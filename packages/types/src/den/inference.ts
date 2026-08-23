@@ -108,6 +108,12 @@ export const INFERENCE_MODEL_ALIASES = {
     enabled: true,
     usageFactor: 1,
   },
+  "deepseek/deepseek-v4-flash-vision-exp": {
+    upstreamModel: "deepseek/deepseek-v4-flash-vision-exp",
+    displayName: "OpenWork: DeepSeek V4 Flash Vision Exp",
+    enabled: true,
+    usageFactor: 1,
+  },
 } as const;
 
 export type InferenceModelAlias = keyof typeof INFERENCE_MODEL_ALIASES;
