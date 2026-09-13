@@ -33,6 +33,12 @@ export type UseModelPickerInput = {
   fallbackOptions?: readonly ModelOption[];
   /** Account-scoped providers are hidden immediately after cloud sign-out. */
   cloudProvidersEnabled?: boolean;
+  /**
+   * Provider IDs to omit. The native codex/sofia engine cannot route the
+   * built-in `opencode` (Zen) provider, so the picker hides it while codex is
+   * the active engine.
+   */
+  excludeProviderIds?: readonly string[];
 };
 
 export function useModelPicker(input: UseModelPickerInput) {
@@ -44,8 +50,13 @@ export function useModelPicker(input: UseModelPickerInput) {
     onLoadError,
     fallbackOptions = [],
     cloudProvidersEnabled = true,
+    excludeProviderIds = [],
   } = input;
   const checkDesktopRestriction = useCheckDesktopRestriction();
+  const excludedProviders = useMemo(
+    () => new Set(excludeProviderIds.map((id) => id.trim().toLowerCase())),
+    [excludeProviderIds],
+  );
 
   const [open, setOpenState] = useState(false);
   const [compactOpen, setCompactOpen] = useState(false);
@@ -127,6 +138,7 @@ export function useModelPicker(input: UseModelPickerInput) {
 
     const next: ModelOption[] = [];
     for (const provider of getConnectedProviderItems(data)) {
+      if (excludedProviders.has(provider.id.trim().toLowerCase())) continue;
       const modelIds = Object.keys(provider.models);
       const isNew = !seenIds.has(provider.id) || recentProviderIds.has(provider.id);
       for (const id of modelIds) {
@@ -150,7 +162,7 @@ export function useModelPicker(input: UseModelPickerInput) {
       mergeModelOptions(next, fallbackOptions),
       cloudProvidersEnabled,
     );
-  }, [cloudProvidersEnabled, fallbackOptions, providerListQuery.data, recentProviderIds]);
+  }, [cloudProvidersEnabled, excludedProviders, fallbackOptions, providerListQuery.data, recentProviderIds]);
 
   // Apply org-level restrictions (dev #1505) on top of the raw model list
   // so the picker never surfaces blocked options:

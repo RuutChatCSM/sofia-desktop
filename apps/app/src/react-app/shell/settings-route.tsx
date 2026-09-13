@@ -42,6 +42,7 @@ import type {
 import { getWorkspaceTaskLoadErrorDisplay } from "@/app/utils";
 import { currentLocale, t, setLocale, type Language } from "@/i18n";
 import { useModelPicker } from "@/react-app/domains/session/modals/use-model-picker";
+import { useSelectedEngine } from "@/react-app/domains/session/engine-selection-store";
 import {
   type RouteWorkspace,
   type RouteSession,
@@ -1066,6 +1067,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
   const handleModelPickerOpen = useCallback(() => {
     void providerAuthStore.runCloudProviderSync("model_picker_open");
   }, [providerAuthStore]);
+  const selectedEngine = useSelectedEngine();
   const modelPicker = useModelPicker({
     client: opencodeClient,
     baseUrl: opencodeBaseUrl,
@@ -1073,6 +1075,9 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
     onOpen: handleModelPickerOpen,
     onLoadError: handleModelPickerLoadError,
     cloudProvidersEnabled: cloudSession.isSignedIn,
+    // The native codex/sofia engine cannot route the built-in opencode (Zen)
+    // provider, so hide it while codex is the active engine.
+    excludeProviderIds: selectedEngine === "codex" ? ["opencode"] : [],
   });
   const currentCloudMcpModel = useMemo<OpenworkCloudMcpProviderModelContext | null>(() => {
     const provider = local.prefs.defaultModel?.providerID.trim() ?? "";
