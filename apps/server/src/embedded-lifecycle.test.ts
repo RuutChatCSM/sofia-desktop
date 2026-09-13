@@ -172,7 +172,7 @@ async function patchProviders(handle: EmbeddedServerHandle): Promise<Record<stri
     method: "PATCH",
     headers: {
       "content-type": "application/json",
-      "x-openwork-host-token": HOST_TOKEN,
+      "x-sofia-host-token": HOST_TOKEN,
     },
     body: JSON.stringify({ provider: { [PROVIDER_ID]: PROVIDER } }),
   });

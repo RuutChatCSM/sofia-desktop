@@ -135,7 +135,7 @@ async function fetchOpenworkWorkspaceList(hostUrl: string, token: string, hostTo
   const timeout = setTimeout(() => controller.abort(), 8_000);
   const headers = new Headers();
   if (token) headers.set("Authorization", `Bearer ${token}`);
-  if (hostToken) headers.set("X-OpenWork-Host-Token", hostToken);
+  if (hostToken) headers.set("X-Sofia-Host-Token", hostToken);
 
   try {
     const response = await externalFetch(url, { headers, signal: controller.signal });

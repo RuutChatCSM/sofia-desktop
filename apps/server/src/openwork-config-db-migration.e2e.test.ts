@@ -74,7 +74,7 @@ describe("openwork config DB migration", () => {
         const workspacePath = join(root, "ws-create");
         const create = await fetch(`http://127.0.0.1:${server.port}/workspaces/local`, {
           method: "POST",
-          headers: { "x-openwork-host-token": config.hostToken, "content-type": "application/json" },
+          headers: { "x-sofia-host-token": config.hostToken, "content-type": "application/json" },
           body: JSON.stringify({ folderPath: workspacePath, name: "ws-create", preset: "starter" }),
         });
         expect(create.status).toBe(201);

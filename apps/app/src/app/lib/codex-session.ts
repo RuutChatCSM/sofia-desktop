@@ -78,7 +78,7 @@ const DEFAULT_TIMEOUT_MS = 15_000;
 function buildHeaders(options: { token?: string; hostToken?: string }): Record<string, string> {
   const headers: Record<string, string> = { "content-type": "application/json" };
   if (options.token?.trim()) headers.authorization = `Bearer ${options.token.trim()}`;
-  if (options.hostToken?.trim()) headers["X-Sofia App-Host-Token"] = options.hostToken.trim();
+  if (options.hostToken?.trim()) headers["x-sofia-host-token"] = options.hostToken.trim();
   return headers;
 }
 

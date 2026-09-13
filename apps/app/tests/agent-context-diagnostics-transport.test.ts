@@ -87,7 +87,7 @@ describe("agent context diagnostics renderer transport", () => {
       port: 0,
       fetch(request) {
         targetRequests += 1;
-        targetHostToken = request.headers.get("x-openwork-host-token");
+        targetHostToken = request.headers.get("x-sofia-host-token");
         targetAuthorization = request.headers.get("authorization");
         return Response.json({ ok: true });
       },
@@ -97,7 +97,7 @@ describe("agent context diagnostics renderer transport", () => {
       hostname: "127.0.0.1",
       port: 0,
       fetch(request) {
-        redirectHostToken = request.headers.get("x-openwork-host-token");
+        redirectHostToken = request.headers.get("x-sofia-host-token");
         return new Response(null, {
           status: 307,
           headers: { location: targetUrl },
@@ -112,7 +112,7 @@ describe("agent context diagnostics renderer transport", () => {
           method: "POST",
           headers: {
             Authorization: `Bearer ${bearerToken}`,
-            "X-OpenWork-Host-Token": hostToken,
+            "X-Sofia-Host-Token": hostToken,
           },
           body: "{}",
         },

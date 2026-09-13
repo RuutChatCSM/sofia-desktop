@@ -155,7 +155,7 @@ function workerHeaders(access: CloudWorkerAccess) {
   return {
     Accept: "application/json",
     Authorization: `Bearer ${access.clientToken}`,
-    "X-OpenWork-Host-Token": access.hostToken,
+    "X-Sofia-Host-Token": access.hostToken,
   }
 }
 

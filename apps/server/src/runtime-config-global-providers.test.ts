@@ -33,7 +33,7 @@ function clientHeaders() {
 }
 
 function hostHeaders() {
-  return { "x-openwork-host-token": HOST_TOKEN, "content-type": "application/json" };
+  return { "x-sofia-host-token": HOST_TOKEN, "content-type": "application/json" };
 }
 
 async function readJsonObject(response: Response): Promise<Record<string, unknown>> {

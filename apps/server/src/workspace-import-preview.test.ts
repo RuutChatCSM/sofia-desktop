@@ -121,7 +121,7 @@ async function silenceExpectedServerError<T>(run: () => Promise<T>): Promise<T> 
 async function waitForPendingApproval(baseUrl: string): Promise<string> {
   for (let attempt = 0; attempt < 50; attempt += 1) {
     const response = await fetch(`${baseUrl}/approvals`, {
-      headers: { "X-OpenWork-Host-Token": "host-token" },
+      headers: { "X-Sofia-Host-Token": "host-token" },
     });
     expect(response.status).toBe(200);
     const body = await response.json() as { items: Array<{ id: string }> };
@@ -689,7 +689,7 @@ describe("workspace import preview", () => {
       const approvalResponse = await fetch(`${baseUrl}/approvals/${approvalId}`, {
         method: "POST",
         headers: {
-          "X-OpenWork-Host-Token": "host-token",
+          "X-Sofia-Host-Token": "host-token",
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ reply: "allow" }),

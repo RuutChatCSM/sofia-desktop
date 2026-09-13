@@ -435,7 +435,7 @@ describe("session-route cloud provider sync wiring", () => {
     );
     expect(sessionPuts).toHaveLength(1);
     expect(new URL(sessionPuts[0]?.url ?? "").origin).toBe(LOCAL_SERVER_ORIGIN);
-    expect(sessionPuts[0]?.headers["x-openwork-host-token"]).toBe("host-token-live");
+    expect(sessionPuts[0]?.headers["x-sofia-host-token"]).toBe("host-token-live");
     expect(sessionPuts[0]?.body).toBe(JSON.stringify({
       baseUrl: "https://den.example/api/den",
       token: "den-token",
@@ -446,7 +446,7 @@ describe("session-route cloud provider sync wiring", () => {
       (request) => request.method === "POST" && new URL(request.url).pathname === "/cloud-provider-sync/run",
     );
     expect(runPosts).toHaveLength(2);
-    expect(runPosts.every((request) => request.headers["x-openwork-host-token"] === "host-token-live")).toBe(true);
+    expect(runPosts.every((request) => request.headers["x-sofia-host-token"] === "host-token-live")).toBe(true);
 
     // Server-side sync means the renderer never fetches Den providers itself.
     expect(requests.filter((request) => request.url.includes("/v1/llm-providers"))).toHaveLength(0);
@@ -469,7 +469,7 @@ describe("session-route cloud provider sync wiring", () => {
       (request) => request.method === "PUT" && new URL(request.url).pathname === "/den-session",
     );
     expect(sessionPuts).toHaveLength(1);
-    expect(sessionPuts[0]?.headers["x-openwork-host-token"]).toBe("host-token-stored");
+    expect(sessionPuts[0]?.headers["x-sofia-host-token"]).toBe("host-token-stored");
   });
 
   test("remote workspaces never receive the desktop's Den session and keep the legacy client path", async () => {

@@ -446,7 +446,7 @@ function hostTokenHeaders(hostToken: string) {
   return {
     Accept: "application/json",
     "Content-Type": "application/json",
-    "X-OpenWork-Host-Token": hostToken,
+    "X-Sofia-Host-Token": hostToken,
   }
 }
 

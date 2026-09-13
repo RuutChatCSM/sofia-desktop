@@ -105,7 +105,7 @@ function clientHeaders(): Record<string, string> {
 }
 
 function hostHeaders(): Record<string, string> {
-  return { "X-OpenWork-Host-Token": HOST_TOKEN, "Content-Type": "application/json" };
+  return { "X-Sofia-Host-Token": HOST_TOKEN, "Content-Type": "application/json" };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -32,7 +32,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function hostHeaders() {
-  return { "x-openwork-host-token": HOST_TOKEN, "content-type": "application/json" };
+  return { "x-sofia-host-token": HOST_TOKEN, "content-type": "application/json" };
 }
 
 function clientHeaders() {

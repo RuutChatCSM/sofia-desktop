@@ -385,11 +385,11 @@ describe("Cloud provider materialization", () => {
       "PATCH /runtime-config/providers",
       "GET /opencode/config",
     ])
-    expect(instance.calls[2]?.headers["x-openwork-host-token"]).toBe("host-token")
+    expect(instance.calls[2]?.headers["x-sofia-host-token"]).toBe("host-token")
     expect(instance.calls[2]?.body).toEqual({
       entries: [{ key: "ANTHROPIC_API_KEY", value: "sk-anthropic" }],
     })
-    expect(instance.calls[3]?.headers["x-openwork-host-token"]).toBe("host-token")
+    expect(instance.calls[3]?.headers["x-sofia-host-token"]).toBe("host-token")
     expect(instance.calls[3]?.headers.authorization).toBeUndefined()
     expect(instance.calls[3]?.body).toEqual({
       provider: {

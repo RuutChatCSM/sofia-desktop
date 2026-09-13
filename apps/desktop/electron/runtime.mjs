@@ -1873,7 +1873,7 @@ export function createRuntimeManager({
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-OpenWork-Host-Token": hostToken,
+          "X-Sofia-Host-Token": hostToken,
         },
         body: JSON.stringify({ scope: "owner", label: "OpenWork desktop owner token" }),
       },

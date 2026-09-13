@@ -458,7 +458,7 @@ function clientHeaders(token = CLIENT_TOKEN) {
 }
 
 function hostHeaders() {
-  return { "x-openwork-host-token": HOST_TOKEN, "Content-Type": "application/json" };
+  return { "x-sofia-host-token": HOST_TOKEN, "Content-Type": "application/json" };
 }
 
 async function snapshotTree(root: string): Promise<Record<string, string>> {

@@ -1257,7 +1257,7 @@ function buildHeaders(
     headers.Authorization = `Bearer ${token}`;
   }
   if (hostToken) {
-    headers["X-Sofia App-Host-Token"] = hostToken;
+    headers["x-sofia-host-token"] = hostToken;
   }
   if (extra) {
     Object.assign(headers, extra);
@@ -1271,7 +1271,7 @@ function buildAuthHeaders(token?: string, hostToken?: string, extra?: Record<str
     headers.Authorization = `Bearer ${token}`;
   }
   if (hostToken) {
-    headers["X-Sofia App-Host-Token"] = hostToken;
+    headers["x-sofia-host-token"] = hostToken;
   }
   if (extra) {
     Object.assign(headers, extra);

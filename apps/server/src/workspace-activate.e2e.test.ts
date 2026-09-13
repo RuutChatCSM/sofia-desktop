@@ -32,7 +32,7 @@ async function createWorkspaceRoot() {
 }
 
 function hostAuth(token: string) {
-  return { "X-OpenWork-Host-Token": token };
+  return { "X-Sofia-Host-Token": token };
 }
 
 function clientAuth(token: string) {

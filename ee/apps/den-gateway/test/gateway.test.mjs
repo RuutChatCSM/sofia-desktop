@@ -99,7 +99,7 @@ function startPassthroughDenApi() {
       method: request.method,
       path: `${url.pathname}${url.search}`,
       authorization: request.headers.get("authorization"),
-      hostToken: request.headers.get("x-openwork-host-token"),
+      hostToken: request.headers.get("x-sofia-host-token"),
       cookie: request.headers.get("cookie"),
       gatewayKey: request.headers.get("x-openwork-gateway-key"),
       forwardedPrefix: request.headers.get("x-forwarded-prefix"),
@@ -145,7 +145,7 @@ function startUpstream() {
       method: request.method,
       path: `${url.pathname}${url.search}`,
       authorization: request.headers.get("authorization"),
-      hostToken: request.headers.get("x-openwork-host-token"),
+      hostToken: request.headers.get("x-sofia-host-token"),
       cookie: request.headers.get("cookie"),
     })
 
@@ -342,7 +342,7 @@ describe("den-gateway proxy", () => {
       method: "POST",
       headers: {
         Authorization: "Bearer den-session",
-        "X-OpenWork-Host-Token": "browser-host-token",
+        "X-Sofia-Host-Token": "browser-host-token",
         Cookie: "ow_session=must_not_leak",
         "Content-Type": "application/json",
       },
@@ -418,7 +418,7 @@ describe("den-gateway proxy", () => {
     const response = await fetch(`${serverBase(gateway)}/status`, {
       headers: {
         Authorization: "Bearer den-bearer",
-        "X-OpenWork-Host-Token": "browser-host-token",
+        "X-Sofia-Host-Token": "browser-host-token",
         Cookie: "ow_session=must_not_leak",
       },
     })

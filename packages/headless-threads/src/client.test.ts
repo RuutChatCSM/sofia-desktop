@@ -151,7 +151,7 @@ describe("createThread", () => {
     await client.createThread({ title: "Cloud Automation" });
 
     expect(double.requestHeaders[0]?.get("authorization")).toBe("Bearer client-token");
-    expect(double.requestHeaders[0]?.get("x-openwork-host-token")).toBe("host-token");
+    expect(double.requestHeaders[0]?.get("x-sofia-host-token")).toBe("host-token");
   });
 
   test("omits the prompt and model when none were given", async () => {

@@ -36,7 +36,7 @@ function clientAuth(token = CLIENT_TOKEN) {
 }
 
 function hostAuth() {
-  return { "x-openwork-host-token": HOST_TOKEN, "content-type": "application/json" };
+  return { "x-sofia-host-token": HOST_TOKEN, "content-type": "application/json" };
 }
 
 async function createTempRoot(prefix: string) {

@@ -231,7 +231,7 @@ try {
   const owner = await step("owner token", async () => {
     const response = await fetch(`${server.baseUrl}/tokens`, {
       method: "POST",
-      headers: { "x-openwork-host-token": server.hostToken, "content-type": "application/json" },
+      headers: { "x-sofia-host-token": server.hostToken, "content-type": "application/json" },
       body: JSON.stringify({ scope: "owner", label: "managed voice e2e" }),
     });
     assert.equal(response.status, 201);

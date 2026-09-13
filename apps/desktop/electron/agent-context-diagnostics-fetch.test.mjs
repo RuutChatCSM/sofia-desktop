@@ -129,7 +129,7 @@ test("Electron diagnostics fetch does not forward credentials across a remote re
   let targetRequests = 0;
   const target = await listenServer((request, response) => {
     targetRequests += 1;
-    const receivedHostToken = request.headers["x-openwork-host-token"];
+    const receivedHostToken = request.headers["x-sofia-host-token"];
     const receivedAuthorization = request.headers.authorization;
     targetHostToken = typeof receivedHostToken === "string" ? receivedHostToken : null;
     targetAuthorization = typeof receivedAuthorization === "string" ? receivedAuthorization : null;
@@ -137,7 +137,7 @@ test("Electron diagnostics fetch does not forward credentials across a remote re
     response.end("{}");
   });
   const redirector = await listenServer((request, response) => {
-    const receivedHostToken = request.headers["x-openwork-host-token"];
+    const receivedHostToken = request.headers["x-sofia-host-token"];
     redirectHostToken = typeof receivedHostToken === "string" ? receivedHostToken : null;
     response.writeHead(307, { location: `${target.url}/capture` });
     response.end();
@@ -151,7 +151,7 @@ test("Electron diagnostics fetch does not forward credentials across a remote re
         method: "POST",
         headers: {
           Authorization: `Bearer ${bearerToken}`,
-          "X-OpenWork-Host-Token": hostToken,
+          "X-Sofia-Host-Token": hostToken,
         },
         body: "{}",
       },

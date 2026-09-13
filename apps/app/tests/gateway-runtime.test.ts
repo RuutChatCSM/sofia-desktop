@@ -267,7 +267,7 @@ describe("gateway runtime mode", () => {
         requests.push({
           url: getRequestUrl(input),
           authorization: headers.get("authorization"),
-          hostToken: headers.get("x-openwork-host-token"),
+          hostToken: headers.get("x-sofia-host-token"),
         });
         return new Response(JSON.stringify({ runtimeKey: "runtime-a", pendingChanges: false, ok: true, count: 1 }), {
           status: 200,
