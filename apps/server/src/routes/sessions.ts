@@ -14,6 +14,11 @@ import {
 import type { ServerConfig, TokenScope, WorkspaceInfo } from "../types.js";
 import { addRoute, type RequestContext, type Route } from "./registry.js";
 
+/** Codex sessions are owned by the Sofia engine and never exist in opencode. */
+function isCodexSessionId(sessionId: string): boolean {
+  return sessionId.startsWith("codex-");
+}
+
 type JsonResponse = (data: unknown, status?: number) => Response;
 type ParseOptionalBoolean = (value: string | null, name: string) => boolean | undefined;
 type ParseOptionalPositiveInteger = (value: string | null, name: string) => number | undefined;
@@ -156,6 +161,10 @@ export function registerSessionRoutes(options: RegisterSessionRoutesOptions): vo
   }
 
   async function readWorkspaceSession(workspace: WorkspaceInfo, sessionId: string) {
+    // Codex sessions are owned by the Sofia engine; never proxy opencode.
+    if (isCodexSessionId(sessionId)) {
+      throw new ApiError(404, "session_not_found", "Session not found");
+    }
     try {
       const opencode = createWorkspaceOpencodeClient(config, workspace);
       return await requireWorkspaceSession(
@@ -175,6 +184,10 @@ export function registerSessionRoutes(options: RegisterSessionRoutesOptions): vo
     sessionId: string,
     input: { limit?: number },
   ) {
+    // Codex sessions are owned by the Sofia engine; never proxy opencode.
+    if (isCodexSessionId(sessionId)) {
+      throw new ApiError(404, "session_not_found", "Session not found");
+    }
     try {
       const opencode = createWorkspaceOpencodeClient(config, workspace);
       const [session, messages] = await Promise.all([
@@ -197,6 +210,10 @@ export function registerSessionRoutes(options: RegisterSessionRoutesOptions): vo
     sessionId: string,
     input: { limit?: number },
   ) {
+    // Codex sessions are owned by the Sofia engine; never proxy opencode.
+    if (isCodexSessionId(sessionId)) {
+      throw new ApiError(404, "session_not_found", "Session not found");
+    }
     try {
       const opencode = createWorkspaceOpencodeClient(config, workspace);
       const [session, messages, todos, statuses] = await Promise.all([

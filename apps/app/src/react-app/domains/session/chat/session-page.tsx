@@ -173,6 +173,23 @@ export type SessionPageSurfaceProps = Omit<
   "client" | "workspaceId" | "sessionId" | "opencodeBaseUrl" | "openworkToken" | "isControlTarget"
 >;
 
+/**
+ * Codex engine surface handed down from the session route when the selected
+ * engine is codex. When present, codex sessions replace opencode sessions in
+ * the sidebar and surface.
+ */
+export type SessionPageCodexEngine = {
+  enabled: boolean;
+  sessions: import("@/app/lib/codex-session").CodexSession[];
+  streaming: boolean;
+  error: string | null;
+  config: import("@/app/lib/codex-session").CodexEngineConfigWire | null;
+  createSession: (input: { title?: string; prompt?: string; cwd?: string; model?: string; providerId?: string }) => Promise<import("@/app/lib/codex-session").CodexSession>;
+  prompt: (sessionId: string, text: string, selection?: { model?: string; providerId?: string }) => Promise<import("@/app/lib/codex-session").CodexSession>;
+  abort: (sessionId: string) => Promise<void>;
+  deleteSession: (sessionId: string) => Promise<void>;
+};
+
 export type SessionPageProps = {
   sessionNumberShortcuts: SessionNumberShortcutsState;
   selectedSessionId: string | null;
@@ -199,6 +216,8 @@ export type SessionPageProps = {
   environmentClient?: OpenworkServerClient | null;
   openworkServerToken?: string | null;
   developerMode: boolean;
+  /** When the selected engine is codex, codex sessions replace opencode sessions. */
+  codexEngine?: SessionPageCodexEngine | null;
   headerStatus: string;
   busyHint: string | null;
   startupPhase: BootPhase;
@@ -549,7 +568,7 @@ export function SessionPage(props: SessionPageProps) {
   const openBrowserUrlControlAction = useMemo<OpenworkControlAction>(() => ({
     id: "browser.open_url",
     label: "Open URL in built-in browser",
-    description: "Create or select an OpenWork built-in browser tab, navigate it to a URL, and return the CDP handle for browser automation.",
+    description: "Create or select an Sofia App built-in browser tab, navigate it to a URL, and return the CDP handle for browser automation.",
     sideEffect: "navigation",
     requiresArgs: true,
     args: [
@@ -903,7 +922,7 @@ export function SessionPage(props: SessionPageProps) {
       name: "sessionId",
       type: "string",
       required: true,
-      description: "Session id from the OpenWork context resources or conversation tabs.",
+      description: "Session id from the Sofia App context resources or conversation tabs.",
     }],
     execute: (args) => {
       if (!args || typeof args !== "object" || !("sessionId" in args) || typeof args.sessionId !== "string") {

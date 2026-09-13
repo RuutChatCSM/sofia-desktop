@@ -81,12 +81,12 @@ export function BrandThemeEffect() {
  * Hook returning the org's brand logo URL if set via desktop policy.
  */
 export function useBrandLogoUrl(): string | undefined {
-  return useOrgRestrictions().brandLogoUrl;
+  return useOrgRestrictions().brandLogoUrl ?? "/sofia-mark.svg";
 }
 
 /** Organization-managed display name. It does not change the signed app identity. */
 export function useBrandAppName(): string {
-  return useOrgRestrictions().brandAppName ?? "OpenWork";
+  return useOrgRestrictions().brandAppName ?? "Sofia App";
 }
 
 const POLICY_NOTIFICATION_DEDUPE = "desktop-policy-active";

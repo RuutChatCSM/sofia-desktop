@@ -11,6 +11,21 @@ import type { Session } from "@opencode-ai/sdk/v2/client";
 import type { Client, ModelRef } from "../types";
 import { unwrap } from "./opencode";
 
+/**
+ * Optional codex abort handler installed by the session route when the selected
+ * engine is codex. Lets the shared abort/stop paths route codex sessions to the
+ * codex engine instead of the opencode SDK.
+ */
+let codexAbortHandler: ((sessionID: string) => Promise<boolean>) | null = null;
+
+export function setCodexAbortHandler(handler: ((sessionID: string) => Promise<boolean>) | null): void {
+  codexAbortHandler = handler;
+}
+
+function isCodexSessionId(sessionID: string): boolean {
+  return sessionID.startsWith("codex-");
+}
+
 export type AbortSessionLogContext = {
   source: string;
   initiator: "user" | "system" | "app";
@@ -80,6 +95,9 @@ export async function abortSessionSafe(
   directory?: string,
   logContext?: AbortSessionLogContext,
 ): Promise<boolean> {
+  if (isCodexSessionId(sessionID) && codexAbortHandler) {
+    return codexAbortHandler(sessionID);
+  }
   try {
     return await abortSession(client, sessionID, directory, logContext);
   } catch {

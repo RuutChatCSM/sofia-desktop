@@ -1257,7 +1257,7 @@ function buildHeaders(
     headers.Authorization = `Bearer ${token}`;
   }
   if (hostToken) {
-    headers["X-OpenWork-Host-Token"] = hostToken;
+    headers["X-Sofia App-Host-Token"] = hostToken;
   }
   if (extra) {
     Object.assign(headers, extra);
@@ -1271,7 +1271,7 @@ function buildAuthHeaders(token?: string, hostToken?: string, extra?: Record<str
     headers.Authorization = `Bearer ${token}`;
   }
   if (hostToken) {
-    headers["X-OpenWork-Host-Token"] = hostToken;
+    headers["X-Sofia App-Host-Token"] = hostToken;
   }
   if (extra) {
     Object.assign(headers, extra);
@@ -1990,7 +1990,7 @@ export function createOpenworkServerClient(options: { baseUrl: string; token?: s
         query.set("provider", providerModel.provider.trim());
         query.set("model", providerModel.model.trim());
       }
-      // probe=1 verifies the Cloud endpoint directly from the OpenWork server
+      // probe=1 verifies the Cloud endpoint directly from the Sofia App server
       // (initialize + tools/list), independent of the engine's own connection.
       if (options?.probe) query.set("probe", "1");
       const suffix = query.size ? `?${query.toString()}` : "";
@@ -2386,6 +2386,31 @@ export function createOpenworkServerClient(options: { baseUrl: string; token?: s
         body: { entries },
         timeoutMs: timeouts.config,
       }),
+
+    setCodexAuth: (workspaceId: string, providerId: string, envKey: string, key: string) =>
+      requestJson<{ ok: true }>(
+        baseUrl,
+        `/workspace/${encodeURIComponent(workspaceId)}/codex/auth/${encodeURIComponent(providerId)}`,
+        {
+          token,
+          hostToken,
+          method: "PUT",
+          body: { envKey, key },
+          timeoutMs: timeouts.config,
+        },
+      ),
+
+    removeCodexAuth: (workspaceId: string, providerId: string) =>
+      requestJson<{ ok: true }>(
+        baseUrl,
+        `/workspace/${encodeURIComponent(workspaceId)}/codex/auth/${encodeURIComponent(providerId)}`,
+        {
+          token,
+          hostToken,
+          method: "DELETE",
+          timeoutMs: timeouts.config,
+        },
+      ),
 
     deleteUserEnv: (key: string) =>
       requestJson<{ ok: true }>(baseUrl, `/env/${encodeURIComponent(key)}`, {

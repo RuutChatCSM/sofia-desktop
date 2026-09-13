@@ -21,6 +21,14 @@ export class ApprovalService {
     this.config = config;
   }
 
+  getMode(): string {
+    return this.config.mode;
+  }
+
+  setMode(mode: ApprovalConfig["mode"]): void {
+    this.config = { ...this.config, mode };
+  }
+
   list(): ApprovalRequest[] {
     return Array.from(this.pending.values()).map((entry) => entry.request);
   }
@@ -28,7 +36,12 @@ export class ApprovalService {
   async requestApproval(
     input: Omit<ApprovalRequest, "id" | "createdAt">,
   ): Promise<ApprovalResult> {
-    if (this.config.mode === "auto") {
+    // ChatGPT-style permission modes: "ask" always prompts, "full" (Full access)
+    // never prompts, and "auto"/"manual" keep the legacy semantics. "approve"
+    // (Approve for me) should only prompt for unsafe actions; without a safety
+    // classifier it conservatively prompts, so a denial never slips through.
+    const neverPrompts = this.config.mode === "auto" || this.config.mode === "full";
+    if (neverPrompts) {
       return { id: "auto", allowed: true };
     }
     const id = shortId();

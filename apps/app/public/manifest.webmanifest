@@ -1,6 +1,6 @@
 {
-  "name": "OpenWork",
-  "short_name": "OpenWork",
+  "name": "Sofia App",
+  "short_name": "Sofia App",
   "description": "Local-first agent workspace",
   "start_url": "/",
   "display": "standalone",
@@ -13,7 +13,7 @@
       "type": "image/png"
     },
     {
-      "src": "/openwork-mark.svg",
+      "src": "/sofia-mark.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any"

@@ -129,7 +129,7 @@ export function buildOpenworkContext(
   const resources: OpenworkResourceDescriptor[] = [{
     ref: `screen:${input.route}`,
     kind: "screen",
-    title: screen.kind === "settings" ? `${screen.panel} settings` : "OpenWork",
+    title: screen.kind === "settings" ? `${screen.panel} settings` : "Sofia App",
     provider,
     state: { kind: screen.kind, route: input.route },
   }];

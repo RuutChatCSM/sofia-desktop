@@ -78,6 +78,7 @@ type RuntimeServiceCard = StatusPill & {
   stderr?: string | null;
   execution?: OpencodeExecutionSnapshot | null;
   error?: string | null;
+  installable?: boolean;
 };
 
 type OpenCodeConnectDebugCard = StatusPill & {
@@ -162,7 +163,11 @@ export type DebugViewProps = {
   serviceRestartError: string | null;
   onRestartOpencode: () => void | Promise<void>;
   onRestartOpenworkServer: () => void | Promise<void>;
+  onInstallCodexEngine: () => void | Promise<void>;
+  codexInstallBusy: boolean;
+  codexInstallStatus: { tone: "success" | "error"; message: string } | null;
   engineCard: RuntimeServiceCard;
+  codexEngineCard: RuntimeServiceCard;
   opencodeConnectCard: OpenCodeConnectDebugCard;
   openworkCard: RuntimeServiceCard;
   openworkServerDiagnostics: OpenworkServerDiagnostics | null;
@@ -260,7 +265,7 @@ function ExecutionDetails(props: { execution: OpencodeExecutionSnapshot }) {
       <div className="mb-2 flex items-center justify-between gap-3">
         <div>
           <div className="text-[11px] font-semibold uppercase tracking-wider text-blue-11">OpenCode execution</div>
-          <div className="text-[11px] text-dls-secondary">Command, working directory, and OpenWork-injected environment.</div>
+          <div className="text-[11px] text-dls-secondary">Command, working directory, and Sofia App-injected environment.</div>
         </div>
         <div className="shrink-0 rounded-full border border-blue-7/30 bg-blue-7/10 px-2 py-1 text-[10px] font-medium text-blue-11">
           redacted
@@ -587,6 +592,48 @@ export function DebugView(props: DebugViewProps) {
             onExportLogs={props.onExportOpencodeLogs}
             isDesktop={isDesktop}
           />
+
+          <ServiceCard
+            title={t("settings.codex_engine_sidecar")}
+            description={t("settings.codex_engine_sidecar_desc")}
+            pill={props.codexEngineCard}
+            lines={props.codexEngineCard.lines}
+            stdout={null}
+            stderr={null}
+            execution={null}
+            error={props.codexEngineCard.error ?? null}
+            restarting={false}
+            restartLabel=""
+            onRestart={async () => {}}
+            serviceStatus={null}
+            logStatus={null}
+            onCopyLogs={async () => {}}
+            onExportLogs={async () => {}}
+            isDesktop={isDesktop}
+          />
+          {props.codexEngineCard.installable ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void props.onInstallCodexEngine()}
+                disabled={props.codexInstallBusy}
+                className="rounded-md border border-dls-border bg-dls-surface px-2.5 py-1 text-[12px] font-medium text-dls-text transition-colors hover:bg-dls-surface-hover disabled:opacity-50"
+              >
+                {props.codexInstallBusy
+                  ? t("settings.codex_install_in_progress")
+                  : t("settings.codex_install_action")}
+              </button>
+              {props.codexInstallStatus ? (
+                <span
+                  className={`text-[12px] ${
+                    props.codexInstallStatus.tone === "success" ? "text-green-11" : "text-red-11"
+                  }`}
+                >
+                  {props.codexInstallStatus.message}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
         <div className={subCardClass}>
@@ -1048,7 +1095,7 @@ export function DebugView(props: DebugViewProps) {
           <div className="rounded-xl border border-green-7/25 bg-green-3/10 px-3 py-2 text-[12px] leading-relaxed text-green-11">
             Safe default: use <strong>Prepare migration data</strong> first. It writes the Electron snapshot only and does
             not replace, quit, or delete the Tauri app. The install handoff keeps rollback backup at{" "}
-            <code className="font-mono">OpenWork.app.migrate-bak</code>.
+            <code className="font-mono">Sofia App.app.migrate-bak</code>.
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -1119,7 +1166,7 @@ export function DebugView(props: DebugViewProps) {
               size="sm"
               onClick={() => void props.onInstallElectronPreviewFromTauri()}
               disabled={props.electronMigrationBusy || !props.electronMigrationUrl.trim()}
-              title="Requires a trusted artifact URL. macOS keeps OpenWork.app.migrate-bak for rollback."
+              title="Requires a trusted artifact URL. macOS keeps Sofia App.app.migrate-bak for rollback."
             >
               Start install handoff…
             </Button>

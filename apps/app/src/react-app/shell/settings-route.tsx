@@ -114,6 +114,7 @@ import {
   openworkServerRestart,
   engineStart,
   engineRestart,
+  codexEngineStatus,
   resolveWorkspaceListSelectedId,
   workspaceBootstrap,
   workspaceForget,
@@ -123,6 +124,7 @@ import {
   readDesktopDistributionInfo,
   type WorkspaceInfo,
   type WorkspaceList,
+  type CodexEngineStatus,
   revealDesktopItemInDir,
 } from "@/app/lib/desktop";
 import { isDesktopProviderBlocked } from "@/app/cloud/desktop-app-restrictions";
@@ -437,6 +439,20 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
   const desktopConfig = useDesktopConfig();
   const reloadCoordinator = useReloadCoordinator();
   const [embeddedPath, setEmbeddedPath] = useState(props.initialPath ?? "general");
+  const [codexEngineStatusState, setCodexEngineStatusState] = useState<CodexEngineStatus | null>(null);
+  useEffect(() => {
+    if (!isDesktopRuntime()) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const status = await codexEngineStatus() as CodexEngineStatus | null;
+        if (!cancelled) setCodexEngineStatusState(status);
+      } catch {
+        if (!cancelled) setCodexEngineStatusState(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
   const route = props.embedded
     ? parseSettingsPath(`/settings/${embeddedPath}`)
     : props.standaloneExtensions
@@ -1142,7 +1158,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
   const installOpenAiImageExtension = useCallback(async (apiKey: string) => {
     const resolvedApiKey = apiKey.trim();
     if (!openworkClient) {
-      setImageExtensionError("OpenWork server is not connected.");
+      setImageExtensionError("Sofia App server is not connected.");
       return;
     }
     if (!resolvedApiKey) {
@@ -1156,7 +1172,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
     try {
       await openworkClient.upsertUserEnv([{ key: "OPENAI_API_KEY", value: resolvedApiKey }]);
       setUserEnvKeys((current) => Array.from(new Set([...current, "OPENAI_API_KEY"])));
-      setImageExtensionStatus("Saved OPENAI_API_KEY. Agents can use OpenWork extension actions for image generation.");
+      setImageExtensionStatus("Saved OPENAI_API_KEY. Agents can use Sofia App extension actions for image generation.");
     } catch (error) {
       setImageExtensionError(describeRouteError(error));
     } finally {
@@ -1170,7 +1186,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
     const apiKey = input.apiKey.trim();
     const prompt = input.prompt.trim();
     if (!client || !workspaceId) {
-      setImageGenerationError("OpenWork server is not connected for this workspace.");
+      setImageGenerationError("Sofia App server is not connected for this workspace.");
       return;
     }
     if (!apiKey) {
@@ -1234,7 +1250,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
 
   const testVoiceSession = useCallback(async () => {
     if (!openworkClient) {
-      setVoiceError("OpenWork server is not connected.");
+      setVoiceError("Sofia App server is not connected.");
       return;
     }
     setVoiceBusy(true);
@@ -1242,7 +1258,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
     setVoiceError(null);
     try {
       const session = await openworkClient.createVoiceRealtimeSession();
-      setVoiceStatus(`Realtime ready with ${session.model} (${session.tools.length} OpenWork tools).`);
+      setVoiceStatus(`Realtime ready with ${session.model} (${session.tools.length} Sofia App tools).`);
     } catch (error) {
       setVoiceError(describeRouteError(error));
     } finally {
@@ -1255,7 +1271,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
     const workspaceId = runtimeWorkspaceId?.trim() ?? "";
     const modelId = input.modelId.trim();
     if (!client || !workspaceId) {
-      setLocalProviderError("OpenWork server is not connected for this workspace.");
+      setLocalProviderError("Sofia App server is not connected for this workspace.");
       return;
     }
     if (!modelId) {
@@ -1874,11 +1890,12 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
     const connectedProviders = new Set(providerConnectedIds);
     const configuredEnvKeys = new Set(userEnvKeys);
     const loadedPlugins = new Set<string>();
-    // Browser plugin detection: check if any configured plugin matches the chrome-devtools name.
-    // For now, treat it as loaded if the plugin is in the MCP/plugin list — this will
-    // be refined when we add a real plugin-loaded signal from the engine.
+    // Browser plugin detection: check if any configured MCP/plugin matches the
+    // chrome-devtools browser surface (either the legacy plugin name or the
+    // chrome-devtools MCP server, matched by name or command).
     const browserPluginConfigured = connectionsSnapshot.mcpServers.some(
-      (s) => s.name === "opencode-chrome-devtools" || s.config.command?.some((c: string) => c.includes("chrome-devtools")),
+      (s) => s.name === "chrome-devtools" || s.name === "opencode-chrome-devtools" ||
+        s.config.command?.some((c: string) => c.includes("chrome-devtools")),
     );
     if (browserPluginConfigured) loadedPlugins.add("opencode-chrome-devtools");
 
@@ -2132,7 +2149,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
     setRenameWorkspaceBusy(true);
     try {
       if (!openworkClient) {
-        toast.error("OpenWork server is unavailable. Reconnect the server before renaming workspaces.");
+        toast.error("Sofia App server is unavailable. Reconnect the server before renaming workspaces.");
         return;
       }
       await openworkClient.updateWorkspaceDisplayName(renameWorkspaceId, trimmed);
@@ -2169,7 +2186,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
       }
       return;
     }
-    throw new Error("OpenWork server is unavailable. Reconnect the server before exporting workspace config.");
+    throw new Error("Sofia App server is unavailable. Reconnect the server before exporting workspace config.");
   }, [workspaceServerClientResolver, workspaces]);
 
   const handleForgetWorkspace = useCallback(async (workspaceId: string) => {
@@ -2505,6 +2522,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
             cloudMcpHealth={cloudMcpHealth}
             refreshCloudMcpHealth={refreshCloudMcpHealth}
             organizationServer={denSession}
+            codexEngineStatus={codexEngineStatusState}
           />
         );
       case "appearance":

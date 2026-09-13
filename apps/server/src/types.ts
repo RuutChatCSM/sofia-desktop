@@ -4,7 +4,7 @@ export type WorkspaceType = "local" | "remote";
 
 export type RemoteType = "opencode" | "openwork";
 
-export type ApprovalMode = "manual" | "auto";
+export type ApprovalMode = "manual" | "auto" | "ask" | "approve" | "full";
 
 export type TokenScope = "owner" | "collaborator" | "viewer";
 

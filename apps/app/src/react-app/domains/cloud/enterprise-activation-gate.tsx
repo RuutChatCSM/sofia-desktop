@@ -67,7 +67,7 @@ function EnterpriseActivationPage() {
 
     const baseUrl = normalizeOrganizationServerInput(serverInput);
     if (!baseUrl) {
-      setServerError("Enter a valid OpenWork server address.");
+      setServerError("Enter a valid Sofia App server address.");
       return;
     }
 
@@ -82,7 +82,7 @@ function EnterpriseActivationPage() {
     setAuthBusy(true);
     setAuthError(null);
     setServerError(null);
-    setStatusMessage("Finishing OpenWork Enterprise sign-in…");
+    setStatusMessage("Finishing Sofia App Enterprise sign-in…");
     try {
       // Persist the confirmed server before exchanging so the session is
       // scoped to this organization's base URL and survives the provider
@@ -92,7 +92,7 @@ function EnterpriseActivationPage() {
         baseUrl,
         client: createDenClient({ baseUrl }),
         desktopInitiated: true,
-        fallbackErrorMessage: "OpenWork Enterprise did not return a session token.",
+        fallbackErrorMessage: "Sofia App Enterprise did not return a session token.",
       });
       if (!result.ok) {
         setStatusMessage(null);
@@ -111,7 +111,7 @@ function EnterpriseActivationPage() {
     } catch (error) {
       setStatusMessage(null);
       setAuthError(
-        error instanceof Error ? error.message : "Unable to finish OpenWork Enterprise sign-in.",
+        error instanceof Error ? error.message : "Unable to finish Sofia App Enterprise sign-in.",
       );
     } finally {
       setAuthBusy(false);
@@ -141,11 +141,11 @@ function EnterpriseActivationPage() {
         setAuthError("We couldn't open your browser automatically. Try again, or paste the sign-in link from your browser into the address field.");
         return;
       }
-      setStatusMessage("Finish signing in in your browser, then return to OpenWork.");
+      setStatusMessage("Finish signing in in your browser, then return to Sofia App.");
     } catch (error) {
       setStatusMessage(null);
       setServerError(
-        error instanceof Error ? error.message : "Unable to save this OpenWork server.",
+        error instanceof Error ? error.message : "Unable to save this Sofia App server.",
       );
     } finally {
       setBrowserBusy(false);
@@ -199,7 +199,7 @@ function EnterpriseActivationPage() {
               aria-hidden="true"
             />
             <span className="text-[15px] font-semibold tracking-tight text-foreground">
-              OpenWork Enterprise
+              Sofia App Enterprise
             </span>
           </div>
 
@@ -249,7 +249,7 @@ function EnterpriseActivationPage() {
             {pendingConfirmation ? (
               <section className="space-y-3 rounded-xl border border-border bg-muted/30 p-4">
                 <p className="text-sm leading-6 text-foreground">
-                  Connect this app to <strong className="break-all font-semibold">{pendingConfirmation.baseUrl}</strong>? This signs you in with that organization and binds OpenWork Enterprise to it.
+                  Connect this app to <strong className="break-all font-semibold">{pendingConfirmation.baseUrl}</strong>? This signs you in with that organization and binds Sofia App Enterprise to it.
                 </p>
                 <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                   <Button

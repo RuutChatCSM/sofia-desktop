@@ -1,10 +1,11 @@
 extends: ./electron-builder.base.yml
-appId: com.differentai.openwork
-productName: OpenWork
+appId: app.sofia.desktop
+productName: Sofia App
 protocols:
-  - name: OpenWork
+  - name: Sofia App
     schemes:
       - openwork
+      - sofia
 linux:
-  executableName: openwork
-artifactName: openwork-${os}-${arch}-${version}.${ext}
+  executableName: sofia-app
+artifactName: sofia-app-${os}-${arch}-${version}.${ext}

@@ -379,7 +379,7 @@ export function createClient(baseUrl: string, directory?: string, auth?: Opencod
       ? createOpenworkServerClient({ baseUrl: openworkMount.baseUrl, token: auth.token })
       : null;
   // TODO(2026-04-12): remove the old-server compatibility path here once all
-  // OpenWork servers expose the workspace-scoped session read APIs.
+  // Sofia App servers expose the workspace-scoped session read APIs.
   const sessionOverrides = session as any as {
     list: (parameters?: SessionListParameters, options?: { throwOnError?: boolean }) => Promise<FieldsResult<Session[]>>;
     get: (parameters: SessionLookupParameters, options?: { throwOnError?: boolean }) => Promise<FieldsResult<Session>>;
@@ -410,6 +410,14 @@ export function createClient(baseUrl: string, directory?: string, auth?: Opencod
 
   const getOriginal = sessionOverrides.get.bind(session);
   sessionOverrides.get = (parameters: SessionLookupParameters, options?: { throwOnError?: boolean }) => {
+    // Codex sessions are owned by the Sofia engine; never proxy opencode.
+    if (parameters.sessionID.startsWith("codex-")) {
+      return Promise.resolve(createSyntheticResult(parameters.sessionID, "GET", {
+        ok: false,
+        error: new Error("Sofia session"),
+        status: 404,
+      }));
+    }
     if (!openworkMount || !openworkSessionClient) {
       return getOriginal(parameters, options);
     }
@@ -424,6 +432,14 @@ export function createClient(baseUrl: string, directory?: string, auth?: Opencod
 
   const messagesOriginal = sessionOverrides.messages.bind(session);
   sessionOverrides.messages = (parameters: SessionMessagesParameters, options?: { throwOnError?: boolean }) => {
+    // Codex sessions are owned by the Sofia engine; never proxy opencode.
+    if (parameters.sessionID.startsWith("codex-")) {
+      return Promise.resolve(createSyntheticResult(parameters.sessionID, "GET", {
+        ok: false,
+        error: new Error("Sofia session"),
+        status: 404,
+      }));
+    }
     if (!openworkMount || !openworkSessionClient) {
       return messagesOriginal(parameters, options);
     }

@@ -22,6 +22,7 @@ import {
   type EngineSpawnTemplate,
 } from "./engine-pool.js";
 import { createManagedOpencodeServer, type ManagedOpencodeServer, type OpencodeExecutionSnapshot } from "./managed-opencode.js";
+import { setCodexBinaryForConfig, closeCodexManagersForConfig } from "./codex-registry.js";
 import {
   clearTrustedOpencodeProcess,
   createEnginePoolForConfig,
@@ -43,6 +44,8 @@ export type EmbeddedServerOptions = CliArgs & {
   manageOpencode?: boolean;
   /** Path to the OpenCode binary. Falls back to OPENWORK_OPENCODE_BIN env. */
   opencodeBin?: string;
+  /** Path to the Codex binary. Falls back to OPENWORK_CODEX_BIN env. */
+  codexBin?: string;
   /** Working directory for the managed OpenCode process. */
   opencodeCwd?: string;
   /** Secure key custody for the local managed MCP credential vault. */
@@ -123,6 +126,12 @@ export async function startEmbeddedServer(options: EmbeddedServerOptions): Promi
       await removeEngineInstance(config, engineRecordId).catch(() => undefined);
     }
 
+    try {
+      await closeCodexManagersForConfig(config);
+    } catch {
+      // cleanup is best-effort
+    }
+
     const httpServer = server;
     server = null;
     if (httpServer) {
@@ -183,6 +192,15 @@ export async function startEmbeddedServer(options: EmbeddedServerOptions): Promi
   server = await duringStartup(() => startServer(config));
   config.port = server.port;
   const serverUrl = `http://${config.host === "0.0.0.0" ? "127.0.0.1" : config.host}:${server.port}`;
+
+  // Codex binary resolution. Runs regardless of opencode engine management —
+  // when the selected engine is codex (Sofia), opencode never boots but the
+  // codex engine still needs its bundled sidecar. The desktop resolves our own
+  // binary; never probe for a system-installed codex.
+  const codexBin = options.codexBin || process.env.OPENWORK_CODEX_BIN?.trim() || null;
+  if (codexBin) {
+    setCodexBinaryForConfig(config, { path: codexBin, source: "custom" });
+  }
 
   if (!config.opencodeBaseUrl && options.manageOpencode) {
     const workspace = findManagedEngineWorkspace(config.workspaces);

@@ -232,7 +232,7 @@ export function AccountStatusMenu(props: AccountStatusMenuProps) {
 
   const docsControlAction = useMemo<OpenworkControlAction>(() => ({
     id: "status.docs.open",
-    label: "Open OpenWork docs",
+    label: "Open Sofia App docs",
     description: "Open the documentation from the account menu.",
     sideEffect: "external",
     targetRef: triggerRef,
@@ -243,7 +243,7 @@ export function AccountStatusMenu(props: AccountStatusMenuProps) {
   const feedbackControlAction = useMemo<OpenworkControlAction>(() => ({
     id: "status.feedback.open",
     label: "Send feedback",
-    description: "Open the OpenWork feedback surface from the account menu.",
+    description: "Open the Sofia App feedback surface from the account menu.",
     sideEffect: "external",
     disabled: !props.onSendFeedback,
     targetRef: triggerRef,

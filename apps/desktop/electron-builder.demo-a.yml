@@ -1,6 +1,6 @@
 extends: electron-builder.yml
-appId: com.differentai.openwork.demo.admin
-productName: OpenWork Demo A
+appId: app.sofia.desktop.demo.admin
+productName: Sofia App Demo A
 protocols: []
 directories:
   output: dist-electron-demo-a

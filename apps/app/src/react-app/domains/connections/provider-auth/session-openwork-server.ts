@@ -9,8 +9,8 @@
 // the Den session, and server-side cloud provider sync never started (#3671).
 //
 // This adapter reports the truth for the endpoint it wraps:
-// - local endpoints (the desktop's own OpenWork server) advertise
-//   `providerSync: true` — every OpenWork server does
+// - local endpoints (the desktop's own Sofia App server) advertise
+//   `providerSync: true` — every Sofia App server does
 //   (apps/server/src/types.ts `Capabilities.providerSync: true`) — and carry
 //   the live host token so the store can PUT /den-session and
 //   POST /cloud-provider-sync/run;

@@ -100,6 +100,34 @@ export function buildOpenworkRuntimeConfigObjectFromSnapshot(
 ): Record<string, unknown> {
   const disabledProviders = runtimeDisabledProviderList(runtimeConfig);
   const provider = runtimeProviderMap(runtimeConfig);
+
+  // The in-app browser surface. chrome-devtools-mcp keeps a persistent CDP
+  // connection (vs the old plugin's reconnect-per-call), exposes a11y-tree
+  // snapshots, console/network/screenshot tools, and registers as a plain MCP
+  // server so the exact same browser surface works for the opencode runtime
+  // today and a codex runtime later. It connects to the local CDP broker so
+  // agent-driven Input events get the human-like cursor replay.
+  const agentCdpBaseUrl = process.env.OPENWORK_ELECTRON_AGENT_CDP_BASE_URL?.trim();
+  const mcp: Record<string, Record<string, unknown>> = Object.fromEntries(
+    Object.entries(runtimeMcpMap(runtimeConfig))
+      .filter(([name]) => !name.startsWith(CONNECT_MCP_SERVER_NAME_PREFIX)),
+  );
+  if (agentCdpBaseUrl) {
+    mcp["chrome-devtools"] = {
+      type: "local",
+      command: [
+        "npx",
+        "-y",
+        "chrome-devtools-mcp@latest",
+        `--browser-url=${agentCdpBaseUrl}`,
+        "--no-usage-statistics",
+        "--screenshot-format=jpeg",
+        "--screenshot-max-width=1280",
+      ],
+      enabled: true,
+    };
+  }
+
   return {
     ...runtimeConfig,
     default_agent: runtimeConfig.default_agent ?? "openwork",
@@ -123,7 +151,6 @@ export function buildOpenworkRuntimeConfigObjectFromSnapshot(
       },
     },
     plugin: [
-      "opencode-chrome-devtools",
       openworkExtensionsPreviewPluginPath(),
       openworkCapabilitiesKnowledgePluginPath(),
       openworkOfficeAttachmentsPluginPath(),
@@ -132,8 +159,7 @@ export function buildOpenworkRuntimeConfigObjectFromSnapshot(
       ...runtimePluginList(runtimeConfig),
     ],
     ...(disabledProviders.length ? { disabled_providers: disabledProviders } : {}),
-    mcp: Object.fromEntries(Object.entries(runtimeMcpMap(runtimeConfig))
-      .filter(([name]) => !name.startsWith(CONNECT_MCP_SERVER_NAME_PREFIX))),
+    mcp,
     ...(Object.keys(provider).length ? { provider } : {}),
   };
 }

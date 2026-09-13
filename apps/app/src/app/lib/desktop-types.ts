@@ -24,6 +24,7 @@ export type {
   DesktopFetchResult,
   EngineDoctorResult,
   EngineInfo,
+  CodexEngineStatus,
   EvalRelaunchResult,
   ExecResult,
   LocalSkillCard,

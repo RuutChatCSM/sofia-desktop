@@ -18,6 +18,12 @@ const CSV_PROMPT =
 const BROWSER_PROMPT =
   "Open craigslist.org in the browser and search for couches for sale. Show me the top 5 results with prices."
 
+const PR_PROMPT =
+  "Talk through the latest pull request in this repo: ask questions about the code, summarize what it does, and note any risks or follow-ups."
+
+const CATCH_UP_PROMPT =
+  'Create this workflow: "catch me up on recent decisions and open questions" from my recent session history.'
+
 const ORGANIZATION_PROMPT_TITLES = ["Organization prompt 1", "Organization prompt 2", "Organization prompt 3"]
 
 export function resolveOrganizationPromptCardContent(input: {
@@ -122,6 +128,32 @@ export function TaskSuggestions({ className }: TaskSuggestionsProps) {
               <DescriptiveButtonContent>
                 <DescriptiveButtonTitle>Browse the web</DescriptiveButtonTitle>
                 <DescriptiveButtonDescription>Search Craigslist for couches</DescriptiveButtonDescription>
+              </DescriptiveButtonContent>
+            </DescriptiveButton>
+
+            <DescriptiveButton
+              orientation="vertical"
+              onClick={() => setPrompt(PR_PROMPT)}
+            >
+              <DescriptiveButtonIcon>
+                <SparklesIcon className="size-6 text-purple-10" aria-hidden />
+              </DescriptiveButtonIcon>
+              <DescriptiveButtonContent>
+                <DescriptiveButtonTitle>Review a PR</DescriptiveButtonTitle>
+                <DescriptiveButtonDescription>Talk through a pull request and open questions</DescriptiveButtonDescription>
+              </DescriptiveButtonContent>
+            </DescriptiveButton>
+
+            <DescriptiveButton
+              orientation="vertical"
+              onClick={() => setPrompt(CATCH_UP_PROMPT)}
+            >
+              <DescriptiveButtonIcon>
+                <BoltIcon className="size-6 text-blue-10" aria-hidden />
+              </DescriptiveButtonIcon>
+              <DescriptiveButtonContent>
+                <DescriptiveButtonTitle>Catch me up</DescriptiveButtonTitle>
+                <DescriptiveButtonDescription>Summarize recent decisions and open questions</DescriptiveButtonDescription>
               </DescriptiveButtonContent>
             </DescriptiveButton>
 

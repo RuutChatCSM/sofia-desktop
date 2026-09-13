@@ -1,0 +1,933 @@
+// Codex session manager: owns a ManagedCodexEngine and exposes a small,
+// OpenWork-shaped session surface for the codex runtime. This is additive —
+// opencode routes are untouched. Each workspace gets its own engine process
+// (mirroring how opencode is managed per workspace) and threads are mapped to
+// OpenWork session ids via a `codex-<threadId>` scheme.
+import { randomUUID } from "node:crypto";
+import { EventEmitter } from "node:events";
+import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join, resolve } from "node:path";
+
+import { importNodeSqlite } from "./runtime-db.js";
+import { ManagedCodexEngine } from "./managed-codex.js";
+import type { CodexFeature } from "./codex-version.js";
+import { buildSofiaDeveloperInstructions } from "./codex-prompt-harness.js";
+import { codexTurnPermissions, readCodexAccessMode } from "./codex-access.js";
+
+/** Normalized path equality (case-insensitive on mac/win). */
+function pathsMatch(left: string, right: string): boolean {
+  const a = left.replace(/\/+$/, "").toLowerCase();
+  const b = right.replace(/\/+$/, "").toLowerCase();
+  return a === b || b.startsWith(`${a}/`);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** Extract the shell command from a codex custom_tool_call "input" JS string. */
+function parseCustomToolCommand(raw: string): string {
+  const trimmed = raw.trim();
+  // The input is often a JS expression: `const r = await tools.exec_command({cmd:"...", workdir:"..."})`.
+  // Prefer the JSON cmd/command if raw is JSON; else pull the `cmd:"..."` string.
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (isRecord(parsed)) {
+      if (typeof parsed.cmd === "string" && parsed.cmd) return parsed.cmd;
+      if (typeof parsed.command === "string" && parsed.command) return parsed.command;
+    }
+  } catch {
+    // Not pure JSON — extract cmd:"..." / cmd:'...' from the JS expression.
+  }
+  const cmdMatch = trimmed.match(/\bcmd\s*:\s*(["'`])([\s\S]*?)\1/);
+  if (cmdMatch) return cmdMatch[2];
+  const commandMatch = trimmed.match(/\bcommand\s*:\s*(["'`])([\s\S]*?)\1/);
+  if (commandMatch) return commandMatch[2];
+  return trimmed;
+}
+
+/** Find a previously emitted item by its call id (to attach tool output). */
+function idFromCallId(
+  items: Array<{ turnId: string; item: Record<string, unknown> }>,
+  callId: string,
+): { item: Record<string, unknown> } | null {
+  return items.find((entry) => entry.item.id === callId) ?? null;
+}
+
+export type CodexEngineHandle = {
+  bin: string;
+  cwd: string;
+  codexHome?: string;
+  env?: Record<string, string>;
+  /** Interpreter to run `bin` with (e.g. process.execPath for test scripts). */
+  interpreter?: string;
+};
+
+export type CodexSession = {
+  id: string; // OpenWork-facing session id: `codex-<threadId>`
+  threadId: string;
+  title: string;
+  workspaceId: string;
+  created: string;
+  turnId: string | null;
+  status: "idle" | "running" | "error";
+  archived?: boolean;
+  /** cwd of the last active turn (per-turn cwd tracking, like the app's turnCwds). */
+  cwd?: string;
+  /** Rollout JSONL path (legacy ChatGPT/Codex store) for transcript fallback. */
+  rolloutPath?: string | null;
+  model?: string;
+  providerId?: string;
+};
+
+export type CodexEvent =
+  | { type: "session.created"; session: CodexSession }
+  | { type: "session.updated"; session: CodexSession }
+  | { type: "message.delta"; sessionId: string; threadId: string; text: string; itemId?: string }
+  | { type: "thinking.delta"; sessionId: string; threadId: string; text: string; itemId?: string }
+  | { type: "item.started"; sessionId: string; threadId: string; itemType: string; item: unknown; turnId: string }
+  | { type: "item.completed"; sessionId: string; threadId: string; itemType: string; item: unknown; turnId: string }
+  | { type: "tool.output"; sessionId: string; threadId: string; itemId: string; text: string }
+  | { type: "file.patch"; sessionId: string; threadId: string; itemId: string; patch: unknown }
+  | { type: "turn.completed"; sessionId: string; threadId: string }
+  | { type: "approval.requested"; sessionId: string; threadId: string; params: unknown }
+  | { type: "thread.status"; sessionId: string; threadId: string; status: unknown }
+  | { type: "rateLimit.updated"; sessionId: string; threadId: string; rateLimits: unknown }
+  | { type: "error"; sessionId: string; threadId: string; message: string };
+
+export function codexSessionId(threadId: string): string {
+  return `codex-${threadId}`;
+}
+
+export function isCodexSessionId(sessionId: string): boolean {
+  return sessionId.startsWith("codex-");
+}
+
+export class CodexSessionManager {
+  private engine: ManagedCodexEngine | null = null;
+  private sessions = new Map<string, CodexSession>();
+  private events = new EventEmitter();
+  private starting: Promise<void> | null = null;
+  private approvalQueue: { sessionId: string; threadId: string; params: unknown; resolve: () => void; reject: (reason?: unknown) => void }[] = [];
+  private threadAliases: Record<string, string>;
+
+  private activeEngine(): ManagedCodexEngine {
+    const engine = this.engine;
+    if (!engine) throw new Error("codex app-server failed to start");
+    return engine;
+  }
+
+  private readThreadAliases(): Record<string, string> {
+    if (!this.handle.codexHome) return {};
+    try {
+      const parsed = JSON.parse(readFileSync(join(this.handle.codexHome, "sofia-thread-aliases.json"), "utf8"));
+      if (!isRecord(parsed)) return {};
+      return Object.fromEntries(Object.entries(parsed).filter((entry): entry is [string, string] => typeof entry[1] === "string"));
+    } catch {
+      return {};
+    }
+  }
+
+  private persistThreadAliases(): void {
+    if (!this.handle.codexHome) return;
+    try {
+      writeFileSync(
+        join(this.handle.codexHome, "sofia-thread-aliases.json"),
+        `${JSON.stringify(this.threadAliases, null, 2)}\n`,
+        { encoding: "utf8", mode: 0o600 },
+      );
+    } catch {
+      // Best-effort; the active process still keeps the alias in memory.
+    }
+  }
+
+  private findRolloutPath(threadId: string): string | null {
+    if (!this.handle.codexHome) return null;
+    const root = join(this.handle.codexHome, "sessions");
+    try {
+      const suffix = `-${threadId}.jsonl`;
+      const relative = readdirSync(root, { recursive: true, encoding: "utf8" })
+        .find((entry) => entry.endsWith(suffix));
+      return relative ? join(root, relative) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private recoveredContext(session: CodexSession): string {
+    session.rolloutPath ??= this.findRolloutPath(session.id.slice("codex-".length));
+    const messages = this.readRolloutItems(session, 30)
+      .flatMap(({ item }) => {
+        if (item.type === "userMessage" && Array.isArray(item.content)) {
+          const text = item.content
+            .map((part) => isRecord(part) && typeof part.text === "string" ? part.text : "")
+            .filter(Boolean)
+            .join("\n");
+          return text ? [`User: ${text}`] : [];
+        }
+        return item.type === "agentMessage" && typeof item.text === "string" && item.text
+          ? [`Assistant: ${item.text}`]
+          : [];
+      })
+      .join("\n\n");
+    return messages.slice(-16_000);
+  }
+
+  private async replaceMissingThread(session: CodexSession, engine: ManagedCodexEngine): Promise<void> {
+    const context = this.recoveredContext(session);
+    const developerInstructions = buildSofiaDeveloperInstructions({
+      workspaceId: session.workspaceId,
+      cwd: session.cwd ?? this.handle.cwd,
+    });
+    const replacementId = await engine.startThread({
+      cwd: session.cwd ?? this.handle.cwd,
+      developerInstructions: context
+        ? `${developerInstructions}\n\n<recovered_thread_context>\n${context}\n</recovered_thread_context>`
+        : developerInstructions,
+    });
+    const originalThreadId = session.id.slice("codex-".length);
+    session.threadId = replacementId;
+    this.threadAliases[originalThreadId] = replacementId;
+    this.persistThreadAliases();
+  }
+
+  private setupEngineListeners(engine: ManagedCodexEngine): void {
+    // Inbound server->client approval requests must be answered with a response.
+    const onReq = (request: unknown) => {
+      const r = request as Record<string, unknown>;
+      const method = r.method as string;
+      if (method === "item/commandExecution/requestApproval" ||
+          method === "item/fileChange/requestApproval" ||
+          method === "item/permissions/requestApproval") {
+        const active = this.activeSession();
+        if (active && r.id !== undefined) {
+          this.events.emit("event", {
+            type: "approval.requested",
+            sessionId: active.id,
+            threadId: active.threadId,
+            params: r.params,
+            requestId: r.id,
+            method,
+          });
+        }
+      }
+    };
+    (engine as unknown as { on: (method: string, listener: (params: unknown) => void) => unknown }).on("request", onReq);
+    engine.on("error", (params) => {
+      const active = this.activeSession();
+      if (active) {
+        this.events.emit("event", {
+          type: "error",
+          sessionId: active.id,
+          threadId: active.threadId,
+          message: typeof params === "string" ? params : JSON.stringify(params),
+        });
+      }
+    });
+  }
+
+  private activeSession(): CodexSession | undefined {
+    for (const s of this.sessions.values()) {
+      if (s.status === "running") return s;
+    }
+    return undefined;
+  }
+
+  constructor(
+    private handle: CodexEngineHandle,
+    private workspaceId: string | null = null,
+    private enableLegacyImport = false,
+  ) {
+    this.threadAliases = this.readThreadAliases();
+  }
+
+  on(listener: (event: CodexEvent) => void): () => void {
+    this.events.on("event", listener);
+    return () => this.events.off("event", listener);
+  }
+
+  onSession(listener: (session: CodexSession) => void): () => void {
+    const off = this.on((event) => {
+      if (event.type === "session.created" || event.type === "session.updated") listener(event.session);
+    });
+    return off;
+  }
+
+  isRunning(): boolean {
+    return this.engine?.isAlive() ?? false;
+  }
+
+  /** True if the connected codex binary supports a feature-gated app-server
+   * method (compactionImageBudget, threadRevert, ...). False before start. */
+  featureSupported(feature: CodexFeature): boolean {
+    return this.engine?.featureSupported(feature) ?? false;
+  }
+
+  get engineInfo() {
+    return this.engine?.info ?? { running: false, pid: null, cwd: this.handle.cwd, userAgent: null, codexHome: null };
+  }
+
+  listSessions(): CodexSession[] {
+    return [...this.sessions.values()].sort((a, b) => b.created.localeCompare(a.created));
+  }
+
+  getSession(sessionId: string): CodexSession | null {
+    return this.sessions.get(sessionId) ?? null;
+  }
+
+  /** Fetch a thread's persisted items (for restoring a transcript). */
+  async getSessionItems(sessionId: string, options?: { limit?: number }): Promise<Array<{ turnId: string; item: Record<string, unknown> }>> {
+    await this.start();
+    const session = this.sessions.get(sessionId);
+    if (!session || !this.engine) return [];
+    try {
+      return await this.engine.listThreadItems(session.threadId, { limit: options?.limit });
+    } catch {
+      // Legacy (ChatGPT/Codex) sessions aren't in the app-server thread store;
+      // fall back to reading the rollout JSONL directly.
+      return this.readRolloutItems(session, options?.limit);
+    }
+  }
+
+  /** Parse a legacy rollout JSONL into ThreadItem-shaped entries. */
+  private readRolloutItems(session: CodexSession, limit = 200): Array<{ turnId: string; item: Record<string, unknown> }> {
+    const path = session.rolloutPath;
+    if (!path || !existsSync(path)) return [];
+    try {
+      const raw = readFileSync(path, "utf8");
+      const out: Array<{ turnId: string; item: Record<string, unknown> }> = [];
+      let currentTurn = "";
+      for (const line of raw.split("\n")) {
+        if (!line.trim()) continue;
+        let parsed: Record<string, unknown>;
+        try { parsed = JSON.parse(line); } catch { continue; }
+        const type = parsed.type;
+        if (type === "event_msg" || type === "turn_context") {
+          const payload = isRecord(parsed.payload) ? parsed.payload : {};
+          if (isRecord(payload)) {
+            const turnId = typeof payload.turn_id === "string" ? payload.turn_id : currentTurn;
+            if (turnId) currentTurn = turnId;
+          }
+          // Messages are emitted only from response_item (the durable record);
+          // event_msg.agent_message duplicates the same assistant reply and
+          // would double every message in the transcript.
+          continue;
+        }
+        if (type === "response_item") {
+          const payload = isRecord(parsed.payload) ? parsed.payload : {};
+          const itemType = typeof payload.type === "string" ? payload.type : "";
+          const id = typeof payload.id === "string" ? payload.id : `${currentTurn}:item:${out.length}`;
+          if (itemType === "reasoning") {
+            const content = Array.isArray(payload.content)
+              ? (payload.content as unknown[]).map((c) => isRecord(c) && typeof c.text === "string" ? c.text : "").filter(Boolean)
+              : [];
+            out.push({ turnId: currentTurn, item: { type: "reasoning", id, content } });
+          } else if (itemType === "message" && payload.role === "user") {
+            const content = Array.isArray(payload.content)
+              ? (payload.content as unknown[]).map((c) => isRecord(c) && typeof c.text === "string" ? c.text : "").filter(Boolean)
+              : [];
+            const text = content.join("\n");
+            if (text) out.push({ turnId: currentTurn, item: { type: "userMessage", id, content: [{ type: "text", text }] } });
+          } else if (itemType === "message" && payload.role === "assistant") {
+            const content = Array.isArray(payload.content)
+              ? (payload.content as unknown[]).map((c) => isRecord(c) && typeof c.text === "string" ? c.text : "").filter(Boolean)
+              : [];
+            out.push({ turnId: currentTurn, item: { type: "agentMessage", id, text: content.join("\n") } });
+          } else if (itemType === "function_call") {
+            out.push({
+              turnId: currentTurn,
+              item: {
+                type: "dynamicToolCall",
+                id,
+                tool: typeof payload.name === "string" ? payload.name : "tool",
+                arguments: payload.arguments,
+                status: "completed",
+              },
+            });
+          } else if (itemType === "function_call_output") {
+            const callId = typeof payload.call_id === "string" ? payload.call_id : "";
+            if (callId) {
+              out.push({
+                turnId: currentTurn,
+                item: {
+                  type: "dynamicToolCall",
+                  id: callId,
+                  tool: "function",
+                  arguments: {},
+                  status: "completed",
+                  result: payload.output,
+                },
+              });
+            }
+          } else if (itemType === "custom_tool_call") {
+            // Codex "exec" custom tool calls are shell commands. Map to a
+            // commandExecution so the UI renders an inline "used bash" marker.
+            const name = typeof payload.name === "string" ? payload.name : "";
+            const rawInput = typeof payload.input === "string" ? payload.input : JSON.stringify(payload.input ?? {});
+            const command = parseCustomToolCommand(rawInput);
+            const callId = typeof payload.call_id === "string" ? payload.call_id : id;
+            if (name === "exec" && command) {
+              out.push({
+                turnId: currentTurn,
+                item: {
+                  type: "commandExecution",
+                  id: callId,
+                  command,
+                  status: typeof payload.status === "string" ? payload.status : "completed",
+                },
+              });
+            } else if (name) {
+              out.push({
+                turnId: currentTurn,
+                item: {
+                  type: "dynamicToolCall",
+                  id: callId,
+                  tool: name,
+                  arguments: payload.input,
+                  status: "completed",
+                },
+              });
+            }
+          } else if (itemType === "custom_tool_call_output") {
+            const callId = typeof payload.call_id === "string" ? payload.call_id : "";
+            const commandItem = idFromCallId(out, callId);
+            if (commandItem && commandItem.item.type === "commandExecution") {
+              commandItem.item.aggregatedOutput = typeof payload.output === "string" ? payload.output : "";
+            }
+          }
+        }
+      }
+      // Return only the most recent `limit` items (rollouts can be huge).
+      return limit > 0 && out.length > limit ? out.slice(-limit) : out;
+    } catch {
+      return [];
+    }
+  }
+
+  async start(): Promise<void> {
+    if (this.engine?.isAlive()) return;
+    if (this.engine) {
+      const deadEngine = this.engine;
+      this.engine = null;
+      await deadEngine.close().catch(() => undefined);
+    }
+    if (this.starting) return await this.starting;
+    const starting = (async () => {
+      const engine = new ManagedCodexEngine({
+        bin: this.handle.bin,        cwd: this.handle.cwd,
+        codexHome: this.handle.codexHome,
+        env: this.handle.env,
+        interpreter: this.handle.interpreter,
+      });
+      await engine.initialize();
+      this.setupEngineListeners(engine);
+      engine.onExit(() => {
+        // Mark running sessions as errored so the UI can surface the loss.
+        for (const session of this.sessions.values()) {
+          if (session.status === "running") {
+            session.status = "error";
+            this.emit({ type: "session.updated", session: { ...session } });
+          }
+        }
+        // Allow start() to re-create the engine instead of reusing the dead
+        // handle. The startup promise is cleared by start() itself.
+        if (this.engine === engine) this.engine = null;
+      });
+      engine.on("item/started", (params) => this.handleItemStarted(params));
+      engine.on("item/agentMessage/delta", (params) => this.handleAgentDelta(params));
+      engine.on("item/reasoning/textDelta", (params) => this.handleReasoningDelta(params));
+      engine.on("item/reasoning/summaryTextDelta", (params) => this.handleReasoningDelta(params));
+      engine.on("command/exec/outputDelta", (params) => this.handleToolOutput(params));
+      engine.on("item/commandExecution/outputDelta", (params) => this.handleToolOutput(params));
+      engine.on("item/fileChange/patchUpdated", (params) => this.handleFilePatch(params));
+      engine.on("item/completed", (params) => this.handleItemCompleted(params));
+      engine.on("turn/completed", (params) => this.handleTurnCompleted(params));
+      engine.on("thread/status/changed", (params) => this.handleThreadStatus(params));
+      engine.on("account/rateLimits/updated", (params) => this.handleRateLimits(params));
+      // Notification-style (no request id) approval requests, e.g. when the
+      // server streams a pending approval as a notification.
+      engine.on("item/permissions/requestApproval", (params) => this.handleApproval(params));
+      engine.on("item/commandExecution/requestApproval", (params) => this.handleApproval(params));
+      engine.on("item/fileChange/requestApproval", (params) => this.handleApproval(params));
+      this.engine = engine;
+      await this.loadExistingThreads();
+    })();
+    this.starting = starting;
+    try {
+      await starting;
+    } finally {
+      if (this.starting === starting) this.starting = null;
+    }
+  }
+
+  /** Restore persisted codex threads into the session map across restarts. */
+  private async loadExistingThreads(): Promise<void> {
+    if (!this.engine) return;
+    try {
+      const threads = await this.engine.listThreads({ limit: 100, archived: false });
+      for (const raw of threads) {
+        const thread = raw as {
+          id?: string;
+          preview?: string;
+          name?: string;
+          createdAt?: number;
+          created_at?: number | string;
+          cwd?: string;
+          model?: string;
+          model_provider?: string;
+          modelProvider?: string;
+        };
+        const threadId = typeof thread.id === "string" ? thread.id : "";
+        if (thread.cwd && resolve(thread.cwd) !== resolve(this.handle.cwd)) continue;
+        const originalThreadId = Object.entries(this.threadAliases).find(([, replacement]) => replacement === threadId)?.[0];
+        const sessionId = codexSessionId(originalThreadId ?? threadId);
+        if (!threadId || this.sessions.has(sessionId)) continue;
+        const createdAt = thread.createdAt ?? thread.created_at;
+        const created = typeof createdAt === "number"
+          ? new Date(createdAt * 1000).toISOString()
+          : typeof thread.created_at === "string"
+            ? thread.created_at
+            : new Date().toISOString();
+        const session: CodexSession = {
+          id: sessionId,
+          threadId,
+          title: thread.name?.trim() || (typeof thread.preview === "string" && thread.preview.trim()
+            ? thread.preview.trim()
+            : "Sofia task"),
+          cwd: thread.cwd ?? this.handle.cwd,
+          workspaceId: this.workspaceId ?? "local",
+          created,
+          turnId: null,
+          status: "idle",
+          ...(typeof thread.model === "string" ? { model: thread.model } : {}),
+          ...(typeof (thread.modelProvider ?? thread.model_provider) === "string"
+            ? { providerId: thread.modelProvider ?? thread.model_provider }
+            : {}),
+        };
+        this.sessions.set(session.id, session);
+      }
+    } catch {
+      // Best-effort: a fresh engine may not expose thread/list; ignore.
+    }
+    await this.importLegacyCodexSessions();
+  }
+
+  /**
+   * Import sessions from the user's legacy `~/.codex/state_5.sqlite` (the store
+   * the ChatGPT/Codex desktop app writes). The app-server's thread/list only
+   * reads the newer thread_history store, so these would otherwise never appear.
+   * Best-effort read-only import; never modifies the source DB.
+   */
+  private async importLegacyCodexSessions(): Promise<void> {
+    // Import the user's real ~/.codex/state_5.sqlite (ChatGPT/Codex desktop
+    // store) so those sessions appear in Sofia. Read-only; never modifies the
+    // source DB. Enabled by the registry (desktop runtime) — isolated unit
+    // tests pass false and stay clean.
+    if (!this.enableLegacyImport) return;
+    let legacyDb: string | null = null;
+    const realHome = process.env.REAL_HOME?.trim() || homedir();
+    const candidates = [
+      join(realHome, ".codex", "state_5.sqlite"),
+      join(homedir(), ".codex", "state_5.sqlite"),
+    ];
+    for (const candidate of candidates) {
+      try {
+        if (existsSync(candidate)) { legacyDb = candidate; break; }
+      } catch { /* skip */ }
+    }
+    if (!legacyDb) return;
+    try {
+      const { DatabaseSync } = await importNodeSqlite();
+      const sqlite = new DatabaseSync(legacyDb, { readOnly: true });
+      const rows = sqlite.prepare(
+        "SELECT id, rollout_path, title, created_at, cwd FROM threads",
+      ).all() as Array<Record<string, unknown>>;
+      sqlite.close();
+      const workspacePath = this.handle.cwd;
+      for (const row of rows) {
+        const threadId = typeof row.id === "string" ? row.id : "";
+        if (!threadId || this.sessions.has(codexSessionId(threadId))) continue;
+        // Only import sessions whose project matches this workspace's path
+        // (codex groups by project cwd; OpenWork groups by workspace).
+        const rowCwd = typeof row.cwd === "string" ? row.cwd : "";
+        if (workspacePath && rowCwd && !pathsMatch(workspacePath, rowCwd)) continue;
+        const createdRaw = row.created_at;
+        const created = typeof createdRaw === "number"
+          ? new Date(createdRaw * 1000).toISOString()
+          : new Date().toISOString();
+        const session: CodexSession = {
+          id: codexSessionId(threadId),
+          threadId,
+          title: typeof row.title === "string" && row.title.trim()
+            ? row.title.trim().slice(0, 200)
+            : "Codex session",
+          workspaceId: this.workspaceId ?? "local",
+          created,
+          turnId: null,
+          status: "idle",
+          rolloutPath: typeof row.rollout_path === "string" ? row.rollout_path : null,
+        };
+        this.sessions.set(session.id, session);
+      }
+    } catch {
+      // Legacy store may be absent or locked; best-effort.
+    }
+  }
+
+  async close(): Promise<void> {
+    await this.engine?.close();
+    this.engine = null;
+    this.starting = null;
+  }
+
+  /** Create a thread (session) and optionally start a turn with a prompt. */
+  async createSession(input: {
+    title: string;
+    prompt?: string;
+    workspaceId: string;
+    cwd?: string;
+    model?: string;
+    providerId?: string;
+  }): Promise<CodexSession> {
+    await this.start();
+    this.workspaceId = input.workspaceId;
+    if (!this.engine) throw new Error("codex engine is not running");
+    const threadId = await this.engine.startThread({
+      cwd: input.cwd ?? this.handle.cwd,
+      ...(input.model ? { model: input.model } : {}),
+      ...(input.providerId ? { modelProvider: input.providerId } : {}),
+      developerInstructions: buildSofiaDeveloperInstructions({
+        workspaceId: input.workspaceId,
+        cwd: input.cwd ?? this.handle.cwd,
+      }),
+    });
+    const session: CodexSession = {
+      id: codexSessionId(threadId),
+      threadId,
+      title: input.title,
+      workspaceId: input.workspaceId,
+      created: new Date().toISOString(),
+      turnId: null,
+      status: "idle",
+      cwd: input.cwd ?? this.handle.cwd,
+      ...(input.model ? { model: input.model } : {}),
+      ...(input.providerId ? { providerId: input.providerId } : {}),
+    };
+    await this.engine.renameThread(threadId, input.title);
+    this.sessions.set(session.id, session);
+    this.emit({ type: "session.created", session });
+    if (input.prompt) {
+      await this.prompt(session.id, input.prompt);
+    }
+    return { ...session };
+  }
+
+  /** Submit a user message to a thread and start a turn. */
+  async prompt(sessionId: string, text: string, opts?: { cwd?: string; model?: string; providerId?: string }): Promise<CodexSession> {
+    await this.start();
+    const engine = this.activeEngine();
+    let session = this.sessions.get(sessionId);
+    if (!session && isCodexSessionId(sessionId)) {
+      const threadId = sessionId.slice("codex-".length);
+      try {
+        const raw = await engine.readThread(threadId) as { thread?: { id?: string; preview?: string; cwd?: string }; id?: string; preview?: string; cwd?: string };
+        const thread = raw.thread ?? raw;
+        if (thread.id === threadId && typeof thread.cwd === "string" && resolve(thread.cwd) === resolve(this.handle.cwd)) {
+          session = {
+            id: sessionId,
+            threadId,
+            title: typeof thread.preview === "string" && thread.preview.trim() ? thread.preview.trim() : "Codex session",
+            workspaceId: this.workspaceId ?? "local",
+            created: new Date().toISOString(),
+            turnId: null,
+            status: "idle",
+            ...(typeof thread.cwd === "string" ? { cwd: thread.cwd } : {}),
+          };
+          this.sessions.set(sessionId, session);
+        }
+      } catch {
+        // The thread may genuinely no longer exist; preserve the normal error.
+      }
+    }
+    if (!session) throw new Error(`unknown codex session: ${sessionId}`);
+    if (session.status === "running") throw new Error("This Sofia task is still running. Stop it or wait before sending another turn.");
+    if ((opts?.model && opts.model !== session.model) || (opts?.providerId && opts.providerId !== session.providerId)) {
+      await engine.updateThreadSettings({
+        threadId: session.threadId,
+        ...(opts.model ? { model: opts.model } : {}),
+        ...(opts.providerId ? { modelProvider: opts.providerId } : {}),
+      });
+      if (opts.model) session.model = opts.model;
+      if (opts.providerId) session.providerId = opts.providerId;
+    }
+    session.status = "running";
+    session.cwd = opts?.cwd ?? session.cwd ?? this.handle.cwd;
+    this.emit({ type: "session.updated", session: { ...session } });
+    let turnId: string | null;
+    try {
+      turnId = await engine.startTurn({
+        ...codexTurnPermissions(readCodexAccessMode(this.handle.codexHome)),
+        threadId: session.threadId,
+        input: [{ text }],
+        cwd: session.cwd,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (/thread not found/.test(message)) {
+        await this.replaceMissingThread(session, engine);
+        turnId = await engine.startTurn({
+          ...codexTurnPermissions(readCodexAccessMode(this.handle.codexHome)),
+          threadId: session.threadId,
+          input: [{ text }],
+          cwd: session.cwd,
+        });
+      } else if (/codex app-server (?:is not running|exited)/.test(message)) {
+      const deadEngine = this.engine;
+      this.engine = null;
+      await deadEngine?.close().catch(() => undefined);
+      await this.start();
+      const restartedEngine = this.activeEngine();
+      turnId = await restartedEngine.startTurn({
+        ...codexTurnPermissions(readCodexAccessMode(this.handle.codexHome)),
+        threadId: session.threadId,
+        input: [{ text }],
+        cwd: session.cwd,
+      });
+      } else {
+        throw error;
+      }
+    }
+    session.turnId = turnId;
+    this.emit({ type: "session.updated", session: { ...session } });
+    return { ...session };
+  }
+
+  async abort(sessionId: string): Promise<void> {
+    const session = this.sessions.get(sessionId);
+    if (!session) throw new Error(`unknown Sofia task: ${sessionId}`);
+    if (!session.turnId || session.status !== "running") return;
+    await this.activeEngine().interruptTurn(session.threadId, session.turnId);
+  }
+
+  /** Steer an in-flight turn with a follow-up message (turn/steer). */
+  async steer(sessionId: string, text: string): Promise<CodexSession> {
+    await this.start();
+    const session = this.sessions.get(sessionId);
+    if (!session || !this.engine) throw new Error(`unknown codex session: ${sessionId}`);
+    if (!session.turnId || session.status !== "running") throw new Error("There is no active Sofia turn to steer");
+    const turnId = await this.engine.steerTurn({ threadId: session.threadId, expectedTurnId: session.turnId, input: [{ text }] });
+    session.turnId = turnId;
+    session.status = "running";
+    this.emit({ type: "session.updated", session: { ...session } });
+    return { ...session };
+  }
+
+  /** Fork a thread into a new thread (thread/fork). Returns the new session. */
+  async forkSession(sessionId: string, prompt: string): Promise<CodexSession> {
+    await this.start();
+    const session = this.sessions.get(sessionId);
+    if (!session || !this.engine) throw new Error(`unknown codex session: ${sessionId}`);
+    const newThreadId = await this.engine.forkThread({ threadId: session.threadId, input: [{ text: prompt }] });
+    if (!newThreadId) throw new Error("thread/fork returned no threadId");
+    const created = new Date().toISOString();
+    const forked: CodexSession = {
+      id: codexSessionId(newThreadId),
+      threadId: newThreadId,
+      title: `${session.title} (fork)`,
+      workspaceId: session.workspaceId,
+      created,
+      turnId: null,
+      status: "idle",
+      cwd: session.cwd ?? this.handle.cwd,
+    };
+    this.sessions.set(forked.id, forked);
+    this.emit({ type: "session.created", session: forked });
+    return { ...forked };
+  }
+
+  /** Archive or unarchive a session (thread/archive, thread/unarchive). */
+  async setArchived(sessionId: string, archived: boolean): Promise<CodexSession> {
+    await this.start();
+    const session = this.sessions.get(sessionId);
+    if (!session) throw new Error(`unknown codex session: ${sessionId}`);
+    await this.activeEngine().archiveThread(session.threadId, archived);
+    session.archived = archived;
+    this.emit({ type: "session.updated", session: { ...session } });
+    return { ...session };
+  }
+
+  async rename(sessionId: string, title: string): Promise<CodexSession> {
+    await this.start();
+    const session = this.sessions.get(sessionId);
+    if (!session) throw new Error(`unknown Sofia task: ${sessionId}`);
+    const name = title.trim();
+    if (!name) throw new Error("title is required");
+    await this.activeEngine().renameThread(session.threadId, name);
+    session.title = name;
+    this.emit({ type: "session.updated", session: { ...session } });
+    return { ...session };
+  }
+
+  /** Unsubscribe from a thread (thread/unsubscribe). */
+  async unsubscribeSession(sessionId: string): Promise<void> {
+    const session = this.sessions.get(sessionId);
+    if (!session || !this.engine) return;
+    await this.engine.unsubscribeThread(session.threadId).catch(() => undefined);
+  }
+
+  async delete(sessionId: string): Promise<void> {
+    await this.start();
+    const session = this.sessions.get(sessionId);
+    if (!session) return;
+    if (session.status === "running" && session.turnId) {
+      await this.activeEngine().interruptTurn(session.threadId, session.turnId);
+    }
+    // Delete the persisted thread in the codex engine, not just the in-memory
+    // session, so it doesn't re-import on the next loadExistingThreads.
+    await this.activeEngine().deleteThread(session.threadId);
+    this.sessions.delete(sessionId);
+  }
+
+  private emit(event: CodexEvent): void {
+    this.events.emit("event", event);
+  }
+
+  private sessionFor(threadId: string): CodexSession | null {
+    return this.sessions.get(codexSessionId(threadId))
+      ?? [...this.sessions.values()].find((session) => session.threadId === threadId)
+      ?? null;
+  }
+
+  private handleItemStarted(params: unknown): void {
+    const { threadId, item, turnId } = params as { threadId?: string; item?: Record<string, unknown>; turnId?: string };
+    const session = this.sessionFor(threadId ?? "");
+    if (!session) return;
+    const itemType = typeof item?.type === "string" ? item.type : "unknown";
+    this.emit({ type: "item.started", sessionId: session.id, threadId: threadId ?? "", itemType, item: item ?? null, turnId: typeof turnId === "string" ? turnId : "" });
+  }
+
+  private handleAgentDelta(params: unknown): void {
+    const { threadId, delta, itemId } = params as { threadId?: string; delta?: string; itemId?: string };
+    const session = this.sessionFor(threadId ?? "");
+    if (!session || typeof delta !== "string") return;
+    this.emit({ type: "message.delta", sessionId: session.id, threadId: threadId ?? "", text: delta, itemId });
+  }
+
+  private handleReasoningDelta(params: unknown): void {
+    const { threadId, delta, itemId } = params as { threadId?: string; delta?: string; itemId?: string };
+    const session = this.sessionFor(threadId ?? "");
+    if (!session || typeof delta !== "string") return;
+    this.emit({ type: "thinking.delta", sessionId: session.id, threadId: threadId ?? "", text: delta, itemId });
+  }
+
+  private handleToolOutput(params: unknown): void {
+    const { threadId, itemId, delta } = params as { threadId?: string; itemId?: string; delta?: string };
+    const session = this.sessionFor(threadId ?? "");
+    if (!session || typeof delta !== "string") return;
+    this.emit({
+      type: "tool.output",
+      sessionId: session.id,
+      threadId: threadId ?? "",
+      itemId: typeof itemId === "string" ? itemId : "",
+      text: delta,
+    });
+  }
+
+  private handleFilePatch(params: unknown): void {
+    const { threadId, itemId, patch } = params as { threadId?: string; itemId?: string; patch?: unknown };
+    const session = this.sessionFor(threadId ?? "");
+    if (!session) return;
+    this.emit({
+      type: "file.patch",
+      sessionId: session.id,
+      threadId: threadId ?? "",
+      itemId: typeof itemId === "string" ? itemId : "",
+      patch: patch ?? null,
+    });
+  }
+
+  private handleThreadStatus(params: unknown): void {
+    const { threadId, status } = params as { threadId?: string; status?: unknown };
+    const session = this.sessionFor(threadId ?? "");
+    if (!session) return;
+    this.emit({ type: "thread.status", sessionId: session.id, threadId: threadId ?? "", status: status ?? null });
+  }
+
+  private handleItemCompleted(params: unknown): void {
+    const { threadId, item, turnId } = params as { threadId?: string; item?: Record<string, unknown>; turnId?: string };
+    const session = this.sessionFor(threadId ?? "");
+    if (!session) return;
+    const itemType = typeof item?.type === "string" ? item.type : "unknown";
+    this.emit({ type: "item.completed", sessionId: session.id, threadId: threadId ?? "", itemType, item: item ?? null, turnId: typeof turnId === "string" ? turnId : "" });
+  }
+
+  private handleTurnCompleted(params: unknown): void {
+    const { threadId, thread_id, turn, error } = params as {
+      threadId?: string;
+      thread_id?: string;
+      turn?: { id?: string; status?: string; error?: { message?: string; codex_error_info?: unknown } };
+      error?: unknown;
+    };
+    const tid = threadId ?? thread_id ?? "";
+    const session = this.sessionFor(tid);
+    if (!session) return;
+    session.status = turn?.status === "failed" || turn?.error || error ? "error" : "idle";
+    session.turnId = null;
+    this.emit({ type: "session.updated", session: { ...session } });
+    this.emit({ type: "turn.completed", sessionId: session.id, threadId: tid });
+    const turnError = turn?.error as { message?: string } | undefined;
+    const raw = (turnError?.message ?? (typeof error === "string" ? error : (error as { message?: string } | undefined)?.message))?.trim();
+    if (raw || session.status === "error") {
+      this.emit({ type: "error", sessionId: session.id, threadId: tid, message: raw || "The Sofia turn failed. Please retry." });
+    }
+  }
+
+  private handleApproval(params: unknown): void {
+    const { threadId } = params as { threadId?: string };
+    const session = this.sessionFor(threadId ?? "");
+    if (!session) return;
+    this.emit({ type: "approval.requested", sessionId: session.id, threadId: threadId ?? "", params });
+  }
+
+  private handleRateLimits(params: unknown): void {
+    const { threadId, rateLimits } = params as { threadId?: string; rateLimits?: unknown };
+    const session = this.sessionFor(threadId ?? "");
+    if (!session) return;
+    this.emit({ type: "rateLimit.updated", sessionId: session.id, threadId: threadId ?? "", rateLimits: rateLimits ?? null });
+  }
+
+  /** Answer an inbound approval request from the codex engine. */
+  respondApproval(
+    requestId: string | number,
+    decision: "Accept" | "AcceptForSession" | "Decline" | "Cancel",
+    method?: string,
+    requestedPermissions?: Record<string, unknown>,
+  ): void {
+    if (!this.engine) return;
+    // Codex's approval decisions are serde camelCase on the wire
+    // (CommandExecutionApprovalDecision / FileChangeApprovalDecision):
+    // "accept" | "acceptForSession" | "decline" | "cancel". Sending PascalCase
+    // fails deserialization, so codex never receives the decision and the turn
+    // hangs.
+    if (method === "item/permissions/requestApproval") {
+      const allowed = decision === "Accept" || decision === "AcceptForSession";
+      this.engine.respond(requestId, {
+        permissions: allowed ? requestedPermissions ?? {} : {},
+        scope: decision === "AcceptForSession" ? "session" : "turn",
+      });
+      return;
+    }
+    const wire = {
+      Accept: "accept",
+      AcceptForSession: "acceptForSession",
+      Decline: "decline",
+      Cancel: "cancel",
+    }[decision];
+    this.engine.respond(requestId, { decision: wire });
+  }
+}
+
+export function createCodexSessionManager(handle: CodexEngineHandle, workspaceId?: string, enableLegacyImport = false): CodexSessionManager {
+  return new CodexSessionManager(handle, workspaceId ?? null, enableLegacyImport);
+}

@@ -33,6 +33,7 @@ import { createUiControlServer } from "./ui-control-server.mjs";
 import { createApplicationMenu } from "./app-menu.mjs";
 import { applyBrandAppName } from "./brand-app-name.mjs";
 import { createBrowserPanel } from "./browser-panel.mjs";
+import { createCdpBroker } from "./cdp-broker.mjs";
 import { createWorkspaceStore } from "./workspace-store.mjs";
 import {
   buildNukeManifest,
@@ -85,6 +86,42 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const APP_ROOT = path.resolve(__dirname, "../../..");
 const require = createRequire(import.meta.url);
 const desktopPackageMetadata = require("../package.json");
+
+/**
+ * Resolve the bundled codex sidecar (built from the mona-chen/codex source).
+ * Mirrors runtime.mjs's sidecar dirs: resources/sidecars in dev and packaged
+ * builds. Bundled-only — never falls back to a system codex install.
+ */
+function resolveBundledCodexBinary() {
+  const exeName = process.platform === "win32" ? "codex.exe" : "codex";
+  const sidecarDirs = [
+    path.join(__dirname, "..", "resources", "sidecars"),
+    process.resourcesPath ? path.join(process.resourcesPath, "sidecars") : null,
+    path.join(path.dirname(app?.getPath?.("exe") ?? ""), "sidecars"),
+  ].filter(Boolean);
+  for (const dir of sidecarDirs) {
+    const candidate = path.join(dir, exeName);
+    if (existsSync(candidate)) return candidate;
+  }
+  return null;
+}
+
+/** Engine-selection file the renderer mirrors so the main process can gate
+ * whether the opencode engine boots at startup. */
+function engineSelectionFilePath() {
+  return path.join(app.getPath("userData"), "codex-engine-selection.json");
+}
+
+function readEngineSelectionFile() {
+  try {
+    const raw = readFileSync(engineSelectionFilePath(), "utf8");
+    const parsed = JSON.parse(raw);
+    return parsed?.engine === "opencode" ? "opencode" : "codex";
+  } catch {
+    // Codex (Sofia) is the default engine; missing file means codex-only.
+    return "codex";
+  }
+}
 // Electron 35 eagerly resolves every export in a named ESM import, including
 // safeStorage. Loading through CommonJS keeps safeStorage lazy so isolated demo
 // profiles do not show macOS's native keychain dialog before our switches run.
@@ -139,16 +176,21 @@ const APP_IDENTIFIER = resolveAppIdentifier({
   isDevMode,
   isPackaged: app.isPackaged,
 });
-if (BLANK_SLATE_LAUNCH.enabled || process.env.OPENWORK_ELECTRON_USE_MOCK_KEYCHAIN === "1") {
-  // Fresh, isolated development profiles otherwise trigger macOS's native
-  // "Login" keychain prompt as soon as Chromium persists an authenticated
-  // cookie. That modal blocks the entire Electron main loop and makes the demo
-  // appear frozen. Production never sets this flag and continues to use the
-  // system keychain normally.
+const mockKeychainRequested = process.env.OPENWORK_ELECTRON_USE_MOCK_KEYCHAIN?.trim().toLowerCase();
+// Fresh, isolated development profiles otherwise trigger macOS's native
+// "Login" keychain prompt as soon as Chromium persists an authenticated
+// cookie (e.g. in the built-in browser partition). That modal blocks the
+// entire Electron main loop and makes the app appear frozen. Dev mode opts
+// into mock keychain by default (override with ...=0); production never sets
+// it and continues to use the system keychain normally.
+const mockKeychainDefault =
+  isDevMode && mockKeychainRequested !== "0" && mockKeychainRequested !== "false";
+if (BLANK_SLATE_LAUNCH.enabled || mockKeychainDefault || mockKeychainRequested === "1" || mockKeychainRequested === "true") {
   app.commandLine.appendSwitch("use-mock-keychain");
 }
-const RELEASE_DOWNLOAD_BASE_URL = "https://github.com/different-ai/openwork/releases/latest/download";
-const RELEASE_PAGE_URL = "https://github.com/different-ai/openwork/releases/latest";
+const { SOFIA_RELEASE } = await import("./sofia-release.mjs");
+const RELEASE_DOWNLOAD_BASE_URL = SOFIA_RELEASE.stable;
+const RELEASE_PAGE_URL = SOFIA_RELEASE.page;
 const DOCS_PAGE_URL = "https://openworklabs.com/docs";
 const applicationMenu = createApplicationMenu({
   appName: APP_NAME,
@@ -344,6 +386,7 @@ function selectDownloadFile(files, arch) {
 }
 
 async function resolveCorrectArchitectureDownloadUrl(arch) {
+  if (!RELEASE_DOWNLOAD_BASE_URL) return null;
   const manifestUrl = `${RELEASE_DOWNLOAD_BASE_URL}/${updaterManifestName(arch)}`;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10_000);
@@ -371,7 +414,7 @@ async function resolveArchitectureInfo() {
   const systemArch = resolveSystemArch();
   const version = app.getVersion();
   const targetArch = systemArch === "arm64" || systemArch === "x64" ? systemArch : appArch;
-  const assetName = `openwork-${platformDownloadSlug()}-${downloadAssetArch(targetArch)}-${version}.${downloadAssetExtension()}`;
+  const assetName = `sofia-app-${platformDownloadSlug()}-${downloadAssetArch(targetArch)}-${version}.${downloadAssetExtension()}`;
   const latestDownloadUrl = await resolveCorrectArchitectureDownloadUrl(targetArch);
   const hasCorrectArchitectureDownload = Boolean(latestDownloadUrl);
   return {
@@ -382,7 +425,7 @@ async function resolveArchitectureInfo() {
     mismatch: appArch !== systemArch && hasCorrectArchitectureDownload,
     platform: process.platform === "win32" ? "windows" : process.platform,
     version,
-    downloadUrl: latestDownloadUrl || `${RELEASE_DOWNLOAD_BASE_URL}/${assetName}`,
+    downloadUrl: latestDownloadUrl || (RELEASE_DOWNLOAD_BASE_URL ? `${RELEASE_DOWNLOAD_BASE_URL}/${assetName}` : ""),
     releaseUrl: RELEASE_PAGE_URL,
   };
 }
@@ -967,9 +1010,73 @@ if (remoteDebugPort > 0) {
 // Make the resolved port available to the embedded server so it flows into
 // agent instructions via ensureOpenworkAgent → resolveAgentTemplate.
 process.env.OPENWORK_ELECTRON_REMOTE_DEBUG_PORT = String(remoteDebugPort);
+
+// Sofia engine home: a DEDICATED OpenWork-managed dir under the REAL user home
+// (Electron's app.getPath("home") ignores the dev-sandbox HOME override). Dev
+// and packaged builds share one session store; the bundled engine never touches
+// the user's own ~/.codex config. Set at module scope so the in-process server
+// inherits it regardless of the CDP broker block below.
+if (!process.env.OPENWORK_CODEX_HOME?.trim()) {
+  process.env.OPENWORK_CODEX_HOME = path.join(app.getPath("home"), ".config", "openwork", "sofia");
+}
+// Pin the REAL user home so the server resolves the user's actual ~/.codex
+// even in dev (the dev sandbox rewrites HOME). The server reads REAL_HOME for
+// legacy session import and any ~-based path that must never hit the sandbox.
+process.env.REAL_HOME = app.getPath("home");
+// Import the user's legacy ~/.codex sessions (ChatGPT/Codex desktop store) into
+// the Sofia session list.
+process.env.OPENWORK_CODEX_IMPORT_LEGACY = "1";
+
 if (isDevMode && !app.isPackaged) {
   const cdpAddress = remoteDebugPort > 0 ? `http://127.0.0.1:${remoteDebugPort}` : "disabled";
   console.log(`[openwork] dev profile=${app.getPath("userData")} cdp=${cdpAddress}`);
+}
+
+// Agent-facing CDP broker: rewrites agent Input events with human-like cursor
+// motion before they reach the built-in browser panel's Chromium. Engine
+// agnostic — any CDP client (opencode-chrome-devtools today, a Codex runtime
+// later) connects here. Falls back to the raw CDP port if unavailable.
+let cdpBrokerBaseUrl = null;
+let closeCdpBroker = null;
+let cdpBrokerCreateTarget = null;
+const agentCdpBrokerPort = Number.parseInt(
+  process.env.OPENWORK_ELECTRON_AGENT_CDP_PORT?.trim() ?? "",
+  10,
+);
+if (remoteDebugPort > 0) {
+  const brokerPort = Number.isFinite(agentCdpBrokerPort) && agentCdpBrokerPort > 0
+    ? agentCdpBrokerPort
+    : 0; // ephemeral
+  try {
+    const broker = await createCdpBroker({
+      upstreamBaseUrl: `http://127.0.0.1:${remoteDebugPort}`,
+      port: brokerPort,
+      debug: envFlagEnabled("OPENWORK_CDP_BROKER_DEBUG"),
+      // Electron cannot create raw CDP targets; route Target.createTarget
+      // (chrome-devtools-mcp new_page) to a real visible built-in tab instead.
+      createTarget: (params) => cdpBrokerCreateTarget?.(params) ?? Promise.reject(new Error("browser panel not ready")),
+    });
+    cdpBrokerBaseUrl = broker.baseUrl;
+    closeCdpBroker = broker.close;
+    // Expose the broker endpoint to the embedded server so it can register the
+    // chrome-devtools MCP server pointing at it (the browser surface for both
+    // the opencode and future codex runtimes).
+    process.env.OPENWORK_ELECTRON_AGENT_CDP_BASE_URL = broker.baseUrl;
+    // Codex binary path forwarded to embedded server (additive engine). Always
+    // resolve the bundled sidecar (built from the mona-chen/codex source) so
+    // the server runs codex with our own binary — never a system install.
+    const codexBinPath = process.env.OPENWORK_CODEX_BIN?.trim()
+      || resolveBundledCodexBinary()
+      || null;
+    if (codexBinPath) {
+      process.env.OPENWORK_CODEX_BIN = codexBinPath;
+    }
+    if (isDevMode && !app.isPackaged) {
+      console.log(`[openwork] dev cdp-broker=${broker.baseUrl} (upstream http://127.0.0.1:${remoteDebugPort})`);
+    }
+  } catch (error) {
+    console.warn("[openwork] CDP broker unavailable; agent will use raw CDP port", error);
+  }
 }
 
 // Apply extra Chromium flags from ELECTRON_EXTRA_LAUNCH_ARGS.
@@ -1053,7 +1160,10 @@ const browserPanel = createBrowserPanel({
   remoteDebugPort,
   getWindow: () => mainWindow,
   onDeepLink: (urls) => queueDeepLinks(urls),
+  agentCdpBaseUrl: cdpBrokerBaseUrl,
 });
+// Broker Target.createTarget now has the panel it needs to open real tabs.
+cdpBrokerCreateTarget = (params) => browserPanel.createTargetForAgent(params);
 
 const workspaceStore = createWorkspaceStore({
   app,
@@ -1239,6 +1349,7 @@ const runtimeManager = createRuntimeManager({
         filePath: path.join(app.getPath("userData"), "local-managed-mcp-vault-key.bin"),
         loadSafeStorage: () => require("electron").safeStorage,
       }),
+  readEngineSelection: readEngineSelectionFile,
 });
 const initialRunnerBootstrap = workspaceStore.readDesktopBootstrapConfigSync();
 const legacyRunnerBaseUrls = [
@@ -1779,11 +1890,26 @@ const desktopCommandHandlers = {
   "engineInfo": async (event, ...args) => {
       return runtimeManager.engineInfo();
   },
+  "codexEngineStatus": async (event, ...args) => {
+      return runtimeManager.codexEngineStatus();
+  },
+  "codexEngineSelectionRead": async (event, ...args) => {
+      return { engine: readEngineSelectionFile() };
+  },
+  "codexEngineSelectionWrite": async (event, ...args) => {
+      const engine = String(args[0]?.engine ?? "").trim();
+      if (engine !== "codex" && engine !== "opencode") return { ok: false };
+      await writeFile(engineSelectionFilePath(), JSON.stringify({ engine }, null, 2), "utf8");
+      return { ok: true };
+  },
   "engineDoctor": async (event, ...args) => {
       return engineDoctor(args[0]);
   },
   "engineInstall": async (event, ...args) => {
       return runtimeManager.engineInstall();
+  },
+  "codexEngineInstall": async (event, ...args) => {
+      return runtimeManager.codexEngineInstall();
   },
   "appBuildInfo": async (event, ...args) => {
       return {
@@ -2650,6 +2776,7 @@ or use: pnpm dev:worktree`);
     void Promise.all([
       disposeRuntimeBeforeQuit(),
       uiControlServer.stop(),
+      closeCdpBroker?.(),
     ]).finally(() => {
       scheduleBlankSlateProfileCleanup();
       app.quit();

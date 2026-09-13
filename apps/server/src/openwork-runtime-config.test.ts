@@ -89,6 +89,42 @@ describe("openwork runtime config file", () => {
     });
   });
 
+  test("registers the chrome-devtools MCP against the CDP broker when exposed", async () => {
+    const { config } = await setup();
+    const previous = process.env.OPENWORK_ELECTRON_AGENT_CDP_BASE_URL;
+    process.env.OPENWORK_ELECTRON_AGENT_CDP_BASE_URL = "http://127.0.0.1:9401";
+    try {
+      await writeOpenworkRuntimeConfigFile(config, "ws_1");
+      const parsed = await readConfigFile(config);
+      const mcp = (parsed.mcp ?? {}) as Record<string, Record<string, unknown>>;
+      const browser = mcp["chrome-devtools"];
+      expect(browser).toBeDefined();
+      expect(browser?.type).toBe("local");
+      expect(browser?.enabled).toBe(true);
+      const command = browser?.command as string[];
+      expect(command.join(" ")).toContain("chrome-devtools-mcp@latest");
+      expect(command.join(" ")).toContain("--browser-url=http://127.0.0.1:9401");
+      expect(parsed.plugin).not.toContain("opencode-chrome-devtools");
+    } finally {
+      if (previous === undefined) delete process.env.OPENWORK_ELECTRON_AGENT_CDP_BASE_URL;
+      else process.env.OPENWORK_ELECTRON_AGENT_CDP_BASE_URL = previous;
+    }
+  });
+
+  test("omits the chrome-devtools MCP when no CDP broker is exposed", async () => {
+    const { config } = await setup();
+    const previous = process.env.OPENWORK_ELECTRON_AGENT_CDP_BASE_URL;
+    delete process.env.OPENWORK_ELECTRON_AGENT_CDP_BASE_URL;
+    try {
+      await writeOpenworkRuntimeConfigFile(config, "ws_1");
+      const parsed = await readConfigFile(config);
+      const mcp = (parsed.mcp ?? {}) as Record<string, Record<string, unknown>>;
+      expect(mcp["chrome-devtools"]).toBeUndefined();
+    } finally {
+      if (previous !== undefined) process.env.OPENWORK_ELECTRON_AGENT_CDP_BASE_URL = previous;
+    }
+  });
+
   test("openwork prompt has a static search-first Memory Bank section, distinct from ## Memory", async () => {
     const { config } = await setup();
     await writeOpenworkRuntimeConfigFile(config, "ws_1");

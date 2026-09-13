@@ -19,7 +19,7 @@ const MENU_OVERLAY_WIDTH = 196;
 const MENU_OVERLAY_HEIGHT = 176;
 const MENU_OVERLAY_READY_TIMEOUT_MS = 2000;
 
-export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink }) {
+export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, agentCdpBaseUrl }) {
   const browserTabs = new Map();
   let browserTabOrder = [];
   let activeBrowserTabId = null;
@@ -111,6 +111,10 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink }) {
   }
 
   function cdpBrowserUrl() {
+    // Prefer the CDP broker when it is available so agent-driven Input events
+    // are rewritten with human-like cursor motion. Falls back to the raw
+    // Chromium CDP endpoint so the panel works without the broker.
+    if (agentCdpBaseUrl) return agentCdpBaseUrl;
     return `http://127.0.0.1:${remoteDebugPort}`;
   }
 
@@ -155,7 +159,12 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink }) {
     const tab = createBrowserTab("about:blank", { select: true });
     await tab.view.webContents.loadURL(browserTargetMarkerUrl(tab.tabId));
     const targetId = await resolveBrowserCdpTargetId(tab.tabId);
-    await tab.view.webContents.loadURL(url);
+    // Kick off the real navigation without awaiting full load — heavy pages
+    // (Netflix, dashboards) can take longer than the agent's bridge timeout,
+    // which made browser.open_url time out and forced the agent to fall back
+    // to new_page (causing tab drift). The target id is what matters; the
+    // agent snapshots/wait_for after the page settles.
+    void tab.view.webContents.loadURL(url).catch(() => {});
     return {
       provider: "builtin",
       browser_url: cdpBrowserUrl(),
@@ -163,6 +172,26 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink }) {
       tab_id: tab.tabId,
       url,
     };
+  }
+
+  // Backing for the broker's Target.createTarget interception: creates a real,
+  // visible built-in browser tab (so new_page works on Electron, which cannot
+  // create raw CDP targets) and returns its CDP target id.
+  /**
+   * @param {{ url?: string, background?: boolean, width?: number, height?: number }} [options]
+   * @returns {Promise<{ targetId: string, tabId: string, url: string }>}
+   */
+  async function createTargetForAgent({ url, background = false } = {}) {
+    const target = url ? normalizeBrowserUrl(url) : "about:blank";
+    const tab = createBrowserTab("about:blank", { select: !background });
+    await tab.view.webContents.loadURL(browserTargetMarkerUrl(tab.tabId));
+    const targetId = await resolveBrowserCdpTargetId(tab.tabId);
+    if (target !== "about:blank") {
+      // Fire-and-forget like openBrowserUrlForAutomation so new_page returns
+      // fast on heavy pages instead of blocking on full load.
+      void tab.view.webContents.loadURL(target).catch(() => {});
+    }
+    return { targetId, tabId: tab.tabId, url: target };
   }
 
   function getBrowserTab(tabId = activeBrowserTabId) {
@@ -806,5 +835,6 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink }) {
     isMainWindowAllowedNavigation,
     registerIpc,
     routeBlockedMainWindowNavigation,
+    createTargetForAgent,
   };
 }

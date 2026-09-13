@@ -10,6 +10,8 @@ type ReactSessionRuntimeProps = {
   activeSessionIds?: string[];
   opencodeBaseUrl: string;
   openworkToken: string;
+  /** When false (codex-only), the opencode session sync is never started. */
+  enabled?: boolean;
   onSessionCreated?: (session: Session) => void;
   onSessionUpdated?: (update: { sessionId: string; info: Record<string, unknown> }) => void;
   onSessionDeleted?: (sessionId: string) => void;
@@ -38,6 +40,7 @@ export function ReactSessionRuntime(props: ReactSessionRuntimeProps) {
   const activeSessionIdsKey = (props.activeSessionIds ?? []).join(",");
 
   useEffect(() => {
+    if (props.enabled === false) return;
     const input = {
       workspaceId: props.workspaceId,
       baseUrl: props.opencodeBaseUrl,
@@ -50,7 +53,7 @@ export function ReactSessionRuntime(props: ReactSessionRuntimeProps) {
       releaseSessions();
       releaseWorkspace();
     };
-  }, [props.workspaceId, props.sessionId, activeSessionIdsKey, props.opencodeBaseUrl, props.openworkToken, stableCallbacks]);
+  }, [props.workspaceId, props.sessionId, activeSessionIdsKey, props.opencodeBaseUrl, props.openworkToken, stableCallbacks, props.enabled]);
 
   return null;
 }

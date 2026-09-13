@@ -1,18 +1,13 @@
 extends: ./electron-builder.base.yml
-appId: com.differentai.openwork
-productName: OpenWork Cloud
+appId: app.sofia.desktop
+productName: Sofia App Cloud
 extraMetadata:
   openworkDistribution: cloud
 protocols:
-  - name: OpenWork Cloud
+  - name: Sofia App Cloud
     schemes:
       - openwork
-publish:
-  - provider: github
-    owner: different-ai
-    repo: openwork
-    releaseType: release
-    channel: cloud
+publish: null
 linux:
-  executableName: openwork-cloud
-artifactName: openwork-cloud-${os}-${arch}-${version}.${ext}
+  executableName: sofia-app-cloud
+artifactName: sofia-app-cloud-${os}-${arch}-${version}.${ext}

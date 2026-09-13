@@ -5,6 +5,8 @@ import {
   appBuildInfo as appBuildInfoCmd,
   engineInfo as engineInfoCmd,
   engineStart as engineStartCmd,
+  codexEngineStatus as codexEngineStatusCmd,
+  codexEngineInstall as codexEngineInstallCmd,
   getDesktopBootstrapConfig,
   debugDesktopBootstrapConfig,
   nukeOpenworkAndOpencodeConfigPreview,
@@ -18,6 +20,7 @@ import {
   updaterEnvironment as updaterEnvironmentCmd,
   workspaceBootstrap as workspaceBootstrapCmd,
   type AppBuildInfo,
+  type CodexEngineStatus,
   type DesktopBootstrapConfig,
   type EngineInfo,
   type NukeManifestPreview,
@@ -205,6 +208,20 @@ function formatOpencodeBinary(info: EngineInfo | null) {
   return formatBinaryWithSource(info?.opencodeBinPath, info?.opencodeBinSource);
 }
 
+function describeCodexEngine(info: CodexEngineStatus | null) {
+  const available = Boolean(info?.available);
+  return {
+    ...statusPill(available, t("settings.available"), t("settings.not_available")),
+    installable: !available,
+    lines: [
+      t("settings.codex_engine_status", { value: available ? t("settings.available") : t("settings.not_available") }),
+      t("settings.codex_engine_binary", { binary: formatBinaryWithSource(info?.path, info?.source) }),
+      t("settings.codex_engine_version", { version: info?.pinnedVersion ?? "—" }),
+    ],
+    error: null as string | null,
+  };
+}
+
 function formatManagedOpencodeBinary(info: OpenworkServerInfo | null) {
   return formatBinaryWithSource(
     info?.managedOpencodeBinPath,
@@ -269,6 +286,9 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
   optionsRef.current = options;
 
   const [engineInfoState, setEngineInfoState] = useState<EngineInfo | null>(null);
+  const [codexEngineState, setCodexEngineState] = useState<CodexEngineStatus | null>(null);
+  const [codexInstallBusy, setCodexInstallBusy] = useState(false);
+  const [codexInstallStatus, setCodexInstallStatus] = useState<{ tone: "success" | "error"; message: string } | null>(null);
   const [appBuild, setAppBuild] = useState<AppBuildInfo | null>(null);
   const [bootstrapPrepared, setBootstrapPrepared] = useState<DesktopBootstrapConfig["prepared"]>(null);
   const [bootstrapConfigDebug, setBootstrapConfigDebug] = useState<unknown>(null);
@@ -321,6 +341,12 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
       setEngineInfoState(info);
     } catch {
       setEngineInfoState(null);
+    }
+    try {
+      const codex = await codexEngineStatusCmd() as CodexEngineStatus | null;
+      setCodexEngineState(codex);
+    } catch {
+      setCodexEngineState(null);
     }
   }, []);
 
@@ -473,6 +499,7 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
   );
 
   const engineCard = useMemo(() => describeEngine(engineInfoState), [engineInfoState]);
+  const codexEngineCard = useMemo(() => describeCodexEngine(codexEngineState), [codexEngineState]);
   const openworkCard = useMemo(
     () => describeOpenworkServer(openworkServerSnapshot.openworkServerHostInfo),
     [openworkServerSnapshot.openworkServerHostInfo],
@@ -568,11 +595,11 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
       const env = await updaterEnvironmentCmd() as { appBundlePath?: string };
       const appBundlePath = env.appBundlePath?.trim();
       if (!appBundlePath) {
-        setElectronMigrationStatus("Could not resolve the current OpenWork.app bundle path.");
+        setElectronMigrationStatus("Could not resolve the current Sofia App.app bundle path.");
         return;
       }
       await revealDesktopItemInDir(`${appBundlePath}.migrate-bak`);
-      setElectronMigrationStatus("Requested Finder reveal for OpenWork.app.migrate-bak. The backup exists after an install handoff completes.");
+      setElectronMigrationStatus("Requested Finder reveal for Sofia App.app.migrate-bak. The backup exists after an install handoff completes.");
     } catch (error) {
       setElectronMigrationStatus(error instanceof Error ? error.message : safeStringify(error));
     }
@@ -799,6 +826,33 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
     }
   }, [bootFullEngineStack, pushDeveloperLog]);
 
+  const onInstallCodexEngine = useCallback(async () => {
+    if (!isDesktopRuntime()) return;
+    setCodexInstallBusy(true);
+    setCodexInstallStatus(null);
+    try {
+      const result = await codexEngineInstallCmd() as { ok: boolean; stdout?: string; stderr?: string };
+      if (result?.ok) {
+        setCodexInstallStatus({
+          tone: "success",
+          message: t("settings.codex_install_succeeded"),
+        });
+      } else {
+        setCodexInstallStatus({
+          tone: "error",
+          message: t("settings.codex_install_failed", { detail: result?.stderr ?? "" }),
+        });
+      }
+      // Refresh availability after install attempt.
+      void refreshEngineInfo();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : safeStringify(error);
+      setCodexInstallStatus({ tone: "error", message: t("settings.codex_install_failed", { detail: message }) });
+    } finally {
+      setCodexInstallBusy(false);
+    }
+  }, [refreshEngineInfo]);
+
   const onRestartOpenworkServer = useCallback(async () => {
     if (!isDesktopRuntime()) return;
     setOpenworkServerRestarting(true);
@@ -810,7 +864,7 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
       });
       setOpenworkServiceStatus({
         tone: "success",
-        message: t("settings.restart_succeeded_template", { service: "OpenWork server" }),
+        message: t("settings.restart_succeeded_template", { service: "Sofia App server" }),
       });
       pushDeveloperLog("Restarted openwork-server");
       await openworkServerStore.reconnectOpenworkServer();
@@ -818,7 +872,7 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
       const message = error instanceof Error ? error.message : safeStringify(error);
       setOpenworkServiceStatus({
         tone: "error",
-        message: `${t("settings.restart_failed_template", { service: "OpenWork server" })} ${message}`,
+        message: `${t("settings.restart_failed_template", { service: "Sofia App server" })} ${message}`,
       });
       setServiceRestartError(message);
     } finally {
@@ -883,7 +937,7 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
     }
     try {
       await navigator.clipboard.writeText(text);
-      setOpenworkLogStatus(t("settings.copied_service_logs", { service: "OpenWork server" }));
+      setOpenworkLogStatus(t("settings.copied_service_logs", { service: "Sofia App server" }));
     } catch (error) {
       setOpenworkLogStatus(error instanceof Error ? error.message : safeStringify(error));
     }
@@ -915,7 +969,7 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
       if (!isDesktopRuntime()) return;
       const message =
         mode === "all"
-          ? "Reset ALL OpenWork app data? Open sessions and workspaces will be removed."
+          ? "Reset ALL Sofia App app data? Open sessions and workspaces will be removed."
           : "Reset onboarding state only?";
       if (typeof window !== "undefined" && !window.confirm(message)) {
         return;
@@ -927,7 +981,7 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
           clearOpenworkLocalStorageForReset(mode);
           setResetStatus(
             mode === "all"
-              ? "Reset OpenWork state. Restart the app to see changes."
+              ? "Reset Sofia App state. Restart the app to see changes."
               : "Reset onboarding state. Restart the app to see changes.",
           );
           pushDeveloperLog(`reset_openwork_state mode=${mode}`);
@@ -1073,7 +1127,11 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
       serviceRestartError,
       onRestartOpencode,
       onRestartOpenworkServer,
+      onInstallCodexEngine,
+      codexInstallBusy,
+      codexInstallStatus,
       engineCard,
+      codexEngineCard,
       opencodeConnectCard,
       openworkCard,
       openworkServerDiagnostics: openworkServerSnapshot.openworkServerDiagnostics,

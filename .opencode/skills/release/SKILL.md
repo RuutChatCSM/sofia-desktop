@@ -1,3 +1,8 @@
+---
+name: release
+description: "Cut an OpenWork release. Use when the user asks to release, publish, or ship a new version of the desktop app, or asks about the release process, versioning, or tag management."
+---
+
 # Skill: release
 
 Cut an OpenWork release. The "Release App" workflow

@@ -143,11 +143,22 @@ Reading another session does not require opening it. Prefer session.search then 
 To open settings or navigate the app, use openwork_execute with ids from openwork_context such as settings.panel.open — never browser_* tools for the OpenWork app itself.`;
 
 const OPENWORK_BROWSER_INSTRUCTION =
-  `Do NOT use browser_navigate, browser_click, or browser_snapshot to interact with the OpenWork app itself. Those are for browsing external websites.
+  `Do NOT use the chrome-devtools browser tools to interact with the OpenWork app itself. They are for browsing external websites.
 
 ## Built-in Browser (external websites)
-For web browsing tasks, ALWAYS start with openwork_execute id browser.open_url. It creates/selects a built-in OpenWork browser tab and returns browser_url plus target_id. Use that exact browser_url and target_id for every later browser_snapshot, browser_click, browser_fill, browser_eval, and browser_screenshot call.
-Do not call browser_navigate without a target_id returned by browser.open_url. Do not use browser_* tools on the OpenWork app target (avoid targets with title "OpenWork" or URLs containing ":5173/#/").`;
+The browser surface is the chrome-devtools MCP server (persistent connection; reuse it, do not spawn another). For web browsing tasks, ALWAYS start with openwork_execute id browser.open_url — it creates a VISIBLE built-in OpenWork browser tab (which is already signed in to the user's session) and returns its browser_url plus target_id.
+CRITICAL: After browser.open_url, call list_pages and select_page the page whose URL matches the URL you just opened. Do NOT use new_page — new_page creates a separate unauthenticated tab that is invisible to the user. Drive the existing tab: take_snapshot for a low-token a11y tree with uid markers, then click / fill / type_text / navigate_page / take_screenshot. After interacting, check list_console_messages and list_network_requests for errors.
+
+## Browser reliability rules (learned from real sessions)
+- browser.open_url and new_page return immediately while the page loads in the background. ALWAYS take_snapshot (or wait_for) after opening or navigating before interacting — never act on an assumed DOM.
+- Snapshots go stale the instant the page changes. RE-SNAPSHOT immediately before every click/fill; if a click fails with a stale uid, re-snapshot and retry instead of reusing the old snapshot.
+- Before interacting, list_pages to confirm you are on the expected page — the selected page can drift between tabs.
+- The a11y snapshot can miss overlay/iframe content. If a target element is missing from the snapshot, use evaluate_script to focus/verify it, but prefer clicking real elements with fresh uids.
+- Multi-step forms (login, checkout) surface fields after each step: enter email, click Continue, THEN snapshot to discover the password/code field. Never assume all fields exist up front.
+- If clicks keep failing, take_screenshot to check for a blocking overlay (e.g. reCAPTCHA, cookie banner, modal). Reload (navigate_page reload) to clear a stuck overlay, then re-fill from a fresh snapshot.
+- Typing + Enter is the most reliable path on SPAs — focus the input, type_text, then press_key Enter.
+- For sites behind the user's login, prefer browser.open_url (uses the signed-in panel session); do NOT create new_page which lands in an unauthenticated context.
+Do not use browser tools on the OpenWork app target (avoid targets with title "OpenWork" or URLs containing ":5173/#/").`;
 
 // ── UI control bridge discovery ──
 

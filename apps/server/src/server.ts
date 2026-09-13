@@ -93,6 +93,10 @@ import { registerFileRoutes } from "./routes/files.js";
 import { registerOperationRoutes } from "./routes/operations.js";
 import { addRoute, matchRoute, type AuthMode, type RequestContext, type Route } from "./routes/registry.js";
 import { registerSessionRoutes } from "./routes/sessions.js";
+import { registerCodexRoutes } from "./codex-routes.js";
+import { getOrCreateCodexSessionManager } from "./codex-registry.js";
+import { bridgeCodexApprovals } from "./codex-approvals.js";
+import { syncCodexEngineConfigFromProviderMap } from "./codex-engine-config.js";
 import { registerWorkspaceRoutes } from "./routes/workspaces.js";
 import { registerCloudMcpRoutes } from "./routes/cloud-mcp.js";
 import { captureServerException, isExpectedRequestCancellation } from "./telemetry.js";
@@ -2098,6 +2102,26 @@ function createRoutes(
     unwrapOpencodeResult,
   });
 
+  // Codex runtime (additive engine surface; opencode routes are untouched).
+  const bridgedCodexWorkspaces = new Set<string>();
+  registerCodexRoutes({
+    routes,
+    config,
+    readJsonBody,
+    ensureWritable,
+    requireClientScope,
+    registry: {
+      getOrCreate: async (workspaceId) => {
+        const manager = await getOrCreateCodexSessionManager(config, workspaceId);
+        if (!bridgedCodexWorkspaces.has(workspaceId)) {
+          bridgedCodexWorkspaces.add(workspaceId);
+          bridgeCodexApprovals(manager, approvals, workspaceId);
+        }
+        return manager;
+      },
+    },
+  });
+
   registerCloudMcpRoutes({
     routes,
     config,
@@ -2624,6 +2648,10 @@ function createRoutes(
       env,
       logger: toManagedProviderAuthLogger(logger),
     }).catch(() => undefined);
+
+    // Keep the codex engine in sync: the app model configuration drives the
+    // bundled codex engine via codexengine.json in the global config dir.
+    await syncCodexEngineConfigFromProviderMap(runtimeProviderMap(result.config)).catch(() => undefined);
 
     return jsonResponse({
       ok: true,

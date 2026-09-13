@@ -95,6 +95,13 @@ const opencodeTargetPath = opencodeTargetName ? join(sidecarDir, opencodeTargetN
 const opencodeCandidatePath = opencodeTargetPath ?? opencodePath;
 let existingOpencodeVersion = null;
 
+// Binaries (re)written during this run. Ad-hoc macOS signatures are only applied
+// to these so an unchanged binary keeps its existing signature — and therefore
+// its existing Accessibility/Screen Recording permission grant. Re-signing an
+// unchanged sidecar on every run changes its cdhash, so macOS treats it as a new
+// app and re-prompts for computer-use permissions each launch.
+const changedBinaries = new Set();
+
 // openwork-server paths
 const openworkServerDir = resolve(__dirname, "..", "..", "server");
 
@@ -329,14 +336,219 @@ if (shouldDownloadOpencode) {
     } catch {
       // ignore
     }
+    changedBinaries.add(target);
   }
 
   console.log(`OpenCode sidecar updated to ${normalizedOpencodeVersion}.`);
 }
 
+// ── Codex sidecar ────────────────────────────────────────────────────────────
+const codexVersion = (() => {
+  try {
+    const raw = readFileSync(constantsPath, "utf8");
+    const parsed = JSON.parse(raw);
+    return typeof parsed.codexVersion === "string" ? parsed.codexVersion.trim() || null : null;
+  } catch {
+    return null;
+  }
+})();
+const normalizedCodexVersion = normalizeVersion(codexVersion);
+const codexBaseName = isWindowsTarget ? "codex.exe" : "codex";
+const codexPath = join(sidecarDir, codexBaseName);
+const codexTargetName = resolvedTargetTriple
+  ? `codex-${resolvedTargetTriple}${isWindowsTarget ? ".exe" : ""}`
+  : null;
+const codexTargetPath = codexTargetName ? join(sidecarDir, codexTargetName) : null;
+const codexCandidatePath = codexTargetPath ?? codexPath;
+
+const findCodexBinary = (dir) => {
+  const candidates = readDirectory(dir);
+  return (
+    candidates.find((file) => file.endsWith(`/${codexBaseName}`) || file.endsWith(`\\${codexBaseName}`)) ??
+    candidates.find((file) => file.endsWith("/codex") || file.endsWith("\\codex")) ??
+    candidates.find((file) => file.endsWith("/codex.exe") || file.endsWith("\\codex.exe")) ??
+    // Codex release tarballs contain a single flat binary named
+    // `codex-<target-triple>` (no `codex` wrapper file).
+    candidates.find((file) => /codex[^/\\]*$/.test(file)) ??
+    null
+  );
+};
+
+let existingCodexVersion = null;
+if (codexCandidatePath) {
+  existingCodexVersion =
+    existsSync(codexCandidatePath) && !isStubBinary(codexCandidatePath)
+      ? readBinaryVersion(codexCandidatePath)
+      : null;
+  // Prefer the sidecar's version stamp (source builds report 0.0.0 via
+  // --version, so the stamp carries the checkout rev).
+  try {
+    const stamp = `${codexCandidatePath}.version`;
+    if (existsSync(stamp)) {
+      const stamped = readFileSync(stamp, "utf8").trim();
+      if (stamped) existingCodexVersion = stamped;
+    }
+  } catch {
+    // ignore
+  }
+}
+
+const codexAssetByTarget = {
+  "aarch64-apple-darwin": "codex-aarch64-apple-darwin.tar.gz",
+  "x86_64-apple-darwin": "codex-x86_64-apple-darwin.tar.gz",
+  "x86_64-unknown-linux-gnu": "codex-x86_64-unknown-linux-gnu.tar.gz",
+  "aarch64-unknown-linux-gnu": "codex-aarch64-unknown-linux-gnu.tar.gz",
+  "x86_64-pc-windows-msvc": "codex-x86_64-pc-windows-msvc.tar.gz",
+  "aarch64-pc-windows-msvc": "codex-aarch64-pc-windows-msvc.tar.gz",
+};
+
+const codexAsset =
+  process.env.CODEX_ASSET?.trim() ??
+  (resolvedTargetTriple ? codexAssetByTarget[resolvedTargetTriple] : null);
+const codexUrl = codexAsset && normalizedCodexVersion
+  ? `https://github.com/openai/codex/releases/download/${normalizedCodexVersion}/${codexAsset}`
+  : null;
+
+// The bundled codex engine is built from the mona-chen/codex source checkout
+// (never the system-installed binary). prepare-sidecar builds the CLI from this
+// checkout; set CODEX_SOURCE_DIR to override the resolved path.
+const codexSourceDir = (() => {
+  const raw = process.env.CODEX_SOURCE_DIR?.trim();
+  if (raw) return resolve(raw);
+  // The codex checkout lives as a sibling repo next to this repo.
+  const sibling = resolve(__dirname, "..", "..", "..", "..", "codex");
+  return existsSync(join(sibling, "codex-rs", "cli", "Cargo.toml")) ? sibling : null;
+})();
+
+if (!codexSourceDir) {
+  throw new Error("Sofia packaging requires its engine source checkout. Set CODEX_SOURCE_DIR; upstream Codex is not a compatible substitute.");
+}
+
+// When building from source, the sidecar's identity is the checkout's git
+// HEAD (the release binary reports codex-cli 0.0.0). This keeps prepare:sidecar
+// idempotent and only rebuilds when the checkout advances.
+const codexSourceRev = (() => {
+  if (!codexSourceDir) return null;
+  const git = spawnSync("git", ["rev-parse", "HEAD"], {
+    cwd: codexSourceDir,
+    encoding: "utf8",
+  });
+  if (git.status !== 0 || !git.stdout) throw new Error("Unable to fingerprint Sofia engine source");
+  const diff = spawnSync("git", ["diff", "--binary", "HEAD"], { cwd: codexSourceDir, maxBuffer: 32 * 1024 * 1024 });
+  const untracked = spawnSync("git", ["ls-files", "--others", "--exclude-standard", "-z"], { cwd: codexSourceDir });
+  if (diff.status !== 0 || untracked.status !== 0) throw new Error("Unable to fingerprint Sofia engine changes");
+  const hash = createHash("sha256").update(git.stdout).update(diff.stdout);
+  for (const file of untracked.stdout.toString().split("\0").filter(Boolean).sort()) {
+    hash.update(file).update(readFileSync(join(codexSourceDir, file)));
+  }
+  return hash.digest("hex").slice(0, 20);
+})();
+const codexBuildSource = codexSourceDir ? "source" : "release";
+// A source build's stamp is the checkout rev; release builds use the pinned tag.
+const expectedCodexVersion = codexSourceRev
+  ? codexSourceRev
+  : normalizedCodexVersion;
+
+const shouldDownloadCodex =
+  Boolean(expectedCodexVersion) &&
+  (!codexCandidatePath ||
+    !existsSync(codexCandidatePath) ||
+    isStubBinary(codexCandidatePath) ||
+    !existingCodexVersion ||
+    existingCodexVersion !== expectedCodexVersion);
+
+if (shouldDownloadCodex) {
+  mkdirSync(sidecarDir, { recursive: true });
+
+  let extractedCodex = null;
+  if (codexSourceDir) {
+    // Build from source checkout: cargo build -p codex-cli --release.
+    const cargoBin = process.env.CARGO?.trim() || "cargo";
+    const build = spawnSync(
+      cargoBin,
+      ["build", "-p", "codex-cli", "--release"],
+      { cwd: join(codexSourceDir, "codex-rs"), stdio: "inherit" },
+    );
+    if (build.status !== 0) {
+      console.error("Codex source build failed.");
+      process.exit(build.status ?? 1);
+    }
+    const builtBinary = join(
+      codexSourceDir,
+      "codex-rs",
+      "target",
+      "release",
+      codexBaseName,
+    );
+    if (existsSync(builtBinary)) extractedCodex = builtBinary;
+  }
+
+  if (!extractedCodex && (!codexAsset || !codexUrl)) {
+    console.error(
+      `No Codex asset configured for target ${resolvedTargetTriple ?? "unknown"} and no source checkout to build from. Set CODEX_SOURCE_DIR or CODEX_ASSET.`
+    );
+    process.exit(1);
+  }
+
+  if (!extractedCodex) {
+    const stamp = Date.now();
+    const archivePath = join(tmpdir(), `codex-${stamp}-${codexAsset}`);
+    const extractDir = join(tmpdir(), `codex-${stamp}`);
+    mkdirSync(extractDir, { recursive: true });
+
+    const downloadResult = spawnSync("curl", ["-fsSL", "-o", archivePath, codexUrl], {
+      stdio: "inherit",
+    });
+    if (downloadResult.status !== 0) {
+      process.exit(downloadResult.status ?? 1);
+    }
+    const tarResult = spawnSync("tar", ["-xzf", archivePath, "-C", extractDir], {
+      stdio: "inherit",
+    });
+    if (tarResult.status !== 0) {
+      process.exit(tarResult.status ?? 1);
+    }
+
+    extractedCodex = findCodexBinary(extractDir);
+    if (!extractedCodex) {
+      console.error("Codex binary not found after extraction.");
+      process.exit(1);
+    }
+  }
+
+  for (const target of [codexTargetPath, codexPath].filter(Boolean)) {
+    try {
+      if (existsSync(target)) unlinkSync(target);
+    } catch {
+      // ignore
+    }
+    copyFileSync(extractedCodex, target);
+    try {
+      chmodSync(target, 0o755);
+    } catch {
+      // ignore
+    }
+    changedBinaries.add(target);
+    // Version stamp: source builds report codex-cli 0.0.0, so identity comes
+    // from this file (the checkout rev) rather than `--version`.
+    try {
+      writeFileSync(`${target}.version`, expectedCodexVersion ?? "");
+    } catch {
+      // ignore
+    }
+  }
+  console.log(
+    `Codex sidecar updated to ${expectedCodexVersion ?? normalizedCodexVersion} (${codexBuildSource === "source" ? "built from source" : "downloaded"}).`
+  );
+} else if (normalizedCodexVersion) {
+  console.log(`Codex sidecar already present (${existingCodexVersion ?? "unknown"}).`);
+}
+
+// Ad-hoc sign only the sidecars that were actually written this run. Untouched
+// binaries keep their existing signature so macOS permission grants (computer
+// use) survive across runs.
 adHocSignDarwinSidecars([
-  opencodePath,
-  opencodeTargetPath,
+  ...changedBinaries,
   // openwork-server runs in-process — no binary to sign.
 ]);
 
@@ -354,6 +566,10 @@ const versions = {
     version: normalizedOpencodeVersion,
     sha256: opencodeCandidatePath && existsSync(opencodeCandidatePath) ? sha256File(opencodeCandidatePath) : null,
   },
+  codex: {
+    version: expectedCodexVersion ?? normalizedCodexVersion,
+    sha256: codexCandidatePath && existsSync(codexCandidatePath) ? sha256File(codexCandidatePath) : null,
+  },
   "openwork-server": {
     version: openworkServerVersion,
     sha256: "in-process",
@@ -361,7 +577,7 @@ const versions = {
 };
 
 const missing = Object.entries(versions)
-  .filter(([, info]) => !info.version || !info.sha256)
+  .filter(([name, info]) => (!info.version || !info.sha256) && ["opencode", "codex", "openwork-server"].includes(name))
   .map(([name]) => name);
 
 if (missing.length) {

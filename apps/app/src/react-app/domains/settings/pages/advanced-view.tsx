@@ -7,6 +7,7 @@ import type { OpencodeConnectStatus } from "@/app/types";
 import type { OpenworkCloudMcpHealth, OpenworkRuntimeConfigStatus, OpenworkServerStatus } from "@/app/lib/openwork-server";
 import { t } from "@/i18n";
 import { LayoutStack } from "../settings-layout";
+import type { CodexEngineAvailability } from "../engine-picker";
 import type { useDenSession } from "../cloud/use-den-session";
 
 import { advancedLocalReducer, initialAdvancedLocalState } from "./advanced-view-state";
@@ -48,6 +49,7 @@ export type AdvancedViewProps = {
   cloudMcpUrl: string | null;
   cloudMcpHealth: OpenworkCloudMcpHealth | null;
   refreshCloudMcpHealth: () => Promise<OpenworkCloudMcpHealth | null>;
+  codexEngineStatus: CodexEngineAvailability | null;
 };
 
 type AdvancedStatusTone = "ready" | "warning" | "error" | "neutral";
@@ -109,12 +111,12 @@ export function AdvancedView(props: AdvancedViewProps) {
     ? ["Chat and task creation can use the OpenCode engine for this workspace."]
     : [
         "Chat and task creation may fail until OpenCode restarts.",
-        "OpenWork server config sources below can still be inspected.",
+        "Sofia App server config sources below can still be inspected.",
       ];
 
   const openworkDetailLines = props.openworkServerStatus === "connected"
     ? ["Runtime DB, workspace config, and migration diagnostics are available."]
-    : ["Runtime config diagnostics need the OpenWork server connection."];
+    : ["Runtime config diagnostics need the Sofia App server connection."];
 
   const submitDebugDeepLink = async () => {
     const rawUrl = debugDeepLinkInput.trim();
@@ -202,6 +204,7 @@ export function AdvancedView(props: AdvancedViewProps) {
         openworkStatusLabel={openworkStatusLabel}
         openworkTone={openworkTone}
         openworkDetailLines={openworkDetailLines}
+        codexEngineStatus={props.codexEngineStatus}
       />
 
       <AdvancedCloudMcpDiagnosticsSection

@@ -1,9 +1,9 @@
 /** @jsxImportSource react */
-import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState, type ReactNode } from "react";
 import type { UIMessage } from "ai";
 import { useQuery } from "@tanstack/react-query";
 import type { SessionStatus } from "@opencode-ai/sdk/v2/client";
-import { Check, Minimize2 } from "lucide-react";
+import { Check, Globe, Minimize2 } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 
 import { captureAnalyticsEvent } from "@/app/lib/analytics";
@@ -67,6 +67,7 @@ import { QuestionPanel } from "@/react-app/domains/session/modals/question-modal
 import { QueuedMessagesPanel } from "@/react-app/domains/session/modals/queued-messages-panel";
 import { deriveOpenTargets, selectAutoOpenTarget, type OpenTarget } from "@/react-app/domains/session/artifacts/open-target";
 import { usePanelTabStore } from "@/react-app/domains/session/panel/panel-tab-store";
+import { useSessionPanelState } from "@/react-app/domains/session/panel/panel-tab-store";
 import {
   markSessionSnapshotFetchStart,
   seedSessionState,
@@ -116,11 +117,11 @@ import { consumeComposerAutoSend } from "./composer-auto-send";
 
 const EMPTY_TRANSCRIPT: UIMessage[] = [];
 const IDLE_STATUS: SessionStatus = { type: "idle" };
-const DEFAULT_COMPOSER_CONTROL_TEXT = "Help me outline the next OpenWork task.";
+const DEFAULT_COMPOSER_CONTROL_TEXT = "Help me outline the next Sofia App task.";
 const SESSION_SURFACE_SELECTOR = "[data-session-surface-id]";
 const MARKDOWN_PRIMITIVE_EVAL_TEXT = `# Markdown proof heading
 
-This shared renderer keeps **bold proof text**, inline \`renderMarkdownHtml\`, and [OpenWork link](https://openworklabs.com) readable in one message.
+This shared renderer keeps **bold proof text**, inline \`renderMarkdownHtml\`, and [Sofia App link](https://openworklabs.com) readable in one message.
 
 \`\`\`ts
 const pipeline = "shared markdown primitive";
@@ -282,7 +283,7 @@ function createChatTranscriptEvalMessages(sessionId: string) {
         },
         {
           type: "text",
-          text: "Your plan is drafted — details in [OpenWork](https://openworklabs.com). Search token: chat-transcript-proof.",
+          text: "Your plan is drafted — details in [Sofia App](https://openworklabs.com). Search token: chat-transcript-proof.",
         },
       ],
       // `completed` makes the finished turn fold behind a real
@@ -303,6 +304,8 @@ export type SessionSurfaceProps = {
   isControlTarget: boolean;
   opencodeBaseUrl: string;
   openworkToken: string;
+  /** Optional composer action-row accessory (e.g. the codex approval-mode control). */
+  approvalAccessory?: ReactNode;
   developerMode: boolean;
   modelLabel: string;
   onModelClick: (sessionId?: string) => void;
@@ -360,7 +363,7 @@ export type SessionSurfaceProps = {
 };
 
 function messageToReadableText(message: UIMessage) {
-  const header = message.role === "user" ? "You" : message.role === "assistant" ? "OpenWork" : message.role;
+  const header = message.role === "user" ? "You" : message.role === "assistant" ? "Sofia App" : message.role;
   const body = message.parts
     .flatMap((part) => {
       if (part.type === "text") return [part.text];
@@ -526,6 +529,41 @@ function TodoPanel(props: { todos: TodoItem[] }) {
             })}
           </div>
         ) : null}
+    </div>
+  );
+}
+
+function browserHost(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Chat browser-use indicator: a slim pill above the composer that appears when
+ * the built-in browser has open tabs, so it is always visible that a browser is
+ * in use and what page the agent is on. Read-only (the panel is toggled from
+ * the session rail); derives entirely from the shared panel-tab store.
+ */
+function BrowserUseIndicator({ sessionId }: { sessionId: string }) {
+  const { tabs, activeTabId } = useSessionPanelState(sessionId);
+  const browserTabs = tabs.filter((tab) => tab.type === "browser");
+  if (browserTabs.length === 0) return null;
+  const activeTab = browserTabs.find((tab) => tab.id === activeTabId) ?? browserTabs[0];
+  const host = activeTab && "url" in activeTab ? browserHost(String((activeTab as { url?: string }).url ?? "")) : "";
+  return (
+    <div className="mx-3 mb-2 flex items-center gap-2 rounded-lg border border-border/70 bg-muted/40 px-3 py-1.5 text-[11px] text-muted-foreground">
+      <span className="relative flex size-1.5" aria-hidden="true">
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+        <span className="relative inline-flex size-1.5 rounded-full bg-emerald-500" />
+      </span>
+      <Globe className="size-3" />
+      <span className="truncate font-medium text-foreground/90">
+        Browser open · {browserTabs.length} {browserTabs.length === 1 ? "tab" : "tabs"}
+      </span>
+      {host ? <span className="truncate">· {host}</span> : null}
     </div>
   );
 }
@@ -775,8 +813,13 @@ export function SessionSurface(props: SessionSurfaceProps) {
     () => reactStatusKey(props.workspaceId, props.sessionId),
     [props.workspaceId, props.sessionId],
   );
+  const isCodexSession = props.sessionId.startsWith("codex-");
   const snapshotQuery = useQuery<OpenworkSessionSnapshot>({
     queryKey: snapshotQueryKey,
+    // Codex sessions are owned by the Sofia engine: never query opencode for
+    // their snapshot (opencode returns 502 "request failed"). The transcript
+    // and status already flow from the codex store via transcriptKey/statusKey.
+    enabled: !isCodexSession,
     queryFn: async () => {
       const startedAt = Date.now();
       const item = (await props.client.getSessionSnapshot(props.workspaceId, props.sessionId, { limit: 140 })).item;
@@ -2132,6 +2175,7 @@ export function SessionSurface(props: SessionSurfaceProps) {
           </button>
         ) : null}
         <DevProfiler id="SessionComposer">
+        <BrowserUseIndicator sessionId={props.sessionId} />
         {props.cloudMcpSubmissionState.status === "failed" ? (
           <div
             className="mx-3 mb-2 flex items-center gap-3 rounded-xl border border-red-7/40 bg-red-2/40 px-3 py-2 text-xs text-red-11"
@@ -2215,6 +2259,7 @@ export function SessionSurface(props: SessionSurfaceProps) {
           isSandboxWorkspace={props.isSandboxWorkspace}
           onUploadInboxFiles={props.onUploadInboxFiles ?? handleUploadInboxFiles}
           compactTopSpacing={Boolean(props.activeQuestion || (props.todos ?? []).some((todo) => todo.content.trim()) || props.activePermission || queuedItems.length > 0)}
+          approvalAccessory={props.approvalAccessory}
           topAccessory={
             props.activeQuestion || (props.todos ?? []).some((todo) => todo.content.trim()) || props.activePermission || queuedItems.length > 0 ? (
               <div>

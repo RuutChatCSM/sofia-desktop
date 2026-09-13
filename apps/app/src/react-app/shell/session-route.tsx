@@ -92,6 +92,30 @@ import {
 import { useLocal } from "@/react-app/kernel/local-provider";
 import { usePlatform } from "@/react-app/kernel/platform";
 import { SessionPage, type OpenSessionTab } from "@/react-app/domains/session/chat/session-page";
+import { useCodexEngine } from "@/react-app/domains/session/use-codex-engine";
+import { useSelectedEngine } from "@/react-app/domains/session/engine-selection-store";
+import { useCodexSessionStore } from "@/react-app/domains/session/codex-session-store";
+import { useCodexApprovals } from "@/react-app/domains/session/codex/use-codex-approvals";
+import { CodexApprovalModal } from "@/react-app/domains/session/codex/codex-approval-modal";
+import { ApprovalModeSelector } from "@/react-app/domains/session/codex/approval-mode-selector";
+import { createCodexSessionClient, type CodexSession } from "@/app/lib/codex-session";
+
+/** Map a codex session into the opencode Session shape the sidebar renders. */
+function toRouteSessionFromCodex(session: CodexSession): RouteSession {
+  const createdMs = Date.parse(session.created) || Date.now();
+  return {
+    id: session.id,
+    title: session.title,
+    time: { created: createdMs, updated: createdMs },
+    status: session.status,
+    state: { type: session.status },
+    workspaceId: session.workspaceId,
+    projectID: session.workspaceId,
+    directory: "",
+    version: "codex",
+    slug: session.id,
+  } as RouteSession;
+}
 import { AutomationsPage } from "@/react-app/domains/automations/automations-page";
 import { useAutomationDeploymentEnabled } from "@/react-app/domains/automations/automation-availability";
 import { automationsStateChangedEvent } from "@/react-app/domains/automations/automation-events";
@@ -277,7 +301,7 @@ function describeTaskCreateError(error: unknown) {
     lower.includes("internal_error") ||
     lower.includes("unexpected server error")
   ) {
-    return "OpenCode is unavailable for this workspace. Retry once it restarts, or restart OpenWork if the problem continues.";
+    return "OpenCode is unavailable for this workspace. Retry once it restarts, or restart Sofia App if the problem continues.";
   }
   return message;
 }
@@ -606,6 +630,23 @@ export function SessionRoute() {
   const cloudWorkspace = useCloudWorkspaceStatus();
   const bootOverlayVisible = useBootOverlayVisible();
   const previousCloudWorkspaceStatusRef = useRef<typeof cloudWorkspace.viewModel.variant | null>(null);
+  const codexEngine = useCodexEngine(
+    selectedWorkspaceEndpoint
+      ? {
+          baseUrl: selectedWorkspaceEndpoint.baseUrl,
+          token: selectedWorkspaceServerToken ?? "",
+          hostToken: selectedWorkspaceEndpoint.isRemote
+            ? selectedWorkspace?.openworkHostToken ?? undefined
+            : openworkServerHostInfoState?.hostToken ?? undefined,
+          workspaceId: selectedWorkspaceEndpoint.workspaceId,
+          displayWorkspaceId: selectedWorkspaceId,
+        }
+      : null,
+  );
+  const codexApproval = useCodexApprovals(
+    codexEngine.enabled ? codexEngine.client : null,
+    selectedWorkspaceEndpoint?.workspaceId ?? selectedWorkspaceId,
+  );
   useEffect(() => {
     const previousStatus = previousCloudWorkspaceStatusRef.current;
     previousCloudWorkspaceStatusRef.current = cloudWorkspace.viewModel.variant;
@@ -780,6 +821,21 @@ export function SessionRoute() {
     () => toSessionGroups(workspaces, sessionsByWorkspaceId, errorsByWorkspaceId, new Set(retryingWorkspaceIds)),
     [errorsByWorkspaceId, retryingWorkspaceIds, sessionsByWorkspaceId, workspaces],
   );
+  // When the selected engine is codex, codex sessions replace opencode sessions
+  // in the sidebar. Build RouteSession-shaped entries from the codex store.
+  const codexWorkspaceSessionGroups = useMemo<WorkspaceSessionGroup[] | null>(() => {
+    if (!codexEngine.enabled) return null;
+    const codexSessions = codexEngine.sessions;
+    return workspaces.map((workspace) => ({
+      workspace,
+      sessions: codexSessions
+        .filter((session) => session.workspaceId === workspace.id)
+        .map((session) => toRouteSessionFromCodex(session)),
+      status: "ready" as const,
+      error: null,
+    }));
+  }, [codexEngine.enabled, codexEngine.sessions, workspaces]);
+  const effectiveWorkspaceSessionGroups = codexWorkspaceSessionGroups ?? workspaceSessionGroups;
   useSessionGroupSync({ workspaces, endpointForWorkspace });
   const selectedWorkspaceGroupState = sessionManagementStore((state) => (
     selectedWorkspaceId ? state.groupsByWorkspace[selectedWorkspaceId] : undefined
@@ -1100,14 +1156,22 @@ export function SessionRoute() {
       !selectedModelUnavailable &&
       !selectedModelAvailabilityPending,
   );
-  const canCreateTask = Boolean(
-    opencodeClient &&
-      selectedWorkspaceId &&
-      !loading &&
-      !selectedWorkspaceError &&
-      !selectedModelUnavailable &&
-      !selectedModelAvailabilityPending,
-  );
+  const codexHasModel = Boolean(codexEngine.enabled && codexEngine.config?.defaultProviderId);
+  const canCreateTask = codexEngine.enabled
+    ? Boolean(
+        codexHasModel &&
+          selectedWorkspaceId &&
+          !loading &&
+          !selectedWorkspaceError,
+      )
+    : Boolean(
+        opencodeClient &&
+          selectedWorkspaceId &&
+          !loading &&
+          !selectedWorkspaceError &&
+          !selectedModelUnavailable &&
+          !selectedModelAvailabilityPending,
+      );
 
   const {
     activePermission,
@@ -1330,11 +1394,21 @@ export function SessionRoute() {
         if (!text && draft.attachments.length === 0) {
           return { outcome: "cancelled", reason: "context_changed" };
         }
-        // Per-conversation model memory: a session that picked its own model
-        // sends with it (and its variant) instead of the global default.
         const sessionModelSelection = getSessionModelSelection(targetSessionId);
         const sendModel = sessionModelSelection?.model ?? local.prefs.defaultModel;
         const sendVariant = sessionModelSelection ? sessionModelSelection.variant : modelVariantValue;
+        // Codex sessions bypass the opencode send pipeline entirely while
+        // preserving the same per-session model selection as the composer.
+        if (codexEngine.enabled && codexEngine.prompt && targetSessionId.startsWith("codex-")) {
+          void codexEngine.prompt(targetSessionId, text, {
+            model: sendModel?.modelID,
+            providerId: sendModel?.providerID,
+          });
+          useSessionActivityStore.getState().setRunStatus(selectedWorkspaceId, targetSessionId, { type: "busy" });
+          return { outcome: "accepted" };
+        }
+        // Per-conversation model memory: a session that picked its own model
+        // sends with it (and its variant) instead of the global default.
         if (!sessionModelSelection && selectedModelUnavailable) throw new Error("Selected model is unavailable. Choose another model before sending.");
 
         return submitWithCloudMcpReadiness({
@@ -1540,6 +1614,10 @@ export function SessionRoute() {
       onApplyEnvironmentChanges: isDesktopRuntime() && selectedWorkspace?.workspaceType !== "remote"
         ? handleApplyEnvironmentChanges
         : undefined,
+      approvalAccessory:
+        codexEngine.enabled && codexEngine.client
+          ? <ApprovalModeSelector client={codexEngine.client} />
+          : undefined,
     };
   }, [
     client,
@@ -1730,7 +1808,7 @@ export function SessionRoute() {
     setRenameWorkspaceBusy(true);
     try {
       if (!client) {
-        toast.error("OpenWork server is unavailable. Reconnect the server before renaming workspaces.");
+        toast.error("Sofia App server is unavailable. Reconnect the server before renaming workspaces.");
         return;
       }
       await client.updateWorkspaceDisplayName(renameWorkspaceId, trimmed);
@@ -1779,7 +1857,7 @@ export function SessionRoute() {
         downloadWorkspaceJson(workspaceExportFilename(workspace), payload);
         return;
       }
-      throw new Error("OpenWork server is unavailable. Reconnect the server before exporting workspace config.");
+      throw new Error("Sofia App server is unavailable. Reconnect the server before exporting workspace config.");
     },
     [endpointForWorkspace, workspaces],
   );
@@ -1836,9 +1914,43 @@ export function SessionRoute() {
     if (
       !workspace ||
       loading ||
-      retryingWorkspaceIds.includes(workspaceId)
+      (!codexEngine.enabled && retryingWorkspaceIds.includes(workspaceId))
     ) {
       return null;
+    }
+    // Codex engine: create a codex session (the surface sends the first prompt).
+    if (codexEngine.enabled && codexEngine.createSession) {
+      try {
+        const preferredModel = local.prefs.defaultModel;
+        const selectedProviderIsConfigured = Boolean(
+          preferredModel && codexEngine.config?.providers.some((provider) => provider.providerId === preferredModel.providerID),
+        );
+        const targetEndpoint = endpointForWorkspace(workspace);
+        if (!targetEndpoint) throw new Error("The selected workspace is unavailable");
+        const targetClient = createCodexSessionClient({
+          baseUrl: targetEndpoint.baseUrl, token: targetEndpoint.token,
+          hostToken: targetEndpoint.isRemote ? workspace.openworkHostToken ?? undefined : openworkServerHostInfoState?.hostToken ?? undefined,
+          workspaceId: targetEndpoint.workspaceId,
+        });
+        const result = await targetClient.createSession({
+          title: "New Sofia task",
+          cwd: workspace.path?.trim() || undefined,
+          model: selectedProviderIsConfigured ? preferredModel?.modelID : codexEngine.config?.model ?? undefined,
+          providerId: selectedProviderIsConfigured ? preferredModel?.providerID : codexEngine.config?.defaultProviderId ?? undefined,
+        });
+        const session = { ...result.session, workspaceId };
+        useCodexSessionStore.getState().upsertSession(session);
+        setLegacySelectedWorkspaceId(workspaceId);
+        writeActiveWorkspaceId(workspaceId || null);
+        writeLastSessionFor(workspaceId, session.id);
+        rememberPendingCreatedSession(workspaceId, session.id);
+        navigateToWorkspaceSession(workspaceId, session.id);
+        focusPromptSoon();
+        return session.id;
+      } catch (error) {
+        toast.error("Unable to create Sofia task", { description: describeRouteError(error) });
+        return null;
+      }
     }
     const endpoint = endpointForWorkspace(workspace);
     if (!endpoint || !endpoint.token) {
@@ -1905,7 +2017,7 @@ export function SessionRoute() {
       }
       return null;
     }
-  }, [applyLastUsedModelToSession, endpointForWorkspace, loading, navigateToWorkspaceSession, refreshCloudProviderSync, refreshRouteState, rememberPendingCreatedSession, retryingWorkspaceIds, selectedWorkspaceId, workspaces]);
+  }, [applyLastUsedModelToSession, codexEngine, endpointForWorkspace, loading, navigateToWorkspaceSession, refreshCloudProviderSync, refreshRouteState, rememberPendingCreatedSession, retryingWorkspaceIds, selectedWorkspaceId, workspaces]);
 
   // Latest session-list state for prev/next session tab navigation. The
   // `options` field is updated by `onSessionTabsChange` from SessionPage so we
@@ -2348,6 +2460,16 @@ export function SessionRoute() {
 
   const handleArchiveSession = useCallback(
     async (sessionId: string, archived: boolean) => {
+      if (codexEngine.enabled && sessionId.startsWith("codex-")) {
+        if (!codexEngine.archiveSession) throw new Error("Sofia engine is unavailable");
+        await codexEngine.archiveSession(sessionId, archived);
+        if (archived) {
+          if (selectedSessionId === sessionId) {
+            navigateToWorkspaceSession(selectedWorkspaceId);
+          }
+        }
+        return;
+      }
       if (!opencodeClient) return;
       try {
         await setSessionArchived(
@@ -2367,7 +2489,7 @@ export function SessionRoute() {
         );
       }
     },
-    [opencodeClient, refreshRouteState, selectedWorkspaceRoot],
+    [codexEngine.enabled, navigateToWorkspaceSession, opencodeClient, refreshRouteState, selectedSessionId, selectedWorkspaceId, selectedWorkspaceRoot],
   );
 
   const handleCreateWorkspace = useCallback(async (
@@ -2393,7 +2515,7 @@ export function SessionRoute() {
           .catch(() => null);
       }
       if (!list) {
-        throw new Error("OpenWork server is unavailable. Start or reconnect the server before creating a workspace.");
+        throw new Error("Sofia App server is unavailable. Start or reconnect the server before creating a workspace.");
       }
       const createdId = resolveWorkspaceListSelectedId(list) || list.workspaces[list.workspaces.length - 1]?.id || "";
       let targetWorkspaceId = createdId;
@@ -2402,7 +2524,7 @@ export function SessionRoute() {
         await workspaceSetSelected(createdId).catch(() => undefined);
         await workspaceSetRuntimeActive(createdId).catch(() => undefined);
       }
-      // First workspace on a fresh install: the OpenWork server was started
+      // First workspace on a fresh install: the Sofia App server was started
       // engine-less (it only spawns OpenCode at boot when a workspace already
       // exists), so sessions would hang forever. This boots the engine when
       // it isn't running, same as the old /welcome flow did.
@@ -2504,7 +2626,7 @@ export function SessionRoute() {
         handleOpenCreateWorkspace();
         return;
       }
-      const folder = await joinDesktopPath(home, "OpenWork Chat").catch(() => "");
+      const folder = await joinDesktopPath(home, "Sofia App Chat").catch(() => "");
       if (!folder) {
         handleOpenCreateWorkspace();
         return;
@@ -2562,7 +2684,7 @@ export function SessionRoute() {
         list = await client.createRemoteWorkspace(payload).catch(() => null);
       }
       if (!list) {
-        throw new Error("OpenWork server is unavailable. Start or reconnect the server before connecting a remote workspace.");
+        throw new Error("Sofia App server is unavailable. Start or reconnect the server before connecting a remote workspace.");
       }
       const createdId = resolveWorkspaceListSelectedId(list) || list.workspaces[list.workspaces.length - 1]?.id || "";
       if (createdId) {
@@ -2590,6 +2712,7 @@ export function SessionRoute() {
       workspaceId={selectedWorkspaceEndpoint?.workspaceId ?? ""}
       selectedWorkspaceRoot={selectedWorkspaceRoot}
     >
+    <CodexApprovalModal active={codexApproval} />
     {opencodeClient && selectedWorkspaceEndpoint && opencodeBaseUrl && selectedWorkspaceServerToken ? (
       <ReactSessionRuntime
         // Use the server-side workspace id (the one without the `rem_`
@@ -2601,6 +2724,7 @@ export function SessionRoute() {
         activeSessionIds={activeSelectedWorkspaceSessionIds}
         opencodeBaseUrl={opencodeBaseUrl}
         openworkToken={selectedWorkspaceServerToken}
+        enabled
         onSessionCreated={handleRuntimeSessionCreated}
         onSessionUpdated={handleRuntimeSessionUpdated}
         onSessionDeleted={handleRuntimeSessionDeleted}
@@ -2627,6 +2751,17 @@ export function SessionRoute() {
       environmentClient={client}
       openworkServerToken={selectedWorkspaceServerToken}
       developerMode={developerMode}
+      codexEngine={codexEngine.enabled ? {
+        enabled: true,
+        sessions: codexEngine.sessions,
+        streaming: codexEngine.streaming,
+        error: codexEngine.error,
+        config: codexEngine.config,
+        createSession: codexEngine.createSession!,
+        prompt: codexEngine.prompt!,
+        abort: codexEngine.abort!,
+        deleteSession: codexEngine.deleteSession!,
+      } : null}
       headerStatus={canCreateTask ? t("status.connected") : (modelUnavailableMessage ?? t("session.loading_detail"))}
       busyHint={organizationModelsEmpty ? t("models.organization_models_empty") : effectiveLoading ? t("session.loading_detail") : null}
       startupPhase={effectiveLoading ? "nativeInit" : "ready"}
@@ -2699,7 +2834,7 @@ export function SessionRoute() {
         sessionTabNavRef.current = { ...sessionTabNavRef.current, options: tabs };
       }}
       sidebar={{
-        workspaceSessionGroups,
+        workspaceSessionGroups: effectiveWorkspaceSessionGroups,
         selectedWorkspaceId,
         selectedSessionId,
         developerMode: false,
@@ -2754,6 +2889,33 @@ export function SessionRoute() {
         },
         onCreateTaskWithPrompt: (workspaceId, prompt, attachments) => {
           void (async () => {
+            // Codex engine: create a codex session and run the prompt directly.
+            if (codexEngine.enabled && codexEngine.createSession) {
+              try {
+                const firstTaskPrompt = prompt.trim();
+                const targetWorkspace = workspaces.find((item) => item.id === workspaceId);
+                const session = await codexEngine.createSession({
+                  title: firstTaskPrompt.slice(0, 60) || "New codex task",
+                  prompt: firstTaskPrompt || undefined,
+                  cwd: targetWorkspace?.path?.trim() || undefined,
+                });
+                if (workspaceId === selectedWorkspaceId) {
+                  void refreshCloudProviderSync("new_chat");
+                }
+                if (firstTaskPrompt) {
+                  saveSessionDraft(workspaceId, session.id, { text: firstTaskPrompt, mode: "prompt" });
+                  useComposerStateStore.getState().setDraft(session.id, firstTaskPrompt);
+                }
+                writeActiveWorkspaceId(workspaceId || null);
+                writeLastSessionFor(workspaceId, session.id);
+                rememberPendingCreatedSession(workspaceId, session.id);
+                navigateToWorkspaceSession(workspaceId, session.id);
+                focusPromptSoon();
+                return;
+              } catch {
+                // fall through to opencode creation below
+              }
+            }
             const workspace = workspaces.find((item) => item.id === workspaceId);
             if (!workspace) return;
             const endpoint = endpointForWorkspace(workspace);
@@ -2861,7 +3023,9 @@ export function SessionRoute() {
       respondQuestion={respondQuestion}
       safeStringify={safeStringify}
       onRenameSession={
-        opencodeClient
+        codexEngine.enabled && codexEngine.renameSession
+          ? codexEngine.renameSession
+          : opencodeClient
           ? async (sessionId, nextTitle) => {
               const trimmed = nextTitle.trim();
               if (!trimmed) return;
@@ -2879,7 +3043,11 @@ export function SessionRoute() {
           ? async (sessionId) => {
               const endpoint = endpointForWorkspace(selectedWorkspace);
               if (!endpoint) return;
-              await endpoint.client.deleteSession(endpoint.workspaceId, sessionId);
+              if (codexEngine.enabled && sessionId.startsWith("codex-") && codexEngine.deleteSession) {
+                await codexEngine.deleteSession(sessionId);
+              } else {
+                await endpoint.client.deleteSession(endpoint.workspaceId, sessionId);
+              }
               if (selectedSessionId === sessionId) {
                 navigateToWorkspaceSession(selectedWorkspaceId);
               }
@@ -2887,7 +3055,7 @@ export function SessionRoute() {
             }
           : undefined
       }
-      onArchiveSession={opencodeClient ? handleArchiveSession : undefined}
+      onArchiveSession={opencodeClient || codexEngine.enabled ? handleArchiveSession : undefined}
       statusBar={{
         loading: showPreparingStatus,
         reloadBusy: reloadCoordinator.reloadBusy,

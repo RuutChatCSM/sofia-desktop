@@ -51,6 +51,13 @@ export type EngineInfo = {
   execution: OpencodeExecutionSnapshot | null;
 };
 
+export type CodexEngineStatus = {
+  available: boolean;
+  path: string | null;
+  source: string | null;
+  pinnedVersion: string | null;
+};
+
 export type DesktopNotificationInput = {
   title: string;
   body?: string;
@@ -410,7 +417,11 @@ export type DesktopCommandMap = {
   engineRestart: { args: [options?: Record<string, unknown>]; result: EngineInfo };
   engineInfo: { args: []; result: EngineInfo };
   engineDoctor: { args: [projectDir?: string]; result: EngineDoctorResult };
+  codexEngineStatus: { args: []; result: CodexEngineStatus };
+  codexEngineSelectionRead: { args: []; result: { engine: "codex" | "opencode" } };
+  codexEngineSelectionWrite: { args: [{ engine: "codex" | "opencode" }]; result: { ok: boolean } };
   engineInstall: { args: []; result: unknown };
+  codexEngineInstall: { args: []; result: unknown };
 
   // App / bridge info
   appBuildInfo: { args: []; result: AppBuildInfo };

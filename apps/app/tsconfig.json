@@ -8,6 +8,7 @@
     "jsxImportSource": "react",
     "moduleResolution": "Bundler",
     "baseUrl": ".",
+    "ignoreDeprecations": "5.0",
     "paths": {
       "@/*": ["./src/*"]
     },

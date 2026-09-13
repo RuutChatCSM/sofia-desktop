@@ -1337,6 +1337,7 @@ export function createRuntimeManager({
   localManagedMcpVaultKey,
   workspaceMkdir = mkdir,
   workspacePlatform = process.platform,
+  readEngineSelection = () => "opencode",
 }) {
   const inheritedProcessEnv = { ...process.env };
   let injectedUserEnvKeys = new Set();
@@ -1610,6 +1611,35 @@ export function createRuntimeManager({
     return explicitPath ? { path: explicitPath, source: "custom" } : resolveBinaryInfo("opencode");
   }
 
+  function resolveCodexBinary(codexBinPath) {
+    const explicitPath = typeof codexBinPath === "string" ? codexBinPath.trim() : "";
+    if (explicitPath) return { path: explicitPath, source: "custom" };
+    // Bundled-only: the codex engine must always come from our own sidecar
+    // (built from the mona-chen/codex source checkout). Never fall back to a
+    // system-installed codex.
+    for (const directory of sidecarDirs) {
+      for (const fileName of binaryFileNames("codex")) {
+        const candidate = path.join(directory, fileName);
+        if (existsSync(candidate)) {
+          return { path: candidate, source: "bundled" };
+        }
+      }
+    }
+    return null;
+  }
+
+  function resolveCodexPinnedVersion() {
+    try {
+      const constantsRaw = readFileSync(path.join(desktopRoot, "constants.json"), "utf8");
+      const parsed = JSON.parse(constantsRaw);
+      return typeof parsed.codexVersion === "string" && parsed.codexVersion.trim()
+        ? parsed.codexVersion.trim()
+        : null;
+    } catch {
+      return null;
+    }
+  }
+
   function resolveDockerCandidates() {
     const candidates = [];
     const seen = new Set();
@@ -1753,6 +1783,16 @@ export function createRuntimeManager({
     return `curl -fsSL https://opencode.ai/install | bash -s -- --version ${version} --no-modify-path`;
   }
 
+  async function pinnedCodexInstallCommand() {
+    const constantsPath = path.resolve(desktopRoot, "../../constants.json");
+    const payload = JSON.parse(await readFile(constantsPath, "utf8"));
+    const version = String(payload?.codexVersion ?? "").trim().replace(/^v/, "");
+    if (!version) {
+      throw new Error("constants.json is missing codexVersion");
+    }
+    return `curl -fsSL https://codex.cli.sh/install | bash -s -- --version ${version} --no-modify-path`;
+  }
+
   function processMatchesSidecar(command) {
     return commandMatchesPackagedSidecar(command, sidecarDirs);
   }
@@ -1857,7 +1897,14 @@ export function createRuntimeManager({
       if (typeof options.engineRollover === "boolean") {
         await persistEngineRolloverPreference(engineRollover);
       }
-      return await startOpenworkServerInner({ ...options, engineRollover });
+      return await startOpenworkServerInner({
+        ...options,
+        engineRollover,
+        manageOpencode: options.manageOpencode === true,
+        opencodeBaseUrl: options.opencodeBaseUrl,
+        opencodeUsername: options.opencodeUsername,
+        opencodePassword: options.opencodePassword,
+      });
     } catch (error) {
       resetRuntimeStatesAfterFailedServerStart(openworkServerState, engineState, options);
       throw error;
@@ -2234,6 +2281,30 @@ export function createRuntimeManager({
     };
   }
 
+  async function codexEngineInstall() {
+    if (process.platform === "win32") {
+      return {
+        ok: false,
+        status: -1,
+        stdout: "",
+        stderr:
+          "Guided install is not supported on Windows yet. Install the OpenWork-pinned Codex version manually, then restart OpenWork.",
+      };
+    }
+
+    const command = await pinnedCodexInstallCommand();
+    const result = await runShellCommand("bash", ["-lc", command], {
+      env: await buildChildEnv(),
+      timeoutMs: 180_000,
+    });
+    return {
+      ok: result.status === 0,
+      status: result.status,
+      stdout: result.stdout,
+      stderr: result.stderr,
+    };
+  }
+
   async function opencodeMcpAuth(projectDir, serverName) {
     const safeProjectDir = String(projectDir ?? "").trim();
     const safeServerName = String(serverName ?? "").trim();
@@ -2296,6 +2367,16 @@ export function createRuntimeManager({
     engineInfo,
     engineDoctor,
     engineInstall,
+    codexEngineInstall,
+    codexEngineStatus: () => {
+      const resolver = resolveCodexBinary();
+      return {
+        available: Boolean(resolver),
+        path: resolver?.path ?? null,
+        source: resolver?.source ?? null,
+        pinnedVersion: resolveCodexPinnedVersion(),
+      };
+    },
     openworkServerInfo,
     openworkServerRestart: (options) => withRuntimeLifecycle(() => openworkServerRestart(options)),
     opencodeMcpAuth,

@@ -639,7 +639,7 @@ export function createExtensionsStore(options: {
     const nextConfig = withWorkspaceCloudImports(config, nextCloudImports);
     const persisted = await writeWorkspaceOpenworkConfigRecord(nextConfig);
     if (!persisted) {
-      throw new Error("OpenWork server unavailable. Connect to manage imported cloud marketplaces.");
+      throw new Error("Sofia App server unavailable. Connect to manage imported cloud marketplaces.");
     }
     setStateField("importedCloudMarketplaces", nextMarketplaces);
     void refreshPendingCloudPluginChanges();
@@ -655,7 +655,7 @@ export function createExtensionsStore(options: {
     const nextConfig = withWorkspaceCloudImports(config, nextCloudImports);
     const persisted = await writeWorkspaceOpenworkConfigRecord(nextConfig);
     if (!persisted) {
-      throw new Error("OpenWork server unavailable. Connect to manage imported cloud plugins.");
+      throw new Error("Sofia App server unavailable. Connect to manage imported cloud plugins.");
     }
     setStateField("importedCloudPlugins", nextPlugins);
     void refreshPendingCloudPluginChanges(nextPlugins);
@@ -693,11 +693,11 @@ export function createExtensionsStore(options: {
     }
 
     if (hasOpenworkTarget) {
-      throw new Error("OpenWork server cannot remove skills for this workspace.");
+      throw new Error("Sofia App server cannot remove skills for this workspace.");
     }
 
     if (isRemoteWorkspace) {
-      throw new Error("OpenWork server unavailable. Connect to remove skills.");
+      throw new Error("Sofia App server unavailable. Connect to remove skills.");
     }
 
     if (!isDesktopRuntime()) {
@@ -911,7 +911,7 @@ export function createExtensionsStore(options: {
       await openworkClient.addMcp(openworkWorkspaceId, { name, config });
       return;
     }
-    throw new Error("OpenWork server unavailable. Connect to import MCP servers into this workspace.");
+    throw new Error("Sofia App server unavailable. Connect to import MCP servers into this workspace.");
   };
 
   const deletePluginMcpConfig = async (name: string) => {
@@ -927,7 +927,7 @@ export function createExtensionsStore(options: {
       await openworkClient.removeMcp(openworkWorkspaceId, name);
       return;
     }
-    throw new Error("OpenWork server unavailable. Connect to remove imported MCP servers from this workspace.");
+    throw new Error("Sofia App server unavailable. Connect to remove imported MCP servers from this workspace.");
   };
 
   const pluginReloadReason = (objectType: string): ReloadReason => {
@@ -958,7 +958,7 @@ export function createExtensionsStore(options: {
       await openworkClient.writeWorkspaceFile(openworkWorkspaceId, { path, content, force: true });
       return;
     }
-    throw new Error("OpenWork server unavailable. Connect to import plugin files into this workspace.");
+    throw new Error("Sofia App server unavailable. Connect to import plugin files into this workspace.");
   };
 
   const deletePluginWorkspaceFiles = async (files: Array<{ path: string; recursive?: boolean }>) => {
@@ -981,7 +981,7 @@ export function createExtensionsStore(options: {
       }
       return;
     }
-    throw new Error("OpenWork server unavailable. Connect to remove imported plugin files from this workspace.");
+    throw new Error("Sofia App server unavailable. Connect to remove imported plugin files from this workspace.");
   };
 
   const applyCloudOrgPluginImport = async (
@@ -1285,7 +1285,7 @@ export function createExtensionsStore(options: {
   async function previewClaudePlugin(url: string): Promise<OpenworkClaudePluginPreview> {
     const target = await resolveWorkspaceServerTarget();
     if (!target.openworkClient || !target.openworkWorkspaceId) {
-      throw new Error("OpenWork server unavailable. Connect to install plugins from GitHub.");
+      throw new Error("Sofia App server unavailable. Connect to install plugins from GitHub.");
     }
     const result = await target.openworkClient.previewClaudePlugin(target.openworkWorkspaceId, { url });
     return result.preview;
@@ -1297,7 +1297,7 @@ export function createExtensionsStore(options: {
     try {
       const target = await resolveWorkspaceServerTarget();
       if (!target.openworkClient || !target.openworkWorkspaceId) {
-        throw new Error("OpenWork server unavailable. Connect to install plugins from GitHub.");
+        throw new Error("Sofia App server unavailable. Connect to install plugins from GitHub.");
       }
       const result = await target.openworkClient.installClaudePlugin(target.openworkWorkspaceId, { url });
       await refreshSkills({ force: true });
@@ -1461,7 +1461,7 @@ export function createExtensionsStore(options: {
       mutateState((current) => ({
         ...current,
         skills: [],
-        skillsStatus: "OpenWork server cannot read skills for this workspace.",
+        skillsStatus: "Sofia App server cannot read skills for this workspace.",
       }));
       return;
     }
@@ -1511,7 +1511,7 @@ export function createExtensionsStore(options: {
       mutateState((current) => ({
         ...current,
         skills: [],
-        skillsStatus: "OpenWork server unavailable. Connect to load skills.",
+        skillsStatus: "Sofia App server unavailable. Connect to load skills.",
       }));
       return;
     }
@@ -1631,9 +1631,9 @@ export function createExtensionsStore(options: {
     if (scope === "project" && hasOpenworkTarget) {
       mutateState((current) => ({
         ...current,
-        pluginStatus: "OpenWork server cannot read plugins for this workspace.",
+        pluginStatus: "Sofia App server cannot read plugins for this workspace.",
         pluginList: [],
-        sidebarPluginStatus: "OpenWork server cannot read plugins for this workspace.",
+        sidebarPluginStatus: "Sofia App server cannot read plugins for this workspace.",
         sidebarPluginList: [],
       }));
       refreshPluginsInFlight = false;
@@ -1655,9 +1655,9 @@ export function createExtensionsStore(options: {
     if (!isLocalWorkspace && !canUseOpenworkServer) {
       mutateState((current) => ({
         ...current,
-        pluginStatus: "OpenWork server unavailable. Connect to manage plugins.",
+        pluginStatus: "Sofia App server unavailable. Connect to manage plugins.",
         pluginList: [],
-        sidebarPluginStatus: "Connect an OpenWork server to load plugins.",
+        sidebarPluginStatus: "Connect an Sofia App server to load plugins.",
         sidebarPluginList: [],
       }));
       refreshPluginsInFlight = false;
@@ -1775,7 +1775,7 @@ export function createExtensionsStore(options: {
     }
 
     if (snapshot.pluginScope === "project" && hasOpenworkTarget) {
-      setStateField("pluginStatus", "OpenWork server cannot write plugins for this workspace.");
+      setStateField("pluginStatus", "Sofia App server cannot write plugins for this workspace.");
       return;
     }
 
@@ -1785,7 +1785,7 @@ export function createExtensionsStore(options: {
     }
 
     if (!isLocalWorkspace) {
-      setStateField("pluginStatus", "OpenWork server unavailable. Connect to manage plugins.");
+      setStateField("pluginStatus", "Sofia App server unavailable. Connect to manage plugins.");
       return;
     }
 
@@ -1865,7 +1865,7 @@ export function createExtensionsStore(options: {
     }
 
     if (snapshot.pluginScope === "project" && hasOpenworkTarget) {
-      setStateField("pluginStatus", "OpenWork server cannot write plugins for this workspace.");
+      setStateField("pluginStatus", "Sofia App server cannot write plugins for this workspace.");
       return;
     }
 
@@ -1875,7 +1875,7 @@ export function createExtensionsStore(options: {
     }
 
     if (!isLocalWorkspace) {
-      setStateField("pluginStatus", "OpenWork server unavailable. Connect to manage plugins.");
+      setStateField("pluginStatus", "Sofia App server unavailable. Connect to manage plugins.");
       return;
     }
 
@@ -1985,13 +1985,13 @@ export function createExtensionsStore(options: {
     }
 
     if (hasOpenworkTarget) {
-      const message = "OpenWork server cannot write skills for this workspace.";
+      const message = "Sofia App server cannot write skills for this workspace.";
       setStateField("skillsStatus", message);
       return { ok: false, message };
     }
 
     if (isRemoteWorkspace) {
-      const message = "OpenWork server unavailable. Connect to install skills.";
+      const message = "Sofia App server unavailable. Connect to install skills.";
       setStateField("skillsStatus", message);
       return { ok: false, message };
     }
@@ -2126,7 +2126,7 @@ export function createExtensionsStore(options: {
     }
 
     if (hasOpenworkTarget) {
-      setStateField("skillsStatus", "OpenWork server cannot read skills for this workspace.");
+      setStateField("skillsStatus", "Sofia App server cannot read skills for this workspace.");
       return null;
     }
 
@@ -2136,7 +2136,7 @@ export function createExtensionsStore(options: {
     }
 
     if (isRemoteWorkspace) {
-      setStateField("skillsStatus", "OpenWork server unavailable. Connect to view skills.");
+      setStateField("skillsStatus", "Sofia App server unavailable. Connect to view skills.");
       return null;
     }
     if (!isDesktopRuntime()) {
@@ -2193,7 +2193,7 @@ export function createExtensionsStore(options: {
     }
 
     if (hasOpenworkTarget) {
-      setStateField("skillsStatus", "OpenWork server cannot write skills for this workspace.");
+      setStateField("skillsStatus", "Sofia App server cannot write skills for this workspace.");
       return;
     }
 
@@ -2203,7 +2203,7 @@ export function createExtensionsStore(options: {
     }
 
     if (isRemoteWorkspace) {
-      setStateField("skillsStatus", "OpenWork server unavailable. Connect to edit skills.");
+      setStateField("skillsStatus", "Sofia App server unavailable. Connect to edit skills.");
       return;
     }
     if (!isDesktopRuntime()) {

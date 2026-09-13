@@ -329,7 +329,7 @@ export function OpenworkControlProvider({ children }: { children: ReactNode }) {
       resources: [{
         ref: `screen:${route}`,
         kind: "screen",
-        title: "OpenWork",
+        title: "Sofia App",
         provider: { id: "openwork-ui", kind: "builtin" },
         state: { kind: "other", route },
       }],
@@ -530,7 +530,7 @@ export function OpenworkControlProvider({ children }: { children: ReactNode }) {
       return {
         ok: false,
         id: request.id,
-        error: `OpenWork context changed from revision ${request.expectedRevision} to ${revision}.`,
+        error: `Sofia App context changed from revision ${request.expectedRevision} to ${revision}.`,
         code: "conflict",
         revision,
       };
@@ -799,8 +799,8 @@ export function OpenworkRouteControlActions() {
     },
     {
       id: "help.capabilities",
-      label: "What can OpenWork do?",
-      description: "List the main capabilities of OpenWork.",
+      label: "What can Sofia App do?",
+      description: "List the main capabilities of Sofia App.",
       kind: "query",
       effects: { data: "read", ui: "none", external: false },
       sideEffect: "none",
@@ -809,7 +809,7 @@ export function OpenworkRouteControlActions() {
           { id: "browse", label: "Browse the web", description: "Control a browser to navigate, scrape, and automate web tasks." },
           { id: "providers", label: "AI model providers", description: "Connect Anthropic, OpenAI, Google, OpenRouter, Ollama, or other LLM providers." },
           { id: "extensions", label: "Library", description: "Skills, connections, and tools your agent can use." },
-          { id: "voice", label: "Voice mode", description: "Talk to OpenWork with real-time voice using OpenAI Realtime." },
+          { id: "voice", label: "Voice mode", description: "Talk to Sofia App with real-time voice using OpenAI Realtime." },
           { id: "files", label: "File management", description: "Read, write, and organize files in your workspace." },
           { id: "code", label: "Write and run code", description: "Generate, edit, and execute code with full tool access." },
           { id: "computer-use", label: "Computer use", description: "Control your computer with screenshots and mouse/keyboard actions." },

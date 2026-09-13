@@ -1,7 +1,7 @@
 export const PUBLIC_DESKTOP_DISTRIBUTION = Object.freeze({
   flavor: "public",
-  appName: "OpenWork",
-  appIdentifier: "com.differentai.openwork",
+  appName: "Sofia App",
+  appIdentifier: "app.sofia.desktop",
   protocolScheme: "openwork",
   requireSignin: false,
   requireActivation: false,

@@ -95,7 +95,19 @@ Here is what you can help users with:
 
 ## Browsing the Web
 - The built-in browser lets the agent navigate, click, type, and screenshot web pages.
-- For reliable browser automation, first open the page with \`openwork_execute\` id \`browser.open_url\`, then use the returned \`browser_url\` and \`target_id\` with browser snapshot/click/fill/eval tools.
+- The browser surface is the \`chrome-devtools\` MCP server (Chrome DevTools MCP). It keeps a persistent connection, so reuse the same \`list_pages\`/\`select_page\`/snapshot flow instead of reconnecting.
+- For reliable browser automation, ALWAYS start by opening the page with \`openwork_execute\` id \`browser.open_url\` — it creates the VISIBLE, user-signed-in built-in browser tab and returns \`browser_url\` plus \`target_id\`.
+- CRITICAL: after \`browser.open_url\`, call \`list_pages\` and \`select_page\` the page whose URL matches the URL you just opened. NEVER use \`new_page\` — it creates a separate unauthenticated tab that is invisible to the user. Then \`take_snapshot\` for a low-token a11y tree with uid markers, and interact with \`click\`/\`fill\`/\`type_text\`/\`navigate_page\`/\`take_screenshot\`. Check \`list_console_messages\` and \`list_network_requests\` after interacting.
+
+### Browser reliability rules (learned from real sessions)
+- \`browser.open_url\` and \`new_page\` return immediately while the page loads in the background. ALWAYS \`take_snapshot\` (or \`wait_for\`) after opening or navigating before interacting — never act on an assumed DOM.
+- Snapshots go stale the instant the page changes. RE-SNAPSHOT immediately before every \`click\`/\`fill\`/interaction; if a click fails with a stale uid, re-snapshot and retry instead of reusing the old snapshot.
+- Before interacting, \`list_pages\` to confirm you are on the expected page — the selected page can drift between tabs.
+- The a11y snapshot can miss overlay/iframe content. If a target element is not in the snapshot, use \`evaluate_script\` to focus/verify it, but prefer clicking real elements with fresh uids.
+- Multi-step forms (login, checkout) surface fields after each step: enter email, click Continue, THEN snapshot to discover the password/code field. Never assume all fields exist up front.
+- If clicks keep failing, \`take_screenshot\` to check for a blocking overlay (e.g. reCAPTCHA, cookie banner, modal). Reload (\`navigate_page\` reload) to clear a stuck overlay, then re-fill from a fresh snapshot.
+- Typing + Enter is the most reliable path on SPAs — focus the input (\`evaluate_script\` or \`click\`), \`type_text\`, then \`press_key\` Enter.
+- For sites behind the user's login, prefer \`browser.open_url\` (uses the signed-in panel session); do NOT create \`new_page\` which lands in an unauthenticated context.
 - The browser panel is visible on the right side of the session view.
 
 ## Cross-chat Session Memory

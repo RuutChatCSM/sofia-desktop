@@ -113,6 +113,9 @@ type ComposerProps = {
   /** Render inline in a page (new-task hero): no sticky dock chrome or inner max-width, aligning with sibling content. */
   flush?: boolean;
   topAccessory?: ReactNode;
+  /** Rendered in the action row (next to the model select/send) — e.g. the
+   * codex approval-mode control. */
+  approvalAccessory?: ReactNode;
 };
 
 const FLUSH_PROMPT_EVENT = "openwork:flushPromptDraft";
@@ -1724,6 +1727,7 @@ export function ReactSessionComposer(props: ComposerProps) {
                     if (!props.steering) props.onModelVariantChange(value);
                   }}
                 />
+                {props.approvalAccessory ? <div className="shrink-0">{props.approvalAccessory}</div> : null}
                 {props.modelUnavailable ? props.onRefreshOrganizationModels ? (
                   <button
                     type="button"
