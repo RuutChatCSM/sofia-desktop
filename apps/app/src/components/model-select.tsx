@@ -24,6 +24,7 @@ import {
   OPENWORK_MODELS_PROVIDER_NAME,
 } from "@/react-app/domains/cloud/openwork-models-promo";
 import { getConnectedProviderItems, useProviderListQuery } from "@/react-app/infra/provider-list-query";
+import { useSelectedEngine } from "@/react-app/domains/session/engine-selection-store";
 import { filterEntitledModelOptions } from "@/react-app/domains/connections/provider-auth/provider-policy";
 import {
   filterCloudManagedModelOptions,
@@ -59,6 +60,9 @@ function useModelOptions(
 ) {
   const { client, opencodeBaseUrl, selectedWorkspaceRoot } = useWorkspace();
   const checkDesktopRestriction = useCheckDesktopRestriction();
+  // Engine-aware: the native codex/sofia engine cannot route the built-in
+  // opencode (Zen) provider, so hide it while codex is the active engine.
+  const isCodexEngine = useSelectedEngine() === "codex";
 
   const { data, refetch } = useProviderListQuery({
     client,
@@ -91,6 +95,7 @@ function useModelOptions(
     });
 
     const options = getConnectedProviderItems(data)
+      .filter((provider) => !(isCodexEngine && provider.id.trim().toLowerCase() === "opencode"))
       .flatMap((provider) =>
         Object.entries(provider.models).map(([id, model]) => {
           const summary = getModelBehaviorSummary(provider.id, model, null, provider.name);
@@ -116,7 +121,7 @@ function useModelOptions(
       restrictToCloud,
       checkRestriction: checkDesktopRestriction,
     });
-  }, [checkDesktopRestriction, cloudProvidersEnabled, data, fallbackOptions]);
+  }, [checkDesktopRestriction, cloudProvidersEnabled, data, fallbackOptions, isCodexEngine]);
 }
 
 type ModelSelectItem = {
