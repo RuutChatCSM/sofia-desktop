@@ -85,7 +85,7 @@ concurrency:
 jobs:
   resolve-production:
     name: Resolve Release Metadata
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     # WARDEN_PRIVATE_KEY lives in this environment; its deployment policy
     # (dev + v* tags) means the key is only reachable from reviewed code —
     # a feature-branch workflow edit cannot mint the tag-push token.
@@ -376,7 +376,7 @@ jobs:
   resolve-benchmark:
     name: Resolve Benchmark Metadata
     if: github.event.inputs.benchmark_only == 'true'
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     outputs:
       release_tag: ${{ steps.resolve.outputs.release_tag }}
       release_version: ${{ steps.resolve.outputs.release_version }}
@@ -413,7 +413,7 @@ jobs:
     if: |
       always() &&
       (needs.resolve-production.result == 'success' || needs.resolve-benchmark.result == 'success')
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     outputs:
       release_tag: ${{ needs.resolve-production.outputs.release_tag || needs.resolve-benchmark.outputs.release_tag }}
       release_version: ${{ needs.resolve-production.outputs.release_version || needs.resolve-benchmark.outputs.release_version }}
@@ -435,7 +435,7 @@ jobs:
     # implicit success() check so that skipped sibling does not propagate
     # through the selected release context and suppress verification.
     if: always() && needs.resolve-release.result == 'success'
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     env:
       RELEASE_TAG: ${{ needs.resolve-release.outputs.release_tag }}
       RELEASE_MODE: ${{ needs.resolve-release.outputs.release_mode }}
@@ -485,7 +485,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: blacksmith-12vcpu-macos-15
+          - platform: macos-15
             os_type: macos
             artifact: electron-macos-arm64
             builder_config: electron-builder.yml
@@ -493,7 +493,7 @@ jobs:
             manifest_pattern: latest*.yml
             electron_args: "--mac --arm64"
             target_triple: aarch64-apple-darwin
-          - platform: blacksmith-12vcpu-macos-15
+          - platform: macos-15
             os_type: macos
             artifact: electron-macos-x64
             builder_config: electron-builder.yml
@@ -501,7 +501,7 @@ jobs:
             manifest_pattern: latest*.yml
             electron_args: "--mac --x64"
             target_triple: x86_64-apple-darwin
-          - platform: blacksmith-16vcpu-ubuntu-2204
+          - platform: ubuntu-22.04
             os_type: linux
             artifact: electron-linux-x64
             builder_config: electron-builder.yml
@@ -512,7 +512,7 @@ jobs:
           # electron-builder can package ARM64 without executing the target
           # binaries. Cross-package on the faster x64 compression runner; the
           # workspace installs both CPU variants of optional native packages.
-          - platform: blacksmith-16vcpu-ubuntu-2204
+          - platform: ubuntu-22.04
             os_type: linux
             artifact: electron-linux-arm64
             builder_config: electron-builder.yml
@@ -520,7 +520,7 @@ jobs:
             manifest_pattern: latest*.yml
             electron_args: "--linux --arm64"
             target_triple: aarch64-unknown-linux-gnu
-          - platform: blacksmith-12vcpu-macos-15
+          - platform: macos-15
             os_type: macos
             artifact: electron-cloud-macos-arm64
             builder_config: electron-builder.cloud.yml
@@ -528,7 +528,7 @@ jobs:
             manifest_pattern: cloud*.yml
             electron_args: "--mac --arm64"
             target_triple: aarch64-apple-darwin
-          - platform: blacksmith-12vcpu-macos-15
+          - platform: macos-15
             os_type: macos
             artifact: electron-cloud-macos-x64
             builder_config: electron-builder.cloud.yml
@@ -536,7 +536,7 @@ jobs:
             manifest_pattern: cloud*.yml
             electron_args: "--mac --x64"
             target_triple: x86_64-apple-darwin
-          - platform: blacksmith-16vcpu-ubuntu-2204
+          - platform: ubuntu-22.04
             os_type: linux
             artifact: electron-cloud-linux-x64
             builder_config: electron-builder.cloud.yml
@@ -544,7 +544,7 @@ jobs:
             manifest_pattern: cloud*.yml
             electron_args: "--linux --x64"
             target_triple: x86_64-unknown-linux-gnu
-          - platform: blacksmith-16vcpu-ubuntu-2204
+          - platform: ubuntu-22.04
             os_type: linux
             artifact: electron-cloud-linux-arm64
             builder_config: electron-builder.cloud.yml
@@ -552,7 +552,7 @@ jobs:
             manifest_pattern: cloud*.yml
             electron_args: "--linux --arm64"
             target_triple: aarch64-unknown-linux-gnu
-          - platform: blacksmith-12vcpu-macos-15
+          - platform: macos-15
             os_type: macos
             artifact: electron-enterprise-macos-arm64
             builder_config: electron-builder.enterprise.yml
@@ -560,7 +560,7 @@ jobs:
             manifest_pattern: enterprise*.yml
             electron_args: "--mac --arm64"
             target_triple: aarch64-apple-darwin
-          - platform: blacksmith-12vcpu-macos-15
+          - platform: macos-15
             os_type: macos
             artifact: electron-enterprise-macos-x64
             builder_config: electron-builder.enterprise.yml
@@ -568,7 +568,7 @@ jobs:
             manifest_pattern: enterprise*.yml
             electron_args: "--mac --x64"
             target_triple: x86_64-apple-darwin
-          - platform: blacksmith-16vcpu-ubuntu-2204
+          - platform: ubuntu-22.04
             os_type: linux
             artifact: electron-enterprise-linux-x64
             builder_config: electron-builder.enterprise.yml
@@ -576,7 +576,7 @@ jobs:
             manifest_pattern: enterprise*.yml
             electron_args: "--linux --x64"
             target_triple: x86_64-unknown-linux-gnu
-          - platform: blacksmith-16vcpu-ubuntu-2204
+          - platform: ubuntu-22.04
             os_type: linux
             artifact: electron-enterprise-linux-arm64
             builder_config: electron-builder.enterprise.yml
@@ -916,7 +916,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: blacksmith-8vcpu-windows-2025
+          - platform: windows-2025
             os_type: windows
             artifact: electron-windows-x64
             builder_config: electron-builder.yml
@@ -927,7 +927,7 @@ jobs:
           # electron-builder cross-packages ARM64 on the faster x64 runner.
           # pnpm-workspace.yaml installs both Windows CPU variants so native
           # optional dependencies remain correct in the ARM64 artifact.
-          - platform: blacksmith-8vcpu-windows-2025
+          - platform: windows-2025
             os_type: windows
             artifact: electron-windows-arm64
             builder_config: electron-builder.yml
@@ -935,7 +935,7 @@ jobs:
             manifest_pattern: latest*.yml
             electron_args: "--win --arm64"
             target_triple: aarch64-pc-windows-msvc
-          - platform: blacksmith-8vcpu-windows-2025
+          - platform: windows-2025
             os_type: windows
             artifact: electron-cloud-windows-x64
             builder_config: electron-builder.cloud.yml
@@ -943,7 +943,7 @@ jobs:
             manifest_pattern: cloud*.yml
             electron_args: "--win --x64"
             target_triple: x86_64-pc-windows-msvc
-          - platform: blacksmith-8vcpu-windows-2025
+          - platform: windows-2025
             os_type: windows
             artifact: electron-cloud-windows-arm64
             builder_config: electron-builder.cloud.yml
@@ -951,7 +951,7 @@ jobs:
             manifest_pattern: cloud*.yml
             electron_args: "--win --arm64"
             target_triple: aarch64-pc-windows-msvc
-          - platform: blacksmith-8vcpu-windows-2025
+          - platform: windows-2025
             os_type: windows
             artifact: electron-enterprise-windows-x64
             builder_config: electron-builder.enterprise.yml
@@ -959,7 +959,7 @@ jobs:
             manifest_pattern: enterprise*.yml
             electron_args: "--win --x64"
             target_triple: x86_64-pc-windows-msvc
-          - platform: blacksmith-8vcpu-windows-2025
+          - platform: windows-2025
             os_type: windows
             artifact: electron-enterprise-windows-arm64
             builder_config: electron-builder.enterprise.yml
@@ -991,7 +991,7 @@ jobs:
       (needs.resolve-release.outputs.build_electron != 'true' || needs.publish-electron-windows.result == 'success') &&
       (needs.publish-npm.result == 'success' || needs.publish-npm.result == 'skipped') &&
       needs.publish-daytona-snapshot.result != 'cancelled'
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     env:
       RELEASE_TAG: ${{ needs.resolve-release.outputs.release_tag }}
       RELEASE_PRERELEASE: ${{ needs.resolve-release.outputs.prerelease }}
@@ -1052,7 +1052,7 @@ jobs:
       needs.verify-release.result == 'success' &&
       needs.resolve-release.outputs.benchmark_only != 'true' &&
       needs.resolve-release.outputs.publish_npm == 'true'
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     outputs:
       publish_server: ${{ steps.npm-versions.outputs.publish_server }}
     env:
@@ -1201,7 +1201,7 @@ jobs:
     # Outages there (e.g. "The AUR is down due to maintenance", 2026-08-04)
     # must not mark an otherwise-published release run as failed.
     continue-on-error: true
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     env:

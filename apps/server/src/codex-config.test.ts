@@ -85,17 +85,6 @@ describe("buildCodexConfigToml", () => {
   it("returns empty string for an empty map", () => {
     expect(buildCodexConfigToml({})).toBe("");
   });
-
-  it("injects experimental_bearer_token from the auth store", () => {
-    const toml = buildCodexConfigToml({ deepseek }, { DEEPSEEK_API_KEY: "sk-test" });
-    expect(toml).toContain('env_key = "DEEPSEEK_API_KEY"');
-    expect(toml).toContain('experimental_bearer_token = "sk-test"');
-  });
-
-  it("omits bearer token when the auth store has no matching key", () => {
-    const toml = buildCodexConfigToml({ deepseek }, { OTHER_KEY: "sk-other" });
-    expect(toml).not.toContain("experimental_bearer_token");
-  });
 });
 
 describe("pickDefaultCodexProvider", () => {

@@ -208,13 +208,22 @@
       "override": "MCP server URL setting"
     },
     {
-      "host": "models.openworklabs.com",
+      "host": "models.dev",
       "kind": "fetched",
       "components": ["server"],
-      "purpose": "First-party OpenCode model catalog mirror passed to managed OpenCode as OPENCODE_MODELS_URL.",
+      "purpose": "Canonical model catalog passed to managed OpenCode as OPENCODE_MODELS_URL.",
       "requirement": "required-in-practice",
       "blockedEffect": "The model catalog is unavailable or degraded; model selection may be stale or incomplete.",
       "override": "OPENCODE_MODELS_URL"
+    },
+    {
+      "host": "codex.cli.sh",
+      "kind": "subprocess",
+      "components": ["desktop"],
+      "purpose": "Sofia (codex) CLI install script fetched and piped to bash when the pinned engine binary is missing.",
+      "requirement": "required-in-practice",
+      "blockedEffect": "The bundled Sofia engine cannot be installed on first run, so the codex engine is unavailable.",
+      "override": "preinstalled codex binary (bundled path or PATH)"
     },
     {
       "host": "oauth2.googleapis.com",

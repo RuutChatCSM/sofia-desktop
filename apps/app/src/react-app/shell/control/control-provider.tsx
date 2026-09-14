@@ -817,7 +817,7 @@ export function OpenworkRouteControlActions() {
           ...(isDesktopRuntime()
             ? [{ id: "automations", label: "Automations", description: "Schedule recurring tasks and background agents." }]
             : []),
-          { id: "sharing", label: "Share sessions", description: "Share workspace sessions with collaborators via OpenWork Cloud." },
+          { id: "sharing", label: "Share sessions", description: "Share workspace sessions with collaborators via Organization cloud." },
         ],
         hint: "Use settings.panel.open for settings such as AI providers, and route.extensions.skills to browse Library.",
       }),

@@ -1391,7 +1391,7 @@ export function applySessionUnrevert(workspaceId: string, sessionId: string) {
 export function trackWorkspaceSessionSync(input: SyncOptions, sessionId: string | null | undefined) {
   const normalizedSessionId = sessionId?.trim() ?? "";
   if (!normalizedSessionId) return () => {};
-  // Codex sessions are owned by the Sofia engine; opencode sync must never
+  // Sofia sessions are owned by the Sofia engine; opencode sync must never
   // attach to them (no SSE, no status/permission polls).
   if (normalizedSessionId.startsWith("codex-")) return () => {};
 

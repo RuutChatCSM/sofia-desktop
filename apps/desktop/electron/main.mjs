@@ -1023,6 +1023,8 @@ if (!process.env.OPENWORK_CODEX_HOME?.trim()) {
 // even in dev (the dev sandbox rewrites HOME). The server reads REAL_HOME for
 // legacy session import and any ~-based path that must never hit the sandbox.
 process.env.REAL_HOME = app.getPath("home");
+// Share the CLI's connected providers and credentials, not its task database.
+process.env.SOFIA_PROVIDER_HOME ||= path.join(app.getPath("home"), ".sofia");
 // Import the user's legacy ~/.codex sessions (ChatGPT/Codex desktop store) into
 // the Sofia session list.
 process.env.OPENWORK_CODEX_IMPORT_LEGACY = "1";

@@ -727,14 +727,14 @@ export function createConnectionsStore(options: {
 
       if (entry.managedBy === "openwork-connect") {
         if (slug !== CLOUD_MCP_SERVER_NAME) {
-          throw new Error("OpenWork Connect MCP metadata is invalid.");
+          throw new Error("Connections MCP metadata is invalid.");
         }
         if (!canUseOpenworkServer || !openworkClient || !openworkWorkspaceId) {
           throw new Error("Sofia App server is required to repair agent access to connected services.");
         }
         const context = await resolveCloudMcpOperationContext(entry.url);
         if (!context) {
-          throw new Error("Sign in to OpenWork Cloud and choose an organization first.");
+          throw new Error("Sign in to Organization cloud and choose an organization first.");
         }
         clearCloudMcpDisabledIntent(context);
         const result = await runOpenworkCloudMcpReconciler({
@@ -1004,7 +1004,7 @@ export function createConnectionsStore(options: {
 
   /**
    * Background reconciliation for the Den cloud MCP: when the desktop is
-   * signed in to OpenWork Cloud with an active org, keep the
+   * signed in to Organization cloud with an active org, keep the
    * `openwork-cloud` MCP entry configured with a fresh first-party token.
    * Quiet by design — a failed mint never opens the OAuth modal.
    *

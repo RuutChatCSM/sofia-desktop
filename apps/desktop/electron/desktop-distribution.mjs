@@ -9,7 +9,7 @@ export const PUBLIC_DESKTOP_DISTRIBUTION = Object.freeze({
 
 export const CLOUD_DESKTOP_DISTRIBUTION = Object.freeze({
   flavor: "cloud",
-  appName: "OpenWork Cloud",
+  appName: "Sofia App Cloud",
   appIdentifier: "com.differentai.openwork",
   protocolScheme: "openwork",
   requireSignin: true,
@@ -18,7 +18,7 @@ export const CLOUD_DESKTOP_DISTRIBUTION = Object.freeze({
 
 export const ENTERPRISE_DESKTOP_DISTRIBUTION = Object.freeze({
   flavor: "enterprise",
-  appName: "OpenWork Enterprise",
+  appName: "Sofia App Enterprise",
   appIdentifier: "com.differentai.openwork",
   protocolScheme: "openwork",
   requireSignin: true,

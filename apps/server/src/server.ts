@@ -6,6 +6,7 @@ import { resolveGlobalOpencodeConfigPath } from "@openwork/paths";
 import type { ApprovalRequest, Capabilities, ServerConfig, WorkspaceInfo, Actor, ReloadReason, ReloadTrigger, TokenScope } from "./types.js";
 import { agentContextDiagnosticsRequestSchema } from "./agent-context-diagnostics-schema.js";
 import { ApprovalService } from "./approvals.js";
+import { readCodexAccessMode } from "./codex-access.js";
 import {
   EnginePool,
   enginePoolForConfig,
@@ -96,7 +97,6 @@ import { registerSessionRoutes } from "./routes/sessions.js";
 import { registerCodexRoutes } from "./codex-routes.js";
 import { getOrCreateCodexSessionManager } from "./codex-registry.js";
 import { bridgeCodexApprovals } from "./codex-approvals.js";
-import { syncCodexEngineConfigFromProviderMap } from "./codex-engine-config.js";
 import { registerWorkspaceRoutes } from "./routes/workspaces.js";
 import { registerCloudMcpRoutes } from "./routes/cloud-mcp.js";
 import { captureServerException, isExpectedRequestCancellation } from "./telemetry.js";
@@ -965,7 +965,15 @@ function isPromptAsyncProxyRequest(method: string, proxyPath: string) {
 }
 
 export async function startServer(config: ServerConfig): Promise<ServeResult> {
-  const approvals = new ApprovalService(config.approval);
+  // The composer's "How should actions be approved?" control persists to the
+  // codex access-mode file, which the engine reads on every turn. Seed the host
+  // approval service from that same file so a restart shows the saved choice
+  // instead of silently reverting the selector to "Ask for approval".
+  const persistedAccessMode = readCodexAccessMode();
+  const approvals = new ApprovalService({
+    ...config.approval,
+    mode: config.approval.mode === "manual" ? persistedAccessMode : config.approval.mode,
+  });
   const reloadEvents = new ReloadEventStore();
   const tokens = new TokenService(config);
   const env = new EnvService();
@@ -2648,10 +2656,6 @@ function createRoutes(
       env,
       logger: toManagedProviderAuthLogger(logger),
     }).catch(() => undefined);
-
-    // Keep the codex engine in sync: the app model configuration drives the
-    // bundled codex engine via codexengine.json in the global config dir.
-    await syncCodexEngineConfigFromProviderMap(runtimeProviderMap(result.config)).catch(() => undefined);
 
     return jsonResponse({
       ok: true,

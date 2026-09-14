@@ -9,7 +9,13 @@
 import { randomUUID } from "node:crypto";
 
 import { removeCodexAuthKey, setCodexAuthKey } from "./codex-auth-store.js";
-import { readCodexEngineConfig } from "./codex-engine-config.js";
+import { ensureProviderModels } from "./codex-model-discovery.js";
+import {
+  codexEnvKeyForProvider,
+  parseCodexEngineConfig,
+  readCodexEngineConfig,
+  writeCodexEngineConfigFromProviders,
+} from "./codex-providers.js";
 import type { CodexEvent, CodexSession } from "./codex-sessions.js";
 import { isCodexSessionId } from "./codex-sessions.js";
 import { ApiError } from "./errors.js";
@@ -101,8 +107,28 @@ export function registerCodexRoutes(options: RegisterCodexRoutesOptions): void {
   // Codex model/provider config: what the app's model picker surfaces when the
   // selected engine is codex. Read from the app-owned codexengine.json.
   addRoute(routes, "GET", "/workspace/:id/codex/config", "client", async () => {
+    // Providers persisted by the CLI's `/connect` flow always carry a catalog
+    // in practice, but a provider whose `/models` response the CLI could not
+    // parse lands with `models: []` and would vanish from the picker. Resolve
+    // those catalogs from the provider before flattening the config.
+    await ensureProviderModels().catch(() => undefined);
     const config = await readCodexEngineConfig();
     return jsonResponse({ ok: true, config });
+  });
+
+  // The app pushes its connected providers (with models.dev-backed models) here
+  // so the codex engine's provider/model catalog stays in sync with what the
+  // picker shows — including providers connected only via the app's auth store.
+  addRoute(routes, "PUT", "/workspace/:id/codex/providers", "client", async (ctx) => {
+    ensureWritable(options.config);
+    requireClientScope(ctx, "collaborator");
+    const body = await readJsonBody(ctx.request);
+    const parsed = parseCodexEngineConfig(body);
+    if (parsed.providers.length === 0) {
+      throw new ApiError(400, "invalid_payload", "providers are required");
+    }
+    const path = await writeCodexEngineConfigFromProviders(parsed.providers);
+    return jsonResponse({ ok: true, path });
   });
 
   addRoute(routes, "POST", "/workspace/:id/codex/sessions", "client", async (ctx) => {
@@ -186,13 +212,19 @@ export function registerCodexRoutes(options: RegisterCodexRoutesOptions): void {
     ensureWritable(options.config);
     requireClientScope(ctx, "collaborator");
     const body = await readJsonBody(ctx.request);
-    const envKey = optionalStringField(body, "envKey");
+    const providedEnvKey = optionalStringField(body, "envKey");
     const key = optionalStringField(body, "key");
-    if (!envKey || !key) {
-      throw new ApiError(400, "invalid_payload", "envKey and key are required");
+    if (!key) {
+      throw new ApiError(400, "invalid_payload", "key is required");
     }
     const providerId = decodeURIComponent(ctx.params.providerId);
-    await setCodexAuthKey(providerId, envKey, key);
+    // Mirror codex's `/connect`: the credential is stored under the derived
+    // `<ID>_API_KEY` name the engine resolves via config.toml's `env_key`. The
+    // app-provided name (if different) is kept too so nothing is orphaned.
+    await setCodexAuthKey(providerId, codexEnvKeyForProvider(providerId), key);
+    if (providedEnvKey && providedEnvKey !== codexEnvKeyForProvider(providerId)) {
+      await setCodexAuthKey(providerId, providedEnvKey, key);
+    }
     return jsonResponse({ ok: true });
   });
 
@@ -201,10 +233,13 @@ export function registerCodexRoutes(options: RegisterCodexRoutesOptions): void {
     requireClientScope(ctx, "collaborator");
     const providerId = decodeURIComponent(ctx.params.providerId);
     const body = await readJsonBody(ctx.request).catch(() => null);
-    const envKey = body && typeof body.envKey === "string" && body.envKey.trim()
+    const providedEnvKey = body && typeof body.envKey === "string" && body.envKey.trim()
       ? body.envKey.trim()
-      : providerId;
-    await removeCodexAuthKey(envKey);
+      : null;
+    await removeCodexAuthKey(codexEnvKeyForProvider(providerId));
+    if (providedEnvKey && providedEnvKey !== codexEnvKeyForProvider(providerId)) {
+      await removeCodexAuthKey(providedEnvKey);
+    }
     return jsonResponse({ ok: true });
   });
 

@@ -8,7 +8,7 @@ import type { DynamicToolUIPart } from "ai"
  */
 
 export type CapabilityCallSentence = {
-  /** Human service name, e.g. "Granola" or "OpenWork Cloud". */
+  /** Human service name, e.g. "Granola" or "Organization cloud". */
   service: string | null
   /** Present-tense line while the call runs. */
   present: string

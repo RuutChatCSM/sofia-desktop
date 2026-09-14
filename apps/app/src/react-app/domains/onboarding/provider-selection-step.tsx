@@ -46,10 +46,10 @@ export function ProviderSelectionStep({
               <SparklesIcon className="mt-0.5 size-5 shrink-0 text-blue-10" />
               <div>
                 <div className="text-sm font-medium text-foreground">
-                  Use OpenWork Models
+                  Use Hosted models
                 </div>
                 <div className="mt-0.5 text-xs text-muted-foreground">
-                  Pay through OpenWork Cloud and skip API key setup.
+                  Pay through Organization cloud and skip API key setup.
                 </div>
               </div>
             </button>

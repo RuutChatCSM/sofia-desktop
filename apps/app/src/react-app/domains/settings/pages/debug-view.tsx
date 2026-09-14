@@ -676,7 +676,7 @@ export function DebugView(props: DebugViewProps) {
           <div className={sectionHeaderClass}>
             <div className={sectionTitleClass}>Agent access</div>
             <div className={sectionDescClass}>
-              Test and repair OpenWork Cloud MCP access for this workspace.
+              Test and repair Organization cloud MCP access for this workspace.
             </div>
           </div>
           <AgentAccessCard

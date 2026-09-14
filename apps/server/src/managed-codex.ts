@@ -66,6 +66,12 @@ const DEFAULT_REQUEST_TIMEOUT_MS = 60_000;
 function buildEnv(options: CodexEngineOptions): Record<string, string> {
   const base = { ...(options.env ?? {}) };
   if (options.codexHome) base.CODEX_HOME = options.codexHome;
+  // The engine resolves provider API keys from its scratch homes
+  // (`~/.sofia`, `~/.config/sofia`) relative to $HOME. Keep HOME exported so
+  // that fallback (and the `~/.codex` import) works — without it the only key
+  // file the engine can read is `$CODEX_HOME/sofia-auth.json`.
+  if (!base.HOME && process.env.HOME) base.HOME = process.env.HOME;
+  if (!base.USERPROFILE && process.env.USERPROFILE) base.USERPROFILE = process.env.USERPROFILE;
   // Force non-interactive app-server mode.
   base.CODEX_EXPERIMENTAL_APP_SERVER = "1";
   return base;

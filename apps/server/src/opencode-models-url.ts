@@ -1,7 +1,11 @@
 import { loopbackFetch } from "./server-fetch.js";
 
 const LOCAL_MODELS_URL = "http://localhost:8791/models";
-const PRODUCTION_MODELS_URL = "https://models.openworklabs.com/";
+// The canonical models.dev catalog. The previous OpenWork-hosted snapshot
+// (models.openworklabs.com) lagged upstream — e.g. its DeepSeek entry had 3
+// models with no V4.1 (`deepseek-flash`). models.dev is the superset the Sofia
+// engine uses, so point the runtime catalog at it directly.
+const PRODUCTION_MODELS_URL = "https://models.dev";
 
 type ResolveOpencodeModelsUrlOptions = {
   env?: NodeJS.ProcessEnv;

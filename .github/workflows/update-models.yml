@@ -26,7 +26,7 @@ env:
 jobs:
   update-models:
     if: github.repository == 'different-ai/openwork'
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout

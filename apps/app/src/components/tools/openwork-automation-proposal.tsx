@@ -85,7 +85,7 @@ export function OpenWorkAutomationProposalTool({ part }: { part: DynamicToolUIPa
   const blocker = !automationsEnabled
     ? "Automations are disabled for this deployment."
     : !signedIn
-      ? "Sign in to OpenWork Cloud to create this Automation."
+      ? "Sign in to Organization cloud to create this Automation."
       : null
 
   const create = async () => {

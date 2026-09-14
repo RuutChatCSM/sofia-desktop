@@ -409,13 +409,13 @@ export function AdvancedCloudMcpDiagnosticsSection(props: AdvancedCloudMcpDiagno
       <LayoutSectionHeader>
         <LayoutSectionTitle>Agent access diagnostics</LayoutSectionTitle>
         <LayoutSectionDescription>
-          Technical details for OpenWork Cloud MCP delivery. Tokens and Authorization headers are redacted before display or copy.
+          Technical details for Organization cloud MCP delivery. Tokens and Authorization headers are redacted before display or copy.
         </LayoutSectionDescription>
       </LayoutSectionHeader>
 
       <LayoutSectionItem>
         <LayoutSectionItemHeader>
-          <LayoutSectionItemTitle>OpenWork Cloud MCP health</LayoutSectionItemTitle>
+          <LayoutSectionItemTitle>Organization cloud MCP health</LayoutSectionItemTitle>
           <LayoutSectionItemDescription>
             Use this when support needs exact runtime state. The main Connect card stays user-facing.
           </LayoutSectionItemDescription>

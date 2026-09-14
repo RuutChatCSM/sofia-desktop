@@ -316,9 +316,9 @@ export type SessionSurfaceProps = {
   selectedModel: ModelRef;
   /** providerID → modelID → provider model, for per-session variant options. */
   providerCatalog?: ProviderCatalog;
-  /** Den/import includes OpenWork Models for this org member (not just local sync). */
+  /** Den/import includes Hosted models for this org member (not just local sync). */
   openWorkModelsEntitled?: boolean;
-  /** The server is waiting to reload this workspace with OpenWork Models. */
+  /** The server is waiting to reload this workspace with Hosted models. */
   openWorkModelsSyncing?: boolean;
   onRefreshOrganizationModels?: () => void | Promise<void>;
   onModelPickerOpenChange: (open: boolean) => void;
@@ -816,7 +816,7 @@ export function SessionSurface(props: SessionSurfaceProps) {
   const isCodexSession = props.sessionId.startsWith("codex-");
   const snapshotQuery = useQuery<OpenworkSessionSnapshot>({
     queryKey: snapshotQueryKey,
-    // Codex sessions are owned by the Sofia engine: never query opencode for
+    // Sofia sessions are owned by the Sofia engine: never query opencode for
     // their snapshot (opencode returns 502 "request failed"). The transcript
     // and status already flow from the codex store via transcriptKey/statusKey.
     enabled: !isCodexSession,
@@ -1829,7 +1829,7 @@ export function SessionSurface(props: SessionSurfaceProps) {
     const organizationId = settings.activeOrgId?.trim() ?? "";
     if (!token || !organizationId) {
       props.onOpenConnect();
-      throw new Error("Sign in to OpenWork Cloud, then try reconnecting again.");
+      throw new Error("Sign in to Organization cloud, then try reconnecting again.");
     }
 
     const scope: ChatMcpReconnectScope = {

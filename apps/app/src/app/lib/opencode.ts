@@ -410,7 +410,7 @@ export function createClient(baseUrl: string, directory?: string, auth?: Opencod
 
   const getOriginal = sessionOverrides.get.bind(session);
   sessionOverrides.get = (parameters: SessionLookupParameters, options?: { throwOnError?: boolean }) => {
-    // Codex sessions are owned by the Sofia engine; never proxy opencode.
+    // Sofia sessions are owned by the Sofia engine; never proxy opencode.
     if (parameters.sessionID.startsWith("codex-")) {
       return Promise.resolve(createSyntheticResult(parameters.sessionID, "GET", {
         ok: false,
@@ -432,7 +432,7 @@ export function createClient(baseUrl: string, directory?: string, auth?: Opencod
 
   const messagesOriginal = sessionOverrides.messages.bind(session);
   sessionOverrides.messages = (parameters: SessionMessagesParameters, options?: { throwOnError?: boolean }) => {
-    // Codex sessions are owned by the Sofia engine; never proxy opencode.
+    // Sofia sessions are owned by the Sofia engine; never proxy opencode.
     if (parameters.sessionID.startsWith("codex-")) {
       return Promise.resolve(createSyntheticResult(parameters.sessionID, "GET", {
         ok: false,

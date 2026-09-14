@@ -321,6 +321,55 @@ function taskCreateUnavailableToastId(workspaceId: string) {
   return `opencode-unavailable:${workspaceId}`;
 }
 
+type CodexProviderWire = {
+  providerId: string;
+  providerName: string;
+  baseUrl: string | null;
+  envKey: string | null;
+  wireApi: "responses" | "chatcompletions";
+  models: Array<{ id: string; name: string; reasoning: boolean; contextWindow: number | null }>;
+};
+
+/**
+ * Map the app's connected opencode providers (models.dev-backed) into the
+ * codex-native provider catalog so the bundled Sofia engine's picker shows every
+ * model the app can use — including providers connected only via the app auth
+ * store. Mirrors codex's `/connect` persistence (providers.json).
+ */
+function codexProvidersFromProviderList(
+  providerList: ProviderListResponse | null | undefined,
+): CodexProviderWire[] {
+  return getConnectedProviderItems(providerList)
+    .filter((provider) => provider.id.trim().toLowerCase() !== "opencode")
+    .map((provider) => ({
+      providerId: provider.id,
+      providerName: provider.name?.trim() || provider.id,
+      baseUrl: readProviderBaseUrl(provider),
+      envKey: null,
+      wireApi: provider.id.trim().toLowerCase() === "openai" ? "responses" : "chatcompletions",
+      models: Object.entries(provider.models ?? {}).map(([id, model]) => ({
+        id,
+        name: model.name?.trim() || id,
+        reasoning: model.capabilities.reasoning === true,
+        contextWindow: model.limit?.context ?? null,
+      })),
+    }));
+}
+
+function readProviderBaseUrl(provider: ProviderListResponse["all"][number]): string | null {
+  for (const key of ["baseURL", "baseUrl", "api"]) {
+    const value = provider.options?.[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  // Built-in providers don't put the base URL in `options`; opencode resolves
+  // it per model from the catalog (`model.api.url`).
+  for (const model of Object.values(provider.models ?? {})) {
+    const url = model.api?.url;
+    if (typeof url === "string" && url.trim()) return url.trim();
+  }
+  return null;
+}
+
 function focusPromptSoon() {
   if (typeof window === "undefined") return;
   const focus = () => window.dispatchEvent(new Event("openwork:focusPrompt"));
@@ -902,6 +951,8 @@ export function SessionRoute() {
     baseUrl: opencodeBaseUrl,
     directory: selectedWorkspaceRoot || undefined,
   });
+  // Sofia's native provider store owns its catalog. Never overwrite it with
+  // OpenCode's independently discovered models during a render/refetch.
   const { providerCatalog, modelVariantLabel, modelBehaviorOptions, modelVariantValue } =
     useModelBehavior({
       providerList: providerListQuery.data,
@@ -1095,13 +1146,17 @@ export function SessionRoute() {
   useEffect(() => {
     if (entitledOrgDefaultModel) writeStoredDefaultModel(entitledOrgDefaultModel);
   }, [entitledOrgDefaultModel]);
-  const selectedModelAvailabilityPending = isManagedModelAvailabilityPending({
+  const selectedModelAvailabilityPending = codexEngine.enabled ? !codexEngine.config : isManagedModelAvailabilityPending({
     signedIn: denAuth.isSignedIn,
     selectedModelUsesCloudProvider,
     cloudProviderSyncReady,
     openWorkModelsSyncing,
   });
-  const selectedModelUnavailable = Boolean(
+  const selectedModelUnavailable = codexEngine.enabled
+    ? Boolean(codexEngine.config && local.prefs.defaultModel &&
+        (!codexEngine.config.providers.some((provider) => provider.providerId === local.prefs.defaultModel?.providerID) ||
+          isDesktopProviderBlocked({ providerId: local.prefs.defaultModel.providerID, checkRestriction: checkDesktopRestriction })))
+    : Boolean(
     selectedWorkspaceId &&
       opencodeClient &&
       !loading &&
@@ -1129,6 +1184,26 @@ export function SessionRoute() {
   const selectedModelUnavailableKey = selectedModelUnavailable && local.prefs.defaultModel
     ? `${local.prefs.defaultModel.providerID}:${local.prefs.defaultModel.modelID}`
     : null;
+  // A conversation can remember its own model. Judge the composer on THAT
+  // model rather than the global default: otherwise reopening a task whose
+  // conversation model is still valid shows "model unavailable" merely because
+  // the global default was pointed at a provider this engine doesn't serve.
+  const selectedSessionOwnModel = useSessionModelStore((state) =>
+    selectedSessionId ? state.bySessionId[selectedSessionId]?.model ?? null : null,
+  );
+  const selectedSessionModelUnavailable = codexEngine.enabled && selectedSessionOwnModel
+    ? Boolean(
+        codexEngine.config &&
+          (!codexEngine.config.providers.some(
+            (provider) => provider.providerId === selectedSessionOwnModel.providerID,
+          ) ||
+            isDesktopProviderBlocked({
+              providerId: selectedSessionOwnModel.providerID,
+              checkRestriction: checkDesktopRestriction,
+            })),
+      )
+    : selectedModelUnavailable;
+
   const autoOpenedUnavailableModelRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -1360,7 +1435,7 @@ export function SessionRoute() {
       },
       providerCatalog,
       modelPickerOpen: modelPicker.compactOpen,
-      modelUnavailable: selectedModelUnavailable,
+      modelUnavailable: selectedSessionModelUnavailable,
       modelUnavailableMessage,
       organizationModelsEmpty,
       selectedModel: local.prefs.defaultModel ?? { providerID: "", modelID: "" },
@@ -1402,7 +1477,7 @@ export function SessionRoute() {
         const sessionModelSelection = getSessionModelSelection(targetSessionId);
         const sendModel = sessionModelSelection?.model ?? local.prefs.defaultModel;
         const sendVariant = sessionModelSelection ? sessionModelSelection.variant : modelVariantValue;
-        // Codex sessions bypass the opencode send pipeline entirely while
+        // Sofia sessions bypass the opencode send pipeline entirely while
         // preserving the same per-session model selection as the composer.
         if (codexEngine.enabled && codexEngine.prompt && targetSessionId.startsWith("codex-")) {
           void codexEngine.prompt(targetSessionId, text, {
@@ -1923,7 +1998,7 @@ export function SessionRoute() {
     ) {
       return null;
     }
-    // Codex engine: create a codex session (the surface sends the first prompt).
+    // Sofia engine: create a codex session (the surface sends the first prompt).
     if (codexEngine.enabled && codexEngine.createSession) {
       try {
         const preferredModel = local.prefs.defaultModel;
@@ -2894,7 +2969,7 @@ export function SessionRoute() {
         },
         onCreateTaskWithPrompt: (workspaceId, prompt, attachments) => {
           void (async () => {
-            // Codex engine: create a codex session and run the prompt directly.
+            // Sofia engine: create a codex session and run the prompt directly.
             if (codexEngine.enabled && codexEngine.createSession) {
               try {
                 const firstTaskPrompt = prompt.trim();

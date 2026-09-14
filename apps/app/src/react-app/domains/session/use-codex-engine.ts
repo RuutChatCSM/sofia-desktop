@@ -40,6 +40,7 @@ export function useCodexEngine(endpoint: CodexEngineEndpoint | null) {
   }, [enabled, endpoint?.baseUrl, endpoint?.hostToken, endpoint?.token, endpoint?.workspaceId]);
 
   const [engineConfig, setEngineConfig] = useState<CodexEngineConfigWire | null>(null);
+  const [configVersion, setConfigVersion] = useState(0);
   useEffect(() => {
     if (!enabled || !client) {
       setEngineConfig(null);
@@ -52,7 +53,7 @@ export function useCodexEngine(endpoint: CodexEngineEndpoint | null) {
       if (!cancelled) setEngineConfig(null);
     });
     return () => { cancelled = true; };
-  }, [enabled, client]);
+  }, [enabled, client, configVersion]);
 
   // Route shared stop/abort actions for codex sessions to the codex engine.
   useEffect(() => {
@@ -138,6 +139,7 @@ export function useCodexEngine(endpoint: CodexEngineEndpoint | null) {
     error,
     config: engineConfig,
     client,
+    refreshConfig: () => setConfigVersion((value) => value + 1),
     createSession: client
       ? async (input: { title?: string; prompt?: string; cwd?: string; model?: string; providerId?: string }) => {
           const result = await client.createSession(input);

@@ -642,10 +642,10 @@ export function denOriginComparisonKey(input: string | null | undefined): string
 }
 
 /**
- * True when the effective Den control plane is not the hosted OpenWork Cloud
+ * True when the effective Den control plane is not the hosted Organization cloud
  * (app.openworklabs.com). Self-hosted deployments point the app at their own
  * control plane via VITE_DEN_BASE_URL or the desktop bootstrap config, so
- * hosted-only surfaces (e.g. OpenWork Models upsells) should stay hidden.
+ * hosted-only surfaces (e.g. Hosted models upsells) should stay hidden.
  */
 export function isSelfHostedControlPlane(): boolean {
   return (

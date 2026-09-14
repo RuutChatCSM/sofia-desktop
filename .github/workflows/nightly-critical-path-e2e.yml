@@ -24,7 +24,7 @@ concurrency:
 jobs:
   critical-path-e2e:
     if: github.repository == 'different-ai/openwork'
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     timeout-minutes: 100
 
     steps:

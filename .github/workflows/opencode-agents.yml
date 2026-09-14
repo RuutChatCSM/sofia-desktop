@@ -18,7 +18,7 @@ on:
 jobs:
   triage-issue:
     if: inputs.target == 'issue'
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       issues: write
@@ -54,7 +54,7 @@ jobs:
 
   duplicate-prs:
     if: inputs.target == 'pull_request'
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       pull-requests: write

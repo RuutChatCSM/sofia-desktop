@@ -374,7 +374,7 @@ export function AgentAccessCard(props: {
         <div className="space-y-1">
           <div className="text-base font-semibold text-dls-text">Agent access to connected services</div>
           <div className="max-w-[62ch] text-sm text-dls-secondary">
-            Lets agents use the exact OpenWork Cloud tools for this active workspace and organization.
+            Lets agents use the exact Organization cloud tools for this active workspace and organization.
           </div>
         </div>
         <SettingsStatusBadge label={summary.statusLabel} tone={summary.tone} />

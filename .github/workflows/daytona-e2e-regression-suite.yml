@@ -36,7 +36,7 @@ jobs:
       (github.event.workflow_run.event == 'pull_request' &&
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.head_repository.full_name == github.repository))
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     outputs:
       enabled: ${{ steps.config.outputs.enabled }}
@@ -222,7 +222,7 @@ jobs:
       max-parallel: 3
       matrix:
         batch: ${{ fromJSON(needs.plan.outputs.batches) }}
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
 
     steps:
@@ -373,7 +373,7 @@ jobs:
       - plan
       - e2e
     if: always() && needs.plan.outputs.enabled == 'true'
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
 
     steps:

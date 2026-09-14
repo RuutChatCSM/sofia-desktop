@@ -67,7 +67,6 @@ function firstString(value: unknown[] | null): string | null {
 /** Emit a codex `config.toml` body from the opencode runtime provider map. */
 export function buildCodexConfigToml(
   providerMap: Record<string, Record<string, unknown>>,
-  authStore?: Record<string, string>,
 ): string {
   const sections: string[] = [];
 
@@ -79,8 +78,6 @@ export function buildCodexConfigToml(
     lines.push(`base_url = ${tomlString(mapped.baseUrl)}`);
     lines.push(`wire_api = ${tomlString(mapped.wireApi)}`);
     if (mapped.envKey) lines.push(`env_key = ${tomlString(mapped.envKey)}`);
-    const bearerKey = mapped.envKey && authStore ? authStore[mapped.envKey] : null;
-    if (bearerKey) lines.push(`experimental_bearer_token = ${tomlString(bearerKey)}`);
     sections.push(lines.join("\n"));
   }
 
@@ -114,10 +111,9 @@ export function addCodexDefaultProviderLines(
 /** Serialize a config.toml from the full runtime config's provider map. */
 export function codexConfigTomlFromRuntime(
   config: RuntimeOpencodeConfig,
-  authStore?: Record<string, string>,
 ): string {
   const providerMap = isRecord(config.provider) ? config.provider as Record<string, Record<string, unknown>> : {};
-  const body = buildCodexConfigToml(providerMap, authStore);
+  const body = buildCodexConfigToml(providerMap);
   return addCodexDefaultProviderLines(body, providerMap);
 }
 

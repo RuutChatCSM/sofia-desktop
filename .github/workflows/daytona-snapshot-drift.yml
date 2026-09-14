@@ -12,7 +12,7 @@ jobs:
   check-snapshot-pin:
     name: Compare production pin with latest release
     if: github.repository == 'different-ai/openwork'
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     env:
       DAYTONA_CLOUD_ENV_GROUP_ID: ${{ vars.DAYTONA_CLOUD_ENV_GROUP_ID }}
       DAYTONA_SNAPSHOT_NAME_BASE: ${{ vars.DAYTONA_SNAPSHOT_NAME_BASE }}

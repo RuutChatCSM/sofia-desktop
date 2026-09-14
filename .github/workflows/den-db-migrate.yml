@@ -61,7 +61,7 @@ jobs:
   migrate:
     name: Apply migrations
     if: github.repository == 'different-ai/openwork'
-    runs-on: blacksmith-4vcpu-ubuntu-2204
+    runs-on: ubuntu-22.04
 
     env:
       DATABASE_HOST: ${{ secrets.DATABASE_HOST }}

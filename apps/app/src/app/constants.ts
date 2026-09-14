@@ -39,7 +39,7 @@ export type McpDirectoryInfo = {
   oauth: boolean;
   /** Route OAuth through the local Sofia App gateway instead of delegating it to OpenCode. */
   managedOAuth?: boolean;
-  /** Identifies MCP entries owned by OpenWork Connect instead of workspace configuration. */
+  /** Identifies MCP entries owned by Connections instead of workspace configuration. */
   managedBy?: "openwork-connect";
   oauthConfig?: {
     clientId?: string;
@@ -177,7 +177,7 @@ export const MCP_QUICK_CONNECT: McpDirectoryInfo[] = [
     kind: "mcp",
     iconSrc: "/openwork-mark.svg",
     // Auto-managed by the signed-in cloud reconciler (syncCloudControlMcp):
-    // configured + enabled while signed in to OpenWork Cloud. Hidden from the
+    // configured + enabled while signed in to Organization cloud. Hidden from the
     // default catalog; "Show hidden" reveals it.
     defaultHidden: true,
   },

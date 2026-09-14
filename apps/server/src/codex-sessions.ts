@@ -94,7 +94,7 @@ export type CodexEvent =
   | { type: "approval.requested"; sessionId: string; threadId: string; params: unknown }
   | { type: "thread.status"; sessionId: string; threadId: string; status: unknown }
   | { type: "rateLimit.updated"; sessionId: string; threadId: string; rateLimits: unknown }
-  | { type: "error"; sessionId: string; threadId: string; message: string };
+  | { type: "error"; sessionId: string; threadId: string; turnId?: string; message: string };
 
 export function codexSessionId(threadId: string): string {
   return `codex-${threadId}`;
@@ -215,13 +215,21 @@ export class CodexSessionManager {
     };
     (engine as unknown as { on: (method: string, listener: (params: unknown) => void) => unknown }).on("request", onReq);
     engine.on("error", (params) => {
-      const active = this.activeSession();
+      const detail = isRecord(params) ? params : {};
+      // A retry notification is progress, not a failed turn. Route terminal
+      // errors by their thread instead of whichever workspace task is first.
+      if (detail.willRetry === true) return;
+      const active = typeof detail.threadId === "string"
+        ? this.sessionFor(detail.threadId) : this.activeSession();
+      const error = isRecord(detail.error) ? detail.error : detail;
       if (active) {
         this.events.emit("event", {
           type: "error",
           sessionId: active.id,
           threadId: active.threadId,
-          message: typeof params === "string" ? params : JSON.stringify(params),
+          turnId: typeof detail.turnId === "string" ? detail.turnId : active.turnId ?? undefined,
+          message: typeof params === "string" ? params
+            : typeof error.message === "string" ? error.message : "The Sofia turn failed. Please retry.",
         });
       }
     });
@@ -879,7 +887,7 @@ export class CodexSessionManager {
     const turnError = turn?.error as { message?: string } | undefined;
     const raw = (turnError?.message ?? (typeof error === "string" ? error : (error as { message?: string } | undefined)?.message))?.trim();
     if (raw || session.status === "error") {
-      this.emit({ type: "error", sessionId: session.id, threadId: tid, message: raw || "The Sofia turn failed. Please retry." });
+      this.emit({ type: "error", sessionId: session.id, threadId: tid, turnId: turn?.id, message: raw || "The Sofia turn failed. Please retry." });
     }
   }
 

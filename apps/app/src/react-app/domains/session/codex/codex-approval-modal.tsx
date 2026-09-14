@@ -29,7 +29,7 @@ export function CodexApprovalModal({ active }: { active: ActiveCodexApproval }) 
         <AlertDialogHeader>
           <AlertDialogTitle className="flex items-center gap-2">
             <AlertTriangle className="size-4 text-amber-600" aria-hidden />
-            Codex needs approval
+            Sofia needs approval
           </AlertDialogTitle>
           <AlertDialogDescription className="whitespace-pre-line">
             {approval.summary || approval.action || "Codex is requesting an action that needs your approval."}

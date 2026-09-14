@@ -13,7 +13,7 @@ import { denSettingsChangedEvent } from "../../../app/lib/den-session-events";
 import { useSyncExternalStore } from "react";
 
 export const OPENWORK_MODELS_PROVIDER_ID = "openwork";
-export const OPENWORK_MODELS_PROVIDER_NAME = "OpenWork Models";
+export const OPENWORK_MODELS_PROVIDER_NAME = "Hosted models";
 export const OPENWORK_MODELS_PROMO_HIDDEN_KEY = "openwork.openworkModelsPromo.hidden";
 export const OPENWORK_MODELS_PROMO_LAST_SHOWN_KEY = "openwork.openworkModelsPromo.lastShownAt";
 export const OPENWORK_MODELS_STARTUP_PROMO_SHOWN_KEY = "openwork.openworkModelsPromo.startupShown";
@@ -26,7 +26,7 @@ export function areOpenWorkModelsPromosDisabled() {
   if (/^(1|true|yes|on)$/i.test(String(import.meta.env.VITE_DISABLE_OPENWORK_MODELS ?? "").trim())) {
     return true;
   }
-  // OpenWork Models are a hosted OpenWork Cloud offering; self-hosted
+  // Hosted models are a hosted Organization cloud offering; self-hosted
   // deployments should never see the upsell surfaces.
   return isSelfHostedControlPlane();
 }
@@ -71,7 +71,7 @@ export function hasOpenWorkModelsProvider(providerIds: readonly string[]) {
   return providerIds.some((id) => id.trim().toLowerCase() === OPENWORK_MODELS_PROVIDER_ID);
 }
 
-/** Local engine has OpenWork Models connected with at least one selectable model. */
+/** Local engine has Hosted models connected with at least one selectable model. */
 export function hasOpenWorkModelsAvailable(input: {
   providerConnectedIds: readonly string[];
   providers: ReadonlyArray<{ id: string; models?: Record<string, unknown> | null }>;
@@ -98,7 +98,7 @@ export function getOpenWorkModelsActionUrl(
 ) {
   const settings = readDenSettings();
   const baseUrl = settings.baseUrl || readDenBootstrapConfig().baseUrl;
-  // Signed-in users go straight to the OpenWork Models page — the value-prop
+  // Signed-in users go straight to the Hosted models page — the value-prop
   // + subscribe surface — never to a bare auth or billing page.
   return isSignedIn ? getDenInferenceUrl(baseUrl) : buildDenAuthUrl(baseUrl, authMode);
 }

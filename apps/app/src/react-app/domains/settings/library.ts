@@ -216,7 +216,7 @@ export type LibraryAddAction =
   | { type: "den-url"; kind: "connection" }
   | { type: "den-modal"; kind: LibraryAuthorableKind };
 
-/** Library Add always creates in OpenWork Cloud. Local workspace files are not an authoring path. */
+/** Library Add always creates in Organization cloud. Local workspace files are not an authoring path. */
 export function libraryAddAction(
   addKind: LibraryAddKind,
   options: {

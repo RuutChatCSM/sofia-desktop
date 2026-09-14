@@ -1,4 +1,4 @@
-// Codex session store: holds codex engine sessions and their transcripts as
+// Sofia session store: holds codex engine sessions and their transcripts as
 // accumulated from the SSE stream. Mirrors the opencode session surface enough
 // to drive the existing transcript UI: each session accumulates a text body
 // from `message.delta`, and status from `item.*` / `turn.completed`.
@@ -57,7 +57,7 @@ type CodexSessionActions = {
   setThreadStatus: (sessionId: string, status: unknown) => void;
   startTurn: (sessionId: string) => void;
   completeTurn: (sessionId: string) => void;
-  failSession: (sessionId: string, message: string) => void;
+  failSession: (sessionId: string, message: string, turnId?: string) => void;
   removeSession: (sessionId: string) => void;
   clear: () => void;
   setStreaming: (value: boolean) => void;
@@ -217,7 +217,7 @@ export const useCodexSessionStore = create<CodexSessionStore>((set, get) => ({
       };
     }),
 
-  failSession: (sessionId, message) =>
+  failSession: (sessionId, message, turnId) =>
     set((state) => {
       const entry = state.sessions[sessionId];
       if (!entry) return state;
@@ -226,11 +226,21 @@ export const useCodexSessionStore = create<CodexSessionStore>((set, get) => ({
       if (last && last.role === "assistant") {
         messages[messages.length - 1] = { ...last, status: "error" };
       }
+      const failureTurnId = turnId ?? entry.session.turnId;
+      const id = `sofia-error:${failureTurnId ?? entry.items.length}`;
+      const items: CodexTrackedItem[] = entry.items
+        .filter((item) => item.id !== id)
+        .map((item) => item.status === "pending" ? { ...item, status: "error" } : item);
+      items.push({
+        id, type: "agentMessage", turnId: failureTurnId ?? id,
+        item: { id, type: "agentMessage", text: `Sofia couldn't complete this request: ${message}` },
+        text: `Sofia couldn't complete this request: ${message}`, thinking: "", output: "", status: "error",
+      });
       return {
         error: message,
         sessions: {
           ...state.sessions,
-          [sessionId]: { ...entry, session: { ...entry.session, status: "error" }, messages },
+          [sessionId]: { ...entry, session: { ...entry.session, status: "error" }, messages, items },
         },
       };
     }),
@@ -326,7 +336,7 @@ export async function runCodexStream(
             s.completeTurn(event.sessionId);
             break;
           case "error":
-            s.failSession(event.sessionId, event.message);
+            s.failSession(event.sessionId, event.message, event.turnId);
             break;
           default:
             break;

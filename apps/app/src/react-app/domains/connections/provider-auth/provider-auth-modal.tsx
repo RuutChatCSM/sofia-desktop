@@ -679,7 +679,7 @@ export default function ProviderAuthModal(props: ProviderAuthModalProps) {
       return "Continue in the browser and let Sofia App finish the connection automatically.";
     }
     if (method.type === "cloud") {
-      return "Subscribe to OpenWork Models.";
+      return "Subscribe to Hosted models.";
     }
     if (isOpencodeZenProvider(entry.id)) {
       return "Sign in to OpenCode Zen with an API key to unlock paid models alongside the free tier.";
@@ -913,7 +913,7 @@ export default function ProviderAuthModal(props: ProviderAuthModalProps) {
                 <div className="rounded-xl border border-blue-6/50 bg-blue-2/25 shadow-sm p-5 space-y-4">
                   <div className="flex items-center justify-between gap-4">
                     <div>
-                      <div className="text-sm font-medium text-gray-12">OpenWork Models</div>
+                      <div className="text-sm font-medium text-gray-12">Hosted models</div>
                       <div className="text-xs text-gray-10 mt-1">
                         Frontier intelligence, hand picked for your team&apos;s most ambitious work.
                       </div>

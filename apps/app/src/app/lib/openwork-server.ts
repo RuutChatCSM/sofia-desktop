@@ -2400,6 +2400,29 @@ export function createOpenworkServerClient(options: { baseUrl: string; token?: s
         },
       ),
 
+    setCodexProviders: (
+      workspaceId: string,
+      providers: Array<{
+        providerId: string;
+        providerName: string;
+        baseUrl: string | null;
+        envKey: string | null;
+        wireApi: "responses" | "chatcompletions";
+        models: Array<{ id: string; name: string; reasoning: boolean }>;
+      }>,
+    ) =>
+      requestJson<{ ok: true; path: string }>(
+        baseUrl,
+        `/workspace/${encodeURIComponent(workspaceId)}/codex/providers`,
+        {
+          token,
+          hostToken,
+          method: "PUT",
+          body: { providers },
+          timeoutMs: timeouts.config,
+        },
+      ),
+
     removeCodexAuth: (workspaceId: string, providerId: string) =>
       requestJson<{ ok: true }>(
         baseUrl,

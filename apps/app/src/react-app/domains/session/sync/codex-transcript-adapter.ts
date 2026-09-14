@@ -15,7 +15,7 @@ import { useCodexSessionStore, type CodexTrackedItem } from "../codex-session-st
 /** Map a tracked codex item into UIMessage parts (mirroring opencode shapes). */
 function trackedItemToUIMessageParts(item: CodexTrackedItem, sessionId: string): UIMessage["parts"] {
   const parts = codexItemToParts(item.item, sessionId, item.id, "");
-  const state = item.status === "done" ? ("done" as const) : ("streaming" as const);
+  const state = item.status === "pending" ? ("streaming" as const) : ("done" as const);
 
   // Tool/command items: emit a canonical dynamic-tool marker (bash/edit/read)
   // so opencode's aggregator renders inline "Used X, edited Y" pills like codex.

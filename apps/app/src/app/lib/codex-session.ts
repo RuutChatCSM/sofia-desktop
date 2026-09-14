@@ -1,4 +1,4 @@
-// Codex session client: the app-side surface for the bundled Sofia (codex)
+// Sofia session client: the app-side surface for the bundled Sofia (codex)
 // engine. Mirrors the opencode SDK's session surface but talks to the
 // Sofia App server's /codex/* routes (which drive the engine's JSON-RPC over
 // stdio). Used when the selected engine is codex.
@@ -32,7 +32,7 @@ export type CodexEvent =
   | { type: "turn.completed"; sessionId: string; threadId: string }
   | { type: "approval.requested"; sessionId: string; threadId: string; params: unknown }
   | { type: "thread.status"; sessionId: string; threadId: string; status: unknown }
-  | { type: "error"; sessionId: string; threadId: string; message: string }
+  | { type: "error"; sessionId: string; threadId: string; turnId?: string; message: string }
   | { type: "stream.ready"; streamId: string };
 
 export type CodexEngineStatus = {
@@ -45,6 +45,8 @@ export type CodexProviderModelWire = {
   id: string;
   name: string;
   reasoning: boolean;
+  /** Context window in tokens (models.dev `limit.context`); null when unknown. */
+  contextWindow: number | null;
 };
 
 export type CodexProviderConfigWire = {
@@ -134,6 +136,13 @@ export function createCodexSessionClient(options: CodexSessionClientOptions) {
         options.baseUrl,
         `${workspacePath}/codex/config`,
         { token: options.token, hostToken: options.hostToken },
+      ),
+
+    setProviders: (providers: CodexProviderConfigWire[]) =>
+      requestJson<{ ok: boolean; path: string }>(
+        options.baseUrl,
+        `${workspacePath}/codex/providers`,
+        { token: options.token, hostToken: options.hostToken, method: "PUT", body: { providers } },
       ),
 
     listSessions: async () => (await requestJson<CodexEngineStatus>(

@@ -2,13 +2,13 @@
 // resolves the codex binary. The desktop runtime injects the resolved binary
 // via setCodexBinaryForConfig (or falls back to `codex` on PATH). Additive to
 // the opencode engine lifecycle.
-import { writeFile, mkdir } from "node:fs/promises";
+import { writeFile, mkdir, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
 import { readCodexAuthStore } from "./codex-auth-store.js";
 import { codexConfigTomlFromRuntime } from "./codex-config.js";
-import { codexConfigTomlFromEngineConfig, readCodexEngineConfig } from "./codex-engine-config.js";
+import { codexConfigTomlFromEngineConfig, readCodexEngineConfig } from "./codex-providers.js";
 import {
   codexMcpServersToml,
   codexRuntimeSkillsFor,
@@ -90,7 +90,23 @@ export async function codexEngineHandleForConfig(config: ServerConfig, workspace
  */
 export async function prepareSofiaAuthInHome(codexHome: string): Promise<void> {
   try {
-    const store = await readCodexAuthStore();
+    const store: Record<string, string> = { ...(await readCodexAuthStore()) };
+    // The engine also searches `~/.sofia` and `~/.config/sofia` for keys, but
+    // that fallback resolves `~` via $HOME. Copy any keys found there into the
+    // authoritative `$CODEX_HOME/sofia-auth.json` so credentials resolve even
+    // when the engine is spawned without HOME.
+    const home = process.env.REAL_HOME?.trim() || process.env.HOME?.trim() || homedir();
+    for (const legacy of [join(home, ".sofia"), join(home, ".config", "sofia")]) {
+      try {
+        const parsed: unknown = JSON.parse(await readFile(join(legacy, "sofia-auth.json"), "utf8"));
+        if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) continue;
+        for (const [key, value] of Object.entries(parsed)) {
+          if (typeof value === "string" && value.trim() && !store[key]) store[key] = value.trim();
+        }
+      } catch {
+        // No credential store at this legacy location.
+      }
+    }
     await mkdir(codexHome, { recursive: true });
     await writeFile(join(codexHome, "sofia-auth.json"), `${JSON.stringify(store, null, 2)}\n`, {
       encoding: "utf8",
@@ -116,18 +132,17 @@ export async function prepareCodexConfigToml(
 ): Promise<void> {
   try {
     await mkdir(codexHome, { recursive: true });
-    const authStore = await readCodexAuthStore();
     let toml = "";
     const engineConfig = await readCodexEngineConfig();
     if (engineConfig.providers.length > 0) {
-      toml = codexConfigTomlFromEngineConfig(engineConfig, authStore);
+      toml = codexConfigTomlFromEngineConfig(engineConfig);
     } else {
       const globalConfig = await readRuntimeOpencodeConfig(config, ENGINE_GLOBAL_RUNTIME_CONFIG_ID);
       const workspaceConfig = await readRuntimeOpencodeConfig(config, workspaceId);
       const merged = {
         provider: { ...(globalConfig.provider ?? {}), ...(workspaceConfig.provider ?? {}) },
       };
-      toml = codexConfigTomlFromRuntime(merged, authStore);
+      toml = codexConfigTomlFromRuntime(merged);
     }
     // Runtime surfaces (computer-use, browser): MCP servers + the SKILL.md docs
     // that teach the agent when/how to use them. Additive and best-effort, and

@@ -21,6 +21,7 @@ export function codexAuthStorePath(opts?: { env?: NodeJS.ProcessEnv }): string {
   // `codexHomeFor` in codex-registry.ts (OPENWORK_CODEX_HOME, then CODEX_HOME,
   // then ~/.config/openwork/sofia).
   const env = opts?.env ?? process.env;
+  if (env.SOFIA_PROVIDER_HOME?.trim()) return join(env.SOFIA_PROVIDER_HOME.trim(), CODEX_AUTH_STORE_FILE);
   const pinnedHome = env.OPENWORK_CODEX_HOME?.trim() || env.CODEX_HOME?.trim();
   if (pinnedHome) return join(pinnedHome, CODEX_AUTH_STORE_FILE);
   const home = env.HOME?.trim() || homedir();

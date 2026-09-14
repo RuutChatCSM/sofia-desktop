@@ -33,7 +33,7 @@ jobs:
   set-env:
     name: Set env var and deploy
     if: github.repository == 'different-ai/openwork'
-    runs-on: blacksmith-4vcpu-ubuntu-2204
+    runs-on: ubuntu-22.04
 
     env:
       RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}

@@ -174,7 +174,7 @@ export type SessionPageSurfaceProps = Omit<
 >;
 
 /**
- * Codex engine surface handed down from the session route when the selected
+ * Sofia engine surface handed down from the session route when the selected
  * engine is codex. When present, codex sessions replace opencode sessions in
  * the sidebar and surface.
  */

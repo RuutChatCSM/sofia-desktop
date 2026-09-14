@@ -448,7 +448,7 @@ export function cloudMcpRecommendedAction(input: {
   userState?: CloudMcpUserState | null;
   health?: OpenworkCloudMcpHealth | null;
 }): string {
-  if (!input.signedIn) return "Sign in to OpenWork Cloud.";
+  if (!input.signedIn) return "Sign in to Organization cloud.";
   if (!input.orgSelected) return "Choose the organization agents should use.";
   if (input.userState) return "Enable Agent access or use Repair and test when you want agents to use connected services.";
   const code = normalizeCode(input.health?.firstFailure?.code);
@@ -460,12 +460,12 @@ export function cloudMcpRecommendedAction(input: {
   if (code === "cloud_desired_missing" || code === "cloud_mcp_missing") return "Use Repair and test to apply agent access for this workspace.";
   if (code.includes("auth") || code.includes("token") || code.includes("unauthorized")) return "Use Repair and test to refresh Cloud authentication.";
   if (code.includes("membership")) return "Ask an organization admin to grant access.";
-  if (code.includes("scope")) return "Reconnect OpenWork Cloud with the required permissions.";
+  if (code.includes("scope")) return "Reconnect Organization cloud with the required permissions.";
   if (code.includes("policy") || code.includes("forbidden") || code.includes("resource")) return "Check organization policy and resource access.";
-  if (isProviderProjectionFailure(input.health?.firstFailure)) return "Choose a model that can use OpenWork Cloud tools.";
+  if (isProviderProjectionFailure(input.health?.firstFailure)) return "Choose a model that can use Organization cloud tools.";
   if (code.includes("tool_ids") || code.includes("client_registration")) return "Update Sofia App, then retry.";
   if (code === "extensions_plugin_missing") return "Reload the agent so Sofia App instructions are current.";
-  if (code === "cloud_tools_missing") return "Reconnect OpenWork Cloud so the endpoint exposes search_capabilities and execute_capability.";
+  if (code === "cloud_tools_missing") return "Reconnect Organization cloud so the endpoint exposes search_capabilities and execute_capability.";
   if (code === "cloud_status_missing" || code === "cloud_registration_failed") return "Use Repair and test to register the Cloud tools.";
   return input.health?.firstFailure?.recommendedAction || "Use Repair and test, then check Advanced Settings if it still fails.";
 }
