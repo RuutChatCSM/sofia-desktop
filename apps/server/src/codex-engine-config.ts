@@ -10,12 +10,20 @@ import { dirname, join } from "node:path";
 import { openworkConfigDir } from "@openwork/paths";
 import { codexWireApiForProvider, type CodexWireApi } from "./codex-config.js";
 
+export type CodexProviderModel = {
+  id: string;
+  name: string;
+  reasoning: boolean;
+};
+
 export type CodexProviderConfig = {
   providerId: string;
   providerName: string;
   baseUrl: string | null;
   envKey: string | null;
   wireApi: CodexWireApi;
+  /** Models the provider exposes, so the codex engine's picker is engine-native. */
+  models: CodexProviderModel[];
 };
 
 export type CodexEngineConfig = {
@@ -98,6 +106,7 @@ function normalizeCodexEngineConfig(value: unknown): CodexEngineConfig {
     const wireApi: CodexWireApi = rawWireApi === "responses" || rawWireApi === "chatcompletions"
       ? rawWireApi
       : providerId.toLowerCase() === "openai" ? "responses" : "chatcompletions";
+    const models = normalizeProviderModels(record?.models);
     providers.push({
       providerId,
       providerName: record && typeof record.providerName === "string" && record.providerName.trim()
@@ -106,6 +115,7 @@ function normalizeCodexEngineConfig(value: unknown): CodexEngineConfig {
       baseUrl,
       envKey,
       wireApi,
+      models,
     });
   }
 
@@ -116,6 +126,7 @@ function normalizeCodexEngineConfig(value: unknown): CodexEngineConfig {
       baseUrl: legacyBaseUrl,
       envKey: legacyEnvKey,
       wireApi: legacyProviderId.toLowerCase() === "openai" ? "responses" : "chatcompletions",
+      models: [],
     });
   }
 
@@ -127,6 +138,22 @@ function normalizeCodexEngineConfig(value: unknown): CodexEngineConfig {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function normalizeProviderModels(value: unknown): CodexProviderModel[] {
+  if (!Array.isArray(value)) return [];
+  const models: CodexProviderModel[] = [];
+  for (const entry of value) {
+    const record = isRecord(entry) ? entry : null;
+    const id = record && typeof record.id === "string" && record.id.trim() ? record.id.trim() : null;
+    if (!id) continue;
+    models.push({
+      id,
+      name: record && typeof record.name === "string" && record.name.trim() ? record.name.trim() : id,
+      reasoning: record ? record.reasoning === true : false,
+    });
+  }
+  return models;
 }
 
 /**
@@ -191,21 +218,32 @@ export async function syncCodexEngineConfigFromProviderMap(
       baseUrl,
       envKey: typeof envKey === "string" ? envKey : null,
       wireApi: codexWireApiForProvider(providerId, value),
+      models: providerModelsFromMapEntry(value),
     });
   }
   if (providers.length === 0) return null;
 
   const first = providers[0];
-  const firstProviderEntry = isRecord(providerMap[first.providerId]) ? providerMap[first.providerId] : null;
-  const firstModels = isRecord(firstProviderEntry?.models)
-    ? Object.keys((firstProviderEntry as { models: Record<string, unknown> }).models)
-    : [];
-
   const config: CodexEngineConfig = {
     defaultProviderId: first.providerId,
-    model: firstModels[0] ?? null,
+    model: first.models[0]?.id ?? null,
     providers,
   };
   await writeCodexEngineConfig(config, opts);
   return codexEngineConfigPath(opts);
+}
+
+function providerModelsFromMapEntry(value: Record<string, unknown>): CodexProviderModel[] {
+  const models = isRecord(value.models) ? value.models : null;
+  if (!models) return [];
+  const out: CodexProviderModel[] = [];
+  for (const [id, entry] of Object.entries(models)) {
+    const record = isRecord(entry) ? entry : null;
+    out.push({
+      id,
+      name: record && typeof record.name === "string" && record.name.trim() ? record.name.trim() : id,
+      reasoning: record ? record.reasoning === true : false,
+    });
+  }
+  return out;
 }

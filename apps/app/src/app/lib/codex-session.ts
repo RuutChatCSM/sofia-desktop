@@ -41,12 +41,19 @@ export type CodexEngineStatus = {
   sessions: CodexSession[];
 };
 
+export type CodexProviderModelWire = {
+  id: string;
+  name: string;
+  reasoning: boolean;
+};
+
 export type CodexProviderConfigWire = {
   providerId: string;
   providerName: string;
   baseUrl: string | null;
   envKey: string | null;
   wireApi: "responses" | "chatcompletions";
+  models: CodexProviderModelWire[];
 };
 
 export type CodexEngineConfigWire = {

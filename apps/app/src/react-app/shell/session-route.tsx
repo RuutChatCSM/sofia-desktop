@@ -1050,6 +1050,7 @@ export function SessionRoute() {
     // Engine-aware: the codex engine offers only the providers its runtime is
     // configured with; the opencode engine offers all connected providers.
     engine: codexEngine.enabled ? "codex" : "opencode",
+    codexProviders: codexEngine.config?.providers ?? [],
     codexProviderIds: codexEngine.config?.providers.map((provider) => provider.providerId) ?? [],
   });
   // Which session the open model picker targets. Selecting a model while a

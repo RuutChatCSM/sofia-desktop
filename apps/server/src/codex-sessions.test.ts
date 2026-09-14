@@ -48,13 +48,15 @@ async function writeFakeCodex(root: string, notifications: Array<{ method: strin
     "    const turnId = 'turn-' + (++id);",
     "    const threadId = msg.params.threadId;",
     "    send({ jsonrpc: '2.0', id: msg.id, result: { threadId, turnId } });",
-    "    // Stream a fake agent message delta, then complete the turn.",
+    "    // Stream a fake agent message delta, then complete the turn — unless the",
+    "    // input asks to hold it open (so tests can steer an in-flight turn).",
+    "    const hold = JSON.stringify(msg.params.input ?? '').includes('hold');",
     "    setTimeout(() => {",
     "      send({ jsonrpc: '2.0', method: 'item/started', params: { threadId, itemType: 'agentMessage' } });",
     "      send({ jsonrpc: '2.0', method: 'item/agentMessage/delta', params: { threadId, delta: 'hello from codex' } });",
     "      send({ jsonrpc: '2.0', method: 'item/completed', params: { threadId, itemType: 'agentMessage' } });",
     "      emitNotifications(threadId, turnId);",
-    "      send({ jsonrpc: '2.0', method: 'turn/completed', params: { threadId, turnId } });",
+    "      if (!hold) send({ jsonrpc: '2.0', method: 'turn/completed', params: { threadId, turnId } });",
     "    }, 30);",
     "  } else if (msg.method === 'thread/fork') {",
     "    send({ jsonrpc: '2.0', id: msg.id, result: { threadId: 'forked-' + (++id) } });",
@@ -140,6 +142,8 @@ describe("CodexSessionManager", () => {
       const session = await manager.createSession({ title: "T", workspaceId: "ws_1", cwd: root });
       expect(session.cwd).toBe(root);
 
+      // Start a turn that stays in flight so turn/steer has an active turn.
+      await manager.prompt(session.id, "hold");
       const steered = await manager.steer(session.id, "go on");
       expect(steered.turnId).toMatch(/^steered-/);
       expect(manager.getSession(session.id)?.status).toBe("running");

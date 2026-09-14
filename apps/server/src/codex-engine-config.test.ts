@@ -50,6 +50,7 @@ describe("readCodexEngineConfig", () => {
           baseUrl: "https://api.deepseek.com",
           envKey: "DEEPSEEK_API_KEY",
           wireApi: "chatcompletions",
+          models: [],
         },
         {
           providerId: "openai",
@@ -57,6 +58,7 @@ describe("readCodexEngineConfig", () => {
           baseUrl: "https://api.openai.com",
           envKey: "OPENAI_API_KEY",
           wireApi: "responses",
+          models: [],
         },
       ],
     }));
@@ -100,6 +102,7 @@ describe("writeCodexEngineConfig", () => {
           baseUrl: "https://api.openai.com",
           envKey: "OPENAI_API_KEY",
           wireApi: "responses",
+          models: [],
         },
       ],
     };
@@ -121,6 +124,7 @@ describe("codexConfigTomlFromEngineConfig", () => {
           baseUrl: "https://api.deepseek.com",
           envKey: "DEEPSEEK_API_KEY",
           wireApi: "chatcompletions",
+          models: [],
         },
         {
           providerId: "openai",
@@ -128,6 +132,7 @@ describe("codexConfigTomlFromEngineConfig", () => {
           baseUrl: "https://api.openai.com",
           envKey: "OPENAI_API_KEY",
           wireApi: "responses",
+          models: [],
         },
       ],
     });

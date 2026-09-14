@@ -5,6 +5,7 @@
 // this hook next.
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Client, ModelOption } from "@/app/types";
+import type { CodexProviderConfigWire } from "@/app/lib/codex-session";
 import { useCheckDesktopRestriction } from "@/react-app/domains/cloud/desktop-config-provider";
 import { isCloudManagedProviderKey } from "@/react-app/domains/connections/provider-auth/cloud-provider-config";
 import { filterEntitledModelOptions } from "@/react-app/domains/connections/provider-auth/provider-policy";
@@ -36,10 +37,15 @@ export type UseModelPickerInput = {
   /** Active agent engine. Codex keeps only the providers its runtime is configured with. */
   engine?: "codex" | "opencode";
   /**
+   * The codex engine's providers and their models (`codexEngine.config.providers`).
+   * When set on the codex engine, the picker is engine-native: it shows exactly
+   * these providers/models instead of the opencode runtime's provider list.
+   */
+  codexProviders?: readonly CodexProviderConfigWire[];
+  /**
    * Provider IDs the codex runtime is configured to use (from the codex
-   * engine's `config.providers`). When present on the codex engine, the picker
-   * only offers these providers. The built-in `opencode` (Zen) provider is
-   * always hidden on the codex engine because it cannot route there.
+   * engine's `config.providers`). Used only as a fallback when `codexProviders`
+   * has no models yet.
    */
   codexProviderIds?: readonly string[];
 };
@@ -54,6 +60,7 @@ export function useModelPicker(input: UseModelPickerInput) {
     fallbackOptions = [],
     cloudProvidersEnabled = true,
     engine = "opencode",
+    codexProviders = [],
     codexProviderIds = [],
   } = input;
   const checkDesktopRestriction = useCheckDesktopRestriction();
@@ -129,6 +136,34 @@ export function useModelPicker(input: UseModelPickerInput) {
   }, [onLoadError, providerListQuery.error]);
 
   const modelOptions = useMemo(() => {
+    // Engine-native: on the codex engine, surface exactly the providers/models
+    // the codex runtime is configured with (codexengine.json), not the opencode
+    // provider list. Falls back to the opencode list when the codex config has
+    // no models yet so the picker is never empty.
+    if (isCodexEngine) {
+      const codexModels: ModelOption[] = codexProviders.flatMap((provider) =>
+        provider.models.map((model) => ({
+          providerID: provider.providerId,
+          modelID: model.id,
+          title: model.name || model.id,
+          description: provider.providerName,
+          behaviorTitle: "Reasoning",
+          behaviorLabel: "Default",
+          behaviorDescription: "",
+          behaviorValue: null,
+          isFree: false,
+          isRecommended: false,
+          source: undefined,
+        })),
+      );
+      if (codexModels.length > 0) {
+        return filterCloudManagedModelOptions(
+          mergeModelOptions(codexModels, fallbackOptions),
+          cloudProvidersEnabled,
+        );
+      }
+    }
+
     const data = providerListQuery.data;
     if (!data?.all) return [];
 
@@ -175,7 +210,7 @@ export function useModelPicker(input: UseModelPickerInput) {
       mergeModelOptions(next, fallbackOptions),
       cloudProvidersEnabled,
     );
-  }, [cloudProvidersEnabled, codexAllowedProviders, fallbackOptions, isCodexEngine, providerListQuery.data, recentProviderIds]);
+  }, [cloudProvidersEnabled, codexAllowedProviders, codexProviders, fallbackOptions, isCodexEngine, providerListQuery.data, recentProviderIds]);
 
   // Apply org-level restrictions (dev #1505) on top of the raw model list
   // so the picker never surfaces blocked options:
