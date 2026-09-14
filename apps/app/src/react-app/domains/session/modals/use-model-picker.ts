@@ -33,12 +33,15 @@ export type UseModelPickerInput = {
   fallbackOptions?: readonly ModelOption[];
   /** Account-scoped providers are hidden immediately after cloud sign-out. */
   cloudProvidersEnabled?: boolean;
+  /** Active agent engine. Codex keeps only the providers its runtime is configured with. */
+  engine?: "codex" | "opencode";
   /**
-   * Provider IDs to omit. The native codex/sofia engine cannot route the
-   * built-in `opencode` (Zen) provider, so the picker hides it while codex is
-   * the active engine.
+   * Provider IDs the codex runtime is configured to use (from the codex
+   * engine's `config.providers`). When present on the codex engine, the picker
+   * only offers these providers. The built-in `opencode` (Zen) provider is
+   * always hidden on the codex engine because it cannot route there.
    */
-  excludeProviderIds?: readonly string[];
+  codexProviderIds?: readonly string[];
 };
 
 export function useModelPicker(input: UseModelPickerInput) {
@@ -50,12 +53,17 @@ export function useModelPicker(input: UseModelPickerInput) {
     onLoadError,
     fallbackOptions = [],
     cloudProvidersEnabled = true,
-    excludeProviderIds = [],
+    engine = "opencode",
+    codexProviderIds = [],
   } = input;
   const checkDesktopRestriction = useCheckDesktopRestriction();
-  const excludedProviders = useMemo(
-    () => new Set(excludeProviderIds.map((id) => id.trim().toLowerCase())),
-    [excludeProviderIds],
+  const isCodexEngine = engine === "codex";
+  const codexAllowedProviders = useMemo(
+    () =>
+      codexProviderIds.length > 0
+        ? new Set(codexProviderIds.map((id) => id.trim().toLowerCase()))
+        : null,
+    [codexProviderIds],
   );
 
   const [open, setOpenState] = useState(false);
@@ -138,7 +146,12 @@ export function useModelPicker(input: UseModelPickerInput) {
 
     const next: ModelOption[] = [];
     for (const provider of getConnectedProviderItems(data)) {
-      if (excludedProviders.has(provider.id.trim().toLowerCase())) continue;
+      const providerId = provider.id.trim().toLowerCase();
+      // The built-in opencode (Zen) provider is only routable by the opencode
+      // engine; hide it while codex is active.
+      if (isCodexEngine && providerId === "opencode") continue;
+      // Keep only the providers the codex runtime is configured with.
+      if (isCodexEngine && codexAllowedProviders && !codexAllowedProviders.has(providerId)) continue;
       const modelIds = Object.keys(provider.models);
       const isNew = !seenIds.has(provider.id) || recentProviderIds.has(provider.id);
       for (const id of modelIds) {
@@ -162,7 +175,7 @@ export function useModelPicker(input: UseModelPickerInput) {
       mergeModelOptions(next, fallbackOptions),
       cloudProvidersEnabled,
     );
-  }, [cloudProvidersEnabled, excludedProviders, fallbackOptions, providerListQuery.data, recentProviderIds]);
+  }, [cloudProvidersEnabled, codexAllowedProviders, fallbackOptions, isCodexEngine, providerListQuery.data, recentProviderIds]);
 
   // Apply org-level restrictions (dev #1505) on top of the raw model list
   // so the picker never surfaces blocked options:

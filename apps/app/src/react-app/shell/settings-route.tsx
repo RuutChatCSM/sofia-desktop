@@ -1075,9 +1075,8 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
     onOpen: handleModelPickerOpen,
     onLoadError: handleModelPickerLoadError,
     cloudProvidersEnabled: cloudSession.isSignedIn,
-    // The native codex/sofia engine cannot route the built-in opencode (Zen)
-    // provider, so hide it while codex is the active engine.
-    excludeProviderIds: selectedEngine === "codex" ? ["opencode"] : [],
+    // Engine-aware: hide the built-in opencode (Zen) provider on the codex engine.
+    engine: selectedEngine,
   });
   const currentCloudMcpModel = useMemo<OpenworkCloudMcpProviderModelContext | null>(() => {
     const provider = local.prefs.defaultModel?.providerID.trim() ?? "";

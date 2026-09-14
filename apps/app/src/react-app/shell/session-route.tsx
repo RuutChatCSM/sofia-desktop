@@ -1047,9 +1047,10 @@ export function SessionRoute() {
     onOpen: handleModelPickerOpen,
     fallbackOptions: organizationAssignedModelOptions,
     cloudProvidersEnabled: denAuth.isSignedIn,
-    // The native codex/sofia engine cannot route the built-in opencode (Zen)
-    // provider, so hide it while codex is the active engine.
-    excludeProviderIds: codexEngine.enabled ? ["opencode"] : [],
+    // Engine-aware: the codex engine offers only the providers its runtime is
+    // configured with; the opencode engine offers all connected providers.
+    engine: codexEngine.enabled ? "codex" : "opencode",
+    codexProviderIds: codexEngine.config?.providers.map((provider) => provider.providerId) ?? [],
   });
   // Which session the open model picker targets. Selecting a model while a
   // session is targeted remembers it for that conversation only; null means
