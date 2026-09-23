@@ -23,7 +23,6 @@ import {
 } from "@/app/lib/den-endpoint-sources";
 import { isDesktopRuntime } from "@/app/utils";
 import { t } from "@/i18n";
-import { EnginePicker, type CodexEngineAvailability } from "../engine-picker";
 import { ControlPlaneUrlEditor } from "../cloud/control-plane-url-editor";
 import { usePlatform } from "../../../kernel/platform";
 import {
@@ -47,6 +46,13 @@ import {
   LayoutSectionItemTitle,
   LayoutSectionTitle,
 } from "../settings-layout";
+
+export type CodexEngineAvailability = {
+  available: boolean;
+  path: string | null;
+  source: string | null;
+  pinnedVersion: string | null;
+};
 
 type SettingsTone = ComponentProps<typeof SettingsStatusBadge>["tone"];
 
@@ -304,13 +310,6 @@ export function AdvancedRuntimeSection(props: AdvancedRuntimeSectionProps) {
         <LayoutSectionTitle>{t("settings.runtime_title")}</LayoutSectionTitle>
         <LayoutSectionDescription>{t("settings.runtime_desc")}</LayoutSectionDescription>
       </LayoutSectionHeader>
-
-      <LayoutSectionHeader>
-        <LayoutSectionTitle>{t("settings.engine_picker_title")}</LayoutSectionTitle>
-        <LayoutSectionDescription>{t("settings.engine_picker_desc")}</LayoutSectionDescription>
-      </LayoutSectionHeader>
-
-      <EnginePicker codex={props.codexEngineStatus ?? null} />
 
       <div className="grid gap-3 sm:grid-cols-2">
         <RuntimeStatusCard

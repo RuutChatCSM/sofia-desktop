@@ -7,7 +7,7 @@ import type { OpencodeConnectStatus } from "@/app/types";
 import type { OpenworkCloudMcpHealth, OpenworkRuntimeConfigStatus, OpenworkServerStatus } from "@/app/lib/openwork-server";
 import { t } from "@/i18n";
 import { LayoutStack } from "../settings-layout";
-import type { CodexEngineAvailability } from "../engine-picker";
+import type { CodexEngineAvailability } from "./advanced-view-sections";
 import type { useDenSession } from "../cloud/use-den-session";
 
 import { advancedLocalReducer, initialAdvancedLocalState } from "./advanced-view-state";
