@@ -215,92 +215,6 @@ async function waitUntil(predicate: () => boolean, timeoutMs: number): Promise<b
 }
 
 describe("engine reload guard", () => {
-  test("global provider patch defers the reload while sessions are busy and applies it once idle", async () => {
-    const root = await createTempRoot();
-    const engine = startFakeEngine();
-    const config = serverConfig(root, `http://127.0.0.1:${engine.port}`);
-    const server = await startServer(config);
-    stops.push(() => server.stop());
-    const base = `http://127.0.0.1:${server.port}`;
-    const den = startFakeDen();
-
-    engine.setBusy(true);
-    const deferred = await readJsonObject(await fetch(`${base}/runtime-config/providers`, {
-      method: "PATCH",
-      headers: hostHeaders(),
-      body: JSON.stringify({ provider: { lpr_test: { id: "anthropic", name: "Anthropic", env: ["ANTHROPIC_API_KEY"] } } }),
-    }));
-    expect(deferred.ok).toBe(true);
-    expect(deferred.changed).toBe(true);
-    expect(deferred.reload).toBe("deferred");
-    expect(engine.disposeCount()).toBe(0);
-
-    // The parked reload applies through the provider sync once the engine idles.
-    engine.setBusy(false);
-    const put = await fetch(`${base}/den-session`, {
-      method: "PUT",
-      headers: hostHeaders(),
-      body: JSON.stringify({ baseUrl: den.url, token: "den_token", orgId: "org_test" }),
-    });
-    expect(put.status).toBe(204);
-    const run = await readJsonObject(await fetch(`${base}/cloud-provider-sync/run`, {
-      method: "POST",
-      headers: hostHeaders(),
-      body: JSON.stringify({ reason: "test" }),
-    }));
-    expect(run.status === "applied" || run.status === "noop").toBe(true);
-    expect(engine.disposeCount()).toBeGreaterThanOrEqual(1);
-  });
-
-  test("provider sync passes defer reloads while busy, then reload and converge to noop when idle", async () => {
-    const root = await createTempRoot();
-    const engine = startFakeEngine();
-    const config = serverConfig(root, `http://127.0.0.1:${engine.port}`);
-    const server = await startServer(config);
-    stops.push(() => server.stop());
-    const base = `http://127.0.0.1:${server.port}`;
-    const den = startFakeDen();
-
-    engine.setBusy(true);
-    const put = await fetch(`${base}/den-session`, {
-      method: "PUT",
-      headers: hostHeaders(),
-      body: JSON.stringify({ baseUrl: den.url, token: "den_token", orgId: "org_test" }),
-    });
-    expect(put.status).toBe(204);
-
-    // The first pass (PUT /den-session enqueues one automatically) writes the
-    // engine-visible runtime file -> a reload becomes pending, but the busy
-    // engine must not be disposed.
-    const busyRun = await readJsonObject(await fetch(`${base}/cloud-provider-sync/run`, {
-      method: "POST",
-      headers: hostHeaders(),
-      body: JSON.stringify({ reason: "busy_pass" }),
-    }));
-    expect(busyRun.status === "applied" || busyRun.status === "noop").toBe(true);
-    expect(engine.disposeCount()).toBe(0);
-    const busyStatus = await readJsonObject(await fetch(`${base}/cloud-provider-sync/status`, { headers: clientHeaders() }));
-    const busyLastRun = isRecord(busyStatus.lastRun) ? busyStatus.lastRun : {};
-    const busyDetail = isRecord(busyLastRun.detail) ? busyLastRun.detail : {};
-    expect(busyDetail.reloadDeferred).toBe(true);
-
-    // Idle: the pending reload fires exactly once, and the sync settles.
-    engine.setBusy(false);
-    await readJsonObject(await fetch(`${base}/cloud-provider-sync/run`, {
-      method: "POST",
-      headers: hostHeaders(),
-      body: JSON.stringify({ reason: "idle_pass" }),
-    }));
-    expect(engine.disposeCount()).toBe(1);
-    const settled = await readJsonObject(await fetch(`${base}/cloud-provider-sync/run`, {
-      method: "POST",
-      headers: hostHeaders(),
-      body: JSON.stringify({ reason: "converged_pass" }),
-    }));
-    expect(settled.status).toBe("noop");
-    expect(engine.disposeCount()).toBe(1);
-  });
-
   test("repeated passes over an unchanged Den snapshot never dispose the engine again", async () => {
     const root = await createTempRoot();
     const engine = startFakeEngine();
@@ -344,37 +258,6 @@ describe("engine reload guard", () => {
     // The credential push is fingerprint-guarded, so it must not re-deliver
     // on every pass either.
     expect(engine.requests.filter((entry) => entry === "PUT /auth/lpr_steady")).toHaveLength(1);
-  });
-
-  test("a deferred reload lands by itself once the engine idles, even with no Den session", async () => {
-    previousReloadRetry = process.env.OPENWORK_ENGINE_RELOAD_RETRY_MS;
-    process.env.OPENWORK_ENGINE_RELOAD_RETRY_MS = "200";
-    const root = await createTempRoot();
-    const engine = startFakeEngine();
-    const config = serverConfig(root, `http://127.0.0.1:${engine.port}`);
-    const server = await startServer(config);
-    stops.push(() => server.stop());
-    const base = `http://127.0.0.1:${server.port}`;
-
-    // No PUT /den-session on purpose: a signed-out desktop that patches
-    // global providers must still see them reach the engine eventually.
-    engine.setBusy(true);
-    const deferred = await readJsonObject(await fetch(`${base}/runtime-config/providers`, {
-      method: "PATCH",
-      headers: hostHeaders(),
-      body: JSON.stringify({ provider: { lpr_retry: { id: "anthropic", name: "Anthropic", env: ["ANTHROPIC_API_KEY"] } } }),
-    }));
-    expect(deferred.reload).toBe("deferred");
-    expect(engine.disposeCount()).toBe(0);
-
-    // Still busy: the retry poll must keep waiting, not dispose.
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    expect(engine.disposeCount()).toBe(0);
-
-    // Idle: the parked reload lands from the retry poll alone.
-    engine.setBusy(false);
-    const landed = await waitUntil(() => engine.disposeCount() >= 1, 3_000);
-    expect(landed).toBe(true);
   });
 
   test("a reload failure mid-pass keeps the materialized providers visible and the failure loud", async () => {

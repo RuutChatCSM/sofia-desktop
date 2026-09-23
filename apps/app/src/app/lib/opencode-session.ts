@@ -7,7 +7,7 @@
  * SDK types directly, and adds feature-detection for newer API surface
  * (e.g. `shellAsync`) that may not be present in older SDK versions.
  */
-import type { Session } from "@opencode-ai/sdk/v2/client";
+import type { Session } from "@/app/lib/engine-types";
 import type { Client, ModelRef } from "../types";
 import { unwrap } from "./opencode";
 

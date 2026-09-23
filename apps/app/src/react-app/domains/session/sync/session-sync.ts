@@ -1,5 +1,5 @@
 import type { UIMessage } from "ai";
-import type { FilePart, Part, PermissionRequest, PermissionV2Request, QuestionRequest, Session, SessionStatus, Todo } from "@opencode-ai/sdk/v2/client";
+import type { FilePart, Part, PermissionRequest, PermissionV2Request, QuestionRequest, Session, SessionStatus, Todo } from "@/app/lib/engine-types";
 
 import { getReactQueryClient } from "../../../infra/query-client";
 import { captureAnalyticsEvent, takeTaskRunStart } from "@/app/lib/analytics";

@@ -1,6 +1,6 @@
 /** @jsxImportSource react */
 import type { UIMessage } from "ai";
-import type { FilePart, Part, ToolPart } from "@opencode-ai/sdk/v2/client";
+import type { FilePart, Part, ToolPart } from "@/app/lib/engine-types";
 
 import type { OpenworkSessionSnapshot } from "../../../../app/lib/openwork-server";
 import { SYNTHETIC_SESSION_ERROR_MESSAGE_PREFIX } from "../../../../app/types";

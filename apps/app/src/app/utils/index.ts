@@ -1,4 +1,4 @@
-import type { Part, Session } from "@opencode-ai/sdk/v2/client";
+import type { Part, Session } from "@/app/lib/engine-types";
 import { t } from "../../i18n";
 import type {
   ArtifactItem,

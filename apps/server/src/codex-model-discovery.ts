@@ -18,6 +18,7 @@ import {
   type CodexProviderModel,
   type CodexProvidersFile,
 } from "./codex-providers.js";
+import { externalFetch } from "./server-fetch.js";
 
 const DISCOVERY_TIMEOUT_MS = 8_000;
 /** Back off after a failed lookup so a provider without `/models` is not
@@ -114,7 +115,7 @@ async function fetchProviderModels(input: {
   timeoutMs: number;
 }): Promise<CodexProviderModel[]> {
   const url = `${input.baseUrl.replace(/\/+$/, "")}/models`;
-  const doFetch = input.fetchImpl ?? fetch;
+  const doFetch = input.fetchImpl ?? externalFetch;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), input.timeoutMs);
   try {

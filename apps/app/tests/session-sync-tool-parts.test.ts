@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import type { Part, Session } from "@opencode-ai/sdk/v2/client";
+import type { Part, Session } from "../src/app/lib/engine-types";
 import type { UIMessage } from "ai";
 
 import { getReactQueryClient } from "../src/react-app/infra/query-client";

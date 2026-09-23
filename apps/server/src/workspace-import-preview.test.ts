@@ -664,7 +664,7 @@ describe("workspace import preview", () => {
     const originalDataDir = process.env.OPENWORK_DATA_DIR;
     process.env.OPENWORK_DATA_DIR = dataDir;
     const serverConfig = makeServerConfig(workspace, dataDir);
-    serverConfig.approval = { mode: "manual", timeoutMs: 5000 };
+    serverConfig.approval = { mode: "ask", timeoutMs: 5000 };
     const server = await startServer(serverConfig) as {
       port: number;
       stop: (force?: boolean) => void;

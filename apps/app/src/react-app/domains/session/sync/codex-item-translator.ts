@@ -4,7 +4,7 @@
 // AgentMessage, FileChange); opencode's UI consumes text/reasoning/tool/
 // step-start parts. This is the harmonization layer between the two engines.
 import type { DynamicToolUIPart } from "ai";
-import type { Part } from "@opencode-ai/sdk/v2/client";
+import type { Part } from "@/app/lib/engine-types";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);

@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState, type ReactNode } from "react";
 import type { UIMessage } from "ai";
 import { useQuery } from "@tanstack/react-query";
-import type { SessionStatus } from "@opencode-ai/sdk/v2/client";
+import type { SessionStatus } from "@/app/lib/engine-types";
 import { Check, Globe, Minimize2 } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 
@@ -335,7 +335,7 @@ export type SessionSurfaceProps = {
   onModelVariantChange: (value: string | null) => void;
   agentLabel: string;
   selectedAgent: string | null;
-  listAgents: () => Promise<import("@opencode-ai/sdk/v2/client").Agent[]>;
+  listAgents: () => Promise<import("@/app/lib/engine-types").Agent[]>;
   onSelectAgent: (agent: string | null) => void;
   listCommands: () => Promise<import("@/app/types").SlashCommandOption[]>;
   recentFiles: string[];

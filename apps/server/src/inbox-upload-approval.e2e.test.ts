@@ -29,7 +29,9 @@ async function startManualApprovalServer() {
     hostToken: "owt_host_token",
     // The web/gateway posture: nobody answers approval prompts, so anything
     // that parks on the approval queue hangs for timeoutMs and then fails.
-    approval: { mode: "manual", timeoutMs: APPROVAL_TIMEOUT_MS },
+    // "ask" always prompts; "manual" is remapped to the persisted codex access
+    // mode by startServer.
+    approval: { mode: "ask", timeoutMs: APPROVAL_TIMEOUT_MS },
     corsOrigins: ["*"],
     workspaces: [{ id: "ws_1", name: "Workspace", path: root, preset: "starter", workspaceType: "local" }],
     authorizedRoots: [root],

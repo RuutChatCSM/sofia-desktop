@@ -6,7 +6,7 @@ import type {
   QuestionRequest,
   ProviderListResponse,
   Session,
-} from "@opencode-ai/sdk/v2/client";
+} from "@/app/lib/engine-types";
 import type { createClient } from "./lib/opencode";
 import type { OpencodeConfigFile, WorkspaceInfo } from "./lib/desktop-types";
 

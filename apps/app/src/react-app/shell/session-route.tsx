@@ -13,7 +13,7 @@ import type {
   FilePartInput,
   ProviderListResponse,
   TextPartInput,
-} from "@opencode-ai/sdk/v2/client";
+} from "@/app/lib/engine-types";
 
 import { captureAnalyticsEvent, markTaskRunStart } from "@/app/lib/analytics";
 import { trackSessionActive, trackTaskStarted } from "@/app/lib/den-telemetry";

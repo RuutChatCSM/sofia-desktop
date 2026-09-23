@@ -1,7 +1,7 @@
 /** @jsxImportSource react */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import type { Agent } from "@opencode-ai/sdk/v2/client";
+import type { Agent } from "@/app/lib/engine-types";
 import { AppWindowMac, ArrowUp, Check, ChevronDown, ChevronRight, FileText, LoaderCircle, Paperclip, Plus, RefreshCw, Settings, Square, Terminal, X, Zap } from "lucide-react";
 import fuzzysort from "fuzzysort";
 import { toast } from "@/components/ui/sonner";

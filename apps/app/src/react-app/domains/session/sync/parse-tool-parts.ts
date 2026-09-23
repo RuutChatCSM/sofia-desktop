@@ -1,5 +1,5 @@
 import type { DynamicToolUIPart, JSONValue, ProviderMetadata, TextUIPart } from "ai";
-import type { ToolPart } from "@opencode-ai/sdk/v2/client";
+import type { ToolPart } from "@/app/lib/engine-types";
 import {
   connectionActionAppResourceUri,
   connectionActionAppSchemaVersion,

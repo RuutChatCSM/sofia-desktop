@@ -5,7 +5,7 @@ import type {
   Session,
   SubtaskPartInput,
   TextPartInput,
-} from "@opencode-ai/sdk/v2/client";
+} from "@/app/lib/engine-types";
 
 import { t } from "../../../../i18n";
 import { unwrap } from "../../../../app/lib/opencode";

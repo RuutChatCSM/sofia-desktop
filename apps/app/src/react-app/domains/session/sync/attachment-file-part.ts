@@ -1,4 +1,4 @@
-import type { FilePartInput, TextPartInput } from "@opencode-ai/sdk/v2/client";
+import type { FilePartInput, TextPartInput } from "@/app/lib/engine-types";
 
 import type { ComposerAttachment } from "../../../../app/types";
 import { compressImageFile } from "./image-compression";

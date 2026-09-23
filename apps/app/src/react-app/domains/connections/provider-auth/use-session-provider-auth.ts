@@ -3,7 +3,7 @@
 // workspace-change resync, the post-onboarding auto-open latch, and cloud
 // provider auto-sync. Extracted verbatim from session-route.tsx.
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
-import type { ProviderListResponse } from "@opencode-ai/sdk/v2/client";
+import type { ProviderListResponse } from "@/app/lib/engine-types";
 
 import type { Client, ProviderListItem, WorkspaceDisplay } from "@/app/types";
 import { readDenSettings } from "@/app/lib/den";

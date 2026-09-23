@@ -1,4 +1,4 @@
-import type { ProviderConfig } from "@opencode-ai/sdk/v2/client";
+import type { ProviderConfig } from "@/app/lib/engine-types";
 
 export type LocalProviderInstallInput = {
   providerId: string;

@@ -1,4 +1,4 @@
-import type { Message, Part, Session, Todo } from "@opencode-ai/sdk/v2/client";
+import type { Message, Part, Session, Todo } from "@/app/lib/engine-types";
 import {
   agentContextDiagnosticsReportSchema,
   agentContextDiagnosticsRequestSchema,

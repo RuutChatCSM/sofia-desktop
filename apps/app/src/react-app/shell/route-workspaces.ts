@@ -3,7 +3,7 @@
 // settings-route was missing the remote-workspace clobber fix in
 // mergeRouteWorkspaces and used older session-status logic. One copy now.
 
-import type { Session } from "@opencode-ai/sdk/v2/client";
+import type { Session } from "@/app/lib/engine-types";
 
 import type { OpenworkWorkspaceInfo } from "@/app/lib/openwork-server";
 import type { WorkspaceInfo } from "@/app/lib/desktop-types";

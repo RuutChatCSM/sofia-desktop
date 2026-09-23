@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, jest, setSystemTime, test } from "bun:test";
-import type { SessionStatus } from "@opencode-ai/sdk/v2/client";
+import type { SessionStatus } from "../src/app/lib/engine-types";
 
 import type { OpenworkSessionSnapshot } from "../src/app/lib/openwork-server";
 import { useSessionActivityStore } from "../src/react-app/domains/session/status/session-activity-store";

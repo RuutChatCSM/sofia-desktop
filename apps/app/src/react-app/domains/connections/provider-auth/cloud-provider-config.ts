@@ -1,5 +1,5 @@
 import { applyEdits, modify } from "jsonc-parser";
-import type { ProviderConfig } from "@opencode-ai/sdk/v2/client";
+import type { ProviderConfig } from "@/app/lib/engine-types";
 
 import type {
   DenOrgLlmProvider,

@@ -4,7 +4,7 @@ import { applyEdits, modify, parse } from "jsonc-parser";
 import type {
   ProviderAuthAuthorization,
   ProviderListResponse,
-} from "@opencode-ai/sdk/v2/client";
+} from "@/app/lib/engine-types";
 
 import { t } from "../../../../i18n";
 import {

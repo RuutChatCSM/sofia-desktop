@@ -3,7 +3,7 @@ import { useQuery, type QueryClient } from "@tanstack/react-query";
 import type { Client, ModelRef, ProviderListItem } from "../../app/types";
 import { unwrap } from "../../app/lib/opencode";
 import { dispatchNewProviders } from "../../app/lib/provider-events";
-import type { ProviderListResponse } from "@opencode-ai/sdk/v2/client";
+import type { ProviderListResponse } from "@/app/lib/engine-types";
 
 export const PROVIDER_LIST_CACHE_MS = 5 * 60 * 1000;
 const PROVIDER_LIST_QUERY_ROOT = ["opencode-provider-list"] as const;

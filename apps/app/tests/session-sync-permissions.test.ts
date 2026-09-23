@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import type { UIMessage } from "ai";
-import type { PermissionRequest, PermissionV2Request, QuestionRequest } from "@opencode-ai/sdk/v2/client";
+import type { PermissionRequest, PermissionV2Request, QuestionRequest } from "../src/app/lib/engine-types";
 
 import type { OpenworkSessionSnapshot } from "../src/app/lib/openwork-server";
 import { getReactQueryClient } from "../src/react-app/infra/query-client";

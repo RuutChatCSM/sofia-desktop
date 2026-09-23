@@ -1,6 +1,6 @@
 /** @jsxImportSource react */
 import { useRef, useState } from "react";
-import type { Agent } from "@opencode-ai/sdk/v2/client";
+import type { Agent } from "@/app/lib/engine-types";
 
 import type { CloudImportedPlugin } from "@/app/cloud/import-state";
 import { createDenClient, readDenSettings } from "@/app/lib/den";

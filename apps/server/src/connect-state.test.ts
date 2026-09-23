@@ -4,19 +4,23 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { OPENWORK_CLOUD_EXPECTED_TOOLS, OPENWORK_CLOUD_PLUGIN_CANARIES } from "./cloud-mcp-health.js";
+import { getConnectSnapshot } from "./connect-state.js";
+import type {
+  EngineMcpStatus,
+  EngineProviderList,
+  EngineResult,
+  WorkspaceEngineClient,
+} from "./engine/workspace-engine-client.js";
 import { writeRuntimeOpencodeConfig } from "./runtime-opencode-config-store.js";
-import { startServer } from "./server.js";
 import type { ServerConfig, WorkspaceInfo } from "./types.js";
 
-const CLIENT_TOKEN = "owt_connect_state_client";
-const HOST_TOKEN = "owt_connect_state_host";
 const previousRuntimeDb = process.env.OPENWORK_RUNTIME_DB;
-const stops: Array<() => void | Promise<void>> = [];
+const runtimeDbRoots: string[] = [];
 const roots: string[] = [];
 
 afterEach(async () => {
-  while (stops.length) await stops.pop()?.();
   while (roots.length) await rm(roots.pop() ?? "", { recursive: true, force: true });
+  while (runtimeDbRoots.length) await rm(runtimeDbRoots.pop() ?? "", { recursive: true, force: true });
   if (previousRuntimeDb === undefined) delete process.env.OPENWORK_RUNTIME_DB;
   else process.env.OPENWORK_RUNTIME_DB = previousRuntimeDb;
 });
@@ -27,62 +31,85 @@ async function createRoot(prefix: string): Promise<string> {
   return root;
 }
 
-function startMockOpencode() {
-  const server = Bun.serve({
-    hostname: "127.0.0.1",
-    port: 0,
-    async fetch(request) {
-      const url = new URL(request.url);
-      if (url.pathname === "/global/health") return Response.json({ healthy: true, version: "1.17.11" });
-      if (url.pathname === "/mcp" && request.method === "GET") return Response.json({ "openwork-cloud": { status: "connected" } });
-      if ((url.pathname === "/cloud-mcp" || url.pathname === "/cloud-mcp/mcp/agent") && request.method === "POST") {
-        const body: unknown = await request.json();
-        const id = isRecord(body) && (typeof body.id === "string" || typeof body.id === "number" || body.id === null) ? body.id : 1;
-        if (isRecord(body) && body.method === "notifications/initialized") return new Response(null, { status: 202 });
-        if (isRecord(body) && body.method === "initialize") {
-          return Response.json({
-            id,
-            jsonrpc: "2.0",
-            result: {
-              capabilities: { tools: {} },
-              protocolVersion: "2025-06-18",
-              serverInfo: { name: "openwork-cloud-test", version: "1.0.0" },
-            },
-          });
-        }
-        if (isRecord(body) && body.method === "tools/list") {
-          return Response.json({
-            id,
-            jsonrpc: "2.0",
-            result: {
-              tools: [
-                { name: "search_capabilities", inputSchema: {} },
-                { name: "execute_capability", inputSchema: {} },
-              ],
-            },
-          });
-        }
-        return Response.json({ id, jsonrpc: "2.0", result: {} });
-      }
-      if (url.pathname === "/experimental/tool/ids") return Response.json([...OPENWORK_CLOUD_EXPECTED_TOOLS, ...OPENWORK_CLOUD_PLUGIN_CANARIES]);
-      return Response.json({ code: "not_found" }, { status: 404 });
+function allReadyToolIds(): string[] {
+  return [...OPENWORK_CLOUD_EXPECTED_TOOLS, ...OPENWORK_CLOUD_PLUGIN_CANARIES];
+}
+
+function ok<T>(data: T): EngineResult<T> {
+  return { data, error: undefined, response: new Response(null, { status: 200 }) };
+}
+
+function unavailable(): EngineResult<never> {
+  return { data: undefined, error: { code: "not_implemented" }, response: new Response(null, { status: 501 }) };
+}
+
+/**
+ * A Codex-backed engine stand-in that reports the Cloud MCP connected with the
+ * full expected tool surface. The connect snapshot only reads engine state, so
+ * the transport is irrelevant to the directory-scoping behavior under test.
+ */
+function readyEngineClient(): WorkspaceEngineClient {
+  const mcpStatus: EngineMcpStatus = { "openwork-cloud": { status: "connected" } };
+  const providerList: EngineProviderList = {
+    all: [
+      {
+        id: "anthropic",
+        name: "Anthropic",
+        models: { "claude-sonnet-4": { id: "claude-sonnet-4", name: "Claude Sonnet", capabilities: { toolcall: true } } },
+      },
+    ],
+    default: {},
+    connected: ["anthropic"],
+  };
+  return {
+    session: {
+      async list() { return ok([]); },
+      async create() { return unavailable(); },
+      async get() { return unavailable(); },
+      async messages() { return ok([]); },
+      async todo() { return ok([]); },
+      async status() { return ok({}); },
+      async promptAsync() { return ok({}); },
+      async abort() { return ok({}); },
+      async delete() { return ok({}); },
     },
-  });
-  stops.push(() => server.stop(true));
-  return server;
+    provider: {
+      async list() { return ok(providerList); },
+    },
+    config: {
+      async get() { return unavailable(); },
+    },
+    mcp: {
+      async status() { return ok(mcpStatus); },
+      async disconnect() { return ok({}); },
+      auth: {
+        async remove() { return ok({}); },
+      },
+    },
+    tool: {
+      async ids() { return ok(allReadyToolIds()); },
+      async list() { return ok(allReadyToolIds().map((id) => ({ id, description: id }))); },
+    },
+    app: {
+      async agents() { return ok([]); },
+    },
+    global: {
+      async health() { return ok({ healthy: true, version: "1.17.11" }); },
+    },
+  };
 }
 
 function workspace(id: string, path: string, baseUrl: string): WorkspaceInfo {
   return { id, name: id, path, preset: "starter", workspaceType: "local", baseUrl };
 }
 
-async function startOpenwork(workspaces: WorkspaceInfo[], runtimeRoot: string): Promise<{ base: string; config: ServerConfig }> {
+function serverConfig(workspaces: WorkspaceInfo[], runtimeRoot: string): ServerConfig {
   process.env.OPENWORK_RUNTIME_DB = join(runtimeRoot, "runtime.sqlite");
-  const config: ServerConfig = {
+  return {
     host: "127.0.0.1",
     port: 0,
-    token: CLIENT_TOKEN,
-    hostToken: HOST_TOKEN,
+    token: "owt_connect_state_client",
+    hostToken: "owt_connect_state_host",
     configPath: join(runtimeRoot, "server.json"),
     approval: { mode: "auto", timeoutMs: 1000 },
     corsOrigins: ["*"],
@@ -95,51 +122,20 @@ async function startOpenwork(workspaces: WorkspaceInfo[], runtimeRoot: string): 
     logFormat: "pretty",
     logRequests: false,
   };
-  const server = await startServer(config);
-  stops.push(() => server.stop());
-  return { base: `http://127.0.0.1:${server.port}`, config };
-}
-
-function clientHeaders(): Record<string, string> {
-  return { Authorization: `Bearer ${CLIENT_TOKEN}` };
-}
-
-function hostHeaders(): Record<string, string> {
-  return { "X-Sofia-Host-Token": HOST_TOKEN, "Content-Type": "application/json" };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-async function responseRecord(response: Response): Promise<Record<string, unknown>> {
-  const body: unknown = await response.json();
-  if (!isRecord(body)) throw new Error("Response body was not an object");
-  return body;
-}
-
-function requireRecord(value: unknown, label: string): Record<string, unknown> {
-  if (!isRecord(value)) throw new Error(`${label} was not an object`);
-  return value;
 }
 
 describe("connect state Cloud health scoping", () => {
   test("uses verified health for the exact requested directory without borrowing another workspace", async () => {
     const rootA = await createRoot("openwork-connect-state-a-");
     const rootB = await createRoot("openwork-connect-state-b-");
-    const engine = startMockOpencode();
-    const baseUrl = `http://127.0.0.1:${engine.port}`;
-    const openwork = await startOpenwork([
+    const runtimeRoot = await createRoot("openwork-connect-state-runtime-");
+    const baseUrl = "http://127.0.0.1:1";
+    const config = serverConfig([
       workspace("ws_a", rootA, baseUrl),
       workspace("ws_b", rootB, baseUrl),
-    ], rootA);
+    ], runtimeRoot);
 
-    await fetch(`${openwork.base}/experimental/connect/state`, {
-      method: "PUT",
-      headers: hostHeaders(),
-      body: JSON.stringify({ connectEnabled: true }),
-    });
-    await writeRuntimeOpencodeConfig(openwork.config, "ws_b", (current) => ({
+    await writeRuntimeOpencodeConfig(config, "ws_b", (current) => ({
       ...current,
       mcp: {
         ...current.mcp,
@@ -153,19 +149,21 @@ describe("connect state Cloud health scoping", () => {
       },
     }));
 
-    const first = await responseRecord(await fetch(`${openwork.base}/experimental/connect/state?directory=${encodeURIComponent(rootA)}`, { headers: clientHeaders() }));
+    const options = { createWorkspaceOpencodeClient: () => readyEngineClient() };
+
+    const first = await getConnectSnapshot(config, { directory: rootA, ...options });
     expect(first.cloudMcpPresent).toBe(false);
-    expect(requireRecord(first.workspace, "workspace").id).toBe("ws_a");
-    expect(requireRecord(requireRecord(first.cloudHealth, "cloudHealth").desired, "desired").present).toBe(false);
+    expect(first.workspace.id).toBe("ws_a");
+    expect(first.cloudHealth?.desired.present).toBe(false);
 
-    const second = await responseRecord(await fetch(`${openwork.base}/experimental/connect/state?directory=${encodeURIComponent(rootB)}`, { headers: clientHeaders() }));
+    const second = await getConnectSnapshot(config, { directory: rootB, ...options });
     expect(second.cloudMcpPresent).toBe(true);
-    expect(requireRecord(second.workspace, "workspace").id).toBe("ws_b");
-    expect(requireRecord(second.cloudHealth, "cloudHealth").usable).toBe(true);
+    expect(second.workspace.id).toBe("ws_b");
+    expect(second.cloudHealth?.usable).toBe(true);
 
-    const unknown = await responseRecord(await fetch(`${openwork.base}/experimental/connect/state?directory=${encodeURIComponent(join(rootA, "other"))}`, { headers: clientHeaders() }));
+    const unknown = await getConnectSnapshot(config, { directory: join(rootA, "other"), ...options });
     expect(unknown.cloudMcpPresent).toBe(false);
     expect(unknown.cloudHealth).toBeNull();
-    expect(requireRecord(unknown.workspace, "workspace").resolution).toBe("unknown");
+    expect(unknown.workspace.resolution).toBe("unknown");
   });
 });

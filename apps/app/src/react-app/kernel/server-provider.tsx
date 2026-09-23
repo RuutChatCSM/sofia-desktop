@@ -9,7 +9,7 @@ import {
   useRef,
   type ReactNode,
 } from "react";
-import { createOpencodeClient } from "@opencode-ai/sdk/v2/client";
+import { createOpencodeClient } from "../../app/lib/engine-client";
 
 import { desktopFetch } from "../../app/lib/desktop";
 import {
