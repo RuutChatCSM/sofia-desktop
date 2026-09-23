@@ -273,11 +273,13 @@ const codexUrl =
 const codexSourceDir = (() => {
   const raw = process.env.CODEX_SOURCE_DIR?.trim();
   if (raw) return resolve(raw);
-  // The codex checkout lives as a sibling repo next to this repo.
-  const sibling = resolve(__dirname, "..", "..", "..", "..", "codex");
-  return existsSync(join(sibling, "codex-rs", "cli", "Cargo.toml"))
-    ? sibling
-    : null;
+  // The Sofia engine checkout lives as a sibling repo next to this repo.
+  for (const name of ["sofia", "codex"]) {
+    const sibling = resolve(__dirname, "..", "..", "..", "..", name);
+    if (existsSync(join(sibling, "sofia-rs", "cli", "Cargo.toml")))
+      return sibling;
+  }
+  return null;
 })();
 
 if (!codexSourceDir) {
@@ -341,19 +343,19 @@ if (shouldDownloadCodex) {
     const cargoBin = process.env.CARGO?.trim() || "cargo";
     const build = spawnSync(
       cargoBin,
-      ["build", "-p", "codex-cli", "--release"],
-      { cwd: join(codexSourceDir, "codex-rs"), stdio: "inherit" },
+      ["build", "-p", "sofia-cli", "--release"],
+      { cwd: join(codexSourceDir, "sofia-rs"), stdio: "inherit" },
     );
     if (build.status !== 0) {
-      console.error("Codex source build failed.");
+      console.error("Sofia engine source build failed.");
       process.exit(build.status ?? 1);
     }
     const builtBinary = join(
       codexSourceDir,
-      "codex-rs",
+      "sofia-rs",
       "target",
       "release",
-      codexBaseName,
+      process.platform === "win32" ? "sofia.exe" : "sofia",
     );
     if (existsSync(builtBinary)) extractedCodex = builtBinary;
   }
