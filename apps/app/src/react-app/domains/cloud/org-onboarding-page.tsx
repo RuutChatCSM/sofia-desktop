@@ -84,9 +84,9 @@ import {
   workspaceBrandingFingerprint,
 } from "./workspace-branding-restart";
 
-const RELOAD_AFTER_ONBOARDING_KEY = "openwork.reloadAfterOrgOnboarding";
-const APPLIED_BRANDING_FINGERPRINT_KEY = "openwork.den.appliedBrandingFingerprint";
-const BRANDING_RESTART_RESUME_KEY = "openwork.den.brandingRestartResume";
+const RELOAD_AFTER_ONBOARDING_KEY = "sofia.reloadAfterOrgOnboarding";
+const APPLIED_BRANDING_FINGERPRINT_KEY = "sofia.den.appliedBrandingFingerprint";
+const BRANDING_RESTART_RESUME_KEY = "sofia.den.brandingRestartResume";
 
 type BrandingRestartState = {
   fingerprint: string;
@@ -94,19 +94,19 @@ type BrandingRestartState = {
   warning: string | null;
 };
 
-type OnboardingUpdaterBridge = NonNullable<Window["__OPENWORK_ELECTRON__"]>["updater"];
+type OnboardingUpdaterBridge = NonNullable<Window["__SOFIA_ELECTRON__"]>["updater"];
 
 declare global {
   interface Window {
-    __openworkOnboardingUpdaterEvalBridge?: OnboardingUpdaterBridge;
+    __sofiaOnboardingUpdaterEvalBridge?: OnboardingUpdaterBridge;
   }
 }
 
 function onboardingUpdaterBridge(): OnboardingUpdaterBridge | undefined {
-  if (import.meta.env.DEV && window.__openworkOnboardingUpdaterEvalBridge) {
-    return window.__openworkOnboardingUpdaterEvalBridge;
+  if (import.meta.env.DEV && window.__sofiaOnboardingUpdaterEvalBridge) {
+    return window.__sofiaOnboardingUpdaterEvalBridge;
   }
-  return window.__OPENWORK_ELECTRON__?.updater;
+  return window.__SOFIA_ELECTRON__?.updater;
 }
 
 async function stageOnboardingUpdate(
@@ -256,8 +256,8 @@ function PreparedWorkspacePage({ prepared }: { prepared: PreparedBootstrapSummar
       <PageContainer>
         <PageHeader>
           <div
-            data-openwork-prepared="true"
-            data-openwork-provisional="true"
+            data-sofia-prepared="true"
+            data-sofia-provisional="true"
             className="mx-auto flex w-fit items-center gap-2 rounded-full border border-green-6/30 bg-green-2/30 px-3 py-1 text-xs font-semibold text-green-11"
           >
             <CheckCircle2 className="size-3.5" />
@@ -326,11 +326,11 @@ function markProvidersSeen(providers: DenOrgLlmProvider[]) {
   if (providers.length === 0) return;
 
   try {
-    const raw = window.localStorage.getItem("openwork.seenProviderIds");
+    const raw = window.localStorage.getItem("sofia.seenProviderIds");
     const existing: string[] = raw ? JSON.parse(raw) : [];
     const ids = new Set(existing);
     for (const provider of providers) ids.add(provider.id);
-    window.localStorage.setItem("openwork.seenProviderIds", JSON.stringify([...ids]));
+    window.localStorage.setItem("sofia.seenProviderIds", JSON.stringify([...ids]));
   } catch {}
 }
 
@@ -647,7 +647,7 @@ export function ResourceSelectionPage({ autoContinue = false }: { autoContinue?:
   }, [navigate, providers, selectedDefault]);
 
   const handleContinue = useCallback(async (optionsArg?: { requestReload?: boolean }) => {
-    if (!window.__OPENWORK_ELECTRON__?.shell?.relaunch) {
+    if (!window.__SOFIA_ELECTRON__?.shell?.relaunch) {
       finishOnboarding({ requestReload: optionsArg?.requestReload });
       return;
     }
@@ -831,7 +831,7 @@ export function ResourceSelectionPage({ autoContinue = false }: { autoContinue?:
         <PageHeader>
           {prepared ? (
             <div
-              data-openwork-prepared="true"
+              data-sofia-prepared="true"
               className="mx-auto flex w-fit items-center gap-2 rounded-full border border-green-6/30 bg-green-2/30 px-3 py-1 text-xs font-semibold text-green-11"
             >
               <CheckCircle2 className="size-3.5" />

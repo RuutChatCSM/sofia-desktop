@@ -1,7 +1,7 @@
 import { expect } from "vitest";
-import { createAndSelectWorkspace, evalIn, waitFor } from "@openwork/behaviors";
-import { desktop } from "@openwork/hosts";
-import { needs, test } from "@openwork/testkit";
+import { createAndSelectWorkspace, evalIn, waitFor } from "@sofia/behaviors";
+import { desktop } from "@sofia/hosts";
+import { needs, test } from "@sofia/testkit";
 
 /**
  * On macOS the show/hide sidebar toggle is not in the header flow: it floats in
@@ -11,20 +11,20 @@ import { needs, test } from "@openwork/testkit";
  * lands on the session title that the collapsed header reserves space for.
  *
  * The `mac:` Tailwind variant only resolves under
- * `html.openwork-electron.openwork-platform-mac`, which the Electron preload
+ * `html.sofia-electron.sofia-platform-mac`, which the Electron preload
  * adds solely when `process.platform === "darwin"`. On any other platform the
  * floating toggle is `display: none` and every claim below would pass
  * vacuously, so this spec refuses to run there rather than reporting a green
  * tape that observed nothing.
  */
-const e2eTestsEnabled = process.env.OPENWORK_EVAL_E2E_TESTS === "1";
+const e2eTestsEnabled = process.env.SOFIA_EVAL_E2E_TESTS === "1";
 const onMac = process.platform === "darwin";
 const enabled = e2eTestsEnabled && onMac;
 const title = enabled
   ? "the macOS titlebar sidebar toggle clears the window controls and never collides with the session title"
   : e2eTestsEnabled
     ? `mac sidebar toggle clearance skipped — needs: run on macOS (mac: variant inert on ${process.platform})`
-    : "mac sidebar toggle clearance skipped — needs: set OPENWORK_EVAL_E2E_TESTS=1";
+    : "mac sidebar toggle clearance skipped — needs: set SOFIA_EVAL_E2E_TESTS=1";
 
 /** Clearance the toggle must keep from the window's left edge, in CSS px. */
 const requiredLeftClearance = 88;
@@ -171,11 +171,11 @@ async function setSidebar(app: Parameters<typeof evalIn>[0], want: "expanded" | 
 }
 
 test.skipIf(!enabled)(title, async ({ evidence }) => {
-  needs({ optIn: ["OPENWORK_EVAL_E2E_TESTS"] });
+  needs({ optIn: ["SOFIA_EVAL_E2E_TESTS"] });
 
   await using app = await desktop({ name: "mac-sidebar-toggle-clearance" });
   await createAndSelectWorkspace(app, {
-    path: `/tmp/openwork-mac-sidebar-toggle-clearance-${Date.now()}`,
+    path: `/tmp/sofia-mac-sidebar-toggle-clearance-${Date.now()}`,
   });
 
   await waitFor(app, `Boolean(document.querySelector('[data-slot="sidebar-trigger"]'))`, {

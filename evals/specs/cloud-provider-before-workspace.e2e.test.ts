@@ -1,8 +1,8 @@
 import { expect, onTestFinished } from "vitest";
-import { createAndSelectWorkspace, denFetch, evalIn, readAvailableModels } from "@openwork/behaviors";
-import type { DenSession } from "@openwork/behaviors";
-import { desktop } from "@openwork/hosts";
-import { eventually, needs, server, signInDesktopAs, test } from "@openwork/testkit";
+import { createAndSelectWorkspace, denFetch, evalIn, readAvailableModels } from "@sofia/behaviors";
+import type { DenSession } from "@sofia/behaviors";
+import { desktop } from "@sofia/hosts";
+import { eventually, needs, server, signInDesktopAs, test } from "@sofia/testkit";
 
 const ORGANIZATION_NAME = "Cloud Provider Before Workspace";
 const PROVIDER_NAME = "First Workspace Models";
@@ -34,7 +34,7 @@ async function organizationId(session: DenSession): Promise<string> {
 async function createProvider(admin: DenSession, orgId: string): Promise<string> {
   const result = await denFetch(admin, "/v1/llm-providers", {
     method: "POST",
-    headers: { ...auth(admin), "x-openwork-org-id": orgId },
+    headers: { ...auth(admin), "x-sofia-org-id": orgId },
     body: JSON.stringify({
       name: PROVIDER_NAME,
       source: "custom",
@@ -45,7 +45,7 @@ async function createProvider(admin: DenSession, orgId: string): Promise<string>
         env: ["FIRST_WORKSPACE_PROVIDER_API_KEY"],
         models: [{ id: MODEL_ID, name: "First Workspace Proof Model" }],
       },
-      apiKey: "sk-openwork-first-workspace-eval-only",
+      apiKey: "sk-sofia-first-workspace-eval-only",
       allMembers: true,
       memberIds: [],
       teamIds: [],
@@ -65,10 +65,10 @@ async function localServerRequest(
   input: { method?: string; body?: Record<string, unknown>; host?: boolean } = {},
 ): Promise<Record<string, unknown>> {
   const result = await evalIn(app, `(async () => {
-    const info = await window.__OPENWORK_ELECTRON__?.invokeDesktop?.("openworkServerInfo");
+    const info = await window.__SOFIA_ELECTRON__?.invokeDesktop?.("sofiaServerInfo");
     if (!info?.running || !info.baseUrl) return { status: 0, body: { error: "local_server_unavailable" } };
     const headers = { "content-type": "application/json" };
-    if (${input.host === true}) headers["x-openwork-host-token"] = String(info.hostToken ?? "");
+    if (${input.host === true}) headers["x-sofia-host-token"] = String(info.hostToken ?? "");
     else headers.authorization = "Bearer " + String(info.ownerToken ?? info.clientToken ?? "");
     const response = await fetch(String(info.baseUrl).replace(/\\/+$/, "") + ${JSON.stringify(path)}, {
       method: ${JSON.stringify(input.method ?? "GET")},
@@ -85,7 +85,7 @@ async function localServerRequest(
 }
 
 test("managed models survive sign-in before the first workspace exists", async ({ evidence, place }) => {
-  needs({ optIn: ["OPENWORK_EVAL_E2E_TESTS"] });
+  needs({ optIn: ["SOFIA_EVAL_E2E_TESTS"] });
   await using den = await server({
     place,
     org: {
@@ -101,7 +101,7 @@ test("managed models survive sign-in before the first workspace exists", async (
   onTestFinished(async () => {
     await denFetch(den.admin, `/v1/llm-providers/${encodeURIComponent(providerId)}`, {
       method: "DELETE",
-      headers: { ...auth(den.admin), "x-openwork-org-id": orgId },
+      headers: { ...auth(den.admin), "x-sofia-org-id": orgId },
     }).catch(() => undefined);
   });
 
@@ -190,7 +190,7 @@ test("managed models survive sign-in before the first workspace exists", async (
   // The first workspace is created through the product itself: organization
   // onboarding plus the app's workspace.create action, the same journey a
   // person takes right after this sign-in.
-  const workspacePath = `/tmp/openwork-provider-before-workspace-${Date.now()}`;
+  const workspacePath = `/tmp/sofia-provider-before-workspace-${Date.now()}`;
   const { workspaceId } = await createAndSelectWorkspace(desktopApp, { path: workspacePath });
   expect(workspaceId).not.toBe("");
   const models = await eventually(

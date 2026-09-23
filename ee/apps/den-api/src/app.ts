@@ -1,8 +1,8 @@
 import "./load-env.js"
-import { createDenTypeId, normalizeDenTypeId } from "@openwork-ee/utils/typeid"
+import { createDenTypeId, normalizeDenTypeId } from "@sofia-ee/utils/typeid"
 import { swaggerUI } from "@hono/swagger-ui"
-import { and, eq, isNull, sql } from "@openwork-ee/den-db/drizzle"
-import { MemberTable, OrganizationTable } from "@openwork-ee/den-db/schema"
+import { and, eq, isNull, sql } from "@sofia-ee/den-db/drizzle"
+import { MemberTable, OrganizationTable } from "@sofia-ee/den-db/schema"
 import { cors } from "hono/cors"
 import { Hono } from "hono"
 import type { RequestIdVariables } from "hono/request-id"
@@ -129,7 +129,7 @@ if (env.corsOrigins.length > 0) {
       cors({
         origin: env.corsOrigins,
         credentials: true,
-        allowHeaders: ["Content-Type", "Authorization", "X-Api-Key", "X-Request-Id", "X-OpenWork-Legacy-Org-Id", "X-OpenWork-Org-Id"],
+        allowHeaders: ["Content-Type", "Authorization", "X-Api-Key", "X-Request-Id", "X-Sofia-Legacy-Org-Id", "X-Sofia-Org-Id"],
         allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         exposeHeaders: ["Content-Length"],
         maxAge: 600,

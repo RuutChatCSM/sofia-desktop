@@ -13,8 +13,6 @@ export type PluginsExtensionsStore = {
   pluginScope: "project" | "global";
   setPluginScope: (value: "project" | "global") => void;
   refreshPlugins: (scope?: "project" | "global") => void | Promise<void>;
-  pluginConfigPath: () => string | null;
-  pluginConfig: () => { path?: string | null } | null;
   pluginList: () => Array<{
     name: string;
     source: "config" | "dir.project" | "dir.global";
@@ -102,17 +100,9 @@ export function PluginsView(props: PluginsViewProps) {
           </div>
         </div>
 
-        <div className="flex flex-col gap-1 text-xs text-gray-10">
-          <div>{t("plugins.config_label")}</div>
-          <div className="text-gray-7 font-mono truncate">
-            {extensions.pluginConfigPath() ??
-              extensions.pluginConfig()?.path ??
-              t("plugins.not_loaded_yet")}
-          </div>
-          {props.accessHint ? (
-            <div className="text-gray-9">{props.accessHint}</div>
-          ) : null}
-        </div>
+        {props.accessHint ? (
+          <div className="text-xs text-gray-9">{props.accessHint}</div>
+        ) : null}
 
         <div className="space-y-3">
           <div className="text-xs font-medium text-gray-11 uppercase tracking-wider">

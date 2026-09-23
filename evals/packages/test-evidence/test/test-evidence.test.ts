@@ -4,7 +4,7 @@ import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import type { CdpClient, Surface } from "@openwork/cdp";
+import type { CdpClient, Surface } from "@sofia/cdp";
 import { withTestEvidence } from "../src/ambient.ts";
 import { screenshot } from "../src/screenshot.ts";
 import type { ScreenshotArtifact } from "../src/screenshot.ts";
@@ -44,7 +44,7 @@ async function payload(dir: string): Promise<Record<string, unknown>> {
 }
 
 test("test evidence writes visual validations, assertions, failures, and unvalidated screenshots", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "openwork-test-evidence-"));
+  const dir = await mkdtemp(join(tmpdir(), "sofia-test-evidence-"));
   try {
     const testEvidence = createTestEvidence({ name: "body cam", outDir: dir });
     const passing = screenshotArtifact("passing");
@@ -94,7 +94,7 @@ test("test evidence writes visual validations, assertions, failures, and unvalid
 });
 
 test("test evidence accepts unchanged screenshots and only lets one validation use their pixel hash", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "openwork-test-evidence-retake-"));
+  const dir = await mkdtemp(join(tmpdir(), "sofia-test-evidence-retake-"));
   try {
     const testEvidence = createTestEvidence({ name: "retakes", outDir: dir });
     const duplicate = screenshotArtifact("same pixels");
@@ -136,7 +136,7 @@ test("test evidence accepts unchanged screenshots and only lets one validation u
 });
 
 test("screenshot automatically records an artifact in ambient test evidence", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "openwork-test-evidence-screenshot-"));
+  const dir = await mkdtemp(join(tmpdir(), "sofia-test-evidence-screenshot-"));
   try {
     const png = Buffer.from("ambient screenshot pixels");
     const client: CdpClient = {

@@ -1,4 +1,4 @@
-import type { ScreenshotArtifact } from "@openwork/test-evidence";
+import type { ScreenshotArtifact } from "@sofia/test-evidence";
 
 /** Transient product chrome that must never ship in a docs screenshot. */
 export const DEFAULT_NEVER = [

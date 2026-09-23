@@ -44,7 +44,7 @@ function startFakeUpstream() {
         recorded.input.push(withSession);
       } else if (msg.method === "Runtime.evaluate") {
         recorded.evaluate.push(withSession);
-        if (String(withSession.params?.expression ?? "").includes("__openworkAgentCursor.present")) {
+        if (String(withSession.params?.expression ?? "").includes("__sofiaAgentCursor.present")) {
           ws.send(JSON.stringify({ id: msg.id, result: { result: { type: "string", value: "640,360" } } }));
           return;
         }
@@ -145,7 +145,7 @@ describe("createCdpBroker", () => {
       const injected = upstream.recorded.addScript.length + upstream.recorded.evaluate.length;
       assert.ok(injected >= 2, "cursor script should be injected via addScript + evaluate");
       const cursorMoves = upstream.recorded.evaluate.filter((p) =>
-        p.params?.expression?.includes("__openworkAgentCursor"),
+        p.params?.expression?.includes("__sofiaAgentCursor"),
       );
       assert.ok(cursorMoves.length > 0, "ghost cursor should be moved via Runtime.evaluate");
     } finally {
@@ -233,7 +233,7 @@ describe("createCdpBroker", () => {
       assert.equal(finalMove.params.y, 300);
 
       const cursorMoves = upstream.recorded.evaluate.filter((p) =>
-        p.params?.expression?.includes("__openworkAgentCursor.moveTo"),
+        p.params?.expression?.includes("__sofiaAgentCursor.moveTo"),
       );
       assert.ok(cursorMoves.length >= 1, "ghost cursor should move to the button");
       const lastCursorMove = cursorMoves[cursorMoves.length - 1];
@@ -277,7 +277,7 @@ describe("createCdpBroker", () => {
       assert.ok(syntheticInputs.length >= 4, `expected eased motion, got ${syntheticInputs.length} moves`);
 
       const syntheticSessions = upstream.recorded.evaluate
-        .filter((p) => p.params?.expression?.includes("__openworkAgentCursor"));
+        .filter((p) => p.params?.expression?.includes("__sofiaAgentCursor"));
       assert.ok(syntheticSessions.length > 0, "cursor moves should be emitted for the page session");
       assert.ok(
         syntheticSessions.every((p) => p.sessionId === "PAGE-SESSION-1"),
@@ -319,7 +319,7 @@ describe("createCdpBroker", () => {
       assert.equal(res.id, 9);
 
       const presents = upstream.recorded.evaluate.filter((p) =>
-        p.params?.expression?.includes("__openworkAgentCursor.present"),
+        p.params?.expression?.includes("__sofiaAgentCursor.present"),
       );
       assert.ok(presents.length >= 1, "cursor should present on page activity");
       assert.equal(presents[0].sessionId, "PAGE-SESSION-1");

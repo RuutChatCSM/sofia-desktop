@@ -614,8 +614,8 @@ export function LlmProviderEditorScreen({
             return;
         }
 
-        if (provider?.source === "openwork") {
-            setSaveError("OpenWork-managed providers are controlled from Inference settings.");
+        if (provider?.source === "sofia") {
+            setSaveError("Sofia-managed providers are controlled from Inference settings.");
             return;
         }
 

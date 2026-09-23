@@ -21,7 +21,7 @@ import { workflowArtifactAppServerCapabilities } from "../src/mcp/workflow-artif
 const needsSignInStatus: ExternalConnectionStatus = {
   version: 1,
   kind: "connection_action",
-  source: "openwork-cloud",
+  source: "sofia-cloud",
   layer: "downstream_provider",
   connectionId: "emc_gmail",
   connectionName: "Gmail",
@@ -34,9 +34,9 @@ const needsSignInStatus: ExternalConnectionStatus = {
   action: {
     type: "connect",
     label: "Connect Gmail",
-    surface: "openwork_your_connections",
+    surface: "sofia_your_connections",
     retry: "search_capabilities",
-    url: "https://app.openworklabs.com/dashboard/connections/emc_gmail",
+    url: "https://sofia-app.ruut.chat/dashboard/connections/emc_gmail",
   },
 }
 
@@ -111,8 +111,8 @@ test("connection status payloads carry the exact human action and same-server la
     action: {
       type: "connect",
       label: "Connect Gmail",
-      surface: "openwork_your_connections",
-      url: "https://app.openworklabs.com/dashboard/connections/emc_gmail",
+      surface: "sofia_your_connections",
+      url: "https://sofia-app.ruut.chat/dashboard/connections/emc_gmail",
     },
   })
   expect(connectionActionLaunch(payload)).toEqual({
@@ -123,7 +123,7 @@ test("connection status payloads carry the exact human action and same-server la
   const fallback = connectionActionTextFallback(payload)
   expect(fallback).toContain("# Connection needs attention: Gmail")
   expect(fallback).toContain("Action: Connect Gmail")
-  expect(fallback).toContain("Open: https://app.openworklabs.com/dashboard/connections/emc_gmail")
+  expect(fallback).toContain("Open: https://sofia-app.ruut.chat/dashboard/connections/emc_gmail")
 
   const connected = connectedConnectionActionPayload({ connectionId: "emc_gmail", connectionName: "Gmail" })
   expect(connected.state).toBe("connected")
@@ -137,7 +137,7 @@ test("needs_connection tool failures carry the same card as the probe", () => {
   expect(parsed.state).toBe("needs_connection")
   expect(parsed.action?.label).toBe("Connect Gmail")
   expect(card.meta).toEqual({
-    "openwork/mcpApp": {
+    "sofia/mcpApp": {
       toolName: CONNECTION_ACTION_TOOL_NAME,
       resourceUri: CONNECTION_ACTION_APP_RESOURCE_URI,
       arguments: { connectionId: "emc_gmail" },

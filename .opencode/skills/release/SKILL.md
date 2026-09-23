@@ -1,11 +1,11 @@
 ---
 name: release
-description: "Cut an OpenWork release. Use when the user asks to release, publish, or ship a new version of the desktop app, or asks about the release process, versioning, or tag management."
+description: "Cut an Sofia release. Use when the user asks to release, publish, or ship a new version of the desktop app, or asks about the release process, versioning, or tag management."
 ---
 
 # Skill: release
 
-Cut an OpenWork release. The "Release App" workflow
+Cut an Sofia release. The "Release App" workflow
 (`.github/workflows/release-macos-aarch64.yml`) builds, signs, and publishes
 the desktop app assets on the GitHub release. Full runbook:
 `docs/RELEASING.md`.
@@ -33,7 +33,7 @@ pnpm release:cut:watch      # same as release:cut, then tails the run
 Equivalent by hand:
 
 ```bash
-gh workflow run "Release App" --repo different-ai/openwork -f bump=patch
+gh workflow run "Release App" --repo RuutChatCSM/sofia-desktop -f bump=patch
 ```
 
 The run resolves the next version from existing `v*` tags, creates the tag on
@@ -67,8 +67,8 @@ rules.
 ## Watch
 
 ```bash
-gh run list --repo different-ai/openwork --workflow "Release App" --limit 1
-gh run watch <run-id> --repo different-ai/openwork --exit-status --interval 90
+gh run list --repo RuutChatCSM/sofia-desktop --workflow "Release App" --limit 1
+gh run watch <run-id> --repo RuutChatCSM/sofia-desktop --exit-status --interval 90
 ```
 
 Publishing is gated on the electron matrix, electron assets, and npm publish.
@@ -80,7 +80,7 @@ workflow with the same tag once the channel recovers.
 non-blocking channels:
 
 ```bash
-gh workflow run "Release App" --repo different-ai/openwork -f tag=vX.Y.Z
+gh workflow run "Release App" --repo RuutChatCSM/sofia-desktop -f tag=vX.Y.Z
 ```
 
 Recovery runs skip tag creation and monotonicity, build source pinned to the
@@ -102,25 +102,25 @@ git push --delete origin vX.Y.Z
 ## Verify
 
 ```bash
-gh release view vX.Y.Z --repo different-ai/openwork --json assets --jq '.assets[].name'
+gh release view vX.Y.Z --repo RuutChatCSM/sofia-desktop --json assets --jq '.assets[].name'
 ```
 
-Expect the app assets (`openwork-<platform>-X.Y.Z.*`, `latest*.yml` updater
+Expect the app assets (`sofia-<platform>-X.Y.Z.*`, `latest*.yml` updater
 manifests), including:
 
-- `openwork-mac-arm64-X.Y.Z.dmg`
-- `openwork-mac-x64-X.Y.Z.dmg`
-- `openwork-win-x64-X.Y.Z.exe`
+- `sofia-mac-arm64-X.Y.Z.dmg`
+- `sofia-mac-x64-X.Y.Z.dmg`
+- `sofia-win-x64-X.Y.Z.exe`
 
 The desktop updater 404s on `latest*.yml` until the release is published —
 that error in a running app during the build window is expected and
 self-heals. Spot-check a download URL resolves (302 to release-assets CDN):
 
 ```bash
-curl -sI "https://github.com/different-ai/openwork/releases/download/vX.Y.Z/openwork-mac-arm64-X.Y.Z.dmg" | head -2
+curl -sI "https://github.com/RuutChatCSM/sofia-desktop/releases/download/vX.Y.Z/sofia-mac-arm64-X.Y.Z.dmg" | head -2
 ```
 
-Confirm `npm view openwork-server version` matches.
+Confirm `npm view sofia-server version` matches.
 
 ---
 

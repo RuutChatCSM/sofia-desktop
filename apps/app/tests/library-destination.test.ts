@@ -73,17 +73,17 @@ describe("library destination", () => {
   });
 
   test("Library agents exclude hidden and subagent entries", () => {
-    expect(isLibraryAgent({ name: "openwork" })).toBe(true);
+    expect(isLibraryAgent({ name: "sofia" })).toBe(true);
     expect(isLibraryAgent({ name: "reviewer", hidden: true })).toBe(false);
     expect(isLibraryAgent({ name: "explore", mode: "subagent" })).toBe(false);
     expect(
       libraryAgentsFromOpencode([
-        { name: "openwork" },
+        { name: "sofia" },
         { name: "hidden", hidden: true },
         { name: "explore", mode: "subagent" },
         { name: "writer", description: "Drafts" },
       ]).map((agent) => agent.name),
-    ).toEqual(["openwork", "writer"]);
+    ).toEqual(["sofia", "writer"]);
   });
 
   test("Library commands keep templates and slash triggers for detail", () => {
@@ -94,7 +94,7 @@ describe("library destination", () => {
         source: "command",
         template: "Ship the build",
         hints: ["ship it"],
-        agent: "openwork",
+        agent: "sofia",
       },
     ]);
     expect(commands[0]?.template).toBe("Ship the build");

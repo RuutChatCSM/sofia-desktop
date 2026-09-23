@@ -4,7 +4,7 @@ import {
   type DenTypeId,
   type DenTypeIdName,
   normalizeDenTypeId,
-} from "@openwork-ee/utils/typeid"
+} from "@sofia-ee/utils/typeid"
 import { sql } from "drizzle-orm"
 
 const INTERNAL_ID_LENGTH = 64

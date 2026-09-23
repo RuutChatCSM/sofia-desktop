@@ -10,7 +10,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { desktopPolicyKeys } from "@openwork/types/den/desktop-policies";
+import { desktopPolicyKeys } from "@sofia/types/den/desktop-policies";
 
 import {
   checkDesktopAppRestriction,
@@ -30,13 +30,13 @@ import {
   type DenDesktopConfig,
 } from "../../../app/lib/den";
 import { applyBrandAppName, applyBrandIcon, getBrandIconState } from "../../../app/lib/desktop";
-import { createOpenworkServerClient } from "../../../app/lib/openwork-server";
+import { createSofiaServerClient } from "../../../app/lib/sofia-server";
 import {
   denSessionUpdatedEvent,
   denSettingsChangedEvent,
 } from "../../../app/lib/den-session-events";
 import { isDesktopRuntime } from "../../../app/lib/runtime-env";
-import { resolveOpenworkConnection } from "../../shell/openwork-connection";
+import { resolveSofiaConnection } from "../../shell/sofia-connection";
 import { useDenAuth } from "./den-auth-provider";
 import {
   bootstrapBrandingFromDesktopConfig,
@@ -400,9 +400,9 @@ export function DesktopConfigProvider({ children }: DesktopConfigProviderProps) 
 
     void deliverConnectState(
       async () => {
-        const connection = await resolveOpenworkConnection();
+        const connection = await resolveSofiaConnection();
         if (!connection.normalizedBaseUrl || !connection.resolvedHostToken) return false;
-        await createOpenworkServerClient({
+        await createSofiaServerClient({
           baseUrl: connection.normalizedBaseUrl,
           token: connection.resolvedToken,
           hostToken: connection.resolvedHostToken,
@@ -431,17 +431,17 @@ export function DesktopConfigProvider({ children }: DesktopConfigProviderProps) 
         normalizeDenDesktopConfig(configPayload),
       );
     };
-    Object.defineProperty(window, "__openworkApplyDesktopConfig", { value: bridge, configurable: true });
+    Object.defineProperty(window, "__sofiaApplyDesktopConfig", { value: bridge, configurable: true });
     const refreshBridge = (configPayload: unknown) => {
       devRefreshDesktopConfigRef.current = normalizeDenDesktopConfig(configPayload);
     };
-    Object.defineProperty(window, "__openworkSetDesktopConfigRefreshResult", {
+    Object.defineProperty(window, "__sofiaSetDesktopConfigRefreshResult", {
       value: refreshBridge,
       configurable: true,
     });
     return () => {
-      Object.defineProperty(window, "__openworkApplyDesktopConfig", { value: undefined, configurable: true });
-      Object.defineProperty(window, "__openworkSetDesktopConfigRefreshResult", { value: undefined, configurable: true });
+      Object.defineProperty(window, "__sofiaApplyDesktopConfig", { value: undefined, configurable: true });
+      Object.defineProperty(window, "__sofiaSetDesktopConfigRefreshResult", { value: undefined, configurable: true });
     };
   }, [applyDesktopConfigActions]);
 

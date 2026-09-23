@@ -1,12 +1,12 @@
 import { expect } from "vitest"
-import { needs, server, test } from "@openwork/testkit"
-import { denFetch, evalIn, waitFor } from "@openwork/behaviors"
-import type { DenSession } from "@openwork/behaviors"
-import { navigate } from "@openwork/cdp"
-import { chrome } from "@openwork/hosts"
+import { needs, server, test } from "@sofia/testkit"
+import { denFetch, evalIn, waitFor } from "@sofia/behaviors"
+import type { DenSession } from "@sofia/behaviors"
+import { navigate } from "@sofia/cdp"
+import { chrome } from "@sofia/hosts"
 
 const requirements = {
-  optIn: ["OPENWORK_EVAL_E2E_TESTS", "OPENWORK_EVAL_GENERATED_ARTIFACT_VIEWS_E2E_TEST"],
+  optIn: ["SOFIA_EVAL_E2E_TESTS", "SOFIA_EVAL_GENERATED_ARTIFACT_VIEWS_E2E_TEST"],
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -60,7 +60,7 @@ async function organizationMemberIdByEmail(admin: DenSession, organizationId: st
   const result = await denFetch(admin, "/v1/org", {
     headers: {
       authorization: `Bearer ${admin.token}`,
-      "x-openwork-org-id": organizationId,
+      "x-sofia-org-id": organizationId,
     },
   })
   const members = isRecord(result.body) && Array.isArray(result.body.members)
@@ -102,7 +102,7 @@ test("the agent MCP exposes the custom Artifact view authoring lifecycle", { tim
     method: "POST",
     headers: {
       authorization: `Bearer ${den.admin.token}`,
-      "x-openwork-org-id": organizationId,
+      "x-sofia-org-id": organizationId,
     },
     body: JSON.stringify({ scopes: ["mcp:read", "mcp:write"] }),
   })
@@ -133,8 +133,8 @@ test("the agent MCP exposes the custom Artifact view authoring lifecycle", { tim
 
   const initialTools = await agentRpc(den.ref.apiUrl, mcpToken, "tools/list", {})
   expect(toolResourceUri(initialTools, "save_artifact_view")).toBeNull()
-  expect(toolResourceUri(initialTools, "render_workflow_artifact")).toBe("ui://openwork/workflow-artifact/v1/view.html")
-  expect(toolResourceUri(initialTools, "render_dynamic_artifact")).toBe("ui://openwork/workflow-artifact/v1/view.html")
+  expect(toolResourceUri(initialTools, "render_workflow_artifact")).toBe("ui://sofia/workflow-artifact/v1/view.html")
+  expect(toolResourceUri(initialTools, "render_dynamic_artifact")).toBe("ui://sofia/workflow-artifact/v1/view.html")
   const initialToolNames = Array.isArray(initialTools.tools)
     ? initialTools.tools.filter(isRecord).map((tool) => String(tool.name ?? ""))
     : []
@@ -195,7 +195,7 @@ test("the agent MCP exposes the custom Artifact view authoring lifecycle", { tim
     method: "POST",
     headers: {
       authorization: `Bearer ${den.admin.token}`,
-      "x-openwork-org-id": organizationId,
+      "x-sofia-org-id": organizationId,
     },
     body: JSON.stringify({ orgMembershipId: viewerMemberId, role: "viewer" }),
   })
@@ -203,7 +203,7 @@ test("the agent MCP exposes the custom Artifact view authoring lifecycle", { tim
   const viewerDetailResponse = await denFetch(viewer, `/v1/workflows/${encodeURIComponent(configObjectId)}`, {
     headers: {
       authorization: `Bearer ${viewer.token}`,
-      "x-openwork-org-id": organizationId,
+      "x-sofia-org-id": organizationId,
     },
   })
   expect(viewerDetailResponse.response.ok, viewerDetailResponse.text).toBe(true)
@@ -217,7 +217,7 @@ test("the agent MCP exposes the custom Artifact view authoring lifecycle", { tim
     const legacyDetail = await denFetch(viewer, `/v1/${legacyPath}/${encodeURIComponent(configObjectId)}`, {
       headers: {
         authorization: `Bearer ${viewer.token}`,
-        "x-openwork-org-id": organizationId,
+        "x-sofia-org-id": organizationId,
       },
     })
     expect(legacyDetail.response.ok, legacyDetail.text).toBe(true)
@@ -227,7 +227,7 @@ test("the agent MCP exposes the custom Artifact view authoring lifecycle", { tim
   const viewerGenericVersionsResponse = await denFetch(viewer, `/v1/config-objects/${encodeURIComponent(configObjectId)}/versions`, {
     headers: {
       authorization: `Bearer ${viewer.token}`,
-      "x-openwork-org-id": organizationId,
+      "x-sofia-org-id": organizationId,
     },
   })
   expect(viewerGenericVersionsResponse.response.ok, viewerGenericVersionsResponse.text).toBe(true)
@@ -286,7 +286,7 @@ test("the agent MCP exposes the custom Artifact view authoring lifecycle", { tim
     method: "POST",
     headers: {
       authorization: `Bearer ${den.admin.token}`,
-      "x-openwork-org-id": organizationId,
+      "x-sofia-org-id": organizationId,
     },
     body: JSON.stringify({
       name: "Legacy quarterly plan",
@@ -316,7 +316,7 @@ test("the agent MCP exposes the custom Artifact view authoring lifecycle", { tim
   const resolvedLegacyPlugin = await denFetch(den.admin, `/v1/plugins/${encodeURIComponent(legacyPluginId)}/resolved`, {
     headers: {
       authorization: `Bearer ${den.admin.token}`,
-      "x-openwork-org-id": organizationId,
+      "x-sofia-org-id": organizationId,
     },
   })
   expect(resolvedLegacyPlugin.response.ok, resolvedLegacyPlugin.text).toBe(true)
@@ -331,7 +331,7 @@ test("the agent MCP exposes the custom Artifact view authoring lifecycle", { tim
   const desktopCapabilities = await denFetch(den.admin, "/v1/resources/marketplace-capabilities", {
     headers: {
       authorization: `Bearer ${den.admin.token}`,
-      "x-openwork-org-id": organizationId,
+      "x-sofia-org-id": organizationId,
     },
   })
   expect(desktopCapabilities.response.ok, desktopCapabilities.text).toBe(true)
@@ -384,7 +384,7 @@ test("the agent MCP exposes the custom Artifact view authoring lifecycle", { tim
   const firstRevisionId = String(firstView.activeRevisionId ?? "")
   const firstRevision = Array.isArray(firstView.revisions) ? firstView.revisions.filter(isRecord)[0] : undefined
   const firstUri = String(firstRevision?.resourceUri ?? "")
-  expect(firstUri).toBe(`ui://openwork/artifacts/${artifactViewId}/views/${firstRevisionId}/index.html`)
+  expect(firstUri).toBe(`ui://sofia/artifacts/${artifactViewId}/views/${firstRevisionId}/index.html`)
   expect(JSON.stringify(firstSave.content)).toContain(`render_artifact_${artifactViewId}`)
 
   const firstRead = resourceContent(await agentRpc(den.ref.apiUrl, mcpToken, "resources/read", { uri: firstUri }))
@@ -420,7 +420,7 @@ test("the agent MCP exposes the custom Artifact view authoring lifecycle", { tim
   const secondRevision = revisions.find((revision) => revision.id !== firstRevisionId)
   const secondRevisionId = String(secondRevision?.id ?? "")
   const secondUri = String(secondRevision?.resourceUri ?? "")
-  expect(secondUri).toBe(`ui://openwork/artifacts/${artifactViewId}/views/${secondRevisionId}/index.html`)
+  expect(secondUri).toBe(`ui://sofia/artifacts/${artifactViewId}/views/${secondRevisionId}/index.html`)
   expect(secondUri).not.toBe(firstUri)
 
   const secondHtml = String(resourceContent(await agentRpc(den.ref.apiUrl, mcpToken, "resources/read", { uri: secondUri })).text ?? "")
@@ -452,7 +452,7 @@ test("the agent MCP exposes the custom Artifact view authoring lifecycle", { tim
   })
   tools = await agentRpc(den.ref.apiUrl, mcpToken, "tools/list", {})
   expect(toolResourceUri(tools, renderName)).toBeNull()
-  expect(toolResourceUri(tools, "render_workflow_artifact")).toBe("ui://openwork/workflow-artifact/v1/view.html")
+  expect(toolResourceUri(tools, "render_workflow_artifact")).toBe("ui://sofia/workflow-artifact/v1/view.html")
   expect(String(resourceContent(await agentRpc(den.ref.apiUrl, mcpToken, "resources/read", { uri: firstUri })).text ?? "")).toBe(firstHtml)
   expect(String(resourceContent(await agentRpc(den.ref.apiUrl, mcpToken, "resources/read", { uri: secondUri })).text ?? "")).toBe(secondHtml)
 
@@ -467,7 +467,7 @@ test("the agent MCP exposes the custom Artifact view authoring lifecycle", { tim
     timeoutMs: 60_000,
     label: "Den Web origin before Workflow auth handoff",
   })
-  await evalIn(browser, `localStorage.setItem("openwork:web:auth-token", ${JSON.stringify(den.admin.token)})`)
+  await evalIn(browser, `localStorage.setItem("sofia:web:auth-token", ${JSON.stringify(den.admin.token)})`)
   await navigate(browser.client, `${den.ref.webUrl}/dashboard/library`)
   await waitFor(browser, `(() => {
     const row = [...document.querySelectorAll('[data-library-item-type="workflow"]')]
@@ -493,7 +493,7 @@ test("the agent MCP exposes the custom Artifact view authoring lifecycle", { tim
 
   evidence.recordAssertionEvidence(
     "Custom Artifact view provider is available only on the Code Mode agent MCP",
-    "The Workflow appeared immediately as a metadata-only never-run Library item inside its OpenWork Connect Plugin. The live provider then discovered and executed it through the standard capability tools, built two custom React revisions, exposed per-view render and preview tools, preserved both immutable resources, injected retained Artifact data through structuredContent, activated the second revision, rolled back to the first, and retired the custom view back to the generic renderer without deleting either resource.",
+    "The Workflow appeared immediately as a metadata-only never-run Library item inside its Sofia App Connect Plugin. The live provider then discovered and executed it through the standard capability tools, built two custom React revisions, exposed per-view render and preview tools, preserved both immutable resources, injected retained Artifact data through structuredContent, activated the second revision, rolled back to the first, and retired the custom view back to the generic renderer without deleting either resource.",
     true,
   )
   evidence.recordAssertionEvidence(

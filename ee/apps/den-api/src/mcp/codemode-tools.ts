@@ -1,5 +1,5 @@
-import { Tool, toolError } from "@openwork/codemode"
-import { normalizeDenTypeId } from "@openwork-ee/utils/typeid"
+import { Tool, toolError } from "@sofia/codemode"
+import { normalizeDenTypeId } from "@sofia-ee/utils/typeid"
 import { Effect } from "effect"
 import type { Hono } from "hono"
 import { z } from "zod"

@@ -153,7 +153,7 @@ function wildcardMatch(value: string, pattern: string): boolean {
   }
 }
 
-/** Mirrors OpenCode's tool-visibility rule: the last matching permission wins,
+/** Mirrors Sofia engine's tool-visibility rule: the last matching permission wins,
  * and only a whole-resource (`pattern: "*"`) deny removes a tool from context.
  */
 export function effectiveToolDecision(

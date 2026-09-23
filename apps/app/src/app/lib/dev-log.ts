@@ -11,8 +11,8 @@ export type DevLogRecord = {
 };
 
 type DevRoot = typeof globalThis & {
-  __openworkDevLogSeq?: number;
-  __openworkDevLogs?: DevLogRecord[];
+  __sofiaDevLogSeq?: number;
+  __sofiaDevLogs?: DevLogRecord[];
 };
 
 const DEV_LOG_LIMIT = 1500;
@@ -39,8 +39,8 @@ export const recordDevLog = (
   if (!enabled) return;
 
   const root = globalThis as DevRoot;
-  const id = (root.__openworkDevLogSeq ?? 0) + 1;
-  root.__openworkDevLogSeq = id;
+  const id = (root.__sofiaDevLogSeq ?? 0) + 1;
+  root.__sofiaDevLogSeq = id;
 
   const entry: DevLogRecord = {
     id,
@@ -52,17 +52,17 @@ export const recordDevLog = (
     payload: input.payload,
   };
 
-  const logs = root.__openworkDevLogs ?? [];
+  const logs = root.__sofiaDevLogs ?? [];
   logs.push(entry);
   if (logs.length > DEV_LOG_LIMIT) {
     logs.splice(0, logs.length - DEV_LOG_LIMIT);
   }
-  root.__openworkDevLogs = logs;
+  root.__sofiaDevLogs = logs;
 };
 
 export const readDevLogs = (limit = 200) => {
   const root = globalThis as DevRoot;
-  const logs = root.__openworkDevLogs ?? [];
+  const logs = root.__sofiaDevLogs ?? [];
   if (limit === 0) return logs.slice();
   if (limit < 0) return [];
   if (logs.length <= limit) return logs.slice();
@@ -71,8 +71,8 @@ export const readDevLogs = (limit = 200) => {
 
 export const clearDevLogs = () => {
   const root = globalThis as DevRoot;
-  root.__openworkDevLogs = [];
-  root.__openworkDevLogSeq = 0;
+  root.__sofiaDevLogs = [];
+  root.__sofiaDevLogSeq = 0;
 };
 
 export const formatDevLogLine = (entry: DevLogRecord) => {

@@ -1,4 +1,4 @@
-import { CodeMode } from "@openwork/codemode"
+import { CodeMode } from "@sofia/codemode"
 import { Effect } from "effect"
 import type { CodemodeToolTree } from "./codemode-tools.js"
 

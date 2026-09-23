@@ -4,7 +4,7 @@ function TerminalLine({ index }: { index: number }) {
   if (index === 0) {
     return (
       <div className="text-[#E2E8F0]">
-        <span className="text-[#7DD3FC]">❯</span> share my skills and MCPs with my OpenWork org
+        <span className="text-[#7DD3FC]">❯</span> share my skills and MCPs with my Sofia org
       </div>
     );
   }
@@ -53,7 +53,7 @@ export function LpTerminalStory() {
         <div className="flex h-12 items-center justify-between border-b border-[#e5e7eb] px-5">
           <div className="flex items-center gap-3">
             <TrafficLights />
-            <span className="text-[12px] font-medium text-[var(--lp-muted)]">OpenWork</span>
+            <span className="text-[12px] font-medium text-[var(--lp-muted)]">Sofia</span>
           </div>
           <span className="text-[11.5px] text-[var(--lp-faint)]">Your teammate&apos;s view</span>
         </div>

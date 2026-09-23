@@ -11,7 +11,7 @@ import {
   type OAuthClientInformationMixed,
   type OAuthTokens,
 } from "@modelcontextprotocol/sdk/shared/auth.js"
-import { createDenTypeId } from "@openwork-ee/utils/typeid"
+import { createDenTypeId } from "@sofia-ee/utils/typeid"
 import { serializeSignedCookie } from "better-call"
 
 const API_ORIGIN = "http://127.0.0.1:8790"
@@ -52,14 +52,14 @@ if (!RUN_REFRESH_LIFECYCLE_CHILD) {
 }
 
 function seedRequiredEnv() {
-  process.env.DATABASE_URL = process.env.DATABASE_URL ?? "mysql://root:password@127.0.0.1:3306/openwork_test"
+  process.env.DATABASE_URL = process.env.DATABASE_URL ?? "mysql://root:password@127.0.0.1:3306/sofia_test"
   process.env.DB_MODE = process.env.DB_MODE ?? "mysql"
   process.env.DEN_DB_ENCRYPTION_KEY = process.env.DEN_DB_ENCRYPTION_KEY ?? "local-dev-db-encryption-key-please-change-1234567890"
   process.env.BETTER_AUTH_SECRET = "y".repeat(32)
   process.env.BETTER_AUTH_URL = process.env.BETTER_AUTH_URL ?? API_ORIGIN
   process.env.CORS_ORIGINS = process.env.CORS_ORIGINS ?? API_ORIGIN
   process.env.DEN_API_PUBLIC_URL = process.env.DEN_API_PUBLIC_URL ?? API_ORIGIN
-  process.env.OPENWORK_DEV_MODE = "1"
+  process.env.SOFIA_DEV_MODE = "1"
   process.env.DEN_ALLOW_PRIVATE_MCP_URLS = "1"
   process.env.DEN_MCP_TEST_ACCESS_TOKEN_EXPIRES_IN_SECONDS = String(TEST_ACCESS_TOKEN_TTL_SECONDS)
 }
@@ -167,8 +167,8 @@ const childTest = RUN_REFRESH_LIFECYCLE_CHILD ? test : test.skip
 
 let app: typeof import("../src/app.js").default
 let db: typeof import("../src/db.js").db
-let schema: typeof import("@openwork-ee/den-db/schema")
-let drizzle: typeof import("@openwork-ee/den-db/drizzle")
+let schema: typeof import("@sofia-ee/den-db/schema")
+let drizzle: typeof import("@sofia-ee/den-db/drizzle")
 let setMcpSessionLivenessDependenciesForTest: typeof import("../src/mcp/session-liveness.js").setMcpSessionLivenessDependenciesForTest
 let setMcpGrantLivenessDependenciesForTest: typeof import("../src/mcp/grant-liveness.js").setMcpGrantLivenessDependenciesForTest
 
@@ -182,7 +182,7 @@ beforeAll(async () => {
   if (!RUN_REFRESH_LIFECYCLE_CHILD) return
   seedRequiredEnv()
   mock.restore()
-  const realDb = (await import("@openwork-ee/den-db")).createDenDb({
+  const realDb = (await import("@sofia-ee/den-db")).createDenDb({
     databaseUrl: process.env.DATABASE_URL,
     mode: "mysql",
   }).db
@@ -191,8 +191,8 @@ beforeAll(async () => {
   const modules = await Promise.all([
     import("../src/app.js"),
     import("../src/db.js"),
-    import("@openwork-ee/den-db/schema"),
-    import("@openwork-ee/den-db/drizzle"),
+    import("@sofia-ee/den-db/schema"),
+    import("@sofia-ee/den-db/drizzle"),
     import("../src/mcp/session-liveness.js"),
     import("../src/mcp/grant-liveness.js"),
   ])
@@ -579,7 +579,7 @@ childTest("session liveness check failures 503 resource requests but fail open r
   await db.insert(schema.OAuthAccessTokenTable).values({
     id: createDenTypeId("oauthAccessToken"),
     token: hashStoredOAuthToken(failOpenAccessSecret),
-    clientId: "openwork-desktop",
+    clientId: "sofia-desktop",
     sessionId: grant.sessionId,
     userId,
     referenceId: organizationId,
@@ -815,7 +815,7 @@ childTest("dead sessions leave consent-bound tokens valid while sid-only tokens 
   await db.insert(schema.OAuthAccessTokenTable).values({
     id: createDenTypeId("oauthAccessToken"),
     token: hashStoredOAuthToken(sidOnlyAccessSecret),
-    clientId: "openwork-desktop",
+    clientId: "sofia-desktop",
     sessionId: grant.sessionId,
     userId,
     referenceId: organizationId,

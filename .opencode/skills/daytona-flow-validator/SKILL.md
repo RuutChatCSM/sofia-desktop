@@ -25,7 +25,7 @@ action must follow this loop:
 
 If any assertion is missing, the flow is not validated yet.
 
-Use the relevant `evals/specs/**/*.test.ts` test with `@openwork/testkit` for a
+Use the relevant `evals/specs/**/*.test.ts` test with `@sofia/testkit` for a
 verdict because it binds assertions and captures into one ambient test run.
 App-driving E2E tests use `.e2e.test.ts`. Use manual CDP only to debug; use
 `write-a-spec` for new repeatable coverage and `run-tests` to execute it.
@@ -96,7 +96,7 @@ with `browser_snapshot` or a screenshot.
 
 ## Lexical Composer
 
-Prefer synthetic paste for the OpenWork composer:
+Prefer synthetic paste for the Sofia composer:
 
 ```js
 (function pasteComposer(text) {
@@ -176,7 +176,7 @@ is not valid evidence until the image itself has been inspected.
 
 For every screenshot, assert these visual checks:
 
-- The target OpenWork/Chrome window is visible and not covered by a native file
+- The target Sofia/Chrome window is visible and not covered by a native file
   picker, modal, toast, desktop window, or unrelated overlay.
 - The exact claimed state is visible in the image, not just present in DOM or
   command output.
@@ -211,8 +211,8 @@ daytona exec "$SANDBOX" -- 'bash -lc '\''DISPLAY=:99 wmctrl -l | tee /tmp/window
 ```
 
 If a Chromium or Electron window is intentionally part of the shot, activate the
-right window first with `wmctrl -a "OpenWork - Dev"` or
-`wmctrl -a "OpenWork Cloud - Chromium"` so the screenshot shows the intended
+right window first with `wmctrl -a "Sofia - Dev"` or
+`wmctrl -a "Sofia Cloud - Chromium"` so the screenshot shows the intended
 journey step.
 
 ## Failure Handling

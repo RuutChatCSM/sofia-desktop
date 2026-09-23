@@ -1,9 +1,9 @@
 import { expect } from "vitest"
-import { createOrgConnection, denFetch } from "@openwork/behaviors"
-import { mcpMock, needs, server, test } from "@openwork/testkit"
+import { createOrgConnection, denFetch } from "@sofia/behaviors"
+import { mcpMock, needs, server, test } from "@sofia/testkit"
 
 const requirements = {
-  optIn: ["OPENWORK_EVAL_E2E_TESTS", "OPENWORK_EVAL_SAVED_SCRIPT_AUTOMATIONS_E2E_TEST"],
+  optIn: ["SOFIA_EVAL_E2E_TESTS", "SOFIA_EVAL_SAVED_SCRIPT_AUTOMATIONS_E2E_TEST"],
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -101,7 +101,7 @@ test("a Code Mode result becomes a cloud Automation and a durable artifact resul
     method: "POST",
     headers: {
       authorization: `Bearer ${den.admin.token}`,
-      "x-openwork-org-id": organizationId,
+      "x-sofia-org-id": organizationId,
     },
     body: JSON.stringify({ scopes: ["mcp:read", "mcp:write"] }),
   })
@@ -239,7 +239,7 @@ test("a Code Mode result becomes a cloud Automation and a durable artifact resul
     executionLocation: "cloud",
     automationId,
     automationRunId: scheduledRunId,
-    engineKind: "openwork-cloud-codemode-v1",
+    engineKind: "sofia-cloud-codemode-v1",
   })
 
   const toolList = await agentRpc(den.ref.apiUrl, mcpToken, "tools/list", {})
@@ -247,16 +247,16 @@ test("a Code Mode result becomes a cloud Automation and a durable artifact resul
   const renderTool = tools.find((candidate) => candidate.name === "render_workflow_artifact")
   const renderToolMeta = isRecord(renderTool?._meta) ? renderTool._meta : {}
   const modernUi = isRecord(renderToolMeta.ui) ? renderToolMeta.ui : {}
-  expect(modernUi.resourceUri).toBe("ui://openwork/workflow-artifact/v1/view.html")
-  expect(renderToolMeta["ui/resourceUri"]).toBe("ui://openwork/workflow-artifact/v1/view.html")
+  expect(modernUi.resourceUri).toBe("ui://sofia/workflow-artifact/v1/view.html")
+  expect(renderToolMeta["ui/resourceUri"]).toBe("ui://sofia/workflow-artifact/v1/view.html")
 
   const resourceList = await agentRpc(den.ref.apiUrl, mcpToken, "resources/list", {})
   const resources = records(resourceList.resources)
-  const appResource = resources.find((candidate) => candidate.uri === "ui://openwork/workflow-artifact/v1/view.html")
+  const appResource = resources.find((candidate) => candidate.uri === "ui://sofia/workflow-artifact/v1/view.html")
   expect(appResource?.mimeType).toBe("text/html;profile=mcp-app")
 
   const resourceRead = await agentRpc(den.ref.apiUrl, mcpToken, "resources/read", {
-    uri: "ui://openwork/workflow-artifact/v1/view.html",
+    uri: "ui://sofia/workflow-artifact/v1/view.html",
   })
   const resourceContents = records(resourceRead.contents)
   expect(resourceContents[0]?.mimeType).toBe("text/html;profile=mcp-app")

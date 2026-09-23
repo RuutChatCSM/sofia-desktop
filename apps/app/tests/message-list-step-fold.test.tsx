@@ -77,7 +77,7 @@ const userMessage: UIMessage = {
   parts: [{ type: "text", text: "do the thing", state: "done" }],
 };
 
-describe("finished turn step fold (single OpenCode message per turn)", () => {
+describe("finished turn step fold (single Sofia engine message per turn)", () => {
   test("folds interleaved steps into a 'Worked for …' line and keeps the answer", () => {
     const assistant: UIMessage = {
       id: "assistant-1",

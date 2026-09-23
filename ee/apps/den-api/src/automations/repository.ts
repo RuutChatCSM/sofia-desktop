@@ -7,12 +7,12 @@ import {
   desktopClaimDeadline,
   missedDesktopRunMessage,
   nextAutomationOccurrence,
-} from "@openwork/automations"
+} from "@sofia/automations"
 import type {
   AutomationClaimResult,
   AutomationListItem,
   AutomationRepository,
-} from "@openwork/automations"
+} from "@sofia/automations"
 import type {
   Automation,
   AutomationAction,
@@ -22,8 +22,8 @@ import type {
   AutomationRunEvent,
   AutomationRunEventType,
   AutomationUsage,
-} from "@openwork/types/automations"
-import { and, asc, desc, eq, gt, inArray, lt, lte, or, sql } from "@openwork-ee/den-db/drizzle"
+} from "@sofia/types/automations"
+import { and, asc, desc, eq, gt, inArray, lt, lte, or, sql } from "@sofia-ee/den-db/drizzle"
 import {
   AutomationRevisionTable,
   AutomationRunnerTable,
@@ -31,8 +31,8 @@ import {
   AutomationRunEventTable,
   AutomationRunTable,
   AutomationTable,
-} from "@openwork-ee/den-db/schema"
-import { createDenTypeId, normalizeDenTypeId } from "@openwork-ee/utils/typeid"
+} from "@sofia-ee/den-db/schema"
+import { createDenTypeId, normalizeDenTypeId } from "@sofia-ee/utils/typeid"
 import { db } from "../db.js"
 import { appLogger } from "../observability/logger.js"
 import { automationUpdateChangedRows } from "./update-result.js"
@@ -599,8 +599,8 @@ export class DenAutomationRepository implements AutomationRepository {
       const revision = revisions[0]
       if (!revision) return null
       const engineKind = revision.action?.kind === "saved_script"
-        ? "openwork-cloud-codemode-v1"
-        : "openwork-cloud-agent-v1"
+        ? "sofia-cloud-codemode-v1"
+        : "sofia-cloud-agent-v1"
       await tx.update(AutomationRunTable).set({
         status: "running",
         lease_owner: input.leaseOwner,
@@ -998,7 +998,7 @@ export class DenAutomationRepository implements AutomationRepository {
           lease_expires_at: new Date(input.now + input.leaseMs),
           heartbeat_at: new Date(input.now),
           attempt_count: selected.run.attempt_count + 1,
-          engine_kind: "openwork-desktop-runner-v1",
+          engine_kind: "sofia-desktop-runner-v1",
           started_at: selected.run.started_at ?? new Date(input.now),
           updated_at: new Date(input.now),
         }).where(and(eq(AutomationRunTable.id, selected.run.id), eq(AutomationRunTable.status, "queued")))

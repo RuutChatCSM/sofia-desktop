@@ -1,6 +1,6 @@
-import { asc, and, eq, gt, isNull, lt, lte } from "@openwork-ee/den-db/drizzle"
-import { AuthSessionTable, AuthUserTable, InvitationTable, MemberTable, OAuthConsentTable, OrganizationTable } from "@openwork-ee/den-db/schema"
-import { normalizeDenTypeId, type DenTypeId, type DenTypeIdName } from "@openwork-ee/utils/typeid"
+import { asc, and, eq, gt, isNull, lt, lte } from "@sofia-ee/den-db/drizzle"
+import { AuthSessionTable, AuthUserTable, InvitationTable, MemberTable, OAuthConsentTable, OrganizationTable } from "@sofia-ee/den-db/schema"
+import { normalizeDenTypeId, type DenTypeId, type DenTypeIdName } from "@sofia-ee/utils/typeid"
 import { createHash } from "node:crypto"
 import Redis from "ioredis"
 import { db } from "./db.js"
@@ -92,7 +92,7 @@ const redisClient = env.databaseRedisUrl
   : null
 
 redisClient?.on("error", (error) => {
-  console.error("openwork_cache_redis_error", error)
+  console.error("sofia_cache_redis_error", error)
 })
 
 let activeRedisClient: CacheRedisClient | null = redisClient
@@ -383,14 +383,14 @@ async function getOrSet<T>(input: {
       return cached
     }
   } catch (error) {
-    console.error("openwork_cache_get_failed", { key, error })
+    console.error("sofia_cache_get_failed", { key, error })
   }
 
   const loaded = await input.load()
   try {
     await redis.set(key, JSON.stringify(loaded), "EX", input.ttlSeconds ?? DEFAULT_CACHE_TTL_SECONDS)
   } catch (error) {
-    console.error("openwork_cache_set_failed", { key, error })
+    console.error("sofia_cache_set_failed", { key, error })
   }
   return loaded
 }
@@ -568,7 +568,7 @@ async function getAuthSessionResult(token: string): Promise<CacheResult<CachedAu
         return { value: cached, source: "cache" }
       }
     } catch (error) {
-      console.error("openwork_cache_get_failed", { ...cacheLogDetails(keyInput), error })
+      console.error("sofia_cache_get_failed", { ...cacheLogDetails(keyInput), error })
     }
   }
 
@@ -582,7 +582,7 @@ async function getAuthSessionResult(token: string): Promise<CacheResult<CachedAu
     try {
       await setUnlessRevoked({ redis, key, revokedKey, value: JSON.stringify(loaded), ttlSeconds: ttl })
     } catch (error) {
-      console.error("openwork_cache_set_failed", { ...cacheLogDetails(keyInput), error })
+      console.error("sofia_cache_set_failed", { ...cacheLogDetails(keyInput), error })
     }
   }
   return { value: loaded, source: "loader" }
@@ -609,7 +609,7 @@ async function getActiveSessionId(sessionId: DenTypeId<"session">) {
         return cached
       }
     } catch (error) {
-      console.error("openwork_cache_get_failed", { ...cacheLogDetails(keyInput), error })
+      console.error("sofia_cache_get_failed", { ...cacheLogDetails(keyInput), error })
     }
   }
 
@@ -623,7 +623,7 @@ async function getActiveSessionId(sessionId: DenTypeId<"session">) {
     try {
       await setUnlessRevoked({ redis, key, revokedKey, value: JSON.stringify(loaded), ttlSeconds: ttl })
     } catch (error) {
-      console.error("openwork_cache_set_failed", { ...cacheLogDetails(keyInput), error })
+      console.error("sofia_cache_set_failed", { ...cacheLogDetails(keyInput), error })
     }
   }
   return loaded
@@ -645,7 +645,7 @@ async function getActiveGrant(grantId: OAuthConsentId) {
         return cached
       }
     } catch (error) {
-      console.error("openwork_cache_get_failed", { ...cacheLogDetails(keyInput), error })
+      console.error("sofia_cache_get_failed", { ...cacheLogDetails(keyInput), error })
     }
   }
 
@@ -657,7 +657,7 @@ async function getActiveGrant(grantId: OAuthConsentId) {
   try {
     await setUnlessRevoked({ redis, key, revokedKey, value: JSON.stringify(loaded), ttlSeconds: DEFAULT_CACHE_TTL_SECONDS })
   } catch (error) {
-    console.error("openwork_cache_set_failed", { ...cacheLogDetails(keyInput), error })
+    console.error("sofia_cache_set_failed", { ...cacheLogDetails(keyInput), error })
   }
   return loaded
 }
@@ -672,7 +672,7 @@ async function deleteAuthSession(token: string) {
       await deleteAuthSessionId(cached.session.id)
     }
   } catch (error) {
-    console.error("openwork_cache_delete_failed", { ...cacheLogDetails(keyInput), error })
+    console.error("sofia_cache_delete_failed", { ...cacheLogDetails(keyInput), error })
   }
 }
 
@@ -684,7 +684,7 @@ async function revokeAuthSession(token: string) {
     await activeRedisClient?.set(cacheKey(revokedKeyInput), "1", "EX", AUTH_SESSION_MAX_TTL_SECONDS)
     await deleteAuthSession(token)
   } catch (error) {
-    console.error("openwork_cache_delete_failed", { ...cacheLogDetails(revokedKeyInput), error })
+    console.error("sofia_cache_delete_failed", { ...cacheLogDetails(revokedKeyInput), error })
   }
 }
 
@@ -693,7 +693,7 @@ async function deleteAuthSessionId(sessionId: DenTypeId<"session">) {
   try {
     await activeRedisClient?.del(cacheKey(keyInput))
   } catch (error) {
-    console.error("openwork_cache_delete_failed", { ...cacheLogDetails(keyInput), error })
+    console.error("sofia_cache_delete_failed", { ...cacheLogDetails(keyInput), error })
   }
 }
 
@@ -703,7 +703,7 @@ async function revokeAuthSessionId(sessionId: DenTypeId<"session">) {
     await activeRedisClient?.set(cacheKey(revokedKeyInput), "1", "EX", AUTH_SESSION_MAX_TTL_SECONDS)
     await deleteAuthSessionId(sessionId)
   } catch (error) {
-    console.error("openwork_cache_delete_failed", { ...cacheLogDetails(revokedKeyInput), error })
+    console.error("sofia_cache_delete_failed", { ...cacheLogDetails(revokedKeyInput), error })
   }
 }
 
@@ -717,12 +717,12 @@ async function revokeAuthGrant(grantId: OAuthConsentId) {
   try {
     await activeRedisClient?.set(cacheKey(revokedKeyInput), "1", "EX", AUTH_SESSION_MAX_TTL_SECONDS)
   } catch (error) {
-    console.error("openwork_cache_delete_failed", { ...cacheLogDetails(revokedKeyInput), error })
+    console.error("sofia_cache_delete_failed", { ...cacheLogDetails(revokedKeyInput), error })
   }
   try {
     await activeRedisClient?.del(cacheKey(keyInput))
   } catch (error) {
-    console.error("openwork_cache_delete_failed", { ...cacheLogDetails(keyInput), error })
+    console.error("sofia_cache_delete_failed", { ...cacheLogDetails(keyInput), error })
   }
 }
 
@@ -747,7 +747,7 @@ async function deleteOrgMemberList(organizationId: OrgId) {
   try {
     await activeRedisClient?.del(key)
   } catch (error) {
-    console.error("openwork_cache_delete_failed", { key, error })
+    console.error("sofia_cache_delete_failed", { key, error })
   }
 }
 
@@ -757,7 +757,7 @@ async function deleteOrgMembers(organizationId: OrgId) {
     await activeRedisClient?.del(key)
     await deleteByPrefix(cacheKey({ parent: "org", child: "member", id: `${organizationId}:` }))
   } catch (error) {
-    console.error("openwork_cache_delete_failed", { key, error })
+    console.error("sofia_cache_delete_failed", { key, error })
   }
 }
 
@@ -766,7 +766,7 @@ async function deleteOrgMembership(input: { organizationId: OrgId; userId: UserI
   try {
     await activeRedisClient?.del(cacheKey(keyInput))
   } catch (error) {
-    console.error("openwork_cache_delete_failed", { ...cacheLogDetails(keyInput), error })
+    console.error("sofia_cache_delete_failed", { ...cacheLogDetails(keyInput), error })
   }
 }
 

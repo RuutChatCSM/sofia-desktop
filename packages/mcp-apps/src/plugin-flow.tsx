@@ -1,4 +1,4 @@
-import { pluginFlowPayloadSchema, type PluginFlowPayload } from "@openwork/types/plugin-flow-app"
+import { pluginFlowPayloadSchema, type PluginFlowPayload } from "@sofia/types/plugin-flow-app"
 import { mountMcpApp } from "./shared/bridge"
 import { AppHeader, CardBody, CardFooter, CheckIcon, KeyValueGrid, ShareIcon } from "./shared/ui"
 import "./shared/theme.css"
@@ -32,7 +32,7 @@ const RECIPIENT_LABEL: Record<NonNullable<PluginFlowPayload["recipient"]>["kind"
 }
 
 mountMcpApp({
-  name: "OpenWork Plugin Flow",
+  name: "Sofia Plugin Flow",
   waitingLabel: "Finishing up...",
   schema: pluginFlowPayloadSchema,
   render: (payload) => {

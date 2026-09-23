@@ -5,7 +5,7 @@ import {
   type AutomationError,
   type AutomationRunEventType,
   type AutomationUsage,
-} from "@openwork/types/automations"
+} from "@sofia/types/automations"
 import {
   automationEngineAdmissionReceiptSchema,
   automationEngineAdmissionRequestSchema,

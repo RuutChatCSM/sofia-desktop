@@ -1,4 +1,5 @@
 /** @jsxImportSource react */
+import { SOFIA_CLOUD_AVAILABLE } from "@/app/cloud-availability";
 import {
   ArrowRight,
   ArrowUpRight,
@@ -106,7 +107,7 @@ export function GeneralSettingsView(props: GeneralSettingsViewProps) {
           Global
         </div>
         <div className="grid grid-cols-2 gap-2">
-          {globalCards.map((card) => (
+          {globalCards.filter((card) => SOFIA_CLOUD_AVAILABLE || card.tab !== "cloud-account").map((card) => (
             <SettingsCard
               key={card.tab}
               icon={card.icon}

@@ -22,7 +22,7 @@ afterEach(() => {
 })
 
 describe("session error resilience", () => {
-  test("classifies an OpenCode abort and retains its diagnostic payload", () => {
+  test("classifies an Sofia engine abort and retains its diagnostic payload", () => {
     const presentation = presentOpencodeSessionError({
       name: "MessageAbortedError",
       data: {
@@ -71,7 +71,7 @@ describe("session error resilience", () => {
     const syncInput = {
       workspaceId: "workspace-1",
       baseUrl: "http://127.0.0.1:1234",
-      openworkToken: "token",
+      sofiaToken: "token",
     }
     const cleanup = __createWorkspaceSessionSyncForTest(syncInput)
     const release = trackWorkspaceSessionSync(syncInput, "session-1")

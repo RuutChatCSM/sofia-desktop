@@ -9,15 +9,15 @@ import {
   legacyDesktopBootstrapPath,
   MAX_CONFIG_ROOT_LENGTH,
   normalizeWorkspaceRootPath,
-  openworkEnvStorePath,
-  openworkServerConfigPath,
+  sofiaEnvStorePath,
+  sofiaServerConfigPath,
   resolveGlobalOpencodeConfigPath,
   resolveWorkspaceOpencodeConfigPath,
   workspaceOpencodeConfigCandidates,
 } from "../index.mjs";
 
 async function withTempDir(callback) {
-  const root = await mkdtemp(path.join(tmpdir(), "openwork-paths-"));
+  const root = await mkdtemp(path.join(tmpdir(), "sofia-paths-"));
   try {
     await callback(root);
   } finally {
@@ -50,10 +50,10 @@ describe("workspace root paths", () => {
   test("rejects Win32 device namespace roots", () => {
     const opts = { platform: "win32" };
     for (const value of [
-      "\\\\.\\pipe\\openwork",
-      "//./PIPE/openwork",
+      "\\\\.\\pipe\\sofia",
+      "//./PIPE/sofia",
       "\\\\.\\PhysicalDrive0",
-      "\\\\?\\UNC\\.\\pipe\\openwork",
+      "\\\\?\\UNC\\.\\pipe\\sofia",
       "\\\\?\\UNC\\?\\PhysicalDrive0",
     ]) {
       expect(() => normalizeWorkspaceRootPath(value, opts)).toThrow("Invalid Windows workspace root");
@@ -80,57 +80,57 @@ describe("workspace root paths", () => {
   });
 });
 
-describe("openwork server config paths", () => {
+describe("sofia server config paths", () => {
   test("uses APPDATA on Windows", () => {
-    expect(openworkServerConfigPath({
+    expect(sofiaServerConfigPath({
       env: { APPDATA: "C:\\Users\\Ada\\AppData\\Roaming" },
       homeDir: "C:\\Users\\Ada",
       platform: "win32",
-    })).toBe("C:\\Users\\Ada\\AppData\\Roaming\\openwork\\server.json");
+    })).toBe("C:\\Users\\Ada\\AppData\\Roaming\\sofia\\server.json");
   });
 
   test("uses XDG_CONFIG_HOME on Unix", () => {
-    expect(openworkServerConfigPath({
+    expect(sofiaServerConfigPath({
       env: { XDG_CONFIG_HOME: "/tmp/xdg" },
       homeDir: "/home/ada",
       platform: "linux",
-    })).toBe("/tmp/xdg/openwork/server.json");
+    })).toBe("/tmp/xdg/sofia/server.json");
   });
 
   test("falls back to ~/.config", () => {
-    expect(openworkServerConfigPath({ env: {}, homeDir: "/home/ada", platform: "linux" }))
-      .toBe("/home/ada/.config/openwork/server.json");
+    expect(sofiaServerConfigPath({ env: {}, homeDir: "/home/ada", platform: "linux" }))
+      .toBe("/home/ada/.config/sofia/server.json");
   });
 
-  test("honors OPENWORK_SERVER_CONFIG", () => {
-    expect(openworkServerConfigPath({
-      env: { OPENWORK_SERVER_CONFIG: "/tmp/openwork/server.json" },
+  test("honors SOFIA_SERVER_CONFIG", () => {
+    expect(sofiaServerConfigPath({
+      env: { SOFIA_SERVER_CONFIG: "/tmp/sofia/server.json" },
       homeDir: "/home/ada",
       platform: "linux",
-    })).toBe("/tmp/openwork/server.json");
+    })).toBe("/tmp/sofia/server.json");
   });
 });
 
-describe("openwork env store and desktop bootstrap paths", () => {
-  test("honors OPENWORK_ENV_STORE", () => {
-    expect(openworkEnvStorePath({
-      env: { OPENWORK_ENV_STORE: "/tmp/openwork/env.json" },
+describe("sofia env store and desktop bootstrap paths", () => {
+  test("honors SOFIA_ENV_STORE", () => {
+    expect(sofiaEnvStorePath({
+      env: { SOFIA_ENV_STORE: "/tmp/sofia/env.json" },
       homeDir: "/home/ada",
       platform: "linux",
-    })).toBe("/tmp/openwork/env.json");
+    })).toBe("/tmp/sofia/env.json");
   });
 
-  test("uses the same openwork config layout for env.json", () => {
-    expect(openworkEnvStorePath({
+  test("uses the same sofia config layout for env.json", () => {
+    expect(sofiaEnvStorePath({
       env: { XDG_CONFIG_HOME: "/tmp/xdg" },
       homeDir: "/home/ada",
       platform: "linux",
-    })).toBe("/tmp/xdg/openwork/env.json");
+    })).toBe("/tmp/xdg/sofia/env.json");
   });
 
-  test("honors OPENWORK_DESKTOP_BOOTSTRAP_PATH", () => {
+  test("honors SOFIA_DESKTOP_BOOTSTRAP_PATH", () => {
     expect(desktopBootstrapPath({
-      env: { OPENWORK_DESKTOP_BOOTSTRAP_PATH: "/tmp/bootstrap.json" },
+      env: { SOFIA_DESKTOP_BOOTSTRAP_PATH: "/tmp/bootstrap.json" },
       homeDir: "/home/ada",
       platform: "linux",
     })).toBe("/tmp/bootstrap.json");
@@ -138,16 +138,16 @@ describe("openwork env store and desktop bootstrap paths", () => {
 
   test("preserves dev-data desktop bootstrap path when userDataDir is injected", () => {
     expect(desktopBootstrapPath({
-      env: { OPENWORK_DEV_MODE: "1" },
+      env: { SOFIA_DEV_MODE: "1" },
       homeDir: "/Users/ada",
       platform: "darwin",
-      userDataDir: "/tmp/openwork-userdata",
-    })).toBe("/tmp/openwork-userdata/openwork-dev-data/home/.config/openwork/desktop-bootstrap.json");
+      userDataDir: "/tmp/sofia-userdata",
+    })).toBe("/tmp/sofia-userdata/sofia-dev-data/home/.config/sofia/desktop-bootstrap.json");
   });
 
   test("resolves the legacy desktop bootstrap path from the chosen home", () => {
     expect(legacyDesktopBootstrapPath({ env: {}, homeDir: "/Users/ada", platform: "darwin" }))
-      .toBe("/Users/ada/.config/openwork/desktop-bootstrap.json");
+      .toBe("/Users/ada/.config/sofia/desktop-bootstrap.json");
   });
 });
 

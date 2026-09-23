@@ -1,5 +1,5 @@
-import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, sql } from "@openwork-ee/den-db/drizzle"
-import type { SQL } from "@openwork-ee/den-db/drizzle"
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, sql } from "@sofia-ee/den-db/drizzle"
+import type { SQL } from "@sofia-ee/den-db/drizzle"
 import {
   AuthAccountTable,
   AuthApiKeyTable,
@@ -24,8 +24,8 @@ import {
   TelemetryEventTable,
   WorkerTable,
   AdminAllowlistTable,
-} from "@openwork-ee/den-db/schema"
-import { createDenTypeId, isDenTypeId } from "@openwork-ee/utils/typeid"
+} from "@sofia-ee/den-db/schema"
+import { createDenTypeId, isDenTypeId } from "@sofia-ee/utils/typeid"
 import type { Hono } from "hono"
 import { describeRoute } from "hono-openapi"
 import { z } from "zod"

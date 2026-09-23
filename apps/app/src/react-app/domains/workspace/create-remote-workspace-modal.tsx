@@ -19,17 +19,17 @@ import { RemoteWorkspaceFields } from "./remote-workspace-fields";
 import type { CreateRemoteWorkspaceModalProps } from "./types";
 
 type RemoteWorkspaceFormState = {
-  openworkHostUrl: string;
-  openworkToken: string;
-  openworkTokenVisible: boolean;
+  sofiaHostUrl: string;
+  sofiaToken: string;
+  sofiaTokenVisible: boolean;
   directory: string;
   displayName: string;
 };
 
 const emptyRemoteWorkspaceForm: RemoteWorkspaceFormState = {
-  openworkHostUrl: "",
-  openworkToken: "",
-  openworkTokenVisible: false,
+  sofiaHostUrl: "",
+  sofiaToken: "",
+  sofiaTokenVisible: false,
   directory: "",
   displayName: "",
 };
@@ -40,7 +40,7 @@ export function CreateRemoteWorkspaceModal(
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const [form, setForm] = useState<RemoteWorkspaceFormState>(emptyRemoteWorkspaceForm);
-  const { openworkHostUrl, openworkToken, openworkTokenVisible, directory, displayName } = form;
+  const { sofiaHostUrl, sofiaToken, sofiaTokenVisible, directory, displayName } = form;
 
   const showClose = props.showClose ?? true;
   const title = props.title ?? t("dashboard.create_remote_workspace_title");
@@ -52,8 +52,8 @@ export function CreateRemoteWorkspaceModal(
 
   const canSubmit = useMemo(() => {
     if (submitting) return false;
-    return openworkHostUrl.trim().length > 0;
-  }, [openworkHostUrl, submitting]);
+    return sofiaHostUrl.trim().length > 0;
+  }, [sofiaHostUrl, submitting]);
 
   useEffect(() => {
     if (!props.open) return;
@@ -65,9 +65,9 @@ export function CreateRemoteWorkspaceModal(
     if (!props.open) return;
     const defaults = props.initialValues ?? {};
     setForm({
-      openworkHostUrl: defaults.openworkHostUrl?.trim() ?? "",
-      openworkToken: defaults.openworkToken?.trim() ?? "",
-      openworkTokenVisible: false,
+      sofiaHostUrl: defaults.sofiaHostUrl?.trim() ?? "",
+      sofiaToken: defaults.sofiaToken?.trim() ?? "",
+      sofiaTokenVisible: false,
       directory: defaults.directory?.trim() ?? "",
       displayName: defaults.displayName?.trim() ?? "",
     });
@@ -91,13 +91,13 @@ export function CreateRemoteWorkspaceModal(
 
         <div className="min-h-0 flex-1 overflow-y-auto">
           <RemoteWorkspaceFields
-            hostUrl={openworkHostUrl}
-            onHostUrlInput={(value) => setForm((current) => ({ ...current, openworkHostUrl: value }))}
-            token={openworkToken}
-            tokenVisible={openworkTokenVisible}
-            onTokenInput={(value) => setForm((current) => ({ ...current, openworkToken: value }))}
+            hostUrl={sofiaHostUrl}
+            onHostUrlInput={(value) => setForm((current) => ({ ...current, sofiaHostUrl: value }))}
+            token={sofiaToken}
+            tokenVisible={sofiaTokenVisible}
+            onTokenInput={(value) => setForm((current) => ({ ...current, sofiaToken: value }))}
             onToggleTokenVisible={() =>
-              setForm((current) => ({ ...current, openworkTokenVisible: !current.openworkTokenVisible }))
+              setForm((current) => ({ ...current, sofiaTokenVisible: !current.sofiaTokenVisible }))
             }
             displayName={displayName}
             onDisplayNameInput={(value) => setForm((current) => ({ ...current, displayName: value }))}
@@ -128,15 +128,15 @@ export function CreateRemoteWorkspaceModal(
               type="button"
               onClick={() =>
                 props.onConfirm({
-                  openworkHostUrl: openworkHostUrl.trim(),
-                  openworkToken: openworkToken.trim(),
+                  sofiaHostUrl: sofiaHostUrl.trim(),
+                  sofiaToken: sofiaToken.trim(),
                   directory: directory.trim() ? directory.trim() : null,
                   displayName: displayName.trim() ? displayName.trim() : null,
                 })
               }
               disabled={!canSubmit}
               title={
-                !openworkHostUrl.trim()
+                !sofiaHostUrl.trim()
                   ? t("dashboard.remote_base_url_required")
                   : undefined
               }

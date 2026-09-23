@@ -1,6 +1,6 @@
 "use client";
 
-import { detectPlatform, DownloadPlatformGrid, type DetectedPlatform, type DownloadPlatformGroup, type DownloadPlatformOption } from "@openwork/ui/react";
+import { detectPlatform, DownloadPlatformGrid, type DetectedPlatform, type DownloadPlatformGroup, type DownloadPlatformOption } from "@sofia/ui/react";
 import { Check, ChevronDown, ShieldCheck } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
@@ -25,7 +25,7 @@ type InstallConfig = {
   distribution: "cloud" | "enterprise";
 };
 
-const RETURN_TO_OPENWORK_URL = "openwork://open";
+const RETURN_TO_SOFIA_URL = "sofia://open";
 const INSTALL_PLATFORMS: InstallPlatform[] = ["mac-arm64", "mac-x64", "win-x64", "linux-x64", "linux-arm64"];
 
 
@@ -58,20 +58,20 @@ function installerOsFor(platform: InstallPlatform | null, detected: DetectedPlat
 function openGuidance(os: InstallerOs | null, fileName: string | null): OpenGuidance {
   const openFile = fileName
     ? `Double-click ${fileName} in Downloads.`
-    : "Open the OpenWork Enterprise download in your Downloads folder.";
+    : "Open the Sofia Enterprise download in your Downloads folder.";
 
   if (os === "macos") {
     return {
-      actions: [openFile, "Drag OpenWork Enterprise to Applications, then open it."],
+      actions: [openFile, "Drag Sofia Enterprise to Applications, then open it."],
       trust: {
         title: "macOS confirms apps downloaded from the internet",
-        body: "Choose Open when macOS asks you to confirm the signed OpenWork Enterprise app.",
+        body: "Choose Open when macOS asks you to confirm the signed Sofia Enterprise app.",
       },
     };
   }
   if (os === "windows") {
     return {
-      actions: [openFile, "Complete the OpenWork Enterprise setup, then open the app."],
+      actions: [openFile, "Complete the Sofia Enterprise setup, then open the app."],
       trust: {
         title: "Windows may warn before it opens the installer",
         body: "If you see “Windows protected your PC”, choose More info, then Run anyway.",
@@ -82,7 +82,7 @@ function openGuidance(os: InstallerOs | null, fileName: string | null): OpenGuid
     return {
       actions: [
         "Make the downloaded AppImage executable.",
-        "Open the OpenWork Enterprise AppImage.",
+        "Open the Sofia Enterprise AppImage.",
       ],
       trust: null,
     };
@@ -115,7 +115,7 @@ function parseInstallConfig(value: unknown): InstallConfig | null {
   }
 
   const clientName = typeof value.clientName === "string" ? value.clientName.trim() : "";
-  const appName = typeof value.appName === "string" && value.appName.trim() ? value.appName.trim() : "OpenWork";
+  const appName = typeof value.appName === "string" && value.appName.trim() ? value.appName.trim() : "Sofia";
   const webUrl = typeof value.webUrl === "string" ? value.webUrl.trim() : "";
   const apiUrl = typeof value.apiUrl === "string" ? value.apiUrl.trim() : "";
   const requireSignin = value.requireSignin;
@@ -162,7 +162,7 @@ async function fetchInstallConfig(token: string | null) {
   );
   if (!response.ok) {
     if (!token && response.status === 401) {
-      throw new Error("Sign in to your Den portal to install OpenWork.");
+      throw new Error("Sign in to your Den portal to install Sofia.");
     }
     throw new Error(getInstallConfigErrorMessage(payload, response.status));
   }
@@ -394,9 +394,9 @@ export function InstallScreen() {
     return (
       <OnboardingShell state="install-loading" width="wide" background="surface">
         <section className="grid gap-4 rounded-[1.75rem] border border-slate-200/80 bg-white p-6 md:p-8" data-testid="install-page">
-          <p className="den-eyebrow">OpenWork Desktop</p>
+          <p className="den-eyebrow">Sofia Desktop</p>
           <h1 className="den-title-lg">Loading your install link.</h1>
-          <p className="den-copy">Checking your team's OpenWork setup...</p>
+          <p className="den-copy">Checking your team's Sofia setup...</p>
         </section>
       </OnboardingShell>
     );
@@ -407,7 +407,7 @@ export function InstallScreen() {
       <OnboardingShell state="install-error" width="wide" background="surface">
         <section className="grid gap-6 rounded-[1.75rem] border border-slate-200/80 bg-white p-6 md:p-8" data-testid="install-page">
           <div className="grid gap-2">
-            <p className="den-eyebrow">OpenWork Desktop</p>
+            <p className="den-eyebrow">Sofia Desktop</p>
             <h1 className="den-title-lg">This install link can't be opened.</h1>
             <p className="den-copy">{error ?? "Ask your workspace admin for a fresh install link."}</p>
           </div>
@@ -423,14 +423,14 @@ export function InstallScreen() {
           <div className="grid gap-6 rounded-[1.75rem] border border-[#e7eaef] bg-[#fcfcfd] p-5 text-center sm:p-6 md:p-8" data-testid="install-card">
             <div className="grid justify-items-center gap-3">
               <h1 className="m-0 text-[2rem] font-semibold leading-[1.04] tracking-[-0.05em] text-slate-950 sm:text-[2.4rem]">
-                Download OpenWork
+                Download Sofia
               </h1>
-              <p className="den-copy max-w-2xl">Choose the version for your computer, install it, and open OpenWork.</p>
+              <p className="den-copy max-w-2xl">Choose the version for your computer, install it, and open Sofia.</p>
             </div>
 
             {isMobile ? (
               <div className="den-frame-inset grid gap-3 rounded-[1.5rem] p-5 text-left" data-testid="install-mobile-note">
-                <p className="m-0 text-base font-medium text-[var(--dls-text-primary)]">OpenWork Cloud runs on your computer.</p>
+                <p className="m-0 text-base font-medium text-[var(--dls-text-primary)]">Sofia Cloud runs on your computer.</p>
                 <p className="den-copy">Open this link on your Mac, Windows, or Linux machine.</p>
                 <button type="button" className="den-button-secondary w-full sm:w-auto" onClick={() => void copyCurrentLink()}>
                   {copied ? "Copied" : "Copy install link"}
@@ -439,8 +439,8 @@ export function InstallScreen() {
             ) : (
               <div className="grid gap-5 text-left">
                 <DownloadPlatformGrid groups={downloadGroups} />
-                <a className="den-button-secondary w-fit" href={RETURN_TO_OPENWORK_URL}>
-                  I already installed OpenWork
+                <a className="den-button-secondary w-fit" href={RETURN_TO_SOFIA_URL}>
+                  I already installed Sofia
                 </a>
               </div>
             )}
@@ -468,7 +468,7 @@ export function InstallScreen() {
               />
             </span>
             <h1 className="m-0 text-[1.5rem] font-semibold leading-tight tracking-[-0.03em] text-slate-950 sm:text-[1.7rem]">
-              Set up OpenWork Enterprise
+              Set up Sofia Enterprise
             </h1>
           </div>
 

@@ -1,9 +1,9 @@
 import type { WorkspaceEngineClient } from "../engine/workspace-engine-client.js";
 import {
-  OPENWORK_CLOUD_MCP_NAME,
-  readOpenworkCloudMcpHealth,
-  reconcileOpenworkCloudMcp,
-  refreshOpenworkCloudMcpEngine,
+  SOFIA_CLOUD_MCP_NAME,
+  readSofiaCloudMcpHealth,
+  reconcileSofiaCloudMcp,
+  refreshSofiaCloudMcpEngine,
   type CloudMcpServerMetadata,
   type CloudMcpProviderModelContext,
   type CloudMcpRuntimeRegistrar,
@@ -72,8 +72,8 @@ function assertStrictBody(body: Record<string, unknown>, workspace: WorkspaceInf
   if (typeof body.workspaceId === "string" && body.workspaceId.trim() !== workspace.id) {
     throw new ApiError(400, "workspace_id_mismatch", "workspaceId must match the route workspace");
   }
-  if (typeof body.name === "string" && body.name.trim() !== OPENWORK_CLOUD_MCP_NAME) {
-    throw new ApiError(400, "invalid_mcp_name", "Only openwork-cloud can be reconciled by this endpoint");
+  if (typeof body.name === "string" && body.name.trim() !== SOFIA_CLOUD_MCP_NAME) {
+    throw new ApiError(400, "invalid_mcp_name", "Only sofia-cloud can be reconciled by this endpoint");
   }
 }
 
@@ -93,10 +93,10 @@ export function registerCloudMcpRoutes(options: RegisterCloudMcpRoutesOptions): 
     serverMetadata,
   } = options;
 
-  addRoute(routes, "GET", "/workspace/:id/mcp/openwork-cloud/health", "client", async (ctx) => {
+  addRoute(routes, "GET", "/workspace/:id/mcp/sofia-cloud/health", "client", async (ctx) => {
     const workspace = await resolveWorkspace(config, ctx.params.id);
     assertExactWorkspace(ctx.params.id, workspace);
-    const health = await readOpenworkCloudMcpHealth({
+    const health = await readSofiaCloudMcpHealth({
       config,
       workspace,
       directory: resolveOpencodeDirectory(workspace),
@@ -109,7 +109,7 @@ export function registerCloudMcpRoutes(options: RegisterCloudMcpRoutesOptions): 
     return jsonResponse(health);
   });
 
-  addRoute(routes, "POST", "/workspace/:id/mcp/openwork-cloud/engine-refresh", "client", async (ctx) => {
+  addRoute(routes, "POST", "/workspace/:id/mcp/sofia-cloud/engine-refresh", "client", async (ctx) => {
     ensureWritable(config);
     requireClientScope(ctx, "collaborator");
     const workspace = await resolveWorkspace(config, ctx.params.id);
@@ -132,7 +132,7 @@ export function registerCloudMcpRoutes(options: RegisterCloudMcpRoutesOptions): 
       body = parsed;
     }
     assertStrictBody(body, workspace);
-    const result = await refreshOpenworkCloudMcpEngine({
+    const result = await refreshSofiaCloudMcpEngine({
       config,
       workspace,
       directory: resolveOpencodeDirectory(workspace),
@@ -146,7 +146,7 @@ export function registerCloudMcpRoutes(options: RegisterCloudMcpRoutesOptions): 
     return jsonResponse(result);
   });
 
-  addRoute(routes, "POST", "/workspace/:id/mcp/openwork-cloud/reconcile", "client", async (ctx) => {
+  addRoute(routes, "POST", "/workspace/:id/mcp/sofia-cloud/reconcile", "client", async (ctx) => {
     ensureWritable(config);
     requireClientScope(ctx, "collaborator");
     const workspace = await resolveWorkspace(config, ctx.params.id);
@@ -156,7 +156,7 @@ export function registerCloudMcpRoutes(options: RegisterCloudMcpRoutesOptions): 
       throw new ApiError(400, "invalid_payload", "JSON object body is required");
     }
     assertStrictBody(body, workspace);
-    const health = await reconcileOpenworkCloudMcp({
+    const health = await reconcileSofiaCloudMcp({
       config,
       workspace,
       directory: resolveOpencodeDirectory(workspace),

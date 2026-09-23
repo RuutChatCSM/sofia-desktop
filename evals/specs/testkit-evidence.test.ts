@@ -2,9 +2,9 @@ import { createHash } from "node:crypto";
 import { readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { afterAll, expect } from "vitest";
-import type { ScreenshotArtifact } from "@openwork/test-evidence";
-import { validate } from "@openwork/test-evidence";
-import { expectVisualEvidence, test } from "@openwork/test-evidence/vitest";
+import type { ScreenshotArtifact } from "@sofia/test-evidence";
+import { validate } from "@sofia/test-evidence";
+import { expectVisualEvidence, test } from "@sofia/test-evidence/vitest";
 
 const expectation = "The synthetic frame is visible";
 const testRunDirs: string[] = [];

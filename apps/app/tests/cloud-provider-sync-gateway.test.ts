@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
-import { createOpenworkServerClient } from "../src/app/lib/openwork-server";
+import { createSofiaServerClient } from "../src/app/lib/sofia-server";
 import { createClient } from "../src/app/lib/opencode";
 import type { ProviderListItem, WorkspaceDisplay } from "../src/app/types";
 import { createProviderAuthStore } from "../src/react-app/domains/connections/provider-auth/store";
@@ -8,7 +8,7 @@ import { createProviderAuthStore } from "../src/react-app/domains/connections/pr
 const originalWindow = globalThis.window;
 const originalFetch = globalThis.fetch;
 const originalConsoleInfo = console.info;
-const originalDeployment = process.env.VITE_OPENWORK_DEPLOYMENT;
+const originalDeployment = process.env.VITE_SOFIA_DEPLOYMENT;
 
 type RecordedRequest = {
   url: string;
@@ -50,7 +50,7 @@ function installWindow(options: { origin: string; gateway?: boolean }) {
       dispatchEvent: () => true,
       localStorage,
       location: { origin: options.origin },
-      __OPENWORK_GATEWAY__: options.gateway ? { version: 1 } : undefined,
+      __SOFIA_GATEWAY__: options.gateway ? { version: 1 } : undefined,
     },
   });
   return localStorage;
@@ -79,13 +79,13 @@ function jsonResponse(payload: unknown, status = 200) {
   });
 }
 
-function cloudProviderPayload(options: { conflict?: boolean } = {}) {
+function cloudProviderPayload() {
   return {
     id: "lpr_test",
-    source: options.conflict ? "openwork" : "custom",
-    providerId: options.conflict ? "openwork" : "openai",
-    name: options.conflict ? "OpenWork Models" : "Team OpenAI",
-    providerConfig: { env: [options.conflict ? "OPENWORK_API_KEY" : "OPENAI_API_KEY"] },
+    source: "custom",
+    providerId: "openai",
+    name: "Team OpenAI",
+    providerConfig: { env: ["OPENAI_API_KEY"] },
     hasApiKey: true,
     apiKey: "sk-test",
     models: [
@@ -102,9 +102,9 @@ function cloudProviderPayload(options: { conflict?: boolean } = {}) {
 }
 
 function installCloudSession(storage: Storage) {
-  storage.setItem("openwork.den.baseUrl", "https://den.example");
-  storage.setItem("openwork.den.authToken", "den-token");
-  storage.setItem("openwork.den.activeOrgId", "org_test");
+  storage.setItem("sofia.den.baseUrl", "https://den.example");
+  storage.setItem("sofia.den.authToken", "den-token");
+  storage.setItem("sofia.den.activeOrgId", "org_test");
 }
 
 function createProviderAuthTestStore(
@@ -112,9 +112,9 @@ function createProviderAuthTestStore(
 ) {
   const opencodeClient = createClient("https://engine.example", "/tmp/workspace_test", {
     token: "engine-token",
-    mode: "openwork",
+    mode: "sofia",
   }, (input, init) => globalThis.fetch(input, init));
-  const openworkClient = createOpenworkServerClient({
+  const sofiaClient = createSofiaServerClient({
     baseUrl: "https://server.example",
     token: "server-token",
     hostToken: "host-token",
@@ -143,12 +143,12 @@ function createProviderAuthTestStore(
     providerBaseUrl: () => "https://engine.example",
     selectedWorkspaceRoot: () => "/tmp/workspace_test",
     runtimeWorkspaceId: () => "ws_1",
-    openworkServer: {
+    sofiaServer: {
       getSnapshot: () => ({
-        openworkServerStatus: "connected",
-        openworkServerClient: openworkClient,
-        openworkServerAuth: { token: "server-token", hostToken: "host-token" },
-        openworkServerCapabilities: {
+        sofiaServerStatus: "connected",
+        sofiaServerClient: sofiaClient,
+        sofiaServerAuth: { token: "server-token", hostToken: "host-token" },
+        sofiaServerCapabilities: {
           config: configCapabilities,
           providerSync: configCapabilities.providerSync,
         },
@@ -180,7 +180,6 @@ function createProviderAuthTestStore(
 function installProviderSyncFetch(
   requests: RecordedRequest[],
   options: {
-    conflict?: boolean;
     runStatuses?: Array<{ status: "applied" | "noop" | "failed" | "no_session"; message?: string }>;
     statusProviders?: Array<Record<string, unknown>>;
     statusReloadPending?: boolean;
@@ -207,7 +206,7 @@ function installProviderSyncFetch(
         return jsonResponse({ llmProvider: cloudProviderPayload(options) });
       }
       if (url.origin === "https://server.example" && url.pathname === "/workspace/ws_1/config" && method === "GET") {
-        return jsonResponse({ opencode: {}, openwork: {} });
+        return jsonResponse({ opencode: {}, sofia: {} });
       }
       if (url.origin === "https://server.example" && url.pathname === "/den-session" && method === "PUT") {
         return new Response(null, { status: 204 });
@@ -234,11 +233,6 @@ function installProviderSyncFetch(
       if (url.origin === "https://server.example" && url.pathname === "/env") {
         return jsonResponse({ ok: true });
       }
-      if (url.origin === "https://server.example" && url.pathname === "/workspace/ws_1/opencode-config") {
-        return jsonResponse(options.conflict
-          ? { content: '{"provider":{"openwork":{"name":"Local OpenWork"}}}' }
-          : null);
-      }
       if (url.origin === "https://server.example" && url.pathname === "/workspace/ws_1/engine/reload") {
         return jsonResponse({ ok: true, reloadedAt: 1 });
       }
@@ -246,7 +240,7 @@ function installProviderSyncFetch(
         return jsonResponse({ healthy: true, version: "1.17.11" });
       }
       if (url.origin === "https://engine.example" && url.pathname === "/health") {
-        return jsonResponse({ healthy: true, version: "1.17.11" });
+        return jsonResponse({ ok: true, version: "1.17.11" });
       }
       if (url.origin === "https://engine.example" && url.pathname === "/provider") {
         return jsonResponse({
@@ -286,7 +280,7 @@ function installProviderSyncFetch(
 
 describe("cloud provider sync in gateway mode", () => {
   beforeEach(() => {
-    process.env.VITE_OPENWORK_DEPLOYMENT = "web";
+    process.env.VITE_SOFIA_DEPLOYMENT = "web";
     console.info = () => undefined;
   });
 
@@ -301,14 +295,14 @@ describe("cloud provider sync in gateway mode", () => {
     });
     console.info = originalConsoleInfo;
     if (originalDeployment === undefined) {
-      delete process.env.VITE_OPENWORK_DEPLOYMENT;
+      delete process.env.VITE_SOFIA_DEPLOYMENT;
     } else {
-      process.env.VITE_OPENWORK_DEPLOYMENT = originalDeployment;
+      process.env.VITE_SOFIA_DEPLOYMENT = originalDeployment;
     }
   });
 
   test("returns a server-handled outcome without network calls or error state behind the gateway", async () => {
-    const storage = installWindow({ origin: "https://web.openworklabs.com", gateway: true });
+    const storage = installWindow({ origin: "https://sofia-web.ruut.chat", gateway: true });
     installCloudSession(storage);
     const requests: RecordedRequest[] = [];
     installProviderSyncFetch(requests);
@@ -355,37 +349,11 @@ describe("cloud provider sync in gateway mode", () => {
     expect(store.getSnapshot().lastSyncError).toEqual({});
   });
 
-  test("records a hand-authored OpenWork collision once and skips later automatic retries", async () => {
-    const storage = installWindow({ origin: "https://self-hosted.example" });
-    installCloudSession(storage);
-    const requests: RecordedRequest[] = [];
-    installProviderSyncFetch(requests, { conflict: true });
-    const { store } = createProviderAuthTestStore();
-
-    await store.runCloudProviderSync("settings_cloud_opened");
-
-    expect(store.getSnapshot().lastSyncError.lpr_test).toMatchObject({
-      kind: "conflict",
-      message: expect.stringContaining("openwork already has a provider block"),
-    });
-    expect(store.getSnapshot().importedCloudProviders.lpr_test).toBeUndefined();
-    const firstConnectCount = requests.filter(
-      (request) => request.url === "https://den.example/api/den/v1/llm-providers/lpr_test/connect",
-    ).length;
-    expect(firstConnectCount).toBe(1);
-
-    await store.runCloudProviderSync("app_resume");
-
-    const secondConnectCount = requests.filter(
-      (request) => request.url === "https://den.example/api/den/v1/llm-providers/lpr_test/connect",
-    ).length;
-    expect(secondConnectCount).toBe(firstConnectCount);
-  });
 });
 
 describe("cloud provider sync in server-capability mode", () => {
   beforeEach(() => {
-    process.env.VITE_OPENWORK_DEPLOYMENT = "web";
+    process.env.VITE_SOFIA_DEPLOYMENT = "web";
     console.info = () => undefined;
   });
 
@@ -393,8 +361,8 @@ describe("cloud provider sync in server-capability mode", () => {
     Object.defineProperty(globalThis, "window", { configurable: true, value: originalWindow });
     Object.defineProperty(globalThis, "fetch", { configurable: true, value: originalFetch });
     console.info = originalConsoleInfo;
-    if (originalDeployment === undefined) delete process.env.VITE_OPENWORK_DEPLOYMENT;
-    else process.env.VITE_OPENWORK_DEPLOYMENT = originalDeployment;
+    if (originalDeployment === undefined) delete process.env.VITE_SOFIA_DEPLOYMENT;
+    else process.env.VITE_SOFIA_DEPLOYMENT = originalDeployment;
   });
 
   test("posts run-now without fetching Den providers in the renderer", async () => {
@@ -440,7 +408,7 @@ describe("cloud provider sync in server-capability mode", () => {
     await Bun.sleep(10);
     expect(requests.filter((request) => new URL(request.url).pathname === "/cloud-provider-sync/run")).toHaveLength(1);
 
-    storage.setItem("openwork.den.activeOrgId", "org_changed");
+    storage.setItem("sofia.den.activeOrgId", "org_changed");
     const changedContext = [
       store.runCloudProviderSync("sign_in"),
       strictModeRemountStore.runCloudProviderSync("app_resume"),

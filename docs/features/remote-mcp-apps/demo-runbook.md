@@ -22,16 +22,16 @@ From a clean checkout of the exact branch under test:
 ```bash
 pnpm install --frozen-lockfile
 pnpm --dir evals install --frozen-lockfile
-pnpm --filter @openwork/types build
-pnpm --filter @openwork-ee/den-db build
-pnpm --filter @openwork/email build
+pnpm --filter @sofia/types build
+pnpm --filter @sofia-ee/den-db build
+pnpm --filter @sofia/email build
 pnpm dev:den:mysql
 ```
 
 ## Run the exact-head demo tape
 
 ```bash
-OPENWORK_EVAL_E2E_TESTS=1 pnpm evals:e2e remote-mcp-apps
+SOFIA_EVAL_E2E_TESTS=1 pnpm evals:e2e remote-mcp-apps
 ```
 
 A valid required proof ends with one passing test, zero failed tests, zero
@@ -112,5 +112,5 @@ ordinary Connect when Apps are disabled.
   are expected, not a resource-loading failure.
 
 The hosted SOL gallery may be checked separately as an external observation,
-but its reachability is not OpenWork compatibility proof and it is not part of
+but its reachability is not Sofia compatibility proof and it is not part of
 this required demo.

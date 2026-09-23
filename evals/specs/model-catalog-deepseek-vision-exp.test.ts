@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { expect } from "vitest";
-import { test } from "@openwork/testkit";
+import { test } from "@sofia/testkit";
 
 const execFileAsync = promisify(execFile);
 
@@ -14,8 +14,8 @@ const VISION_MODEL_ID = "deepseek-v4-flash-vision-exp";
 
 /**
  * ACCEPTANCE TEST for shipping DeepSeek-V4-Flash-Vision-Exp (published
- * 2026-08-21 on DeepSeek's API platform) through the OpenWork curated model
- * catalog served at models.openworklabs.com/models/api.json.
+ * 2026-08-21 on DeepSeek's API platform) through the Sofia App curated model
+ * catalog served at sofia-models.ruut.chat/models/api.json.
  *
  * Regression this pins: the deployed catalog lacked the new model entirely,
  * so engines merging a configured-but-unknown model synthesized default
@@ -28,8 +28,8 @@ const VISION_MODEL_ID = "deepseek-v4-flash-vision-exp";
  *      with image input (and its text-only sibling does NOT claim image).
  *   2. The real generator script produces a catalog whose deepseek provider
  *      serves that exact model shape — these are the bytes engines fetch.
- *   3. The OpenWork overlay in the same catalog exposes the model too.
- *   4. Every OpenWork overlay model has a Den inference alias, and the
+ *   3. The Sofia App overlay in the same catalog exposes the model too.
+ *   4. Every Sofia App overlay model has a Den inference alias, and the
  *      vision alias is enabled — an uncovered alias is unreachable in Den.
  */
 test("curated catalog ships deepseek v4 flash vision exp with image input", async () => {
@@ -56,20 +56,20 @@ test("generated models/api.json serves the vision model exactly as engines fetch
   expect(vision.modalities?.input).toEqual(["text", "image"]);
   expect(vision.attachment).toBe(true);
 
-  const openworkOverlay = catalog.openwork?.models;
-  expect(openworkOverlay, "generated catalog must expose the openwork provider").toBeTruthy();
-  const overlayModel = openworkOverlay[`deepseek/${VISION_MODEL_ID}`];
-  expect(overlayModel, "openwork provider must serve deepseek/deepseek-v4-flash-vision-exp").toBeTruthy();
+  const sofiaOverlay = catalog.sofia?.models;
+  expect(sofiaOverlay, "generated catalog must expose the sofia provider").toBeTruthy();
+  const overlayModel = sofiaOverlay[`deepseek/${VISION_MODEL_ID}`];
+  expect(overlayModel, "sofia provider must serve deepseek/deepseek-v4-flash-vision-exp").toBeTruthy();
   expect(overlayModel.modalities?.input).toEqual(["text", "image"]);
 });
 
-test("every openwork overlay model has an enabled den inference alias", async () => {
-  const [{ INFERENCE_MODEL_ALIASES }, openworkModels] = await Promise.all([
+test("every sofia overlay model has an enabled den inference alias", async () => {
+  const [{ INFERENCE_MODEL_ALIASES }, sofiaModels] = await Promise.all([
     import("../../packages/types/src/den/inference.ts"),
-    readFile(path.join(inferenceRoot, "src", "models", "openwork-models.json"), "utf8").then(JSON.parse),
+    readFile(path.join(inferenceRoot, "src", "models", "sofia-models.json"), "utf8").then(JSON.parse),
   ]);
 
-  const overlayIds = Object.keys(openworkModels);
+  const overlayIds = Object.keys(sofiaModels);
   expect(overlayIds.length, "overlay must not be empty").toBeGreaterThan(0);
 
   const aliasIds = Object.keys(INFERENCE_MODEL_ALIASES);

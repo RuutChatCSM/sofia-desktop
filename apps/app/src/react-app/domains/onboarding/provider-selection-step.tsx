@@ -11,15 +11,15 @@ import { Button } from "@/components/ui/button";
 import { KeyRoundIcon, SkipForwardIcon, SparklesIcon } from "lucide-react";
 
 type ProviderSelectionStepProps = {
-  showOpenWorkModels?: boolean;
-  onOpenWorkModels: () => void;
+  showSofiaModels?: boolean;
+  onSofiaModels: () => void;
   onBringYourOwn: () => void;
   onSkip: () => void;
 };
 
 export function ProviderSelectionStep({
-  showOpenWorkModels = true,
-  onOpenWorkModels,
+  showSofiaModels = true,
+  onSofiaModels,
   onBringYourOwn,
   onSkip,
 }: ProviderSelectionStepProps) {
@@ -37,11 +37,11 @@ export function ProviderSelectionStep({
         </PageHeader>
 
         <div className="space-y-3">
-          {showOpenWorkModels ? (
+          {showSofiaModels ? (
             <button
               type="button"
               className="flex w-full items-start gap-4 rounded-xl border border-blue-7/50 bg-blue-2/30 p-4 text-left transition-colors hover:bg-blue-3/40"
-              onClick={onOpenWorkModels}
+              onClick={onSofiaModels}
             >
               <SparklesIcon className="mt-0.5 size-5 shrink-0 text-blue-10" />
               <div>

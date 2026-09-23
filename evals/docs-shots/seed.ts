@@ -1,7 +1,7 @@
-import { createOrgConnection, createPluginWithSkill, denFetch } from "@openwork/behaviors";
-import type { DenSession } from "@openwork/behaviors";
-import { mcpMock, resolvePlace, server } from "@openwork/testkit/stack";
-import type { Den, MockBoot, PersonShape, Place } from "@openwork/testkit/stack";
+import { createOrgConnection, createPluginWithSkill, denFetch } from "@sofia/behaviors";
+import type { DenSession } from "@sofia/behaviors";
+import { mcpMock, resolvePlace, server } from "@sofia/testkit/stack";
+import type { Den, MockBoot, PersonShape, Place } from "@sofia/testkit/stack";
 import { provider } from "./ctx.ts";
 import type { Provider } from "./ctx.ts";
 
@@ -113,7 +113,7 @@ async function readOrganizationId(admin: DenSession): Promise<string> {
 async function mintMcpToken(admin: DenSession, orgId: string): Promise<string> {
   const { response, body, text } = await denFetch(admin, "/v1/mcp/token", {
     method: "POST",
-    headers: { authorization: `Bearer ${admin.token}`, "x-openwork-org-id": orgId },
+    headers: { authorization: `Bearer ${admin.token}`, "x-sofia-org-id": orgId },
     body: JSON.stringify({ scopes: ["mcp:read", "mcp:write"] }),
   });
   const token = isRecord(body) && typeof body.token === "string" ? body.token : "";
@@ -142,7 +142,7 @@ async function seedDesktopPolicy(den: Den, orgId: string, data: OrgFixture["desk
   const member = den.members[data.member];
   if (!member) throw new Error(`The desktop policy member ${JSON.stringify(data.member)} was not provisioned.`);
   const memberId = await readOrganizationMemberId(member, orgId);
-  const headers = { authorization: `Bearer ${den.admin.token}`, "x-openwork-org-id": orgId };
+  const headers = { authorization: `Bearer ${den.admin.token}`, "x-sofia-org-id": orgId };
   const team = await denFetch(den.admin, "/v1/teams", {
     method: "POST",
     headers,

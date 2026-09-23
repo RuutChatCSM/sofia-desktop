@@ -1,7 +1,7 @@
 import * as crypto from "node:crypto"
-import { eq } from "@openwork-ee/den-db/drizzle"
-import { OAuthAccessTokenTable } from "@openwork-ee/den-db/schema"
-import { normalizeDenTypeId } from "@openwork-ee/utils/typeid"
+import { eq } from "@sofia-ee/den-db/drizzle"
+import { OAuthAccessTokenTable } from "@sofia-ee/den-db/schema"
+import { normalizeDenTypeId } from "@sofia-ee/utils/typeid"
 import { verifyJwsAccessToken } from "better-auth/oauth2"
 import {
   auth,
@@ -398,7 +398,7 @@ export async function verifyMcpRequest(headers: Headers, optionsInput?: string |
     if (grantLiveness === "check_failed") {
       return mcpJsonResponse(503, {
         error: "mcp_grant_check_unavailable",
-        message: "OpenWork could not verify the token grant. Retry shortly.",
+        message: "Sofia could not verify the token grant. Retry shortly.",
         referenceId,
       }, undefined, { "retry-after": "10" })
     }
@@ -428,7 +428,7 @@ export async function verifyMcpRequest(headers: Headers, optionsInput?: string |
     if (sessionLiveness === "check_failed") {
       return mcpJsonResponse(503, {
         error: "mcp_session_check_unavailable",
-        message: "OpenWork could not verify the token session. Retry shortly.",
+        message: "Sofia could not verify the token session. Retry shortly.",
         referenceId,
       }, undefined, { "retry-after": "10" })
     }

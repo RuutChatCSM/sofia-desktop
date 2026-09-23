@@ -1,12 +1,12 @@
 import { expect, test } from "vitest";
-import { createAndSelectWorkspace, evalIn, waitFor } from "@openwork/behaviors";
-import { createVisualEvidence, screenshot, validate } from "@openwork/test-evidence";
-import { desktop } from "@openwork/hosts";
+import { createAndSelectWorkspace, evalIn, waitFor } from "@sofia/behaviors";
+import { createVisualEvidence, screenshot, validate } from "@sofia/test-evidence";
+import { desktop } from "@sofia/hosts";
 
-const e2eTestsEnabled = process.env.OPENWORK_EVAL_E2E_TESTS === "1";
+const e2eTestsEnabled = process.env.SOFIA_EVAL_E2E_TESTS === "1";
 const title = e2eTestsEnabled
   ? "app boots with a control route and meaningful visible content"
-  : "app smoke skipped: set OPENWORK_EVAL_E2E_TESTS=1 to opt in";
+  : "app smoke skipped: set SOFIA_EVAL_E2E_TESTS=1 to opt in";
 
 test.skipIf(!e2eTestsEnabled)(title, async () => {
   await using app = await desktop({ name: "app-smoke" });
@@ -16,14 +16,14 @@ test.skipIf(!e2eTestsEnabled)(title, async () => {
   // when the app runs in a sandbox. NOT the repo root either: opening the whole
   // monorepo makes the engine scan node_modules and blocks the renderer past
   // 240s. createLocalWorkspace creates the folder, so it need not pre-exist.
-  const workspace = await createAndSelectWorkspace(app, { path: `/tmp/openwork-app-smoke-${Date.now()}` });
+  const workspace = await createAndSelectWorkspace(app, { path: `/tmp/sofia-app-smoke-${Date.now()}` });
   expect(workspace.workspaceId).toBeTruthy();
-  const route = await evalIn(app, "window.__openworkControl.snapshot().route");
+  const route = await evalIn(app, "window.__sofiaControl.snapshot().route");
   expect(route).toBeTruthy();
   await waitFor(app, "document.body.innerText.trim().length > 40", { timeoutMs: 30_000, label: "rendered body text" });
   const shot = await screenshot(app);
   const seen = await validate(shot, [
-    "A ready OpenWork workspace composer with meaningful visible content is on screen",
+    "A ready Sofia App workspace composer with meaningful visible content is on screen",
     "No generic error or 'Something went wrong' crash message is visible",
   ]);
   expect(seen.ok, seen.why).toBe(true);

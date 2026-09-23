@@ -9,7 +9,7 @@ export type ConfiguredInstallerArtifact = {
   size: number
 }
 
-export const DEFAULT_INSTALLER_RELEASE_REPO = "different-ai/openwork"
+export const DEFAULT_INSTALLER_RELEASE_REPO = "RuutChatCSM/sofia-desktop"
 
 type InstallerReleaseAssetOptions = { releaseRepo?: string; releaseTag?: string }
 type ExplicitInstallerReleaseAssetOptions = InstallerReleaseAssetOptions & { releaseTag: string }
@@ -42,28 +42,28 @@ export function installerLatestReleaseAssetUrl(
 export function desktopReleaseAssetName(platform: string, releaseTag: string) {
   const version = releaseTag.startsWith("v") ? releaseTag.slice(1) : releaseTag
   if (platform === "mac-arm64" || platform === "mac-x64") {
-    return `openwork-${platform}-${version}.dmg`
+    return `sofia-${platform}-${version}.dmg`
   }
   if (platform === "win-x64") {
-    return `openwork-${platform}-${version}.exe`
+    return `sofia-${platform}-${version}.exe`
   }
   if (platform === "linux-x64") {
-    return `openwork-linux-x86_64-${version}.AppImage`
+    return `sofia-linux-x86_64-${version}.AppImage`
   }
   if (platform === "linux-arm64") {
-    return `openwork-linux-arm64-${version}.AppImage`
+    return `sofia-linux-arm64-${version}.AppImage`
   }
   return null
 }
 
 export function enterpriseDesktopReleaseAssetName(platform: string, releaseTag: string) {
   const publicName = desktopReleaseAssetName(platform, releaseTag)
-  return publicName?.replace(/^openwork-/, "openwork-enterprise-") ?? null
+  return publicName?.replace(/^sofia-/, "sofia-enterprise-") ?? null
 }
 
 export function cloudDesktopReleaseAssetName(platform: string, releaseTag: string) {
   const publicName = desktopReleaseAssetName(platform, releaseTag)
-  return publicName?.replace(/^openwork-/, "openwork-cloud-") ?? null
+  return publicName?.replace(/^sofia-/, "sofia-cloud-") ?? null
 }
 
 /**

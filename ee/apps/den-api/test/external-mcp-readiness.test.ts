@@ -3,8 +3,8 @@ import { expect, mock, test } from "bun:test"
 process.env.DEN_DB_ENCRYPTION_KEY ??= "x".repeat(32)
 process.env.BETTER_AUTH_SECRET ??= "y".repeat(32)
 process.env.BETTER_AUTH_URL ??= "http://127.0.0.1:3005"
-process.env.OPENWORK_DEV_MODE ??= "1"
-process.env.DATABASE_URL ??= "mysql://root:password@127.0.0.1:3306/openwork_den"
+process.env.SOFIA_DEV_MODE ??= "1"
+process.env.DATABASE_URL ??= "mysql://root:password@127.0.0.1:3306/sofia_den"
 
 type QueryRows = Record<string, unknown>[]
 type FakeQuery = {

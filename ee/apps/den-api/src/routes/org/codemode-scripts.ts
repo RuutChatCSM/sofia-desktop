@@ -8,7 +8,7 @@ import {
   workflowTestResultSchema,
   workflowVersionSchema,
   generatedArtifactViewSchema,
-} from "@openwork/types/workflows"
+} from "@sofia/types/workflows"
 import {
   createWorkflowVersion,
   deleteWorkflowSnapshotContent,
@@ -53,7 +53,7 @@ const scriptSchema = z.object({
 })
 const listSchema = z.object({ items: z.array(scriptSchema) })
 const saveSchema = z.object({
-  pluginId: z.string().trim().min(1).max(160).optional().describe("Existing OpenWork Connect Plugin that will contain and share this Workflow. Omit to use the member's private My Workflows Plugin."),
+  pluginId: z.string().trim().min(1).max(160).optional().describe("Existing Sofia Connect Plugin that will contain and share this Workflow. Omit to use the member's private My Workflows Plugin."),
   name: z.string().trim().min(1).max(255),
   description: z.string().trim().max(4_000).optional(),
   code: z.string().min(1).max(200_000),
@@ -204,7 +204,7 @@ export function registerOrgWorkflowRoutes<T extends { Variables: OrgRouteVariabl
     "/v1/workflows",
     describeRoute({
       operationId: saveWorkflowOperationId,
-      tags: ["Workflows"], summary: "Save a successful Code Mode run as a Workflow inside an OpenWork Connect Plugin",
+      tags: ["Workflows"], summary: "Save a successful Code Mode run as a Workflow inside an Sofia Connect Plugin",
       responses: {
         201: jsonResponse("Workflow saved.", savedSchema),
         400: jsonResponse("Invalid request.", invalidRequestSchema),

@@ -6,9 +6,9 @@ import {
   automationListSchema,
   automationRunReceiptSchema,
   automationRunSchema,
-} from "@openwork/types/automations";
-import type { CreateCloudAutomation, UpdateAutomation } from "@openwork/types/automations";
-import { workflowArtifactSnapshotSchema } from "@openwork/types/workflows";
+} from "@sofia/types/automations";
+import type { CreateCloudAutomation, UpdateAutomation } from "@sofia/types/automations";
+import { workflowArtifactSnapshotSchema } from "@sofia/types/workflows";
 import { getErrorMessage, requestJson } from "../../_lib/den-flow";
 
 async function payload(path: string, init: RequestInit = { method: "GET" }) {

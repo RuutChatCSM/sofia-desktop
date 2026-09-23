@@ -48,19 +48,19 @@ describe("managed model sync ordering", () => {
       signedIn: true,
       selectedModelUsesCloudProvider: true,
       cloudProviderSyncReady: false,
-      openWorkModelsSyncing: false,
+      sofiaModelsSyncing: false,
     })).toBe(true);
     expect(isManagedModelAvailabilityPending({
       signedIn: true,
       selectedModelUsesCloudProvider: true,
       cloudProviderSyncReady: true,
-      openWorkModelsSyncing: true,
+      sofiaModelsSyncing: true,
     })).toBe(true);
     expect(isManagedModelAvailabilityPending({
       signedIn: true,
       selectedModelUsesCloudProvider: true,
       cloudProviderSyncReady: true,
-      openWorkModelsSyncing: false,
+      sofiaModelsSyncing: false,
     })).toBe(false);
   });
 
@@ -69,13 +69,13 @@ describe("managed model sync ordering", () => {
       signedIn: true,
       selectedModelUsesCloudProvider: false,
       cloudProviderSyncReady: false,
-      openWorkModelsSyncing: true,
+      sofiaModelsSyncing: true,
     })).toBe(false);
     expect(isManagedModelAvailabilityPending({
       signedIn: false,
       selectedModelUsesCloudProvider: true,
       cloudProviderSyncReady: false,
-      openWorkModelsSyncing: true,
+      sofiaModelsSyncing: true,
     })).toBe(false);
   });
 });
@@ -120,7 +120,7 @@ describe("managed model recovery", () => {
 
   test("returns the refreshed provider snapshot for lifecycle and product triggers", async () => {
     const calls: string[] = [];
-    const snapshot = { connected: ["openwork"], all: [] };
+    const snapshot = { connected: ["sofia"], all: [] };
 
     const result = await refreshOrganizationModels({
       runCloudProviderSync: async (reason) => {

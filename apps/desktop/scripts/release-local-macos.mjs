@@ -6,7 +6,7 @@
 // macOS hosts when CI is unavailable.
 //
 // Usage:
-//   pnpm --filter @openwork/desktop release:local:macos --version 0.1.1
+//   pnpm --filter @sofia/desktop release:local:macos --version 0.1.1
 //
 // Configuration comes from the environment or an env file (default:
 //   ~/.sofia/app-release.env), one KEY=VALUE per line:
@@ -117,10 +117,10 @@ const tag = `v${options.version}`;
 
 const arch = options.target.startsWith("aarch64") ? "arm64" : "x64";
 const artifacts = [
-  `sofia-app-mac-${arch}-${options.version}.dmg`,
-  `sofia-app-mac-${arch}-${options.version}.dmg.blockmap`,
-  `sofia-app-mac-${arch}-${options.version}.zip`,
-  `sofia-app-mac-${arch}-${options.version}.zip.blockmap`,
+  `sofia-mac-${arch}-${options.version}.dmg`,
+  `sofia-mac-${arch}-${options.version}.dmg.blockmap`,
+  `sofia-mac-${arch}-${options.version}.zip`,
+  `sofia-mac-${arch}-${options.version}.zip.blockmap`,
 ].map((name) => path.join(distDir, name));
 
 const p12 = process.env.CSC_LINK;
@@ -137,7 +137,7 @@ if (options.build) {
   log(`Stamping version ${options.version}`);
   run(process.execPath, [path.join(repoRoot, "scripts", "release", "stamp-version.mjs"), "--version", options.version]);
   log(`Building Sofia App ${options.version} (${options.target})`);
-  run("pnpm", ["--filter", "@openwork/desktop", "package:electron"], {
+  run("pnpm", ["--filter", "@sofia/desktop", "package:electron"], {
     SOFIA_SOURCE_DIR: process.env.SOFIA_SOURCE_DIR,
     TARGET: options.target,
     MACOS_NOTARIZE: "true",

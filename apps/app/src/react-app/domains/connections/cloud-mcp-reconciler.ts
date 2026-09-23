@@ -4,13 +4,13 @@ import {
   resolveCloudMcpResourceUrl,
 } from "../../../app/lib/den";
 import type {
-  OpenworkCloudMcpEngineRefresh,
-  OpenworkCloudMcpEngineRefreshResult,
-  OpenworkCloudMcpFailure,
-  OpenworkCloudMcpHealth,
-  OpenworkCloudMcpProviderModelContext,
-  OpenworkCloudMcpReconcilePayload,
-} from "../../../app/lib/openwork-server";
+  SofiaCloudMcpEngineRefresh,
+  SofiaCloudMcpEngineRefreshResult,
+  SofiaCloudMcpFailure,
+  SofiaCloudMcpHealth,
+  SofiaCloudMcpProviderModelContext,
+  SofiaCloudMcpReconcilePayload,
+} from "../../../app/lib/sofia-server";
 import {
   CLOUD_MCP_SERVER_NAME,
   clearCloudMcpScopedMetadata,
@@ -26,26 +26,26 @@ import {
   type CloudMcpUserState,
 } from "./cloud-mcp-user-state";
 
-export const OPENWORK_CLOUD_EXPECTED_TOOLS = [
-  "openwork-cloud_search_capabilities",
-  "openwork-cloud_execute_capability",
+export const SOFIA_CLOUD_EXPECTED_TOOLS = [
+  "sofia-cloud_search_capabilities",
+  "sofia-cloud_execute_capability",
 ];
 
 export type CloudMcpClient = {
   baseUrl: string;
-  getOpenworkCloudMcpHealth: (
+  getSofiaCloudMcpHealth: (
     workspaceId: string,
-    providerModel?: OpenworkCloudMcpProviderModelContext,
+    providerModel?: SofiaCloudMcpProviderModelContext,
     options?: { probe?: boolean },
-  ) => Promise<OpenworkCloudMcpHealth>;
-  reconcileOpenworkCloudMcp: (
+  ) => Promise<SofiaCloudMcpHealth>;
+  reconcileSofiaCloudMcp: (
     workspaceId: string,
-    payload: OpenworkCloudMcpReconcilePayload,
-  ) => Promise<OpenworkCloudMcpHealth>;
-  refreshOpenworkCloudMcpEngine?: (
+    payload: SofiaCloudMcpReconcilePayload,
+  ) => Promise<SofiaCloudMcpHealth>;
+  refreshSofiaCloudMcpEngine?: (
     workspaceId: string,
     payload?: { provider?: string; model?: string; trigger?: string },
-  ) => Promise<OpenworkCloudMcpEngineRefreshResult>;
+  ) => Promise<SofiaCloudMcpEngineRefreshResult>;
 };
 
 export type CloudMcpOperationContext = CloudMcpScope & {
@@ -53,7 +53,7 @@ export type CloudMcpOperationContext = CloudMcpScope & {
   orgSlug?: string | null;
   orgName?: string | null;
   fallbackUrl?: string | null;
-  providerModel?: OpenworkCloudMcpProviderModelContext;
+  providerModel?: SofiaCloudMcpProviderModelContext;
   connectCatalogEnabled?: boolean;
   trigger?: string;
 };
@@ -62,7 +62,7 @@ export type CloudMcpOperationMode = "health" | "repair";
 
 export type CloudMcpOperationResult = {
   status: "checked" | "ready" | "repaired" | "unchanged" | "skipped" | "failed";
-  health: OpenworkCloudMcpHealth | null;
+  health: SofiaCloudMcpHealth | null;
   skippedReason?: "signed_out" | "missing_org" | "missing_workspace" | "disabled" | "deduped" | "mint_failed";
   attempts: number;
   markerWritten: boolean;
@@ -111,14 +111,14 @@ type CleanupClient = {
 
 const repairInFlight = new Map<string, Promise<CloudMcpOperationResult>>();
 
-const APP_VERSION = String(import.meta.env.VITE_OPENWORK_APP_VERSION ?? "").trim();
-const APP_BUILD_SHA = String(import.meta.env.VITE_OPENWORK_BUILD_SHA ?? import.meta.env.VITE_OPENWORK_GIT_SHA ?? "").trim();
+const APP_VERSION = String(import.meta.env.VITE_SOFIA_APP_VERSION ?? "").trim();
+const APP_BUILD_SHA = String(import.meta.env.VITE_SOFIA_BUILD_SHA ?? import.meta.env.VITE_SOFIA_GIT_SHA ?? "").trim();
 
 function normalizeCode(code: string | null | undefined): string {
   return code?.trim().toLowerCase().replace(/[-.]/g, "_") ?? "";
 }
 
-function isProviderProjectionFailure(failure?: OpenworkCloudMcpFailure | null): boolean {
+function isProviderProjectionFailure(failure?: SofiaCloudMcpFailure | null): boolean {
   if (!failure) return false;
   if (failure.stage === "provider_projection") return true;
   const code = normalizeCode(failure.code);
@@ -172,10 +172,10 @@ function resolveMcpUrl(token: DenMcpToken, fallbackUrl?: string | null): string 
   return fallback || null;
 }
 
-export function buildOpenworkCloudMcpReconcilePayload(input: {
+export function buildSofiaCloudMcpReconcilePayload(input: {
   context: CloudMcpOperationContext;
   token: DenMcpToken;
-}): OpenworkCloudMcpReconcilePayload | null {
+}): SofiaCloudMcpReconcilePayload | null {
   const workspaceId = input.context.workspaceId.trim();
   const url = resolveMcpUrl(input.token, input.context.fallbackUrl);
   if (!workspaceId || !url) return null;
@@ -219,9 +219,9 @@ export function isCloudMcpAuthTokenFailureCode(code: string | null | undefined):
   ) {
     return false;
   }
-  return normalized === "openwork_cloud_auth_required" ||
-    normalized === "openwork_cloud_auth_invalid" ||
-    normalized === "openwork_cloud_token_expired" ||
+  return normalized === "sofia_cloud_auth_required" ||
+    normalized === "sofia_cloud_auth_invalid" ||
+    normalized === "sofia_cloud_token_expired" ||
     // The Den rejects an expired/missing first-party bearer with exactly these
     // codes; the `_mcp_` infix means the `invalid_token` substring below never
     // matches them (field incident: token sat expired for 7 days because the
@@ -237,9 +237,9 @@ export function isCloudMcpAuthTokenFailureCode(code: string | null | undefined):
 /**
  * Health failures carry the primary `code` plus optional `aliases` (e.g. the
  * direct-probe 401 reports code `invalid_mcp_token` with alias
- * `openwork_cloud_token_expired`). Remint decisions must consider both.
+ * `sofia_cloud_token_expired`). Remint decisions must consider both.
  */
-export function isCloudMcpAuthTokenFailure(failure: Pick<OpenworkCloudMcpFailure, "code" | "aliases"> | null | undefined): boolean {
+export function isCloudMcpAuthTokenFailure(failure: Pick<SofiaCloudMcpFailure, "code" | "aliases"> | null | undefined): boolean {
   if (!failure) return false;
   if (isCloudMcpAuthTokenFailureCode(failure.code)) return true;
   return (failure.aliases ?? []).some((alias) => isCloudMcpAuthTokenFailureCode(alias));
@@ -263,7 +263,7 @@ function shouldSkipForPrerequisite(input: CloudMcpReconcilerInput, scope: CloudM
 }
 
 function writeUsableMarker(input: {
-  health: OpenworkCloudMcpHealth | null;
+  health: SofiaCloudMcpHealth | null;
   scope: CloudMcpScope;
   expiresAt: string | null;
 }): boolean {
@@ -273,7 +273,7 @@ function writeUsableMarker(input: {
 }
 
 async function probeHealth(input: CloudMcpReconcilerInput, scope: CloudMcpScope, options?: { writeFreshnessMarker?: boolean }): Promise<CloudMcpOperationResult> {
-  const health = await input.client.getOpenworkCloudMcpHealth(
+  const health = await input.client.getSofiaCloudMcpHealth(
     scope.workspaceId,
     input.context.providerModel,
     input.probe ? { probe: true } : undefined,
@@ -291,17 +291,17 @@ async function probeHealth(input: CloudMcpReconcilerInput, scope: CloudMcpScope,
   };
 }
 
-async function mintAndPost(input: CloudMcpReconcilerInput, scope: CloudMcpScope): Promise<{ health: OpenworkCloudMcpHealth | null; token: DenMcpToken | null }> {
+async function mintAndPost(input: CloudMcpReconcilerInput, scope: CloudMcpScope): Promise<{ health: SofiaCloudMcpHealth | null; token: DenMcpToken | null }> {
   const token = await input.mintToken({
     baseUrl: scope.denBaseUrl,
     authToken: input.context.denAuthToken,
     orgId: scope.orgId,
   });
   if (!token) return { health: null, token: null };
-  const payload = buildOpenworkCloudMcpReconcilePayload({ context: { ...input.context, ...scope }, token });
+  const payload = buildSofiaCloudMcpReconcilePayload({ context: { ...input.context, ...scope }, token });
   if (!payload) return { health: null, token };
   return {
-    health: await input.client.reconcileOpenworkCloudMcp(scope.workspaceId, payload),
+    health: await input.client.reconcileSofiaCloudMcp(scope.workspaceId, payload),
     token,
   };
 }
@@ -318,7 +318,7 @@ async function repairCloudMcp(input: CloudMcpReconcilerInput, scope: CloudMcpSco
     now: input.now ?? Date.now(),
     refreshMarginMs: input.refreshMarginMs,
   })) {
-    const health = await input.client.getOpenworkCloudMcpHealth(scope.workspaceId, input.context.providerModel);
+    const health = await input.client.getSofiaCloudMcpHealth(scope.workspaceId, input.context.providerModel);
     if (health.usable) return { status: "unchanged", health, attempts: 0, markerWritten: false, reminted: false };
   }
 
@@ -349,7 +349,7 @@ async function repairCloudMcp(input: CloudMcpReconcilerInput, scope: CloudMcpSco
   };
 }
 
-export async function runOpenworkCloudMcpReconciler(input: CloudMcpReconcilerInput): Promise<CloudMcpOperationResult> {
+export async function runSofiaCloudMcpReconciler(input: CloudMcpReconcilerInput): Promise<CloudMcpOperationResult> {
   const scope = normalizedContextScope(input.context);
   if (!scope) return { status: "skipped", health: null, skippedReason: "missing_workspace", attempts: 0, markerWritten: false, reminted: false };
   const prerequisite = shouldSkipForPrerequisite(input, scope);
@@ -371,19 +371,19 @@ export async function runOpenworkCloudMcpReconciler(input: CloudMcpReconcilerInp
 export type CloudMcpEngineRefreshRunResult = {
   status: "refreshed" | "failed" | "skipped";
   skippedReason?: "missing_workspace" | "unsupported";
-  health: OpenworkCloudMcpHealth | null;
-  refresh: OpenworkCloudMcpEngineRefresh | null;
+  health: SofiaCloudMcpHealth | null;
+  refresh: SofiaCloudMcpEngineRefresh | null;
 };
 
 const engineRefreshInFlight = new Map<string, Promise<CloudMcpEngineRefreshRunResult>>();
 
 /**
- * Force the engine to drop its openwork-cloud MCP client and reconnect.
+ * Force the engine to drop its sofia-cloud MCP client and reconnect.
  * OpenCode keeps a failed MCP failed forever (no automatic retry), so this is
  * the explicit "try again from scratch" lever: engine disconnect, then
  * re-registration from the persisted desired config, then a direct probe.
  */
-export async function runOpenworkCloudMcpEngineRefresh(input: {
+export async function runSofiaCloudMcpEngineRefresh(input: {
   client: CloudMcpClient;
   context: CloudMcpOperationContext;
 }): Promise<CloudMcpEngineRefreshRunResult> {
@@ -391,7 +391,7 @@ export async function runOpenworkCloudMcpEngineRefresh(input: {
   if (!scope?.workspaceId) {
     return { status: "skipped", skippedReason: "missing_workspace", health: null, refresh: null };
   }
-  const refreshEngine = input.client.refreshOpenworkCloudMcpEngine;
+  const refreshEngine = input.client.refreshSofiaCloudMcpEngine;
   if (!refreshEngine) {
     return { status: "skipped", skippedReason: "unsupported", health: null, refresh: null };
   }
@@ -423,7 +423,7 @@ export function cloudMcpFailureStageLabel(input: {
   signedIn: boolean;
   orgSelected: boolean;
   userState?: CloudMcpUserState | null;
-  health?: OpenworkCloudMcpHealth | null;
+  health?: SofiaCloudMcpHealth | null;
 }): string {
   if (!input.signedIn) return "Sign in required";
   if (!input.orgSelected) return "Select an organization";
@@ -446,7 +446,7 @@ export function cloudMcpRecommendedAction(input: {
   signedIn: boolean;
   orgSelected: boolean;
   userState?: CloudMcpUserState | null;
-  health?: OpenworkCloudMcpHealth | null;
+  health?: SofiaCloudMcpHealth | null;
 }): string {
   if (!input.signedIn) return "Sign in to Organization cloud.";
   if (!input.orgSelected) return "Choose the organization agents should use.";
@@ -475,7 +475,7 @@ export function cloudMcpDisplaySummary(input: {
   orgSelected: boolean;
   connecting: boolean;
   userState?: CloudMcpUserState | null;
-  health?: OpenworkCloudMcpHealth | null;
+  health?: SofiaCloudMcpHealth | null;
 }): CloudMcpDisplaySummary {
   if (input.connecting) {
     return {
@@ -525,9 +525,9 @@ export function cloudMcpDisplaySummary(input: {
   };
 }
 
-export async function cleanupOpenworkCloudMcpAfterSignOut(input: {
+export async function cleanupSofiaCloudMcpAfterSignOut(input: {
   context: CloudMcpScope;
-  openworkClient: CleanupClient | null;
+  sofiaClient: CleanupClient | null;
   opencodeClient: OpenCodeDisconnectClient | null;
   directory: string;
 }): Promise<void> {
@@ -535,8 +535,8 @@ export async function cleanupOpenworkCloudMcpAfterSignOut(input: {
   if (scope) clearCloudMcpScopedMetadata(scope);
 
   await Promise.all([
-    input.openworkClient && scope
-      ? input.openworkClient.removeMcp(scope.workspaceId, CLOUD_MCP_SERVER_NAME).catch(() => null)
+    input.sofiaClient && scope
+      ? input.sofiaClient.removeMcp(scope.workspaceId, CLOUD_MCP_SERVER_NAME).catch(() => null)
       : Promise.resolve(null),
     input.opencodeClient && input.directory.trim()
       ? input.opencodeClient.mcp.disconnect({ directory: input.directory.trim(), name: CLOUD_MCP_SERVER_NAME }).catch(() => null)

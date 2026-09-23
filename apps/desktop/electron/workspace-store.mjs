@@ -1,5 +1,5 @@
 // Desktop workspace persistence and bootstrap configuration. This module owns
-// on-disk workspace state, per-workspace openwork.json files, remote workspace
+// on-disk workspace state, per-workspace sofia.json files, remote workspace
 // normalization/discovery, and the workspace-facing command operations.
 import { createHash, randomBytes } from "node:crypto";
 import { existsSync, readFileSync, statSync } from "node:fs";
@@ -10,10 +10,10 @@ import {
   desktopBootstrapPath as resolveDesktopBootstrapPath,
   legacyDesktopBootstrapPath as resolveLegacyDesktopBootstrapPath,
   normalizeWorkspaceRootPath,
-  openworkServerConfigPath as resolveOpenworkServerConfigPath,
-} from "@openwork/paths";
+  sofiaServerConfigPath as resolveSofiaServerConfigPath,
+} from "@sofia/paths";
 
-import { openworkWorkspaceDisplayName, selectOpenworkWorkspaceForConnection } from "./remote-workspace.mjs";
+import { sofiaWorkspaceDisplayName, selectSofiaWorkspaceForConnection } from "./remote-workspace.mjs";
 import { exportWorkspaceConfig, importWorkspaceConfig } from "./workspace-archive.mjs";
 
 const EMPTY_WORKSPACE_LIST = Object.freeze({
@@ -116,8 +116,8 @@ const DEFAULT_DESKTOP_BOOTSTRAP_PATH = resolveDesktopBootstrapPath({ homeDir: os
 // LOCALAPPDATA and XDG_CONFIG_HOME. Keep reading that file when the canonical one
 // is missing so existing installs keep their deployment config.
 const LEGACY_DESKTOP_BOOTSTRAP_PATH = resolveLegacyDesktopBootstrapPath({ homeDir: os.homedir() });
-const HOSTED_DESKTOP_WEB_URL = "https://app.openworklabs.com";
-const HOSTED_DESKTOP_API_URL = "https://api.openworklabs.com";
+const HOSTED_DESKTOP_WEB_URL = "https://sofia-app.ruut.chat";
+const HOSTED_DESKTOP_API_URL = "https://sofia-api.ruut.chat";
 
 function bootstrapUrlOrigin(value) {
   if (typeof value !== "string" || !value.trim()) return "";
@@ -140,14 +140,14 @@ export function createWorkspaceStore({
   forceRequireSignin,
 }) {
   function desktopBootstrapPath() {
-    if (process.env.OPENWORK_DESKTOP_BOOTSTRAP_PATH?.trim()) {
+    if (process.env.SOFIA_DESKTOP_BOOTSTRAP_PATH?.trim()) {
       return resolveDesktopBootstrapPath({ env: process.env, homeDir: os.homedir(), userDataDir: app.getPath("userData") });
     }
     // Dev mode swaps process.env.HOME to the sandboxed dev-data home midway
     // through startup (runtime.mjs buildChildEnv -> Object.assign(process.env)),
     // which changes what os.homedir() returns. Resolve the dev-data home
     // deterministically so early and late IPC reads target the same file.
-    if (process.env.OPENWORK_DEV_MODE === "1") {
+    if (process.env.SOFIA_DEV_MODE === "1") {
       return resolveDesktopBootstrapPath({ env: process.env, homeDir: os.homedir(), userDataDir: app.getPath("userData") });
     }
     return DEFAULT_DESKTOP_BOOTSTRAP_PATH;
@@ -157,7 +157,7 @@ export function createWorkspaceStore({
     // An explicit bootstrap path defines an isolated installation boundary.
     // Never let a legacy global config cross that boundary: it may contain a
     // completed activation from another distribution or deployment.
-    if (process.env.OPENWORK_DESKTOP_BOOTSTRAP_PATH?.trim()) return null;
+    if (process.env.SOFIA_DESKTOP_BOOTSTRAP_PATH?.trim()) return null;
     const primary = desktopBootstrapPath();
     if (primary === DEFAULT_DESKTOP_BOOTSTRAP_PATH && LEGACY_DESKTOP_BOOTSTRAP_PATH !== primary) {
       return LEGACY_DESKTOP_BOOTSTRAP_PATH;
@@ -166,20 +166,20 @@ export function createWorkspaceStore({
   }
 
   function workspaceStatePath() {
-    return path.join(app.getPath("userData"), "openwork-workspaces.json");
+    return path.join(app.getPath("userData"), "sofia-workspaces.json");
   }
 
-  function openworkServerTokenStorePath() {
-    return path.join(app.getPath("userData"), "openwork-server-tokens.json");
+  function sofiaServerTokenStorePath() {
+    return path.join(app.getPath("userData"), "sofia-server-tokens.json");
   }
 
-  function openworkServerConfigPath() {
-    return resolveOpenworkServerConfigPath({ env: process.env, homeDir: os.homedir() });
+  function sofiaServerConfigPath() {
+    return resolveSofiaServerConfigPath({ env: process.env, homeDir: os.homedir() });
   }
 
-  // Earlier Electron alpha builds copied Tauri's openwork-workspaces.json into
+  // Earlier Electron alpha builds copied Tauri's sofia-workspaces.json into
   // an Electron-only workspace-state.json. Keep importing that file when the
-  // shared canonical file is missing, but write openwork-workspaces.json going
+  // shared canonical file is missing, but write sofia-workspaces.json going
   // forward so Tauri rollback and Electron both read the same desktop state.
   function legacyElectronWorkspaceStatePath() {
     return path.join(app.getPath("userData"), "workspace-state.json");
@@ -194,7 +194,7 @@ export function createWorkspaceStore({
       await mkdir(path.dirname(current), { recursive: true });
       const raw = await readFile(legacy, "utf8");
       await writeFile(current, raw, "utf8");
-      console.info("[migration] copied workspace-state.json to openwork-workspaces.json");
+      console.info("[migration] copied workspace-state.json to sofia-workspaces.json");
       return true;
     } catch (error) {
       console.warn("[migration] legacy Electron workspace-state copy failed", error);
@@ -463,7 +463,7 @@ export function createWorkspaceStore({
       legacyExists: legacyPath ? existsSync(legacyPath) : false,
       home: os.homedir(),
       envHome: process.env.HOME ?? null,
-      envOverride: process.env.OPENWORK_DESKTOP_BOOTSTRAP_PATH ?? null,
+      envOverride: process.env.SOFIA_DESKTOP_BOOTSTRAP_PATH ?? null,
       exists: existsSync(configPath),
       raw: null,
       parsed: null,
@@ -503,7 +503,7 @@ export function createWorkspaceStore({
     return undefined;
   }
 
-  function defaultWorkspaceOpenworkConfig(workspacePath, preset = null) {
+  function defaultWorkspaceSofiaConfig(workspacePath, preset = null) {
     return {
       version: 1,
       workspace: workspacePath
@@ -553,7 +553,7 @@ export function createWorkspaceStore({
   }
 
   async function recoverWorkspacesFromTokenStore() {
-    const store = await readJsonFile(openworkServerTokenStorePath(), null);
+    const store = await readJsonFile(sofiaServerTokenStorePath(), null);
     if (!isRecord(store) || !isRecord(store.workspaces)) return [];
 
     const candidates = [];
@@ -589,7 +589,7 @@ export function createWorkspaceStore({
     const workspaceKey = normalizeWorkspacePathKey(workspacePath);
     if (!workspaceKey) return;
 
-    const store = await readJsonFile(openworkServerTokenStorePath(), null);
+    const store = await readJsonFile(sofiaServerTokenStorePath(), null);
     if (!isRecord(store) || !isRecord(store.workspaces)) return;
 
     const workspaces = { ...store.workspaces };
@@ -600,12 +600,12 @@ export function createWorkspaceStore({
       changed = true;
     }
     if (changed) {
-      await writeJsonFileAtomic(openworkServerTokenStorePath(), { ...store, workspaces });
+      await writeJsonFileAtomic(sofiaServerTokenStorePath(), { ...store, workspaces });
     }
   }
 
   async function recoverWorkspacesFromServerConfig() {
-    const config = await readJsonFile(openworkServerConfigPath(), null);
+    const config = await readJsonFile(sofiaServerConfigPath(), null);
     if (!isRecord(config) || !Array.isArray(config.workspaces)) return [];
 
     const seen = new Set();
@@ -621,13 +621,13 @@ export function createWorkspaceStore({
 
       const baseUrl = typeof entry.baseUrl === "string" ? entry.baseUrl.trim() : "";
       const directory = typeof entry.directory === "string" && entry.directory.trim() ? entry.directory.trim() : null;
-      const remoteType = entry.remoteType === "opencode" ? "opencode" : "openwork";
-      const openworkWorkspaceId = typeof entry.openworkWorkspaceId === "string" ? entry.openworkWorkspaceId.trim() : "";
+      const remoteType = entry.remoteType === "opencode" ? "opencode" : "sofia";
+      const sofiaWorkspaceId = typeof entry.sofiaWorkspaceId === "string" ? entry.sofiaWorkspaceId.trim() : "";
       const id = typeof entry.id === "string" && entry.id.trim()
         ? entry.id.trim()
         : workspaceType === "remote"
-          ? remoteType === "openwork"
-            ? openworkRemoteWorkspaceId(baseUrl, openworkWorkspaceId)
+          ? remoteType === "sofia"
+            ? sofiaRemoteWorkspaceId(baseUrl, sofiaWorkspaceId)
             : remoteWorkspaceId(baseUrl, directory)
           : localWorkspaceId(normalizedPath);
       const key = workspaceType === "remote" ? id : normalizeWorkspacePathKey(normalizedPath);
@@ -670,7 +670,7 @@ export function createWorkspaceStore({
     return stableWorkspaceId(key);
   }
 
-  function parseOpenworkWorkspaceIdFromUrl(input) {
+  function parseSofiaWorkspaceIdFromUrl(input) {
     const raw = String(input ?? "").trim();
     if (!raw) return null;
     try {
@@ -693,7 +693,7 @@ export function createWorkspaceStore({
     }
   }
 
-  function stripOpenworkWorkspaceMount(input) {
+  function stripSofiaWorkspaceMount(input) {
     const raw = String(input ?? "").trim();
     if (!raw) return null;
     try {
@@ -712,13 +712,13 @@ export function createWorkspaceStore({
     }
   }
 
-  function openworkRemoteWorkspaceId(hostUrl, workspaceId) {
-    const remoteWorkspaceId = String(workspaceId ?? "").trim() || parseOpenworkWorkspaceIdFromUrl(hostUrl);
+  function sofiaRemoteWorkspaceId(hostUrl, workspaceId) {
+    const remoteWorkspaceId = String(workspaceId ?? "").trim() || parseSofiaWorkspaceIdFromUrl(hostUrl);
     if (remoteWorkspaceId) return `rem_${remoteWorkspaceId}`;
-    return `rem_${createHash("sha256").update(`openwork::${hostUrl}`).digest("hex").slice(0, 12)}`;
+    return `rem_${createHash("sha256").update(`sofia::${hostUrl}`).digest("hex").slice(0, 12)}`;
   }
 
-  async function fetchOpenworkWorkspaceList(hostUrl, token, hostToken) {
+  async function fetchSofiaWorkspaceList(hostUrl, token, hostToken) {
     const url = `${String(hostUrl ?? "").replace(/\/+$/, "")}/workspaces`;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8_000);
@@ -738,7 +738,7 @@ export function createWorkspaceStore({
         cache: "no-store",
       });
       if (!response.ok) {
-        throw new Error(`OpenWork workspace discovery failed (${response.status} ${response.statusText || "HTTP error"})`);
+        throw new Error(`Sofia App workspace discovery failed (${response.status} ${response.statusText || "HTTP error"})`);
       }
       return await response.json();
     } finally {
@@ -746,9 +746,9 @@ export function createWorkspaceStore({
     }
   }
 
-  async function discoverOpenworkWorkspace({ hostUrl, token, hostToken, directory }) {
-    const list = await fetchOpenworkWorkspaceList(hostUrl, token, hostToken);
-    return selectOpenworkWorkspaceForConnection(list, directory);
+  async function discoverSofiaWorkspace({ hostUrl, token, hostToken, directory }) {
+    const list = await fetchSofiaWorkspaceList(hostUrl, token, hostToken);
+    return selectSofiaWorkspaceForConnection(list, directory);
   }
 
   function normalizeWorkspaceEntry(input) {
@@ -762,32 +762,32 @@ export function createWorkspaceStore({
       baseUrl: input.baseUrl ?? null,
       directory: input.directory ?? null,
       displayName: input.displayName ?? null,
-      openworkHostUrl: input.openworkHostUrl ?? null,
-      openworkToken: input.openworkToken ?? null,
-      openworkClientToken: input.openworkClientToken ?? null,
-      openworkHostToken: input.openworkHostToken ?? null,
-      openworkWorkspaceId: input.openworkWorkspaceId ?? null,
-      openworkWorkspaceName: input.openworkWorkspaceName ?? null,
+      sofiaHostUrl: input.sofiaHostUrl ?? null,
+      sofiaToken: input.sofiaToken ?? null,
+      sofiaClientToken: input.sofiaClientToken ?? null,
+      sofiaHostToken: input.sofiaHostToken ?? null,
+      sofiaWorkspaceId: input.sofiaWorkspaceId ?? null,
+      sofiaWorkspaceName: input.sofiaWorkspaceName ?? null,
       sandboxBackend: input.sandboxBackend ?? null,
       sandboxRunId: input.sandboxRunId ?? null,
       sandboxContainerName: input.sandboxContainerName ?? null,
     };
   }
 
-  async function readWorkspaceOpenworkConfig(workspacePath) {
-    const openworkPath = path.join(workspacePath, ".opencode", "openwork.json");
-    if (!(await pathExists(openworkPath))) {
-      return defaultWorkspaceOpenworkConfig(workspacePath);
+  async function readWorkspaceSofiaConfig(workspacePath) {
+    const sofiaPath = path.join(workspacePath, ".opencode", "sofia.json");
+    if (!(await pathExists(sofiaPath))) {
+      return defaultWorkspaceSofiaConfig(workspacePath);
     }
-    const raw = await readFile(openworkPath, "utf8");
+    const raw = await readFile(sofiaPath, "utf8");
     return JSON.parse(raw);
   }
 
-  async function writeWorkspaceOpenworkConfig(workspacePath, config) {
-    const openworkPath = path.join(workspacePath, ".opencode", "openwork.json");
-    await mkdir(path.dirname(openworkPath), { recursive: true });
-    await writeFile(openworkPath, `${JSON.stringify(config, null, 2)}\n`, "utf8");
-    return execResult(true, `Wrote ${openworkPath}`);
+  async function writeWorkspaceSofiaConfig(workspacePath, config) {
+    const sofiaPath = path.join(workspacePath, ".opencode", "sofia.json");
+    await mkdir(path.dirname(sofiaPath), { recursive: true });
+    await writeFile(sofiaPath, `${JSON.stringify(config, null, 2)}\n`, "utf8");
+    return execResult(true, `Wrote ${sofiaPath}`);
   }
 
   async function writeWorkspaceState(nextState) {
@@ -829,11 +829,11 @@ export function createWorkspaceStore({
     let activeId = typeof state?.activeId === "string" ? state.activeId : null;
     let workspaces = Array.isArray(state?.workspaces) ? state.workspaces : [];
     let changed = false;
-    if (!workspaceStateExists && process.env.OPENWORK_DESKTOP_DISABLE_WORKSPACE_RECOVERY !== "1") {
+    if (!workspaceStateExists && process.env.SOFIA_DESKTOP_DISABLE_WORKSPACE_RECOVERY !== "1") {
       const recoveredWorkspaces = await recoverWorkspacesFromKnownState();
       if (recoveredWorkspaces.length > 0) {
         const selectedWorkspace = recoveredWorkspaces[0];
-        console.info("[migration] recovered desktop workspaces from persisted OpenWork state", {
+        console.info("[migration] recovered desktop workspaces from persisted Sofia App state", {
           count: recoveredWorkspaces.length,
           selectedWorkspaceId: selectedWorkspace.id,
         });
@@ -847,29 +847,29 @@ export function createWorkspaceStore({
     const idMap = new Map();
     const migratedWorkspaces = workspaces.map((entry) => {
       const workspace = entry && typeof entry === "object" ? entry : normalizeWorkspaceEntry(entry ?? {});
-      if (workspace.workspaceType !== "remote" || workspace.remoteType !== "openwork") return workspace;
+      if (workspace.workspaceType !== "remote" || workspace.remoteType !== "sofia") return workspace;
 
-      const remoteWorkspaceId = String(workspace.openworkWorkspaceId ?? "").trim()
-        || parseOpenworkWorkspaceIdFromUrl(workspace.openworkHostUrl)
-        || parseOpenworkWorkspaceIdFromUrl(workspace.baseUrl);
+      const remoteWorkspaceId = String(workspace.sofiaWorkspaceId ?? "").trim()
+        || parseSofiaWorkspaceIdFromUrl(workspace.sofiaHostUrl)
+        || parseSofiaWorkspaceIdFromUrl(workspace.baseUrl);
       if (!remoteWorkspaceId) return workspace;
 
-      const hostUrl = stripOpenworkWorkspaceMount(workspace.openworkHostUrl) || stripOpenworkWorkspaceMount(workspace.baseUrl);
-      const nextId = openworkRemoteWorkspaceId(hostUrl ?? workspace.baseUrl, remoteWorkspaceId);
+      const hostUrl = stripSofiaWorkspaceMount(workspace.sofiaHostUrl) || stripSofiaWorkspaceMount(workspace.baseUrl);
+      const nextId = sofiaRemoteWorkspaceId(hostUrl ?? workspace.baseUrl, remoteWorkspaceId);
       idMap.set(workspace.id, nextId);
       const nextWorkspace = {
         ...workspace,
         id: nextId,
         baseUrl: hostUrl,
-        openworkWorkspaceId: remoteWorkspaceId,
-        openworkHostUrl: hostUrl,
+        sofiaWorkspaceId: remoteWorkspaceId,
+        sofiaHostUrl: hostUrl,
       };
-      if (workspace.id !== nextWorkspace.id || workspace.baseUrl !== nextWorkspace.baseUrl || workspace.openworkWorkspaceId !== nextWorkspace.openworkWorkspaceId || workspace.openworkHostUrl !== nextWorkspace.openworkHostUrl) {
+      if (workspace.id !== nextWorkspace.id || workspace.baseUrl !== nextWorkspace.baseUrl || workspace.sofiaWorkspaceId !== nextWorkspace.sofiaWorkspaceId || workspace.sofiaHostUrl !== nextWorkspace.sofiaHostUrl) {
         changed = true;
       }
       return nextWorkspace;
     });
-    // Older desktop state can contain multiple OpenWork remote entries that
+    // Older desktop state can contain multiple Sofia App remote entries that
     // normalize to the same rem_<workspaceId> after stripping worker mounts.
     // Collapse them here so React never receives duplicate workspace keys.
     const workspaceIndexById = new Map();
@@ -958,7 +958,7 @@ export function createWorkspaceStore({
       workspaceType: "local",
     });
     await mkdir(path.join(folderPath, ".opencode"), { recursive: true });
-    await writeWorkspaceOpenworkConfig(folderPath, defaultWorkspaceOpenworkConfig(folderPath, preset));
+    await writeWorkspaceSofiaConfig(folderPath, defaultWorkspaceSofiaConfig(folderPath, preset));
 
     return mutateWorkspaceState((state) => {
       const key = workspacePathKey(workspace);
@@ -979,57 +979,57 @@ export function createWorkspaceStore({
     if (!baseUrl.startsWith("http://") && !baseUrl.startsWith("https://")) {
       throw new Error("baseUrl must start with http:// or https://");
     }
-    const remoteType = input.remoteType === "opencode" ? "opencode" : "openwork";
+    const remoteType = input.remoteType === "opencode" ? "opencode" : "sofia";
     const directory = typeof input.directory === "string" && input.directory.trim() ? input.directory.trim() : null;
-    const rawOpenworkHostUrl = typeof input.openworkHostUrl === "string" && input.openworkHostUrl.trim()
-      ? input.openworkHostUrl.trim()
+    const rawSofiaHostUrl = typeof input.sofiaHostUrl === "string" && input.sofiaHostUrl.trim()
+      ? input.sofiaHostUrl.trim()
       : null;
-    const openworkHostUrl = remoteType === "openwork"
-      ? stripOpenworkWorkspaceMount(rawOpenworkHostUrl ?? baseUrl)
-      : rawOpenworkHostUrl;
-    const openworkWorkspaceId = typeof input.openworkWorkspaceId === "string" && input.openworkWorkspaceId.trim()
-      ? input.openworkWorkspaceId.trim()
-      : remoteType === "openwork"
-        ? parseOpenworkWorkspaceIdFromUrl(rawOpenworkHostUrl) || parseOpenworkWorkspaceIdFromUrl(baseUrl)
+    const sofiaHostUrl = remoteType === "sofia"
+      ? stripSofiaWorkspaceMount(rawSofiaHostUrl ?? baseUrl)
+      : rawSofiaHostUrl;
+    const sofiaWorkspaceId = typeof input.sofiaWorkspaceId === "string" && input.sofiaWorkspaceId.trim()
+      ? input.sofiaWorkspaceId.trim()
+      : remoteType === "sofia"
+        ? parseSofiaWorkspaceIdFromUrl(rawSofiaHostUrl) || parseSofiaWorkspaceIdFromUrl(baseUrl)
         : null;
-    let resolvedOpenworkWorkspaceId = openworkWorkspaceId;
-    let resolvedOpenworkWorkspaceName = input.openworkWorkspaceName ?? null;
-    if (remoteType === "openwork" && !resolvedOpenworkWorkspaceId) {
-      const discovered = await discoverOpenworkWorkspace({
-        hostUrl: openworkHostUrl ?? baseUrl,
-        token: input.openworkToken,
-        hostToken: input.openworkHostToken,
+    let resolvedSofiaWorkspaceId = sofiaWorkspaceId;
+    let resolvedSofiaWorkspaceName = input.sofiaWorkspaceName ?? null;
+    if (remoteType === "sofia" && !resolvedSofiaWorkspaceId) {
+      const discovered = await discoverSofiaWorkspace({
+        hostUrl: sofiaHostUrl ?? baseUrl,
+        token: input.sofiaToken,
+        hostToken: input.sofiaHostToken,
         directory,
       });
       if (!discovered?.id) {
         throw new Error(
           directory
-            ? `OpenWork server has no workspace matching ${directory}.`
-            : "OpenWork server returned no workspaces.",
+            ? `Sofia App server has no workspace matching ${directory}.`
+            : "Sofia App server returned no workspaces.",
         );
       }
-      resolvedOpenworkWorkspaceId = String(discovered.id).trim();
-      resolvedOpenworkWorkspaceName = openworkWorkspaceDisplayName(discovered);
+      resolvedSofiaWorkspaceId = String(discovered.id).trim();
+      resolvedSofiaWorkspaceName = sofiaWorkspaceDisplayName(discovered);
     }
-    const id = remoteType === "openwork"
-      ? openworkRemoteWorkspaceId(openworkHostUrl ?? baseUrl, resolvedOpenworkWorkspaceId)
+    const id = remoteType === "sofia"
+      ? sofiaRemoteWorkspaceId(sofiaHostUrl ?? baseUrl, resolvedSofiaWorkspaceId)
       : remoteWorkspaceId(baseUrl, directory);
     const workspace = normalizeWorkspaceEntry({
       id,
-      name: String(input.displayName ?? resolvedOpenworkWorkspaceName ?? "Remote workspace"),
+      name: String(input.displayName ?? resolvedSofiaWorkspaceName ?? "Remote workspace"),
       displayName: input.displayName ?? null,
       path: directory ?? "",
       preset: "remote",
       workspaceType: "remote",
       remoteType,
-      baseUrl: remoteType === "openwork" ? (openworkHostUrl ?? baseUrl) : baseUrl,
+      baseUrl: remoteType === "sofia" ? (sofiaHostUrl ?? baseUrl) : baseUrl,
       directory,
-      openworkHostUrl,
-      openworkToken: input.openworkToken ?? null,
-      openworkClientToken: input.openworkClientToken ?? null,
-      openworkHostToken: input.openworkHostToken ?? null,
-      openworkWorkspaceId: resolvedOpenworkWorkspaceId,
-      openworkWorkspaceName: resolvedOpenworkWorkspaceName,
+      sofiaHostUrl,
+      sofiaToken: input.sofiaToken ?? null,
+      sofiaClientToken: input.sofiaClientToken ?? null,
+      sofiaHostToken: input.sofiaHostToken ?? null,
+      sofiaWorkspaceId: resolvedSofiaWorkspaceId,
+      sofiaWorkspaceName: resolvedSofiaWorkspaceName,
       sandboxBackend: input.sandboxBackend ?? null,
       sandboxRunId: input.sandboxRunId ?? null,
       sandboxContainerName: input.sandboxContainerName ?? null,
@@ -1052,50 +1052,50 @@ export function createWorkspaceStore({
       if (!existing) return state;
 
       let nextWorkspace = { ...existing, ...patch };
-      const nextRemoteType = nextWorkspace.remoteType === "opencode" ? "opencode" : "openwork";
-      if (nextRemoteType === "openwork") {
-        const rawHostUrl = typeof nextWorkspace.openworkHostUrl === "string" && nextWorkspace.openworkHostUrl.trim()
-          ? nextWorkspace.openworkHostUrl.trim()
+      const nextRemoteType = nextWorkspace.remoteType === "opencode" ? "opencode" : "sofia";
+      if (nextRemoteType === "sofia") {
+        const rawHostUrl = typeof nextWorkspace.sofiaHostUrl === "string" && nextWorkspace.sofiaHostUrl.trim()
+          ? nextWorkspace.sofiaHostUrl.trim()
           : null;
         const nextBaseUrl = String(nextWorkspace.baseUrl ?? "").trim();
-        const hostUrl = stripOpenworkWorkspaceMount(rawHostUrl ?? nextBaseUrl);
+        const hostUrl = stripSofiaWorkspaceMount(rawHostUrl ?? nextBaseUrl);
         const directory = typeof nextWorkspace.directory === "string" && nextWorkspace.directory.trim()
           ? nextWorkspace.directory.trim()
           : null;
-        const parsedWorkspaceId = parseOpenworkWorkspaceIdFromUrl(rawHostUrl) || parseOpenworkWorkspaceIdFromUrl(nextBaseUrl);
+        const parsedWorkspaceId = parseSofiaWorkspaceIdFromUrl(rawHostUrl) || parseSofiaWorkspaceIdFromUrl(nextBaseUrl);
         let remoteWorkspaceId = parsedWorkspaceId || (
-          typeof nextWorkspace.openworkWorkspaceId === "string" && nextWorkspace.openworkWorkspaceId.trim()
-            ? nextWorkspace.openworkWorkspaceId.trim()
+          typeof nextWorkspace.sofiaWorkspaceId === "string" && nextWorkspace.sofiaWorkspaceId.trim()
+            ? nextWorkspace.sofiaWorkspaceId.trim()
             : null
         );
-        let remoteWorkspaceName = nextWorkspace.openworkWorkspaceName ?? null;
+        let remoteWorkspaceName = nextWorkspace.sofiaWorkspaceName ?? null;
         if (!remoteWorkspaceId) {
-          const discovered = await discoverOpenworkWorkspace({
+          const discovered = await discoverSofiaWorkspace({
             hostUrl: hostUrl ?? nextBaseUrl,
-            token: nextWorkspace.openworkToken,
-            hostToken: nextWorkspace.openworkHostToken,
+            token: nextWorkspace.sofiaToken,
+            hostToken: nextWorkspace.sofiaHostToken,
             directory,
           });
           if (!discovered?.id) {
             throw new Error(
               directory
-                ? `OpenWork server has no workspace matching ${directory}.`
-                : "OpenWork server returned no workspaces.",
+                ? `Sofia App server has no workspace matching ${directory}.`
+                : "Sofia App server returned no workspaces.",
             );
           }
           remoteWorkspaceId = String(discovered.id).trim();
-          remoteWorkspaceName = openworkWorkspaceDisplayName(discovered);
+          remoteWorkspaceName = sofiaWorkspaceDisplayName(discovered);
         }
-        const nextId = openworkRemoteWorkspaceId(hostUrl ?? nextBaseUrl, remoteWorkspaceId);
+        const nextId = sofiaRemoteWorkspaceId(hostUrl ?? nextBaseUrl, remoteWorkspaceId);
         nextWorkspace = normalizeWorkspaceEntry({
           ...nextWorkspace,
           id: nextId,
           baseUrl: hostUrl ?? nextBaseUrl,
-          openworkHostUrl: hostUrl,
+          sofiaHostUrl: hostUrl,
           directory,
-          remoteType: "openwork",
-          openworkWorkspaceId: remoteWorkspaceId,
-          openworkWorkspaceName: remoteWorkspaceName,
+          remoteType: "sofia",
+          sofiaWorkspaceId: remoteWorkspaceId,
+          sofiaWorkspaceName: remoteWorkspaceName,
         });
         if (nextId !== workspaceId) {
           if (state.selectedId === workspaceId) state.selectedId = nextId;
@@ -1144,14 +1144,14 @@ export function createWorkspaceStore({
     if (!workspacePath || !authorizedRoot) {
       throw new Error("workspacePath and folderPath are required");
     }
-    const config = await readWorkspaceOpenworkConfig(workspacePath);
+    const config = await readWorkspaceSofiaConfig(workspacePath);
     if (!Array.isArray(config.authorizedRoots)) {
       config.authorizedRoots = [];
     }
     if (!config.authorizedRoots.includes(authorizedRoot)) {
       config.authorizedRoots.push(authorizedRoot);
     }
-    return writeWorkspaceOpenworkConfig(workspacePath, config);
+    return writeWorkspaceSofiaConfig(workspacePath, config);
   }
 
   async function exportConfig(input = {}) {
@@ -1197,7 +1197,7 @@ export function createWorkspaceStore({
     });
   }
 
-  async function resetOpenworkState() {
+  async function resetSofiaState() {
     await rm(workspaceStatePath(), { force: true });
     await clearDesktopBootstrapFiles();
     return undefined;
@@ -1209,7 +1209,7 @@ export function createWorkspaceStore({
     createWorkspace,
     clearDesktopBootstrapConfig,
     debugDesktopBootstrapConfig,
-    defaultWorkspaceOpenworkConfig,
+    defaultWorkspaceSofiaConfig,
     exportConfig,
     forgetWorkspace,
     getDesktopBootstrapConfig,
@@ -1217,15 +1217,15 @@ export function createWorkspaceStore({
     listLocalWorkspacePaths,
     migrateLegacyElectronWorkspaceStateIfNeeded,
     readDesktopBootstrapConfigSync,
-    readWorkspaceOpenworkConfig,
+    readWorkspaceSofiaConfig,
     readWorkspaceState,
-    resetOpenworkState,
+    resetSofiaState,
     setDesktopBootstrapConfig,
     setRuntimeActiveWorkspace,
     setSelectedWorkspace,
     updateRemoteWorkspace,
     updateWorkspaceDisplayName,
-    writeWorkspaceOpenworkConfig,
+    writeWorkspaceSofiaConfig,
     writeWorkspaceState,
   };
 }

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -17,12 +17,12 @@ afterEach(async () => {
 });
 
 async function createWorkspaceRoot() {
-  const root = await mkdtemp(join(tmpdir(), "openwork-reload-events-"));
+  const root = await mkdtemp(join(tmpdir(), "sofia-reload-events-"));
   roots.push(root);
   return root;
 }
 
-async function startOpenworkServer(workspaceRoot: string) {
+async function startSofiaServer(workspaceRoot: string) {
   const config: ServerConfig = {
     host: "127.0.0.1",
     port: 0,
@@ -71,7 +71,7 @@ async function waitForEvents(base: string, token: string): Promise<ReloadEvent[]
 describe("reload event API", () => {
   test("does not expose internal workspace bootstrap writes as reload events", async () => {
     const root = await createWorkspaceRoot();
-    const { base, token } = await startOpenworkServer(root);
+    const { base, token } = await startSofiaServer(root);
 
     const configResponse = await fetch(`${base}/workspace/ws_1/config`, { headers: auth(token) });
     expect(configResponse.status).toBe(200);
@@ -86,7 +86,7 @@ describe("reload event API", () => {
     const configPath = join(root, "opencode.jsonc");
     const content = '{ "plugin": ["demo"] }\n';
     await writeFile(configPath, content, "utf8");
-    const { base, token } = await startOpenworkServer(root);
+    const { base, token } = await startSofiaServer(root);
 
     const configResponse = await fetch(`${base}/workspace/ws_1/config`, { headers: auth(token) });
     expect(configResponse.status).toBe(200);
@@ -96,18 +96,20 @@ describe("reload event API", () => {
     expect(await readEvents(base, token)).toEqual([]);
   });
 
-  test("exposes runtime config content changes as reload events", async () => {
+  test("exposes workspace skill changes as reload events", async () => {
     const root = await createWorkspaceRoot();
-    const configPath = join(root, "opencode.jsonc");
-    await writeFile(configPath, '{ "plugin": ["demo"] }\n', "utf8");
-    const { base, token } = await startOpenworkServer(root);
+    const skillDir = join(root, ".sofia", "skills", "demo");
+    await mkdir(skillDir, { recursive: true });
+    await writeFile(join(skillDir, "SKILL.md"), "---\nname: demo\n---\nbody\n", "utf8");
+    const { base, token } = await startSofiaServer(root);
 
     const configResponse = await fetch(`${base}/workspace/ws_1/config`, { headers: auth(token) });
     expect(configResponse.status).toBe(200);
-    await writeFile(configPath, '{ "plugin": ["runtime-change"] }\n', "utf8");
+    await sleep(400);
+    await writeFile(join(skillDir, "SKILL.md"), "---\nname: demo\n---\nchanged\n", "utf8");
 
     const items = await waitForEvents(base, token);
     expect(items).toHaveLength(1);
-    expect(items[0]).toMatchObject({ reason: "config", trigger: { name: "opencode.jsonc" } });
+    expect(items[0]).toMatchObject({ reason: "skills", trigger: { name: "demo" } });
   });
 });

@@ -7,8 +7,8 @@ import {
   selectModel,
   waitFor,
   writeComposerText,
-} from "@openwork/behaviors";
-import { screenshot, validate } from "@openwork/test-evidence";
+} from "@sofia/behaviors";
+import { screenshot, validate } from "@sofia/test-evidence";
 import {
   app,
   eventually,
@@ -22,22 +22,22 @@ import {
   server,
   sleep,
   test,
-} from "@openwork/testkit";
-import type { App } from "@openwork/testkit";
+} from "@sofia/testkit";
+import type { App } from "@sofia/testkit";
 
 const providerId = "active-session-storm-mock";
 const modelId = "mock-agent-workload-model";
 const modelName = "Active session storm model";
 const workspaceCount = 3;
-const e2eTestsEnabled = process.env.OPENWORK_EVAL_E2E_TESTS === "1";
-const daytonaEnabled = process.env.OPENWORK_EVAL_DAYTONA === "1";
-const configuredDen = Boolean(process.env.OPENWORK_EVAL_DEN_API_URL?.trim());
+const e2eTestsEnabled = process.env.SOFIA_EVAL_E2E_TESTS === "1";
+const daytonaEnabled = process.env.SOFIA_EVAL_DAYTONA === "1";
+const configuredDen = Boolean(process.env.SOFIA_EVAL_DEN_API_URL?.trim());
 const localServicesRequired = !daytonaEnabled && !configuredDen;
 const mysqlOpen = await localMysqlIsRunning();
 const redisOpen = await localRedisIsRunning();
 const runnable = e2eTestsEnabled && (!localServicesRequired || (mysqlOpen && redisOpen));
 const skipSuffix = !e2eTestsEnabled
-  ? " skipped — needs: set OPENWORK_EVAL_E2E_TESTS=1"
+  ? " skipped — needs: set SOFIA_EVAL_E2E_TESTS=1"
   : localServicesRequired && !mysqlOpen
     ? " skipped — needs MySQL on 127.0.0.1:3306"
     : localServicesRequired && !redisOpen
@@ -45,9 +45,9 @@ const skipSuffix = !e2eTestsEnabled
       : "";
 
 function workloadMinutes(): number {
-  const value = Number(process.env.OPENWORK_EVAL_ACTIVE_SESSION_STORM_MINUTES ?? "2");
+  const value = Number(process.env.SOFIA_EVAL_ACTIVE_SESSION_STORM_MINUTES ?? "2");
   if (!Number.isFinite(value) || value < 1 || value > 5) {
-    throw new Error("OPENWORK_EVAL_ACTIVE_SESSION_STORM_MINUTES must be a number from 1 through 5.");
+    throw new Error("SOFIA_EVAL_ACTIVE_SESSION_STORM_MINUTES must be a number from 1 through 5.");
   }
   return value;
 }
@@ -58,7 +58,7 @@ const slowToolMs = Math.round(configuredMinutes * 60_000);
 // slow tools overlap. A one-minute override remains useful for quick iteration
 // and gets a 35-second switching window so startup skew cannot make it flaky.
 const routeStormMs = Math.min(60_000, Math.max(35_000, slowToolMs - 25_000));
-const diagnosticProfileDir = process.env.OPENWORK_EVAL_ACTIVE_SESSION_STORM_PROFILE_DIR?.trim();
+const diagnosticProfileDir = process.env.SOFIA_EVAL_ACTIVE_SESSION_STORM_PROFILE_DIR?.trim();
 
 interface WorkspacePlan {
   index: number;
@@ -167,7 +167,7 @@ function parseSurfaceFacts(value: unknown): SurfaceFacts {
 function parseEngineRuntimeFacts(value: unknown): EngineRuntimeFacts {
   const root = isRecord(value) ? value : {};
   const engine = isRecord(root.engine) ? root.engine : {};
-  const openworkServer = isRecord(root.openworkServer) ? root.openworkServer : {};
+  const sofiaServer = isRecord(root.sofiaServer) ? root.sofiaServer : {};
   const pool = isRecord(root.enginePool) ? root.enginePool : {};
   const generations: EngineGenerationFact[] = [];
   if (Array.isArray(pool.generations)) {
@@ -183,7 +183,7 @@ function parseEngineRuntimeFacts(value: unknown): EngineRuntimeFacts {
   return {
     lifecycleState: typeof root.lifecycleState === "string" ? root.lifecycleState : "",
     enginePid: typeof engine.pid === "number" ? engine.pid : null,
-    engineRollover: openworkServer.engineRollover === true,
+    engineRollover: sofiaServer.engineRollover === true,
     generations,
   };
 }
@@ -196,7 +196,7 @@ function shellValue(value: string): string {
 function buildPlans(runId: string): WorkspacePlan[] {
   return Array.from({ length: workspaceCount }, (_, offset) => {
     const index = offset + 1;
-    const path = `/tmp/openwork-active-session-storm-${runId}-w${index}`;
+    const path = `/tmp/sofia-active-session-storm-${runId}-w${index}`;
     const marker = `STORM-W${index}-${runId}`;
     return {
       index,
@@ -277,7 +277,7 @@ function agentWorkloads(plans: WorkspacePlan[]) {
 
 async function listWorkspaces(desktopApp: App): Promise<WorkspaceListing> {
   const value = await evalIn(desktopApp, `(async () => {
-    const info = await window.__OPENWORK_ELECTRON__?.invokeDesktop?.("openworkServerInfo");
+    const info = await window.__SOFIA_ELECTRON__?.invokeDesktop?.("sofiaServerInfo");
     if (!info?.running || !info.baseUrl) return { error: "local_server_unavailable" };
     const response = await fetch(String(info.baseUrl).replace(/\\/+$/, "") + "/workspaces", {
       headers: { Authorization: "Bearer " + String(info.ownerToken ?? info.clientToken ?? "") },
@@ -316,7 +316,7 @@ async function createWorkspace(desktopApp: App, path: string): Promise<string> {
 
 async function configureWorkspaces(desktopApp: App, plans: WorkspacePlan[], baseUrl: string): Promise<void> {
   const result = await evalIn(desktopApp, `(async () => {
-    const info = await window.__OPENWORK_ELECTRON__?.invokeDesktop?.("openworkServerInfo");
+    const info = await window.__SOFIA_ELECTRON__?.invokeDesktop?.("sofiaServerInfo");
     if (!info?.running || !info.baseUrl) return { error: "local_server_unavailable" };
     const root = String(info.baseUrl).replace(/\\/+$/, "");
     const headers = {
@@ -356,17 +356,17 @@ async function configureWorkspaces(desktopApp: App, plans: WorkspacePlan[], base
       });
       outcomes.push({ workspaceId, stage: "reload", status: reload.status, text: reload.ok ? "ok" : (await reload.text()).slice(0, 300) });
     }
-    const raw = localStorage.getItem("openwork.preferences");
+    const raw = localStorage.getItem("sofia.preferences");
     let preferences = {};
     try { preferences = raw ? JSON.parse(raw) : {}; } catch { preferences = {}; }
     if (!preferences || typeof preferences !== "object" || Array.isArray(preferences)) preferences = {};
-    localStorage.setItem("openwork.preferences", JSON.stringify({
+    localStorage.setItem("sofia.preferences", JSON.stringify({
       ...preferences,
       defaultModel: { providerID: ${JSON.stringify(providerId)}, modelID: ${JSON.stringify(modelId)} },
       modelVariant: null,
       providerStepCompleted: true,
     }));
-    localStorage.setItem("openwork.defaultModel", ${JSON.stringify(`${providerId}/${modelId}`)});
+    localStorage.setItem("sofia.defaultModel", ${JSON.stringify(`${providerId}/${modelId}`)});
     return { outcomes };
   })()`, { awaitPromise: true, timeoutMs: 240_000 });
   if (!isRecord(result) || !Array.isArray(result.outcomes)) {
@@ -380,16 +380,16 @@ async function openExactSessionRoute(desktopApp: App, plan: WorkspacePlan): Prom
   const route = `/workspace/${plan.workspaceId}/session/${plan.sessionId}`;
   await go(desktopApp, route, { timeoutMs: 60_000 });
   await waitFor(desktopApp, `(() => {
-    const current = window.__openworkControl?.snapshot().route.split("?")[0].replace(/\\/+$/, "") ?? "";
+    const current = window.__sofiaControl?.snapshot().route.split("?")[0].replace(/\\/+$/, "") ?? "";
     return current === ${JSON.stringify(route)}
-      && (localStorage.getItem("openwork.react.activeWorkspace") ?? "") === ${JSON.stringify(plan.workspaceId)}
+      && (localStorage.getItem("sofia.react.activeWorkspace") ?? "") === ${JSON.stringify(plan.workspaceId)}
       && document.querySelector("[data-session-surface-id]")?.getAttribute("data-session-surface-id") === ${JSON.stringify(plan.sessionId)};
   })()`, { timeoutMs: 60_000, label: `exact route ${route}` });
 }
 
 async function readSessionFacts(desktopApp: App, workspaceId: string, sessionId: string): Promise<SessionFacts> {
   const value = await evalIn(desktopApp, `(async () => {
-    const info = await window.__OPENWORK_ELECTRON__?.invokeDesktop?.("openworkServerInfo");
+    const info = await window.__SOFIA_ELECTRON__?.invokeDesktop?.("sofiaServerInfo");
     if (!info?.running || !info.baseUrl) return { ok: false, status: 0, error: "local_server_unavailable" };
     const response = await fetch(
       String(info.baseUrl).replace(/\\/+$/, "") + "/workspace/" + encodeURIComponent(${JSON.stringify(workspaceId)})
@@ -440,7 +440,7 @@ async function readSurfaceFacts(desktopApp: App, marker: string): Promise<Surfac
       .map((element) => (element.textContent ?? "").trim())
       .filter((text) => /^(sign in|reconnect|connect again|log in)$/i.test(text));
     return {
-      route: window.__openworkControl?.snapshot().route ?? window.location.hash,
+      route: window.__sofiaControl?.snapshot().route ?? window.location.hash,
       sessionId: document.querySelector("[data-session-surface-id]")?.getAttribute("data-session-surface-id") ?? "",
       authActions,
       crash: /aw, snap|renderer process gone|application error|uncaught exception/i.test(body),
@@ -454,14 +454,14 @@ async function readSurfaceFacts(desktopApp: App, marker: string): Promise<Surfac
 async function readEngineRuntimeFacts(desktopApp: App): Promise<EngineRuntimeFacts> {
   return parseEngineRuntimeFacts(await evalIn(
     desktopApp,
-    `window.__OPENWORK_ELECTRON__.invokeDesktop("runtimeStatus")`,
+    `window.__SOFIA_ELECTRON__.invokeDesktop("runtimeStatus")`,
     { awaitPromise: true, timeoutMs: 15_000 },
   ));
 }
 
 async function readWorkspaceFileFacts(desktopApp: App, plan: WorkspacePlan): Promise<WorkspaceFileFacts> {
   const value = await evalIn(desktopApp, `(async () => {
-    const info = await window.__OPENWORK_ELECTRON__?.invokeDesktop?.("openworkServerInfo");
+    const info = await window.__SOFIA_ELECTRON__?.invokeDesktop?.("sofiaServerInfo");
     if (!info?.running || !info.baseUrl) return { status: 0, content: "" };
     const response = await fetch(
       String(info.baseUrl).replace(/\\/+$/, "") + "/workspace/" + encodeURIComponent(${JSON.stringify(plan.workspaceId)})
@@ -519,7 +519,7 @@ async function allowVisibleToolPermission(desktopApp: App): Promise<boolean> {
 
 async function approvePendingToolPermissions(desktopApp: App, plan: WorkspacePlan): Promise<number> {
   const result = await evalIn(desktopApp, `(async () => {
-    const info = await window.__OPENWORK_ELECTRON__?.invokeDesktop?.("openworkServerInfo");
+    const info = await window.__SOFIA_ELECTRON__?.invokeDesktop?.("sofiaServerInfo");
     if (!info?.running || !info.baseUrl) return { error: "local_server_unavailable" };
     const root = String(info.baseUrl).replace(/\\/+$/, "")
       + "/workspace/" + encodeURIComponent(${JSON.stringify(plan.workspaceId)}) + "/opencode";
@@ -593,7 +593,7 @@ test.skipIf(!runnable)(
   `three workspaces keep independent live tool runs through exact-route switching${skipSuffix}`,
   { timeout: 25 * 60_000 },
   async ({ evidence, place }) => {
-    needs({ optIn: ["OPENWORK_EVAL_E2E_TESTS"] });
+    needs({ optIn: ["SOFIA_EVAL_E2E_TESTS"] });
     const runId = `${Date.now().toString(36)}-${process.pid}`;
     const plans = buildPlans(runId);
     await using den = await server({
@@ -638,7 +638,7 @@ test.skipIf(!runnable)(
     // once, before any session exists, so every workspace sees the same mock
     // provider without perturbing an in-flight engine event subscription.
     await evalIn(desktopApp, "location.reload(); true");
-    await waitFor(desktopApp, "Boolean(window.__openworkControl)", {
+    await waitFor(desktopApp, "Boolean(window.__sofiaControl)", {
       timeoutMs: 60_000,
       label: "desktop reloaded with the storm model preference",
     });
@@ -651,7 +651,7 @@ test.skipIf(!runnable)(
     const workloadStartedAt = new Date().toISOString();
     for (const plan of plans) {
       await go(desktopApp, `/workspace/${plan.workspaceId}/session`);
-      await waitFor(desktopApp, `(localStorage.getItem("openwork.react.activeWorkspace") ?? "") === ${JSON.stringify(plan.workspaceId)}`, {
+      await waitFor(desktopApp, `(localStorage.getItem("sofia.react.activeWorkspace") ?? "") === ${JSON.stringify(plan.workspaceId)}`, {
         timeoutMs: 60_000,
         label: `workspace ${plan.index} active before task creation`,
       });

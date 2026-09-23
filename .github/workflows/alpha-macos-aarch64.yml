@@ -59,13 +59,13 @@ jobs:
     timeout-minutes: 180
 
     env:
-      ALPHA_RELEASE_NAME: OpenWork Alpha (macOS arm64)
+      ALPHA_RELEASE_NAME: Sofia Alpha (macOS arm64)
       # Apple signing + notarization are required so alpha bundles install
       # and launch without Gatekeeper friction. Alpha builds are served
       # from GitHub Releases like stable, just from a different tag.
       MACOS_NOTARIZE: ${{ vars.MACOS_NOTARIZE || 'true' }}
-      OPENWORK_DESKTOP_SENTRY_DSN: ${{ secrets.OPENWORK_DESKTOP_SENTRY_DSN || vars.OPENWORK_DESKTOP_SENTRY_DSN }}
-      OPENWORK_DESKTOP_SENTRY_TRACES_SAMPLE_RATE: ${{ vars.OPENWORK_DESKTOP_SENTRY_TRACES_SAMPLE_RATE || '0.01' }}
+      SOFIA_DESKTOP_SENTRY_DSN: ${{ secrets.SOFIA_DESKTOP_SENTRY_DSN || vars.SOFIA_DESKTOP_SENTRY_DSN }}
+      SOFIA_DESKTOP_SENTRY_TRACES_SAMPLE_RATE: ${{ vars.SOFIA_DESKTOP_SENTRY_TRACES_SAMPLE_RATE || '0.01' }}
 
     steps:
       - name: Checkout
@@ -159,7 +159,7 @@ jobs:
         shell: bash
         env:
           TARGET: aarch64-apple-darwin
-        run: pnpm --filter @openwork/desktop build:electron
+        run: pnpm --filter @sofia/desktop build:electron
 
       - name: Package Electron alpha (macOS, signed + notarized)
         if: env.MACOS_NOTARIZE == 'true'
@@ -201,7 +201,7 @@ jobs:
             gh release create "$CHANNEL_TAG" \
               --repo "$GITHUB_REPOSITORY" \
               --title "$ALPHA_RELEASE_NAME" \
-              --notes "Rolling alpha channel for OpenWork macOS arm64 builds. Each publish adds versioned updater assets and advances the channel manifest." \
+              --notes "Rolling alpha channel for Sofia macOS arm64 builds. Each publish adds versioned updater assets and advances the channel manifest." \
               --target "$GITHUB_SHA" \
               --prerelease
           fi

@@ -16,58 +16,58 @@ afterEach(async () => {
 });
 
 async function makeWorkspace(): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), "openwork-portable-files-"));
+  const dir = await mkdtemp(join(tmpdir(), "sofia-portable-files-"));
   tempDirs.push(dir);
-  await mkdir(join(dir, ".opencode"), { recursive: true });
+  await mkdir(join(dir, ".sofia"), { recursive: true });
   return dir;
 }
 
 describe("portable files", () => {
-  test("lists only extra shareable .opencode files", async () => {
+  test("lists only extra shareable .sofia files", async () => {
     const workspaceRoot = await makeWorkspace();
-    await mkdir(join(workspaceRoot, ".opencode", "agents"), { recursive: true });
-    await mkdir(join(workspaceRoot, ".opencode", "plugins"), { recursive: true });
-    await mkdir(join(workspaceRoot, ".opencode", "tools"), { recursive: true });
-    await mkdir(join(workspaceRoot, ".opencode", "node_modules", "demo"), { recursive: true });
-    await mkdir(join(workspaceRoot, ".opencode", "skills", "demo"), { recursive: true });
-    await mkdir(join(workspaceRoot, ".opencode", "commands"), { recursive: true });
+    await mkdir(join(workspaceRoot, ".sofia", "agents"), { recursive: true });
+    await mkdir(join(workspaceRoot, ".sofia", "plugins"), { recursive: true });
+    await mkdir(join(workspaceRoot, ".sofia", "tools"), { recursive: true });
+    await mkdir(join(workspaceRoot, ".sofia", "node_modules", "demo"), { recursive: true });
+    await mkdir(join(workspaceRoot, ".sofia", "skills", "demo"), { recursive: true });
+    await mkdir(join(workspaceRoot, ".sofia", "commands"), { recursive: true });
 
-    await writeFile(join(workspaceRoot, ".opencode", "agents", "openwork.md"), "# agent\n", "utf8");
-    await writeFile(join(workspaceRoot, ".opencode", "plugins", "router.json"), '{"enabled":true}\n', "utf8");
-    await writeFile(join(workspaceRoot, ".opencode", "tools", "database.ts"), "export default {};\n", "utf8");
-    await writeFile(join(workspaceRoot, ".opencode", "node_modules", "demo", "index.js"), "export default 1;\n", "utf8");
-    await writeFile(join(workspaceRoot, ".opencode", "skills", "demo", "SKILL.md"), "# skill\n", "utf8");
-    await writeFile(join(workspaceRoot, ".opencode", "commands", "demo.md"), "# command\n", "utf8");
-    await writeFile(join(workspaceRoot, ".opencode", "openwork.json"), '{"version":1}\n', "utf8");
-    await writeFile(join(workspaceRoot, ".opencode", "opencode.db"), "sqlite-bytes", "utf8");
-    await writeFile(join(workspaceRoot, ".opencode", ".env"), "SECRET=value\n", "utf8");
+    await writeFile(join(workspaceRoot, ".sofia", "agents", "sofia.md"), "# agent\n", "utf8");
+    await writeFile(join(workspaceRoot, ".sofia", "plugins", "router.json"), '{"enabled":true}\n', "utf8");
+    await writeFile(join(workspaceRoot, ".sofia", "tools", "database.ts"), "export default {};\n", "utf8");
+    await writeFile(join(workspaceRoot, ".sofia", "node_modules", "demo", "index.js"), "export default 1;\n", "utf8");
+    await writeFile(join(workspaceRoot, ".sofia", "skills", "demo", "SKILL.md"), "# skill\n", "utf8");
+    await writeFile(join(workspaceRoot, ".sofia", "commands", "demo.md"), "# command\n", "utf8");
+    await writeFile(join(workspaceRoot, ".sofia", "sofia.json"), '{"version":1}\n', "utf8");
+    await writeFile(join(workspaceRoot, ".sofia", "opencode.db"), "sqlite-bytes", "utf8");
+    await writeFile(join(workspaceRoot, ".sofia", ".env"), "SECRET=value\n", "utf8");
 
     const files = await listPortableFiles(workspaceRoot);
 
     expect(files).toEqual([
-      { path: ".opencode/agents/openwork.md", content: "# agent\n" },
-      { path: ".opencode/plugins/router.json", content: '{"enabled":true}\n' },
-      { path: ".opencode/tools/database.ts", content: "export default {};\n" },
+      { path: ".sofia/agents/sofia.md", content: "# agent\n" },
+      { path: ".sofia/plugins/router.json", content: '{"enabled":true}\n' },
+      { path: ".sofia/tools/database.ts", content: "export default {};\n" },
     ]);
   });
 
   test("plans and writes validated portable files", async () => {
     const workspaceRoot = await makeWorkspace();
     const planned = planPortableFiles(workspaceRoot, [
-      { path: ".opencode/agents/demo.md", content: "hello\n" },
-      { path: ".opencode/tools/demo.ts", content: "export default {};\n" },
+      { path: ".sofia/agents/demo.md", content: "hello\n" },
+      { path: ".sofia/tools/demo.ts", content: "export default {};\n" },
     ]);
 
-    expect(planned[0]?.absolutePath.endsWith("/.opencode/agents/demo.md")).toBe(true);
-    expect(planned[1]?.absolutePath.endsWith("/.opencode/tools/demo.ts")).toBe(true);
+    expect(planned[0]?.absolutePath.endsWith("/.sofia/agents/demo.md")).toBe(true);
+    expect(planned[1]?.absolutePath.endsWith("/.sofia/tools/demo.ts")).toBe(true);
 
     await writePortableFiles(workspaceRoot, [
-      { path: ".opencode/agents/demo.md", content: "hello\n" },
-      { path: ".opencode/tools/demo.ts", content: "export default {};\n" },
+      { path: ".sofia/agents/demo.md", content: "hello\n" },
+      { path: ".sofia/tools/demo.ts", content: "export default {};\n" },
     ]);
 
-    const contents = await readFile(join(workspaceRoot, ".opencode", "agents", "demo.md"), "utf8");
-    const toolContents = await readFile(join(workspaceRoot, ".opencode", "tools", "demo.ts"), "utf8");
+    const contents = await readFile(join(workspaceRoot, ".sofia", "agents", "demo.md"), "utf8");
+    const toolContents = await readFile(join(workspaceRoot, ".sofia", "tools", "demo.ts"), "utf8");
     expect(contents).toBe("hello\n");
     expect(toolContents).toBe("export default {};\n");
   });
@@ -76,15 +76,15 @@ describe("portable files", () => {
     const workspaceRoot = await makeWorkspace();
 
     expect(() =>
-      planPortableFiles(workspaceRoot, [{ path: ".opencode/.env", content: "SECRET=value" }]),
+      planPortableFiles(workspaceRoot, [{ path: ".sofia/.env", content: "SECRET=value" }]),
     ).toThrow(/not allowed/i);
 
     expect(() =>
-      planPortableFiles(workspaceRoot, [{ path: ".opencode/package.json", content: "{}" }]),
+      planPortableFiles(workspaceRoot, [{ path: ".sofia/package.json", content: "{}" }]),
     ).toThrow(/not allowed/i);
 
     expect(() =>
-      planPortableFiles(workspaceRoot, [{ path: ".opencode/openwork.json", content: "{}" }]),
+      planPortableFiles(workspaceRoot, [{ path: ".sofia/sofia.json", content: "{}" }]),
     ).toThrow(/not allowed/i);
 
     expect(() =>
@@ -92,7 +92,7 @@ describe("portable files", () => {
     ).toThrow(/invalid/i);
 
     expect(() =>
-      planPortableFiles(workspaceRoot, [{ path: ".opencode/node_modules/demo/index.js", content: "oops" }]),
+      planPortableFiles(workspaceRoot, [{ path: ".sofia/node_modules/demo/index.js", content: "oops" }]),
     ).toThrow(/not allowed/i);
   });
 });

@@ -1,7 +1,7 @@
 import { expect } from "vitest";
-import { createAndSelectWorkspace, evalIn, go, waitFor } from "@openwork/behaviors";
-import type { Surface } from "@openwork/cdp";
-import { desktop } from "@openwork/hosts";
+import { createAndSelectWorkspace, evalIn, go, waitFor } from "@sofia/behaviors";
+import type { Surface } from "@sofia/cdp";
+import { desktop } from "@sofia/hosts";
 import {
   faultProxy,
   needs,
@@ -9,10 +9,10 @@ import {
   signInDesktopAs,
   test,
   unmetNeeds,
-} from "@openwork/testkit";
-import type { TestNeeds } from "@openwork/testkit";
+} from "@sofia/testkit";
+import type { TestNeeds } from "@sofia/testkit";
 
-const requirements: TestNeeds = { optIn: ["OPENWORK_EVAL_E2E_TESTS"] };
+const requirements: TestNeeds = { optIn: ["SOFIA_EVAL_E2E_TESTS"] };
 const missingRequirements = unmetNeeds(requirements, process.env);
 const title = missingRequirements.length > 0
   ? `Library Add session restore skipped — needs: ${missingRequirements.join(", ")}`
@@ -54,9 +54,9 @@ test(title, { timeout: 600_000 }, async ({ evidence, place }) => {
     org: {
       name: `Library session restore ${stamp}`,
       admin: {
-        email: `library-session-restore-${stamp}@openwork.test`,
+        email: `library-session-restore-${stamp}@sofia.test`,
         name: "Library Session Restore Admin",
-        password: "OpenWorkEval123!",
+        password: "SofiaEval123!",
       },
     },
   });
@@ -75,7 +75,7 @@ test(title, { timeout: 600_000 }, async ({ evidence, place }) => {
   });
 
   const selected = await createAndSelectWorkspace(surface, {
-    path: `/tmp/openwork-library-session-restore-${stamp}`,
+    path: `/tmp/sofia-library-session-restore-${stamp}`,
   });
   const skillsRoute = `/workspace/${selected.workspaceId}/extensions/skills`;
   const sessionRoute = `/workspace/${selected.workspaceId}/session`;
@@ -100,7 +100,7 @@ test(title, { timeout: 600_000 }, async ({ evidence, place }) => {
     label: "pre-sign-in session route",
   });
   const navigationInstalled = await evalIn(surface, `(() => {
-    window.addEventListener("openwork-den-session-updated", (event) => {
+    window.addEventListener("sofia-den-session-updated", (event) => {
       if (event.detail?.status === "success") {
         window.location.hash = ${JSON.stringify(`#${skillsRoute}`)};
       }
@@ -166,7 +166,7 @@ test(title, { timeout: 600_000 }, async ({ evidence, place }) => {
 
   const stalledBoundMs = 13_500;
   await waitFor(surface, `${enabledAddSkill}
-    && document.body.innerText.includes("OpenWork Cloud is temporarily unavailable.")`, {
+    && document.body.innerText.includes("Sofia Cloud is temporarily unavailable.")`, {
     timeoutMs: Math.max(1, stalledBoundMs - (Date.now() - stalledCommittedAt)),
     label: "enabled Add skill after stalled session timeout",
   });

@@ -1,7 +1,7 @@
 /**
- * Single entry point for embedding the OpenWork server in-process.
+ * Single entry point for embedding the Sofia App server in-process.
  *
- * Handles config resolution, Codex engine binary wiring, and server start in
+ * Handles config resolution, Sofia engine binary wiring, and server start in
  * one call -- mirrors what cli.ts does but returns a handle instead of owning
  * the process lifecycle.
  */
@@ -13,7 +13,9 @@ import type { ServeResult } from "./serve-node.js";
 import type { LocalManagedMcpVaultKeyProvider, ServerConfig } from "./types.js";
 
 export type EmbeddedServerOptions = CliArgs & {
-  /** Path to the Codex binary. Falls back to OPENWORK_CODEX_BIN env. */
+  /** Path to the Sofia engine. Falls back to SOFIA_BIN. */
+  sofiaBin?: string;
+  /** Compatibility with previously packaged desktop runtimes. */
   codexBin?: string;
   /** Secure key custody for the local managed MCP credential vault. */
   localManagedMcpVaultKey?: LocalManagedMcpVaultKeyProvider;
@@ -58,7 +60,7 @@ export async function startEmbeddedServer(options: EmbeddedServerOptions): Promi
 
     if (errors.length === 1) throw errors[0];
     if (errors.length > 1) {
-      throw new AggregateError(errors, "Failed to stop embedded OpenWork server");
+      throw new AggregateError(errors, "Failed to stop embedded Sofia App server");
     }
   };
 
@@ -76,7 +78,7 @@ export async function startEmbeddedServer(options: EmbeddedServerOptions): Promi
       } catch (cleanupError) {
         throw new AggregateError(
           [startupError, cleanupError],
-          "Embedded OpenWork server startup failed and cleanup was incomplete",
+          "Embedded Sofia App server startup failed and cleanup was incomplete",
         );
       }
       throw startupError;
@@ -87,11 +89,10 @@ export async function startEmbeddedServer(options: EmbeddedServerOptions): Promi
     await ensureLocalWorkspaceFiles(config.workspaces);
   }
 
-  // Codex binary resolution. The desktop resolves our own bundled binary;
-  // never probe for a system-installed codex.
-  const codexBin = options.codexBin || process.env.OPENWORK_CODEX_BIN?.trim() || null;
-  if (codexBin) {
-    setCodexBinaryForConfig(config, { path: codexBin, source: "custom" });
+  // The desktop passes the resolved Sofia engine; headless hosts use SOFIA_BIN.
+  const sofiaBin = options.sofiaBin || process.env.SOFIA_BIN?.trim() || options.codexBin || process.env.SOFIA_CODEX_BIN?.trim();
+  if (sofiaBin) {
+    setCodexBinaryForConfig(config, { path: sofiaBin, source: "custom" });
   }
 
   server = await duringStartup(() => startServer(config));

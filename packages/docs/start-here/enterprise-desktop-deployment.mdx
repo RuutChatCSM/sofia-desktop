@@ -1,23 +1,23 @@
 ---
 title: "Enterprise desktop deployment"
-description: "Deploy the OpenWork Enterprise binary with your existing software distribution, optionally pushing one configuration file through MDM."
+description: "Deploy the Sofia Enterprise binary with your existing software distribution, optionally pushing one configuration file through MDM."
 ---
 
-Enterprise deployment is the standard **OpenWork Enterprise binary** plus an optional MDM push of one configuration file. There is no customer-specific installer build, no wrapping, and no repackaging — the signed release artifacts are never modified, so normal macOS and Windows signature verification is preserved.
+Enterprise deployment is the standard **Sofia Enterprise binary** plus an optional MDM push of one configuration file. There is no customer-specific installer build, no wrapping, and no repackaging — the signed release artifacts are never modified, so normal macOS and Windows signature verification is preserved.
 
 ## The enterprise binary
 
-OpenWork ships a dedicated enterprise distribution alongside the public one. Both are published on [GitHub Releases](https://github.com/different-ai/openwork/releases); enterprise artifacts follow the `enterprise` update channel.
+Sofia ships a dedicated enterprise distribution alongside the public one. Both are published on [GitHub Releases](https://github.com/RuutChatCSM/sofia-desktop/releases); enterprise artifacts follow the `enterprise` update channel.
 
 | Platform | Artifact |
 | --- | --- |
-| macOS (Apple Silicon / Intel) | `openwork-enterprise-mac-arm64-<version>.dmg`, `openwork-enterprise-mac-x64-<version>.dmg` |
-| Windows (x64 / ARM64) | `openwork-enterprise-win-x64-<version>.exe`, `openwork-enterprise-win-arm64-<version>.exe` |
-| Linux | `openwork-enterprise-linux-x86_64-<version>.AppImage`, `openwork-enterprise-linux-arm64-<version>.AppImage`, `.tar.gz` variants |
+| macOS (Apple Silicon / Intel) | `sofia-enterprise-mac-arm64-<version>.dmg`, `sofia-enterprise-mac-x64-<version>.dmg` |
+| Windows (x64 / ARM64) | `sofia-enterprise-win-x64-<version>.exe`, `sofia-enterprise-win-arm64-<version>.exe` |
+| Linux | `sofia-enterprise-linux-x86_64-<version>.AppImage`, `sofia-enterprise-linux-arm64-<version>.AppImage`, `.tar.gz` variants |
 
 The enterprise distribution differs from the public build in ways that are baked into the package metadata at build time — not toggled by configuration:
 
-- The product is named **OpenWork Enterprise**.
+- The product is named **Sofia Enterprise**.
 - Sign-in is always required.
 - **Activation is always required**: before an administrator-provisioned activation completes, the app exposes only the minimal surface needed to accept a connect link and read or write its bootstrap configuration. Chat, tools, and workspace access stay locked.
 - Auto-update follows the `enterprise` release channel, so enterprise installs never pick up public-channel artifacts.
@@ -30,15 +30,15 @@ If you manage the fleet with MDM (Jamf, Intune, or similar), distribute the ente
 
 | OS | Canonical path |
 | --- | --- |
-| Windows | `%LOCALAPPDATA%\openwork\desktop-bootstrap.json` (`%XDG_CONFIG_HOME%\openwork\desktop-bootstrap.json` wins if set) |
-| macOS / Linux | `$XDG_CONFIG_HOME/openwork/desktop-bootstrap.json`, falling back to `~/.config/openwork/desktop-bootstrap.json` |
+| Windows | `%LOCALAPPDATA%\sofia\desktop-bootstrap.json` (`%XDG_CONFIG_HOME%\sofia\desktop-bootstrap.json` wins if set) |
+| macOS / Linux | `$XDG_CONFIG_HOME/sofia/desktop-bootstrap.json`, falling back to `~/.config/sofia/desktop-bootstrap.json` |
 
 ```json
 {
-  "baseUrl": "https://openwork.example.com",
-  "apiBaseUrl": "https://openwork.example.com/api/den",
+  "baseUrl": "https://sofia.example.com",
+  "apiBaseUrl": "https://sofia.example.com/api/den",
   "requireSignin": true,
-  "brandAppName": "Example Corp OpenWork",
+  "brandAppName": "Example Corp Sofia",
   "writtenAt": "2026-08-20T12:00:00.000Z"
 }
 ```
@@ -54,14 +54,14 @@ If you manage the fleet with MDM (Jamf, Intune, or similar), distribute the ente
 
 Deployment details worth knowing:
 
-- Older builds read a legacy `~/.config/openwork` path on every OS. Current builds still read it for compatibility; the newest `writtenAt` decides which file applies.
+- Older builds read a legacy `~/.config/sofia` path on every OS. Current builds still read it for compatibility; the newest `writtenAt` decides which file applies.
 - Clearing cloud configuration in the app removes bootstrap files entirely, so a fresh MDM-dropped config wins on the next launch.
-- `OPENWORK_DESKTOP_BOOTSTRAP_PATH` points a machine at an isolated bootstrap file for testing; legacy global configuration never crosses that boundary.
+- `SOFIA_DESKTOP_BOOTSTRAP_PATH` points a machine at an isolated bootstrap file for testing; legacy global configuration never crosses that boundary.
 
 ## What you do not push through MDM
 
 - **Activation.** The app writes `enterpriseActivation` into `desktop-bootstrap.json` only after a signed activation claim verifies. Do not provision this record yourself; a hand-written entry is not proof of a provisioned tenant, and the app treats it as incomplete.
-- **Certificates.** The desktop builds its trust bundle from the OS trust stores — Windows machine and user Root/CA stores, and the macOS administrator-controlled System keychains. Deploy enterprise CAs the way you already do; no OpenWork-specific certificate file exists. See [Certificate trust and proxies](/start-here/certificate-trust-and-proxies).
+- **Certificates.** The desktop builds its trust bundle from the OS trust stores — Windows machine and user Root/CA stores, and the macOS administrator-controlled System keychains. Deploy enterprise CAs the way you already do; no Sofia-specific certificate file exists. See [Certificate trust and proxies](/start-here/certificate-trust-and-proxies).
 - **Desktop policies.** Version pinning and feature policies are delivered by your Den server after sign-in and enforced by the app automatically — no MDM scripting. Manage them in the organization dashboard.
 
 ## Choosing between install links and MDM

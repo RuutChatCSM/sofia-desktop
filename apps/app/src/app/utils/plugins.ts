@@ -1,6 +1,5 @@
 import { parse } from "jsonc-parser";
 
-import type { OpencodeConfigFile } from "../lib/desktop";
 
 type PluginListValue = string | string[] | null | undefined;
 

@@ -2,12 +2,12 @@ extends: ./electron-builder.base.yml
 appId: app.sofia.desktop
 productName: Sofia App Enterprise
 extraMetadata:
-  openworkDistribution: enterprise
+  sofiaDistribution: enterprise
 protocols:
   - name: Sofia App Enterprise
     schemes:
-      - openwork
+      - sofia
 publish: null
 linux:
   executableName: sofia-app-enterprise
-artifactName: sofia-app-enterprise-${os}-${arch}-${version}.${ext}
+artifactName: sofia-enterprise-${os}-${arch}-${version}.${ext}

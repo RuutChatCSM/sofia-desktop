@@ -3,7 +3,7 @@ import { useCallback } from "react";
 
 import type { McpDirectoryInfo } from "../../../app/constants";
 import { evaluateEnablement, type EnablementContext } from "../../../app/enablement";
-import type { OpenworkServerClient } from "../../../app/lib/openwork-server";
+import type { SofiaServerClient } from "../../../app/lib/sofia-server";
 import type { McpServerEntry } from "../../../app/types";
 import { getExtensionConfigSlot, type ExtensionConfigContext } from "./extension-registry";
 import type { LocalProviderInstallInput } from "./openai-image-extension";
@@ -14,8 +14,8 @@ type ProviderLike = {
 };
 
 type SettingsExtensionControllerInput = {
-  openworkServerClient: OpenworkServerClient | null;
-  hostOpenworkServerClient: OpenworkServerClient | null;
+  sofiaServerClient: SofiaServerClient | null;
+  hostSofiaServerClient: SofiaServerClient | null;
   enablementContext: EnablementContext;
   mcpServers: McpServerEntry[];
   mcpConnectingName: string | null;
@@ -51,15 +51,15 @@ type SettingsExtensionControllerInput = {
 function hasOpenAiEnv(input: Pick<SettingsExtensionControllerInput, "providers" | "providerConnectedIds" | "userEnvKeys">) {
   return input.userEnvKeys.includes("OPENAI_REALTIME_API_KEY") ||
     input.userEnvKeys.includes("OPENAI_API_KEY") ||
-    input.userEnvKeys.includes("OPENWORK_OPENAI_IMAGE_API_KEY") ||
+    input.userEnvKeys.includes("SOFIA_OPENAI_IMAGE_API_KEY") ||
     input.providers.some((provider) => provider.id === "openai" && provider.source === "env") ||
     input.providerConnectedIds.includes("openai");
 }
 
 export function useSettingsExtensionController(input: SettingsExtensionControllerInput) {
   const configContextForEntry = useCallback((entry: McpDirectoryInfo): ExtensionConfigContext => ({
-    openworkServerClient: input.openworkServerClient,
-    hostOpenworkServerClient: input.hostOpenworkServerClient,
+    sofiaServerClient: input.sofiaServerClient,
+    hostSofiaServerClient: input.hostSofiaServerClient,
     restartLocalServer: input.restartLocalServer,
     computerUse: {
       connected: input.mcpServers.some((server) => server.name === "computer-use"),

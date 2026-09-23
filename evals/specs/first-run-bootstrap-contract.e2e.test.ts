@@ -10,38 +10,38 @@ import {
   readDenClientState,
   server,
   test,
-} from "@openwork/testkit";
+} from "@sofia/testkit";
 
 const desktopConfigPath = "/api/den/v1/me/desktop-config";
-const e2eTestsEnabled = process.env.OPENWORK_EVAL_E2E_TESTS === "1";
-const localPlacement = process.env.OPENWORK_EVAL_DAYTONA !== "1" && !process.env.OPENWORK_EVAL_DEN_API_URL?.trim();
+const e2eTestsEnabled = process.env.SOFIA_EVAL_E2E_TESTS === "1";
+const localPlacement = process.env.SOFIA_EVAL_DAYTONA !== "1" && !process.env.SOFIA_EVAL_DEN_API_URL?.trim();
 const mysqlOpen = await localMysqlIsRunning();
 const title = !e2eTestsEnabled
-  ? "first-run bootstrap contract skipped — needs: set OPENWORK_EVAL_E2E_TESTS=1"
+  ? "first-run bootstrap contract skipped — needs: set SOFIA_EVAL_E2E_TESTS=1"
   : !localPlacement
-    ? "first-run bootstrap contract skipped — needs local placement without OPENWORK_EVAL_DEN_API_URL"
+    ? "first-run bootstrap contract skipped — needs local placement without SOFIA_EVAL_DEN_API_URL"
     : !mysqlOpen
       ? "first-run bootstrap contract skipped — needs MySQL on 127.0.0.1:3306"
       : "first-run handoff bootstraps Connect while desktop config is rate limited";
 
 test.skipIf(!e2eTestsEnabled || !localPlacement || !mysqlOpen)(title, async ({ evidence, place }) => {
-  needs({ optIn: ["OPENWORK_EVAL_E2E_TESTS"] });
+  needs({ optIn: ["SOFIA_EVAL_E2E_TESTS"] });
 
   await using den = await server({
     place,
     org: {
       name: "First Run Bootstrap",
       admin: {
-        email: `first-run-bootstrap-admin-${Date.now()}@openwork.test`,
+        email: `first-run-bootstrap-admin-${Date.now()}@sofia.test`,
         name: "First Run Bootstrap Admin",
-        password: "OpenWorkEval123!",
+        password: "SofiaEval123!",
       },
     },
   });
   await inviteMember(den, "member", {
-    email: `first-run-bootstrap-member-${Date.now()}@openwork.test`,
+    email: `first-run-bootstrap-member-${Date.now()}@sofia.test`,
     name: "First Run Bootstrap Member",
-    password: "OpenWorkEval123!",
+    password: "SofiaEval123!",
   });
   await using proxy = await faultProxy(den.ref);
   proxy.faults.status(desktopConfigPath, 429, { times: 5 });

@@ -20,12 +20,12 @@ export function workspaceIdForRemote(baseUrl: string, directory?: string | null)
   return workspaceIdForKey(key);
 }
 
-export function workspaceIdForOpenwork(hostUrl: string, workspaceId?: string | null): string {
+export function workspaceIdForSofia(hostUrl: string, workspaceId?: string | null): string {
   const normalizedHostUrl = hostUrl.trim();
   const normalizedWorkspaceId = workspaceId?.trim() ?? "";
   const key = normalizedWorkspaceId
-    ? `openwork::${normalizedHostUrl}::${normalizedWorkspaceId}`
-    : `openwork::${normalizedHostUrl}`;
+    ? `sofia::${normalizedHostUrl}::${normalizedWorkspaceId}`
+    : `sofia::${normalizedHostUrl}`;
   return workspaceIdForKey(key);
 }
 
@@ -40,13 +40,13 @@ export function buildWorkspaceInfos(
     const remoteType = workspace.remoteType;
     const id = workspace.id?.trim()
       || (workspaceType === "remote"
-        ? remoteType === "openwork"
-          ? workspaceIdForOpenwork(workspace.openworkHostUrl ?? workspace.baseUrl ?? "", workspace.openworkWorkspaceId)
+        ? remoteType === "sofia"
+          ? workspaceIdForSofia(workspace.sofiaHostUrl ?? workspace.baseUrl ?? "", workspace.sofiaWorkspaceId)
           : workspaceIdForRemote(workspace.baseUrl ?? "", workspace.directory)
         : workspaceIdForPath(resolvedPath));
     const name = workspace.name?.trim()
       || workspace.displayName?.trim()
-      || workspace.openworkWorkspaceName?.trim()
+      || workspace.sofiaWorkspaceName?.trim()
       || basename(resolvedPath || workspace.directory?.trim() || workspace.baseUrl?.trim() || "Workspace");
     return {
       id,
@@ -58,10 +58,10 @@ export function buildWorkspaceInfos(
       baseUrl: workspace.baseUrl,
       directory: workspace.directory,
       displayName: workspace.displayName,
-      openworkHostUrl: workspace.openworkHostUrl,
-      openworkToken: workspace.openworkToken,
-      openworkWorkspaceId: workspace.openworkWorkspaceId,
-      openworkWorkspaceName: workspace.openworkWorkspaceName,
+      sofiaHostUrl: workspace.sofiaHostUrl,
+      sofiaToken: workspace.sofiaToken,
+      sofiaWorkspaceId: workspace.sofiaWorkspaceId,
+      sofiaWorkspaceName: workspace.sofiaWorkspaceName,
       sandboxBackend: workspace.sandboxBackend,
       sandboxRunId: workspace.sandboxRunId,
       sandboxContainerName: workspace.sandboxContainerName,
@@ -72,7 +72,7 @@ export function buildWorkspaceInfos(
 }
 
 /**
- * Pick the workspace the server-managed OpenCode engine should boot in.
+ * Pick the workspace the server-managed Sofia engine should boot in.
  *
  * The engine serves every workspace but needs one local directory to start in.
  * `config.workspaces[0]` is not reliably that: a freshly added remote worker is

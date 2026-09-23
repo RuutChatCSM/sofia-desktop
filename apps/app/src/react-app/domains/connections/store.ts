@@ -18,20 +18,16 @@ import { finishPerf, perfNow, recordPerfLog } from "../../../app/lib/perf-log";
 import {
   assertDesktopWebUrl,
   openDesktopUrl,
-  readOpencodeConfig,
-  writeOpencodeConfig,
-  type OpencodeConfigFile,
 } from "../../../app/lib/desktop";
 import { toSessionTransportDirectory } from "../../../app/lib/session-scope";
 import {
   parseMcpServersFromContent,
-  removeMcpFromConfig,
   validateMcpServerName,
 } from "../../../app/mcp";
 import {
-  buildOpenworkWorkspaceBaseUrl,
-  type OpenworkServerClient,
-} from "../../../app/lib/openwork-server";
+  buildSofiaWorkspaceBaseUrl,
+  type SofiaServerClient,
+} from "../../../app/lib/sofia-server";
 import type {
   Client,
   McpServerEntry,
@@ -40,9 +36,9 @@ import type {
   ReloadTrigger,
 } from "../../../app/types";
 import { isDesktopRuntime, normalizeDirectoryPath, safeStringify } from "../../../app/utils";
-import { conflictsWithOpenworkConnect } from "./mcp-connection-boundary";
+import { conflictsWithSofiaConnect } from "./mcp-connection-boundary";
 
-import type { OpenworkServerStore } from "./openwork-server-store";
+import type { SofiaServerStore } from "./sofia-server-store";
 import { attemptSilentMcpReauth } from "./mcp-silent-reauth";
 import {
   CLOUD_MCP_SERVER_NAME,
@@ -52,7 +48,7 @@ import {
   clearCloudMcpDisabledIntent,
   cloudMcpDisplaySummary,
   recordCloudMcpDisabledIntent,
-  runOpenworkCloudMcpReconciler,
+  runSofiaCloudMcpReconciler,
   type CloudMcpOperationContext,
 } from "./cloud-mcp-reconciler";
 
@@ -63,9 +59,9 @@ type SetStateAction<T> = T | ((current: T) => T);
 // den-api): when the two were equal, the marker was stale the instant it
 // was written and every sync tick re-wrote the MCP config.
 const CLOUD_MCP_REFRESH_MARGIN_MS = 24 * 60 * 60 * 1000;
-const LOCAL_OPENWORK_SERVER_RECOVERY_TIMEOUT_MS = 30_000;
+const LOCAL_SOFIA_SERVER_RECOVERY_TIMEOUT_MS = 30_000;
 
-async function withLocalOpenworkServerRecoveryTimeout<T>(
+async function withLocalSofiaServerRecoveryTimeout<T>(
   task: Promise<T>,
   timeoutMs: number,
 ): Promise<T> {
@@ -109,10 +105,10 @@ export function createConnectionsStore(options: {
   selectedWorkspaceId: () => string;
   selectedWorkspaceRoot: () => string;
   workspaceType: () => "local" | "remote";
-  openworkServer: OpenworkServerStore;
+  sofiaServer: SofiaServerStore;
   runtimeWorkspaceId: () => string | null;
   ensureRuntimeWorkspaceId?: () => Promise<string | null | undefined>;
-  localOpenworkServerRecoveryTimeoutMs?: number;
+  localSofiaServerRecoveryTimeoutMs?: number;
   setProjectDir?: (value: string) => void;
   developerMode: () => boolean;
   markReloadRequired?: (reason: ReloadReason, trigger?: ReloadTrigger) => void;
@@ -179,13 +175,13 @@ export function createConnectionsStore(options: {
     return `${workspaceType}:${workspaceId}:${root}:${runtimeWorkspaceId}`;
   };
 
-  const getOpenworkSnapshot = () => options.openworkServer.getSnapshot();
+  const getSofiaSnapshot = () => options.sofiaServer.getSnapshot();
 
-  const resolveOpenworkWorkspaceId = async () => {
+  const resolveSofiaWorkspaceId = async () => {
     const current = options.runtimeWorkspaceId()?.trim();
     if (current) return current;
-    const openworkSnapshot = getOpenworkSnapshot();
-    if (openworkSnapshot.openworkServerStatus !== "connected" || !openworkSnapshot.openworkServerClient) {
+    const sofiaSnapshot = getSofiaSnapshot();
+    if (sofiaSnapshot.sofiaServerStatus !== "connected" || !sofiaSnapshot.sofiaServerClient) {
       return null;
     }
     const ensured = (await options.ensureRuntimeWorkspaceId?.())?.trim();
@@ -193,51 +189,51 @@ export function createConnectionsStore(options: {
     return options.workspaceType() === "local" ? options.selectedWorkspaceId().trim() || null : null;
   };
 
-  const resolveConfigOpenworkTarget = async (mode: "read" | "write") => {
-    const openworkSnapshot = getOpenworkSnapshot();
-    const openworkClient = openworkSnapshot.openworkServerClient;
-    const openworkWorkspaceId = await resolveOpenworkWorkspaceId();
-    const hasOpenworkTarget =
-      openworkSnapshot.openworkServerStatus === "connected" &&
-      Boolean(openworkClient && openworkWorkspaceId);
-    const canUseOpenworkServer =
-      hasOpenworkTarget &&
-      openworkSnapshot.openworkServerCapabilities?.config?.[mode] !== false;
+  const resolveConfigSofiaTarget = async (mode: "read" | "write") => {
+    const sofiaSnapshot = getSofiaSnapshot();
+    const sofiaClient = sofiaSnapshot.sofiaServerClient;
+    const sofiaWorkspaceId = await resolveSofiaWorkspaceId();
+    const hasSofiaTarget =
+      sofiaSnapshot.sofiaServerStatus === "connected" &&
+      Boolean(sofiaClient && sofiaWorkspaceId);
+    const canUseSofiaServer =
+      hasSofiaTarget &&
+      sofiaSnapshot.sofiaServerCapabilities?.config?.[mode] !== false;
     return {
-      openworkClient,
-      openworkWorkspaceId,
-      hasOpenworkTarget,
-      canUseOpenworkServer,
+      sofiaClient,
+      sofiaWorkspaceId,
+      hasSofiaTarget,
+      canUseSofiaServer,
     };
   };
 
-  const resolveMcpOpenworkTarget = async (mode: "read" | "write") => {
-    let openworkSnapshot = getOpenworkSnapshot();
-    let openworkClient = openworkSnapshot.openworkServerClient;
-    let openworkWorkspaceId = await resolveOpenworkWorkspaceId();
-    if ((!openworkClient || !openworkWorkspaceId || openworkSnapshot.openworkServerStatus !== "connected")
+  const resolveMcpSofiaTarget = async (mode: "read" | "write") => {
+    let sofiaSnapshot = getSofiaSnapshot();
+    let sofiaClient = sofiaSnapshot.sofiaServerClient;
+    let sofiaWorkspaceId = await resolveSofiaWorkspaceId();
+    if ((!sofiaClient || !sofiaWorkspaceId || sofiaSnapshot.sofiaServerStatus !== "connected")
       && isDesktopRuntime()
       && options.workspaceType() === "local") {
-      openworkClient = await withLocalOpenworkServerRecoveryTimeout(
-        options.openworkServer.ensureLocalOpenworkServerClient(),
-        options.localOpenworkServerRecoveryTimeoutMs ?? LOCAL_OPENWORK_SERVER_RECOVERY_TIMEOUT_MS,
+      sofiaClient = await withLocalSofiaServerRecoveryTimeout(
+        options.sofiaServer.ensureLocalSofiaServerClient(),
+        options.localSofiaServerRecoveryTimeoutMs ?? LOCAL_SOFIA_SERVER_RECOVERY_TIMEOUT_MS,
       );
-      openworkSnapshot = getOpenworkSnapshot();
-      openworkWorkspaceId = options.runtimeWorkspaceId()?.trim()
+      sofiaSnapshot = getSofiaSnapshot();
+      sofiaWorkspaceId = options.runtimeWorkspaceId()?.trim()
         || (await options.ensureRuntimeWorkspaceId?.())?.trim()
         || options.selectedWorkspaceId().trim()
         || null;
     }
-    const hasOpenworkTarget =
-      Boolean(openworkClient && openworkWorkspaceId);
-    const canUseOpenworkServer =
-      hasOpenworkTarget &&
-      openworkSnapshot.openworkServerCapabilities?.mcp?.[mode] !== false;
+    const hasSofiaTarget =
+      Boolean(sofiaClient && sofiaWorkspaceId);
+    const canUseSofiaServer =
+      hasSofiaTarget &&
+      sofiaSnapshot.sofiaServerCapabilities?.mcp?.[mode] !== false;
     return {
-      openworkClient,
-      openworkWorkspaceId,
-      hasOpenworkTarget,
-      canUseOpenworkServer,
+      sofiaClient,
+      sofiaWorkspaceId,
+      hasSofiaTarget,
+      canUseSofiaServer,
     };
   };
 
@@ -248,57 +244,37 @@ export function createConnectionsStore(options: {
     ) as McpStatusMap;
   };
 
-  const readMcpConfigFile = async (scope: "project" | "global"): Promise<OpencodeConfigFile | null> => {
-    const projectDir = options.projectDir().trim();
-    const { openworkClient, openworkWorkspaceId, hasOpenworkTarget, canUseOpenworkServer } =
-      await resolveConfigOpenworkTarget("read");
-
-    if (canUseOpenworkServer && openworkClient && openworkWorkspaceId) {
-      return openworkClient.readOpencodeConfigFile(openworkWorkspaceId, scope);
-    }
-
-    if (hasOpenworkTarget) {
-      return null;
-    }
-
-    if (options.workspaceType() !== "local" || !isDesktopRuntime()) {
-      return null;
-    }
-
-    return readOpencodeConfig(scope, projectDir) as Promise<OpencodeConfigFile>;
-  };
-
   const ensureActiveClient = async () => {
     let activeClient = options.client();
     if (activeClient) {
       return activeClient;
     }
 
-    const openworkSnapshot = getOpenworkSnapshot();
-    const openworkBaseUrl = openworkSnapshot.openworkServerBaseUrl.trim();
-    const token = openworkSnapshot.openworkServerAuth.token?.trim();
-    if (!openworkBaseUrl || !token) {
+    const sofiaSnapshot = getSofiaSnapshot();
+    const sofiaBaseUrl = sofiaSnapshot.sofiaServerBaseUrl.trim();
+    const token = sofiaSnapshot.sofiaServerAuth.token?.trim();
+    if (!sofiaBaseUrl || !token) {
       return null;
     }
 
     const mountedBaseUrl =
-      buildOpenworkWorkspaceBaseUrl(openworkBaseUrl, await resolveOpenworkWorkspaceId()) ?? openworkBaseUrl;
+      buildSofiaWorkspaceBaseUrl(sofiaBaseUrl, await resolveSofiaWorkspaceId()) ?? sofiaBaseUrl;
     activeClient = createClient(`${mountedBaseUrl.replace(/\/+$/, "")}/opencode`, undefined, {
       token,
-      mode: "openwork",
+      mode: "sofia",
     });
     options.setClient(activeClient);
     return activeClient;
   };
 
-  const resolveWritableOpenworkTarget = async () => {
-    return resolveMcpOpenworkTarget("write");
+  const resolveWritableSofiaTarget = async () => {
+    return resolveMcpSofiaTarget("write");
   };
 
   const resolveCloudMcpOperationContext = async (fallbackUrl?: string | null): Promise<CloudMcpOperationContext | null> => {
     const settings = readDenSettings();
-    const workspaceId = await resolveOpenworkWorkspaceId();
-    const serverBaseUrl = getOpenworkSnapshot().openworkServerClient?.baseUrl.trim() ?? "";
+    const workspaceId = await resolveSofiaWorkspaceId();
+    const serverBaseUrl = getSofiaSnapshot().sofiaServerClient?.baseUrl.trim() ?? "";
     const orgId = settings.activeOrgId?.trim() ?? "";
     if (!workspaceId || !serverBaseUrl || !orgId) return null;
     return {
@@ -332,29 +308,29 @@ export function createConnectionsStore(options: {
     return resolvedProjectDir;
   };
 
-  const listMcpFromOpenworkServer = async (projectDir: string) => {
-    const openworkSnapshot = getOpenworkSnapshot();
-    const { openworkClient, openworkWorkspaceId, hasOpenworkTarget, canUseOpenworkServer } =
-      await resolveMcpOpenworkTarget("read");
-    const canTryOpenworkServer = canUseOpenworkServer;
+  const listMcpFromSofiaServer = async (projectDir: string) => {
+    const sofiaSnapshot = getSofiaSnapshot();
+    const { sofiaClient, sofiaWorkspaceId, hasSofiaTarget, canUseSofiaServer } =
+      await resolveMcpSofiaTarget("read");
+    const canTrySofiaServer = canUseSofiaServer;
 
     recordPerfLog(options.developerMode(), "mcp.refresh", "server-path-check", {
       workspaceType: options.workspaceType(),
       projectDir: projectDir || null,
-      openworkStatus: openworkSnapshot.openworkServerStatus,
-      hasOpenworkClient: Boolean(openworkClient),
-      openworkWorkspaceId: openworkWorkspaceId ?? null,
-      canReadMcp: openworkSnapshot.openworkServerCapabilities?.mcp?.read ?? null,
-      canTryOpenworkServer,
+      sofiaStatus: sofiaSnapshot.sofiaServerStatus,
+      hasSofiaClient: Boolean(sofiaClient),
+      sofiaWorkspaceId: sofiaWorkspaceId ?? null,
+      canReadMcp: sofiaSnapshot.sofiaServerCapabilities?.mcp?.read ?? null,
+      canTrySofiaServer,
     });
 
-    if (hasOpenworkTarget && !canTryOpenworkServer) {
+    if (hasSofiaTarget && !canTrySofiaServer) {
       throw new Error("Sofia App server cannot read MCP config for this workspace.");
     }
 
-    if (!canTryOpenworkServer || !openworkClient || !openworkWorkspaceId) return null;
+    if (!canTrySofiaServer || !sofiaClient || !sofiaWorkspaceId) return null;
 
-    const response = await openworkClient.listMcp(openworkWorkspaceId);
+    const response = await sofiaClient.listMcp(sofiaWorkspaceId);
     const next = response.items.map((entry) => ({
       name: entry.name,
       config: entry.config as McpServerEntry["config"],
@@ -403,9 +379,9 @@ export function createConnectionsStore(options: {
     };
   };
 
-  const resolveDesktopCommand = async (commandName: "getComputerUseMcpCommand" | "getOpenworkUiMcpCommand", fallbackOnError = true) => {
+  const resolveDesktopCommand = async (commandName: "getComputerUseMcpCommand" | "getSofiaUiMcpCommand", fallbackOnError = true) => {
     try {
-      const command = await window.__OPENWORK_ELECTRON__?.invokeDesktop?.(commandName);
+      const command = await window.__SOFIA_ELECTRON__?.invokeDesktop?.(commandName);
       if (Array.isArray(command) && command.every((part) => typeof part === "string") && command.length > 0) {
         return command;
       }
@@ -422,21 +398,21 @@ export function createConnectionsStore(options: {
 
   const resolveLocalMcpCommand = async (entry: McpDirectoryInfo) => {
     const mcpResource = extensionResource(entry.extensionManifest, "mcp");
-    if (mcpResource?.localCommandRef === "openwork.computerUseMcp") {
+    if (mcpResource?.localCommandRef === "sofia.computerUseMcp") {
       const command = await resolveDesktopCommand("getComputerUseMcpCommand", false);
       return command ?? entry.command;
     }
-    if (mcpResource?.localCommandRef === "openwork.uiMcp" || entry.serverName === "openwork-ui") {
-      const command = await resolveDesktopCommand("getOpenworkUiMcpCommand");
+    if (mcpResource?.localCommandRef === "sofia.uiMcp" || entry.serverName === "sofia-ui") {
+      const command = await resolveDesktopCommand("getSofiaUiMcpCommand");
       return command ?? entry.command;
     }
     return entry.command;
   };
 
   const resolveLocalMcpEnvironment = async (entry: McpDirectoryInfo) => {
-    if (entry.serverName !== "openwork-ui") return undefined;
+    if (entry.serverName !== "sofia-ui") return undefined;
     try {
-      const environment = await window.__OPENWORK_ELECTRON__?.invokeDesktop?.("getOpenworkUiMcpEnvironment");
+      const environment = await window.__SOFIA_ELECTRON__?.invokeDesktop?.("getSofiaUiMcpEnvironment");
       if (environment && typeof environment === "object" && !Array.isArray(environment)) {
         return Object.fromEntries(
           Object.entries(environment).filter((entry): entry is [string, string] =>
@@ -445,7 +421,7 @@ export function createConnectionsStore(options: {
         );
       }
     } catch {
-      // Discovery fallback in openwork-ui-mcp still handles normal launches.
+      // Discovery fallback in sofia-ui-mcp still handles normal launches.
     }
     return undefined;
   };
@@ -489,7 +465,7 @@ export function createConnectionsStore(options: {
 
     try {
       setStateField("mcpStatus", null);
-      const serverResult = await listMcpFromOpenworkServer(projectDir);
+      const serverResult = await listMcpFromSofiaServer(projectDir);
       if (serverResult) {
         // Surface engine registration failures instead of leaving users
         // staring at an MCP that silently shows as disconnected.
@@ -513,8 +489,8 @@ export function createConnectionsStore(options: {
       recordPerfLog(options.developerMode(), "mcp.refresh", "server-path-error", {
         message: error instanceof Error ? error.message : String(error),
       });
-      const serverTarget = await resolveMcpOpenworkTarget("read").catch(() => null);
-      if (isRemoteWorkspace || serverTarget?.hasOpenworkTarget) {
+      const serverTarget = await resolveMcpSofiaTarget("read").catch(() => null);
+      if (isRemoteWorkspace || serverTarget?.hasSofiaTarget) {
         mutateState((current) => ({
           ...current,
           mcpServers: [],
@@ -545,102 +521,22 @@ export function createConnectionsStore(options: {
       return;
     }
 
-    if (!projectDir) {
-      mutateState((current) => ({
-        ...current,
-        mcpStatus: "Pick a workspace folder to load MCP servers.",
-        mcpServers: [],
-        mcpStatuses: {},
-      }));
-      return;
-    }
-
-    try {
-      setStateField("mcpStatus", null);
-      recordPerfLog(options.developerMode(), "mcp.refresh", "desktop-project-fallback", {
-        projectDir,
-      });
-      const [globalConfig, projectConfig] = await Promise.all([
-        readOpencodeConfig("global", projectDir) as Promise<OpencodeConfigFile>,
-        readOpencodeConfig("project", projectDir) as Promise<OpencodeConfigFile>,
-      ]);
-      const globalServers = globalConfig.exists && globalConfig.content
-        ? parseMcpServersFromContent(globalConfig.content).map((entry) => ({
-          ...entry,
-          source: "config.global" as const,
-        }))
-        : [];
-      const projectServers = projectConfig.exists && projectConfig.content
-        ? parseMcpServersFromContent(projectConfig.content)
-        : [];
-      const projectNames = new Set(projectServers.map((entry) => entry.name));
-      const fileServers = [
-        ...globalServers.filter((entry) => !projectNames.has(entry.name)),
-        ...projectServers,
-      ];
-      // Runtime-DB MCPs (source "config.remote") only exist on the Sofia App
-      // server. Keep the last-known entries instead of silently dropping them
-      // while the server is briefly unreachable (startup race) — otherwise
-      // enabled MCPs like openwork-ui render as "off".
-      const fileNames = new Set(fileServers.map((entry) => entry.name));
-      const runtimeServers = state.mcpServers.filter(
-        (entry) => entry.source === "config.remote" && !fileNames.has(entry.name),
-      );
-      const next = [...fileServers, ...runtimeServers];
-
-      recordPerfLog(options.developerMode(), "mcp.refresh", "desktop-project-fallback-result", {
-        globalConfigPath: globalConfig.path,
-        projectConfigPath: projectConfig.path,
-        count: next.length,
-        names: next.map((entry) => entry.name),
-        sources: next.map((entry) => entry.source ?? "unknown"),
-      });
-
-      if (!globalConfig.exists && !projectConfig.exists && runtimeServers.length === 0) {
-        mutateState((current) => ({
-          ...current,
-          mcpServers: [],
-          mcpStatuses: {},
-          mcpStatus: "No opencode.json found yet. Create one by connecting an MCP.",
-        }));
-        return;
-      }
-
-      let nextStatuses = state.mcpStatuses;
-      const activeClient = options.client();
-      if (activeClient) {
-        try {
-          const status = unwrap(await activeClient.mcp.status({ directory: projectDir }));
-          nextStatuses = filterConfiguredStatuses(status as McpStatusMap, next);
-        } catch {
-          nextStatuses = {};
-        }
-      }
-
-      mutateState((current) => ({
-        ...current,
-        mcpServers: next,
-        mcpLastUpdatedAt: Date.now(),
-        mcpStatuses: nextStatuses,
-        mcpStatus: next.length ? null : "No MCP servers configured yet.",
-      }));
-      void healUnhealthyMcpEntries(next, nextStatuses);
-    } catch (error) {
-      mutateState((current) => ({
-        ...current,
-        mcpServers: [],
-        mcpStatuses: {},
-        mcpStatus: error instanceof Error ? error.message : "Failed to load MCP servers",
-      }));
-    }
+    // Sofia serves MCP config from the runtime DB: there is no local engine
+    // config file to read.
+    mutateState((current) => ({
+      ...current,
+      mcpServers: [],
+      mcpStatuses: {},
+      mcpStatus: "Sofia App server unavailable. Connect to manage MCP servers.",
+    }));
   }
 
   async function connectMcp(entry: McpDirectoryInfo): Promise<McpConnectResult> {
     const startedAt = perfNow();
-    const openworkSnapshot = getOpenworkSnapshot();
+    const sofiaSnapshot = getSofiaSnapshot();
     const isRemoteWorkspace =
       options.workspaceType() === "remote" ||
-      (!isDesktopRuntime() && openworkSnapshot.openworkServerStatus === "connected");
+      (!isDesktopRuntime() && sofiaSnapshot.sofiaServerStatus === "connected");
     const projectDir = options.projectDir().trim();
     const entryType = entry.type ?? "remote";
 
@@ -651,28 +547,28 @@ export function createConnectionsStore(options: {
       projectDir: projectDir || null,
     });
 
-    const { openworkClient, openworkWorkspaceId, hasOpenworkTarget, canUseOpenworkServer } =
-      await resolveWritableOpenworkTarget();
+    const { sofiaClient, sofiaWorkspaceId, hasSofiaTarget, canUseSofiaServer } =
+      await resolveWritableSofiaTarget();
 
-    if (isRemoteWorkspace && !canUseOpenworkServer) {
+    if (isRemoteWorkspace && !canUseSofiaServer) {
       const error = "Sofia App server unavailable. MCP config is read-only.";
       setStateField("mcpStatus", error);
       finishPerf(options.developerMode(), "mcp.connect", "blocked", startedAt, {
-        reason: "openwork-server-unavailable",
+        reason: "sofia-server-unavailable",
       });
       return { ok: false, error };
     }
 
-    if (hasOpenworkTarget && !canUseOpenworkServer) {
+    if (hasSofiaTarget && !canUseSofiaServer) {
       const error = "Sofia App server MCP config is read-only.";
       setStateField("mcpStatus", error);
       finishPerf(options.developerMode(), "mcp.connect", "blocked", startedAt, {
-        reason: "openwork-server-read-only",
+        reason: "sofia-server-read-only",
       });
       return { ok: false, error };
     }
 
-    if (!canUseOpenworkServer && !isDesktopRuntime()) {
+    if (!canUseSofiaServer && !isDesktopRuntime()) {
       const error = t("mcp.desktop_required");
       setStateField("mcpStatus", error);
       finishPerf(options.developerMode(), "mcp.connect", "blocked", startedAt, {
@@ -681,7 +577,7 @@ export function createConnectionsStore(options: {
       return { ok: false, error };
     }
 
-    if (!isRemoteWorkspace && !projectDir && !canUseOpenworkServer) {
+    if (!isRemoteWorkspace && !projectDir && !canUseSofiaServer) {
       const error = t("mcp.pick_workspace_first");
       setStateField("mcpStatus", error);
       finishPerf(options.developerMode(), "mcp.connect", "blocked", startedAt, {
@@ -690,8 +586,8 @@ export function createConnectionsStore(options: {
       return { ok: false, error };
     }
 
-    const activeClient = canUseOpenworkServer ? options.client() ?? await ensureActiveClient().catch(() => null) : await ensureActiveClient();
-    if (!activeClient && !canUseOpenworkServer) {
+    const activeClient = canUseSofiaServer ? options.client() ?? await ensureActiveClient().catch(() => null) : await ensureActiveClient();
+    if (!activeClient && !canUseSofiaServer) {
       const error = t("mcp.connect_server_first");
       setStateField("mcpStatus", error);
       finishPerf(options.developerMode(), "mcp.connect", "blocked", startedAt, {
@@ -701,7 +597,7 @@ export function createConnectionsStore(options: {
     }
 
     const resolvedProjectDir = activeClient ? await resolveProjectDir(activeClient, projectDir) : projectDir;
-    if (!resolvedProjectDir && !canUseOpenworkServer) {
+    if (!resolvedProjectDir && !canUseSofiaServer) {
       const error = t("mcp.pick_workspace_first");
       setStateField("mcpStatus", error);
       finishPerf(options.developerMode(), "mcp.connect", "blocked", startedAt, {
@@ -713,11 +609,11 @@ export function createConnectionsStore(options: {
     const slug = entry.id ?? getMcpServerName(entry);
     const action = snapshot.mcpServers.some((server) => server.name === slug) ? "updated" : "added";
 
-    if (conflictsWithOpenworkConnect(entry)) {
-      const error = t("mcp.name_reserved_openwork_connect");
+    if (conflictsWithSofiaConnect(entry)) {
+      const error = t("mcp.name_reserved_sofia_connect");
       setStateField("mcpStatus", error);
       finishPerf(options.developerMode(), "mcp.connect", "blocked", startedAt, {
-        reason: "openwork-connect-name-reserved",
+        reason: "sofia-connect-name-reserved",
       });
       return { ok: false, error };
     }
@@ -725,11 +621,11 @@ export function createConnectionsStore(options: {
     try {
       mutateState((current) => ({ ...current, mcpStatus: null, mcpConnectingName: entry.name }));
 
-      if (entry.managedBy === "openwork-connect") {
+      if (entry.managedBy === "sofia-connect") {
         if (slug !== CLOUD_MCP_SERVER_NAME) {
           throw new Error("Connections MCP metadata is invalid.");
         }
-        if (!canUseOpenworkServer || !openworkClient || !openworkWorkspaceId) {
+        if (!canUseSofiaServer || !sofiaClient || !sofiaWorkspaceId) {
           throw new Error("Sofia App server is required to repair agent access to connected services.");
         }
         const context = await resolveCloudMcpOperationContext(entry.url);
@@ -737,9 +633,9 @@ export function createConnectionsStore(options: {
           throw new Error("Sign in to Organization cloud and choose an organization first.");
         }
         clearCloudMcpDisabledIntent(context);
-        const result = await runOpenworkCloudMcpReconciler({
+        const result = await runSofiaCloudMcpReconciler({
           mode: "repair",
-          client: openworkClient,
+          client: sofiaClient,
           context: { ...context, trigger: "desktop-explicit-connect" },
           mintToken: mintCloudControlMcpToken,
           force: true,
@@ -777,10 +673,10 @@ export function createConnectionsStore(options: {
         if (entryType !== "remote" || !entry.url) {
           throw new Error("Sofia App-managed OAuth requires a remote MCP URL.");
         }
-        if (!canUseOpenworkServer || !openworkClient || !openworkWorkspaceId) {
+        if (!canUseSofiaServer || !sofiaClient || !sofiaWorkspaceId) {
           throw new Error("The local Sofia App server is required for managed MCP sign-in.");
         }
-        const result = await openworkClient.addManagedMcp(openworkWorkspaceId, {
+        const result = await sofiaClient.addManagedMcp(sofiaWorkspaceId, {
           name: slug,
           url: entry.url,
           oauth: {
@@ -791,8 +687,8 @@ export function createConnectionsStore(options: {
           },
         });
         const connected = await waitForManagedMcpAuthorization(
-          openworkClient,
-          openworkWorkspaceId,
+          sofiaClient,
+          sofiaWorkspaceId,
           slug,
           result,
         );
@@ -815,9 +711,9 @@ export function createConnectionsStore(options: {
       // Resolve dynamic URLs for built-in MCPs
       let resolvedUrl = entry.url;
       let resolvedHeaders: Record<string, string> | undefined;
-      if (!resolvedUrl && entry.serverName === "openwork-ui") {
+      if (!resolvedUrl && entry.serverName === "sofia-ui") {
         try {
-          const bridgeInfo = await window.__OPENWORK_ELECTRON__?.invokeDesktop?.("getUiControlBridgeInfo");
+          const bridgeInfo = await window.__SOFIA_ELECTRON__?.invokeDesktop?.("getUiControlBridgeInfo");
           if (bridgeInfo?.baseUrl) {
             resolvedUrl = `${bridgeInfo.baseUrl}/mcp`;
             if (bridgeInfo.token) {
@@ -865,52 +761,16 @@ export function createConnectionsStore(options: {
         }
       }
 
-      if (canUseOpenworkServer && openworkClient && openworkWorkspaceId) {
-        await openworkClient.addMcp(openworkWorkspaceId, {
+      if (canUseSofiaServer && sofiaClient && sofiaWorkspaceId) {
+        await sofiaClient.addMcp(sofiaWorkspaceId, {
           name: slug,
           config: mcpEntryConfig,
         });
       } else {
-        if (!activeClient || !resolvedProjectDir) {
-          throw new Error(t("mcp.connect_server_first"));
-        }
-        const configFile = await readOpencodeConfig("project", resolvedProjectDir) as OpencodeConfigFile;
-
-        const raw = configFile.exists && configFile.content?.trim()
-          ? configFile.content
-          : '{\n  "$schema": "https://opencode.ai/config.json"\n}\n';
-
-        const parseErrors: Array<{ error: number; offset: number; length: number }> = [];
-        parse(raw, parseErrors, { allowTrailingComma: true });
-        if (parseErrors.length > 0) {
-          const details = parseErrors
-            .map((entry) => printParseErrorCode(entry.error))
-            .join(", ");
-          throw new Error(`Failed to parse opencode config: ${details}`);
-        }
-
-        let updated = raw;
-        const formattingOptions = { insertSpaces: true, tabSize: 2, eol: "\n" };
-        updated = applyEdits(
-          updated,
-          modify(updated, ["$schema"], "https://opencode.ai/config.json", { formattingOptions }),
-        );
-        updated = applyEdits(
-          updated,
-          modify(updated, ["mcp", slug], mcpEntryConfig, { formattingOptions }),
-        );
-
-        const writeResult = await writeOpencodeConfig(
-          "project",
-          resolvedProjectDir,
-          updated.endsWith("\n") ? updated : `${updated}\n`,
-        ) as { ok: boolean; stderr?: string; stdout?: string };
-        if (!writeResult.ok) {
-          throw new Error(writeResult.stderr || writeResult.stdout || "Failed to write opencode.json");
-        }
+        throw new Error(t("mcp.connect_server_first"));
       }
 
-      if (canUseOpenworkServer && openworkClient && openworkWorkspaceId) {
+      if (canUseSofiaServer && sofiaClient && sofiaWorkspaceId) {
         // The Sofia App server is the source of truth for workspace-scoped MCP
         // config in the React port. Avoid also calling the OpenCode SDK's MCP
         // hot-add endpoint here: when the SDK client is rooted at the aggregate
@@ -1005,7 +865,7 @@ export function createConnectionsStore(options: {
   /**
    * Background reconciliation for the Den cloud MCP: when the desktop is
    * signed in to Organization cloud with an active org, keep the
-   * `openwork-cloud` MCP entry configured with a fresh first-party token.
+   * `sofia-cloud` MCP entry configured with a fresh first-party token.
    * Quiet by design — a failed mint never opens the OAuth modal.
    *
    * `force` bypasses the freshness marker: used by the user-facing Refresh
@@ -1017,11 +877,11 @@ export function createConnectionsStore(options: {
     const settings = readDenSettings();
     const orgId = settings.activeOrgId?.trim() ?? "";
     if (!orgId || !settings.authToken?.trim()) return "skipped";
-    const workspaceId = await resolveOpenworkWorkspaceId();
+    const workspaceId = await resolveSofiaWorkspaceId();
     if (!workspaceId) return "skipped";
-    const openworkClient = getOpenworkSnapshot().openworkServerClient;
-    const serverBaseUrl = openworkClient?.baseUrl.trim() ?? "";
-    if (!openworkClient || !serverBaseUrl) return "skipped";
+    const sofiaClient = getSofiaSnapshot().sofiaServerClient;
+    const serverBaseUrl = sofiaClient?.baseUrl.trim() ?? "";
+    if (!sofiaClient || !serverBaseUrl) return "skipped";
 
     const entry = MCP_QUICK_CONNECT.find((candidate) => candidate.serverName === CLOUD_MCP_SERVER_NAME);
     if (!entry) return "skipped";
@@ -1032,9 +892,9 @@ export function createConnectionsStore(options: {
     const configuredEntry = snapshot.mcpServers.find((server) => server.name === CLOUD_MCP_SERVER_NAME);
     if (configuredEntry?.config.enabled === false) return "skipped";
 
-    const result = await runOpenworkCloudMcpReconciler({
+    const result = await runSofiaCloudMcpReconciler({
       mode: "repair",
-      client: openworkClient,
+      client: sofiaClient,
       context: {
         ...scope,
         denAuthToken: settings.authToken,
@@ -1056,7 +916,7 @@ export function createConnectionsStore(options: {
   }
 
   async function waitForManagedMcpAuthorization(
-    openworkClient: OpenworkServerClient,
+    sofiaClient: SofiaServerClient,
     workspaceId: string,
     name: string,
     result: { status: "connected" } | { status: "needs_auth"; authorizeUrl: string },
@@ -1065,7 +925,7 @@ export function createConnectionsStore(options: {
     await openDesktopUrl(assertDesktopWebUrl(result.authorizeUrl));
     for (let attempt = 0; attempt < 120; attempt += 1) {
       await new Promise((resolve) => setTimeout(resolve, 1_000));
-      const connection = await openworkClient.getManagedMcp(workspaceId, name);
+      const connection = await sofiaClient.getManagedMcp(workspaceId, name);
       if (connection.status === "connected") return true;
       if (connection.status === "reconnect_required") {
         throw new Error(connection.lastError || "MCP sign-in needs to be restarted.");
@@ -1078,13 +938,13 @@ export function createConnectionsStore(options: {
   async function authorizeMcp(entry: McpServerEntry) {
     if (entry.managedOAuth) {
       try {
-        const { openworkClient, openworkWorkspaceId, canUseOpenworkServer } = await resolveWritableOpenworkTarget();
-        if (!canUseOpenworkServer || !openworkClient || !openworkWorkspaceId) {
+        const { sofiaClient, sofiaWorkspaceId, canUseSofiaServer } = await resolveWritableSofiaTarget();
+        if (!canUseSofiaServer || !sofiaClient || !sofiaWorkspaceId) {
           throw new Error("The local Sofia App server is required for managed MCP sign-in.");
         }
         mutateState((current) => ({ ...current, mcpStatus: null, mcpConnectingName: entry.name }));
-        const result = await openworkClient.connectManagedMcp(openworkWorkspaceId, entry.name);
-        const connected = await waitForManagedMcpAuthorization(openworkClient, openworkWorkspaceId, entry.name, result);
+        const result = await sofiaClient.connectManagedMcp(sofiaWorkspaceId, entry.name);
+        const connected = await waitForManagedMcpAuthorization(sofiaClient, sofiaWorkspaceId, entry.name, result);
         await refreshMcpServers();
         if (connected) setStateField("mcpStatus", t("mcp.connected"));
       } catch (error) {
@@ -1120,38 +980,38 @@ export function createConnectionsStore(options: {
   }
 
   async function logoutMcpAuth(name: string) {
-    const openworkSnapshot = getOpenworkSnapshot();
+    const sofiaSnapshot = getSofiaSnapshot();
     const isRemoteWorkspace =
       options.workspaceType() === "remote" ||
-      (!isDesktopRuntime() && openworkSnapshot.openworkServerStatus === "connected");
+      (!isDesktopRuntime() && sofiaSnapshot.sofiaServerStatus === "connected");
     const projectDir = options.projectDir().trim();
 
-    const { openworkClient, openworkWorkspaceId, hasOpenworkTarget, canUseOpenworkServer } =
-      await resolveWritableOpenworkTarget();
+    const { sofiaClient, sofiaWorkspaceId, hasSofiaTarget, canUseSofiaServer } =
+      await resolveWritableSofiaTarget();
 
-    if (isRemoteWorkspace && !canUseOpenworkServer) {
+    if (isRemoteWorkspace && !canUseSofiaServer) {
       setStateField("mcpStatus", "Sofia App server unavailable. MCP auth is read-only.");
       return;
     }
 
-    if (hasOpenworkTarget && !canUseOpenworkServer) {
+    if (hasSofiaTarget && !canUseSofiaServer) {
       setStateField("mcpStatus", "Sofia App server MCP auth is read-only.");
       return;
     }
 
-    if (!canUseOpenworkServer && !isDesktopRuntime()) {
+    if (!canUseSofiaServer && !isDesktopRuntime()) {
       setStateField("mcpStatus", t("mcp.desktop_required"));
       return;
     }
 
-    const activeClient = canUseOpenworkServer ? options.client() : await ensureActiveClient();
-    if (!activeClient && !canUseOpenworkServer) {
+    const activeClient = canUseSofiaServer ? options.client() : await ensureActiveClient();
+    if (!activeClient && !canUseSofiaServer) {
       setStateField("mcpStatus", t("mcp.connect_server_first"));
       return;
     }
 
     const resolvedProjectDir = activeClient ? await resolveProjectDir(activeClient, projectDir) : projectDir;
-    if (!resolvedProjectDir && !canUseOpenworkServer) {
+    if (!resolvedProjectDir && !canUseSofiaServer) {
       setStateField("mcpStatus", t("mcp.pick_workspace_first"));
       return;
     }
@@ -1160,8 +1020,8 @@ export function createConnectionsStore(options: {
     setStateField("mcpStatus", null);
 
     try {
-      if (canUseOpenworkServer && openworkClient && openworkWorkspaceId) {
-        await openworkClient.logoutMcpAuth(openworkWorkspaceId, safeName);
+      if (canUseSofiaServer && sofiaClient && sofiaWorkspaceId) {
+        await sofiaClient.logoutMcpAuth(sofiaWorkspaceId, safeName);
       } else {
         if (!activeClient || !resolvedProjectDir) {
           throw new Error(t("mcp.connect_server_first"));
@@ -1197,22 +1057,18 @@ export function createConnectionsStore(options: {
     try {
       setStateField("mcpStatus", null);
 
-      const { openworkClient, openworkWorkspaceId, hasOpenworkTarget, canUseOpenworkServer } =
-        await resolveWritableOpenworkTarget();
+      const { sofiaClient, sofiaWorkspaceId, hasSofiaTarget, canUseSofiaServer } =
+        await resolveWritableSofiaTarget();
 
-      if (canUseOpenworkServer && openworkClient && openworkWorkspaceId) {
-        await openworkClient.removeMcp(openworkWorkspaceId, name);
+      if (canUseSofiaServer && sofiaClient && sofiaWorkspaceId) {
+        await sofiaClient.removeMcp(sofiaWorkspaceId, name);
       } else {
-        if (hasOpenworkTarget) {
+        if (hasSofiaTarget) {
           setStateField("mcpStatus", "Sofia App server MCP config is read-only.");
           return;
         }
-        const projectDir = options.projectDir().trim();
-        if (!projectDir) {
-          setStateField("mcpStatus", t("mcp.pick_workspace_first"));
-          return;
-        }
-        await removeMcpFromConfig(projectDir, name);
+        setStateField("mcpStatus", t("mcp.connect_server_first"));
+        return;
       }
 
       if (name === CLOUD_MCP_SERVER_NAME) {
@@ -1277,15 +1133,15 @@ export function createConnectionsStore(options: {
   // from the existing reload-required popup; no extra banner here.
   async function setMcpEnabled(name: string, enabled: boolean) {
     try {
-      const { openworkClient, openworkWorkspaceId, canUseOpenworkServer } =
-        await resolveWritableOpenworkTarget();
+      const { sofiaClient, sofiaWorkspaceId, canUseSofiaServer } =
+        await resolveWritableSofiaTarget();
 
-      if (!canUseOpenworkServer || !openworkClient || !openworkWorkspaceId) {
+      if (!canUseSofiaServer || !sofiaClient || !sofiaWorkspaceId) {
         setStateField("mcpStatus", t("mcp.toggle_requires_server"));
         return;
       }
 
-      await openworkClient.setMcpEnabled(openworkWorkspaceId, name, enabled);
+      await sofiaClient.setMcpEnabled(sofiaWorkspaceId, name, enabled);
       if (name === CLOUD_MCP_SERVER_NAME) {
         const context = await resolveCloudMcpOperationContext(null);
         if (enabled) {
@@ -1331,7 +1187,7 @@ export function createConnectionsStore(options: {
       return;
     }
 
-    if (!isDesktopRuntime() && getOpenworkSnapshot().openworkServerStatus !== "connected") {
+    if (!isDesktopRuntime() && getSofiaSnapshot().sofiaServerStatus !== "connected") {
       return;
     }
 
@@ -1391,7 +1247,6 @@ export function createConnectionsStore(options: {
       setStateField("selectedMcp", resolved);
     },
     quickConnect: MCP_QUICK_CONNECT,
-    readMcpConfigFile,
     refreshMcpServers,
     connectMcp,
     syncCloudControlMcp,

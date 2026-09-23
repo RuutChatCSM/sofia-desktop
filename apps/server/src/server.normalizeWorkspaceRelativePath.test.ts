@@ -98,13 +98,13 @@ describe("isSupportedWorkspaceTextFilePath", () => {
     expect(isSupportedWorkspaceTextFilePath("dist/index.html")).toBe(true);
   });
 
-  test("keeps accepting OpenCode config/plugin text file extensions", () => {
-    expect(isSupportedWorkspaceTextFilePath(".opencode/tools/cloud.ts")).toBe(true);
-    expect(isSupportedWorkspaceTextFilePath(".opencode/mcps/cloud.json")).toBe(true);
-    expect(isSupportedWorkspaceTextFilePath(".opencode/plugins/cloud.txt")).toBe(true);
+  test("keeps accepting Sofia engine config/plugin text file extensions", () => {
+    expect(isSupportedWorkspaceTextFilePath(".sofia/tools/cloud.ts")).toBe(true);
+    expect(isSupportedWorkspaceTextFilePath(".sofia/mcps/cloud.json")).toBe(true);
+    expect(isSupportedWorkspaceTextFilePath(".sofia/plugins/cloud.txt")).toBe(true);
   });
 
   test("rejects unsupported binary-like extensions", () => {
-    expect(isSupportedWorkspaceTextFilePath(".opencode/plugins/cloud.bin")).toBe(false);
+    expect(isSupportedWorkspaceTextFilePath(".sofia/plugins/cloud.bin")).toBe(false);
   });
 });

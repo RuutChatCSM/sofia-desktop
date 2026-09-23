@@ -6,7 +6,7 @@ import {
 } from "../src/app/lib/app-inspector";
 import { createClient } from "../src/app/lib/opencode";
 
-describe("app inspector OpenCode client", () => {
+describe("app inspector Sofia engine client", () => {
   test("tracks the latest published client and clears it safely", () => {
     Object.defineProperty(globalThis, "window", {
       configurable: true,
@@ -19,10 +19,10 @@ describe("app inspector OpenCode client", () => {
     const disposeFirst = publishInspectorOpencodeClient(first);
     const disposeSecond = publishInspectorOpencodeClient(second);
 
-    expect(window.__openwork?.opencode).toBe(second);
+    expect(window.__sofia?.opencode).toBe(second);
     disposeFirst();
-    expect(window.__openwork?.opencode).toBe(second);
+    expect(window.__sofia?.opencode).toBe(second);
     disposeSecond();
-    expect(window.__openwork?.opencode).toBeNull();
+    expect(window.__sofia?.opencode).toBeNull();
   });
 });

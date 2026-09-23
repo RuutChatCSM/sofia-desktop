@@ -1,7 +1,7 @@
 import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { test } from "@openwork/testkit";
+import { test } from "@sofia/testkit";
 import { expect } from "vitest";
 
 import { isEngineConnectionFailure } from "../../apps/server/src/engine-pool";
@@ -9,7 +9,7 @@ import { createManagedOpencodeServer } from "../../apps/server/src/managed-openc
 import { captureServerException } from "../../apps/server/src/telemetry";
 
 test("server error boundaries contain expected noise without hiding actionable failures", async ({ evidence }) => {
-  const originalTelemetry = globalThis.__openworkDesktopTelemetry;
+  const originalTelemetry = globalThis.__sofiaDesktopTelemetry;
   const captured: unknown[] = [];
   const request = new AbortController();
   const cancellation = new DOMException("The operation was aborted", "AbortError");
@@ -17,7 +17,7 @@ test("server error boundaries contain expected noise without hiding actionable f
   request.abort(cancellation);
 
   try {
-    globalThis.__openworkDesktopTelemetry = {
+    globalThis.__sofiaDesktopTelemetry = {
       captureException(error) {
         captured.push(error);
         return true;
@@ -40,7 +40,7 @@ test("server error boundaries contain expected noise without hiding actionable f
       true,
     );
   } finally {
-    globalThis.__openworkDesktopTelemetry = originalTelemetry;
+    globalThis.__sofiaDesktopTelemetry = originalTelemetry;
   }
 
   expect(isEngineConnectionFailure(new TypeError("fetch failed"))).toBe(true);
@@ -51,7 +51,7 @@ test("server error boundaries contain expected noise without hiding actionable f
     true,
   );
 
-  const root = await mkdtemp(join(tmpdir(), "openwork-server-boundaries-"));
+  const root = await mkdtemp(join(tmpdir(), "sofia-server-boundaries-"));
   const attemptsPath = join(root, "attempts.log");
   const bin = join(root, "unknown-code-one.mjs");
   await writeFile(bin, [
@@ -73,8 +73,8 @@ test("server error boundaries contain expected noise without hiding actionable f
     }
 
     expect(failure).toBeInstanceOf(Error);
-    if (!(failure instanceof Error)) throw new Error("Expected managed OpenCode startup to fail");
-    expect(failure.message).toContain("OpenCode server exited with code 1");
+    if (!(failure instanceof Error)) throw new Error("Expected managed Sofia engine startup to fail");
+    expect(failure.message).toContain("Sofia engine server exited with code 1");
     expect(failure.message).toContain("startup diagnostics from stdout");
     expect(failure.message).toContain("fatal provider configuration mismatch");
     expect((await readFile(attemptsPath, "utf8")).trim().split("\n")).toEqual(["start"]);

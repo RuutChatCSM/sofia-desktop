@@ -29,6 +29,6 @@ describe("Workflow Artifact surfaces", () => {
     expect(screen).toContain("WorkflowArtifactResult")
     expect(result).toContain('["preview", "data", "lineage"]')
     expect(result).toContain("Exact Workflow version")
-    expect(result).toContain("OpenWork Cloud")
+    expect(result).toContain("Sofia Cloud")
   });
 });

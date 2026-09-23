@@ -1,12 +1,12 @@
 import { unwrap } from "@/app/lib/opencode";
-import type { OpenworkServerClient } from "@/app/lib/openwork-server";
+import type { SofiaServerClient } from "@/app/lib/sofia-server";
 import type { Client } from "@/app/types";
 
 type WorkspaceType = "local" | "remote" | string;
 
 export type UpdateManagedDisabledProvidersOptions = {
   opencodeClient: Client | null;
-  openworkClient?: OpenworkServerClient | null;
+  sofiaClient?: SofiaServerClient | null;
   workspaceId?: string | null;
   workspaceType?: WorkspaceType | null;
   disabledProviders: unknown;
@@ -59,13 +59,13 @@ export async function updateManagedDisabledProviders(
   const disabledProviders = normalizeDisabledProviders(options.disabledProviders);
   const workspaceId = options.workspaceId?.trim() ?? "";
 
-  if (options.openworkClient && workspaceId && options.workspaceType === "local") {
-    const result = await options.openworkClient.setRuntimeDisabledProviders(workspaceId, disabledProviders);
+  if (options.sofiaClient && workspaceId && options.workspaceType === "local") {
+    const result = await options.sofiaClient.setRuntimeDisabledProviders(workspaceId, disabledProviders);
     return { managedRuntime: true, disabledProviders: result.disabledProviders };
   }
 
   const client = options.opencodeClient;
-  if (!client) throw new Error("OpenCode client is not connected.");
+  if (!client) throw new Error("Sofia engine is not connected.");
   const currentConfig = options.currentConfig ?? unwrap(await client.config.get());
   await client.config.update({
     config: configWithDisabledProviders(

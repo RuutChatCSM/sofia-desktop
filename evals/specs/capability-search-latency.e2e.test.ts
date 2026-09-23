@@ -5,13 +5,13 @@ import {
   denFetch,
   evalIn,
   waitFor,
-} from "@openwork/behaviors";
-import type { DenSession } from "@openwork/behaviors";
-import { allocateFreePort, closeTarget, listTargets, navigate } from "@openwork/cdp";
-import type { Surface } from "@openwork/cdp";
-import { chrome } from "@openwork/hosts";
-import { startMockMcp } from "@openwork/labs";
-import type { MockMcpHandle } from "@openwork/labs";
+} from "@sofia/behaviors";
+import type { DenSession } from "@sofia/behaviors";
+import { allocateFreePort, closeTarget, listTargets, navigate } from "@sofia/cdp";
+import type { Surface } from "@sofia/cdp";
+import { chrome } from "@sofia/hosts";
+import { startMockMcp } from "@sofia/labs";
+import type { MockMcpHandle } from "@sofia/labs";
 import {
   faultProxy,
   mcpMock,
@@ -19,11 +19,11 @@ import {
   server,
   test,
   unmetNeeds,
-} from "@openwork/testkit";
-import type { TestNeeds } from "@openwork/testkit";
+} from "@sofia/testkit";
+import type { TestNeeds } from "@sofia/testkit";
 
 const requirements: TestNeeds = {
-  optIn: ["OPENWORK_EVAL_E2E_TESTS"],
+  optIn: ["SOFIA_EVAL_E2E_TESTS"],
 };
 const missingRequirements = unmetNeeds(requirements, process.env);
 const title = missingRequirements.length > 0
@@ -92,7 +92,7 @@ async function mintMcpToken(session: DenSession, orgId: string): Promise<string>
     method: "POST",
     headers: {
       authorization: `Bearer ${session.token}`,
-      "x-openwork-org-id": orgId,
+      "x-sofia-org-id": orgId,
     },
     body: JSON.stringify({}),
   });
@@ -230,8 +230,8 @@ test(title, async ({ place, evidence, skip }) => {
     label: "Den Web origin before admin auth token handoff",
   });
   const tokenStored = await evalIn(browser, `(() => {
-    localStorage.setItem("openwork:web:auth-token", ${JSON.stringify(den.admin.token)});
-    return localStorage.getItem("openwork:web:auth-token") === ${JSON.stringify(den.admin.token)};
+    localStorage.setItem("sofia:web:auth-token", ${JSON.stringify(den.admin.token)});
+    return localStorage.getItem("sofia:web:auth-token") === ${JSON.stringify(den.admin.token)};
   })()`);
   expect(tokenStored).toBe(true);
   await oauthConnect(browser, den.ref.webUrl, healthy, den.mocks.healthy);

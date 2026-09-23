@@ -1,5 +1,5 @@
 {
-  "name": "@openwork/testkit",
+  "name": "@sofia/testkit",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -12,11 +12,11 @@
     "./stack": "./src/stack.ts"
   },
   "dependencies": {
-    "@openwork/behaviors": "workspace:*",
-    "@openwork/cdp": "workspace:*",
-    "@openwork/test-evidence": "workspace:*",
-    "@openwork/hosts": "workspace:*",
-    "@openwork/labs": "workspace:*",
+    "@sofia/behaviors": "workspace:*",
+    "@sofia/cdp": "workspace:*",
+    "@sofia/test-evidence": "workspace:*",
+    "@sofia/hosts": "workspace:*",
+    "@sofia/labs": "workspace:*",
     "mysql2": "^3.11.3",
     "vitest": "^3.2.4"
   }

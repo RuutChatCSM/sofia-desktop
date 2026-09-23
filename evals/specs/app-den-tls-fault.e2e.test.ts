@@ -1,9 +1,9 @@
 import { expect, test } from "vitest";
-import { desktop } from "@openwork/hosts";
-import { startEgressLab } from "@openwork/labs";
-import { clickButton, diagnoseEgressLabProduct, enabledButtons, visibleText, waitUntilInteractive } from "@openwork/behaviors";
-import { matchVerdictExpectations } from "@openwork/matchers";
-import { createVisualEvidence, screenshot, validate } from "@openwork/test-evidence";
+import { desktop } from "@sofia/hosts";
+import { startEgressLab } from "@sofia/labs";
+import { clickButton, diagnoseEgressLabProduct, enabledButtons, visibleText, waitUntilInteractive } from "@sofia/behaviors";
+import { matchVerdictExpectations } from "@sofia/matchers";
+import { createVisualEvidence, screenshot, validate } from "@sofia/test-evidence";
 
 /**
  * CORE JOURNEY: a desktop pointed at a Den whose TLS is broken by the corporate
@@ -15,10 +15,10 @@ import { createVisualEvidence, screenshot, validate } from "@openwork/test-evide
  * — it must say something a person can act on, not spin forever.
  */
 
-const optedIn = process.env.OPENWORK_EVAL_E2E_TESTS === "1";
+const optedIn = process.env.SOFIA_EVAL_E2E_TESTS === "1";
 const title = optedIn
   ? "a desktop pointed at a TLS-intercepted Den never claims it is connected, and diagnostics name the interception"
-  : "app + TLS-broken Den skipped: set OPENWORK_EVAL_E2E_TESTS=1 to opt in";
+  : "app + TLS-broken Den skipped: set SOFIA_EVAL_E2E_TESTS=1 to opt in";
 
 test.skipIf(!optedIn)(title, async () => {
   // The lab re-signs TLS with a CA the app does not trust: a corporate
@@ -39,7 +39,7 @@ test.skipIf(!optedIn)(title, async () => {
   {
     const shot = await screenshot(app);
     const seen = await validate(shot, [
-      "An OpenWork screen offering to sign in to OpenWork Cloud is visible",
+      "An Sofia App screen offering to sign in to Sofia Cloud is visible",
       "No error or 'Something went wrong' crash message is visible yet",
     ]);
     expect(seen.ok, seen.why).toBe(true);
@@ -48,10 +48,10 @@ test.skipIf(!optedIn)(title, async () => {
 
   // Attempting to reach the Den is what exercises the broken edge. The
   // affordance differs by surface, so use whichever the app is showing.
-  // Pick from actual enabled buttons: "Sync with OpenWork Cloud" appears in the
+  // Pick from actual enabled buttons: "Sync with Sofia Cloud" appears in the
   // text but is not a control, which a text match would wrongly select.
   const buttons = await enabledButtons(app);
-  const signInLabel = ["Sign in to OpenWork Cloud", "Sign in", "Sync with OpenWork Cloud"]
+  const signInLabel = ["Sign in to Sofia Cloud", "Sign in", "Sync with Sofia Cloud"]
     .find((label) => buttons.includes(label));
   expect(signInLabel, `no sign-in button on screen. Buttons: ${buttons.join(" | ")}`).toBeDefined();
   if (!signInLabel) throw new Error("unreachable: no sign-in affordance");
@@ -67,7 +67,7 @@ test.skipIf(!optedIn)(title, async () => {
   // TLS-intercepted Den is that sign-in produces no in-app feedback (the desktop
   // hands off to a browser), so what we require here is the absence of a false
   // positive rather than a specific error string.
-  for (const claim of ["Signed in as", "Synced", "Connected to OpenWork Cloud"]) {
+  for (const claim of ["Signed in as", "Synced", "Connected to Sofia Cloud"]) {
     expect(afterText.includes(claim), `app claimed "${claim}" while the Den is TLS-intercepted`).toBe(false);
   }
 

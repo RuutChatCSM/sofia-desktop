@@ -10,9 +10,9 @@ import {
   sendComposerMessage,
   waitFor,
   writeComposerText,
-} from "@openwork/behaviors";
-import { daytonaSandbox, deleteSandboxes, provisionDesktopSandbox } from "@openwork/hosts";
-import type { DisposableHost, Host } from "@openwork/hosts";
+} from "@sofia/behaviors";
+import { daytonaSandbox, deleteSandboxes, provisionDesktopSandbox } from "@sofia/hosts";
+import type { DisposableHost, Host } from "@sofia/hosts";
 import {
   app,
   denLink,
@@ -24,12 +24,12 @@ import {
   server,
   test,
   unmetNeeds,
-} from "@openwork/testkit";
-import type { Den, DenLink, Place, TestNeeds } from "@openwork/testkit";
+} from "@sofia/testkit";
+import type { Den, DenLink, Place, TestNeeds } from "@sofia/testkit";
 
 const requirements: TestNeeds = {
   env: ["ANTHROPIC_API_KEY"],
-  optIn: ["OPENWORK_EVAL_E2E_TESTS"],
+  optIn: ["SOFIA_EVAL_E2E_TESTS"],
 };
 const missingRequirements = unmetNeeds(requirements, process.env);
 const title = missingRequirements.length > 0
@@ -107,10 +107,10 @@ async function placeSurfaces(den: Den, place: Place): Promise<SurfacePlacement> 
   }
 
   const provisioned = await provisionDesktopSandbox({
-    ref: process.env.OPENWORK_EVAL_REF?.trim() || process.env.GITHUB_SHA?.trim() || "dev",
+    ref: process.env.SOFIA_EVAL_REF?.trim() || process.env.GITHUB_SHA?.trim() || "dev",
     name: "chat-survives-flaky-den-link",
-    reuse: process.env.OPENWORK_EVAL_DAYTONA_SANDBOX?.trim(),
-    log: (line) => console.error(`[openwork/testkit] ${line}`),
+    reuse: process.env.SOFIA_EVAL_DAYTONA_SANDBOX?.trim(),
+    log: (line) => console.error(`[sofia/testkit] ${line}`),
   });
   let host: DisposableHost | undefined;
   try {
@@ -149,7 +149,7 @@ const assistantHasText = (text: string): string => `(() => [...document.querySel
   .some((message) => (message.innerText ?? "").includes(${JSON.stringify(text)})))()`;
 
 const stopEnabledExpression = `(() => {
-  const stop = window.__openworkControl?.listActions().find((action) => action.id === "composer.stop");
+  const stop = window.__sofiaControl?.listActions().find((action) => action.id === "composer.stop");
   return Boolean(stop && !stop.disabled);
 })()`;
 
@@ -159,7 +159,7 @@ const sessionRunningExpression = (sessionId: string): string => `(() => {
 })()`;
 
 const denProbeExpression = (apiUrl: string): string => `(async () => {
-  const token = (localStorage.getItem("openwork.den.authToken") ?? "").trim();
+  const token = (localStorage.getItem("sofia.den.authToken") ?? "").trim();
   try {
     const response = await fetch(${JSON.stringify(`${apiUrl}/v1/me/orgs`)}, {
       headers: { Authorization: "Bearer " + token },
@@ -171,8 +171,8 @@ const denProbeExpression = (apiUrl: string): string => `(async () => {
 })()`;
 
 const toolRunningExpression = (workspaceId: string, sessionId: string): string => `(async () => {
-  const port = localStorage.getItem("openwork.server.port");
-  const token = localStorage.getItem("openwork.server.token");
+  const port = localStorage.getItem("sofia.server.port");
+  const token = localStorage.getItem("sofia.server.token");
   if (!port || !token) return false;
   const response = await fetch(
     "http://127.0.0.1:" + port + "/workspace/" + encodeURIComponent(${JSON.stringify(workspaceId)})
@@ -226,8 +226,8 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 900_000 }, async (
 
   const anthropicKey = process.env.ANTHROPIC_API_KEY?.trim() ?? "";
   const providerConfigured = await evalIn(desktopApp, `(async () => {
-    const port = localStorage.getItem("openwork.server.port");
-    const token = localStorage.getItem("openwork.server.token");
+    const port = localStorage.getItem("sofia.server.port");
+    const token = localStorage.getItem("sofia.server.token");
     if (!port || !token) return "missing local server credentials";
     const headers = { Authorization: "Bearer " + token, "Content-Type": "application/json" };
     const patch = await fetch("http://127.0.0.1:" + port + "/workspace/" + encodeURIComponent(${JSON.stringify(workspaceId)}) + "/config", {
@@ -244,7 +244,7 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 900_000 }, async (
   })()`, { awaitPromise: true, timeoutMs: 60_000 });
   expect(providerConfigured).toBe("ok");
 
-  const preferredModel = process.env.OPENWORK_EVAL_MODEL?.trim() ?? "";
+  const preferredModel = process.env.SOFIA_EVAL_MODEL?.trim() ?? "";
   const models = await readAvailableModels(desktopApp);
   const selectable = models.filter((model) => model.selectable);
   const anthropicModels = selectable.filter((model) => /anthropic/i.test(model.providerName) || /^claude-/i.test(model.id));
@@ -277,8 +277,8 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 900_000 }, async (
   expect(baselineCompleted).toBe(true);
 
   const tailStarted = await evalIn(desktopApp, `(() => {
-    const port = localStorage.getItem("openwork.server.port");
-    const token = localStorage.getItem("openwork.server.token");
+    const port = localStorage.getItem("sofia.server.port");
+    const token = localStorage.getItem("sofia.server.token");
     if (!port || !token) return "missing local server credentials";
     window.__owDenLink = { active: true, disposes: [], retries: [], errors: [], eventCounts: {} };
     const record = (event) => {
@@ -383,7 +383,7 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 900_000 }, async (
   }
   const offlineSessionId = offlineSessionResult;
   await waitFor(desktopApp, `(() => {
-    const parts = window.__openworkControl.snapshot().route.split("/");
+    const parts = window.__sofiaControl.snapshot().route.split("/");
     const sessionIndex = parts.indexOf("session");
     return sessionIndex >= 0
       && decodeURIComponent(parts[sessionIndex + 1] ?? "") === ${JSON.stringify(offlineSessionId)};
@@ -411,7 +411,7 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 900_000 }, async (
         /(?:failed|failure|error|unavailable|offline|timed out|refused|closed)[^\\n]{0,180}(?:connect|mcp|search_capabilities|mock_echo|network|den|tool)/i,
       ].flatMap((pattern) => failureSurfaces.map((surface) => surface.textContent?.match(pattern)?.[0] ?? ""))
         .find(Boolean) ?? "";
-      const stop = window.__openworkControl?.listActions().find((action) => action.id === "composer.stop");
+      const stop = window.__sofiaControl?.listActions().find((action) => action.id === "composer.stop");
       return { failureText: namedFailure.slice(0, 240), active: Boolean(stop && !stop.disabled) };
     })()`),
     {
@@ -430,7 +430,7 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 900_000 }, async (
   if (offlineRunStillActive) {
     await control(desktopApp, "composer.stop");
     offlineCancelled = await waitFor(desktopApp, `(() => {
-      const stop = window.__openworkControl?.listActions().find((action) => action.id === "composer.stop");
+      const stop = window.__sofiaControl?.listActions().find((action) => action.id === "composer.stop");
       return Boolean(stop?.disabled);
     })()`, {
       timeoutMs: 30_000,
@@ -470,7 +470,7 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 900_000 }, async (
   );
   evidence.recordAssertionEvidence(
     "The session created during the Den hole exists locally rather than being attributed to Den persistence",
-    `Created local OpenCode session ${offlineSessionId} while offline; it differed from live session ${longSessionId} and appeared in session.list_sessions=${offlineSessionAppeared}.`,
+    `Created local Sofia engine session ${offlineSessionId} while offline; it differed from live session ${longSessionId} and appeared in session.list_sessions=${offlineSessionAppeared}.`,
     offlineSessionAppeared,
   );
   evidence.recordAssertionEvidence(
@@ -506,13 +506,13 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 900_000 }, async (
   );
   evidence.recordAssertionEvidence(
     "The locally created outage session remains listed after Den recovery",
-    `Session ${offlineSessionId} remained in ${JSON.stringify(sessionsAfterRecovery)}; this asserts local OpenCode continuity, not Den persistence.`,
+    `Session ${offlineSessionId} remained in ${JSON.stringify(sessionsAfterRecovery)}; this asserts local Sofia engine continuity, not Den persistence.`,
     offlineSessionRemained,
   );
 
   await control(desktopApp, "session.open", { sessionId: longSessionId });
   await waitFor(desktopApp, `(() => {
-    const parts = window.__openworkControl.snapshot().route.split("/");
+    const parts = window.__sofiaControl.snapshot().route.split("/");
     const sessionIndex = parts.indexOf("session");
     return sessionIndex >= 0
       && decodeURIComponent(parts[sessionIndex + 1] ?? "") === ${JSON.stringify(longSessionId)};

@@ -3,10 +3,10 @@
   "permission": "allow",
   "plugin": [],
   "mcp": {
-    "openwork": {
+    "sofia": {
       "type": "remote",
       "enabled": true,
-      "url": "https://api.openworklabs.com/mcp/agent",
+      "url": "https://sofia-api.ruut.chat/mcp/agent",
       "oauth": {}
     }
   }

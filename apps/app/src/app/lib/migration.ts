@@ -11,12 +11,12 @@
 export const MIGRATION_SNAPSHOT_VERSION = 1;
 
 export const MIGRATION_KEY_PATTERNS: Array<RegExp> = [
-  /^openwork\.react\.activeWorkspace$/,
-  /^openwork\.react\.sessionByWorkspace$/,
-  /^openwork\.server\.list$/,
-  /^openwork\.server\.active$/,
-  /^openwork\.server\.urlOverride$/,
-  /^openwork\.server\.token$/,
+  /^sofia\.react\.activeWorkspace$/,
+  /^sofia\.react\.sessionByWorkspace$/,
+  /^sofia\.server\.list$/,
+  /^sofia\.server\.active$/,
+  /^sofia\.server\.urlOverride$/,
+  /^sofia\.server\.token$/,
 ];
 
 export type MigrationSnapshot = {
@@ -38,8 +38,8 @@ type ElectronMigrationBridge = {
 function electronMigrationBridge(): ElectronMigrationBridge | null {
   if (typeof window === "undefined") return null;
   const bridge = (window as unknown as {
-    __OPENWORK_ELECTRON__?: { migration?: ElectronMigrationBridge };
-  }).__OPENWORK_ELECTRON__;
+    __SOFIA_ELECTRON__?: { migration?: ElectronMigrationBridge };
+  }).__SOFIA_ELECTRON__;
   return bridge?.migration ?? null;
 }
 
@@ -87,7 +87,7 @@ export async function ingestMigrationSnapshotOnElectronBoot(): Promise<number> {
 }
 
 // Localstorage key that stores a "don't ask again until" epoch-ms.
-export const MIGRATION_DEFER_KEY = "openwork.migration.deferredUntil";
+export const MIGRATION_DEFER_KEY = "sofia.migration.deferredUntil";
 export const MIGRATION_DEFAULT_DEFER_MS = 24 * 60 * 60 * 1000;
 
 export function isMigrationDeferred(now: number = Date.now()): boolean {

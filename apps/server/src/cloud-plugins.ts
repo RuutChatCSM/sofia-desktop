@@ -214,13 +214,13 @@ function normalizePluginSourcePath(path: string, objectType: string, namespace: 
   };
   const folder = folderByType[objectType];
   if (!folder) return "";
-  const opencodeIndex = parts.findIndex((part) => part === ".opencode");
+  const opencodeIndex = parts.findIndex((part) => part === ".sofia");
   const searchParts = opencodeIndex >= 0 ? parts.slice(opencodeIndex + 1) : parts;
   const folderIndex = searchParts.findIndex((part) => part === folder);
   if (folderIndex < 0 || folderIndex === searchParts.length - 1) return "";
   const rest = searchParts.slice(folderIndex + 1);
-  if (rest[0] === namespace) return [".opencode", folder, ...rest].join("/");
-  return [".opencode", folder, namespace, ...rest].join("/");
+  if (rest[0] === namespace) return [".sofia", folder, ...rest].join("/");
+  return [".sofia", folder, namespace, ...rest].join("/");
 }
 
 function getPluginObjectInstallPath(object: CloudPluginConfigObject, namespace: string): string {
@@ -232,28 +232,28 @@ function getPluginObjectInstallPath(object: CloudPluginConfigObject, namespace: 
       const skillName = /^SKILL\.md$/i.test(lastPart)
         ? parts.at(-2) ?? slugifyConfigObjectName(object.title, object.id)
         : lastPart || slugifyConfigObjectName(object.title, object.id);
-      return `.opencode/skills/${namespace}/${skillName}/SKILL.md`;
+      return `.sofia/skills/${namespace}/${skillName}/SKILL.md`;
     }
     return existing;
   }
   const name = slugifyConfigObjectName(object.title, object.id);
   switch (object.objectType) {
     case "skill":
-      return `.opencode/skills/${namespace}/${name}/SKILL.md`;
+      return `.sofia/skills/${namespace}/${name}/SKILL.md`;
     case "agent":
-      return `.opencode/agents/${namespace}/${name}.md`;
+      return `.sofia/agents/${namespace}/${name}.md`;
     case "command":
-      return `.opencode/commands/${namespace}/${name}.md`;
+      return `.sofia/commands/${namespace}/${name}.md`;
     case "mcp":
-      return `.opencode/mcps/${namespace}/${name}.json`;
+      return `.sofia/mcps/${namespace}/${name}.json`;
     case "hook":
-      return `.opencode/hooks/${namespace}/${name}.json`;
+      return `.sofia/hooks/${namespace}/${name}.json`;
     case "tool":
-      return `.opencode/tools/${namespace}/${name}.ts`;
+      return `.sofia/tools/${namespace}/${name}.ts`;
     case "context":
-      return `.opencode/context/${namespace}/${name}.md`;
+      return `.sofia/context/${namespace}/${name}.md`;
     default:
-      return `.opencode/plugins/${namespace}/${name}.txt`;
+      return `.sofia/plugins/${namespace}/${name}.txt`;
   }
 }
 
@@ -500,7 +500,7 @@ async function writeInstalledCloudPlugins(
 function resolveWorkspaceInstallPath(workspaceRoot: string, relativePath: string): string {
   const normalized = relativePath.trim().replace(/^\/+/, "");
   const parts = normalized.split("/").filter(Boolean);
-  if (!normalized.startsWith(".opencode/") || parts.some((part) => part === "." || part === "..")) {
+  if (!normalized.startsWith(".sofia/") || parts.some((part) => part === "." || part === "..")) {
     throw new ApiError(400, "invalid_cloud_plugin_path", `Invalid cloud plugin path: ${relativePath}`);
   }
   const root = resolve(workspaceRoot);
@@ -518,7 +518,7 @@ async function writePluginWorkspaceFile(workspaceRoot: string, path: string, con
 }
 
 async function removePluginWorkspaceFile(workspaceRoot: string, path: string): Promise<void> {
-  if (!path.startsWith(".opencode/")) return;
+  if (!path.startsWith(".sofia/")) return;
   const absolutePath = resolveWorkspaceInstallPath(workspaceRoot, path);
   if (/^\.opencode\/skills\/[^/]+\/[^/]+\/SKILL\.md$/.test(path)) {
     await rm(dirname(absolutePath), { recursive: true, force: true });

@@ -306,7 +306,7 @@ export function ApiKeysScreen() {
         <DashboardPageTemplate
             icon={KeyRound}
             title="API Keys"
-            description="Manage your OpenWork API keys."
+            description="Manage your Sofia API keys."
             colors={["#E6FFFA", "#0F766E", "#14B8A6", "#99F6E4"]}
         >
             {!access.canViewSettings ? (

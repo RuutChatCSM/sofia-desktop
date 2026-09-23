@@ -8,7 +8,7 @@ import type {
   AgentContextDiagnosticsRequest,
   AgentContextMcpEvidence,
   AgentContextToolPermission,
-} from "@openwork/types/agent-context-diagnostics";
+} from "@sofia/types/agent-context-diagnostics";
 
 import {
   AGENT_CONTEXT_DIAGNOSTICS_SCHEMA_VERSION,
@@ -25,7 +25,7 @@ import {
 } from "./agent-context-engine-inspection.js";
 import {
   differentialCloudVerdict,
-  probeOpenworkCloudCatalog,
+  probeSofiaCloudCatalog,
   type CloudCatalogProbe,
 } from "./agent-context-cloud-probe.js";
 import { readActivatedEnterpriseDenOrigin } from "./enterprise-den-origin.js";
@@ -39,7 +39,6 @@ import {
   type ConnectSnapshot,
   type ConnectStateInspectionStatus,
 } from "./connect-state.js";
-import { readJsoncFile } from "./jsonc.js";
 import {
   inspectLocalManagedMcpVault,
   type LocalManagedMcpVaultInspection,
@@ -50,7 +49,7 @@ import {
   type McpInventoryInspection,
 } from "./mcp.js";
 import { resolveWorkspaceEngineConnection } from "./engine-connection.js";
-import { buildOpenworkRuntimeConfigObjectFromSnapshot } from "./openwork-runtime-config.js";
+import { buildSofiaRuntimeConfigObjectFromSnapshot } from "./sofia-runtime-config.js";
 import {
   inspectRuntimeOpencodeConfigState,
   runtimeMcpMap,
@@ -59,13 +58,12 @@ import {
 } from "./runtime-opencode-config-store.js";
 import type { McpItem, ServerConfig, WorkspaceInfo } from "./types.js";
 import { exists } from "./utils.js";
-import { opencodeConfigPath } from "./workspace-files.js";
 
-const OPENWORK_CLOUD_MCP_NAME = "openwork-cloud";
+const SOFIA_CLOUD_MCP_NAME = "sofia-cloud";
 const CLOUD_MCP_TERMINAL_PATH = "/mcp/agent";
 const REQUIRED_CLOUD_TOOL_IDS = ["search_capabilities", "execute_capability"] as const;
 const REQUIRED_CLOUD_AGENT_TOOL_IDS = REQUIRED_CLOUD_TOOL_IDS.map(
-  (toolId) => `${OPENWORK_CLOUD_MCP_NAME}_${toolId}`,
+  (toolId) => `${SOFIA_CLOUD_MCP_NAME}_${toolId}`,
 );
 
 export type McpRegistrationStatus =
@@ -152,30 +150,30 @@ function assessEffectiveToolPolicy(
       unavailableReasons: ["effective_engine_snapshot_unavailable"],
     };
   }
-  const openworkAgent = snapshot.agents.find((agent) => agent.name === "openwork");
-  if (!openworkAgent) {
+  const sofiaAgent = snapshot.agents.find((agent) => agent.name === "sofia");
+  if (!sofiaAgent) {
     return {
       status: "unavailable",
       decisions: {},
       deniedToolIds: [],
-      unavailableReasons: ["effective_openwork_agent_missing"],
+      unavailableReasons: ["effective_sofia_agent_missing"],
     };
   }
   if (
-    snapshot.defaultAgent !== "openwork"
-    || openworkAgent.hidden
-    || (openworkAgent.mode !== "primary" && openworkAgent.mode !== "all")
+    snapshot.defaultAgent !== "sofia"
+    || sofiaAgent.hidden
+    || (sofiaAgent.mode !== "primary" && sofiaAgent.mode !== "all")
   ) {
     return {
       status: "unavailable",
       decisions: {},
       deniedToolIds: [],
-      unavailableReasons: ["effective_openwork_agent_unusable_as_default"],
+      unavailableReasons: ["effective_sofia_agent_unusable_as_default"],
     };
   }
   const decisions: Record<string, EffectiveToolPolicyDecision> = {};
   for (const toolId of REQUIRED_CLOUD_AGENT_TOOL_IDS) {
-    decisions[toolId] = effectiveToolDecision(openworkAgent.permission, toolId);
+    decisions[toolId] = effectiveToolDecision(sofiaAgent.permission, toolId);
   }
 
   const deniedToolIds = REQUIRED_CLOUD_AGENT_TOOL_IDS.filter(
@@ -306,7 +304,7 @@ export function pluginLabel(spec: string): string | null {
 }
 
 /**
- * OpenCode rewrites path-like plugin declarations to file URLs while loading
+ * Sofia engine rewrites path-like plugin declarations to file URLs while loading
  * configuration. Compare that load identity without weakening exact matching
  * for package specs or unrelated URLs that merely share a basename.
  */
@@ -341,53 +339,18 @@ function promptEvidence(configuredAgent: Record<string, unknown> | null) {
   };
 }
 
-async function inspectProjectAgent(workspace: WorkspaceInfo, signal?: AbortSignal): Promise<ProjectAgentInspection> {
-  if (workspace.workspaceType !== "local" || !workspace.path.trim()) {
-    return {
-      available: false,
-      defaultAgentOverride: false,
-      agentConfigOverride: false,
-      agentFileOverride: false,
-    };
-  }
-  try {
-    const { data, invalid } = await readJsoncFile(
-      opencodeConfigPath(workspace.path),
-      {} as Record<string, unknown>,
-      {
-        allowInvalid: true,
-        maxBytes: 1024 * 1024,
-        regularFileOnly: true,
-        signal,
-      },
-    );
-    if (invalid) {
-      return {
-        available: false,
-        defaultAgentOverride: false,
-        agentConfigOverride: false,
-        agentFileOverride: false,
-      };
-    }
-    const agents = isRecord(data.agent) ? data.agent : {};
-    return {
-      available: true,
-      defaultAgentOverride: typeof data.default_agent === "string",
-      agentConfigOverride: Object.hasOwn(agents, "openwork"),
-      agentFileOverride: await Promise.all([
-        exists(join(workspace.path, ".opencode", "agent", "openwork.md")),
-        exists(join(workspace.path, ".opencode", "agents", "openwork.md")),
-      ]).then((values) => values.some(Boolean)),
-    };
-  } catch {
-    signal?.throwIfAborted();
-    return {
-      available: false,
-      defaultAgentOverride: false,
-      agentConfigOverride: false,
-      agentFileOverride: false,
-    };
-  }
+/**
+ * Sofia owns the agent config: it is generated from the runtime config store
+ * into the engine's `config.toml`, so a workspace can no longer carry a
+ * user-authored project agent override.
+ */
+function inspectProjectAgent(): ProjectAgentInspection {
+  return {
+    available: false,
+    defaultAgentOverride: false,
+    agentConfigOverride: false,
+    agentFileOverride: false,
+  };
 }
 
 function runtimeOnlyMcpInventory(runtime: RuntimeOpencodeConfig): McpInventoryInspection {
@@ -421,8 +384,8 @@ async function inspectMcpInventory(
       inventory: await inspectMcpLayersFromRuntimeSnapshot(workspace.path, runtime, {
         signal,
         toolPolicy: {
-          agentName: "openwork",
-          mcpName: OPENWORK_CLOUD_MCP_NAME,
+          agentName: "sofia",
+          mcpName: SOFIA_CLOUD_MCP_NAME,
           toolIds: [...REQUIRED_CLOUD_AGENT_TOOL_IDS],
         },
       }),
@@ -456,7 +419,7 @@ function cloudEndpointEvidenceUrl(
   config: Record<string, unknown>,
 ): URL | null {
   if (
-    name !== OPENWORK_CLOUD_MCP_NAME
+    name !== SOFIA_CLOUD_MCP_NAME
     || (source !== "config.remote" && source !== "engine.config")
     || typeof config.url !== "string"
   ) return null;
@@ -569,24 +532,24 @@ export function cloudCatalogCheck(probe: CloudCatalogProbe): AgentContextDiagnos
         ? "cloud_catalog_recovered_after_transient_401"
         : exact ? "cloud_catalog_exact_match" : "cloud_catalog_mismatch",
       message: transientUnauthorizedRecovered
-        ? "The OpenWork runtime saw a transient HTTP 401 during the independent Cloud MCP initialize request and recovered on retry; this points to a proxy or auth-gateway blip, not a revoked OpenWork Cloud credential."
+        ? "The Sofia App runtime saw a transient HTTP 401 during the independent Cloud MCP initialize request and recovered on retry; this points to a proxy or auth-gateway blip, not a revoked Sofia Cloud credential."
         : exact
-        ? "The canonical OpenWork Cloud catalog exposes exactly the two required capability tools."
-        : "The OpenWork Cloud catalog does not match the required two-tool contract.",
-      owner: transientUnauthorizedRecovered ? "network-admin" : exact ? "openwork-server" : "openwork-support",
+        ? "The canonical Sofia Cloud catalog exposes exactly the two required capability tools."
+        : "The Sofia Cloud catalog does not match the required two-tool contract.",
+      owner: transientUnauthorizedRecovered ? "network-admin" : exact ? "sofia-server" : "sofia-support",
       action: transientUnauthorizedRecovered
         ? "Treat the first 401 as transient unless it repeats or carries a Den revoked-session envelope; inspect proxy and auth-gateway logs for one-off challenges."
         : exact
         ? "No action is required."
-        : "Review the OpenWork Cloud deployment and restore the canonical capability catalog.",
+        : "Review the Sofia Cloud deployment and restore the canonical capability catalog.",
     });
   }
 
   let status: AgentContextDiagnosticCheck["status"] = "failed";
   let evidenceKind: AgentContextDiagnosticCheck["evidenceKind"] = probe.performed ? "observed" : "derived";
-  let message = "The selected workspace does not have a usable managed OpenWork Cloud MCP configuration.";
-  let owner: AgentContextDiagnosticCheck["owner"] = "openwork-server";
-  let action = "Reconnect OpenWork Cloud from Settings > Connect and rerun diagnostics.";
+  let message = "The selected workspace does not have a usable managed Sofia Cloud MCP configuration.";
+  let owner: AgentContextDiagnosticCheck["owner"] = "sofia-server";
+  let action = "Reconnect Sofia Cloud from Settings > Connect and rerun diagnostics.";
 
   switch (probe.code) {
     case "runtime_config_unavailable":
@@ -599,51 +562,51 @@ export function cloudCatalogCheck(probe: CloudCatalogProbe): AgentContextDiagnos
       status = "warning";
       evidenceKind = "unavailable";
       message = "A local runtime credential was not inspected or used for this remote workspace shell.";
-      action = "Run diagnostics on the OpenWork server that owns the workspace.";
+      action = "Run diagnostics on the Sofia App server that owns the workspace.";
       break;
     case "cloud_mcp_missing":
-      owner = "openwork-client";
-      message = "The selected client workspace has no synced OpenWork Cloud MCP entry.";
+      owner = "sofia-client";
+      message = "The selected client workspace has no synced Sofia Cloud MCP entry.";
       break;
     case "cloud_mcp_disabled":
-      owner = "openwork-client";
-      message = "The selected workspace OpenWork Cloud MCP entry is disabled.";
-      action = "Enable or reconnect OpenWork Cloud from Settings > Connect, then rerun diagnostics.";
+      owner = "sofia-client";
+      message = "The selected workspace Sofia Cloud MCP entry is disabled.";
+      action = "Enable or reconnect Sofia Cloud from Settings > Connect, then rerun diagnostics.";
       break;
     case "cloud_mcp_not_remote":
-      message = "The managed OpenWork Cloud entry is not configured as a remote MCP.";
-      action = "Reconnect OpenWork Cloud to restore its managed remote configuration.";
+      message = "The managed Sofia Cloud entry is not configured as a remote MCP.";
+      action = "Reconnect Sofia Cloud to restore its managed remote configuration.";
       break;
     case "invalid_endpoint":
-      message = "The managed OpenWork Cloud endpoint is not credential-safe or does not end at the required /mcp/agent route.";
-      action = "Reconnect OpenWork Cloud to restore its managed endpoint, then rerun diagnostics.";
+      message = "The managed Sofia Cloud endpoint is not credential-safe or does not end at the required /mcp/agent route.";
+      action = "Reconnect Sofia Cloud to restore its managed endpoint, then rerun diagnostics.";
       break;
     case "untrusted_endpoint":
       status = "warning";
       evidenceKind = "unavailable";
       message = probe.enterpriseActivationPresent
-        ? "The runtime endpoint probe was not performed: this installation is enterprise activated, but against a different control-plane origin than the configured OpenWork Cloud MCP. No request was sent, so this is a configuration mismatch, not a network, TLS, or MCP failure."
+        ? "The runtime endpoint probe was not performed: this installation is enterprise activated, but against a different control-plane origin than the configured Sofia Cloud MCP. No request was sent, so this is a configuration mismatch, not a network, TLS, or MCP failure."
         : "The runtime endpoint probe was not performed because the configured origin is not in the diagnostics trust list; no request was sent, so this is a trust-configuration state, not a network, TLS, or MCP failure.";
       action = probe.enterpriseActivationPresent
-        ? "Reconcile the enterprise activation origin with the configured OpenWork Cloud MCP origin, or have an administrator add the exact endpoint origin to OPENWORK_AGENT_DIAGNOSTICS_TRUSTED_ORIGINS, then rerun diagnostics."
-        : "Activate this installation against your on-prem Den, or have an administrator set OPENWORK_AGENT_DIAGNOSTICS_TRUSTED_ORIGINS on the OpenWork desktop/server process to the exact endpoint origin, then rerun diagnostics.";
+        ? "Reconcile the enterprise activation origin with the configured Sofia Cloud MCP origin, or have an administrator add the exact endpoint origin to SOFIA_AGENT_DIAGNOSTICS_TRUSTED_ORIGINS, then rerun diagnostics."
+        : "Activate this installation against your on-prem Den, or have an administrator set SOFIA_AGENT_DIAGNOSTICS_TRUSTED_ORIGINS on the Sofia App desktop/server process to the exact endpoint origin, then rerun diagnostics.";
       break;
     case "credential_missing":
     case "duplicate_authorization":
-      owner = "openwork-client";
-      message = "The managed OpenWork Cloud entry does not contain one unambiguous authentication value.";
-      action = "Reconnect OpenWork Cloud so the client can replace the managed credential, then rerun diagnostics.";
+      owner = "sofia-client";
+      message = "The managed Sofia Cloud entry does not contain one unambiguous authentication value.";
+      action = "Reconnect Sofia Cloud so the client can replace the managed credential, then rerun diagnostics.";
       break;
     case "timeout":
     case "network_error":
     case "http_error":
       owner = "network-admin";
       if (probe.httpStatus === 451) {
-        message = "The independent runtime endpoint probe received HTTP 451, which indicates an egress proxy, firewall, or allowlist deny rather than an OpenWork Cloud catalog shape problem.";
-        action = "Add the configured OpenWork Cloud MCP host and its documented redirect targets to the corporate allowlist, then rerun diagnostics.";
+        message = "The independent runtime endpoint probe received HTTP 451, which indicates an egress proxy, firewall, or allowlist deny rather than an Sofia Cloud catalog shape problem.";
+        action = "Add the configured Sofia Cloud MCP host and its documented redirect targets to the corporate allowlist, then rerun diagnostics.";
       } else {
         message = "The independent runtime endpoint probe could not be completed through the configured network path.";
-        action = "Verify server egress, DNS, TLS, proxy policy, and the configured OpenWork Cloud service, then rerun diagnostics.";
+        action = "Verify server egress, DNS, TLS, proxy policy, and the configured Sofia Cloud service, then rerun diagnostics.";
       }
       break;
     case "redirect_rejected":
@@ -654,11 +617,11 @@ export function cloudCatalogCheck(probe: CloudCatalogProbe): AgentContextDiagnos
     case "dns_error":
       owner = "network-admin";
       message = "The independent runtime endpoint probe could not resolve the configured service hostname.";
-      action = "Verify DNS resolution from the OpenWork server, then rerun diagnostics.";
+      action = "Verify DNS resolution from the Sofia App server, then rerun diagnostics.";
       break;
     case "connection_refused":
       owner = "network-admin";
-      message = "The configured OpenWork Cloud service refused the independent runtime probe connection.";
+      message = "The configured Sofia Cloud service refused the independent runtime probe connection.";
       action = "Verify the service listener, firewall, and egress route, then rerun diagnostics.";
       break;
     case "connection_reset":
@@ -668,49 +631,49 @@ export function cloudCatalogCheck(probe: CloudCatalogProbe): AgentContextDiagnos
       break;
     case "tls_error":
       owner = "network-admin";
-      message = "The independent runtime endpoint probe failed TLS certificate validation or negotiation on the OpenWork runtime trust store.";
+      message = "The independent runtime endpoint probe failed TLS certificate validation or negotiation on the Sofia App runtime trust store.";
       action = "Verify the server trust store, enterprise certificates, TLS inspection, and service certificate, then rerun diagnostics.";
       break;
     case "proxy_error":
       owner = "network-admin";
       if (probe.httpStatus === 451) {
-        message = "The independent runtime endpoint probe received HTTP 451, which indicates an egress proxy, firewall, or allowlist deny rather than an OpenWork Cloud catalog shape problem.";
-        action = "Add the configured OpenWork Cloud MCP host and its documented redirect targets to the corporate allowlist, then rerun diagnostics.";
+        message = "The independent runtime endpoint probe received HTTP 451, which indicates an egress proxy, firewall, or allowlist deny rather than an Sofia Cloud catalog shape problem.";
+        action = "Add the configured Sofia Cloud MCP host and its documented redirect targets to the corporate allowlist, then rerun diagnostics.";
       } else {
         message = "The configured proxy could not complete the independent runtime endpoint probe.";
         action = "Verify proxy reachability, authentication, and bypass policy, then rerun diagnostics.";
       }
       break;
     case "unauthorized":
-      owner = "openwork-client";
-      message = "OpenWork Cloud rejected the configured credential during the independent runtime probe.";
-      action = "Reconnect OpenWork Cloud so the client can replace the managed credential, then rerun diagnostics.";
+      owner = "sofia-client";
+      message = "Sofia Cloud rejected the configured credential during the independent runtime probe.";
+      action = "Reconnect Sofia Cloud so the client can replace the managed credential, then rerun diagnostics.";
       break;
     case "forbidden":
       owner = "organization-admin";
-      message = "OpenWork Cloud rejected the probe for membership, scope, or policy reasons rather than credential validity.";
+      message = "Sofia Cloud rejected the probe for membership, scope, or policy reasons rather than credential validity.";
       action = "Verify organization membership, workspace scope, and Cloud policy for this credential, then rerun diagnostics.";
       break;
     case "mcp_route_not_found":
-      owner = "openwork-support";
+      owner = "sofia-support";
       message = "The configured service answered, but the MCP agent route was not found; the deployment version or route configuration is implicated.";
-      action = "Verify the OpenWork Cloud or on-prem Den deployment version exposes the /mcp/agent route, then rerun diagnostics.";
+      action = "Verify the Sofia Cloud or on-prem Den deployment version exposes the /mcp/agent route, then rerun diagnostics.";
       break;
     case "rate_limited":
       status = "warning";
-      owner = "openwork-support";
-      message = "OpenWork Cloud rate-limited the independent runtime probe.";
-      action = "Wait before rerunning diagnostics; contact OpenWork support if rate limiting persists.";
+      owner = "sofia-support";
+      message = "Sofia Cloud rate-limited the independent runtime probe.";
+      action = "Wait before rerunning diagnostics; contact Sofia App support if rate limiting persists.";
       break;
     case "gateway_unavailable":
       owner = "network-admin";
-      message = "A gateway or upstream in front of the OpenWork Cloud service reported it unavailable during the independent runtime probe.";
+      message = "A gateway or upstream in front of the Sofia Cloud service reported it unavailable during the independent runtime probe.";
       action = "Check service status and gateway health, wait briefly, then rerun diagnostics.";
       break;
     case "probe_busy":
       status = "warning";
       evidenceKind = "unavailable";
-      owner = "openwork-server";
+      owner = "sofia-server";
       message = "The server's bounded diagnostics probe capacity was busy, so no new egress was started.";
       action = "Wait briefly and rerun diagnostics.";
       break;
@@ -725,14 +688,14 @@ export function cloudCatalogCheck(probe: CloudCatalogProbe): AgentContextDiagnos
     case "invalid_session_header":
     case "pagination_unsupported":
     case "invalid_catalog":
-      owner = "openwork-support";
-      message = "OpenWork Cloud returned a response that does not satisfy the bounded MCP handshake protocol contract.";
-      action = "Review the OpenWork Cloud deployment and restore a conformant MCP handshake response.";
+      owner = "sofia-support";
+      message = "Sofia Cloud returned a response that does not satisfy the bounded MCP handshake protocol contract.";
+      action = "Review the Sofia Cloud deployment and restore a conformant MCP handshake response.";
       break;
     case "required_tools_missing":
-      owner = "openwork-support";
-      message = "The OpenWork Cloud catalog handshake succeeded, but the catalog does not contain both required capability tools.";
-      action = "Review the OpenWork Cloud deployment and restore the canonical capability catalog.";
+      owner = "sofia-support";
+      message = "The Sofia Cloud catalog handshake succeeded, but the catalog does not contain both required capability tools.";
+      action = "Review the Sofia Cloud deployment and restore the canonical capability catalog.";
       break;
   }
   return diagnosticCheck({
@@ -769,8 +732,8 @@ export function cloudDifferentialCheck(probe: CloudCatalogProbe, engineReachable
       ...common,
       status: "passed",
       evidenceKind: "derived",
-      message: "The independent OpenWork runtime probe and the engine registration evidence both report the OpenWork Cloud endpoint as reachable.",
-      owner: "openwork-server",
+      message: "The independent Sofia App runtime probe and the engine registration evidence both report the Sofia Cloud endpoint as reachable.",
+      owner: "sofia-server",
       action: "No action is required.",
     });
   }
@@ -779,9 +742,9 @@ export function cloudDifferentialCheck(probe: CloudCatalogProbe, engineReachable
       ...common,
       status: "failed",
       evidenceKind: "derived",
-      message: "The OpenWork runtime reached the Cloud endpoint directly, but the engine registration evidence reports a failure; the engine-side connection path or registration lifecycle is implicated, not the endpoint.",
+      message: "The Sofia App runtime reached the Cloud endpoint directly, but the engine registration evidence reports a failure; the engine-side connection path or registration lifecycle is implicated, not the endpoint.",
       owner: "opencode-engine",
-      action: "Reconnect OpenWork Cloud or restart the selected workspace engine, then rerun diagnostics; the endpoint itself is reachable from this machine.",
+      action: "Reconnect Sofia Cloud or restart the selected workspace engine, then rerun diagnostics; the endpoint itself is reachable from this machine.",
     });
   }
   if (verdict === "runtime_failed_engine_connected") {
@@ -789,9 +752,9 @@ export function cloudDifferentialCheck(probe: CloudCatalogProbe, engineReachable
       ...common,
       status: "warning",
       evidenceKind: "derived",
-      message: "The engine registration evidence reports a live connection, but the independent runtime probe failed; the OpenWork runtime network path is implicated rather than the endpoint or the engine.",
+      message: "The engine registration evidence reports a live connection, but the independent runtime probe failed; the Sofia App runtime network path is implicated rather than the endpoint or the engine.",
       owner: "network-admin",
-      action: "Compare proxy, DNS, and trust-store configuration between the OpenWork runtime and the engine process, then rerun diagnostics.",
+      action: "Compare proxy, DNS, and trust-store configuration between the Sofia App runtime and the engine process, then rerun diagnostics.",
     });
   }
   if (verdict === "runtime_and_engine_failed") {
@@ -809,7 +772,7 @@ export function cloudDifferentialCheck(probe: CloudCatalogProbe, engineReachable
       ...common,
       status: "warning",
       evidenceKind: "derived",
-      message: "The engine registration evidence for OpenWork Cloud is stale or was never recorded, so only the independent runtime observation is current.",
+      message: "The engine registration evidence for Sofia Cloud is stale or was never recorded, so only the independent runtime observation is current.",
       owner: "opencode-engine",
       action: "Start or reconnect the selected workspace engine to refresh its registration evidence, then rerun diagnostics.",
     });
@@ -819,7 +782,7 @@ export function cloudDifferentialCheck(probe: CloudCatalogProbe, engineReachable
     status: "skipped",
     evidenceKind: "unavailable",
     message: "The independent runtime probe was not performed, so endpoint availability cannot be compared with the engine registration evidence.",
-    owner: "openwork-server",
+    owner: "sofia-server",
     action: "Address the probe eligibility code reported by the cloud catalog check, then rerun diagnostics.",
   });
 }
@@ -856,8 +819,8 @@ export function cloudEndpointTransportCheck(
       status: "skipped",
       evidenceKind: "derived",
       code: "transport_probe_not_required",
-      message: "The managed OpenWork Cloud MCP registration is connected; the differential check compares runtime and engine reachability, so a separate TLS-layer probe was not needed.",
-      owner: "openwork-server",
+      message: "The managed Sofia Cloud MCP registration is connected; the differential check compares runtime and engine reachability, so a separate TLS-layer probe was not needed.",
+      owner: "sofia-server",
       action: "No action is required.",
       details,
     });
@@ -868,8 +831,8 @@ export function cloudEndpointTransportCheck(
       status: "passed",
       evidenceKind: "observed",
       code: "endpoint_tls_handshake_verified",
-      message: "The OpenWork Cloud endpoint completed a credential-free TLS handshake; use the differential check for authentication, MCP protocol, and engine-registration attribution.",
-      owner: "openwork-server",
+      message: "The Sofia Cloud endpoint completed a credential-free TLS handshake; use the differential check for authentication, MCP protocol, and engine-registration attribution.",
+      owner: "sofia-server",
       action: "Review the cloud-endpoint-differential verdict and catalog evidence for the next failure layer.",
       details,
     });
@@ -887,7 +850,7 @@ export function cloudEndpointTransportCheck(
       code: "endpoint_tls_version_handshake_fault",
       message: "The credential-free transport probe reproduced a TLS version fault: TLS 1.3 timed out while TLS 1.2 completed, which points to an egress proxy or firewall stalling TLS 1.3 handshakes rather than a ServiceNow, credential, or allowlist issue.",
       owner: "network-admin",
-      action: "Fix or bypass the egress device that stalls TLS 1.3 ClientHello traffic for OpenWork Cloud hosts, or temporarily force TLS 1.2 where your policy permits it, then rerun diagnostics.",
+      action: "Fix or bypass the egress device that stalls TLS 1.3 ClientHello traffic for Sofia Cloud hosts, or temporarily force TLS 1.2 where your policy permits it, then rerun diagnostics.",
       details,
     });
   }
@@ -905,7 +868,7 @@ export function cloudEndpointTransportCheck(
         code: "endpoint_tls_handshake_timeout_tls12_comparison_failed",
         message: "The credential-free TLS handshake timed out before any HTTP response, and the explicit TLS 1.3 probe also timed out; the runtime TLS 1.2 comparison timed out too, so this still points to an egress TLS ClientHello stall but this runtime could not prove the TLS 1.2 workaround.",
         owner: "network-admin",
-        action: "Verify the egress proxy and firewall pass TLS ClientHello traffic to OpenWork Cloud hosts, then compare with a known Node or openssl TLS 1.2-only probe and confirm every OpenWork runtime honors any temporary TLS-version pinning policy.",
+        action: "Verify the egress proxy and firewall pass TLS ClientHello traffic to Sofia Cloud hosts, then compare with a known Node or openssl TLS 1.2-only probe and confirm every Sofia App runtime honors any temporary TLS-version pinning policy.",
         details,
       });
     }
@@ -916,7 +879,7 @@ export function cloudEndpointTransportCheck(
       code: "endpoint_tls_handshake_timeout",
       message: "The credential-free TLS handshake timed out before any HTTP response; this points to a TLS handshake or egress proxy fault consistent with a TLS 1.3 ClientHello stall, not an application credential or ServiceNow problem.",
       owner: "network-admin",
-      action: "Verify that the egress proxy and firewall pass TLS 1.3 ClientHello traffic to OpenWork Cloud hosts; compare with a TLS 1.2-only probe or temporarily force TLS 1.2 where policy permits, then rerun diagnostics.",
+      action: "Verify that the egress proxy and firewall pass TLS 1.3 ClientHello traffic to Sofia Cloud hosts; compare with a TLS 1.2-only probe or temporarily force TLS 1.2 where policy permits, then rerun diagnostics.",
       details,
     });
   }
@@ -928,9 +891,9 @@ export function cloudEndpointTransportCheck(
         status: "failed",
         evidenceKind: "observed",
         code: "endpoint_tls_interception_detected",
-        message: "The OpenWork Cloud endpoint appears to be TLS-inspected or re-signed by a corporate proxy; the runtime does not trust that inspecting issuer.",
+        message: "The Sofia Cloud endpoint appears to be TLS-inspected or re-signed by a corporate proxy; the runtime does not trust that inspecting issuer.",
         owner: "network-admin",
-        action: "Install the corporate inspection root for the OpenWork runtime with NODE_EXTRA_CA_CERTS, or bypass TLS inspection for OpenWork Cloud hosts, then rerun diagnostics.",
+        action: "Install the corporate inspection root for the Sofia App runtime with NODE_EXTRA_CA_CERTS, or bypass TLS inspection for Sofia Cloud hosts, then rerun diagnostics.",
         details,
       });
     }
@@ -940,9 +903,9 @@ export function cloudEndpointTransportCheck(
         status: "failed",
         evidenceKind: "observed",
         code: "endpoint_tls_incomplete_chain",
-        message: "The OpenWork Cloud endpoint served a leaf-only TLS chain and verification failed with UNABLE_TO_VERIFY_LEAF_SIGNATURE; the missing intermediate/fullchain must be repaired before blaming credentials or application logic.",
+        message: "The Sofia Cloud endpoint served a leaf-only TLS chain and verification failed with UNABLE_TO_VERIFY_LEAF_SIGNATURE; the missing intermediate/fullchain must be repaired before blaming credentials or application logic.",
         owner: "network-admin",
-        action: "Serve the complete certificate chain from the endpoint or let the OpenWork runtime add the AIA intermediate to NODE_EXTRA_CA_CERTS, then rerun diagnostics.",
+        action: "Serve the complete certificate chain from the endpoint or let the Sofia App runtime add the AIA intermediate to NODE_EXTRA_CA_CERTS, then rerun diagnostics.",
         details,
       });
     }
@@ -951,9 +914,9 @@ export function cloudEndpointTransportCheck(
       status: "failed",
       evidenceKind: "observed",
       code: "endpoint_tls_untrusted",
-      message: `The OpenWork Cloud endpoint TLS handshake failed with ${probe.verifyErrorCode ?? "a certificate verification error"}; the OS or corporate CA chain is not visible to this runtime.`,
+      message: `The Sofia Cloud endpoint TLS handshake failed with ${probe.verifyErrorCode ?? "a certificate verification error"}; the OS or corporate CA chain is not visible to this runtime.`,
       owner: "network-admin",
-      action: "Provide the corporate CA chain to OpenWork with NODE_EXTRA_CA_CERTS or fix the server to present its full certificate chain; the served-chain evidence below shows what the endpoint sent.",
+      action: "Provide the corporate CA chain to Sofia App with NODE_EXTRA_CA_CERTS or fix the server to present its full certificate chain; the served-chain evidence below shows what the endpoint sent.",
       details,
     });
   }
@@ -963,7 +926,7 @@ export function cloudEndpointTransportCheck(
       status: "failed",
       evidenceKind: "observed",
       code: "endpoint_unreachable",
-      message: "The OpenWork Cloud endpoint could not be reached with a credential-free TCP/TLS handshake.",
+      message: "The Sofia Cloud endpoint could not be reached with a credential-free TCP/TLS handshake.",
       owner: "network-admin",
       action: "Verify DNS, firewall, VPN, proxy, and endpoint availability from this machine, then rerun diagnostics.",
       details,
@@ -975,8 +938,8 @@ export function cloudEndpointTransportCheck(
     evidenceKind: probe.skipReason === "invalid_endpoint" || probe.skipReason === "missing_endpoint" ? "unavailable" : "derived",
     code: "transport_probe_not_applicable",
     message: "A credential-free TLS-layer probe was not applicable to this workspace or endpoint configuration; the differential check reports runtime probe eligibility.",
-    owner: "openwork-server",
-    action: "Review the managed OpenWork Cloud MCP configuration if transport evidence is needed.",
+    owner: "sofia-server",
+    action: "Review the managed Sofia Cloud MCP configuration if transport evidence is needed.",
     details,
   });
 }
@@ -989,7 +952,7 @@ function organizationCheck(request: AgentContextDiagnosticsRequest): AgentContex
       evidenceKind: "client-observed",
       code: "organization_connections_unavailable",
       message: "The client could not observe organization connection readiness.",
-      owner: "openwork-client",
+      owner: "sofia-client",
       action: "Verify the Den session and organization access, then rerun diagnostics.",
       details: { connectionCount: 0, reportedConnectionCount: 0, truncated: false, notReadyCount: 0 },
     });
@@ -1002,9 +965,9 @@ function organizationCheck(request: AgentContextDiagnosticsRequest): AgentContex
       evidenceKind: "client-observed",
       code: request.organizationConnectionsProbe.code ?? "organization_connections_skipped",
       message: remotePrivacy
-        ? "Local Den organization topology was intentionally omitted from the remote OpenWork diagnostics request."
+        ? "Local Den organization topology was intentionally omitted from the remote Sofia App diagnostics request."
         : "Organization connection readiness was not observed for this run.",
-      owner: remotePrivacy ? "openwork-client" : "member",
+      owner: remotePrivacy ? "sofia-client" : "member",
       action: remotePrivacy
         ? "No action is required; run diagnostics against a local workspace to include local Den organization readiness."
         : "Sign in to Den and select an organization to include organization readiness.",
@@ -1045,14 +1008,14 @@ function organizationCheck(request: AgentContextDiagnosticsRequest): AgentContex
           ? "One or more shared organization connections need organization administrator setup or repair."
           : "The client-observed organization connections are ready.",
     owner: truncated
-      ? "openwork-client"
+      ? "sofia-client"
       : memberAndAdminAction
       ? "member-and-organization-admin"
       : memberActionCount > 0
         ? "member"
         : organizationAdminActionCount > 0
           ? "organization-admin"
-          : "openwork-client",
+          : "sofia-client",
     action: truncated
       ? "Review organization connection readiness in Den for the complete inventory."
       : memberAndAdminAction
@@ -1152,24 +1115,24 @@ function engineAgentCheck(
       durationMs,
     );
   }
-  const agent = snapshot.agents.find((candidate) => candidate.name === "openwork");
+  const agent = snapshot.agents.find((candidate) => candidate.name === "sofia");
   return diagnosticCheck({
     id: "engine-agent",
     status: agent ? "passed" : "failed",
     evidenceKind: "observed",
-    code: agent ? "effective_openwork_agent_observed" : "effective_openwork_agent_missing",
+    code: agent ? "effective_sofia_agent_observed" : "effective_sofia_agent_missing",
     message: agent
-      ? "The selected engine resolved the OpenWork agent."
-      : "The selected engine did not resolve an OpenWork agent.",
-    owner: agent ? "opencode-engine" : "openwork-server",
+      ? "The selected engine resolved the Sofia App agent."
+      : "The selected engine did not resolve an Sofia App agent.",
+    owner: agent ? "opencode-engine" : "sofia-server",
     action: agent
       ? "No action is required."
-      : "Restore the OpenWork runtime agent injection and restart the selected workspace engine.",
+      : "Restore the Sofia App runtime agent injection and restart the selected workspace engine.",
     details: {
       engineApiReadPerformed: true,
       effectiveAgentCount: snapshot.agents.length,
-      openworkAgentPresent: Boolean(agent),
-      openworkAgentHidden: agent?.hidden ?? null,
+      sofiaAgentPresent: Boolean(agent),
+      sofiaAgentHidden: agent?.hidden ?? null,
       permissionRuleCount: agent?.permission.length ?? null,
       rawPromptIncluded: false,
     },
@@ -1203,7 +1166,7 @@ function runtimeHealthCheck(
   const message = corrupt
     ? "The selected workspace runtime configuration could not be safely decoded."
     : !engineConfigured
-      ? "The selected workspace does not have an OpenCode runtime endpoint configured."
+      ? "The selected workspace does not have an Sofia engine runtime endpoint configured."
       : absent
         ? "The runtime configuration database or selected workspace row has not been initialized."
         : remote
@@ -1215,13 +1178,13 @@ function runtimeHealthCheck(
     evidenceKind: corrupt ? "unavailable" : "derived",
     code,
     message,
-    owner: corrupt ? "openwork-server" : engineConfigured ? "openwork-server" : "member",
+    owner: corrupt ? "sofia-server" : engineConfigured ? "sofia-server" : "member",
     action: status === "passed"
       ? "No action is required."
       : corrupt
-        ? "Repair the OpenWork runtime state before relying on injected configuration."
+        ? "Repair the Sofia App runtime state before relying on injected configuration."
         : remote
-          ? "Run diagnostics on the OpenWork server that owns the workspace."
+          ? "Run diagnostics on the Sofia App server that owns the workspace."
           : "Start or configure the selected workspace runtime, then rerun diagnostics.",
     details: {
       workspaceType: workspace.workspaceType,
@@ -1292,22 +1255,22 @@ export async function runAgentContextDiagnostics(input: {
   input.dependencies?.signal?.throwIfAborted();
   const runtimeDuration = elapsed(runtimeStarted, now);
   const runtime = runtimeInspection.config;
-  const expectedRuntimeConfig = buildOpenworkRuntimeConfigObjectFromSnapshot(runtime);
+  const expectedRuntimeConfig = buildSofiaRuntimeConfigObjectFromSnapshot(runtime);
   const expectedAgents = isRecord(expectedRuntimeConfig.agent) ? expectedRuntimeConfig.agent : {};
-  const expectedAgent = isRecord(expectedAgents.openwork) ? expectedAgents.openwork : null;
-  const effectiveOpenworkAgent = effectiveEngine?.agents.find((agent) => agent.name === "openwork") ?? null;
-  const effectiveAgentModeUsable = effectiveOpenworkAgent?.mode === "primary"
-    || effectiveOpenworkAgent?.mode === "all";
+  const expectedAgent = isRecord(expectedAgents.sofia) ? expectedAgents.sofia : null;
+  const effectiveSofiaAgent = effectiveEngine?.agents.find((agent) => agent.name === "sofia") ?? null;
+  const effectiveAgentModeUsable = effectiveSofiaAgent?.mode === "primary"
+    || effectiveSofiaAgent?.mode === "all";
   const effectiveAgentUsable = Boolean(
-    effectiveOpenworkAgent
-    && effectiveEngine?.defaultAgent === "openwork"
-    && !effectiveOpenworkAgent.hidden
+    effectiveSofiaAgent
+    && effectiveEngine?.defaultAgent === "sofia"
+    && !effectiveSofiaAgent.hidden
     && effectiveAgentModeUsable,
   );
   const agentEvidenceSource = effectiveEngine ? "effective-engine" as const : "configured-intent" as const;
   const reportedAgent = effectiveEngine
-    ? effectiveOpenworkAgent
-      ? { prompt: effectiveOpenworkAgent.prompt }
+    ? effectiveSofiaAgent
+      ? { prompt: effectiveSofiaAgent.prompt }
       : null
     : expectedAgent;
   const prompt = promptEvidence(reportedAgent);
@@ -1328,21 +1291,14 @@ export async function runAgentContextDiagnostics(input: {
     return label ? [label] : [];
   }))].slice(0, 100);
   const canonicalConnectPluginSpec = expectedPlugins.find(
-    (spec) => pluginLabel(spec) === "openwork-extensions-preview",
+    (spec) => pluginLabel(spec) === "sofia-extensions-preview",
   ) ?? null;
   const canonicalPluginSpecMatched = canonicalConnectPluginSpec !== null
     && reportedPlugins.some(
       (reportedPlugin) => pluginSpecIdentity(reportedPlugin) === pluginSpecIdentity(canonicalConnectPluginSpec),
     );
 
-  const projectAgent = effectiveEngine
-    ? {
-      available: false,
-      defaultAgentOverride: false,
-      agentConfigOverride: false,
-      agentFileOverride: false,
-    }
-    : await inspectProjectAgent(input.workspace, input.dependencies?.signal);
+  const projectAgent = inspectProjectAgent();
   input.dependencies?.signal?.throwIfAborted();
   const projectOverrideDetected = projectAgent.defaultAgentOverride
     || projectAgent.agentConfigOverride
@@ -1375,7 +1331,7 @@ export async function runAgentContextDiagnostics(input: {
       googleWorkspace: { legacyConfigured: false },
     };
   }
-  const selectedCloudMcpPresent = Object.hasOwn(runtimeMcpMap(runtime), OPENWORK_CLOUD_MCP_NAME);
+  const selectedCloudMcpPresent = Object.hasOwn(runtimeMcpMap(runtime), SOFIA_CLOUD_MCP_NAME);
   const branch = expectedConnectBranch(connectSnapshot);
   const crossWorkspaceSteeringDrift = connectSnapshot.cloudMcpPresent && !selectedCloudMcpPresent;
 
@@ -1389,7 +1345,7 @@ export async function runAgentContextDiagnostics(input: {
   const engineConfigItems = effectiveEngine?.mcps.map((item) => ({
     ...item,
     source: "engine.config" as const,
-    disabledByTools: item.name === OPENWORK_CLOUD_MCP_NAME
+    disabledByTools: item.name === SOFIA_CLOUD_MCP_NAME
       ? assessEffectiveToolPolicy(effectiveEngine).status === "denied" || undefined
       : undefined,
   }));
@@ -1397,7 +1353,7 @@ export async function runAgentContextDiagnostics(input: {
   const combinedInventoryItems = [...inventory.items, ...(engineConfigItems ?? [])];
   const inventoryItems = combinedInventoryItems.slice(0, 200);
   const runtimeCloudItem = combinedInventoryItems.find((item) =>
-    item.source === "config.remote" && item.name === OPENWORK_CLOUD_MCP_NAME,
+    item.source === "config.remote" && item.name === SOFIA_CLOUD_MCP_NAME,
   );
   if (
     runtimeCloudItem
@@ -1418,7 +1374,7 @@ export async function runAgentContextDiagnostics(input: {
     return inspection;
   };
   const mcps = inventoryItems.map((item) => mcpEvidence(item, registrationForItem(item).status, managedMcpNames));
-  const runtimeCloudConfig = runtimeMcpMap(runtime)[OPENWORK_CLOUD_MCP_NAME] ?? null;
+  const runtimeCloudConfig = runtimeMcpMap(runtime)[SOFIA_CLOUD_MCP_NAME] ?? null;
   const runtimeCloudRegistration = runtimeCloudItem && runtimeCloudConfig ? registrationForItem(runtimeCloudItem) : null;
   const staticallyDeniedCloudAgentToolIds = new Set(inventory.toolPolicy.deniedToolIds);
   const effectiveToolPolicy = assessEffectiveToolPolicy(effectiveEngine);
@@ -1463,7 +1419,7 @@ export async function runAgentContextDiagnostics(input: {
   // Cached engine registration and agent tool policy are comparison inputs
   // for the differential verdict, never eligibility gates: the independent
   // runtime probe exists precisely to diagnose engine-side failures.
-  const cloudProbe = await probeOpenworkCloudCatalog({
+  const cloudProbe = await probeSofiaCloudCatalog({
     workspaceId: input.workspace.id,
     workspaceType: input.workspace.workspaceType,
     runtimeConfigAvailable: runtimeInspection.status === "available",
@@ -1552,7 +1508,7 @@ export async function runAgentContextDiagnostics(input: {
       evidenceKind: "observed",
       code: "strict_request_validated",
       message: "The request matched the strict diagnostics schema and contained only safe organization summaries.",
-      owner: "openwork-server",
+      owner: "sofia-server",
       action: "No action is required.",
       details: {
         organizationProbeStatus: request.organizationConnectionsProbe.status,
@@ -1574,13 +1530,13 @@ export async function runAgentContextDiagnostics(input: {
       message: !connectSnapshotAvailable
         ? "The passive Connect steering state could not be inspected."
         : crossWorkspaceSteeringDrift
-          ? "Global Connect steering sees OpenWork Cloud, but the selected workspace does not contain that managed MCP."
+          ? "Global Connect steering sees Sofia Cloud, but the selected workspace does not contain that managed MCP."
           : "The expected Connect steering branch is internally consistent for the selected workspace.",
-      owner: !connectSnapshotAvailable || crossWorkspaceSteeringDrift ? "openwork-server" : "openwork-client",
+      owner: !connectSnapshotAvailable || crossWorkspaceSteeringDrift ? "sofia-server" : "sofia-client",
       action: !connectSnapshotAvailable
-        ? "Verify the OpenWork server runtime state and rerun diagnostics."
+        ? "Verify the Sofia App server runtime state and rerun diagnostics."
         : crossWorkspaceSteeringDrift
-          ? "Reconnect or sync OpenWork Cloud for the selected workspace."
+          ? "Reconnect or sync Sofia Cloud for the selected workspace."
           : "No action is required.",
       details: {
         expectedBranch: branch,
@@ -1600,43 +1556,43 @@ export async function runAgentContextDiagnostics(input: {
         ? "observed"
         : runtimeInspection.status === "available" ? "expected" : "unavailable",
       code: effectiveEngine
-        ? !effectiveOpenworkAgent
-          ? "effective_openwork_agent_missing"
-          : effectiveEngine.defaultAgent !== "openwork"
+        ? !effectiveSofiaAgent
+          ? "effective_sofia_agent_missing"
+          : effectiveEngine.defaultAgent !== "sofia"
             ? "effective_default_agent_mismatch"
-            : effectiveOpenworkAgent.hidden
-              ? "effective_openwork_agent_hidden"
+            : effectiveSofiaAgent.hidden
+              ? "effective_sofia_agent_hidden"
               : !effectiveAgentModeUsable
-                ? "effective_openwork_agent_not_primary"
-            : "effective_openwork_agent_selected"
+                ? "effective_sofia_agent_not_primary"
+            : "effective_sofia_agent_selected"
         : projectOverrideDetected
           ? "configured_agent_has_override_layers"
           : "runtime_agent_intent_only",
       message: effectiveEngine
-        ? !effectiveOpenworkAgent
-          ? "The effective engine configuration does not contain the OpenWork agent."
-          : effectiveEngine.defaultAgent !== "openwork"
-            ? "The effective engine default does not select the OpenWork agent."
-            : effectiveOpenworkAgent.hidden
-              ? "The effective OpenWork agent is hidden and cannot be used as the default agent."
+        ? !effectiveSofiaAgent
+          ? "The effective engine configuration does not contain the Sofia App agent."
+          : effectiveEngine.defaultAgent !== "sofia"
+            ? "The effective engine default does not select the Sofia App agent."
+            : effectiveSofiaAgent.hidden
+              ? "The effective Sofia App agent is hidden and cannot be used as the default agent."
               : !effectiveAgentModeUsable
-                ? "The effective OpenWork agent is subagent-only and cannot be used as the default agent."
-            : "The effective engine default selects the resolved OpenWork agent."
+                ? "The effective Sofia App agent is subagent-only and cannot be used as the default agent."
+            : "The effective engine default selects the resolved Sofia App agent."
         : projectOverrideDetected
-          ? "The configured OpenWork agent intent has project override layers and could not be confirmed live."
-          : "Only the configured OpenWork agent intent was available; effective resolution was not observed.",
+          ? "The configured Sofia App agent intent has project override layers and could not be confirmed live."
+          : "Only the configured Sofia App agent intent was available; effective resolution was not observed.",
       owner: effectiveEngine ? "opencode-engine" : projectOverrideDetected ? "member" : "opencode-engine",
       action: effectiveEngine && effectiveAgentUsable
         ? "No action is required."
         : effectiveEngine
-          ? "Restore the OpenWork agent and default-agent injection, then restart the selected workspace engine."
+          ? "Restore the Sofia App agent and default-agent injection, then restart the selected workspace engine."
           : "Check the selected workspace engine health and rerun diagnostics.",
       details: {
         configuredAgentPresent: Boolean(expectedAgent),
-        effectiveAgentPresent: effectiveEngine ? Boolean(effectiveOpenworkAgent) : null,
-        effectiveDefaultAgentIsOpenwork: effectiveEngine ? effectiveEngine.defaultAgent === "openwork" : null,
-        effectiveAgentHidden: effectiveOpenworkAgent?.hidden ?? null,
-        effectiveAgentMode: effectiveOpenworkAgent?.mode ?? null,
+        effectiveAgentPresent: effectiveEngine ? Boolean(effectiveSofiaAgent) : null,
+        effectiveDefaultAgentIsSofia: effectiveEngine ? effectiveEngine.defaultAgent === "sofia" : null,
+        effectiveAgentHidden: effectiveSofiaAgent?.hidden ?? null,
+        effectiveAgentMode: effectiveSofiaAgent?.mode ?? null,
         effectiveAgentUsableAsDefault: effectiveEngine ? effectiveAgentUsable : null,
         projectLayersAvailable: projectAgent.available,
         projectDefaultAgentOverride: projectAgent.defaultAgentOverride,
@@ -1656,19 +1612,19 @@ export async function runAgentContextDiagnostics(input: {
           : effectiveEngine ? "effective_prompt_digest_mismatch" : "configured_prompt_digest_mismatch",
       message: promptMatchesCanonicalIntent
         ? effectiveEngine
-          ? "The effective OpenWork base prompt exactly matches the canonical configured injection and contains every required marker."
-          : "The configured OpenWork base prompt intent matches its canonical generated injection and contains every required marker."
+          ? "The effective Sofia App base prompt exactly matches the canonical configured injection and contains every required marker."
+          : "The configured Sofia App base prompt intent matches its canonical generated injection and contains every required marker."
         : !promptMarkersPresent
           ? effectiveEngine
-            ? "The effective OpenWork base prompt is missing one or more required markers."
-            : "The configured OpenWork base prompt intent is missing one or more required markers."
+            ? "The effective Sofia App base prompt is missing one or more required markers."
+            : "The configured Sofia App base prompt intent is missing one or more required markers."
           : effectiveEngine
-            ? "The effective OpenWork base prompt contains the markers but does not match the canonical configured injection."
-            : "The configured OpenWork base prompt markers are present, but its digest does not match the canonical generated injection.",
-      owner: effectiveEngine ? "opencode-engine" : "openwork-server",
+            ? "The effective Sofia App base prompt contains the markers but does not match the canonical configured injection."
+            : "The configured Sofia App base prompt markers are present, but its digest does not match the canonical generated injection.",
+      owner: effectiveEngine ? "opencode-engine" : "sofia-server",
       action: promptMatchesCanonicalIntent
         ? "No action is required."
-        : "Restore the canonical OpenWork runtime agent definition.",
+        : "Restore the canonical Sofia App runtime agent definition.",
       details: {
         ...prompt.markers,
         promptLength: prompt.length,
@@ -1695,24 +1651,24 @@ export async function runAgentContextDiagnostics(input: {
           : "required_connect_tool_ids_not_denied_by_effective_policy",
       message: cloudToolPolicyStatus === "denied"
         ? !effectiveEngine && staticallyDeniedCloudAgentToolIds.size > 0
-          ? "A passively inspected static OpenCode policy denies one or more required OpenWork Cloud capability tools."
-          : "The effective OpenCode agent policy hides one or more required OpenWork Cloud capability tools."
+          ? "A passively inspected static Sofia engine policy denies one or more required Sofia Cloud capability tools."
+          : "The effective Sofia engine agent policy hides one or more required Sofia Cloud capability tools."
         : cloudToolPolicyStatus === "unavailable"
-          ? "Required OpenWork Cloud tool visibility could not be verified from the effective selected-engine agent."
-          : "The effective OpenCode agent policy does not deny either required OpenWork Cloud candidate tool ID; the live engine tool registry was not read.",
+          ? "Required Sofia Cloud tool visibility could not be verified from the effective selected-engine agent."
+          : "The effective Sofia engine agent policy does not deny either required Sofia Cloud candidate tool ID; the live engine tool registry was not read.",
       owner: cloudToolPolicyStatus === "available"
-        ? "openwork-server"
+        ? "sofia-server"
         : cloudToolPolicyStatus === "unavailable"
           ? "opencode-engine"
           : "member",
       action: cloudToolPolicyStatus === "denied"
-        ? "Allow the denied openwork-cloud capability tool IDs in top-level or OpenWork agent permission policy, then rerun diagnostics."
+        ? "Allow the denied sofia-cloud capability tool IDs in top-level or Sofia App agent permission policy, then rerun diagnostics."
         : cloudToolPolicyStatus === "unavailable"
           ? "Check the selected workspace engine health and rerun diagnostics."
           : "No policy change is required; confirm catalog and registration evidence because this policy check alone does not prove live tool presence.",
       details: {
-        searchCapabilities: reportedToolPermission(`${OPENWORK_CLOUD_MCP_NAME}_search_capabilities`),
-        executeCapability: reportedToolPermission(`${OPENWORK_CLOUD_MCP_NAME}_execute_capability`),
+        searchCapabilities: reportedToolPermission(`${SOFIA_CLOUD_MCP_NAME}_search_capabilities`),
+        executeCapability: reportedToolPermission(`${SOFIA_CLOUD_MCP_NAME}_execute_capability`),
         deniedRelevantToolCount: cloudToolPolicyStatus === "unavailable" ? null : deniedCloudAgentToolIds.size,
         staticPolicyScope: inventory.toolPolicy.scope,
         staticPolicyLayerStatus: inventory.toolPolicy.status,
@@ -1736,10 +1692,10 @@ export async function runAgentContextDiagnostics(input: {
         : effectiveEngine
           ? "The Connect steering plugin is missing from the effective engine configuration."
           : "The Connect steering plugin is missing from the configured runtime injection intent.",
-      owner: effectiveEngine ? "opencode-engine" : "openwork-server",
+      owner: effectiveEngine ? "opencode-engine" : "sofia-server",
       action: canonicalPluginSpecMatched
         ? "No action is required."
-        : "Restore the canonical OpenWork runtime plugin bundle.",
+        : "Restore the canonical Sofia App runtime plugin bundle.",
       details: {
         configuredPluginLabels: pluginLabels,
         canonicalPluginSpecMatched,
@@ -1774,7 +1730,7 @@ export async function runAgentContextDiagnostics(input: {
       message: effectiveEngine
         ? inventoryTotal > 200
           ? "The combined engine-configuration and runtime-managed MCP evidence exceeded the report limit and was truncated."
-          : "The selected engine's merged MCP configuration and OpenWork-managed dynamic injection intent were inventoried as separate evidence sources."
+          : "The selected engine's merged MCP configuration and Sofia-managed dynamic injection intent were inventoried as separate evidence sources."
         : layerHealthProblem
         ? "One or more static MCP configuration layers are invalid or unreadable."
         : inventoryTotal > 200
@@ -1783,16 +1739,16 @@ export async function runAgentContextDiagnostics(input: {
             ? "Multiple configuration layers define one or more MCP names; no effective winner is claimed."
             : !passiveLocalLayersAvailable
               ? "Only server-managed runtime MCP layers were available for this workspace."
-              : "The server-managed runtime and selected project/global MCP sources were inventoried without claiming complete OpenCode resolution.",
+              : "The server-managed runtime and selected project/global MCP sources were inventoried without claiming complete Sofia engine resolution.",
       owner: effectiveEngine
         ? "opencode-engine"
-        : layerHealthProblem ? "member" : inventory.collisions.length > 0 ? "member" : "openwork-server",
+        : layerHealthProblem ? "member" : inventory.collisions.length > 0 ? "member" : "sofia-server",
       action: effectiveEngine
         ? inventoryTotal > 200
-          ? "Reduce the configured MCP count or inspect the engine and OpenWork runtime sources directly."
+          ? "Reduce the configured MCP count or inspect the engine and Sofia App runtime sources directly."
           : "No action is required; review registration evidence for runtime-managed dynamic MCP connection state."
         : layerHealthProblem
-        ? "Repair the invalid or unreadable OpenCode configuration layer, then rerun diagnostics."
+        ? "Repair the invalid or unreadable Sofia engine configuration layer, then rerun diagnostics."
         : inventory.collisions.length > 0
           ? "Review the listed MCP layer collisions and remove unintended duplicate definitions."
           : inventoryTotal > 200
@@ -1807,7 +1763,7 @@ export async function runAgentContextDiagnostics(input: {
         globalLayerStatus: inventory.layerStatus.global,
         inventoryScope: effectiveEngine
           ? "engine-merged-config-plus-runtime-managed-injection"
-          : "bounded-openwork-sources",
+          : "bounded-sofia-sources",
         completeDynamicMcpStateClaimed: false,
         engineConfigMcpCount: engineConfigItems?.length ?? 0,
         runtimeManagedMcpCount: inventory.items.filter((item) => item.source === "config.remote").length,
@@ -1855,9 +1811,9 @@ export async function runAgentContextDiagnostics(input: {
         : missingRegistrationCount > 0
           ? "One or more enabled managed MCPs do not have a current engine registration record."
           : remoteMcps.length > 0
-            ? "Every enabled OpenWork-managed MCP has a current connected registration result; configured-disabled entries are not treated as injected tools."
+            ? "Every enabled Sofia-managed MCP has a current connected registration result; configured-disabled entries are not treated as injected tools."
             : "No server-managed MCP registration was available to inspect.",
-      owner: failedRegistrationCount > 0 || missingRegistrationCount > 0 ? "opencode-engine" : "openwork-server",
+      owner: failedRegistrationCount > 0 || missingRegistrationCount > 0 ? "opencode-engine" : "sofia-server",
       action: failedRegistrationCount > 0 || missingRegistrationCount > 0
         ? staleRegistrationFailure
           ? "The engine is reachable and this evidence is stale; rerun diagnostics. No repair is needed unless it persists."
@@ -1888,7 +1844,7 @@ export async function runAgentContextDiagnostics(input: {
       code: "live_mcp_status_intentionally_not_queried",
       message: "Live MCP status was not queried because that endpoint can connect every enabled MCP.",
       owner: "opencode-engine",
-      action: "Review the bounded OpenWork Cloud catalog probe and exact managed registration response evidence instead.",
+      action: "Review the bounded Sofia Cloud catalog probe and exact managed registration response evidence instead.",
       details: {
         effectiveMcpConfigurationObserved: Boolean(effectiveEngine),
         mcpStatusApiReadPerformed: false,
@@ -1907,7 +1863,7 @@ export async function runAgentContextDiagnostics(input: {
       evidenceKind: "derived",
       code: "sanitized_allowlist_report",
       message: "The report contains only allowlisted evidence, bounded sanitized engine error summaries, and credential-free transport metadata; diagnostics did not directly request mutations, provider operations, or capability calls.",
-      owner: "openwork-server",
+      owner: "sofia-server",
       action: engineApiReadPerformed
         ? "Be aware that reading a cold engine may initialize configured bootstrap or plugin hooks whose side effects this report does not inspect."
         : "No action is required.",
@@ -1953,23 +1909,23 @@ export async function runAgentContextDiagnostics(input: {
         effectiveEngine ? effectiveEngine.defaultAgent : expectedRuntimeConfig.default_agent,
         160,
       ) || null,
-      configuredOpenworkAgent: {
+      configuredSofiaAgent: {
         state: effectiveEngine
-          ? effectiveOpenworkAgent ? "present" : "missing"
+          ? effectiveSofiaAgent ? "present" : "missing"
           : expectedAgent?.disable === true
             ? "configured-disabled"
             : expectedAgent
               ? "present"
               : "missing",
-        mode: effectiveOpenworkAgent
-          ? effectiveOpenworkAgent.mode
+        mode: effectiveSofiaAgent
+          ? effectiveSofiaAgent.mode
           : expectedAgent?.mode === "subagent" || expectedAgent?.mode === "primary" || expectedAgent?.mode === "all"
             ? expectedAgent.mode
             : null,
         prompt,
         connectToolPermissions: {
-          searchCapabilities: reportedToolPermission(`${OPENWORK_CLOUD_MCP_NAME}_search_capabilities`),
-          executeCapability: reportedToolPermission(`${OPENWORK_CLOUD_MCP_NAME}_execute_capability`),
+          searchCapabilities: reportedToolPermission(`${SOFIA_CLOUD_MCP_NAME}_search_capabilities`),
+          executeCapability: reportedToolPermission(`${SOFIA_CLOUD_MCP_NAME}_execute_capability`),
           deniedRelevantToolCount: cloudToolPolicyStatus === "unavailable" ? null : deniedCloudAgentToolIds.size,
         },
       },

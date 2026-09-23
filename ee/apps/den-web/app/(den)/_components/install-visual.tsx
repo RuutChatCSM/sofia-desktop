@@ -90,10 +90,10 @@ function LinuxTerminalVisual() {
       </div>
       <div className="grid gap-1.5 bg-[#101828] px-5 py-5 font-mono text-[11px] leading-5 text-[#d0d5dd]">
         <span>
-          <span className="text-[#67e8f9]">$</span> chmod +x openwork-enterprise.AppImage
+          <span className="text-[#67e8f9]">$</span> chmod +x sofia-enterprise.AppImage
         </span>
         <span>
-          <span className="text-[#67e8f9]">$</span> ./openwork-enterprise.AppImage
+          <span className="text-[#67e8f9]">$</span> ./sofia-enterprise.AppImage
         </span>
       </div>
     </div>

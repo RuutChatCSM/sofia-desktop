@@ -1,1 +1,1 @@
-export * from "@openwork/labs/release-feed";
+export * from "@sofia/labs/release-feed";

@@ -7,13 +7,13 @@
 //
 // Required:
 //   DEN_API_E2E_BASE_URL=http://127.0.0.1:18990
-//   DATABASE_URL=mysql://root:password@127.0.0.1:33307/openwork_agent_signup
+//   DATABASE_URL=mysql://root:password@127.0.0.1:33307/sofia_agent_signup
 //
 // Run from ee/apps/den-api:
 //   DEN_API_E2E_BASE_URL=... DATABASE_URL=... pnpm exec node evals/agent-test-evidence-unverified-signup.mjs
 
-import { eq } from "@openwork-ee/den-db/drizzle"
-import { AuthUserTable } from "@openwork-ee/den-db/schema"
+import { eq } from "@sofia-ee/den-db/drizzle"
+import { AuthUserTable } from "@sofia-ee/den-db/schema"
 import { mkdirSync, writeFileSync } from "node:fs"
 import { readFile } from "node:fs/promises"
 import { dirname, join } from "node:path"

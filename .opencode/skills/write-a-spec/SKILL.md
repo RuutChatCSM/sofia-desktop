@@ -1,12 +1,12 @@
 ---
 name: write-a-spec
-description: Write a spec, new E2E test, or test a feature end to end. Use when authoring an @openwork/testkit test in evals/specs.
+description: Write a spec, new E2E test, or test a feature end to end. Use when authoring an @sofia/testkit test in evals/specs.
 ---
 
 # Skill: Write a Spec
 
 Write new tests in `evals/specs/**/*.test.ts` and import `test` from
-`@openwork/testkit`. App-driving E2E tests use `.e2e.test.ts`; the PR lane excludes
+`@sofia/testkit`. App-driving E2E tests use `.e2e.test.ts`; the PR lane excludes
 them. Model setup as resources in dependency order: `needs()` → `server()` →
 `app()`.
 

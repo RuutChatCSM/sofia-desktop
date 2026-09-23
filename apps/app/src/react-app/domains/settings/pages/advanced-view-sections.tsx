@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import type { OpenworkCloudMcpHealth, OpenworkRuntimeConfigStatus, OpenworkServerStatus } from "@/app/lib/openwork-server";
+import type { SofiaCloudMcpHealth, SofiaRuntimeConfigStatus, SofiaServerStatus } from "@/app/lib/sofia-server";
 import { sanitizeCloudMcpHealthDiagnostic, sanitizeDiagnosticRecord } from "@/app/lib/diagnostic-sanitizer";
 import {
   DEFAULT_DEN_API_BASE_URL,
@@ -56,7 +56,7 @@ export type CodexEngineAvailability = {
 
 type SettingsTone = ComponentProps<typeof SettingsStatusBadge>["tone"];
 
-const DESKTOP_BOOTSTRAP_PATH_HINT = "~/.config/openwork/desktop-bootstrap.json";
+const DESKTOP_BOOTSTRAP_PATH_HINT = "~/.config/sofia/desktop-bootstrap.json";
 
 function sourceBadgeLabel(source: DenEndpointSource): string {
   switch (source) {
@@ -297,9 +297,9 @@ interface AdvancedRuntimeSectionProps {
   clientStatusLabel: string;
   clientTone: SettingsTone;
   clientDetailLines: string[];
-  openworkStatusLabel: string;
-  openworkTone: SettingsTone;
-  openworkDetailLines: string[];
+  sofiaStatusLabel: string;
+  sofiaTone: SettingsTone;
+  sofiaDetailLines: string[];
   codexEngineStatus?: CodexEngineAvailability | null;
 }
 
@@ -322,11 +322,11 @@ export function AdvancedRuntimeSection(props: AdvancedRuntimeSectionProps) {
         />
         <RuntimeStatusCard
           icon={<Server size={18} />}
-          title={t("settings.openwork_server_label")}
-          description={t("settings.openwork_server_desc")}
-          statusLabel={props.openworkStatusLabel}
-          tone={props.openworkTone}
-          detailLines={props.openworkDetailLines}
+          title={t("settings.sofia_server_label")}
+          description={t("settings.sofia_server_desc")}
+          statusLabel={props.sofiaStatusLabel}
+          tone={props.sofiaTone}
+          detailLines={props.sofiaDetailLines}
         />
       </div>
     </LayoutSection>
@@ -356,11 +356,11 @@ function formatMetadataRecord(value: Record<string, string | number | boolean | 
   return Object.entries(value).map(([key, nested]) => `${key}=${formatMaybe(nested)}`).join(", ");
 }
 
-function formatSupportedFeatures(features: OpenworkCloudMcpHealth["compatibility"]["supportedFeatures"]): string {
+function formatSupportedFeatures(features: SofiaCloudMcpHealth["compatibility"]["supportedFeatures"]): string {
   return Object.entries(features).map(([key, enabled]) => `${key}:${enabled ? "yes" : "no"}`).join(", ");
 }
 
-function formatPluginHashes(hashes: OpenworkCloudMcpHealth["compatibility"]["pluginFileHashes"]): string {
+function formatPluginHashes(hashes: SofiaCloudMcpHealth["compatibility"]["pluginFileHashes"]): string {
   if (hashes.length === 0) return "none";
   return hashes.map((hash) => `${hash.name}=${hash.sha256 ? hash.sha256.slice(0, 12) : `unavailable${hash.error ? ` (${hash.error})` : ""}`}`).join(", ");
 }
@@ -372,8 +372,8 @@ function formatMcpToolExposure(input: { checked: boolean; includesMcpTools: bool
 }
 
 interface AdvancedCloudMcpDiagnosticsSectionProps {
-  cloudMcpHealth: OpenworkCloudMcpHealth | null;
-  onRefresh: () => Promise<OpenworkCloudMcpHealth | null>;
+  cloudMcpHealth: SofiaCloudMcpHealth | null;
+  onRefresh: () => Promise<SofiaCloudMcpHealth | null>;
 }
 
 export function AdvancedCloudMcpDiagnosticsSection(props: AdvancedCloudMcpDiagnosticsSectionProps) {
@@ -466,8 +466,8 @@ export function AdvancedCloudMcpDiagnosticsSection(props: AdvancedCloudMcpDiagno
               <DiagnosticRow label="Safe capabilities" value={`schema v${props.cloudMcpHealth.schemaVersion}; connect catalog ${props.cloudMcpHealth.connectCatalogEnabled ? "enabled" : "disabled"}`} />
               {compatibility ? (
                 <>
-                  <DiagnosticRow label="Sofia App versions" value={`server ${formatMaybe(compatibility.openwork.serverVersion)}; app ${formatMetadataRecord(compatibility.openwork.app)}`} />
-                  <DiagnosticRow label="OpenCode compatibility" value={`expected ${formatMaybe(compatibility.opencode.expectedVersion)}; actual ${formatMaybe(compatibility.opencode.actualVersion)}; probe ${compatibility.opencode.probe}`} />
+                  <DiagnosticRow label="Sofia App versions" value={`server ${formatMaybe(compatibility.sofia.serverVersion)}; app ${formatMetadataRecord(compatibility.sofia.app)}`} />
+                  <DiagnosticRow label="Engine compatibility" value={`expected ${formatMaybe(compatibility.opencode.expectedVersion)}; actual ${formatMaybe(compatibility.opencode.actualVersion)}; probe ${compatibility.opencode.probe}`} />
                   <DiagnosticRow label="Feature probes" value={formatSupportedFeatures(compatibility.supportedFeatures)} />
                   <DiagnosticRow label="Experimental tool IDs" value={formatMcpToolExposure(compatibility.experimentalToolIds)} />
                   <DiagnosticRow label="Experimental provider tools" value={formatMcpToolExposure(compatibility.experimentalProviderTools)} />
@@ -496,7 +496,7 @@ interface AdvancedRuntimeMigrationSectionProps {
   canMigrate: boolean;
   migrationBusy: boolean;
   migrationStatus: string | null;
-  configStatus: OpenworkRuntimeConfigStatus | null;
+  configStatus: SofiaRuntimeConfigStatus | null;
   configStatusBusy: boolean;
   configStatusError: string | null;
   onRefresh: () => Promise<void>;
@@ -607,9 +607,9 @@ export function AdvancedRuntimeMigrationSection(props: AdvancedRuntimeMigrationS
   return (
     <LayoutSection>
       <LayoutSectionHeader>
-        <LayoutSectionTitle>OpenCode config sources</LayoutSectionTitle>
+        <LayoutSectionTitle>Engine config sources</LayoutSectionTitle>
         <LayoutSectionDescription>
-          Inspect what Sofia App controls at runtime versus what belongs to your workspace config. This works through the Sofia App server and does not require the OpenCode engine to be healthy.
+          Inspect what Sofia App controls at runtime versus what belongs to your workspace config. This works through the Sofia App server and does not require the engine to be healthy.
         </LayoutSectionDescription>
       </LayoutSectionHeader>
 
@@ -617,7 +617,7 @@ export function AdvancedRuntimeMigrationSection(props: AdvancedRuntimeMigrationS
         <LayoutSectionItemHeader>
           <LayoutSectionItemTitle>Move Sofia App-managed config</LayoutSectionItemTitle>
           <LayoutSectionItemDescription>
-            Moves older Sofia App-owned runtime keys from `.opencode/openwork.json` and safe Sofia App-managed keys from `opencode.jsonc` into the runtime database.
+            Moves older Sofia App-owned runtime keys from `.opencode/sofia.json` and safe Sofia App-managed keys from `opencode.jsonc` into the runtime database.
           </LayoutSectionItemDescription>
           <LayoutSectionItemHeaderActions>
             <Button
@@ -662,14 +662,14 @@ export function AdvancedRuntimeMigrationSection(props: AdvancedRuntimeMigrationS
             {props.configStatus.sources ? (
               <div className="space-y-3">
                 <div>
-                  <div className="font-medium text-gray-12">OpenCode source breakdown</div>
+                  <div className="font-medium text-gray-12">Engine source breakdown</div>
                   <div className="text-[11px] text-gray-9">
-                    OpenCode also reads its own project and global config files. Sofia App injects the runtime config separately; for Sofia App-managed keys, the injected config is the source to inspect.
+                    The engine also reads its own project and global config files. Sofia App injects the runtime config separately; for Sofia App-managed keys, the injected config is the source to inspect.
                   </div>
                 </div>
                 <RuntimeConfigSourceBlock
                   title="Project opencode config"
-                  description="Workspace-level OpenCode config owned by the user/project."
+                  description="Workspace-level engine config owned by the user/project."
                   path={props.configStatus.sources.projectOpencode.path}
                   exists={props.configStatus.sources.projectOpencode.exists}
                   keys={props.configStatus.sources.projectOpencode.keys}
@@ -677,7 +677,7 @@ export function AdvancedRuntimeMigrationSection(props: AdvancedRuntimeMigrationS
                 />
                 <RuntimeConfigSourceBlock
                   title="Global opencode config"
-                  description="User-level OpenCode config under ~/.config/opencode."
+                  description="User-level engine config under the engine home directory."
                   path={props.configStatus.sources.globalOpencode.path}
                   exists={props.configStatus.sources.globalOpencode.exists}
                   keys={props.configStatus.sources.globalOpencode.keys}
@@ -691,7 +691,7 @@ export function AdvancedRuntimeMigrationSection(props: AdvancedRuntimeMigrationS
                 />
                 <RuntimeConfigSourceBlock
                   title="Sofia App injected config"
-                  description="The object Sofia App injects into OpenCode at runtime."
+                  description="The object Sofia App injects into the engine at runtime."
                   keys={props.configStatus.sources.injected.keys}
                   config={props.configStatus.sources.injected.config}
                 />
@@ -703,11 +703,11 @@ export function AdvancedRuntimeMigrationSection(props: AdvancedRuntimeMigrationS
             </div>
             <div>
               <div className="font-medium text-gray-12">Legacy Sofia App metadata</div>
-              <div className="break-all">{props.configStatus.legacyOpenwork.path}</div>
-              {props.configStatus.legacyOpenwork.error ? (
-                <div className="text-amber-11">{props.configStatus.legacyOpenwork.error}; fix this file before moving legacy config.</div>
+              <div className="break-all">{props.configStatus.legacySofia.path}</div>
+              {props.configStatus.legacySofia.error ? (
+                <div className="text-amber-11">{props.configStatus.legacySofia.error}; fix this file before moving legacy config.</div>
               ) : null}
-              <div>Migratable keys: {formatKeys(props.configStatus.legacyOpenwork.keys)}</div>
+              <div>Migratable keys: {formatKeys(props.configStatus.legacySofia.keys)}</div>
             </div>
             <div>
               <div className="font-medium text-gray-12">User opencode.jsonc</div>
@@ -864,7 +864,7 @@ export function AdvancedDeveloperSection(props: AdvancedDeveloperSectionProps) {
                   value={props.deepLinkInput}
                   onChange={(event) => props.onDeepLinkInput(event.currentTarget.value)}
                   rows={3}
-                  placeholder="openwork://..."
+                  placeholder="sofia://..."
                   className="font-mono text-xs"
                 />
               </Field>
@@ -893,9 +893,9 @@ interface AdvancedConnectionSectionProps {
   busy: boolean;
   headerStatus: string;
   baseUrl: string;
-  openworkServerUrl: string;
-  openworkServerStatus: OpenworkServerStatus;
-  openworkReconnectBusy: boolean;
+  sofiaServerUrl: string;
+  sofiaServerStatus: SofiaServerStatus;
+  sofiaReconnectBusy: boolean;
   isLocalEngineRunning: boolean;
   restartBusy: boolean;
   reconnectStatus: string | null;
@@ -923,10 +923,10 @@ export function AdvancedConnectionSection(props: AdvancedConnectionSectionProps)
             variant="outline"
             size="sm"
             onClick={() => void props.onReconnect()}
-            disabled={props.busy || props.openworkReconnectBusy || !props.openworkServerUrl.trim()}
+            disabled={props.busy || props.sofiaReconnectBusy || !props.sofiaServerUrl.trim()}
           >
-            <RefreshCcw size={14} className={props.openworkReconnectBusy ? "animate-spin" : ""} />
-            {props.openworkReconnectBusy ? t("settings.reconnecting") : t("settings.reconnect_server")}
+            <RefreshCcw size={14} className={props.sofiaReconnectBusy ? "animate-spin" : ""} />
+            {props.sofiaReconnectBusy ? t("settings.reconnecting") : t("settings.reconnect_server")}
           </Button>
 
           {props.isLocalEngineRunning ? (
@@ -938,7 +938,7 @@ export function AdvancedConnectionSection(props: AdvancedConnectionSectionProps)
               disabled={props.busy || props.restartBusy}
             >
               <RefreshCcw size={14} className={props.restartBusy ? "animate-spin" : ""} />
-              {props.restartBusy ? t("settings.restarting") : t("settings.restart_openwork_server")}
+              {props.restartBusy ? t("settings.restarting") : t("settings.restart_sofia_server")}
             </Button>
           ) : null}
 
@@ -955,7 +955,7 @@ export function AdvancedConnectionSection(props: AdvancedConnectionSectionProps)
             </Button>
           ) : null}
 
-          {!props.isLocalEngineRunning && props.openworkServerStatus === "connected" ? (
+          {!props.isLocalEngineRunning && props.sofiaServerStatus === "connected" ? (
             <Button
               type="button"
               variant="outline"

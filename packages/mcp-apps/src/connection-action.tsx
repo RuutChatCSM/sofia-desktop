@@ -1,4 +1,4 @@
-import { connectionActionPayloadSchema, type ConnectionActionPayload } from "@openwork/types/connection-action-app"
+import { connectionActionPayloadSchema, type ConnectionActionPayload } from "@sofia/types/connection-action-app"
 import { mountMcpApp } from "./shared/bridge"
 import { AlertIcon, AppHeader, ArrowIcon, CardBody, CardFooter, CheckIcon, KeyValueGrid, PlugIcon, type Tone } from "./shared/ui"
 import "./shared/theme.css"
@@ -19,19 +19,19 @@ const ACTOR_LABEL: Record<NonNullable<ConnectionActionPayload["actor"]>, string>
   organization_admin: "An organization admin",
   provider_admin: "The provider admin",
   network_admin: "A network admin",
-  openwork: "OpenWork support",
+  sofia: "Sofia support",
 }
 
 const SURFACE_LABEL: Record<NonNullable<ConnectionActionPayload["action"]>["surface"], string> = {
-  openwork_your_connections: "Your Connections",
-  openwork_organization_connections: "Organization Connections",
+  sofia_your_connections: "Your Connections",
+  sofia_organization_connections: "Organization Connections",
   provider_admin_console: "Provider admin console",
   network_infrastructure: "Network infrastructure",
-  openwork_support: "OpenWork support",
+  sofia_support: "Sofia support",
 }
 
 mountMcpApp({
-  name: "OpenWork Connection Action",
+  name: "Sofia Connection Action",
   waitingLabel: "Checking the connection...",
   schema: connectionActionPayloadSchema,
   render: (payload, app) => {

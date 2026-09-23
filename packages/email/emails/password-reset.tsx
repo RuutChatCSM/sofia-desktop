@@ -5,5 +5,5 @@ export default function PasswordResetPreview(props: PasswordResetEmailProps) {
 }
 
 PasswordResetPreview.PreviewProps = {
-  resetLink: "https://app.openworklabs.com/api/auth/reset-password/example-token?callbackURL=https%3A%2F%2Fapp.openworklabs.com%2Freset-password",
+  resetLink: "https://sofia-app.ruut.chat/api/auth/reset-password/example-token?callbackURL=https%3A%2F%2Fsofia-app.ruut.chat%2Freset-password",
 } satisfies PasswordResetEmailProps

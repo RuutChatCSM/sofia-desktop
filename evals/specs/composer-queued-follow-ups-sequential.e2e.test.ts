@@ -2,15 +2,15 @@ import { createServer } from "node:http";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, onTestFinished } from "vitest";
-import { clickButton, control, createAndSelectWorkspace, evalIn, waitFor } from "@openwork/behaviors";
-import type { Surface } from "@openwork/cdp";
-import { screenshot, validate } from "@openwork/test-evidence";
-import { desktop } from "@openwork/hosts";
-import { needs, test, unmetNeeds } from "@openwork/testkit";
-import type { TestNeeds } from "@openwork/testkit";
+import { clickButton, control, createAndSelectWorkspace, evalIn, waitFor } from "@sofia/behaviors";
+import type { Surface } from "@sofia/cdp";
+import { screenshot, validate } from "@sofia/test-evidence";
+import { desktop } from "@sofia/hosts";
+import { needs, test, unmetNeeds } from "@sofia/testkit";
+import type { TestNeeds } from "@sofia/testkit";
 
 const requirements: TestNeeds = {
-  optIn: ["OPENWORK_EVAL_E2E_TESTS"],
+  optIn: ["SOFIA_EVAL_E2E_TESTS"],
 };
 const missingRequirements = unmetNeeds(requirements, process.env);
 const title = missingRequirements.length > 0
@@ -317,7 +317,7 @@ test(title, async ({ evidence }) => {
 
   await using app = await desktop({
     name: "sequential-queue",
-    mode: process.env.OPENWORK_EVAL_CDP_URL?.trim() ? "attach" : "spawn",
+    mode: process.env.SOFIA_EVAL_CDP_URL?.trim() ? "attach" : "spawn",
     // Provider keys in the runner env (e.g. via infisical) would make the
     // engine register real providers and out-default the deterministic mock.
     env: {
@@ -325,8 +325,8 @@ test(title, async ({ evidence }) => {
       OPENAI_API_KEY: "",
       OPENROUTER_API_KEY: "",
       GOOGLE_GENERATIVE_AI_API_KEY: "",
-      OPENWORK_API_KEY: "",
-      OPENWORK_INFERENCE_BASE_URL: "",
+      SOFIA_API_KEY: "",
+      SOFIA_INFERENCE_BASE_URL: "",
     },
   });
   // Register the deterministic provider through the workspace's own
@@ -334,7 +334,7 @@ test(title, async ({ evidence }) => {
   // spawn, so no config PATCH, engine reload, or renderer reload is needed —
   // reloading mid-session detaches the renderer's engine event stream and
   // would starve the live busy status this spec asserts on.
-  const workspacePath = `/tmp/openwork-sequential-queue-${Date.now()}`;
+  const workspacePath = `/tmp/sofia-sequential-queue-${Date.now()}`;
   await mkdir(workspacePath, { recursive: true });
   await writeFile(join(workspacePath, "opencode.json"), `${JSON.stringify({
     $schema: "https://opencode.ai/config.json",
@@ -349,11 +349,11 @@ test(title, async ({ evidence }) => {
   }, null, 2)}\n`);
   const workspace = await createAndSelectWorkspace(app, { path: workspacePath });
   const credentials = parseRuntimeCredentials(await evalIn(app, `JSON.stringify({
-    port: localStorage.getItem("openwork.server.port") ?? "",
-    token: localStorage.getItem("openwork.server.token") ?? "",
+    port: localStorage.getItem("sofia.server.port") ?? "",
+    token: localStorage.getItem("sofia.server.token") ?? "",
   })`));
   await waitForEngineReady(credentials, workspace.workspaceId);
-  await waitFor(app, `window.__openworkControl.listActions().some((action) => action.id === "session.create_task" && !action.disabled)`, {
+  await waitFor(app, `window.__sofiaControl.listActions().some((action) => action.id === "session.create_task" && !action.disabled)`, {
     timeoutMs: 30_000,
     label: "new task action enabled",
   });

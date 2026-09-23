@@ -1,6 +1,6 @@
 import { expect } from "vitest";
-import { evalIn, go, waitFor } from "@openwork/behaviors";
-import { screenshot, validate } from "@openwork/test-evidence";
+import { evalIn, go, waitFor } from "@sofia/behaviors";
+import { screenshot, validate } from "@sofia/test-evidence";
 import {
   app,
   eventually,
@@ -11,17 +11,17 @@ import {
   readDenClientState,
   server,
   test,
-} from "@openwork/testkit";
-import type { App, DesktopHandle, FaultProxy } from "@openwork/testkit";
+} from "@sofia/testkit";
+import type { App, DesktopHandle, FaultProxy } from "@sofia/testkit";
 
-const e2eTestsEnabled = process.env.OPENWORK_EVAL_E2E_TESTS === "1";
-const daytonaEnabled = process.env.OPENWORK_EVAL_DAYTONA === "1";
-const configuredDen = Boolean(process.env.OPENWORK_EVAL_DEN_API_URL?.trim());
+const e2eTestsEnabled = process.env.SOFIA_EVAL_E2E_TESTS === "1";
+const daytonaEnabled = process.env.SOFIA_EVAL_DAYTONA === "1";
+const configuredDen = Boolean(process.env.SOFIA_EVAL_DEN_API_URL?.trim());
 const localMysqlRequired = !daytonaEnabled && !configuredDen;
 const mysqlOpen = await localMysqlIsRunning();
 const runnable = e2eTestsEnabled && (!localMysqlRequired || mysqlOpen);
 const title = !e2eTestsEnabled
-  ? "desktop intermittent Den connection loss skipped — needs: set OPENWORK_EVAL_E2E_TESTS=1"
+  ? "desktop intermittent Den connection loss skipped — needs: set SOFIA_EVAL_E2E_TESTS=1"
   : localMysqlRequired && !mysqlOpen
     ? "desktop intermittent Den connection loss skipped — needs MySQL on 127.0.0.1:3306"
     : "desktop survives intermittent Den connection loss: engine stays up, health stays honest, Connect recovers";
@@ -52,7 +52,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 async function readEngineIdentity(desktopApp: DesktopHandle): Promise<EngineIdentity> {
   const value = await evalIn(desktopApp, `(async () => {
-    const info = await window.__OPENWORK_ELECTRON__?.invokeDesktop?.("engineInfo");
+    const info = await window.__SOFIA_ELECTRON__?.invokeDesktop?.("engineInfo");
     return {
       pid: typeof info?.pid === "number" ? info.pid : null,
       baseUrl: typeof info?.baseUrl === "string" ? info.baseUrl : "",
@@ -250,7 +250,7 @@ async function waitForRecoveredRequest(
 }
 
 test.skipIf(!runnable)(title, { timeout: 1_500_000 }, async ({ evidence, place }) => {
-  needs({ optIn: ["OPENWORK_EVAL_E2E_TESTS"] });
+  needs({ optIn: ["SOFIA_EVAL_E2E_TESTS"] });
 
   const stamp = Date.now();
   await using den = await server({
@@ -258,9 +258,9 @@ test.skipIf(!runnable)(title, { timeout: 1_500_000 }, async ({ evidence, place }
     org: {
       name: `Intermittent Outage ${stamp}`,
       admin: {
-        email: `intermittent-outage-admin-${stamp}@openwork.test`,
+        email: `intermittent-outage-admin-${stamp}@sofia.test`,
         name: "Intermittent Outage Admin",
-        password: "OpenWorkEval123!",
+        password: "SofiaEval123!",
       },
     },
   });
@@ -314,7 +314,7 @@ test.skipIf(!runnable)(title, { timeout: 1_500_000 }, async ({ evidence, place }
   ]);
   expect(baselineHealthySeen.ok, baselineHealthySeen.why).toBe(true);
 
-  await evalIn(desktopApp, `localStorage.setItem("openwork.developerMode", "1"); true`);
+  await evalIn(desktopApp, `localStorage.setItem("sofia.developerMode", "1"); true`);
   await openDiagnostics(desktopApp);
   const baselineDiagnostics = await runDiagnostics(desktopApp, "healthy baseline diagnostics");
   expect(baselineDiagnostics.overallFailed, JSON.stringify(baselineDiagnostics)).toBe(false);
@@ -556,7 +556,7 @@ test.skipIf(!runnable)(title, { timeout: 1_500_000 }, async ({ evidence, place }
   );
   expect(everyAuthSampleRetained).toBe(true);
   evidence.recordAssertionEvidence(
-    "The local OpenCode engine never restarted across two full outage and recovery cycles",
+    "The local Sofia engine never restarted across two full outage and recovery cycles",
     `Baseline engine ${JSON.stringify(baselineEngine)} equals final engine ${JSON.stringify(finalEngine)}.`,
     sameEngine(finalEngine, baselineEngine),
   );

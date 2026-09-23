@@ -1,6 +1,6 @@
-# gmail-draft-formatting — Gmail desktop preserves OpenWork draft formatting
+# gmail-draft-formatting — Gmail desktop preserves Sofia draft formatting
 
-1. OpenWork creates a Gmail draft containing long paragraphs, blank lines, and a short list.
+1. Sofia creates a Gmail draft containing long paragraphs, blank lines, and a short list.
 
 2. The draft opens in Gmail desktop with the intended spacing and readable paragraphs.
 

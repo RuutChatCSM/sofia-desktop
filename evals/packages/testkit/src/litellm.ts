@@ -10,9 +10,9 @@ import {
   defaultDaytonaExec,
   deleteSandboxes,
   execInSandbox,
-} from "@openwork/hosts";
+} from "@sofia/hosts";
 import type { Server, ServerResponse } from "node:http";
-import type { DaytonaExec, DaytonaExecResult } from "@openwork/hosts";
+import type { DaytonaExec, DaytonaExecResult } from "@sofia/hosts";
 import { SkipError } from "./needs.ts";
 import type { Place } from "./place.ts";
 
@@ -23,10 +23,10 @@ const EXEC_READY_TIMEOUT_MS = 180_000;
 const PREVIEW_EXPIRY_SECONDS = 7_200;
 const DAYTONA_PROXY_PORT = 4_000;
 const DAYTONA_WITNESS_PORT = 4_001;
-const DAYTONA_CONFIG = "/tmp/openwork-litellm-config.json";
-const DAYTONA_WITNESS = "/tmp/openwork-litellm-witness.py";
-const DAYTONA_LOG = "/tmp/openwork-litellm.log";
-const DAYTONA_WITNESS_LOG = "/tmp/openwork-litellm-witness.log";
+const DAYTONA_CONFIG = "/tmp/sofia-litellm-config.json";
+const DAYTONA_WITNESS = "/tmp/sofia-litellm-witness.py";
+const DAYTONA_LOG = "/tmp/sofia-litellm.log";
+const DAYTONA_WITNESS_LOG = "/tmp/sofia-litellm-witness.log";
 const BASE64_CHUNK_LENGTH = 8 * 1_024;
 const MAX_DAYTONA_COMMAND_LENGTH = 12 * 1_024;
 
@@ -80,10 +80,10 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path == "/v1/models":
             self.send_json(200, {
                 "object": "list",
-                "data": [{"id": MODEL, "object": "model", "owned_by": "openwork-testkit"}],
+                "data": [{"id": MODEL, "object": "model", "owned_by": "sofia-testkit"}],
             })
             return
-        if parsed.path not in ("/__openwork_litellm/health", "/__openwork_litellm/requests"):
+        if parsed.path not in ("/__sofia_litellm/health", "/__sofia_litellm/requests"):
             self.send_json(404, {"error": {"message": "not found"}})
             return
         if not self.control_authorized():
@@ -91,7 +91,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         with LOCK:
             sequence = SEQUENCE
-            if parsed.path == "/__openwork_litellm/health":
+            if parsed.path == "/__sofia_litellm/health":
                 self.send_json(200, {"ok": True, "sequence": sequence})
                 return
             values = parse_qs(parsed.query).get("after", ["0"])
@@ -139,7 +139,7 @@ class Handler(BaseHTTPRequestHandler):
         if not hmac.compare_digest(token_id, OPTIONS.upstream_token_id):
             self.send_json(401, {"error": {"message": "unauthorized"}})
             return
-        completion_id = "chatcmpl-openwork-" + str(sequence)
+        completion_id = "chatcmpl-sofia-" + str(sequence)
         if isinstance(body, dict) and body.get("stream") is True:
             self.send_response(200)
             self.send_header("content-type", "text/event-stream")
@@ -328,7 +328,7 @@ function makeHandle(input: HandleInput): LiteLlmHandle {
     const cursor = validCursor(after);
     try {
       return parseRequests(
-        await controlJson(input.fetchImpl, input.controlUrl, input.controlKey, `/__openwork_litellm/requests?after=${cursor}`),
+        await controlJson(input.fetchImpl, input.controlUrl, input.controlKey, `/__sofia_litellm/requests?after=${cursor}`),
         cursor,
       );
     } catch (error) {
@@ -346,7 +346,7 @@ function makeHandle(input: HandleInput): LiteLlmHandle {
           input.fetchImpl,
           input.controlUrl,
           input.controlKey,
-          "/__openwork_litellm/health",
+          "/__sofia_litellm/health",
         ));
       } catch (error) {
         throw redactedError(error, secrets);
@@ -394,16 +394,16 @@ function startWitness(
   const server = createServer((request, response) => {
     const url = new URL(request.url ?? "/", "http://127.0.0.1");
     if (request.method === "GET" && url.pathname === "/v1/models") {
-      writeJson(response, 200, { object: "list", data: [{ id: modelId, object: "model", owned_by: "openwork-testkit" }] });
+      writeJson(response, 200, { object: "list", data: [{ id: modelId, object: "model", owned_by: "sofia-testkit" }] });
       return;
     }
     if (request.method === "GET"
-      && (url.pathname === "/__openwork_litellm/health" || url.pathname === "/__openwork_litellm/requests")) {
+      && (url.pathname === "/__sofia_litellm/health" || url.pathname === "/__sofia_litellm/requests")) {
       if (tokenId(bearerToken(request.headers.authorization)) !== controlTokenId) {
         writeJson(response, 401, { error: "unauthorized" });
         return;
       }
-      if (url.pathname === "/__openwork_litellm/health") {
+      if (url.pathname === "/__sofia_litellm/health") {
         writeJson(response, 200, { ok: true, sequence: state.sequence });
         return;
       }
@@ -439,7 +439,7 @@ function startWitness(
         writeJson(response, 401, { error: { message: "unauthorized" } });
         return;
       }
-      const id = `chatcmpl-openwork-${sequence}`;
+      const id = `chatcmpl-sofia-${sequence}`;
       if (isRecord(body) && body.stream === true) {
         response.writeHead(200, {
           "content-type": "text/event-stream",
@@ -534,7 +534,7 @@ async function startLocalLiteLlm(
   }
 
   const state: WitnessState = { requests: [], sequence: 0 };
-  const container = `openwork-litellm-${randomBytes(8).toString("hex")}`;
+  const container = `sofia-litellm-${randomBytes(8).toString("hex")}`;
   let root = "";
   let witness: Server | null = null;
   try {
@@ -546,7 +546,7 @@ async function startLocalLiteLlm(
       state,
     );
     witness = startedWitness.server;
-    root = await realpath(await mkdtemp(join(tmpdir(), "openwork-litellm-")));
+    root = await realpath(await mkdtemp(join(tmpdir(), "sofia-litellm-")));
     const configPath = join(root, "config.json");
     await writeFile(
       configPath,
@@ -596,7 +596,7 @@ async function startLocalLiteLlm(
 }
 
 export function liteLlmSandboxName(): string {
-  return `openwork-litellm-eval-${process.pid}-${Date.now().toString(36)}-${randomBytes(4).toString("hex")}`;
+  return `sofia-litellm-eval-${process.pid}-${Date.now().toString(36)}-${randomBytes(4).toString("hex")}`;
 }
 
 function uploadCommands(content: string, remotePath: string): string[] {
@@ -675,7 +675,7 @@ async function waitForDaytonaReady(
   while (Date.now() < deadline) {
     let healthResponse: Response;
     try {
-      healthResponse = await fetchImpl(`${controlUrl}/__openwork_litellm/health`, {
+      healthResponse = await fetchImpl(`${controlUrl}/__sofia_litellm/health`, {
         headers: { authorization: `Bearer ${secrets.controlKey}` },
         signal: AbortSignal.timeout(5_000),
       });
@@ -750,7 +750,7 @@ async function startDaytonaLiteLlm(
   let root = "";
   let createAttempted = false;
   try {
-    root = await realpath(await mkdtemp(join(tmpdir(), "openwork-litellm-daytona-")));
+    root = await realpath(await mkdtemp(join(tmpdir(), "sofia-litellm-daytona-")));
     const dockerfile = join(root, "Dockerfile");
     await writeFile(dockerfile, DAYTONA_DOCKERFILE, { mode: 0o600 });
     createAttempted = true;
@@ -838,9 +838,9 @@ export async function liteLlm(input: {
   fetchImpl?: typeof fetch;
 }): Promise<LiteLlmHandle> {
   const secrets: LiteLlmSecrets = {
-    masterKey: `sk-openwork-master-${randomBytes(24).toString("hex")}`,
-    upstreamKey: `sk-openwork-upstream-${randomBytes(24).toString("hex")}`,
-    controlKey: `sk-openwork-control-${randomBytes(24).toString("hex")}`,
+    masterKey: `sk-sofia-master-${randomBytes(24).toString("hex")}`,
+    upstreamKey: `sk-sofia-upstream-${randomBytes(24).toString("hex")}`,
+    controlKey: `sk-sofia-control-${randomBytes(24).toString("hex")}`,
   };
   return input.place.kind === "daytona"
     ? startDaytonaLiteLlm(input, secrets)

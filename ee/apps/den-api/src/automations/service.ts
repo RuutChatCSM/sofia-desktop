@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto"
-import type { AutomationClaimResult, AutomationListItem } from "@openwork/automations"
-import { AUTOMATION_MIN_CLAIM_WINDOW_MS, desktopRunnerConnected } from "@openwork/automations"
+import type { AutomationClaimResult, AutomationListItem } from "@sofia/automations"
+import { AUTOMATION_MIN_CLAIM_WINDOW_MS, desktopRunnerConnected } from "@sofia/automations"
 import type {
   AutomationDesktopRunnerCapability,
   AutomationDesktopRunnerPresence,
@@ -11,7 +11,7 @@ import type {
   AutomationAction,
   CreateAutomationDefinition,
   UpdateAutomation,
-} from "@openwork/types/automations"
+} from "@sofia/types/automations"
 import { env } from "../env.js"
 import { isActiveAutomationOwner, resolveAutomationModelAccess } from "./authority.js"
 import { shouldApplyAutomationModelAccessFailure } from "./model-attention-rollout.js"
@@ -561,8 +561,8 @@ export class AutomationService {
         runId,
         leaseOwner,
         status: "failed",
-        resultSummary: "OpenWork Cloud Workflow execution is unavailable.",
-        error: { code: "execution_runtime_unavailable", message: "OpenWork Cloud Workflow execution is unavailable.", retryable: true },
+        resultSummary: "Sofia Cloud Workflow execution is unavailable.",
+        error: { code: "execution_runtime_unavailable", message: "Sofia Cloud Workflow execution is unavailable.", retryable: true },
         now: Date.now(),
       })
       return
@@ -619,9 +619,9 @@ export class AutomationService {
         runId: claimed.run.id,
         leaseOwner,
         status: "failed",
-        resultSummary: "OpenWork Cloud agent execution is unavailable.",
+        resultSummary: "Sofia Cloud agent execution is unavailable.",
         updateArtifactState: false,
-        error: { code: "execution_runtime_unavailable", message: "OpenWork Cloud agent execution is unavailable.", retryable: true },
+        error: { code: "execution_runtime_unavailable", message: "Sofia Cloud agent execution is unavailable.", retryable: true },
         now: Date.now(),
       })
       return
@@ -686,7 +686,7 @@ export class AutomationService {
         onAdmitted: async (receipt) => automationRepository.setCloudExecution({
           runId: claimed.run.id,
           leaseOwner,
-          engineKind: "openwork-cloud-agent-v1",
+          engineKind: "sofia-cloud-agent-v1",
           receipt,
           now: Date.now(),
         }),

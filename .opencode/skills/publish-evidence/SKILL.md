@@ -1,6 +1,6 @@
 ---
 name: publish-evidence
-description: Publish test evidence, publish all test runs, update PR verification, or audit red evidence. Use after @openwork/testkit runs.
+description: Publish test evidence, publish all test runs, update PR verification, or audit red evidence. Use after @sofia/testkit runs.
 ---
 
 # Skill: Publish Evidence
@@ -27,7 +27,7 @@ pnpm evals:e2e --publish --pr <n> --test-run <dir|name>
 ```
 
 `evals:e2e --publish` judges pending visual validations in the selected test
-run, then publishes it. It publishes existing `@openwork/testkit` evidence, not legacy
+run, then publishes it. It publishes existing `@sofia/testkit` evidence, not legacy
 flows, and never reruns tests.
 
 - Omitting `--test-run` selects the most recent test run; pass it explicitly

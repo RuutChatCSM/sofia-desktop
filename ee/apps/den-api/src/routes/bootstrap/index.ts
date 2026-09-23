@@ -1,4 +1,4 @@
-import { and, eq, gt, isNotNull, isNull } from "@openwork-ee/den-db/drizzle"
+import { and, eq, gt, isNotNull, isNull } from "@sofia-ee/den-db/drizzle"
 import {
   ConfigObjectAccessGrantTable,
   ConfigObjectTable,
@@ -14,8 +14,8 @@ import {
   RateLimitTable,
   WorkspaceBootstrapTable,
   WorkspaceClaimTable,
-} from "@openwork-ee/den-db/schema"
-import { createDenTypeId, normalizeDenTypeId, parseSkillMarkdown } from "@openwork-ee/utils"
+} from "@sofia-ee/den-db/schema"
+import { createDenTypeId, normalizeDenTypeId, parseSkillMarkdown } from "@sofia-ee/utils"
 import { createHash, randomBytes } from "node:crypto"
 import type { Hono } from "hono"
 import { describeRoute } from "hono-openapi"
@@ -30,20 +30,20 @@ import { seedDefaultOrganizationRoles, setSessionActiveOrganization } from "../.
 import { clampUtf8Bytes, PROJECTION_TEXT_MAX_BYTES } from "../org/plugin-system/projection-text.js"
 import type { AuthContextVariables } from "../../session.js"
 import {
-  DEFAULT_OPENWORK_MARKETPLACE_DESCRIPTION,
-  DEFAULT_OPENWORK_MARKETPLACE_LOGO_URL,
-  DEFAULT_OPENWORK_MARKETPLACE_NAME,
+  DEFAULT_SOFIA_MARKETPLACE_DESCRIPTION,
+  DEFAULT_SOFIA_MARKETPLACE_LOGO_URL,
+  DEFAULT_SOFIA_MARKETPLACE_NAME,
 } from "../org/plugin-system/default-marketplaces.js"
 
 const BOOTSTRAP_TTL_MS = 1000 * 60 * 60 * 24
 const BOOTSTRAP_RATE_LIMIT_WINDOW_MS = 1000 * 60 * 60
 const BOOTSTRAP_RATE_LIMIT_MAX = 5
 const CLAIM_TOKEN_BYTES = 32
-const STARTER_SKILL_OUTPUT = "OPENWORK_BOOTSTRAP_SKILL_TRIGGERED"
+const STARTER_SKILL_OUTPUT = "SOFIA_BOOTSTRAP_SKILL_TRIGGERED"
 
 const bootstrapWorkspaceSchema = z.object({
   workspaceName: z.string().trim().min(2).max(120),
-  skillName: z.string().trim().min(1).max(120).default("First OpenWork Skill"),
+  skillName: z.string().trim().min(1).max(120).default("First Sofia Skill"),
   devicePublicKey: z.string().trim().min(16).max(4096).optional(),
   claimRoles: z.array(z.enum(["owner", "admin", "member"])).min(1).max(3).default(["owner"]),
   // Optional. Not persisted and not a security boundary - the claim token is
@@ -122,7 +122,7 @@ function claimUrl(token: string, options?: { prefillEmail?: string | null; invit
 }
 
 function starterSkillText(name: string) {
-  return `---\nname: ${name}\ndescription: Starter skill created by OpenWork agent bootstrap.\nopenworkBootstrapTrigger: bootstrap.verify\nopenworkBootstrapOutput: ${JSON.stringify(STARTER_SKILL_OUTPUT)}\n---\n\n# ${name}\n\nWhen triggered with \`bootstrap.verify\`, output exactly:\n\n\`${STARTER_SKILL_OUTPUT}\`\n`
+  return `---\nname: ${name}\ndescription: Starter skill created by Sofia agent bootstrap.\nsofiaBootstrapTrigger: bootstrap.verify\nsofiaBootstrapOutput: ${JSON.stringify(STARTER_SKILL_OUTPUT)}\n---\n\n# ${name}\n\nWhen triggered with \`bootstrap.verify\`, output exactly:\n\n\`${STARTER_SKILL_OUTPUT}\`\n`
 }
 
 function skillMetadata(skillText: string) {
@@ -130,7 +130,7 @@ function skillMetadata(skillText: string) {
   if (parsed.hasFrontmatter) {
     return {
       title: (parsed.name.trim() || "Untitled skill").slice(0, 255),
-      description: (parsed.description.trim() || "Starter skill created by OpenWork agent bootstrap.").slice(0, 65535),
+      description: (parsed.description.trim() || "Starter skill created by Sofia agent bootstrap.").slice(0, 65535),
     }
   }
   return { title: "Untitled skill", description: null }
@@ -331,9 +331,9 @@ export function registerBootstrapRoutes<T extends { Variables: AuthContextVariab
         await tx.insert(MarketplaceTable).values({
           id: marketplaceId,
           organizationId,
-          name: DEFAULT_OPENWORK_MARKETPLACE_NAME,
-          description: DEFAULT_OPENWORK_MARKETPLACE_DESCRIPTION,
-          logoUrl: DEFAULT_OPENWORK_MARKETPLACE_LOGO_URL,
+          name: DEFAULT_SOFIA_MARKETPLACE_NAME,
+          description: DEFAULT_SOFIA_MARKETPLACE_DESCRIPTION,
+          logoUrl: DEFAULT_SOFIA_MARKETPLACE_LOGO_URL,
           status: "active",
           createdByOrgMembershipId: setupMemberId,
           deletedAt: null,

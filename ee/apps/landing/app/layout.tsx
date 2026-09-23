@@ -14,11 +14,11 @@ const posthogEnabled = process.env.VERCEL_ENV === "production";
 const organizationSchema = {
   "@context": "https://schema.org",
   "@type": "Organization",
-  name: "OpenWork",
+  name: "Sofia",
   legalName: "Different AI",
-  url: "https://openworklabs.com",
-  logo: "https://openworklabs.com/openwork-mark.svg",
-  sameAs: ["https://github.com/different-ai/openwork"]
+  url: "https://sofia.ruut.chat",
+  logo: "https://sofia.ruut.chat/sofia-mark.svg",
+  sameAs: ["https://github.com/RuutChatCSM/sofia-desktop"]
 };
 
 const inter = Inter({
@@ -34,8 +34,8 @@ const jetbrains = JetBrains_Mono({
 });
 
 export const metadata = {
-  metadataBase: new URL("https://openworklabs.com"),
-  title: "OpenWork — Open source Claude Cowork alternative for teams",
+  metadataBase: new URL("https://sofia.ruut.chat"),
+  title: "Sofia — Open source Claude Cowork alternative for teams",
   description:
     "Bring your own model and provider, wire in your tools and context, and ship reusable agent setups across your org — with guardrails built in.",
   alternates: {
@@ -47,7 +47,7 @@ export const metadata = {
   },
   openGraph: {
     type: "website",
-    siteName: "OpenWork",
+    siteName: "Sofia",
     locale: "en_US",
     images: ["/og-image-clean.png"]
   },

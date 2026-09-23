@@ -4,17 +4,17 @@ import net from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect } from "vitest";
-import { denFetch, evalIn, signIn, waitFor } from "@openwork/behaviors";
-import { attachSurface, navigate } from "@openwork/cdp";
-import { screenshot, validate } from "@openwork/test-evidence";
-import { chrome, localHost } from "@openwork/hosts";
-import { startEgressLab } from "@openwork/labs";
-import { needs, server, test, unmetNeeds } from "@openwork/testkit";
+import { denFetch, evalIn, signIn, waitFor } from "@sofia/behaviors";
+import { attachSurface, navigate } from "@sofia/cdp";
+import { screenshot, validate } from "@sofia/test-evidence";
+import { chrome, localHost } from "@sofia/hosts";
+import { startEgressLab } from "@sofia/labs";
+import { needs, server, test, unmetNeeds } from "@sofia/testkit";
 import { resolveSystemCaEnv } from "../../apps/desktop/electron/runtime.mjs";
-import type { TestNeeds } from "@openwork/testkit";
+import type { TestNeeds } from "@sofia/testkit";
 
 const requirements: TestNeeds = {
-  optIn: ["OPENWORK_EVAL_E2E_TESTS"],
+  optIn: ["SOFIA_EVAL_E2E_TESTS"],
 };
 const missingRequirements = unmetNeeds(requirements, process.env);
 const title = missingRequirements.length > 0
@@ -67,7 +67,7 @@ async function fetchLabInChild(url: string, env: NodeJS.ProcessEnv): Promise<{ s
 // Exactly the record the enterprise gate stamps after a confirmed exchange
 // (enterprise-activation-gate.tsx, exchangeConfirmedGrant).
 async function writeStampedBootstrap(denBaseUrl: string): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), "openwork-invite-connect-activation-"));
+  const dir = await mkdtemp(join(tmpdir(), "sofia-invite-connect-activation-"));
   const bootstrapPath = join(dir, "desktop-bootstrap.json");
   const stamped = {
     baseUrl: denBaseUrl,
@@ -82,7 +82,7 @@ async function resolveCaEnvFromRecord(options: {
   bootstrapPath: string;
   rootPem: string;
 }): Promise<{ caEnv: NodeJS.ProcessEnv; logs: string[] }> {
-  const userDataDir = await mkdtemp(join(tmpdir(), "openwork-invite-connect-chain-"));
+  const userDataDir = await mkdtemp(join(tmpdir(), "sofia-invite-connect-chain-"));
   const logs: string[] = [];
   const caEnv: NodeJS.ProcessEnv = await resolveSystemCaEnv({
     tlsModule: { getCACertificates: () => [] },
@@ -124,7 +124,7 @@ async function reserveClosedPort(): Promise<number> {
  * nonexistent account), lands on the clean authenticated /install guide with
  * no installer token anywhere, and links a real blank-slate Enterprise desktop
  * by typing the workspace address the guide showed — with the pasted
- * openwork:// URL as the same field's silent recovery. The one-time grant dies
+ * sofia:// URL as the same field's silent recovery. The one-time grant dies
  * after use, and the activation record this flow stamps is exactly what the
  * TLS chain-repair seam consumes, unlocking only the stamped origin on a
  * broken-chain, semi-airgapped network.
@@ -135,9 +135,9 @@ test(title, { timeout: 1_800_000 }, async ({ evidence, place }) => {
   const runId = `${Date.now().toString(36)}${process.pid.toString(36)}`;
   const orgName = `Acme Robotics ${runId}`;
   const invitee = {
-    email: `maya+${runId}@openwork.test`,
+    email: `maya+${runId}@sofia.test`,
     name: "Maya Chen",
-    password: "OpenWorkEval123!",
+    password: "SofiaEval123!",
   };
 
   await using den = await server({
@@ -254,7 +254,7 @@ test(title, { timeout: 1_800_000 }, async ({ evidence, place }) => {
     const resources = performance.getEntriesByType("resource").map((entry) => entry.name);
     const hrefs = [...document.querySelectorAll("a[href]")].map((anchor) => anchor.href);
     const headers = new Headers({ Accept: "application/json" });
-    const storedToken = localStorage.getItem("openwork:web:auth-token")?.trim();
+    const storedToken = localStorage.getItem("sofia:web:auth-token")?.trim();
     if (storedToken) headers.set("Authorization", "Bearer " + storedToken);
     const configResponse = await fetch("/api/den/v1/me/install-config", {
       credentials: "include",
@@ -269,9 +269,9 @@ test(title, { timeout: 1_800_000 }, async ({ evidence, place }) => {
       distribution: config?.distribution,
       downloadHrefs: hrefs.filter((href) => href.includes("/v1/me/install/")),
       cloudDownloadSurface: [...document.querySelectorAll("h1")]
-        .some((heading) => (heading.textContent ?? "").trim() === "Download OpenWork"),
+        .some((heading) => (heading.textContent ?? "").trim() === "Download Sofia App"),
       cloudReturnControl: [...document.querySelectorAll("a")]
-        .some((anchor) => (anchor.textContent ?? "").trim() === "I already installed OpenWork"),
+        .some((anchor) => (anchor.textContent ?? "").trim() === "I already installed Sofia App"),
       enterpriseGuide: Boolean(document.querySelector('[data-testid="install-guide"]')),
       skipControl: Boolean(document.querySelector('[data-testid="install-skip-download"]')),
       workspaceControl: Boolean(document.querySelector('[data-testid="install-workspace-address"]')),
@@ -357,11 +357,11 @@ test(title, { timeout: 1_800_000 }, async ({ evidence, place }) => {
   const handoff = await denFetch(den.ref, "/v1/auth/desktop-handoff", {
     method: "POST",
     headers: { authorization: `Bearer ${member.token}` },
-    body: JSON.stringify({ desktopScheme: "openwork" }),
+    body: JSON.stringify({ desktopScheme: "sofia" }),
   });
-  const openworkUrl = stringField(handoff.body, "openworkUrl");
+  const sofiaUrl = stringField(handoff.body, "sofiaUrl");
   const grant = stringField(handoff.body, "grant");
-  if (!handoff.response.ok || !openworkUrl || !grant) {
+  if (!handoff.response.ok || !sofiaUrl || !grant) {
     throw new Error(`Desktop handoff mint failed: HTTP ${handoff.response.status} ${handoff.text.slice(0, 400)}`);
   }
 
@@ -371,7 +371,7 @@ test(title, { timeout: 1_800_000 }, async ({ evidence, place }) => {
   if (!host) throw new Error("No Electron host: neither placement host nor local fallback is available.");
   const handle = await host.spawnElectron("enterprise-invite-connect", {
     profile: "fresh",
-    env: { OPENWORK_DESKTOP_DISTRIBUTION: "enterprise" },
+    env: { SOFIA_DESKTOP_DISTRIBUTION: "enterprise" },
   });
   const desktopSurface = await attachSurface(handle, { timeoutMs: 240_000 });
   try {
@@ -387,7 +387,7 @@ test(title, { timeout: 1_800_000 }, async ({ evidence, place }) => {
       return JSON.stringify({
         heading: text.includes("Link this app to your organization"),
         serverField: Boolean(document.querySelector('#organization-server-input')),
-        linkField: Boolean(document.querySelector('#enterprise-openwork-link')),
+        linkField: Boolean(document.querySelector('#enterprise-sofia-link')),
         methodToggle: Boolean(document.querySelector('[data-testid="enterprise-connection-method-toggle"]')),
       });
     })()`)));
@@ -397,7 +397,7 @@ test(title, { timeout: 1_800_000 }, async ({ evidence, place }) => {
     expect(isRecord(gate) && gate.methodToggle === false).toBe(true);
     evidence.recordAssertionEvidence(
       "The enterprise blank slate asks one question: the workspace address",
-      "The packaged-policy gate renders Link this app to your organization with only the organization-server-input form; no OpenWork link field and no method toggle exist.",
+      "The packaged-policy gate renders Link this app to your organization with only the organization-server-input form; no Sofia App link field and no method toggle exist.",
       true,
     );
 
@@ -436,15 +436,15 @@ test(title, { timeout: 1_800_000 }, async ({ evidence, place }) => {
     })()`);
     expect(wentBack).toBe(true);
 
-    // Recovery seam of the SAME field: a pasted openwork:// URL carries the
+    // Recovery seam of the SAME field: a pasted sofia:// URL carries the
     // origin and one-time grant, still passes the named confirmation, and
     // signs the desktop in — sign-in IS activation.
-    expect(await typeIntoGate(openworkUrl)).toBe("submitted");
+    expect(await typeIntoGate(sofiaUrl)).toBe("submitted");
     await waitFor(
       desktopSurface,
       `Boolean(document.querySelector('[data-testid="organization-server-confirm"]'))
         && document.body.innerText.includes("Confirm and finish sign-in")`,
-      { timeoutMs: 30_000, label: "manual confirmation for the pasted openwork:// URL" },
+      { timeoutMs: 30_000, label: "manual confirmation for the pasted sofia:// URL" },
     );
     const confirmed = await evalIn(desktopSurface, `(() => {
       const confirm = document.querySelector('[data-testid="organization-server-confirm"]');
@@ -467,7 +467,7 @@ test(title, { timeout: 1_800_000 }, async ({ evidence, place }) => {
     });
     expect(reused.response.ok).toBe(false);
     evidence.recordAssertionEvidence(
-      "Pasting the complete OpenWork URL signs the desktop in exactly once",
+      "Pasting the complete Sofia App URL signs the desktop in exactly once",
       `After confirming ${webOrigin} the enterprise gate unmounted (sign-in is activation), and replaying the same grant against /v1/auth/desktop-handoff/exchange failed with HTTP ${reused.response.status}: the credential is single-use.`,
       !reused.response.ok,
     );
@@ -512,11 +512,11 @@ test(title, { timeout: 1_800_000 }, async ({ evidence, place }) => {
   const finalShot = await screenshot(browser);
   const seen = await validate(finalShot, distribution === "cloud"
     ? [
-        "The page is an OpenWork download guide",
+        "The page is an Sofia App download guide",
         "Desktop download choices are visible",
       ]
     : [
-        "The page is an OpenWork install or setup guide",
+        "The page is an Sofia App install or setup guide",
         "A step mentions connecting or a workspace address",
       ]);
   expect(seen.ok, seen.why).toBe(true);

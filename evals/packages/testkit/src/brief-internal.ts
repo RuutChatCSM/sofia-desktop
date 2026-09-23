@@ -15,6 +15,6 @@ export function setBriefTestRegistrar(registrar: RegisterTest): void {
 }
 
 export function getBriefTestRegistrar(): RegisterTest {
-  if (!registerTest) throw new Error("briefTest must be imported from @openwork/testkit.");
+  if (!registerTest) throw new Error("briefTest must be imported from @sofia/testkit.");
   return registerTest;
 }

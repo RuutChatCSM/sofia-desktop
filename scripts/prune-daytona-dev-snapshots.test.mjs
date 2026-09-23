@@ -34,54 +34,54 @@ function inventoryFetch(snapshots, sandboxes = []) {
 
 test("selection prunes only unprotected dev snapshots", () => {
   const snapshots = [
-    snapshot("old", "openwork-dev-old", "2026-01-01T00:00:00Z"),
-    snapshot("stopped", "openwork-dev-stopped", "2026-01-02T00:00:00Z"),
-    snapshot("explicit", "openwork-dev-explicit", "2026-01-03T00:00:00Z"),
-    snapshot("pulling", "openwork-dev-pulling", "2026-01-04T00:00:00Z", "pulling"),
-    snapshot("active", "openwork-dev-active-ref", "2026-01-05T00:00:00Z"),
-    snapshot("recent-1", "openwork-dev-recent-1", "2026-01-06T00:00:00Z"),
-    snapshot("recent-2", "openwork-dev-recent-2", "2026-01-07T00:00:00Z"),
-    snapshot("release", "openwork-0.18.23", "2026-01-08T00:00:00Z"),
+    snapshot("old", "sofia-dev-old", "2026-01-01T00:00:00Z"),
+    snapshot("stopped", "sofia-dev-stopped", "2026-01-02T00:00:00Z"),
+    snapshot("explicit", "sofia-dev-explicit", "2026-01-03T00:00:00Z"),
+    snapshot("pulling", "sofia-dev-pulling", "2026-01-04T00:00:00Z", "pulling"),
+    snapshot("active", "sofia-dev-active-ref", "2026-01-05T00:00:00Z"),
+    snapshot("recent-1", "sofia-dev-recent-1", "2026-01-06T00:00:00Z"),
+    snapshot("recent-2", "sofia-dev-recent-2", "2026-01-07T00:00:00Z"),
+    snapshot("release", "sofia-0.18.23", "2026-01-08T00:00:00Z"),
     snapshot("base", "daytonaio/sandbox:0.8.0", "2026-01-09T00:00:00Z"),
     snapshot("windows", "windows-small", "2026-01-10T00:00:00Z"),
   ]
   const sandboxes = [
-    { id: "started", state: "started", snapshot: "openwork-dev-active-ref" },
-    { id: "stopped", state: "stopped", snapshot: "openwork-dev-stopped" },
-    { id: "archived", state: "archived", snapshot: "openwork-dev-stopped" },
+    { id: "started", state: "started", snapshot: "sofia-dev-active-ref" },
+    { id: "stopped", state: "stopped", snapshot: "sofia-dev-stopped" },
+    { id: "archived", state: "archived", snapshot: "sofia-dev-stopped" },
   ]
 
   const result = selectDevSnapshotPrunes({
     snapshots,
     sandboxes,
-    nameBase: "openwork",
-    keepNames: ["openwork-dev-explicit"],
+    nameBase: "sofia",
+    keepNames: ["sofia-dev-explicit"],
     keepCount: 2,
   })
 
   assert.deepEqual(result.prune.map((item) => item.name), [
-    "openwork-dev-old",
-    "openwork-dev-stopped",
+    "sofia-dev-old",
+    "sofia-dev-stopped",
   ])
   assert.deepEqual(result.keep.map((item) => [item.name, item.reason]), [
-    ["openwork-dev-explicit", "explicit"],
-    ["openwork-dev-pulling", "in-flight"],
-    ["openwork-dev-active-ref", "active-ref"],
-    ["openwork-dev-recent-1", "recent"],
-    ["openwork-dev-recent-2", "recent"],
+    ["sofia-dev-explicit", "explicit"],
+    ["sofia-dev-pulling", "in-flight"],
+    ["sofia-dev-active-ref", "active-ref"],
+    ["sofia-dev-recent-1", "recent"],
+    ["sofia-dev-recent-2", "recent"],
   ])
-  assert.equal(result.prune.some((item) => !item.name.startsWith("openwork-dev-")), false)
+  assert.equal(result.prune.some((item) => !item.name.startsWith("sofia-dev-")), false)
 })
 
 test("exactly keepCount in-scope snapshots prunes nothing", () => {
   const snapshots = [
-    snapshot("one", "openwork-dev-one", "2026-01-01T00:00:00Z"),
-    snapshot("two", "openwork-dev-two", "2026-01-02T00:00:00Z"),
+    snapshot("one", "sofia-dev-one", "2026-01-01T00:00:00Z"),
+    snapshot("two", "sofia-dev-two", "2026-01-02T00:00:00Z"),
   ]
   const result = selectDevSnapshotPrunes({
     snapshots,
     sandboxes: [],
-    nameBase: "openwork",
+    nameBase: "sofia",
     keepNames: [],
     keepCount: 2,
   })
@@ -91,14 +91,14 @@ test("exactly keepCount in-scope snapshots prunes nothing", () => {
 
 test("dry-run fetches inventory but sends no DELETE requests", async () => {
   const snapshots = [
-    snapshot("old", "openwork-dev-old", "2026-01-01T00:00:00Z"),
-    snapshot("new", "openwork-dev-new", "2026-01-02T00:00:00Z"),
+    snapshot("old", "sofia-dev-old", "2026-01-01T00:00:00Z"),
+    snapshot("new", "sofia-dev-new", "2026-01-02T00:00:00Z"),
   ]
   const { calls, fetchImpl } = inventoryFetch(snapshots)
 
   const result = await pruneDaytonaDevSnapshots({
     apiKey,
-    keepNames: ["openwork-dev-new"],
+    keepNames: ["sofia-dev-new"],
     keepCount: 1,
     dryRun: true,
     fetchImpl,
@@ -112,15 +112,15 @@ test("dry-run fetches inventory but sends no DELETE requests", async () => {
 
 test("real run deletes every selected id and no kept ids", async () => {
   const snapshots = [
-    snapshot("old-1", "openwork-dev-old-1", "2026-01-01T00:00:00Z"),
-    snapshot("old-2", "openwork-dev-old-2", "2026-01-02T00:00:00Z"),
-    snapshot("new", "openwork-dev-new", "2026-01-03T00:00:00Z"),
+    snapshot("old-1", "sofia-dev-old-1", "2026-01-01T00:00:00Z"),
+    snapshot("old-2", "sofia-dev-old-2", "2026-01-02T00:00:00Z"),
+    snapshot("new", "sofia-dev-new", "2026-01-03T00:00:00Z"),
   ]
   const { calls, fetchImpl } = inventoryFetch(snapshots)
 
   await pruneDaytonaDevSnapshots({
     apiKey,
-    keepNames: ["openwork-dev-new"],
+    keepNames: ["sofia-dev-new"],
     keepCount: 1,
     fetchImpl,
     log: () => {},
@@ -136,11 +136,11 @@ test("pagination protects newest snapshots and reads all sandbox pages", async (
   const firstPage = Array.from({ length: 200 }, (_, index) =>
     snapshot(
       `old-${index}`,
-      `openwork-dev-old-${String(index).padStart(3, "0")}`,
+      `sofia-dev-old-${String(index).padStart(3, "0")}`,
       `2025-01-${String((index % 28) + 1).padStart(2, "0")}T00:00:00Z`,
     ),
   )
-  const newest = snapshot("newest", "openwork-dev-newest", "2026-01-01T00:00:00Z")
+  const newest = snapshot("newest", "sofia-dev-newest", "2026-01-01T00:00:00Z")
   const calls = []
   const fetchImpl = async (url, options) => {
     calls.push({ url, options })
@@ -196,9 +196,9 @@ test("pagination protects newest snapshots and reads all sandbox pages", async (
 
 test("a failed DELETE does not prevent later deletes and rejects with the result", async () => {
   const snapshots = [
-    snapshot("old-1", "openwork-dev-old-1", "2026-01-01T00:00:00Z"),
-    snapshot("old-2", "openwork-dev-old-2", "2026-01-02T00:00:00Z"),
-    snapshot("new", "openwork-dev-new", "2026-01-03T00:00:00Z"),
+    snapshot("old-1", "sofia-dev-old-1", "2026-01-01T00:00:00Z"),
+    snapshot("old-2", "sofia-dev-old-2", "2026-01-02T00:00:00Z"),
+    snapshot("new", "sofia-dev-new", "2026-01-03T00:00:00Z"),
   ]
   const calls = []
   const messages = []
@@ -219,7 +219,7 @@ test("a failed DELETE does not prevent later deletes and rejects with the result
   await assert.rejects(
     pruneDaytonaDevSnapshots({
       apiKey,
-      keepNames: ["openwork-dev-new"],
+      keepNames: ["sofia-dev-new"],
       keepCount: 1,
       fetchImpl,
       log: (message) => messages.push(message),

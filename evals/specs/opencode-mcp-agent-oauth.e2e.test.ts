@@ -4,21 +4,21 @@ import os from "node:os";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { expect } from "vitest";
-import { denFetch, signIn } from "@openwork/behaviors";
-import type { DenSession } from "@openwork/behaviors";
-import { needs, server, SkipError, test, unmetNeeds } from "@openwork/testkit";
-import type { TestNeeds } from "@openwork/testkit";
+import { denFetch, signIn } from "@sofia/behaviors";
+import type { DenSession } from "@sofia/behaviors";
+import { needs, server, SkipError, test, unmetNeeds } from "@sofia/testkit";
+import type { TestNeeds } from "@sofia/testkit";
 
-// Proves the docs' "Verified" claim for OpenCode: the real `opencode` CLI
+// Proves the docs' "Verified" claim for Sofia engine: the real `opencode` CLI
 // completes the full public OAuth path against the Den MCP gateway — RFC9728
 // discovery, dynamic client registration, PKCE authorize + consent, loopback
 // callback, token exchange, credential storage, transparent refresh with
 // rotation, and logout — and the minted token works on the /mcp/agent surface
 // without reopening the optional standalone SSE listener.
-const MCP_NAME = "openwork";
+const MCP_NAME = "sofia";
 const ORGANIZATION_NAME = "OAuth Lab";
 const EXPECTED_TOOLS = ["create_skill", "execute_capability", "search_capabilities"] as const;
-const OPENCODE_BIN = process.env.OPENWORK_EVAL_OPENCODE_BIN?.trim() || "opencode";
+const OPENCODE_BIN = process.env.SOFIA_EVAL_OPENCODE_BIN?.trim() || "opencode";
 const COMMAND_TIMEOUT_MS = 60_000;
 const AUTHORIZE_URL_TIMEOUT_MS = 90_000;
 const AUTH_EXIT_TIMEOUT_MS = 60_000;
@@ -27,9 +27,9 @@ const REQUEST_TIMEOUT_MS = 30_000;
 const BROWSER_LAUNCHERS = ["open", "xdg-open", "sensible-browser", "x-www-browser", "www-browser"];
 const POISONED_ACCESS_TOKEN = "eyJhbGciOiJFZERTQSJ9.eyJleHAiOjF9.invalid";
 
-const placementCommand = process.env.OPENWORK_EVAL_DAYTONA?.trim() === "1" ? "daytona" : "docker";
+const placementCommand = process.env.SOFIA_EVAL_DAYTONA?.trim() === "1" ? "daytona" : "docker";
 const requirements: TestNeeds = {
-  optIn: ["OPENWORK_EVAL_E2E_TESTS"],
+  optIn: ["SOFIA_EVAL_E2E_TESTS"],
   commands: [placementCommand, OPENCODE_BIN],
 };
 const missingRequirements = unmetNeeds(requirements, process.env);
@@ -87,7 +87,7 @@ function childEnvironment(home: { root: string; binDir: string; browserShim: str
 }
 
 async function prepareOpencodeHome(mcpUrl: string): Promise<OpencodeHome> {
-  const root = await mkdtemp(path.join(os.tmpdir(), "openwork-opencode-oauth-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "sofia-opencode-oauth-"));
   const binDir = path.join(root, "bin");
   const configDir = path.join(root, "xdg-config", "opencode");
   const dataDir = path.join(root, "xdg-data", "opencode");
@@ -430,7 +430,7 @@ async function activeOrganization(admin: DenSession): Promise<{ id: string; slug
 
 test.skipIf(missingRequirements.length > 0)(title, { timeout: 30 * 60_000 }, async ({ evidence, place }) => {
   needs(requirements);
-  if (process.env.OPENWORK_EVAL_DEN_API_URL?.trim()) {
+  if (process.env.SOFIA_EVAL_DEN_API_URL?.trim()) {
     throw new SkipError("The opencode OAuth proof requires a cold managed Den");
   }
 
@@ -555,12 +555,12 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 30 * 60_000 }, asy
   const authList = await runOpencode(home, ["mcp", "auth", "list"], "opencode mcp auth list");
   const mcpList = await runOpencode(home, ["mcp", "list"], "opencode mcp list");
   const authListSound = authList.exitCode === 0
-    && /\bopenwork\b/i.test(authList.combined)
+    && /\bsofia\b/i.test(authList.combined)
     && /authenticated/i.test(authList.combined)
     && !/not authenticated|expired/i.test(authList.combined)
     && !containsTokenMaterial(authList.combined);
   const mcpListSound = mcpList.exitCode === 0
-    && /\bopenwork\b/i.test(mcpList.combined)
+    && /\bsofia\b/i.test(mcpList.combined)
     && /connected/i.test(mcpList.combined)
     && !/failed|needs authentication/i.test(mcpList.combined)
     && !containsTokenMaterial(mcpList.combined);
@@ -640,7 +640,7 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 30 * 60_000 }, asy
   const storedAfterLogout = await readFile(home.authFilePath, "utf8").catch(() => "");
   const logoutSound = logout.exitCode === 0
     && authListAfterLogout.exitCode === 0
-    && !/\bopenwork\b.*\bauthenticated\b|✓ openwork/i.test(authListAfterLogout.combined.replace(/not authenticated/gi, ""))
+    && !/\bsofia\b.*\bauthenticated\b|✓ sofia/i.test(authListAfterLogout.combined.replace(/not authenticated/gi, ""))
     && !storedAfterLogout.includes("ow_mcp_rt_");
   evidence.recordAssertionEvidence(
     "Logout removes the stored OAuth credential and the server is no longer authenticated",

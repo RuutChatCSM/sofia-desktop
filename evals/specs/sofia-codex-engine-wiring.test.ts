@@ -1,7 +1,7 @@
 import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 import { expect } from "vitest";
-import { test } from "@openwork/testkit";
+import { test } from "@sofia/testkit";
 
 import { buildCodexConfigToml } from "../../apps/server/src/codex-config.ts";
 import { buildSofiaDeveloperInstructions } from "../../apps/server/src/codex-prompt-harness.ts";
@@ -9,9 +9,10 @@ import { codexRuntimeSkill } from "../../apps/server/src/codex-runtime-mcp.ts";
 
 const repoRoot = path.resolve(import.meta.dirname, "../..");
 
-test("OpenWork preserves Codex behavior while wiring multi-provider and browser capabilities", async () => {
+test("Sofia preserves native engine behavior while wiring multi-provider and browser capabilities", async () => {
   const context = buildSofiaDeveloperInstructions({ workspaceId: "workspace-1", cwd: "/repo" });
-  expect(context).toContain("<openwork_context>");
+  expect(context).toContain("<sofia_context>");
+  expect(context).not.toMatch(/Sofia App|Codex/);
   expect(context).toContain("Working directory: /repo");
   expect(context).not.toMatch(/make a short plan|execute it back-to-back|report the outcome in one line/i);
 
@@ -39,7 +40,7 @@ test("OpenWork preserves Codex behavior while wiring multi-provider and browser 
   expect(browserSkill).toContain("browser.documentation()");
   expect(browserSkill).toContain("take a fresh snapshot");
 
-  const sourceAsset = path.join(repoRoot, "apps/server/src/openwork-browser-repl.mjs");
+  const sourceAsset = path.join(repoRoot, "apps/server/src/sofia-browser-repl.mjs");
   await access(sourceAsset);
   const packageJson = JSON.parse(await readFile(path.join(repoRoot, "apps/server/package.json"), "utf8"));
   expect(packageJson.scripts.build).toContain("build:runtime-assets");

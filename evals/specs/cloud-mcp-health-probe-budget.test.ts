@@ -1,14 +1,14 @@
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import { expect } from "vitest";
-import { test } from "@openwork/testkit";
+import { test } from "@sofia/testkit";
 
 const repoRoot = resolve(import.meta.dirname, "../..");
 
 test("direct Cloud MCP health checks stay within a scoped handshake budget", ({ evidence }) => {
   const budgetResult = spawnSync("pnpm", [
     "--filter",
-    "openwork-server",
+    "sofia-server",
     "test",
     "src/cloud-mcp-health.test.ts",
     "--test-name-pattern",
@@ -22,7 +22,7 @@ test("direct Cloud MCP health checks stay within a scoped handshake budget", ({ 
   const budgetOutput = `${budgetResult.stdout}${budgetResult.stderr}`;
   const reconcileResult = spawnSync("pnpm", [
     "--filter",
-    "openwork-server",
+    "sofia-server",
     "test",
     "src/cloud-mcp-reconcile.e2e.test.ts",
     "--test-name-pattern",

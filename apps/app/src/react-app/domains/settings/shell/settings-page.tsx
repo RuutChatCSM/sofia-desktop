@@ -44,6 +44,7 @@ import {
 import { t } from "../../../../i18n";
 import type { PlatformCapabilities } from "../../../../app/lib/platform-capabilities";
 import type { SettingsTab } from "../../../../app/types";
+import { SOFIA_CLOUD_AVAILABLE } from "@/app/cloud-availability";
 import { cn } from "@/lib/utils";
 import { usePlatform } from "../../../kernel/platform";
 import { useOrgRestrictions } from "../../cloud/desktop-config-provider";
@@ -238,7 +239,8 @@ function SettingsSidebarTabLabel({ tab }: { tab: SettingsTab }) {
  * surfaces (sidebar + compact section menu) must use this so they can't drift.
  */
 export function getCloudSettingsTabs(memoryEnabled: boolean): SettingsTab[] {
-  return memoryEnabled ? ["cloud-account", "memory"] : CLOUD_SETTINGS_TABS;
+  const cloudTabs: SettingsTab[] = SOFIA_CLOUD_AVAILABLE ? CLOUD_SETTINGS_TABS : [];
+  return memoryEnabled ? [...cloudTabs, "memory"] : cloudTabs;
 }
 
 type SettingsPageProps = {

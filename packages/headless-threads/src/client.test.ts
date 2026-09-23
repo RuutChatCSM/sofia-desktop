@@ -10,7 +10,7 @@ type MessageWire = { info: { id: string; role: string; parentID?: string; time?:
 type Beat = { status: HeadlessThreadStatus; messages: MessageWire[] };
 
 const SESSION_ID = "ses_1";
-const BASE_URL = "http://openwork.test";
+const BASE_URL = "http://sofia.test";
 
 function reply(id: string, role: string, text?: string, parentID?: string): MessageWire {
   return {
@@ -20,11 +20,11 @@ function reply(id: string, role: string, text?: string, parentID?: string): Mess
 }
 
 /**
- * A stand-in for the OpenWork server's session routes. `beats` scripts what
+ * A stand-in for the Sofia server's session routes. `beats` scripts what
  * successive snapshot reads observe, so a wait can be tested without a clock
  * or an engine.
  */
-function createOpenworkDouble(input?: { beats?: Beat[]; messages?: MessageWire[] }) {
+function createSofiaDouble(input?: { beats?: Beat[]; messages?: MessageWire[] }) {
   const requests: RecordedRequest[] = [];
   const requestHeaders: Headers[] = [];
   const beats = input?.beats ?? [];
@@ -83,7 +83,7 @@ function createClock() {
   };
 }
 
-function createClient(double: ReturnType<typeof createOpenworkDouble>, clock = createClock()) {
+function createClient(double: ReturnType<typeof createSofiaDouble>, clock = createClock()) {
   return createHeadlessThreadClient({
     baseUrl: BASE_URL,
     workspaceId: "ws_1",
@@ -95,8 +95,8 @@ function createClient(double: ReturnType<typeof createOpenworkDouble>, clock = c
 }
 
 describe("createThread", () => {
-  test("sends the title, prompt, and model in OpenWork's casing", async () => {
-    const double = createOpenworkDouble();
+  test("sends the title, prompt, and model in Sofia's casing", async () => {
+    const double = createSofiaDouble();
     const thread = await createClient(double).createThread({
       title: "Refund policy",
       prompt: "A customer wants a refund after 40 days.",
@@ -125,7 +125,7 @@ describe("createThread", () => {
   });
 
   test("normalizes a base URL that ends in slashes", async () => {
-    const double = createOpenworkDouble();
+    const double = createSofiaDouble();
     const client = createHeadlessThreadClient({
       baseUrl: `${BASE_URL}///`,
       workspaceId: "ws_1",
@@ -139,7 +139,7 @@ describe("createThread", () => {
   });
 
   test("authenticates server-to-server Cloud requests with both worker tokens", async () => {
-    const double = createOpenworkDouble();
+    const double = createSofiaDouble();
     const client = createHeadlessThreadClient({
       baseUrl: BASE_URL,
       workspaceId: "ws_1",
@@ -155,7 +155,7 @@ describe("createThread", () => {
   });
 
   test("omits the prompt and model when none were given", async () => {
-    const double = createOpenworkDouble();
+    const double = createSofiaDouble();
     const thread = await createClient(double).createThread({ title: "Empty" });
 
     expect(double.requests[0]?.body).toEqual({ title: "Empty" });
@@ -165,7 +165,7 @@ describe("createThread", () => {
 
 describe("sendTurn", () => {
   test("records the pre-turn message count and prompts in OpenCode's casing", async () => {
-    const double = createOpenworkDouble({ messages: [reply("msg_1", "user"), reply("msg_2", "assistant", "hi")] });
+    const double = createSofiaDouble({ messages: [reply("msg_1", "user"), reply("msg_2", "assistant", "hi")] });
     const acceptance = await createClient(double).sendTurn(SESSION_ID, {
       prompt: "They also lost the receipt.",
       model: { providerId: "anthropic", modelId: "claude-sonnet-5" },
@@ -189,7 +189,7 @@ describe("sendTurn", () => {
   });
 
   test("falls back to the client's default model", async () => {
-    const double = createOpenworkDouble({ messages: [] });
+    const double = createSofiaDouble({ messages: [] });
     const client = createHeadlessThreadClient({
       baseUrl: BASE_URL,
       workspaceId: "ws_1",
@@ -207,7 +207,7 @@ describe("sendTurn", () => {
   });
 
   test("uses a stable message id and does not submit it twice", async () => {
-    const double = createOpenworkDouble({ messages: [reply("msg_run_1", "user")] });
+    const double = createSofiaDouble({ messages: [reply("msg_run_1", "user")] });
 
     const acceptance = await createClient(double).sendTurn(SESSION_ID, {
       prompt: "Run the report.",
@@ -221,7 +221,7 @@ describe("sendTurn", () => {
   });
 
   test("passes a new stable message id to OpenCode", async () => {
-    const double = createOpenworkDouble({ messages: [] });
+    const double = createSofiaDouble({ messages: [] });
 
     await createClient(double).sendTurn(SESSION_ID, { prompt: "Run it.", messageId: "msg_run_2" });
 
@@ -237,7 +237,7 @@ describe("waitForThread", () => {
     // The first beat is the gap between accepting a prompt and starting work:
     // the thread is idle and has no new reply. Settling there would report a
     // turn finished before it began.
-    const double = createOpenworkDouble({
+    const double = createSofiaDouble({
       beats: [
         { status: { type: "idle" }, messages: [reply("msg_1", "user")] },
         { status: { type: "busy" }, messages: [reply("msg_1", "user")] },
@@ -257,7 +257,7 @@ describe("waitForThread", () => {
 
   test("ignores an assistant reply that predates the turn being waited on", async () => {
     const before = [reply("msg_1", "user"), reply("msg_2", "assistant", "First answer.")];
-    const double = createOpenworkDouble({
+    const double = createSofiaDouble({
       beats: [
         { status: { type: "idle" }, messages: before },
         { status: { type: "idle" }, messages: [...before, reply("msg_3", "user")] },
@@ -278,7 +278,7 @@ describe("waitForThread", () => {
 
   test("reports a timeout instead of throwing when the thread never answers", async () => {
     const clock = createClock();
-    const double = createOpenworkDouble({
+    const double = createSofiaDouble({
       beats: [{ status: { type: "busy" }, messages: [reply("msg_1", "user")] }],
     });
 
@@ -296,7 +296,7 @@ describe("waitForThread", () => {
   test("stops on an aborted signal", async () => {
     const controller = new AbortController();
     controller.abort();
-    const double = createOpenworkDouble({
+    const double = createSofiaDouble({
       beats: [{ status: { type: "busy" }, messages: [] }],
     });
 
@@ -310,7 +310,7 @@ describe("waitForThread", () => {
   });
 
   test("matches the assistant response to the stable user message", async () => {
-    const double = createOpenworkDouble({
+    const double = createSofiaDouble({
       beats: [{
         status: { type: "idle" },
         messages: [
@@ -331,7 +331,7 @@ describe("waitForThread", () => {
   test("reports a terminal assistant error", async () => {
     const failed = reply("msg_failed", "assistant", undefined, "msg_run_1");
     failed.info.error = { name: "ProviderAuthError", data: { message: "Reconnect the provider." } };
-    const double = createOpenworkDouble({ beats: [{ status: { type: "idle" }, messages: [failed] }] });
+    const double = createSofiaDouble({ beats: [{ status: { type: "idle" }, messages: [failed] }] });
 
     const result = await createClient(double).waitForThread(SESSION_ID, {
       timeoutMs: 1_000,
@@ -345,7 +345,7 @@ describe("waitForThread", () => {
 
 describe("failures", () => {
   test("surfaces the server's error code and status", async () => {
-    const double = createOpenworkDouble();
+    const double = createSofiaDouble();
     const client = createClient(double);
 
     const error = await client.getThreadSnapshot("ses_missing").catch((caught: unknown) => caught);
@@ -392,7 +392,7 @@ describe("failures", () => {
 
 describe("abortThread", () => {
   test("reports acceptance without claiming the run stopped", async () => {
-    const double = createOpenworkDouble();
+    const double = createSofiaDouble();
 
     await expect(createClient(double).abortThread(SESSION_ID)).resolves.toEqual({
       threadId: SESSION_ID,
@@ -401,7 +401,7 @@ describe("abortThread", () => {
   });
 
   test("waits until the aborted thread is observably idle", async () => {
-    const double = createOpenworkDouble({ beats: [
+    const double = createSofiaDouble({ beats: [
       { status: { type: "busy" }, messages: [] },
       { status: { type: "idle" }, messages: [] },
     ] });
@@ -415,7 +415,7 @@ describe("abortThread", () => {
 
 describe("exportTranscript", () => {
   test("flattens the current snapshot", async () => {
-    const double = createOpenworkDouble({
+    const double = createSofiaDouble({
       beats: [
         {
           status: { type: "idle" },

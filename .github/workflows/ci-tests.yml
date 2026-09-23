@@ -1,4 +1,4 @@
-name: OpenWork Tests
+name: Sofia Tests
 
 on:
   pull_request:
@@ -14,7 +14,7 @@ permissions:
   contents: read
 
 jobs:
-  openwork-tests:
+  sofia-tests:
     runs-on: ${{ matrix.os }}
 
     strategy:
@@ -142,13 +142,13 @@ jobs:
         run: pnpm --dir evals run test:pr
 
       - name: Run app unit tests
-        run: pnpm --filter @openwork/app test
+        run: pnpm --filter @sofia/app test
 
       - name: Run server unit tests
-        run: pnpm --filter openwork-server test
+        run: pnpm --filter sofia-server test
 
       - name: Run desktop unit tests
-        run: pnpm --filter @openwork/desktop test
+        run: pnpm --filter @sofia/desktop test
 
       - name: Run release script tests
         run: node --test scripts/release/*.test.mjs
@@ -167,28 +167,28 @@ jobs:
         run: |
           set -euo pipefail
           rm -rf packages/types/dist
-          pnpm --filter openwork-server build
+          pnpm --filter sofia-server build
 
       - name: Typecheck Electron main against the IPC contract
-        run: pnpm --filter @openwork/desktop typecheck:electron
+        run: pnpm --filter @sofia/desktop typecheck:electron
 
       - name: Run e2e tests
-        run: pnpm --filter @openwork/app test:e2e
+        run: pnpm --filter @sofia/app test:e2e
 
   # Single stable context for branch rulesets to require. Green only when
-  # every openwork-tests matrix leg succeeded; runs even when legs fail or
+  # every sofia-tests matrix leg succeeded; runs even when legs fail or
   # are cancelled so the required check always reports instead of hanging.
-  openwork-tests-required:
-    needs: openwork-tests
+  sofia-tests-required:
+    needs: sofia-tests
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - name: Require every openwork-tests matrix leg to pass
+      - name: Require every sofia-tests matrix leg to pass
         env:
-          RESULT: ${{ needs.openwork-tests.result }}
+          RESULT: ${{ needs.sofia-tests.result }}
         run: |
-          echo "openwork-tests result: $RESULT"
+          echo "sofia-tests result: $RESULT"
           if [ "$RESULT" != "success" ]; then
-            echo "One or more OpenWork Tests matrix legs did not succeed; blocking merge." >&2
+            echo "One or more Sofia Tests matrix legs did not succeed; blocking merge." >&2
             exit 1
           fi

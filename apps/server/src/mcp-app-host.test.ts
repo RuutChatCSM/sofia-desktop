@@ -14,9 +14,9 @@ import { addMcp } from "./mcp.js";
 import {
   CONNECT_MCP_SERVER_INDEX_URI,
   connectMcpAppHostName,
-  readOpenWorkConnectMcpAppHostCatalog,
-  writeOpenWorkConnectMcpAppHostAuthorization,
-  writeOpenWorkConnectMcpAppHostCatalog,
+  readSofiaConnectMcpAppHostCatalog,
+  writeSofiaConnectMcpAppHostAuthorization,
+  writeSofiaConnectMcpAppHostCatalog,
 } from "./connect-mcp-server-catalog.js";
 import { readRuntimeOpencodeConfig, runtimeMcpMap, writeRuntimeOpencodeConfig } from "./runtime-opencode-config-store.js";
 import {
@@ -181,7 +181,7 @@ async function startFixtureMcp(
               uri: CONNECT_MCP_SERVER_INDEX_URI,
               mimeType: "application/json",
               text: JSON.stringify({
-                schemaVersion: "openwork.connect/mcp-servers/1",
+                schemaVersion: "sofia.connect/mcp-servers/1",
                 servers: [{
                   connectionId,
                   name: "Fixture provider",
@@ -238,15 +238,15 @@ async function configuredFixture(
   catalogReads: () => number;
 }> {
   const root = await mkdtemp(join(tmpdir(), prefix));
-  const previousRuntimeDb = process.env.OPENWORK_RUNTIME_DB;
-  const previousDevMode = process.env.OPENWORK_DEV_MODE;
-  process.env.OPENWORK_RUNTIME_DB = join(root, "runtime.sqlite");
-  process.env.OPENWORK_DEV_MODE = "1";
+  const previousRuntimeDb = process.env.SOFIA_RUNTIME_DB;
+  const previousDevMode = process.env.SOFIA_DEV_MODE;
+  process.env.SOFIA_RUNTIME_DB = join(root, "runtime.sqlite");
+  process.env.SOFIA_DEV_MODE = "1";
   stops.push(async () => {
-    if (previousRuntimeDb === undefined) delete process.env.OPENWORK_RUNTIME_DB;
-    else process.env.OPENWORK_RUNTIME_DB = previousRuntimeDb;
-    if (previousDevMode === undefined) delete process.env.OPENWORK_DEV_MODE;
-    else process.env.OPENWORK_DEV_MODE = previousDevMode;
+    if (previousRuntimeDb === undefined) delete process.env.SOFIA_RUNTIME_DB;
+    else process.env.SOFIA_RUNTIME_DB = previousRuntimeDb;
+    if (previousDevMode === undefined) delete process.env.SOFIA_DEV_MODE;
+    else process.env.SOFIA_DEV_MODE = previousDevMode;
     await rm(root, { recursive: true, force: true });
   });
   await mkdir(join(root, ".git"), { recursive: true });
@@ -263,18 +263,18 @@ async function configuredFixture(
       ...current,
       mcp: {
         ...runtimeMcpMap(current),
-        "openwork-cloud": {
+        "sofia-cloud": {
           ...mcpConfig,
           url: fixture.catalogUrl,
           headers: { Authorization: "Bearer member-token" },
         },
       },
     }));
-    await writeOpenWorkConnectMcpAppHostCatalog(config, WORKSPACE_ID, {
-      schemaVersion: "openwork.connect/mcp-servers/1",
+    await writeSofiaConnectMcpAppHostCatalog(config, WORKSPACE_ID, {
+      schemaVersion: "sofia.connect/mcp-servers/1",
       servers: [{ connectionId, name: "Fixture provider", description: null, url: fixture.url }],
     });
-    await writeOpenWorkConnectMcpAppHostAuthorization(
+    await writeSofiaConnectMcpAppHostAuthorization(
       config,
       WORKSPACE_ID,
       "Bearer app-host-token",
@@ -292,13 +292,13 @@ async function configuredFixture(
 }
 
 describe("MCP Apps host transport", () => {
-  test("uses OpenCode's exact projected MCP tool naming", () => {
+  test("uses Sofia engine's exact projected MCP tool naming", () => {
     expect(projectedMcpToolName("sales force", "render.pipeline")).toBe("sales_force_render_pipeline");
     expect(toolUiResourceUri({ _meta: { ui: { resourceUri: RESOURCE_URI } } })).toBe(RESOURCE_URI);
   });
 
   test("negotiates and resolves one fixed remote MCP App fixture", async () => {
-    const { config, root } = await configuredFixture("openwork-mcp-app-host-");
+    const { config, root } = await configuredFixture("sofia-mcp-app-host-");
 
     const app = await resolveMcpAppResource({
       serverConfig: config,
@@ -321,7 +321,7 @@ describe("MCP Apps host transport", () => {
     const connectionId = "emc_01mcpappgatewayfixture";
     const serverName = connectMcpAppHostName(connectionId);
     const { config, root, catalogReads } = await configuredFixture(
-      "openwork-mcp-app-host-gateway-",
+      "sofia-mcp-app-host-gateway-",
       undefined,
       serverName,
       connectionId,
@@ -344,7 +344,7 @@ describe("MCP Apps host transport", () => {
       resourceUri: RESOURCE_URI,
       html: RESOURCE_HTML,
     });
-    expect(Object.keys(runtimeMcpMap(await readRuntimeOpencodeConfig(config, WORKSPACE_ID)))).toEqual(["openwork-cloud"]);
+    expect(Object.keys(runtimeMcpMap(await readRuntimeOpencodeConfig(config, WORKSPACE_ID)))).toEqual(["sofia-cloud"]);
     expect(catalogReads()).toBe(0);
   });
 
@@ -352,13 +352,13 @@ describe("MCP Apps host transport", () => {
     const connectionId = "emc_01mcpappgatewayrefresh";
     const serverName = connectMcpAppHostName(connectionId);
     const { config, root, catalogReads } = await configuredFixture(
-      "openwork-mcp-app-host-gateway-refresh-",
+      "sofia-mcp-app-host-gateway-refresh-",
       undefined,
       serverName,
       connectionId,
     );
-    await writeOpenWorkConnectMcpAppHostCatalog(config, WORKSPACE_ID, {
-      schemaVersion: "openwork.connect/mcp-servers/1",
+    await writeSofiaConnectMcpAppHostCatalog(config, WORKSPACE_ID, {
+      schemaVersion: "sofia.connect/mcp-servers/1",
       servers: [],
     });
 
@@ -379,20 +379,20 @@ describe("MCP Apps host transport", () => {
       resourceUri: RESOURCE_URI,
       html: RESOURCE_HTML,
     });
-    expect((await readOpenWorkConnectMcpAppHostCatalog(config, WORKSPACE_ID)).servers[0]?.connectionId).toBe(connectionId);
+    expect((await readSofiaConnectMcpAppHostCatalog(config, WORKSPACE_ID)).servers[0]?.connectionId).toBe(connectionId);
     expect(catalogReads()).toBe(1);
   });
 
   test("rejects a stale private catalog endpoint outside the credential's trusted origin", async () => {
     const connectionId = "emc_01mcpappcrossorigin";
     const { config, root } = await configuredFixture(
-      "openwork-mcp-app-host-cross-origin-",
+      "sofia-mcp-app-host-cross-origin-",
       undefined,
       connectMcpAppHostName(connectionId),
       connectionId,
     );
-    await writeOpenWorkConnectMcpAppHostCatalog(config, WORKSPACE_ID, {
-      schemaVersion: "openwork.connect/mcp-servers/1",
+    await writeSofiaConnectMcpAppHostCatalog(config, WORKSPACE_ID, {
+      schemaVersion: "sofia.connect/mcp-servers/1",
       servers: [{
         connectionId,
         name: "Untrusted provider",
@@ -414,7 +414,7 @@ describe("MCP Apps host transport", () => {
   });
 
   test("resolves a same-server MCP App through its capability gateway", async () => {
-    const { config, root } = await configuredFixture("openwork-mcp-app-host-same-server-");
+    const { config, root } = await configuredFixture("sofia-mcp-app-host-same-server-");
     const app = await resolveSameServerMcpAppResource({
       serverConfig: config,
       workspaceId: WORKSPACE_ID,
@@ -436,7 +436,7 @@ describe("MCP Apps host transport", () => {
   test("rejects a stale gateway launch when the native tool changes its resource binding", async () => {
     const connectionId = "emc_01mcpappgatewaystale";
     const { config, root, activateUpdatedResource } = await configuredFixture(
-      "openwork-mcp-app-host-gateway-stale-",
+      "sofia-mcp-app-host-gateway-stale-",
       undefined,
       connectMcpAppHostName(connectionId),
       connectionId,
@@ -456,7 +456,7 @@ describe("MCP Apps host transport", () => {
   });
 
   test("treats a management tool without a UI resource as a normal result", async () => {
-    const { config, root } = await configuredFixture("openwork-mcp-app-host-management-");
+    const { config, root } = await configuredFixture("sofia-mcp-app-host-management-");
 
     expect(await resolveMcpAppResource({
       serverConfig: config,
@@ -467,7 +467,7 @@ describe("MCP Apps host transport", () => {
   });
 
   test("refreshes the current tool definition before reading its exact resource", async () => {
-    const { config, root, activateUpdatedResource } = await configuredFixture("openwork-mcp-app-host-refresh-");
+    const { config, root, activateUpdatedResource } = await configuredFixture("sofia-mcp-app-host-refresh-");
 
     const first = await resolveMcpAppResource({
       serverConfig: config,
@@ -488,7 +488,7 @@ describe("MCP Apps host transport", () => {
   });
 
   test("reports an advertised resource that resources/read cannot load", async () => {
-    const { config, root } = await configuredFixture("openwork-mcp-app-host-missing-");
+    const { config, root } = await configuredFixture("sofia-mcp-app-host-missing-");
 
     await expect(resolveMcpAppResource({
       serverConfig: config,
@@ -499,7 +499,7 @@ describe("MCP Apps host transport", () => {
   });
 
   test("decodes a stable-spec blob-backed HTML resource", async () => {
-    const { config, root } = await configuredFixture("openwork-mcp-app-host-blob-", {
+    const { config, root } = await configuredFixture("sofia-mcp-app-host-blob-", {
       blob: Buffer.from(RESOURCE_HTML, "utf8").toString("base64"),
     });
 
@@ -513,7 +513,7 @@ describe("MCP Apps host transport", () => {
   });
 
   test("rejects non-UTF-8 blob-backed HTML", async () => {
-    const invalidUtf8 = await configuredFixture("openwork-mcp-app-host-bad-utf8-", {
+    const invalidUtf8 = await configuredFixture("sofia-mcp-app-host-bad-utf8-", {
       blob: Buffer.from([0xff]).toString("base64"),
     });
     await expect(resolveMcpAppResource({
@@ -525,7 +525,7 @@ describe("MCP Apps host transport", () => {
   });
 
   test("preserves an unreachable provider error for host diagnostics", async () => {
-    const { config, root } = await configuredFixture("openwork-mcp-app-host-unreachable-");
+    const { config, root } = await configuredFixture("sofia-mcp-app-host-unreachable-");
     await stops.pop()?.();
 
     await expect(resolveMcpAppResource({
@@ -537,7 +537,7 @@ describe("MCP Apps host transport", () => {
   });
 
   test("mediates explicitly read-only same-server tool calls", async () => {
-    const { config, root } = await configuredFixture("openwork-mcp-app-call-");
+    const { config, root } = await configuredFixture("sofia-mcp-app-call-");
 
     const result = await callMcpAppTool({
       serverConfig: config,
@@ -554,7 +554,7 @@ describe("MCP Apps host transport", () => {
   });
 
   test("mediates a resource-bound same-server tool for its exact MCP App", async () => {
-    const { config, root } = await configuredFixture("openwork-mcp-app-bound-call-");
+    const { config, root } = await configuredFixture("sofia-mcp-app-bound-call-");
 
     const result = await callMcpAppTool({
       serverConfig: config,
@@ -572,7 +572,7 @@ describe("MCP Apps host transport", () => {
   });
 
   test("rejects a resource-bound tool call from a different MCP App", async () => {
-    const { config, root } = await configuredFixture("openwork-mcp-app-cross-resource-");
+    const { config, root } = await configuredFixture("sofia-mcp-app-cross-resource-");
 
     await expect(callMcpAppTool({
       serverConfig: config,
@@ -585,7 +585,7 @@ describe("MCP Apps host transport", () => {
   });
 
   test("prevents sandboxed Apps from calling model-only tools", async () => {
-    const { config, root } = await configuredFixture("openwork-mcp-app-model-only-");
+    const { config, root } = await configuredFixture("sofia-mcp-app-model-only-");
     await expect(callMcpAppTool({
       serverConfig: config,
       workspaceId: WORKSPACE_ID,
@@ -596,7 +596,7 @@ describe("MCP Apps host transport", () => {
   });
 
   test("rejects same-server tools that require approval", async () => {
-    const { config, root } = await configuredFixture("openwork-mcp-app-write-");
+    const { config, root } = await configuredFixture("sofia-mcp-app-write-");
     await expect(callMcpAppTool({
       serverConfig: config,
       workspaceId: WORKSPACE_ID,
@@ -607,7 +607,7 @@ describe("MCP Apps host transport", () => {
   });
 
   test("calls an approved write tool on the exact originating server", async () => {
-    const { config, root } = await configuredFixture("openwork-mcp-app-approved-write-");
+    const { config, root } = await configuredFixture("sofia-mcp-app-approved-write-");
     const result = await callMcpAppTool({
       serverConfig: config,
       workspaceId: WORKSPACE_ID,
@@ -624,8 +624,8 @@ describe("MCP Apps host transport", () => {
   });
 
   test("rejects private MCP egress outside explicit development mode", async () => {
-    const { config, root } = await configuredFixture("openwork-mcp-app-private-");
-    delete process.env.OPENWORK_DEV_MODE;
+    const { config, root } = await configuredFixture("sofia-mcp-app-private-");
+    delete process.env.SOFIA_DEV_MODE;
 
     await expect(resolveMcpAppResource({
       serverConfig: config,

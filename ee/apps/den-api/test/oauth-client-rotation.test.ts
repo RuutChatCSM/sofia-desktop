@@ -1,4 +1,4 @@
-import { createDenTypeId } from "@openwork-ee/utils/typeid"
+import { createDenTypeId } from "@sofia-ee/utils/typeid"
 import { describe, expect, test } from "bun:test"
 import { revokeAccountsBeforeOAuthClientIdentityChange } from "../src/capability-sources/oauth-client-rotation.js"
 

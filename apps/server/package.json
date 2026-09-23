@@ -1,19 +1,19 @@
 {
-  "name": "openwork-server",
+  "name": "sofia-server",
   "version": "0.0.0-dev",
-  "description": "Filesystem-backed API for OpenWork remote clients",
+  "description": "Filesystem-backed API for Sofia remote clients",
   "type": "module",
   "bin": {
-    "openwork-server": "bin/openwork-server.mjs"
+    "sofia-server": "bin/sofia-server.mjs"
   },
   "scripts": {
-    "dev": "OPENWORK_DEV_MODE=1 bun --conditions=development src/cli.ts",
+    "dev": "SOFIA_DEV_MODE=1 bun --conditions=development src/cli.ts",
     "test": "bun --conditions=development test",
     "test:artifacts": "bun --conditions=development test src/artifact-files.e2e.test.ts src/workspace-init.test.ts src/server.normalizeWorkspaceRelativePath.test.ts",
-    "build:enterprise-mcp-client": "pnpm --filter @openwork/enterprise-mcp-client build",
-    "build": "pnpm build:enterprise-mcp-client && tsc -p tsconfig.json && pnpm build:runtime-assets && bun build src/opencode-plugins/openwork-extensions-preview.ts src/opencode-plugins/openwork-capabilities-knowledge.ts src/opencode-plugins/openwork-office-attachments.ts src/opencode-plugins/openwork-anthropic-adaptive-thinking.ts src/opencode-plugins/openwork-anthropic-tool-schema.ts --outdir dist/opencode-plugins --target node --format esm",
+    "build:enterprise-mcp-client": "pnpm --filter @sofia/enterprise-mcp-client build",
+    "build": "pnpm build:enterprise-mcp-client && tsc -p tsconfig.json && pnpm build:runtime-assets && bun build src/opencode-plugins/sofia-extensions-preview.ts src/opencode-plugins/sofia-capabilities-knowledge.ts src/opencode-plugins/sofia-office-attachments.ts src/opencode-plugins/sofia-anthropic-adaptive-thinking.ts src/opencode-plugins/sofia-anthropic-tool-schema.ts --outdir dist/opencode-plugins --target node --format esm",
     "build:runtime-assets": "node scripts/copy-runtime-assets.mjs",
-    "build:bin": "pnpm build:enterprise-mcp-client && bun build --compile src/cli.ts --outfile dist/bin/openwork-server",
+    "build:bin": "pnpm build:enterprise-mcp-client && bun build --compile src/cli.ts --outfile dist/bin/sofia-server",
     "build:bin:all": "pnpm build:enterprise-mcp-client && bun ./script/build.ts --outdir dist/bin --target bun-darwin-arm64 --target bun-darwin-x64 --target bun-linux-x64 --target bun-linux-arm64 --target bun-windows-x64 --target bun-windows-arm64",
     "prepare:npm": "pnpm build:bin && node scripts/publish-npm.mjs --prepare-only",
     "publish:npm": "pnpm build:bin && node scripts/publish-npm.mjs",
@@ -28,15 +28,15 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/different-ai/openwork.git",
+    "url": "git+https://github.com/RuutChatCSM/sofia-desktop.git",
     "directory": "apps/server"
   },
-  "homepage": "https://github.com/different-ai/openwork/tree/dev/apps/server",
+  "homepage": "https://github.com/RuutChatCSM/sofia-desktop/tree/dev/apps/server",
   "bugs": {
-    "url": "https://github.com/different-ai/openwork/issues"
+    "url": "https://github.com/RuutChatCSM/sofia-desktop/issues"
   },
   "keywords": [
-    "openwork",
+    "sofia",
     "server",
     "opencode",
     "headless",
@@ -51,7 +51,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@openwork/enterprise-mcp-client": "workspace:*",
+    "@sofia/enterprise-mcp-client": "workspace:*",
     "better-sqlite3": "^13.0.2",
     "chrome-devtools-mcp": "^1.7.0",
     "drizzle-orm": "^0.45.2",
@@ -62,9 +62,9 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@openwork/headless-threads": "workspace:*",
-    "@openwork/paths": "workspace:*",
-    "@openwork/types": "workspace:*",
+    "@sofia/headless-threads": "workspace:*",
+    "@sofia/paths": "workspace:*",
+    "@sofia/types": "workspace:*",
     "@types/better-sqlite3": "^7.6.13",
     "@types/minimatch": "^5.1.2",
     "@types/node": "^22.10.2",

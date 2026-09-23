@@ -1,5 +1,5 @@
-import type { DenTypeId } from "@openwork-ee/utils/typeid"
-import { normalizeDenTypeId } from "@openwork-ee/utils/typeid"
+import type { DenTypeId } from "@sofia-ee/utils/typeid"
+import { normalizeDenTypeId } from "@sofia-ee/utils/typeid"
 import {
   listUsableExternalMcpConnections,
   type ExternalMcpConnectionRow,

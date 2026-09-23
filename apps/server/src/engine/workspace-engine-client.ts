@@ -1,12 +1,12 @@
 // Codex-backed workspace engine client.
 //
-// This is the adapter that replaces the OpenCode SDK in the OpenWork server:
-// it exposes the small subset of the OpenCode client surface the server's
+// This is the adapter that replaces the Sofia engine SDK in the Sofia App server:
+// it exposes the small subset of the Sofia engine client surface the server's
 // feature modules call, but every method is backed by the bundled Sofia/Codex
 // engine (`CodexSessionManager` + the codex provider/config stores). Feature
-// modules therefore keep their existing call shapes while OpenCode is removed.
+// modules therefore keep their existing call shapes while Sofia engine is removed.
 //
-// Return values mirror the OpenCode SDK's `{ data, error, response }` result so
+// Return values mirror the Sofia engine SDK's `{ data, error, response }` result so
 // callers can keep using `unwrapOpencodeResult`.
 import { readCodexEngineConfig, type CodexEngineConfig } from "../codex-providers.js";
 import { getOrCreateCodexSessionManager } from "../codex-registry.js";
@@ -71,7 +71,7 @@ export type EngineProviderList = {
 };
 
 /**
- * Per-server MCP status union mirroring the OpenCode SDK's `McpStatus` shape so
+ * Per-server MCP status union mirroring the Sofia engine SDK's `McpStatus` shape so
  * health/reconcile logic keeps narrowing on the literal status values.
  */
 export type EngineMcpServerStatus =
@@ -205,15 +205,20 @@ async function readEngineConfig(): Promise<CodexEngineConfig> {
 }
 
 /**
- * Build a Codex-backed engine client for a workspace. Mirrors the OpenCode
- * client method names the OpenWork server calls.
+ * Build a Codex-backed engine client for a workspace. Mirrors the Sofia engine
+ * client method names the Sofia App server calls.
  */
 export function createWorkspaceEngineClient(
   config: ServerConfig,
   workspace: WorkspaceInfo,
   options: WorkspaceEngineClientOptions = {},
 ): WorkspaceEngineClient {
-  const manager = () => getOrCreateCodexSessionManager(config, workspace.id);
+  const manager = async () => {
+    const engine = await getOrCreateCodexSessionManager(config, workspace.id);
+    // Metadata reads must restore persisted Sofia sessions on a cold server too.
+    await engine.start();
+    return engine;
+  };
   void options;
 
   return {

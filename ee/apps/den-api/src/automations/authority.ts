@@ -1,14 +1,14 @@
-import { and, eq, inArray, isNull, or } from "@openwork-ee/den-db/drizzle"
+import { and, eq, inArray, isNull, or } from "@sofia-ee/den-db/drizzle"
 import {
   LlmProviderAccessTable,
   LlmProviderModelTable,
   LlmProviderTable,
   MemberTable,
   TeamMemberTable,
-} from "@openwork-ee/den-db/schema"
-import { normalizeDenTypeId } from "@openwork-ee/utils/typeid"
-import { AUTOMATION_FREE_MODEL } from "@openwork/types/automations"
-import { INFERENCE_MODEL_ALIASES } from "@openwork/types/den/inference"
+} from "@sofia-ee/den-db/schema"
+import { normalizeDenTypeId } from "@sofia-ee/utils/typeid"
+import { AUTOMATION_FREE_MODEL } from "@sofia/types/automations"
+import { INFERENCE_MODEL_ALIASES } from "@sofia/types/den/inference"
 import { db } from "../db.js"
 import { calculateDesktopPolicyForOrgMember } from "../desktop-policies.js"
 
@@ -21,7 +21,7 @@ export type AutomationAuthorityMember = {
 
 export type AutomationAuthorityProvider = {
   id: ProviderId
-  source: "models_dev" | "custom" | "openwork"
+  source: "models_dev" | "custom" | "sofia"
   name: string
 }
 
@@ -36,7 +36,7 @@ export type AutomationModelSelection = {
 }
 
 export type ResolvedAutomationModel = AutomationModelSelection & {
-  accessKind: "free" | "openwork_managed" | "authorized_custom"
+  accessKind: "free" | "sofia_managed" | "authorized_custom"
   providerRecordId: string | null
   providerName: string
   modelName: string
@@ -54,7 +54,7 @@ export type AutomationAuthorityResult =
 
 export type AutomationModelAuthorityStore = {
   findActiveMember(input: { organizationId: string; ownerMemberId: string }): Promise<AutomationAuthorityMember | null>
-  findOpenWorkProvider(input: { organizationId: string; ownerMemberId: string }): Promise<AutomationAuthorityProvider | null>
+  findSofiaProvider(input: { organizationId: string; ownerMemberId: string }): Promise<AutomationAuthorityProvider | null>
   findProvider(input: { organizationId: string; providerId: string }): Promise<AutomationAuthorityProvider | null>
   findModel(input: { providerRecordId: ProviderId; modelId: string }): Promise<AutomationAuthorityModel | null>
   canAccessProvider(input: { member: AutomationAuthorityMember; providerRecordId: ProviderId }): Promise<boolean>
@@ -71,12 +71,12 @@ const databaseAuthorityStore: AutomationModelAuthorityStore = {
     return members[0] ?? null
   },
 
-  async findOpenWorkProvider(input) {
+  async findSofiaProvider(input) {
     const providers = await db.select().from(LlmProviderTable).where(and(
       eq(LlmProviderTable.organizationId, normalizeDenTypeId("organization", input.organizationId)),
       eq(LlmProviderTable.createdByOrgMembershipId, normalizeDenTypeId("member", input.ownerMemberId)),
-      eq(LlmProviderTable.source, "openwork"),
-      eq(LlmProviderTable.providerId, "openwork"),
+      eq(LlmProviderTable.source, "sofia"),
+      eq(LlmProviderTable.providerId, "sofia"),
     )).limit(1)
     return providers[0] ?? null
   },
@@ -127,7 +127,7 @@ const databaseAuthorityStore: AutomationModelAuthorityStore = {
   },
 }
 
-function enabledOpenWorkModel(modelId: string) {
+function enabledSofiaModel(modelId: string) {
   const model = Object.entries(INFERENCE_MODEL_ALIASES)
     .find(([candidate]) => candidate === modelId)?.[1]
   return model?.enabled === true ? model : null
@@ -183,33 +183,33 @@ export async function resolveAutomationModelAccessWithStore(
     }
   }
 
-  if (input.providerId === "openwork") {
-    const model = enabledOpenWorkModel(input.modelId)
+  if (input.providerId === "sofia") {
+    const model = enabledSofiaModel(input.modelId)
     if (!model) {
-      return { ok: false, code: "model_access_lost", message: "The selected OpenWork-managed model is not available." }
+      return { ok: false, code: "model_access_lost", message: "The selected Sofia-managed model is not available." }
     }
-    const provider = await store.findOpenWorkProvider(input)
+    const provider = await store.findSofiaProvider(input)
     if (!provider) {
-      return { ok: false, code: "provider_unavailable", message: "OpenWork Models are not available for the Automation owner." }
+      return { ok: false, code: "provider_unavailable", message: "Sofia Models are not available for the Automation owner." }
     }
     if (!await store.canAccessProvider({ member, providerRecordId: provider.id })) {
-      return { ok: false, code: "model_access_lost", message: "The Automation owner no longer has access to OpenWork Models." }
+      return { ok: false, code: "model_access_lost", message: "The Automation owner no longer has access to Sofia Models." }
     }
     return {
       ok: true,
       value: {
-        accessKind: "openwork_managed",
+        accessKind: "sofia_managed",
         providerRecordId: provider.id,
         providerId: input.providerId,
         modelId: input.modelId,
         providerName: provider.name,
-        modelName: model.displayName.replace(/^OpenWork:\s*/, ""),
+        modelName: model.displayName.replace(/^Sofia:\s*/, ""),
       },
     }
   }
 
   const provider = await store.findProvider(input)
-  if (!provider || provider.source === "openwork") {
+  if (!provider || provider.source === "sofia") {
     return { ok: false, code: "provider_unavailable", message: "The selected model provider is no longer available." }
   }
   const model = await store.findModel({ providerRecordId: provider.id, modelId: input.modelId })

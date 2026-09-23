@@ -1,7 +1,7 @@
 "use client";
 
 import type { ElementType, ReactNode } from "react";
-import { PaperMeshGradient } from "@openwork/ui/react";
+import { PaperMeshGradient } from "@sofia/ui/react";
 import { useWebGlSupported } from "../../_lib/use-webgl-supported";
 
 /**

@@ -1,14 +1,14 @@
-import { denFetch } from "@openwork/behaviors";
+import { denFetch } from "@sofia/behaviors";
 import { expect } from "vitest";
-import { localMysqlIsRunning, needs, server, test } from "@openwork/testkit";
+import { localMysqlIsRunning, needs, server, test } from "@sofia/testkit";
 
-const e2eTestsEnabled = process.env.OPENWORK_EVAL_E2E_TESTS === "1";
-const localPlacement = process.env.OPENWORK_EVAL_DAYTONA !== "1" && !process.env.OPENWORK_EVAL_DEN_API_URL?.trim();
+const e2eTestsEnabled = process.env.SOFIA_EVAL_E2E_TESTS === "1";
+const localPlacement = process.env.SOFIA_EVAL_DAYTONA !== "1" && !process.env.SOFIA_EVAL_DEN_API_URL?.trim();
 const mysqlOpen = await localMysqlIsRunning();
 const title = !e2eTestsEnabled
-  ? "shared-domain login rate limit skipped — needs: set OPENWORK_EVAL_E2E_TESTS=1"
+  ? "shared-domain login rate limit skipped — needs: set SOFIA_EVAL_E2E_TESTS=1"
   : !localPlacement
-    ? "shared-domain login rate limit skipped — needs local placement without OPENWORK_EVAL_DEN_API_URL"
+    ? "shared-domain login rate limit skipped — needs local placement without SOFIA_EVAL_DEN_API_URL"
     : !mysqlOpen
       ? "shared-domain login rate limit skipped — needs MySQL on 127.0.0.1:3306"
       : "coworkers sharing an email domain keep independent login-option rate limits";
@@ -23,7 +23,7 @@ function statusDistribution(statuses: number[]): string {
 }
 
 test.skipIf(!e2eTestsEnabled || !localPlacement || !mysqlOpen)(title, async ({ evidence, place }) => {
-  needs({ optIn: ["OPENWORK_EVAL_E2E_TESTS"] });
+  needs({ optIn: ["SOFIA_EVAL_E2E_TESTS"] });
 
   const unique = `${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
   const domain = `shared-${unique}.example.test`;

@@ -4,8 +4,8 @@ import { createHash } from "node:crypto"
 process.env.DEN_DB_ENCRYPTION_KEY ??= "x".repeat(32)
 process.env.BETTER_AUTH_SECRET ??= "y".repeat(32)
 process.env.BETTER_AUTH_URL ??= "http://127.0.0.1:3005"
-process.env.OPENWORK_DEV_MODE ??= "1"
-process.env.DATABASE_URL ??= "mysql://root:password@127.0.0.1:3306/openwork_den"
+process.env.SOFIA_DEV_MODE ??= "1"
+process.env.DATABASE_URL ??= "mysql://root:password@127.0.0.1:3306/sofia_den"
 
 const {
   inspectRemoteMcpAppHtml,
@@ -18,7 +18,7 @@ function appHtml(extra = "") {
   return `<!doctype html><html><head><title>Project Explorer</title><meta name="description" content="Browse connected projects."><style>body{font:14px sans-serif}</style></head><body><main id="app"></main>${extra}<script>document.querySelector('#app').textContent='Ready'</script></body></html>`
 }
 
-test("accepts a self-contained HTML app without an OpenWork-specific manifest", () => {
+test("accepts a self-contained HTML app without an Sofia-specific manifest", () => {
   const html = appHtml()
   const inspected = inspectRemoteMcpAppHtml(html)
   expect(inspected.metadata).toMatchObject({

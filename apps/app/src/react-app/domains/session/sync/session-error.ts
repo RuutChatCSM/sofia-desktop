@@ -80,7 +80,7 @@ function errorTitle(kind: OpencodeSessionErrorKind, fallback: string) {
 
 function errorDescription(kind: OpencodeSessionErrorKind) {
   if (kind === "aborted") {
-    return "OpenCode stopped before the task finished. Output and files already produced are kept.";
+    return "The engine stopped before the task finished. Output and files already produced are kept.";
   }
   if (kind === "provider-timeout") {
     return "The provider connection timed out before a response began. Output and files already produced are kept.";

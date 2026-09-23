@@ -8,37 +8,37 @@ import {
   readConnectState,
   server,
   test,
-} from "@openwork/testkit";
+} from "@sofia/testkit";
 
-const e2eTestsEnabled = process.env.OPENWORK_EVAL_E2E_TESTS === "1";
-const localPlacement = process.env.OPENWORK_EVAL_DAYTONA !== "1" && !process.env.OPENWORK_EVAL_DEN_API_URL?.trim();
+const e2eTestsEnabled = process.env.SOFIA_EVAL_E2E_TESTS === "1";
+const localPlacement = process.env.SOFIA_EVAL_DAYTONA !== "1" && !process.env.SOFIA_EVAL_DEN_API_URL?.trim();
 const mysqlOpen = await localMysqlIsRunning();
 const title = !e2eTestsEnabled
-  ? "Connect state provenance skipped — needs: set OPENWORK_EVAL_E2E_TESTS=1"
+  ? "Connect state provenance skipped — needs: set SOFIA_EVAL_E2E_TESTS=1"
   : !localPlacement
-    ? "Connect state provenance skipped — needs local placement without OPENWORK_EVAL_DEN_API_URL"
+    ? "Connect state provenance skipped — needs local placement without SOFIA_EVAL_DEN_API_URL"
     : !mysqlOpen
       ? "Connect state provenance skipped — needs MySQL on 127.0.0.1:3306"
       : "fresh-profile Connect state distinguishes not configured from explicit organization policy";
 
 test.skipIf(!e2eTestsEnabled || !localPlacement || !mysqlOpen)(title, async ({ evidence, place }) => {
-  needs({ optIn: ["OPENWORK_EVAL_E2E_TESTS"] });
+  needs({ optIn: ["SOFIA_EVAL_E2E_TESTS"] });
 
   await using den = await server({
     place,
     org: {
       name: "Connect State Provenance",
       admin: {
-        email: `connect-state-admin-${Date.now()}@openwork.test`,
+        email: `connect-state-admin-${Date.now()}@sofia.test`,
         name: "Connect State Admin",
-        password: "OpenWorkEval123!",
+        password: "SofiaEval123!",
       },
     },
   });
   await inviteMember(den, "fresh", {
-    email: `connect-state-member-${Date.now()}@openwork.test`,
+    email: `connect-state-member-${Date.now()}@sofia.test`,
     name: "Fresh Profile Member",
-    password: "OpenWorkEval123!",
+    password: "SofiaEval123!",
   });
   await using freshApp = await app({
     den,

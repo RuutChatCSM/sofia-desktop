@@ -1,7 +1,7 @@
 import { expect } from "vitest";
-import { denFetch, provisionOrg } from "@openwork/behaviors";
-import type { DenSession } from "@openwork/behaviors";
-import { needs, server, test } from "@openwork/testkit";
+import { denFetch, provisionOrg } from "@sofia/behaviors";
+import type { DenSession } from "@sofia/behaviors";
+import { needs, server, test } from "@sofia/testkit";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -15,7 +15,7 @@ function requireRecord(value: unknown, label: string): Record<string, unknown> {
 function auth(session: DenSession, orgId: string): Record<string, string> {
   return {
     authorization: `Bearer ${session.token}`,
-    "x-openwork-org-id": orgId,
+    "x-sofia-org-id": orgId,
   };
 }
 

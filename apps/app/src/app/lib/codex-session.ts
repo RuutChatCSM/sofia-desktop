@@ -2,7 +2,7 @@
 // engine. Mirrors the opencode SDK's session surface but talks to the
 // Sofia App server's /codex/* routes (which drive the engine's JSON-RPC over
 // stdio). Used when the selected engine is codex.
-import { OpenworkServerError } from "./openwork-server";
+import { SofiaServerError } from "./sofia-server";
 
 export type CodexSessionStatus = "idle" | "running" | "error";
 
@@ -115,7 +115,7 @@ async function requestJson<T>(
   if (!response.ok) {
     const code = typeof json?.code === "string" ? json.code : "request_failed";
     const message = typeof json?.message === "string" ? json.message : response.statusText;
-    throw new OpenworkServerError(response.status, code, message, json?.details);
+    throw new SofiaServerError(response.status, code, message, json?.details);
   }
   return json as T;
 }
@@ -208,7 +208,7 @@ export function createCodexSessionClient(options: CodexSessionClientOptions) {
         );
         return { outcome: "steered", session: result.session };
       } catch (error) {
-        if (error instanceof OpenworkServerError) {
+        if (error instanceof SofiaServerError) {
           if (error.code === "codex_no_active_turn") return { outcome: "no_active_turn" };
           if (error.code === "codex_not_steerable") return { outcome: "not_steerable" };
           if (error.code === "codex_turn_mismatch") {
@@ -316,7 +316,7 @@ export function createCodexSessionClient(options: CodexSessionClientOptions) {
         });
         if (!response.ok || !response.body) {
           const text = await response.text().catch(() => "");
-          throw new OpenworkServerError(response.status, "stream_failed", text || response.statusText);
+          throw new SofiaServerError(response.status, "stream_failed", text || response.statusText);
         }
         const reader = response.body.getReader();
         const decoder = new TextDecoder();

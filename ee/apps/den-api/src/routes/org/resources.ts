@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull } from "@openwork-ee/den-db/drizzle"
+import { and, desc, eq, inArray, isNull } from "@sofia-ee/den-db/drizzle"
 import {
   ConfigObjectTable,
   LlmProviderAccessTable,
@@ -7,8 +7,8 @@ import {
   MarketplaceTable,
   PluginConfigObjectTable,
   PluginTable,
-} from "@openwork-ee/den-db/schema"
-import { normalizeDenTypeId } from "@openwork-ee/utils/typeid"
+} from "@sofia-ee/den-db/schema"
+import { normalizeDenTypeId } from "@sofia-ee/utils/typeid"
 import type { Hono } from "hono"
 import { describeRoute } from "hono-openapi"
 import { z } from "zod"

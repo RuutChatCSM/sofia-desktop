@@ -43,24 +43,24 @@ export async function generateMetadata(): Promise<Metadata> {
 
   return {
     metadataBase: metadataBaseFromOrigin(metadataOrigin),
-    title: "OpenWork Cloud",
+    title: "Sofia Cloud",
     description:
-      "Share your OpenWork setup with your team, manage billing, and use OpenWork Cloud from app.openworklabs.com.",
+      "Share your Sofia setup with your team, manage billing, and use Sofia Cloud from sofia-app.ruut.chat.",
     openGraph: {
-      title: "OpenWork Cloud",
+      title: "Sofia Cloud",
       description:
-        "Share your OpenWork setup with your team and keep selected workflows available in OpenWork Cloud.",
+        "Share your Sofia setup with your team and keep selected workflows available in Sofia Cloud.",
       images: ["/opengraph-image"]
     },
     twitter: {
       card: "summary_large_image",
-      title: "OpenWork Cloud",
+      title: "Sofia Cloud",
       description:
-        "Share your OpenWork setup with your team and manage OpenWork Cloud from app.openworklabs.com.",
+        "Share your Sofia setup with your team and manage Sofia Cloud from sofia-app.ruut.chat.",
       images: ["/opengraph-image"]
     },
     icons: {
-      icon: "/openwork-mark.svg"
+      icon: "/sofia-mark.svg"
     }
   };
 }

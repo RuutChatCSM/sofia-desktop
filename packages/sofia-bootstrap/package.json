@@ -1,0 +1,22 @@
+{
+  "name": "sofia-bootstrap",
+  "version": "0.1.0",
+  "description": "Script-installable Sofia bootstrap CLI for agents",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "sofia-bootstrap": "bin/sofia.mjs"
+  },
+  "files": [
+    "bin",
+    "README.md",
+    "start.md"
+  ],
+  "scripts": {
+    "check": "node --check bin/sofia.mjs && node --check evals/agent-test-evidence-sofia-bootstrap.mjs && node --check evals/agent-test-evidence-sofia-app-install.mjs && node --check evals/agent-test-evidence-linux-container.mjs",
+    "test": "node test/sofia-bootstrap.test.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

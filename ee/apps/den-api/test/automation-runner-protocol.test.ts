@@ -8,7 +8,7 @@ import {
   automationRunnerHeartbeatResponseSchema,
   automationRunnerNotificationSchema,
   automationRunnerUnavailableOutcomeSchema,
-} from "@openwork/types/automations"
+} from "@sofia/types/automations"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import {
@@ -133,7 +133,7 @@ test("desktop occurrences stay claimable through the recovery window with named 
     repositorySource.indexOf("async expireUnclaimedDesktop"),
     repositorySource.indexOf("async getRunReceipt"),
   )
-  // The recovery window is one policy in @openwork/automations: the claim path
+  // The recovery window is one policy in @sofia/automations: the claim path
   // clamps it against the occurrence's own next due time, and the expiry path
   // records the cause an operator can act on instead of one generic wording.
   assert.match(claim, /desktopClaimDeadline\(\{[\s\S]*nextDueAt,[\s\S]*\}\)/)

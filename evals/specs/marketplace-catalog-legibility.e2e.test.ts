@@ -1,6 +1,6 @@
 import { expect, onTestFinished, test } from "vitest";
-import { chrome } from "@openwork/hosts";
-import { createVisualEvidence, screenshot, validate } from "@openwork/test-evidence";
+import { chrome } from "@sofia/hosts";
+import { createVisualEvidence, screenshot, validate } from "@sofia/test-evidence";
 import {
   createMarketplace,
   denFetch,
@@ -10,9 +10,9 @@ import {
   signInInBrowser,
   waitFor,
   waitForText,
-} from "@openwork/behaviors";
-import type { DenSession } from "@openwork/behaviors";
-import type { Surface } from "@openwork/cdp";
+} from "@sofia/behaviors";
+import type { DenSession } from "@sofia/behaviors";
+import type { Surface } from "@sofia/cdp";
 
 /**
  * CORE JOURNEY: an org admin opens the cloud dashboard's marketplace catalogue
@@ -30,16 +30,16 @@ import type { Surface } from "@openwork/cdp";
  *    authority for what "needs action".
  */
 
-const e2eTestsEnabled = process.env.OPENWORK_EVAL_E2E_TESTS === "1";
-const denApiUrl = process.env.OPENWORK_EVAL_DEN_API_URL?.trim().replace(/\/+$/, "") ?? "";
-const denWebUrl = (process.env.OPENWORK_EVAL_DEN_WEB_URL?.trim() || denApiUrl.replace("127.0.0.1", "localhost")).replace(/\/+$/, "");
-const email = process.env.OPENWORK_EVAL_DEMO_EMAIL?.trim() || "alex@acme.test";
-const password = process.env.OPENWORK_EVAL_DEMO_PASSWORD?.trim() || "OpenWorkDemo123!";
+const e2eTestsEnabled = process.env.SOFIA_EVAL_E2E_TESTS === "1";
+const denApiUrl = process.env.SOFIA_EVAL_DEN_API_URL?.trim().replace(/\/+$/, "") ?? "";
+const denWebUrl = (process.env.SOFIA_EVAL_DEN_WEB_URL?.trim() || denApiUrl.replace("127.0.0.1", "localhost")).replace(/\/+$/, "");
+const email = process.env.SOFIA_EVAL_DEMO_EMAIL?.trim() || "alex@acme.test";
+const password = process.env.SOFIA_EVAL_DEMO_PASSWORD?.trim() || "SofiaDemo123!";
 
 const title = !e2eTestsEnabled
-  ? "marketplace catalogue legibility skipped: set OPENWORK_EVAL_E2E_TESTS=1 to opt in"
+  ? "marketplace catalogue legibility skipped: set SOFIA_EVAL_E2E_TESTS=1 to opt in"
   : !denApiUrl
-    ? "marketplace catalogue legibility skipped: set OPENWORK_EVAL_DEN_API_URL to a running Den"
+    ? "marketplace catalogue legibility skipped: set SOFIA_EVAL_DEN_API_URL to a running Den"
     : "an org admin can read identity, counts, and exceptional readiness across the cloud catalogues";
 
 type Marketplace = { id: string; name: string; pluginCount: number };

@@ -20,7 +20,7 @@ describe("agent context diagnostics renderer transport", () => {
     const startedAtMs = Date.now();
 
     await expect(requestAgentContextDiagnosticsPayload({
-      url: "https://remote.openwork.test/workspace/test/diagnostics/agent-context",
+      url: "https://remote.sofia.test/workspace/test/diagnostics/agent-context",
       init: { method: "POST", body: "{}" },
       timeoutMs: 40,
       fetchImpl: async (_input, _init, deadlineAtMs) => {
@@ -48,7 +48,7 @@ describe("agent context diagnostics renderer transport", () => {
     }), { status: 200 });
 
     await expect(requestAgentContextDiagnosticsPayload({
-      url: "https://remote.openwork.test/workspace/test/diagnostics/agent-context",
+      url: "https://remote.sofia.test/workspace/test/diagnostics/agent-context",
       init: { method: "POST", body: "{}" },
       timeoutMs: 1_000,
       fetchImpl: async () => response,
@@ -66,7 +66,7 @@ describe("agent context diagnostics renderer transport", () => {
     });
 
     await expect(requestAgentContextDiagnosticsPayload({
-      url: "https://remote.openwork.test/workspace/test/diagnostics/agent-context",
+      url: "https://remote.sofia.test/workspace/test/diagnostics/agent-context",
       init: { method: "POST", body: "{}" },
       timeoutMs: 1_000,
       fetchImpl: async () => response,

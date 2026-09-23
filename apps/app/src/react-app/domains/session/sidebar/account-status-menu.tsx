@@ -1,5 +1,7 @@
 /** @jsxImportSource react */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+import { SOFIA_CLOUD_AVAILABLE } from "@/app/cloud-availability";
 import {
   BookOpen,
   LogOut,
@@ -25,9 +27,9 @@ import { cn } from "@/lib/utils";
 import { t } from "@/i18n";
 import { usePlatform } from "../../../kernel/platform";
 import { isDenSessionRestoring, useDenAuth } from "../../cloud/den-auth-provider";
-import { useControlAction, type OpenworkControlAction } from "../../../shell/control/control-provider";
+import { useControlAction, type SofiaControlAction } from "../../../shell/control/control-provider";
 import { useShellConfig } from "../../../shell/shell-config";
-import type { OpenworkServerStatus } from "../../../../app/lib/openwork-server";
+import type { SofiaServerStatus } from "../../../../app/lib/sofia-server";
 import {
   buildDenAuthUrl,
   clearDenSession,
@@ -39,21 +41,21 @@ import { markDesktopSignInInitiated } from "../../../../app/lib/den-sign-in-inte
 import { exchangeHandoffAndSignIn } from "../../../../app/lib/den-handoff";
 import { parseManualAuthInput } from "../../../../app/lib/manual-auth-input";
 import {
-  openWorkConnectAttentionTitle,
-  resolveOpenWorkConnectStatus,
-  type OpenWorkConnectStatus,
-} from "../../connections/openwork-connect-status";
+  sofiaConnectAttentionTitle,
+  resolveSofiaConnectStatus,
+  type SofiaConnectStatus,
+} from "../../connections/sofia-connect-status";
 import type { SessionCloudMcpMaintenanceState } from "../../connections/use-session-mcp-maintenance";
 import {
-  getOpenWorkModelsActionUrl,
-  hasOpenWorkModelsProvider,
-  hideOpenWorkModelsPromo,
-  isOpenWorkModelsPromoHidden,
-  openWorkModelsPromoChangedEvent,
-  useOpenWorkModelsPromoEligibility,
-} from "../../cloud/openwork-models-promo";
+  getSofiaModelsActionUrl,
+  hasSofiaModelsProvider,
+  hideSofiaModelsPromo,
+  isSofiaModelsPromoHidden,
+  sofiaModelsPromoChangedEvent,
+  useSofiaModelsPromoEligibility,
+} from "../../cloud/sofia-models-promo";
 
-const DOCS_URL = "https://openworklabs.com/docs";
+const DOCS_URL = "https://sofia.ruut.chat/docs";
 const BOOT_STARTED_AT = Date.now();
 const INITIALIZING_MS = 15_000;
 
@@ -86,7 +88,7 @@ type RuntimeStatus = {
 
 type RuntimeStatusInput = {
   clientConnected: boolean;
-  openworkServerStatus: OpenworkServerStatus;
+  sofiaServerStatus: SofiaServerStatus;
   loading?: boolean;
   initializing: boolean;
   reloadBusy?: boolean;
@@ -104,7 +106,7 @@ function resolveRuntimeStatus(input: RuntimeStatusInput): RuntimeStatus {
   if (input.reloadError) {
     return { variant: "disconnected", label: t("system.reload_failed"), detail: input.reloadError };
   }
-  if (input.loading || (input.openworkServerStatus === "disconnected" && input.initializing)) {
+  if (input.loading || (input.sofiaServerStatus === "disconnected" && input.initializing)) {
     return {
       variant: "loading",
       label: t("session.preparing_workspace"),
@@ -114,7 +116,7 @@ function resolveRuntimeStatus(input: RuntimeStatusInput): RuntimeStatus {
   if (input.clientConnected) {
     return { variant: "connected", label: t("status.ready_for_tasks"), detail: null };
   }
-  if (input.openworkServerStatus === "limited") {
+  if (input.sofiaServerStatus === "limited") {
     return { variant: "partial", label: t("status.limited_mode"), detail: t("status.limited_hint") };
   }
   return {
@@ -124,7 +126,7 @@ function resolveRuntimeStatus(input: RuntimeStatusInput): RuntimeStatus {
   };
 }
 
-function connectDotVariant(status: OpenWorkConnectStatus): StatusDotVariant {
+function connectDotVariant(status: SofiaConnectStatus): StatusDotVariant {
   if (status.state === "ready") return "connected";
   if (status.state === "checking") return "loading";
   return "disconnected";
@@ -137,7 +139,7 @@ function connectDotVariant(status: OpenWorkConnectStatus): StatusDotVariant {
  */
 export function resolveCollapsedStatus(
   runtime: RuntimeStatus | null,
-  connect: OpenWorkConnectStatus | null,
+  connect: SofiaConnectStatus | null,
 ): RuntimeStatus | null {
   if (runtime && runtime.variant !== "connected") return runtime;
   if (connect && connect.state === "needs_attention") {
@@ -166,23 +168,23 @@ function accountInitials(name: string | null, email: string) {
   return (parts[0][0] + parts[1][0]).toUpperCase();
 }
 
-function useOpenWorkModelsPromoVisible(hasOpenWorkModels: boolean) {
+function useSofiaModelsPromoVisible(hasSofiaModels: boolean) {
   const { config } = useShellConfig();
-  const eligible = useOpenWorkModelsPromoEligibility();
-  const [hidden, setHidden] = useState(isOpenWorkModelsPromoHidden);
+  const eligible = useSofiaModelsPromoEligibility();
+  const [hidden, setHidden] = useState(isSofiaModelsPromoHidden);
 
   useEffect(() => {
-    const sync = () => setHidden(isOpenWorkModelsPromoHidden());
-    window.addEventListener(openWorkModelsPromoChangedEvent, sync);
-    return () => window.removeEventListener(openWorkModelsPromoChangedEvent, sync);
+    const sync = () => setHidden(isSofiaModelsPromoHidden());
+    window.addEventListener(sofiaModelsPromoChangedEvent, sync);
+    return () => window.removeEventListener(sofiaModelsPromoChangedEvent, sync);
   }, []);
 
-  return eligible && config.cloudSignin && !hasOpenWorkModels && !hidden;
+  return eligible && config.cloudSignin && !hasSofiaModels && !hidden;
 }
 
 export type AccountStatusMenuProps = {
   clientConnected: boolean;
-  openworkServerStatus: OpenworkServerStatus;
+  sofiaServerStatus: SofiaServerStatus;
   developerMode: boolean;
   /** Hidden until a workspace is selected, matching the old status bar. */
   showConnectionStatus: boolean;
@@ -191,7 +193,7 @@ export type AccountStatusMenuProps = {
   loading?: boolean;
   reloadBusy?: boolean;
   reloadError?: string | null;
-  openWorkConnectState?: SessionCloudMcpMaintenanceState;
+  sofiaConnectState?: SessionCloudMcpMaintenanceState;
   showSettingsButton?: boolean;
   onOpenAccountSettings?: () => void;
   onSendFeedback?: () => void;
@@ -214,11 +216,11 @@ export function AccountStatusMenu(props: AccountStatusMenuProps) {
     () => Date.now() - BOOT_STARTED_AT < INITIALIZING_MS,
   );
 
-  const hasOpenWorkModels = useMemo(
-    () => hasOpenWorkModelsProvider(props.providerConnectedIds),
+  const hasSofiaModels = useMemo(
+    () => hasSofiaModelsProvider(props.providerConnectedIds),
     [props.providerConnectedIds],
   );
-  const promoVisible = useOpenWorkModelsPromoVisible(hasOpenWorkModels);
+  const promoVisible = useSofiaModelsPromoVisible(hasSofiaModels);
 
   useEffect(() => {
     if (!initializing) return;
@@ -230,7 +232,7 @@ export function AccountStatusMenu(props: AccountStatusMenuProps) {
   const openSettings = props.onOpenAccountSettings;
   const openDocs = useCallback(() => platform.openLink(DOCS_URL), [platform]);
 
-  const docsControlAction = useMemo<OpenworkControlAction>(() => ({
+  const docsControlAction = useMemo<SofiaControlAction>(() => ({
     id: "status.docs.open",
     label: "Open Sofia App docs",
     description: "Open the documentation from the account menu.",
@@ -240,7 +242,7 @@ export function AccountStatusMenu(props: AccountStatusMenuProps) {
   }), [openDocs]);
   useControlAction(docsControlAction);
 
-  const feedbackControlAction = useMemo<OpenworkControlAction>(() => ({
+  const feedbackControlAction = useMemo<SofiaControlAction>(() => ({
     id: "status.feedback.open",
     label: "Send feedback",
     description: "Open the Sofia App feedback surface from the account menu.",
@@ -251,7 +253,7 @@ export function AccountStatusMenu(props: AccountStatusMenuProps) {
   }), [props.onSendFeedback]);
   useControlAction(feedbackControlAction);
 
-  const settingsControlAction = useMemo<OpenworkControlAction>(() => ({
+  const settingsControlAction = useMemo<SofiaControlAction>(() => ({
     id: "status.settings.open",
     label: "Open settings from the account menu",
     description: "Use the account menu in the sidebar footer.",
@@ -274,25 +276,29 @@ export function AccountStatusMenu(props: AccountStatusMenuProps) {
   });
   const accountLabel = signedIn
     ? user.name?.trim() || user.email
-    : restoringSession ? "Organization cloud" : "Sign in";
+    : !SOFIA_CLOUD_AVAILABLE
+      ? "Account"
+      : restoringSession ? "Organization cloud" : "Sign in";
   const accountDetail = signedIn
     ? (user.name ? user.email : "Organization cloud")
-    : restoringSession ? "Restoring your session" : "Sync with Organization cloud";
+    : !SOFIA_CLOUD_AVAILABLE
+      ? "Local build"
+      : restoringSession ? "Restoring your session" : "Sync with Organization cloud";
 
   const runtimeStatus = props.showConnectionStatus
     ? resolveRuntimeStatus({
       clientConnected: props.clientConnected,
-      openworkServerStatus: props.openworkServerStatus,
+      sofiaServerStatus: props.sofiaServerStatus,
       loading: props.loading,
       initializing,
       reloadBusy: props.reloadBusy,
       reloadError: props.reloadError,
     })
     : null;
-  const connectStatus = resolveOpenWorkConnectStatus(
+  const connectStatus = resolveSofiaConnectStatus(
     denAuth.isSignedIn
       || (denAuth.status === "checking" && Boolean(readDenSettings().authToken?.trim())),
-    props.openWorkConnectState,
+    props.sofiaConnectState,
   );
   const connectNeedsAttention = connectStatus?.state === "needs_attention";
   const collapsedStatus = resolveCollapsedStatus(runtimeStatus, connectStatus);
@@ -352,7 +358,7 @@ export function AccountStatusMenu(props: AccountStatusMenuProps) {
             className="flex w-full items-center gap-2 rounded-lg ps-1.5 pe-2 py-1.5 text-left transition-colors hover:bg-sidebar-accent max-lg:min-h-11"
             aria-label={signedIn ? `${user.email} — account and status` : "Account and status"}
             title={connectNeedsAttention
-              ? openWorkConnectAttentionTitle(connectStatus.description)
+              ? sofiaConnectAttentionTitle(connectStatus.description)
               : connectStatus
                 ? `${runtimeStatus ? `${runtimeStatus.label} · ` : ""}Connections: ${connectStatus.label}`
                 : runtimeStatus?.label}
@@ -408,7 +414,7 @@ export function AccountStatusMenu(props: AccountStatusMenuProps) {
                   </div>
                 ) : null}
                 {connectStatus ? (
-                  <div data-testid="openwork-connect-status" className="flex items-start gap-2">
+                  <div data-testid="sofia-connect-status" className="flex items-start gap-2">
                     <span className="mt-1">
                       <StatusDot variant={connectDotVariant(connectStatus)} />
                     </span>
@@ -458,12 +464,12 @@ export function AccountStatusMenu(props: AccountStatusMenuProps) {
         {promoVisible ? (
           <DropdownMenuItem
             onClick={() => {
-              hideOpenWorkModelsPromo();
+              hideSofiaModelsPromo();
               if (!denAuth.isSignedIn) {
                 navigate("/settings/cloud-account");
                 markDesktopSignInInitiated();
               }
-              platform.openLink(getOpenWorkModelsActionUrl(denAuth.isSignedIn));
+              platform.openLink(getSofiaModelsActionUrl(denAuth.isSignedIn));
             }}
           >
             <Sparkles className="size-3.5 text-blue-11" />
@@ -498,7 +504,7 @@ export function AccountStatusMenu(props: AccountStatusMenuProps) {
             <LogOut className="size-3.5" />
             Log out
           </DropdownMenuItem>
-        ) : restoringSession ? null : (
+        ) : !SOFIA_CLOUD_AVAILABLE || restoringSession ? null : (
           <>
             <DropdownMenuItem onClick={openSignIn}>
               <UserRound className="size-3.5" />

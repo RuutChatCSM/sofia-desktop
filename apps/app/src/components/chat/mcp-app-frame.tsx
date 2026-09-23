@@ -8,11 +8,11 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js"
 
 import { openDesktopUrl } from "@/app/lib/desktop"
 import {
-  OpenworkServerError,
-  type OpenworkMcpAppLaunchReference,
-  type OpenworkMcpAppResource,
-  type OpenworkMcpAppToolResult,
-} from "@/app/lib/openwork-server"
+  SofiaServerError,
+  type SofiaMcpAppLaunchReference,
+  type SofiaMcpAppResource,
+  type SofiaMcpAppToolResult,
+} from "@/app/lib/sofia-server"
 import { useWorkspace } from "@/react-app/shell/workspace-provider"
 import { cn } from "@/lib/utils"
 import {
@@ -59,11 +59,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function preservedResult(part: DynamicToolUIPart): PreservedMcpAppResult | null {
-  const openwork = isRecord(part.callProviderMetadata?.openwork) ? part.callProviderMetadata.openwork : null
-  const result = openwork && isRecord(openwork.mcpResult)
-    ? openwork.mcpResult
-    : openwork && isRecord(openwork.mcpApp)
-      ? openwork.mcpApp
+  const sofia = isRecord(part.callProviderMetadata?.sofia) ? part.callProviderMetadata.sofia : null
+  const result = sofia && isRecord(sofia.mcpResult)
+    ? sofia.mcpResult
+    : sofia && isRecord(sofia.mcpApp)
+      ? sofia.mcpApp
       : null
   if (!result || !Array.isArray(result.content)) return null
   const content = result.content.filter(isRecord) as Array<Record<string, unknown>>
@@ -79,9 +79,9 @@ export function hasPreservedMcpAppResult(part: DynamicToolUIPart): boolean {
   return preservedResult(part) !== null
 }
 
-export function gatewayMcpAppLaunch(meta: unknown): OpenworkMcpAppLaunchReference | null {
-  if (!isRecord(meta) || !isRecord(meta["openwork/mcpApp"])) return null
-  const launch = meta["openwork/mcpApp"]
+export function gatewayMcpAppLaunch(meta: unknown): SofiaMcpAppLaunchReference | null {
+  if (!isRecord(meta) || !isRecord(meta["sofia/mcpApp"])) return null
+  const launch = meta["sofia/mcpApp"]
   if ((launch.connectionId !== undefined && typeof launch.connectionId !== "string")
     || typeof launch.toolName !== "string"
     || typeof launch.resourceUri !== "string"
@@ -94,7 +94,7 @@ export function gatewayMcpAppLaunch(meta: unknown): OpenworkMcpAppLaunchReferenc
   }
 }
 
-export function buildMcpAppCsp(app: OpenworkMcpAppResource): string {
+export function buildMcpAppCsp(app: SofiaMcpAppResource): string {
   const resources = app.csp.resourceDomains.join(" ")
   const withResources = (source: string) => resources ? `${source} ${resources}` : source
   const sourceList = (values: string[]) => values.length ? values.join(" ") : "'none'"
@@ -117,7 +117,7 @@ function escapeAttribute(value: string): string {
   return value.replaceAll("&", "&amp;").replaceAll('"', "&quot;")
 }
 
-export function secureMcpAppHtml(app: OpenworkMcpAppResource): string {
+export function secureMcpAppHtml(app: SofiaMcpAppResource): string {
   const meta = `<meta http-equiv="Content-Security-Policy" content="${escapeAttribute(buildMcpAppCsp(app))}">`
   const html = /<html(?:\s[^>]*)?>/i.exec(app.html)
   if (html?.index !== undefined) {
@@ -143,7 +143,7 @@ export function secureMcpAppHtml(app: OpenworkMcpAppResource): string {
   return `<!doctype html><html><head>${meta}</head><body>${app.html}</body></html>`
 }
 
-function mcpToolResult(result: OpenworkMcpAppToolResult): CallToolResult {
+function mcpToolResult(result: SofiaMcpAppToolResult): CallToolResult {
   return result as CallToolResult
 }
 
@@ -193,11 +193,11 @@ function hostStyleVariables(): McpUiStyles {
 }
 
 export function isActionableMcpAppResolutionError(cause: unknown): boolean {
-  return cause instanceof OpenworkServerError && ACTIONABLE_MCP_APP_RESOLUTION_CODES.has(cause.code)
+  return cause instanceof SofiaServerError && ACTIONABLE_MCP_APP_RESOLUTION_CODES.has(cause.code)
 }
 
 export function McpAppFrame({ part }: { part: DynamicToolUIPart }) {
-  const { openworkServerClient, workspaceId } = useWorkspace()
+  const { sofiaServerClient, workspaceId } = useWorkspace()
   const nextResult = preservedResult(part)
   const nextResultSignature = JSON.stringify(nextResult)
   const resultCache = useRef<{ signature: string; value: PreservedMcpAppResult | null }>({
@@ -210,7 +210,7 @@ export function McpAppFrame({ part }: { part: DynamicToolUIPart }) {
   const result = resultCache.current.value
   const launch = useMemo(() => gatewayMcpAppLaunch(result?._meta), [result])
   const iframeRef = useRef<HTMLIFrameElement>(null)
-  const [app, setApp] = useState<OpenworkMcpAppResource | null>(null)
+  const [app, setApp] = useState<SofiaMcpAppResource | null>(null)
   const [height, setHeight] = useState(DEFAULT_HEIGHT)
   const [error, setError] = useState<McpAppDiagnostic | null>(null)
   const [detailsCopied, setDetailsCopied] = useState(false)
@@ -220,9 +220,9 @@ export function McpAppFrame({ part }: { part: DynamicToolUIPart }) {
     setApp(null)
     setError(null)
     setDetailsCopied(false)
-    if (!result || !openworkServerClient || !workspaceId) return () => { cancelled = true }
+    if (!result || !sofiaServerClient || !workspaceId) return () => { cancelled = true }
     const startedAt = performance.now()
-    void openworkServerClient.resolveMcpApp(workspaceId, part.toolName, launch ?? undefined)
+    void sofiaServerClient.resolveMcpApp(workspaceId, part.toolName, launch ?? undefined)
       .then(({ app: resolved }) => {
         if (cancelled) return
         // A preserved MCP result is neutral transport data. A null resolution
@@ -235,7 +235,7 @@ export function McpAppFrame({ part }: { part: DynamicToolUIPart }) {
         if (!cancelled && isActionableMcpAppResolutionError(cause)) {
           const diagnostic: McpAppDiagnostic = {
             code: "MCP_APP_RESOURCE_RESOLUTION_FAILED",
-            ...(cause instanceof OpenworkServerError ? { causeCode: cause.code } : {}),
+            ...(cause instanceof SofiaServerError ? { causeCode: cause.code } : {}),
             stage: "resource-resolution",
             message: safeMcpAppDiagnosticMessage(cause, "The interactive view resource could not be resolved."),
             toolName: part.toolName,
@@ -247,11 +247,11 @@ export function McpAppFrame({ part }: { part: DynamicToolUIPart }) {
         }
       })
     return () => { cancelled = true }
-  }, [launch, openworkServerClient, part.toolName, result, workspaceId])
+  }, [launch, sofiaServerClient, part.toolName, result, workspaceId])
 
   useEffect(() => {
     const iframe = iframeRef.current
-    if (!app || !result || !iframe || !iframe.contentWindow || !openworkServerClient || !workspaceId) return
+    if (!app || !result || !iframe || !iframe.contentWindow || !sofiaServerClient || !workspaceId) return
     let disposed = false
     let lastSizeEventAt = 0
     const startedAt = performance.now()
@@ -283,7 +283,7 @@ export function McpAppFrame({ part }: { part: DynamicToolUIPart }) {
       setError(diagnostic)
     }
     checkpoint("resource-resolved")
-    const sandbox = openworkServerClient.mcpAppSandbox(app, window.location.origin)
+    const sandbox = sofiaServerClient.mcpAppSandbox(app, window.location.origin)
     if (sandbox.expectedOrigin === window.location.origin) {
       fail(
         "MCP_APP_SANDBOX_ORIGIN_INVALID",
@@ -360,12 +360,12 @@ export function McpAppFrame({ part }: { part: DynamicToolUIPart }) {
     bridge.oncalltool = async ({ name, arguments: args }) => {
       const request = { serverName: app.serverName, name, resourceUri: app.resourceUri, arguments: args }
       try {
-        return mcpToolResult(await openworkServerClient.callMcpAppTool(workspaceId, request))
+        return mcpToolResult(await sofiaServerClient.callMcpAppTool(workspaceId, request))
       } catch (cause) {
-        if (!(cause instanceof OpenworkServerError) || cause.code !== "tool_requires_approval") throw cause
+        if (!(cause instanceof SofiaServerError) || cause.code !== "tool_requires_approval") throw cause
         const approved = window.confirm(`Allow this MCP App to call ${name} on ${app.serverName}?`)
         if (!approved) throw new Error("The user declined the MCP App tool call.")
-        return mcpToolResult(await openworkServerClient.callMcpAppTool(workspaceId, { ...request, approved: true }))
+        return mcpToolResult(await sofiaServerClient.callMcpAppTool(workspaceId, { ...request, approved: true }))
       }
     }
     bridge.oninitialized = () => {
@@ -518,7 +518,7 @@ export function McpAppFrame({ part }: { part: DynamicToolUIPart }) {
         new Promise<void>((resolve) => window.setTimeout(resolve, 500)),
       ]).catch(() => undefined).finally(() => bridge.close().catch(() => undefined))
     }
-  }, [app, launch, openworkServerClient, part.input, result, workspaceId])
+  }, [app, launch, sofiaServerClient, part.input, result, workspaceId])
 
   if (!result || (!app && !error)) return null
   if (error) {

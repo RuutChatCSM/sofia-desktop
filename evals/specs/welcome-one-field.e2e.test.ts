@@ -1,9 +1,9 @@
 import { expect } from "vitest";
-import { captureOpenedUrls, clickButton, evalIn, fill, waitFor, waitForText } from "@openwork/behaviors";
-import { screenshot, validate } from "@openwork/test-evidence";
-import { desktop } from "@openwork/hosts";
-import { needs, test, unmetNeeds } from "@openwork/testkit";
-import type { TestNeeds } from "@openwork/testkit";
+import { captureOpenedUrls, clickButton, evalIn, fill, waitFor, waitForText } from "@sofia/behaviors";
+import { screenshot, validate } from "@sofia/test-evidence";
+import { desktop } from "@sofia/hosts";
+import { needs, test, unmetNeeds } from "@sofia/testkit";
+import type { TestNeeds } from "@sofia/testkit";
 
 /**
  * The invite points at localhost so the external open the app performs stays
@@ -14,7 +14,7 @@ const INVITE_URL = "http://localhost:59991/join-org?invite=inv_demo123";
 const INVITE_ORIGIN = "http://localhost:59991";
 
 const requirements: TestNeeds = {
-  optIn: ["OPENWORK_EVAL_E2E_TESTS"],
+  optIn: ["SOFIA_EVAL_E2E_TESTS"],
 };
 const missingRequirements = unmetNeeds(requirements, process.env);
 const title = missingRequirements.length > 0
@@ -36,7 +36,7 @@ test(title, async ({ evidence }) => {
     env: { PATH: `${capture.binDir}:${process.env.PATH ?? ""}` },
   });
   expect(app.readiness.route).toContain("/welcome");
-  await waitForText(app, "Welcome to OpenWork");
+  await waitForText(app, "Welcome to Sofia App");
 
   const doors = await evalIn(app, `(() => {
     const join = document.querySelector('[data-testid="welcome-join-org"]');
@@ -44,7 +44,7 @@ test(title, async ({ evidence }) => {
       signIn: Boolean(document.querySelector('[data-testid="welcome-team-signin"]')),
       useWithoutCloud: Boolean(document.querySelector('[data-testid="welcome-use-without-cloud"]')),
       join: (join?.textContent ?? "").replace(/\\s+/g, " ").trim(),
-      onPremLink: document.body.innerText.includes("Using OpenWork on-premises?"),
+      onPremLink: document.body.innerText.includes("Using Sofia App on-premises?"),
     };
   })()`);
   if (!isRecord(doors) || typeof doors.join !== "string") {
@@ -67,10 +67,10 @@ test(title, async ({ evidence }) => {
   {
     const shot = await screenshot(app);
     const seen = await validate(shot, [
-      "The Welcome to OpenWork heading is visible",
-      "Sign in to OpenWork Cloud and Use Without Cloud are offered",
+      "The Welcome to Sofia App heading is visible",
+      "Sign in to Organization cloud and Use Without Cloud are offered",
       "Join your organization says to paste an invite link, install link, or server URL",
-      "The page does not say Using OpenWork on-premises",
+      "The page does not say Using Sofia App on-premises",
     ]);
     expect(seen.ok, seen.why).toBe(true);
   }
@@ -90,26 +90,26 @@ test(title, async ({ evidence }) => {
   // Branch 1: a plain organization server URL is saved as the control plane.
   // On desktop the control plane persists in the shell's desktop-bootstrap.json
   // (not localStorage), so read it back through the bridge.
-  await fill(app, "#join-organization-input", "https://openwork.acme.test");
+  await fill(app, "#join-organization-input", "https://sofia.acme.test");
   await clickButton(app, "Connect");
-  await waitForText(app, "Connected to openwork.acme.test. Sign in to continue.", { timeoutMs: 20_000 });
+  await waitForText(app, "Connected to sofia.acme.test. Sign in to continue.", { timeoutMs: 20_000 });
   const savedBaseUrl = await evalIn(
     app,
-    `window.__OPENWORK_ELECTRON__.invokeDesktop("getDesktopBootstrapConfig").then((config) => config.baseUrl)`,
+    `window.__SOFIA_ELECTRON__.invokeDesktop("getDesktopBootstrapConfig").then((config) => config.baseUrl)`,
     { awaitPromise: true },
   );
-  expect(savedBaseUrl).toBe("https://openwork.acme.test");
+  expect(savedBaseUrl).toBe("https://sofia.acme.test");
   evidence.recordAssertionEvidence(
     "Pasting a server URL points the app at that organization server",
-    `status=Connected to openwork.acme.test; savedBaseUrl=${String(savedBaseUrl)}`,
-    savedBaseUrl === "https://openwork.acme.test",
+    `status=Connected to sofia.acme.test; savedBaseUrl=${String(savedBaseUrl)}`,
+    savedBaseUrl === "https://sofia.acme.test",
   );
 
   {
     const shot = await screenshot(app);
     const seen = await validate(shot, [
       "The join dialog field label mentions invite link, install link, or server URL",
-      "The dialog confirms it connected to openwork.acme.test",
+      "The dialog confirms it connected to sofia.acme.test",
     ]);
     expect(seen.ok, seen.why).toBe(true);
   }
@@ -121,16 +121,16 @@ test(title, async ({ evidence }) => {
   await waitForText(app, "Trust this organization server?", { timeoutMs: 20_000 });
   const unchangedBaseUrl = await evalIn(
     app,
-    `window.__OPENWORK_ELECTRON__.invokeDesktop("getDesktopBootstrapConfig").then((config) => config.baseUrl)`,
+    `window.__SOFIA_ELECTRON__.invokeDesktop("getDesktopBootstrapConfig").then((config) => config.baseUrl)`,
     { awaitPromise: true },
   );
-  expect(unchangedBaseUrl).toBe("https://openwork.acme.test");
+  expect(unchangedBaseUrl).toBe("https://sofia.acme.test");
   await clickButton(app, "Trust and open invite");
   await waitForText(app, "Your invite opened in the browser", { timeoutMs: 20_000 });
 
   const inviteBaseUrl = await evalIn(
     app,
-    `window.__OPENWORK_ELECTRON__.invokeDesktop("getDesktopBootstrapConfig").then((config) => config.baseUrl)`,
+    `window.__SOFIA_ELECTRON__.invokeDesktop("getDesktopBootstrapConfig").then((config) => config.baseUrl)`,
     { awaitPromise: true },
   );
   expect(inviteBaseUrl).toBe(INVITE_ORIGIN);

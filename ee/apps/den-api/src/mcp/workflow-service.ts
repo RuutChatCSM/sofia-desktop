@@ -1,5 +1,5 @@
-import type { createDenDb } from "@openwork-ee/den-db"
-import type { DenTypeId } from "@openwork-ee/utils/typeid"
+import type { createDenDb } from "@sofia-ee/den-db"
+import type { DenTypeId } from "@sofia-ee/utils/typeid"
 import { recordWorkflowRun, recordWorkflowResult } from "../workflow-runs.js"
 import {
   artifactDigest,
@@ -114,7 +114,7 @@ export async function executeWorkflow(input: {
     ? firstUnattendedUnsafeCapability(built, parsed.payload.requiredCapabilities)
     : null
   if (unsafe) {
-    const message = `Required capability ${unsafe.scriptPath} (${unsafe.capabilityName}) must be read-only and explicitly approved by an organization admin before it can run unattended in OpenWork Cloud.`
+    const message = `Required capability ${unsafe.scriptPath} (${unsafe.capabilityName}) must be read-only and explicitly approved by an organization admin before it can run unattended in Sofia Cloud.`
     const receiptId = await recordPreflightFailure("CapabilityUnavailable", message)
     return {
       ok: false,

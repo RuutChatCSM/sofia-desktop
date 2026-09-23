@@ -8,12 +8,12 @@ import { resolveOrganizationPromptCardContent } from "@/components/chat/task-sug
 import { useCheckDesktopRestriction, useOrgRestrictions } from "@/react-app/domains/cloud/desktop-config-provider";
 import { useDenAuth } from "@/react-app/domains/cloud/den-auth-provider";
 import {
-  getOpenWorkModelsActionUrl,
-  hideOpenWorkModelsPromo,
-  isOpenWorkModelsPromoHidden,
-  openWorkModelsPromoChangedEvent,
-  useOpenWorkModelsPromoEligibility,
-} from "@/react-app/domains/cloud/openwork-models-promo";
+  getSofiaModelsActionUrl,
+  hideSofiaModelsPromo,
+  isSofiaModelsPromoHidden,
+  sofiaModelsPromoChangedEvent,
+  useSofiaModelsPromoEligibility,
+} from "@/react-app/domains/cloud/sofia-models-promo";
 import { usePlatform } from "@/react-app/kernel/platform";
 import { NewTaskComposer, type NewTaskComposerContext } from "./new-task-composer";
 
@@ -70,13 +70,13 @@ export function SessionEmptyHero(props: SessionEmptyHeroProps) {
   const canAddProviders = !checkDesktopRestriction({ restriction: "allowCustomProviders" });
   const platform = usePlatform();
   const denAuth = useDenAuth();
-  const openWorkModelsPromoEligible = useOpenWorkModelsPromoEligibility();
-  const [modelsPromoHidden, setModelsPromoHidden] = useState(isOpenWorkModelsPromoHidden);
+  const sofiaModelsPromoEligible = useSofiaModelsPromoEligibility();
+  const [modelsPromoHidden, setModelsPromoHidden] = useState(isSofiaModelsPromoHidden);
 
   useEffect(() => {
-    const handlePromoChanged = () => setModelsPromoHidden(isOpenWorkModelsPromoHidden());
-    window.addEventListener(openWorkModelsPromoChangedEvent, handlePromoChanged);
-    return () => window.removeEventListener(openWorkModelsPromoChangedEvent, handlePromoChanged);
+    const handlePromoChanged = () => setModelsPromoHidden(isSofiaModelsPromoHidden());
+    window.addEventListener(sofiaModelsPromoChangedEvent, handlePromoChanged);
+    return () => window.removeEventListener(sofiaModelsPromoChangedEvent, handlePromoChanged);
   }, []);
 
   // Quiet inline lead to Hosted models: replaces the old startup dialog
@@ -84,9 +84,9 @@ export function SessionEmptyHero(props: SessionEmptyHeroProps) {
   // (the built-in `opencode` provider) and the hosted offering applies.
   const onFreeStarterModel = props.composer?.selectedModel.providerID === DEFAULT_MODEL.providerID;
   const showModelsHint =
-    openWorkModelsPromoEligible &&
+    sofiaModelsPromoEligible &&
     !modelsPromoHidden &&
-    !props.composer?.openWorkModelsEntitled &&
+    !props.composer?.sofiaModelsEntitled &&
     onFreeStarterModel;
 
   const organizationPrompts = orgRestrictions.onboardingPrompts;
@@ -109,7 +109,7 @@ export function SessionEmptyHero(props: SessionEmptyHeroProps) {
 
   const fillPrompt = (value: string) => {
     setPrompt(value);
-    window.dispatchEvent(new Event("openwork:focusPrompt"));
+    window.dispatchEvent(new Event("sofia:focusPrompt"));
   };
 
   return (
@@ -132,13 +132,13 @@ export function SessionEmptyHero(props: SessionEmptyHeroProps) {
       {showModelsHint ? (
         <div
           className="flex items-center justify-center gap-2 text-[12px] text-muted-foreground"
-          data-testid="openwork-models-hint"
+          data-testid="sofia-models-hint"
         >
           <span>Using the free starter model.</span>
           <button
             type="button"
             className="flex items-center gap-1 font-medium text-blue-10 transition-colors hover:text-blue-11"
-            onClick={() => platform.openLink(getOpenWorkModelsActionUrl(denAuth.isSignedIn, "sign-up"))}
+            onClick={() => platform.openLink(getSofiaModelsActionUrl(denAuth.isSignedIn, "sign-up"))}
           >
             Get frontier models with no API keys
             <ArrowRight className="size-3" />
@@ -146,7 +146,7 @@ export function SessionEmptyHero(props: SessionEmptyHeroProps) {
           <button
             type="button"
             className="flex size-5 items-center justify-center rounded text-muted-foreground/70 transition-colors hover:text-foreground"
-            onClick={hideOpenWorkModelsPromo}
+            onClick={hideSofiaModelsPromo}
             aria-label="Hide Hosted models hint"
           >
             <X className="size-3" />

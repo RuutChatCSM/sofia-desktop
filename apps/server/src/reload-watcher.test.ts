@@ -9,7 +9,7 @@ import type { ServerConfig, WorkspaceInfo } from "./types.js";
 import { ensureWorkspaceFiles } from "./workspace-init.js";
 
 async function withWorkspace(fn: (root: string) => Promise<void>) {
-  const root = await mkdtemp(join(tmpdir(), "openwork-reload-watcher-"));
+  const root = await mkdtemp(join(tmpdir(), "sofia-reload-watcher-"));
   try {
     await fn(root);
   } finally {
@@ -63,8 +63,10 @@ describe("reload watcher fingerprints", () => {
   test("does not emit when a watched file is rewritten with identical content", async () => {
     await withWorkspace(async (root) => {
       const { config, workspace } = buildConfig(root);
-      const configPath = join(root, "opencode.jsonc");
-      const content = '{ "plugin": ["demo"] }\n';
+      const skillDir = join(root, ".sofia", "skills", "demo");
+      const configPath = join(skillDir, "SKILL.md");
+      const content = "---\nname: demo\ndescription: Demo\n---\nbody\n";
+      await mkdir(skillDir, { recursive: true });
       await writeFile(configPath, content, "utf8");
 
       const events = new ReloadEventStore();
@@ -81,21 +83,22 @@ describe("reload watcher fingerprints", () => {
     });
   });
 
-  test("emits when project config content changes while running", async () => {
+  test("emits when a workspace skill changes while running", async () => {
     await withWorkspace(async (root) => {
       const { config, workspace } = buildConfig(root);
-      const configPath = join(root, "opencode.jsonc");
-      await writeFile(configPath, '{ "plugin": ["demo"] }\n', "utf8");
+      const skillDir = join(root, ".sofia", "skills", "demo");
+      await mkdir(skillDir, { recursive: true });
+      await writeFile(join(skillDir, "SKILL.md"), "---\nname: demo\n---\nbody\n", "utf8");
 
       const events = new ReloadEventStore();
       const watcher = startReloadWatchers({ config, reloadEvents: events, debounceMs: 30 });
       try {
         await watcher.refreshWorkspace(workspace.id);
-        await writeFile(configPath, '{ "plugin": ["changed"] }\n', "utf8");
+        await sleep(300);
+        await writeFile(join(skillDir, "SKILL.md"), "---\nname: demo\n---\nchanged\n", "utf8");
 
         const event = await waitForEvent(events, workspace.id);
-        expect(event?.reason).toBe("config");
-        expect(event?.trigger?.name).toBe("opencode.jsonc");
+        expect(event?.reason).toBe("skills");
       } finally {
         watcher.close();
       }
@@ -121,21 +124,23 @@ describe("reload watcher fingerprints", () => {
     });
   });
 
-  test("watches hidden project opencode config files", async () => {
+  test("watches workspace command files", async () => {
     await withWorkspace(async (root) => {
       const { config, workspace } = buildConfig(root);
-      await mkdir(join(root, ".opencode"), { recursive: true });
+      const commandsDir = join(root, ".sofia", "commands");
+      await mkdir(commandsDir, { recursive: true });
 
       const events = new ReloadEventStore();
       const watcher = startReloadWatchers({ config, reloadEvents: events, debounceMs: 30 });
       try {
         await watcher.refreshWorkspace(workspace.id);
+        await sleep(300);
         await sleep(75);
-        await writeFile(join(root, ".opencode", "opencode.jsonc"), '{ "mcp": {} }\n', "utf8");
+        await sleep(75);
+        await writeFile(join(commandsDir, "demo.md"), "---\nname: demo\n---\nbody\n", "utf8");
 
         const event = await waitForEvent(events, workspace.id);
-        expect(event?.reason).toBe("config");
-        expect(event?.trigger?.name).toBe("opencode.jsonc");
+        expect(event?.reason).toBe("commands");
       } finally {
         watcher.close();
       }

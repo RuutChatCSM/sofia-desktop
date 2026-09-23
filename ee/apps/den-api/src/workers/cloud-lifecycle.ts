@@ -1,5 +1,5 @@
-import { and, asc, eq, inArray, isNull, lt, notExists, or } from "@openwork-ee/den-db/drizzle"
-import { AutomationRunTable, AutomationTable, MemberTable, WorkerTable, WorkerTokenTable } from "@openwork-ee/den-db/schema"
+import { and, asc, eq, inArray, isNull, lt, notExists, or } from "@sofia-ee/den-db/drizzle"
+import { AutomationRunTable, AutomationTable, MemberTable, WorkerTable, WorkerTokenTable } from "@sofia-ee/den-db/schema"
 import { db } from "../db.js"
 import { env } from "../env.js"
 import { materializeCloudWorkerProviders } from "../llm/cloud-provider-materialization.js"

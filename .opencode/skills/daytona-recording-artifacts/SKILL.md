@@ -6,7 +6,7 @@ description: screenshots, recording, presentation artifacts, validate visually. 
 # Daytona Recording Artifacts
 
 Use this skill to collect supplementary presentation artifacts for a Daytona UI
-journey. Pass/fail evidence comes from an `@openwork/testkit` spec and its
+journey. Pass/fail evidence comes from an `@sofia/testkit` spec and its
 ambient test evidence; use `daytona-flow-validator` and `run-tests` before declaring a
 verdict. Custom screenshots or recordings never replace the test run.
 
@@ -24,7 +24,7 @@ frame cannot capture. When video is used, embed it inside the frame-by-frame
 HTML page alongside the static frames.
 
 First run the relevant `evals/specs/**/*.test.ts` through `run-tests`. The spec
-imports `test` from `@openwork/testkit`; screenshots and validation claims are
+imports `test` from `@sofia/testkit`; screenshots and validation claims are
 recorded ambiently in its test evidence. Use `publish-evidence` for that existing test run,
 then create the custom index here only if useful.
 
@@ -103,7 +103,7 @@ though CDP is driving the browser or Electron window.
 The reusable Daytona volume is:
 
 ```text
-openwork-eval-artifacts:/daytona-artifacts
+sofia-eval-artifacts:/daytona-artifacts
 ```
 
 The helper serves it on port `8090` when `--artifacts-volume` or

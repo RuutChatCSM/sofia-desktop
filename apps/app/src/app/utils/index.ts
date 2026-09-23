@@ -34,7 +34,7 @@ export function modelEquals(a: ModelRef, b: ModelRef) {
  * Used when the backend doesn't return a provider name.
  */
 export const FRIENDLY_PROVIDER_LABELS: Record<string, string> = {
-  opencode: "OpenCode",
+  opencode: "Sofia",
   openai: "OpenAI",
   anthropic: "Anthropic",
   google: "Google",
@@ -192,9 +192,9 @@ export function isMacPlatform() {
   return /mac/i.test(platform) || /macintosh|mac os x/i.test(ua);
 }
 
-const STARTUP_PREF_KEY = "openwork.startupPref";
-const LEGACY_PREF_KEY = "openwork.modePref";
-const LEGACY_PREF_KEY_ALT = "openwork_mode_pref";
+const STARTUP_PREF_KEY = "sofia.startupPref";
+const LEGACY_PREF_KEY = "sofia.modePref";
+const LEGACY_PREF_KEY_ALT = "sofia_mode_pref";
 
 export function readStartupPreference(): "local" | "server" | null {
   if (typeof window === "undefined") return null;
@@ -377,7 +377,7 @@ export function addOpencodeCacheHint(message: string) {
   ];
 
   if (cacheSignals.some((signal) => lower.includes(signal)) && lower.includes("enoent")) {
-    return `${message}\n\nOpenCode cache looks corrupted. Use Repair cache in Settings to rebuild it.`;
+    return `${message}\n\nSofia cache looks corrupted. Use Repair cache in Settings to rebuild it.`;
   }
 
   return message;
@@ -457,7 +457,7 @@ export function getWorkspaceTaskLoadErrorDisplay(workspace: WorkspaceInfo, error
   const normalized = raw.toLowerCase();
   const hasDockerHint = SANDBOX_DOCKER_OFFLINE_HINTS.some((hint) => normalized.includes(hint));
   const hasNetworkHint = SANDBOX_NETWORK_HINTS.some((hint) => normalized.includes(hint));
-  const host = `${workspace.baseUrl ?? ""} ${workspace.openworkHostUrl ?? ""}`.toLowerCase();
+  const host = `${workspace.baseUrl ?? ""} ${workspace.sofiaHostUrl ?? ""}`.toLowerCase();
   const localHost = host.includes("localhost") || host.includes("127.0.0.1");
 
   if (!hasDockerHint && !(localHost && hasNetworkHint)) {
@@ -981,8 +981,8 @@ const ARTIFACT_OUTPUT_SKIP_TOOLS = new Set(["webfetch"]);
 
 // Patterns that indicate a path is a truncated system/absolute path rather than a workspace-relative path
 const TRUNCATED_SYSTEM_PATH_PATTERNS = [
-  /com\.[^/]+\.(openwork|opencode)/i, // macOS app bundle identifiers
-  /\.openwork\.dev\//i, // Sofia App dev paths
+  /com\.[^/]+\.(sofia|opencode)/i, // macOS app bundle identifiers
+  /\.sofia\.dev\//i, // Sofia App dev paths
   /Application Support\//i, // macOS Application Support
   /AppData[/\\]/i, // Windows AppData
   /\.local\/share\//i, // Linux XDG data

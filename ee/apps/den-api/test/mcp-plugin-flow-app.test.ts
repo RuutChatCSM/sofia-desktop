@@ -120,7 +120,7 @@ test("attaches the same-server launch to successful sharing results only", () =>
     recipient: { kind: "org_wide", id: null, role: "viewer" },
   })
   expect(success._meta).toEqual({
-    "openwork/mcpApp": {
+    "sofia/mcpApp": {
       toolName: PLUGIN_FLOW_TOOL_NAME,
       resourceUri: PLUGIN_FLOW_APP_RESOURCE_URI,
       arguments: { mode: "plugin_access_granted" },

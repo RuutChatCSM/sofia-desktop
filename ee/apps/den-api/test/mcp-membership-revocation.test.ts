@@ -1,11 +1,11 @@
 import { afterAll, beforeAll, expect, mock, test } from "bun:test"
-import { createDenTypeId } from "@openwork-ee/utils/typeid"
+import { createDenTypeId } from "@sofia-ee/utils/typeid"
 import { Hono } from "hono"
 import type { MiddlewareHandler } from "hono"
 import type { McpAuthResourceContext } from "../src/mcp/auth.js"
 
 function seedRequiredEnv() {
-  process.env.DATABASE_URL = process.env.DATABASE_URL ?? "mysql://root:password@127.0.0.1:3306/openwork_test"
+  process.env.DATABASE_URL = process.env.DATABASE_URL ?? "mysql://root:password@127.0.0.1:3306/sofia_test"
   process.env.DEN_DB_ENCRYPTION_KEY = process.env.DEN_DB_ENCRYPTION_KEY ?? "x".repeat(32)
   process.env.BETTER_AUTH_SECRET = process.env.BETTER_AUTH_SECRET ?? "y".repeat(32)
   process.env.BETTER_AUTH_URL = process.env.BETTER_AUTH_URL ?? "http://127.0.0.1:8790"
@@ -52,19 +52,19 @@ beforeAll(async () => {
       handler: () => Promise.resolve(new Response(JSON.stringify({ keys: [] }), { status: 200 })),
     },
     DEN_MCP_OPAQUE_ACCESS_TOKEN_PREFIX: "ow_mcp_at_",
-    DEN_MCP_FIRST_PARTY_CLIENT_ID: "openwork-desktop",
+    DEN_MCP_FIRST_PARTY_CLIENT_ID: "sofia-desktop",
     DEN_MCP_FIRST_PARTY_RESOURCES: [
       "http://127.0.0.1:8790/mcp",
       "http://127.0.0.1:8790/mcp/agent",
       "http://127.0.0.1:8790/mcp/admin",
     ],
-    DEN_MCP_GRANT_ID_CLAIM: "https://openworklabs.com/grant_id",
-    DEN_MCP_ORG_ID_CLAIM: "https://openworklabs.com/org_id",
+    DEN_MCP_GRANT_ID_CLAIM: "https://sofia.ruut.chat/grant_id",
+    DEN_MCP_ORG_ID_CLAIM: "https://sofia.ruut.chat/org_id",
     DEN_MCP_OAUTH_RESOURCE: "http://127.0.0.1:8790/mcp/agent",
     DEN_MCP_RESOURCE: "http://127.0.0.1:8790/mcp",
-    DEN_MCP_RESOURCE_CLAIM: "https://openworklabs.com/resource",
+    DEN_MCP_RESOURCE_CLAIM: "https://sofia.ruut.chat/resource",
     DEN_MCP_RESOURCES: ["http://127.0.0.1:8790/mcp"],
-    DEN_MCP_TOKEN_USE_CLAIM: "https://openworklabs.com/token_use",
+    DEN_MCP_TOKEN_USE_CLAIM: "https://sofia.ruut.chat/token_use",
   }))
 
   mock.module("../src/db.js", () => ({
@@ -185,9 +185,9 @@ function validMcpJwtPayload(input: { resource: string; clientId?: string }) {
     azp: input.clientId ?? "client_mcp_test",
     scope: "mcp:read mcp:write",
     client_id: input.clientId,
-    "https://openworklabs.com/token_use": "mcp",
-    "https://openworklabs.com/resource": input.resource,
-    "https://openworklabs.com/org_id": createDenTypeId("organization"),
+    "https://sofia.ruut.chat/token_use": "mcp",
+    "https://sofia.ruut.chat/resource": input.resource,
+    "https://sofia.ruut.chat/org_id": createDenTypeId("organization"),
     sid: createDenTypeId("session"),
   }
 }
@@ -200,7 +200,7 @@ function selectActiveSessionAndMembership() {
 function validFirstPartyOpaqueTokenRow() {
   return {
     token: mcpAuth.hashOpaqueMcpSecret(OPAQUE_SECRET),
-    clientId: "openwork-desktop",
+    clientId: "sofia-desktop",
     userId: createDenTypeId("user"),
     sessionId: createDenTypeId("session"),
     referenceId: createDenTypeId("organization"),
@@ -262,9 +262,9 @@ test("MCP JWTs without required scopes return insufficient_scope", async () => {
     aud: "http://127.0.0.1:8790/mcp/agent",
     azp: "client_mcp_test",
     scope: "profile",
-    "https://openworklabs.com/token_use": "mcp",
-    "https://openworklabs.com/resource": "http://127.0.0.1:8790/mcp/agent",
-    "https://openworklabs.com/org_id": createDenTypeId("organization"),
+    "https://sofia.ruut.chat/token_use": "mcp",
+    "https://sofia.ruut.chat/resource": "http://127.0.0.1:8790/mcp/agent",
+    "https://sofia.ruut.chat/org_id": createDenTypeId("organization"),
     sid: createDenTypeId("session"),
   }
 
@@ -288,9 +288,9 @@ test("MCP JWTs with the wrong token use are rejected as invalid_token", async ()
     aud: "http://127.0.0.1:8790/mcp/agent",
     azp: "client_mcp_test",
     scope: "mcp:read",
-    "https://openworklabs.com/token_use": "session",
-    "https://openworklabs.com/resource": "http://127.0.0.1:8790/mcp/agent",
-    "https://openworklabs.com/org_id": createDenTypeId("organization"),
+    "https://sofia.ruut.chat/token_use": "session",
+    "https://sofia.ruut.chat/resource": "http://127.0.0.1:8790/mcp/agent",
+    "https://sofia.ruut.chat/org_id": createDenTypeId("organization"),
     sid: createDenTypeId("session"),
   }
 
@@ -311,9 +311,9 @@ test("MCP JWTs for the wrong resource are rejected as invalid_token", async () =
     aud: "http://127.0.0.1:8790/mcp/agent",
     azp: "client_mcp_test",
     scope: "mcp:read",
-    "https://openworklabs.com/token_use": "mcp",
-    "https://openworklabs.com/resource": "http://127.0.0.1:8790/mcp",
-    "https://openworklabs.com/org_id": createDenTypeId("organization"),
+    "https://sofia.ruut.chat/token_use": "mcp",
+    "https://sofia.ruut.chat/resource": "http://127.0.0.1:8790/mcp",
+    "https://sofia.ruut.chat/org_id": createDenTypeId("organization"),
     sid: createDenTypeId("session"),
   }
 
@@ -334,9 +334,9 @@ test("MCP JWTs without session claims are rejected", async () => {
     aud: "http://127.0.0.1:8790/mcp/agent",
     azp: "client_mcp_test",
     scope: "mcp:read mcp:write",
-    "https://openworklabs.com/token_use": "mcp",
-    "https://openworklabs.com/resource": "http://127.0.0.1:8790/mcp/agent",
-    "https://openworklabs.com/org_id": createDenTypeId("organization"),
+    "https://sofia.ruut.chat/token_use": "mcp",
+    "https://sofia.ruut.chat/resource": "http://127.0.0.1:8790/mcp/agent",
+    "https://sofia.ruut.chat/org_id": createDenTypeId("organization"),
   }
 
   const response = await mcpAuth.verifyMcpRequest(new Headers({
@@ -401,7 +401,7 @@ test("first-party opaque desktop tokens remain accepted on parent and admin MCP 
 test("JWT client_id cannot make external tokens use first-party resource aliases", async () => {
   jwtPayload = validMcpJwtPayload({
     resource: "http://127.0.0.1:8790/mcp",
-    clientId: "openwork-desktop",
+    clientId: "sofia-desktop",
   })
   selectActiveSessionAndMembership()
 
@@ -532,9 +532,9 @@ test("MCP JWTs tied to revoked memberships stay forbidden", async () => {
     aud: "http://127.0.0.1:8790/mcp/agent",
     azp: "client_mcp_test",
     scope: "mcp:read mcp:write",
-    "https://openworklabs.com/token_use": "mcp",
-    "https://openworklabs.com/resource": "http://127.0.0.1:8790/mcp/agent",
-    "https://openworklabs.com/org_id": createDenTypeId("organization"),
+    "https://sofia.ruut.chat/token_use": "mcp",
+    "https://sofia.ruut.chat/resource": "http://127.0.0.1:8790/mcp/agent",
+    "https://sofia.ruut.chat/org_id": createDenTypeId("organization"),
     sid: createDenTypeId("session"),
   }
   selectedRows = []

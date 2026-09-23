@@ -2,18 +2,18 @@ import { createServer } from "node:net";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { expect } from "vitest";
-import { screenshot, validate } from "@openwork/test-evidence";
-import { expectVisualEvidence } from "@openwork/test-evidence/vitest";
-import { app, localMysqlIsRunning, needs, server, test } from "@openwork/testkit";
+import { screenshot, validate } from "@sofia/test-evidence";
+import { expectVisualEvidence } from "@sofia/test-evidence/vitest";
+import { app, localMysqlIsRunning, needs, server, test } from "@sofia/testkit";
 
-const expectation = "The OpenWork workspace shell is visible and ready for a task";
-const e2eTestsEnabled = process.env.OPENWORK_EVAL_E2E_TESTS === "1";
-const localPlacement = process.env.OPENWORK_EVAL_DAYTONA !== "1" && !process.env.OPENWORK_EVAL_DEN_API_URL?.trim();
+const expectation = "The Sofia App workspace shell is visible and ready for a task";
+const e2eTestsEnabled = process.env.SOFIA_EVAL_E2E_TESTS === "1";
+const localPlacement = process.env.SOFIA_EVAL_DAYTONA !== "1" && !process.env.SOFIA_EVAL_DEN_API_URL?.trim();
 const mysqlOpen = await localMysqlIsRunning();
 const title = !e2eTestsEnabled
-  ? "testkit app boot skipped — needs: set OPENWORK_EVAL_E2E_TESTS=1"
+  ? "testkit app boot skipped — needs: set SOFIA_EVAL_E2E_TESTS=1"
   : !localPlacement
-    ? "testkit app boot skipped — needs local placement without OPENWORK_EVAL_DEN_API_URL"
+    ? "testkit app boot skipped — needs local placement without SOFIA_EVAL_DEN_API_URL"
     : !mysqlOpen
       ? "testkit app boot skipped — needs MySQL on 127.0.0.1:3306"
       : "testkit boots a local Den and signed-in app with ambient evidence";
@@ -27,7 +27,7 @@ async function portCanBind(port: number): Promise<boolean> {
 }
 
 test.skipIf(!e2eTestsEnabled || !localPlacement || !mysqlOpen)(title, async ({ evidence, place }) => {
-  needs({ optIn: ["OPENWORK_EVAL_E2E_TESTS"] });
+  needs({ optIn: ["SOFIA_EVAL_E2E_TESTS"] });
   let apiPort = 0;
   let webPort = 0;
   {
@@ -41,7 +41,7 @@ test.skipIf(!e2eTestsEnabled || !localPlacement || !mysqlOpen)(title, async ({ e
     const shot = await screenshot(desktopApp);
     const seen = await validate(shot, [expectation], {
       ask: async (request) => request.prompt.startsWith("Objectively describe")
-        ? JSON.stringify({ description: "An OpenWork workspace shell with navigation and a task composer." })
+        ? JSON.stringify({ description: "An Sofia App workspace shell with navigation and a task composer." })
         : JSON.stringify({
           results: [{
             expectation,

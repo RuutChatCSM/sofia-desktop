@@ -13,7 +13,7 @@ async function writeSkill(dir: string, name: string) {
 }
 
 beforeEach(async () => {
-  workspace = await mkdtemp(join(tmpdir(), "openwork-skills-"));
+  workspace = await mkdtemp(join(tmpdir(), "sofia-skills-"));
   await mkdir(join(workspace, ".git"), { recursive: true });
 });
 
@@ -23,7 +23,7 @@ afterEach(async () => {
 
 describe("deleteSkill", () => {
   test("deletes a flat skill", async () => {
-    const dir = join(workspace, ".opencode", "skills", "flat-skill");
+    const dir = join(workspace, ".sofia", "skills", "flat-skill");
     await writeSkill(dir, "flat-skill");
     await deleteSkill(workspace, "flat-skill");
     expect(await exists(dir)).toBe(false);
@@ -31,7 +31,7 @@ describe("deleteSkill", () => {
 
   test("deletes a plugin-namespaced (nested) skill", async () => {
     // Marketplace plugin bundles install skills under skills/<plugin>/<name>/
-    const dir = join(workspace, ".opencode", "skills", "bio-research-plugin", "instrument-data-to-allotrope");
+    const dir = join(workspace, ".sofia", "skills", "bio-research-plugin", "instrument-data-to-allotrope");
     await writeSkill(dir, "instrument-data-to-allotrope");
 
     const listed = await listSkills(workspace, false);
@@ -48,10 +48,10 @@ describe("deleteSkill", () => {
 
 describe("listSkills", () => {
   test("returns skills with malformed YAML frontmatter as visible errors", async () => {
-    const validDir = join(workspace, ".opencode", "skills", "valid-skill");
+    const validDir = join(workspace, ".sofia", "skills", "valid-skill");
     await writeSkill(validDir, "valid-skill");
 
-    const invalidDir = join(workspace, ".opencode", "skills", "invalid-skill");
+    const invalidDir = join(workspace, ".sofia", "skills", "invalid-skill");
     await mkdir(invalidDir, { recursive: true });
     const invalidContent = `---\nname: invalid-skill\ndescription: Use when searching the web, looking up facts, researching technology: trends\n---\n\nBody\n`;
     await writeFile(
@@ -77,7 +77,7 @@ describe("listSkills", () => {
       expect(invalid ? renderSkillContentForResponse(invalid, invalidContent) : "").toContain("ERROR: This skill has invalid YAML frontmatter");
       expect(invalid ? renderSkillContentForResponse(invalid, invalidContent) : "").toContain(invalidContent);
       expect(warnings).toHaveLength(1);
-      expect(warnings[0]?.[0]).toBe("[openwork:skills] Found invalid skill frontmatter");
+      expect(warnings[0]?.[0]).toBe("[sofia:skills] Found invalid skill frontmatter");
     } finally {
       console.warn = originalWarn;
     }

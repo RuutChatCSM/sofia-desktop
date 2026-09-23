@@ -1,4 +1,4 @@
-import type { DesktopPolicyKey } from "@openwork/types/den/desktop-policies";
+import type { DesktopPolicyKey } from "@sofia/types/den/desktop-policies";
 import type { DenDesktopConfig } from "../lib/den";
 import type { ModelRef } from "../types";
 

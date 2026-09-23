@@ -1,10 +1,10 @@
 "use client";
 
-import { detectPlatform, type DetectedPlatform } from "@openwork/ui/react";
+import { detectPlatform, type DetectedPlatform } from "@sofia/ui/react";
 import { useEffect, useState } from "react";
 import {
   getDesktopHandoffGrant,
-  getDesktopHandoffOpenworkUrl,
+  getDesktopHandoffSofiaUrl,
   rememberDesktopHandoffGrant,
 } from "../_lib/desktop-handoff";
 import { getErrorMessage, requestJson } from "../_lib/den-flow";
@@ -23,22 +23,22 @@ import { OnboardingCard } from "./onboarding-card";
 import { OnboardingShell } from "./onboarding-shell";
 import { OrganizationBrandIdentity, type OrganizationBrand } from "./organization-brand-identity";
 
-const OPENWORK_DOWNLOAD_URL = "https://openworklabs.com/download";
+const SOFIA_DOWNLOAD_URL = "https://sofia.ruut.chat/download";
 
-function ReturnToOpenWorkStatus({
-  openworkUrl,
+function ReturnToSofiaStatus({
+  sofiaUrl,
   grant,
   organizationName,
 }: {
-  openworkUrl: string;
+  sofiaUrl: string;
   grant: string | null;
   organizationName: string;
 }) {
   const { status, timedOut } = useDesktopHandoffStatus(grant);
   const [copied, setCopied] = useState(false);
 
-  async function copyOpenworkUrl() {
-    await navigator.clipboard.writeText(openworkUrl);
+  async function copySofiaUrl() {
+    await navigator.clipboard.writeText(sofiaUrl);
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1800);
   }
@@ -46,7 +46,7 @@ function ReturnToOpenWorkStatus({
   if (status === "consumed") {
     return (
       <div className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700" data-testid="desktop-connected" aria-live="polite">
-        Connected — {organizationName} is ready in OpenWork.
+        Connected — {organizationName} is ready in Sofia.
       </div>
     );
   }
@@ -56,15 +56,15 @@ function ReturnToOpenWorkStatus({
       <div className="grid gap-3 rounded-2xl bg-slate-50 p-4 text-sm text-slate-600" data-testid="desktop-handoff-troubleshoot" aria-live="polite">
         <p className="m-0">
           Nothing opened?{" "}
-          <button type="button" className="font-medium text-slate-950 underline-offset-4 hover:underline" onClick={() => window.location.assign(openworkUrl)}>
-            Return to OpenWork again
+          <button type="button" className="font-medium text-slate-950 underline-offset-4 hover:underline" onClick={() => window.location.assign(sofiaUrl)}>
+            Return to Sofia again
           </button>
         </p>
         <div className="grid gap-2">
-          <p className="m-0">Still stuck? Copy this sign-in link into OpenWork:</p>
+          <p className="m-0">Still stuck? Copy this sign-in link into Sofia:</p>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <input className="den-input min-w-0 flex-1 text-xs" value={openworkUrl} readOnly onFocus={(event) => event.currentTarget.select()} />
-            <button type="button" className="den-button-secondary sm:w-auto" onClick={() => void copyOpenworkUrl()}>
+            <input className="den-input min-w-0 flex-1 text-xs" value={sofiaUrl} readOnly onFocus={(event) => event.currentTarget.select()} />
+            <button type="button" className="den-button-secondary sm:w-auto" onClick={() => void copySofiaUrl()}>
               {copied ? "Copied" : "Copy link"}
             </button>
           </div>
@@ -75,7 +75,7 @@ function ReturnToOpenWorkStatus({
 
   return (
     <p className="m-0 text-sm text-slate-500" aria-live="polite">
-      Returning to OpenWork…
+      Returning to Sofia…
     </p>
   );
 }
@@ -105,7 +105,7 @@ export function JoinOrgSuccess({
   const [emailSent, setEmailSent] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [handoffBusy, setHandoffBusy] = useState(false);
-  const [desktopOpenworkUrl, setDesktopOpenworkUrl] = useState<string | null>(null);
+  const [desktopSofiaUrl, setDesktopSofiaUrl] = useState<string | null>(null);
   const [desktopGrant, setDesktopGrant] = useState<string | null>(null);
   const [downloadHref, setDownloadHref] = useState<string | null>(null);
 
@@ -179,7 +179,7 @@ export function JoinOrgSuccess({
     }
   }
 
-  async function handleReturnToOpenWork() {
+  async function handleReturnToSofia() {
     setHandoffBusy(true);
     setActionError(null);
 
@@ -190,23 +190,23 @@ export function JoinOrgSuccess({
         12000,
       );
       if (!response.ok) {
-        setActionError(getErrorMessage(payload, `Could not return to OpenWork (${response.status}).`));
+        setActionError(getErrorMessage(payload, `Could not return to Sofia (${response.status}).`));
         return;
       }
 
-      const openworkUrl = getDesktopHandoffOpenworkUrl(payload);
-      if (!openworkUrl) {
-        setActionError("OpenWork sign-in was prepared, but no app link was returned.");
+      const sofiaUrl = getDesktopHandoffSofiaUrl(payload);
+      if (!sofiaUrl) {
+        setActionError("Sofia sign-in was prepared, but no app link was returned.");
         return;
       }
 
-      const grant = getDesktopHandoffGrant(payload, openworkUrl);
+      const grant = getDesktopHandoffGrant(payload, sofiaUrl);
       rememberDesktopHandoffGrant(grant);
-      setDesktopOpenworkUrl(openworkUrl);
+      setDesktopSofiaUrl(sofiaUrl);
       setDesktopGrant(grant);
-      window.location.assign(openworkUrl);
+      window.location.assign(sofiaUrl);
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : "Could not return to OpenWork.");
+      setActionError(error instanceof Error ? error.message : "Could not return to Sofia.");
     } finally {
       setHandoffBusy(false);
     }
@@ -238,7 +238,7 @@ export function JoinOrgSuccess({
             <h1 className="m-0 grid max-w-full gap-1 text-[30px] font-semibold leading-[38px] tracking-[-0.03em] text-slate-950 sm:text-[38px] sm:leading-[46px]">
               <span>You&apos;re in, welcome to</span>
               {/* No horizontal gap: the possessive must hug the org identity
-                  ("Acme Robotics's OpenWork", not "Acme Robotics 's"). */}
+                  ("Acme Robotics's Sofia", not "Acme Robotics 's"). */}
               <span className="flex min-w-0 flex-wrap items-center gap-y-1">
                 <OrganizationBrandIdentity organizationName={organizationName} brand={brand} />
                 <span className="whitespace-nowrap">&apos;s {brand.appName}</span>
@@ -246,8 +246,8 @@ export function JoinOrgSuccess({
             </h1>
             <p className="m-0 max-w-2xl text-[15px] leading-[23px] text-slate-600">
               {desktopAuthRequested
-                ? "Your team setup is ready. Return to OpenWork to continue where you left off."
-                : "The desktop app is where OpenWork runs on your computer and puts your team's setup to work."}
+                ? "Your team setup is ready. Return to Sofia to continue where you left off."
+                : "The desktop app is where Sofia runs on your computer and puts your team's setup to work."}
             </p>
           </div>
 
@@ -256,7 +256,7 @@ export function JoinOrgSuccess({
           ) : isMobile ? (
             <div className="grid gap-3">
               <div className="grid gap-2 rounded-2xl bg-slate-50 p-4" data-testid="join-org-mobile-note">
-                <p className="m-0 text-sm font-medium text-slate-950">OpenWork runs on your computer.</p>
+                <p className="m-0 text-sm font-medium text-slate-950">Sofia runs on your computer.</p>
                 <p className="m-0 text-sm leading-6 text-slate-600">
                   Email the install link to yourself and continue when you&apos;re back at your desk.
                 </p>
@@ -273,17 +273,17 @@ export function JoinOrgSuccess({
               {emailSent ? <div className="den-notice is-info">Sent — check your inbox when you&apos;re back at your desk.</div> : null}
             </div>
           ) : desktopAuthRequested ? (
-            desktopOpenworkUrl ? (
-              <ReturnToOpenWorkStatus openworkUrl={desktopOpenworkUrl} grant={desktopGrant} organizationName={organizationName} />
+            desktopSofiaUrl ? (
+              <ReturnToSofiaStatus sofiaUrl={desktopSofiaUrl} grant={desktopGrant} organizationName={organizationName} />
             ) : (
               <button
                 type="button"
                 className="den-button-primary min-h-12 w-full"
-                onClick={() => void handleReturnToOpenWork()}
+                onClick={() => void handleReturnToSofia()}
                 disabled={handoffBusy}
-                data-testid="join-org-return-openwork"
+                data-testid="join-org-return-sofia"
               >
-                {handoffBusy ? "Returning to OpenWork..." : "Return to OpenWork"}
+                {handoffBusy ? "Returning to Sofia..." : "Return to Sofia"}
               </button>
             )
           ) : !platformReady ? (
@@ -303,18 +303,18 @@ export function JoinOrgSuccess({
               <button
                 type="button"
                 className="min-h-12 w-full rounded-full px-3 text-sm font-medium text-slate-500 underline-offset-4 hover:text-slate-950 hover:underline"
-                onClick={() => void handleReturnToOpenWork()}
+                onClick={() => void handleReturnToSofia()}
                 disabled={handoffBusy}
                 data-testid="join-org-open-app"
               >
-                {handoffBusy ? "Opening OpenWork..." : "Already have OpenWork? Open it."}
+                {handoffBusy ? "Opening Sofia..." : "Already have Sofia? Open it."}
               </button>
             </div>
           )}
 
-          {desktopAuthRequested && desktopOpenworkUrl ? null : (
+          {desktopAuthRequested && desktopSofiaUrl ? null : (
             <div className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700" data-testid="join-org-connected">
-              Connected — OpenWork is set up for {organizationName}
+              Connected — Sofia is set up for {organizationName}
             </div>
           )}
 
@@ -331,7 +331,7 @@ export function JoinOrgSuccess({
             <div className="grid gap-3">
               <div className="den-notice is-error">{actionError}</div>
               {desktopAuthRequested ? null : (
-                <a href={OPENWORK_DOWNLOAD_URL} className="den-button-secondary min-h-12 w-full">
+                <a href={SOFIA_DOWNLOAD_URL} className="den-button-secondary min-h-12 w-full">
                   Open the public download page
                 </a>
               )}

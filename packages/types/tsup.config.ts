@@ -4,9 +4,9 @@ export default defineConfig({
   entry: {
     index: "src/index.ts",
     "agent-context-diagnostics": "src/agent-context-diagnostics.ts",
-    "openwork-affordance": "src/openwork-affordance.ts",
-    "openwork-context": "src/openwork-context.ts",
-    "openwork-provider": "src/openwork-provider.ts",
+    "sofia-affordance": "src/sofia-affordance.ts",
+    "sofia-context": "src/sofia-context.ts",
+    "sofia-provider": "src/sofia-provider.ts",
     "automations": "src/automations.ts",
     workflows: "src/workflows.ts",
     "skill-created-app": "src/skill-created-app.ts",

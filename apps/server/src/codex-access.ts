@@ -10,7 +10,7 @@ export type CodexAccessMode = "ask" | "approve" | "full";
 export const CODEX_ACCESS_MODES: CodexAccessMode[] = ["ask", "approve", "full"];
 
 function accessFile(codexHome?: string): string {
-  return join(codexHome || process.env.OPENWORK_CODEX_HOME?.trim() || process.env.CODEX_HOME?.trim() || join(homedir(), ".sofia"), ".access-mode");
+  return join(codexHome || process.env.SOFIA_CODEX_HOME?.trim() || process.env.CODEX_HOME?.trim() || join(homedir(), ".sofia"), ".access-mode");
 }
 
 /** Read the persisted access mode. Defaults to "ask" (safe). */

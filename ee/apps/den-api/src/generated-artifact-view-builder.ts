@@ -6,7 +6,7 @@ import React from "react"
 import type {
   GeneratedArtifactViewBuildDiagnostic,
   GeneratedArtifactViewCsp,
-} from "@openwork/types/workflows"
+} from "@sofia/types/workflows"
 
 const MAX_SOURCE_BYTES = 200_000
 const MAX_CSS_BYTES = 100_000
@@ -20,7 +20,7 @@ const extAppsEntry = require.resolve("@modelcontextprotocol/ext-apps/app-with-de
 const reactPackageRoot = require.resolve("react/package.json").replace(/\/package\.json$/u, "")
 const reactDomPackageRoot = require.resolve("react-dom/package.json").replace(/\/package\.json$/u, "")
 
-export const GENERATED_ARTIFACT_VIEW_COMPILER = "openwork-react-view"
+export const GENERATED_ARTIFACT_VIEW_COMPILER = "sofia-react-view"
 export const GENERATED_ARTIFACT_VIEW_COMPILER_VERSION = "3"
 export const GENERATED_ARTIFACT_VIEW_CSP: GeneratedArtifactViewCsp = {
   connectDomains: [],
@@ -80,7 +80,7 @@ const HOST_GLOBAL_NAMES = [
 
 const HOST_GLOBAL_DEFINES = Object.fromEntries(HOST_GLOBAL_NAMES.map((name, index) => [
   name,
-  `__openwork_forbidden_host_global_${index}__`,
+  `__sofia_forbidden_host_global_${index}__`,
 ]))
 
 async function sourcePolicyDiagnostic(reactSource: string, cssSource: string): Promise<GeneratedArtifactViewBuildDiagnostic | null> {
@@ -118,7 +118,7 @@ async function sourcePolicyDiagnostic(reactSource: string, cssSource: string): P
     return diagnosticsFrom(error)[0] ?? diagnostic("React view build failed.")
   }
   const hostGlobal = HOST_GLOBAL_NAMES.find((_, index) =>
-    scopeAnalyzedSource.includes(`__openwork_forbidden_host_global_${index}__`))
+    scopeAnalyzedSource.includes(`__sofia_forbidden_host_global_${index}__`))
   if (hostGlobal) {
     return diagnostic(`Generated Artifact views cannot use the browser host global "${hostGlobal}". Use component props and React rendering only.`)
   }
@@ -189,7 +189,7 @@ const GENERATED_ARTIFACT_RUNTIME_REPORTER = `
       },
     }, "*");
   };
-  window.__openworkReportArtifactRuntimeError = report;
+  window.__sofiaReportArtifactRuntimeError = report;
   window.addEventListener("error", (event) => report("document-error", event.error || event.message));
   window.addEventListener("unhandledrejection", (event) => report("unhandled-rejection", event.reason));
 })();
@@ -201,9 +201,9 @@ async function buildClientBundle(reactSource: string): Promise<string> {
     import { createRoot } from "react-dom/client";
     import { App, PostMessageTransport } from "@modelcontextprotocol/ext-apps";
     const ArtifactView = React.lazy(() => import("artifact:view"));
-    const mount = document.getElementById("openwork-artifact-view-root");
+    const mount = document.getElementById("sofia-artifact-view-root");
     const reportRuntimeError = (stage, error) => {
-      const report = window.__openworkReportArtifactRuntimeError;
+      const report = window.__sofiaReportArtifactRuntimeError;
       if (typeof report === "function") report(stage, error);
     };
     const renderFailure = () => React.createElement("p", { role: "alert", style: { margin: "16px", fontFamily: "system-ui, sans-serif" } }, "This Artifact view could not render. The normal tool result is still available.");
@@ -227,7 +227,7 @@ async function buildClientBundle(reactSource: string): Promise<string> {
       }
     };
     const app = new App(
-      { name: "OpenWork Generated Artifact", version: "1.0.0" },
+      { name: "Sofia Generated Artifact", version: "1.0.0" },
       {},
       { autoResize: true, strict: true },
     );
@@ -290,14 +290,14 @@ export async function buildGeneratedArtifactViewInWorker(input: GeneratedArtifac
   if (policyFailure) return { ok: false, ...shared, diagnostics: [policyFailure] }
 
   try {
-    // esbuild parses and bundles generated source, but OpenWork never executes
+    // esbuild parses and bundles generated source, but Sofia never executes
     // it in the Den process. The authored React runs only after the immutable
     // resource completes MCP Apps initialization and receives render-time
     // structuredContent inside the host's sandboxed iframe.
     const javascript = await buildClientBundle(reactSource)
     const runtimeReporterDigest = createHash("sha256").update(GENERATED_ARTIFACT_RUNTIME_REPORTER).digest("base64")
     const scriptDigest = createHash("sha256").update(javascript).digest("base64")
-    const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-${runtimeReporterDigest}' 'sha256-${scriptDigest}'; script-src-attr 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; worker-src 'none'"><title>${input.title.replace(/[<&>]/gu, "")}</title><style>${cssSource}</style></head><body><div id="openwork-artifact-view-root"></div><script>${GENERATED_ARTIFACT_RUNTIME_REPORTER}</script><script>${javascript}</script></body></html>`
+    const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-${runtimeReporterDigest}' 'sha256-${scriptDigest}'; script-src-attr 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; worker-src 'none'"><title>${input.title.replace(/[<&>]/gu, "")}</title><style>${cssSource}</style></head><body><div id="sofia-artifact-view-root"></div><script>${GENERATED_ARTIFACT_RUNTIME_REPORTER}</script><script>${javascript}</script></body></html>`
     const htmlBytes = Buffer.byteLength(html)
     if (htmlBytes > MAX_HTML_BYTES) throw new Error(`Compiled MCP App exceeds ${MAX_HTML_BYTES} bytes.`)
     return {

@@ -1,3 +1,4 @@
+import { resolveSofiaEngine } from "./sofia-engine.mjs";
 import { randomUUID, X509Certificate } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
@@ -11,10 +12,10 @@ import { pathToFileURL } from "node:url";
 import {
   desktopBootstrapPath,
   normalizeWorkspaceRootPath,
-  openworkEnvStorePath,
-  openworkServerConfigPath,
+  sofiaEnvStorePath,
+  sofiaServerConfigPath,
   resolveWorkspaceOpencodeConfigPath,
-} from "@openwork/paths";
+} from "@sofia/paths";
 import {
   dedupeCertificates,
   resolveSystemCaBundle,
@@ -25,8 +26,8 @@ import {
 const __runtimeDir = path.dirname(fileURLToPath(import.meta.url));
 
 const DIRECT_RUNTIME = "direct";
-const OPENWORK_SERVER_PORT_RANGE_START = 48_000;
-const OPENWORK_SERVER_PORT_RANGE_END = 51_000;
+const SOFIA_SERVER_PORT_RANGE_START = 48_000;
+const SOFIA_SERVER_PORT_RANGE_END = 51_000;
 const MAX_BOOTSTRAP_BYTES = 256 * 1024;
 const MAX_CHAIN_REPAIR_BODY_BYTES = 64 * 1024;
 const MAX_CHAIN_REPAIR_ORIGINS = 3;
@@ -182,7 +183,7 @@ function normalizeServerCredentials(value) {
   };
 }
 
-export function migrateOpenworkServerTokenStore(value) {
+export function migrateSofiaServerTokenStore(value) {
   const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
   const sourceWorkspaces = source.workspaces && typeof source.workspaces === "object" && !Array.isArray(source.workspaces)
     ? source.workspaces
@@ -255,15 +256,15 @@ export async function prepareRuntimeWorkspaceRoot(projectDir, options = {}) {
   }
 }
 
-export function resolveOpenworkServerConfigPath(env = process.env) {
-  return openworkServerConfigPath({ env });
+export function resolveSofiaServerConfigPath(env = process.env) {
+  return sofiaServerConfigPath({ env });
 }
 
 export function seedWorkspacePathsForEmbeddedServer(workspacePaths, serverConfigExists) {
   return serverConfigExists ? [] : workspacePaths;
 }
 
-export function selectStickyOpenworkPortWorkspace(requestedWorkspacePaths = [], serverWorkspacePaths = []) {
+export function selectStickySofiaPortWorkspace(requestedWorkspacePaths = [], serverWorkspacePaths = []) {
   for (const value of [...requestedWorkspacePaths, ...serverWorkspacePaths]) {
     const workspacePath = String(value ?? "").trim();
     if (workspacePath) return workspacePath;
@@ -272,7 +273,7 @@ export function selectStickyOpenworkPortWorkspace(requestedWorkspacePaths = [], 
 }
 
 export function resolveEvalLocalServerDelayMs(env = process.env) {
-  const delayMs = Number(env.OPENWORK_EVAL_LOCAL_SERVER_DELAY_MS);
+  const delayMs = Number(env.SOFIA_EVAL_LOCAL_SERVER_DELAY_MS);
   return Number.isFinite(delayMs) && delayMs > 0 ? delayMs : 0;
 }
 
@@ -379,7 +380,7 @@ export function snapshotEngineState(state) {
   };
 }
 
-function createOpenworkServerState() {
+function createSofiaServerState() {
   return {
     child: null,
     childExited: true,
@@ -403,7 +404,7 @@ function createOpenworkServerState() {
   };
 }
 
-export function snapshotOpenworkServerState(state) {
+export function snapshotSofiaServerState(state) {
   const child = state.childExited ? null : state.child;
   const running = state.inProcess || Boolean(child && child.exitCode === null && !child.killed);
   return {
@@ -434,19 +435,19 @@ export function resolveEngineRolloverPreference(optionValue, persistedValue) {
 
 /**
  * A failed server start must not leave the state objects describing the
- * runtime it already stopped: snapshotOpenworkServerState would report
- * running:true with a dead baseUrl and assertOpenworkServerReady would pass
+ * runtime it already stopped: snapshotSofiaServerState would report
+ * running:true with a dead baseUrl and assertSofiaServerReady would pass
  * against it. Keeps accumulated output for diagnostics and the project dir so
  * a retry via engineRestart still knows its workspace. The engine state only
  * resets when this start owned the engine (manageOpencode) — an external
  * engine keeps running regardless of the server's fate.
  */
-export function resetRuntimeStatesAfterFailedServerStart(openworkServerStateRef, engineStateRef, options = {}) {
-  const serverStdout = openworkServerStateRef.lastStdout;
-  const serverStderr = openworkServerStateRef.lastStderr;
-  Object.assign(openworkServerStateRef, createOpenworkServerState());
-  openworkServerStateRef.lastStdout = serverStdout;
-  openworkServerStateRef.lastStderr = serverStderr;
+export function resetRuntimeStatesAfterFailedServerStart(sofiaServerStateRef, engineStateRef, options = {}) {
+  const serverStdout = sofiaServerStateRef.lastStdout;
+  const serverStderr = sofiaServerStateRef.lastStderr;
+  Object.assign(sofiaServerStateRef, createSofiaServerState());
+  sofiaServerStateRef.lastStdout = serverStdout;
+  sofiaServerStateRef.lastStderr = serverStderr;
   if (options.manageOpencode === true) {
     const engineStdout = engineStateRef.lastStdout;
     const engineStderr = engineStateRef.lastStderr;
@@ -458,15 +459,15 @@ export function resetRuntimeStatesAfterFailedServerStart(openworkServerStateRef,
   }
 }
 
-function assertOpenworkServerReady(snapshot) {
+function assertSofiaServerReady(snapshot) {
   if (!snapshot?.running) {
-    throw new Error("OpenWork server did not stay running after startup.");
+    throw new Error("Sofia App server did not stay running after startup.");
   }
   if (!snapshot.baseUrl) {
-    throw new Error("OpenWork server did not report a base URL after startup.");
+    throw new Error("Sofia App server did not report a base URL after startup.");
   }
   if (!snapshot.ownerToken && !snapshot.clientToken) {
-    throw new Error("OpenWork server did not report an access token after startup.");
+    throw new Error("Sofia App server did not report an access token after startup.");
   }
   return snapshot;
 }
@@ -682,14 +683,14 @@ async function fetchJson(url, options = {}, timeoutMs = 3000) {
 }
 
 export function resolveUserEnvFilePath(env = process.env) {
-  return openworkEnvStorePath({ env });
+  return sofiaEnvStorePath({ env });
 }
 
 const USER_ENV_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
-const USER_ENV_RESERVED_PREFIXES = ["OPENWORK_", "OPENCODE_"];
+const USER_ENV_RESERVED_PREFIXES = ["SOFIA_", "OPENCODE_"];
 
 // Synchronous, best-effort; absent or malformed returns {}. Reserved prefixes
-// are stripped so a tampered file can never shadow OPENWORK_* / OPENCODE_*.
+// are stripped so a tampered file can never shadow SOFIA_* / OPENCODE_*.
 function loadUserEnvFile(env = process.env) {
   try {
     const raw = readFileSync(resolveUserEnvFilePath(env), "utf8");
@@ -1109,7 +1110,7 @@ async function resolveChainRepairOrigins(options) {
   const env = options.parentEnv ?? {};
   const chainRepair = options.chainRepair ?? {};
   if (chainRepair.origins) return normalizeRepairOrigins(chainRepair.origins);
-  const envOrigins = typeof env.OPENWORK_CHAIN_REPAIR_ORIGINS === "string" ? env.OPENWORK_CHAIN_REPAIR_ORIGINS : "";
+  const envOrigins = typeof env.SOFIA_CHAIN_REPAIR_ORIGINS === "string" ? env.SOFIA_CHAIN_REPAIR_ORIGINS : "";
   if (envOrigins.trim()) return normalizeRepairOrigins(envOrigins.split(","));
   const bootstrapPath = chainRepair.bootstrapPath ?? desktopBootstrapPath({ env });
   const origin = await readActivatedEnterpriseOrigin(bootstrapPath);
@@ -1124,15 +1125,15 @@ async function repairIncompleteChains(options) {
   const env = options.parentEnv ?? {};
   const chainRepair = options.chainRepair ?? {};
   const logInfo = options.logInfo;
-  if (chainRepair.disabled === true || String(env.OPENWORK_DISABLE_CHAIN_REPAIR ?? "").trim() === "1") {
-    if (typeof logInfo === "function") logInfo("OpenWork runtime: chain repair disabled by OPENWORK_DISABLE_CHAIN_REPAIR.");
+  if (chainRepair.disabled === true || String(env.SOFIA_DISABLE_CHAIN_REPAIR ?? "").trim() === "1") {
+    if (typeof logInfo === "function") logInfo("Sofia App runtime: chain repair disabled by SOFIA_DISABLE_CHAIN_REPAIR.");
     return { pems: [], timedOut: false };
   }
 
   const origins = await resolveChainRepairOrigins(options);
   if (origins.length === 0) {
-    if (!chainRepair.origins && !String(env.OPENWORK_CHAIN_REPAIR_ORIGINS ?? "").trim() && typeof logInfo === "function") {
-      logInfo("OpenWork runtime: chain repair skipped: no activation record.");
+    if (!chainRepair.origins && !String(env.SOFIA_CHAIN_REPAIR_ORIGINS ?? "").trim() && typeof logInfo === "function") {
+      logInfo("Sofia App runtime: chain repair skipped: no activation record.");
     }
     return { pems: [], timedOut: false };
   }
@@ -1140,7 +1141,7 @@ async function repairIncompleteChains(options) {
   const fetchImpl = chainRepair.fetchImpl ?? globalThis.fetch;
   const tlsModule = options.tlsModule ?? tls;
   const tlsConnectImpl = chainRepair.tlsConnectImpl ?? tls.connect;
-  const totalTimeoutValue = Number(env.OPENWORK_CHAIN_REPAIR_TIMEOUT_MS);
+  const totalTimeoutValue = Number(env.SOFIA_CHAIN_REPAIR_TIMEOUT_MS);
   const totalTimeoutMs =
     Number.isFinite(totalTimeoutValue) && totalTimeoutValue >= 1000 && totalTimeoutValue <= 120000
       ? totalTimeoutValue
@@ -1153,7 +1154,7 @@ async function repairIncompleteChains(options) {
 
   if (typeof fetchImpl !== "function") {
     if (typeof logInfo === "function") {
-      for (const origin of origins) logInfo(`OpenWork runtime: chain repair skipped for ${origin}: fetch unavailable`);
+      for (const origin of origins) logInfo(`Sofia App runtime: chain repair skipped for ${origin}: fetch unavailable`);
     }
     return { pems: [], timedOut: false };
   }
@@ -1163,27 +1164,27 @@ async function repairIncompleteChains(options) {
     for (const origin of origins) {
       const strictError = await strictProbeChainRepair(origin, tlsConnectImpl);
       if (strictError === null) {
-        if (typeof logInfo === "function") logInfo(`OpenWork runtime: chain ok for ${origin}`);
+        if (typeof logInfo === "function") logInfo(`Sofia App runtime: chain ok for ${origin}`);
         continue;
       }
       if (strictError !== "UNABLE_TO_VERIFY_LEAF_SIGNATURE") {
-        if (typeof logInfo === "function") logInfo(`OpenWork runtime: chain repair skipped for ${origin}: ${strictError}`);
+        if (typeof logInfo === "function") logInfo(`Sofia App runtime: chain repair skipped for ${origin}: ${strictError}`);
         continue;
       }
 
       const leafState = await introspectLeafCertificate(origin, tlsConnectImpl);
       if (!leafState) {
-        if (typeof logInfo === "function") logInfo(`OpenWork runtime: chain repair skipped for ${origin}: certificate introspection failed`);
+        if (typeof logInfo === "function") logInfo(`Sofia App runtime: chain repair skipped for ${origin}: certificate introspection failed`);
         continue;
       }
       if (!leafState.leafOnly) {
-        if (typeof logInfo === "function") logInfo(`OpenWork runtime: chain repair skipped for ${origin}: served chain includes an intermediate`);
+        if (typeof logInfo === "function") logInfo(`Sofia App runtime: chain repair skipped for ${origin}: served chain includes an intermediate`);
         continue;
       }
 
       const issuerUrls = caIssuerUrls(leafState.leaf);
       if (issuerUrls.length === 0) {
-        if (typeof logInfo === "function") logInfo(`OpenWork runtime: chain repair skipped for ${origin}: no CA Issuers AIA URL`);
+        if (typeof logInfo === "function") logInfo(`Sofia App runtime: chain repair skipped for ${origin}: no CA Issuers AIA URL`);
         continue;
       }
 
@@ -1198,18 +1199,18 @@ async function repairIncompleteChains(options) {
         if (!intermediate) continue;
         const reason = refusalReason(leafState.leaf, intermediate, rootsProvider);
         if (reason) {
-          if (typeof logInfo === "function") logInfo(`OpenWork runtime: chain repair refused for ${origin}: ${reason}`);
+          if (typeof logInfo === "function") logInfo(`Sofia App runtime: chain repair refused for ${origin}: ${reason}`);
           continue;
         }
         pems.push(intermediate.toString());
         repaired = true;
         if (typeof logInfo === "function") {
-          logInfo(`OpenWork runtime: chain repaired for ${origin}: added "${certificateCommonName(intermediate)}"`);
+          logInfo(`Sofia App runtime: chain repaired for ${origin}: added "${certificateCommonName(intermediate)}"`);
         }
         break;
       }
       if (!repaired && typeof logInfo === "function") {
-        logInfo(`OpenWork runtime: chain repair skipped for ${origin}: no usable AIA issuer certificate`);
+        logInfo(`Sofia App runtime: chain repair skipped for ${origin}: no usable AIA issuer certificate`);
       }
     }
     return { pems, timedOut: false };
@@ -1244,7 +1245,7 @@ async function resolveSystemCa({
   const env = parentEnv ?? {};
   if (Object.prototype.hasOwnProperty.call(env, "NODE_EXTRA_CA_CERTS")) {
     if (typeof logInfo === "function") {
-      logInfo("OpenWork runtime: NODE_EXTRA_CA_CERTS is already set; skipping system CA bundle export.");
+      logInfo("Sofia App runtime: NODE_EXTRA_CA_CERTS is already set; skipping system CA bundle export.");
     }
     try {
       const configuredPem = await readFile(String(env.NODE_EXTRA_CA_CERTS), "utf8");
@@ -1267,7 +1268,7 @@ async function resolveSystemCa({
       platform: platformLoader,
     });
     if (typeof logInfo === "function") {
-      logInfo(`OpenWork runtime: system CA bundle sources ${summarizeSystemCaSources(bundle.sources)}`);
+      logInfo(`Sofia App runtime: system CA bundle sources ${summarizeSystemCaSources(bundle.sources)}`);
     }
     let repairedPems = [];
     try {
@@ -1283,7 +1284,7 @@ async function resolveSystemCa({
       });
       repairedPems = repaired.pems;
       if (repaired.timedOut && typeof logInfo === "function") {
-        logInfo("OpenWork runtime: chain repair skipped: timed out");
+        logInfo("Sofia App runtime: chain repair skipped: timed out");
       }
     } catch {
       repairedPems = [];
@@ -1342,7 +1343,7 @@ export function createRuntimeManager({
   const inheritedProcessEnv = { ...process.env };
   let injectedUserEnvKeys = new Set();
   const engineState = createEngineState();
-  const openworkServerState = createOpenworkServerState();
+  const sofiaServerState = createSofiaServerState();
 
   // Serialize engine lifecycle operations. Without this, concurrent renderer
   // invocations of engineStart/engineStop/engineRestart race: each call's
@@ -1382,12 +1383,12 @@ export function createRuntimeManager({
     return systemCaPromise;
   }
 
-  function openworkServerTokenStorePath() {
-    return path.join(userDataDir, "openwork-server-tokens.json");
+  function sofiaServerTokenStorePath() {
+    return path.join(userDataDir, "sofia-server-tokens.json");
   }
 
-  function openworkServerStatePath() {
-    return path.join(userDataDir, "openwork-server-state.json");
+  function sofiaServerStatePath() {
+    return path.join(userDataDir, "sofia-server-state.json");
   }
 
   function managedOpencodeWorkdir() {
@@ -1395,8 +1396,8 @@ export function createRuntimeManager({
   }
 
   async function loadTokenStore() {
-    const stored = await readJsonFile(openworkServerTokenStorePath(), { version: 1, workspaces: {} });
-    const migrated = migrateOpenworkServerTokenStore(stored);
+    const stored = await readJsonFile(sofiaServerTokenStorePath(), { version: 1, workspaces: {} });
+    const migrated = migrateSofiaServerTokenStore(stored);
     if (JSON.stringify(stored) !== JSON.stringify(migrated)) {
       await saveTokenStore(migrated);
     }
@@ -1404,13 +1405,13 @@ export function createRuntimeManager({
   }
 
   async function saveTokenStore(store) {
-    const filePath = openworkServerTokenStorePath();
+    const filePath = sofiaServerTokenStorePath();
     await mkdir(path.dirname(filePath), { recursive: true });
     await writeFile(filePath, `${JSON.stringify(store, null, 2)}\n`, "utf8");
   }
 
   async function loadPortState() {
-    return readJsonFile(openworkServerStatePath(), {
+    return readJsonFile(sofiaServerStatePath(), {
       version: 4,
       workspacePorts: {},
       preferredPort: null,
@@ -1419,7 +1420,7 @@ export function createRuntimeManager({
   }
 
   async function savePortState(state) {
-    const filePath = openworkServerStatePath();
+    const filePath = sofiaServerStatePath();
     await mkdir(path.dirname(filePath), { recursive: true });
     await writeFile(filePath, `${JSON.stringify(state, null, 2)}\n`, "utf8");
   }
@@ -1436,7 +1437,7 @@ export function createRuntimeManager({
     await saveTokenStore(store);
   }
 
-  async function readPreferredOpenworkPort(workspaceKey) {
+  async function readPreferredSofiaPort(workspaceKey) {
     const state = await loadPortState();
     const normalized = normalizeWorkspaceKey(workspaceKey, workspacePlatform);
     if (normalized && state.workspacePorts?.[normalized]) {
@@ -1445,7 +1446,7 @@ export function createRuntimeManager({
     return state.preferredPort ?? null;
   }
 
-  async function persistPreferredOpenworkPort(workspaceKey, port) {
+  async function persistPreferredSofiaPort(workspaceKey, port) {
     const state = await loadPortState();
     const normalized = normalizeWorkspaceKey(workspaceKey, workspacePlatform);
     state.version = 4;
@@ -1480,8 +1481,8 @@ export function createRuntimeManager({
     return portAvailable(host, port);
   }
 
-  async function resolveOpenworkPort(host, workspaceKey, currentPort = null) {
-    const preferredPort = await readPreferredOpenworkPort(workspaceKey);
+  async function resolveSofiaPort(host, workspaceKey, currentPort = null) {
+    const preferredPort = await readPreferredSofiaPort(workspaceKey);
     if (currentPort && (await waitForPortAvailable(host, currentPort))) {
       return { port: currentPort, preferredPort };
     }
@@ -1492,7 +1493,7 @@ export function createRuntimeManager({
   }
 
   async function ensureDevModePaths() {
-    const root = path.join(userDataDir, "openwork-dev-data");
+    const root = path.join(userDataDir, "sofia-dev-data");
     const paths = {
       homeDir: path.join(root, "home"),
       xdgConfigHome: path.join(root, "xdg", "config"),
@@ -1514,7 +1515,7 @@ export function createRuntimeManager({
     // User env is layered first so process.env + any caller overrides always
     // win. See apps/server/src/env-file.ts — all loaders must agree on path +
     // reserved-keys policy.
-    const devPaths = process.env.OPENWORK_DEV_MODE === "1"
+    const devPaths = process.env.SOFIA_DEV_MODE === "1"
       ? await ensureDevModePaths()
       : null;
     const userEnvPathEnv = devPaths
@@ -1551,7 +1552,7 @@ export function createRuntimeManager({
       env[pathKey] = pathEnv;
     }
     if (devPaths) {
-      env.OPENWORK_DEV_MODE = "1";
+      env.SOFIA_DEV_MODE = "1";
       env.HOME = devPaths.homeDir;
       env.USERPROFILE = devPaths.homeDir;
       env.XDG_CONFIG_HOME = devPaths.xdgConfigHome;
@@ -1611,21 +1612,8 @@ export function createRuntimeManager({
     return explicitPath ? { path: explicitPath, source: "custom" } : resolveBinaryInfo("opencode");
   }
 
-  function resolveCodexBinary(codexBinPath) {
-    const explicitPath = typeof codexBinPath === "string" ? codexBinPath.trim() : "";
-    if (explicitPath) return { path: explicitPath, source: "custom" };
-    // Bundled-only: the codex engine must always come from our own sidecar
-    // (built from the mona-chen/codex source checkout). Never fall back to a
-    // system-installed codex.
-    for (const directory of sidecarDirs) {
-      for (const fileName of binaryFileNames("codex")) {
-        const candidate = path.join(directory, fileName);
-        if (existsSync(candidate)) {
-          return { path: candidate, source: "bundled" };
-        }
-      }
-    }
-    return null;
+  function resolveSofiaBinary() {
+    return resolveSofiaEngine({ home: app.getPath("home"), sidecarDirs });
   }
 
   function resolveCodexPinnedVersion() {
@@ -1644,7 +1632,7 @@ export function createRuntimeManager({
     const candidates = [];
     const seen = new Set();
 
-    for (const key of ["OPENWORK_DOCKER_BIN", "OPENWRK_DOCKER_BIN", "DOCKER_BIN"]) {
+    for (const key of ["SOFIA_DOCKER_BIN", "OPENWRK_DOCKER_BIN", "DOCKER_BIN"]) {
       const value = process.env[key]?.trim();
       if (value && !seen.has(value)) {
         seen.add(value);
@@ -1697,13 +1685,13 @@ export function createRuntimeManager({
     }
 
     throw new Error(
-      `Failed to run docker: ${errors.join("; ")} (Set OPENWORK_DOCKER_BIN to your docker binary if needed)`,
+      `Failed to run docker: ${errors.join("; ")} (Set SOFIA_DOCKER_BIN to your docker binary if needed)`,
     );
   }
 
-  const legacyOpenworkContainerPrefix = `${["openwork", "orchestrator"].join("-")}-`;
+  const legacySofiaContainerPrefix = `${["sofia", "orchestrator"].join("-")}-`;
 
-  async function listOpenworkManagedContainers() {
+  async function listSofiaManagedContainers() {
     const result = runDockerCommandDetailed(["ps", "-a", "--format", "{{.Names}}"], 8000);
     if (result.status !== 0) {
       const combined = `${result.stdout.trim()}\n${result.stderr.trim()}`.trim();
@@ -1712,7 +1700,7 @@ export function createRuntimeManager({
     return result.stdout
       .split(/\r?\n/)
       .map((line) => line.trim())
-      .filter((name) => name && (name.startsWith(legacyOpenworkContainerPrefix) || name.startsWith("openwork-dev-") || name.startsWith("openwrk-")))
+      .filter((name) => name && (name.startsWith(legacySofiaContainerPrefix) || name.startsWith("sofia-dev-") || name.startsWith("openwrk-")))
       .sort();
   }
 
@@ -1742,7 +1730,7 @@ export function createRuntimeManager({
         resolvedSource: null,
         version: null,
         supportsServe: false,
-        notes: ["OpenCode binary not found in bundled sidecars or PATH."],
+        notes: ["Sofia engine binary not found in bundled sidecars or PATH."],
         serveHelpStatus: null,
         serveHelpStdout: null,
         serveHelpStderr: null,
@@ -1753,10 +1741,10 @@ export function createRuntimeManager({
     const helpResult = spawnSync(resolved.path, ["serve", "--help"], { encoding: "utf8" });
     const notes = [`Using ${resolved.source}: ${resolved.path}`];
     if (versionResult.status !== 0) {
-      notes.push("OpenCode version probe failed.");
+      notes.push("Sofia engine version probe failed.");
     }
     if (helpResult.status !== 0) {
-      notes.push("OpenCode serve --help probe failed.");
+      notes.push("Sofia engine serve --help probe failed.");
     }
 
     return {
@@ -1786,11 +1774,12 @@ export function createRuntimeManager({
   async function pinnedCodexInstallCommand() {
     const constantsPath = path.resolve(desktopRoot, "../../constants.json");
     const payload = JSON.parse(await readFile(constantsPath, "utf8"));
-    const version = String(payload?.codexVersion ?? "").trim().replace(/^v/, "");
+    const version = String(payload?.codexVersion ?? "").trim().replace(/^v/, "").replace(/^rust-v/, "");
     if (!version) {
       throw new Error("constants.json is missing codexVersion");
     }
-    return `curl -fsSL https://codex.cli.sh/install | bash -s -- --version ${version} --no-modify-path`;
+    // Install our own Sofia engine release, not OpenAI's codex installer.
+    return `curl -fsSL https://release.ruut.chat/sofia/install.sh | sh -s -- --release ${version}`;
   }
 
   function processMatchesSidecar(command) {
@@ -1875,7 +1864,7 @@ export function createRuntimeManager({
           "Content-Type": "application/json",
           "X-Sofia-Host-Token": hostToken,
         },
-        body: JSON.stringify({ scope: "owner", label: "OpenWork desktop owner token" }),
+        body: JSON.stringify({ scope: "owner", label: "Sofia App desktop owner token" }),
       },
       5000,
     );
@@ -1886,7 +1875,7 @@ export function createRuntimeManager({
   // In-process server handle. Kept alive across restarts so we can stop it.
   let inProcessServer = null;
 
-  async function startOpenworkServer(options) {
+  async function startSofiaServer(options) {
     // The inner start stops any previous runtime before mutating state, so a
     // throw below always happens with nothing left running.
     try {
@@ -1897,7 +1886,7 @@ export function createRuntimeManager({
       if (typeof options.engineRollover === "boolean") {
         await persistEngineRolloverPreference(engineRollover);
       }
-      return await startOpenworkServerInner({
+      return await startSofiaServerInner({
         ...options,
         engineRollover,
         manageOpencode: options.manageOpencode === true,
@@ -1906,35 +1895,35 @@ export function createRuntimeManager({
         opencodePassword: options.opencodePassword,
       });
     } catch (error) {
-      resetRuntimeStatesAfterFailedServerStart(openworkServerState, engineState, options);
+      resetRuntimeStatesAfterFailedServerStart(sofiaServerState, engineState, options);
       throw error;
     }
   }
 
-  async function startOpenworkServerInner(options) {
+  async function startSofiaServerInner(options) {
     const evalDelayMs = resolveEvalLocalServerDelayMs();
     if (evalDelayMs > 0) {
       await new Promise((resolve) => setTimeout(resolve, evalDelayMs));
     }
-    const currentPort = openworkServerState.port;
+    const currentPort = sofiaServerState.port;
     // Stop any previously running in-process server
     if (inProcessServer) {
       try { await inProcessServer.stop(); } catch { /* ignore */ }
       inProcessServer = null;
     }
-    await stopChild(openworkServerState);
+    await stopChild(sofiaServerState);
 
     const host = options.remoteAccessEnabled ? "0.0.0.0" : "127.0.0.1";
 
     const managedOpencode = options.manageOpencode ? resolveOpencodeBinary(options.opencodeBinPath) : null;
-    openworkServerState.managedOpencodeBinPath = managedOpencode?.path ?? null;
-    openworkServerState.managedOpencodeBinSource = managedOpencode?.source ?? null;
+    sofiaServerState.managedOpencodeBinPath = managedOpencode?.path ?? null;
+    sofiaServerState.managedOpencodeBinSource = managedOpencode?.source ?? null;
     if (options.manageOpencode) {
       engineState.opencodeBinPath = managedOpencode?.path ?? null;
       engineState.opencodeBinSource = managedOpencode?.source ?? null;
     }
 
-    // Inject user env vars so the server and managed OpenCode inherit them.
+    // Inject user env vars so the server and managed Sofia engine inherit them.
     const serverEnv = await buildChildEnv({});
     Object.assign(process.env, serverEnv);
 
@@ -1942,7 +1931,7 @@ export function createRuntimeManager({
     // truth. Do not pass Electron's legacy workspace list as CLI workspaces or
     // the server config loader will ignore server.json and lose server-created
     // workspaces after restart.
-    const serverConfigPath = resolveOpenworkServerConfigPath(process.env);
+    const serverConfigPath = resolveSofiaServerConfigPath(process.env);
     const requestedWorkspacePaths = prioritizeWorkspacePaths("", options.workspacePaths, {
       platform: workspacePlatform,
     });
@@ -1950,11 +1939,11 @@ export function createRuntimeManager({
       requestedWorkspacePaths,
       existsSync(serverConfigPath),
     );
-    const activeWorkspace = selectStickyOpenworkPortWorkspace(requestedWorkspacePaths, workspacePaths);
-    const portSelection = await resolveOpenworkPort(host, activeWorkspace, currentPort);
+    const activeWorkspace = selectStickySofiaPortWorkspace(requestedWorkspacePaths, workspacePaths);
+    const portSelection = await resolveSofiaPort(host, activeWorkspace, currentPort);
     const tokens = await loadServerCredentials();
 
-    // One call: resolve config, spawn managed OpenCode, start HTTP server.
+    // One call: resolve config, spawn managed Sofia engine, start HTTP server.
     // Dev must prefer apps/server/dist; build output also stages a packaged
     // copy under apps/desktop/server for electron-builder.
     const devPath = path.resolve(__runtimeDir, "..", "..", "server", "dist", "embedded.js");
@@ -1962,12 +1951,12 @@ export function createRuntimeManager({
       path.resolve(__runtimeDir, "..", "server", "dist", "embedded.js"),
       ...(process.resourcesPath ? [path.resolve(process.resourcesPath, "server", "dist", "embedded.js")] : []),
     ];
-    const candidates = process.env.OPENWORK_DEV_MODE === "1"
+    const candidates = process.env.SOFIA_DEV_MODE === "1"
       ? [devPath, ...packagedPaths]
       : [...packagedPaths, devPath];
     const embeddedPath = candidates.find((candidate) => existsSync(candidate));
     if (!embeddedPath) {
-      throw new Error(`Cannot find OpenWork embedded server bundle. Checked: ${candidates.join(", ")}`);
+      throw new Error(`Cannot find Sofia App embedded server bundle. Checked: ${candidates.join(", ")}`);
     }
     const { startEmbeddedServer } = await import(embeddedServerImportUrl(embeddedPath));
     // startEmbeddedServer falls back to an OS-assigned port if `port` races
@@ -1975,6 +1964,7 @@ export function createRuntimeManager({
     // below is authoritative.
     const handle = await startEmbeddedServer({
       host,
+      sofiaBin: resolveSofiaBinary()?.path,
       port: portSelection.port,
       corsOrigins: ["*"],
       approvalMode: "auto",
@@ -1991,7 +1981,7 @@ export function createRuntimeManager({
       engineRollover: options.engineRollover === true,
     });
     inProcessServer = handle;
-    openworkServerState.managedOpencodeExecution = handle.managedOpencodeExecution ?? null;
+    sofiaServerState.managedOpencodeExecution = handle.managedOpencodeExecution ?? null;
     engineState.managedByServer = Boolean(handle.managedOpencode);
     engineState.managedPid = handle.managedOpencode?.pid ?? null;
     engineState.managedIsAlive = handle.managedOpencode?.isAlive ?? null;
@@ -1999,19 +1989,19 @@ export function createRuntimeManager({
     const boundPort = handle.port;
     const baseUrl = handle.url;
 
-    openworkServerState.inProcess = true;
-    openworkServerState.engineRollover = options.engineRollover === true;
-    openworkServerState.remoteAccessEnabled = options.remoteAccessEnabled;
-    openworkServerState.host = host;
-    openworkServerState.port = boundPort;
-    openworkServerState.baseUrl = baseUrl;
-    openworkServerState.clientToken = tokens.clientToken;
-    openworkServerState.hostToken = tokens.hostToken;
+    sofiaServerState.inProcess = true;
+    sofiaServerState.engineRollover = options.engineRollover === true;
+    sofiaServerState.remoteAccessEnabled = options.remoteAccessEnabled;
+    sofiaServerState.host = host;
+    sofiaServerState.port = boundPort;
+    sofiaServerState.baseUrl = baseUrl;
+    sofiaServerState.clientToken = tokens.clientToken;
+    sofiaServerState.hostToken = tokens.hostToken;
 
     const connectUrls = options.remoteAccessEnabled ? buildConnectUrls(boundPort) : { connectUrl: null, mdnsUrl: null, lanUrl: null };
-    openworkServerState.connectUrl = connectUrls.connectUrl;
-    openworkServerState.mdnsUrl = connectUrls.mdnsUrl;
-    openworkServerState.lanUrl = connectUrls.lanUrl;
+    sofiaServerState.connectUrl = connectUrls.connectUrl;
+    sofiaServerState.mdnsUrl = connectUrls.mdnsUrl;
+    sofiaServerState.lanUrl = connectUrls.lanUrl;
 
     // No health check needed -- startServer() resolves only after the listener is bound.
     let workspaceList = null;
@@ -2026,7 +2016,7 @@ export function createRuntimeManager({
       }
     }
     ownerToken ||= await issueOwnerToken(baseUrl, tokens.hostToken);
-    openworkServerState.ownerToken = ownerToken;
+    sofiaServerState.ownerToken = ownerToken;
     if (ownerToken) {
       await persistServerOwnerToken(ownerToken);
     }
@@ -2050,26 +2040,26 @@ export function createRuntimeManager({
           engineState.childExited = false;
         }
       } catch (error) {
-        appendOutput(openworkServerState, "lastStderr", `OpenWork server workspace probe: ${error instanceof Error ? error.message : String(error)}\n`);
+        appendOutput(sofiaServerState, "lastStderr", `Sofia App server workspace probe: ${error instanceof Error ? error.message : String(error)}\n`);
       }
     }
     if (!portSelection.preferredPort || boundPort === portSelection.preferredPort) {
-      await persistPreferredOpenworkPort(activeWorkspace, boundPort);
+      await persistPreferredSofiaPort(activeWorkspace, boundPort);
     }
-    return snapshotOpenworkServerState(openworkServerState);
+    return snapshotSofiaServerState(sofiaServerState);
   }
 
   async function stopAllRuntimeChildren() {
-    // Stop the in-process server (and its managed OpenCode child) if running.
+    // Stop the in-process server (and its managed Sofia engine child) if running.
     if (inProcessServer) {
       try { await inProcessServer.stop(); } catch { /* ignore */ }
       inProcessServer = null;
     }
-    await stopChild(openworkServerState);
+    await stopChild(sofiaServerState);
     await stopChild(engineState);
 
     Object.assign(engineState, createEngineState());
-    Object.assign(openworkServerState, createOpenworkServerState());
+    Object.assign(sofiaServerState, createSofiaServerState());
   }
 
   async function prepareFreshRuntime() {
@@ -2080,19 +2070,19 @@ export function createRuntimeManager({
   }
 
   function settleAfterWorkspacePreparationFailure() {
-    if (snapshotOpenworkServerState(openworkServerState).running) {
+    if (snapshotSofiaServerState(sofiaServerState).running) {
       lifecycleState = "healthy";
       return;
     }
     Object.assign(engineState, createEngineState());
-    Object.assign(openworkServerState, createOpenworkServerState());
+    Object.assign(sofiaServerState, createSofiaServerState());
     lifecycleState = "idle";
   }
 
-  async function ensureOpenwork(options) {
-    let openworkServer;
+  async function ensureSofia(options) {
+    let sofiaServer;
     try {
-      openworkServer = await startOpenworkServer({
+      sofiaServer = await startSofiaServer({
         workspacePaths: options.workspacePaths,
         opencodeBaseUrl: engineState.baseUrl,
         opencodeUsername: engineState.opencodeUsername,
@@ -2103,11 +2093,11 @@ export function createRuntimeManager({
         engineRollover: options.engineRollover,
       });
     } catch (error) {
-      appendOutput(engineState, "lastStderr", `OpenWork server: ${error instanceof Error ? error.message : String(error)}\n`);
+      appendOutput(engineState, "lastStderr", `Sofia App server: ${error instanceof Error ? error.message : String(error)}\n`);
       throw error;
     }
 
-    assertOpenworkServerReady(openworkServer);
+    assertSofiaServerReady(sofiaServer);
   }
 
   async function engineStart(projectDir, options = {}) {
@@ -2125,25 +2115,25 @@ export function createRuntimeManager({
 
     // Reuse a healthy server instead of tearing it down. During boot the
     // main process kicks off bootRuntimeForSelectedWorkspace while renderer
-    // routes independently call ensureDesktopLocalOpenworkConnection. Both go
+    // routes independently call ensureDesktopLocalSofiaConnection. Both go
     // through this serialized path; without this guard the second call runs
     // prepareFreshRuntime (killing the freshly bound server) and then rebinds
     // the sticky preferred port, racing the not-yet-released socket into
     // EADDRINUSE and leaving the runtime in error -> boot screen.
-    const requestedRemoteAccess = options.openworkRemoteAccess === true;
+    const requestedRemoteAccess = options.sofiaRemoteAccess === true;
     const requestedEngineRollover = resolveEngineRolloverPreference(
       options.engineRollover,
       await readEngineRolloverPreference(),
     );
     if (
       options.forceRestart !== true &&
-      openworkServerState.inProcess &&
+      sofiaServerState.inProcess &&
       lifecycleState === "healthy" &&
       normalizeWorkspaceKey(engineState.projectDir, workspacePlatform) === normalizeWorkspaceKey(safeProjectDir, workspacePlatform) &&
-      openworkServerState.remoteAccessEnabled === requestedRemoteAccess &&
-      openworkServerState.engineRollover === requestedEngineRollover
+      sofiaServerState.remoteAccessEnabled === requestedRemoteAccess &&
+      sofiaServerState.engineRollover === requestedEngineRollover
     ) {
-      const existing = snapshotOpenworkServerState(openworkServerState);
+      const existing = snapshotSofiaServerState(sofiaServerState);
       if (existing.running && existing.baseUrl && (existing.ownerToken || existing.clientToken)) {
         return snapshotEngineState(engineState);
       }
@@ -2174,10 +2164,10 @@ export function createRuntimeManager({
       engineState.child = null;
       engineState.childExited = true;
 
-      await ensureOpenwork({
+      await ensureSofia({
         projectDir: safeProjectDir,
         workspacePaths,
-        remoteAccessEnabled: options.openworkRemoteAccess === true,
+        remoteAccessEnabled: options.sofiaRemoteAccess === true,
         manageOpencode: true,
         opencodeBinPath: options.opencodeBinPath,
         engineRollover: requestedEngineRollover,
@@ -2201,16 +2191,16 @@ export function createRuntimeManager({
   async function engineRestart(options = {}) {
     const projectDir = engineState.projectDir;
     if (!projectDir) {
-      throw new Error("OpenCode is not configured for a local workspace");
+      throw new Error("Sofia engine is not configured for a local workspace");
     }
-    const openworkRemoteAccess = typeof options.openworkRemoteAccess === "boolean"
-      ? options.openworkRemoteAccess
-      : openworkServerState.remoteAccessEnabled;
+    const sofiaRemoteAccess = typeof options.sofiaRemoteAccess === "boolean"
+      ? options.sofiaRemoteAccess
+      : sofiaServerState.remoteAccessEnabled;
     return engineStart(projectDir, {
       runtime: engineState.runtime,
       workspacePaths: [projectDir],
       opencodeEnableExa: options.opencodeEnableExa,
-      openworkRemoteAccess,
+      sofiaRemoteAccess,
       ...(typeof options.engineRollover === "boolean"
         ? { engineRollover: options.engineRollover }
         : {}),
@@ -2230,29 +2220,29 @@ export function createRuntimeManager({
       lifecycleState,
       engine: await engineInfo(),
       enginePool: inProcessServer?.managedOpencodePool?.() ?? null,
-      openworkServer: snapshotOpenworkServerState(openworkServerState),
+      sofiaServer: snapshotSofiaServerState(sofiaServerState),
     };
   }
 
-  async function openworkServerInfo() {
-    return snapshotOpenworkServerState(openworkServerState);
+  async function sofiaServerInfo() {
+    return snapshotSofiaServerState(sofiaServerState);
   }
 
-  async function openworkServerRestart(options = {}) {
+  async function sofiaServerRestart(options = {}) {
     const workspacePaths = prioritizeWorkspacePaths(engineState.projectDir, await listLocalWorkspacePaths(), {
       platform: workspacePlatform,
     });
     const shouldManageOpencode = Boolean(
-      openworkServerState.managedOpencodeBinPath || engineState.opencodeBinPath || !engineState.baseUrl,
+      sofiaServerState.managedOpencodeBinPath || engineState.opencodeBinPath || !engineState.baseUrl,
     );
-    return startOpenworkServer({
+    return startSofiaServer({
       workspacePaths,
       opencodeBaseUrl: shouldManageOpencode ? null : engineState.baseUrl,
       opencodeUsername: shouldManageOpencode ? null : engineState.opencodeUsername,
       opencodePassword: shouldManageOpencode ? null : engineState.opencodePassword,
       remoteAccessEnabled: options.remoteAccessEnabled === true,
       manageOpencode: shouldManageOpencode,
-      opencodeBinPath: engineState.opencodeBinPath ?? openworkServerState.managedOpencodeBinPath,
+      opencodeBinPath: engineState.opencodeBinPath ?? sofiaServerState.managedOpencodeBinPath,
     });
   }
 
@@ -2263,7 +2253,7 @@ export function createRuntimeManager({
         status: -1,
         stdout: "",
         stderr:
-          "Guided install is not supported on Windows yet. Install the OpenWork-pinned OpenCode version manually, then restart OpenWork.",
+          "Guided install is not supported on Windows yet. Install the Sofia-pinned Sofia engine version manually, then restart Sofia App.",
       };
     }
 
@@ -2288,7 +2278,7 @@ export function createRuntimeManager({
         status: -1,
         stdout: "",
         stderr:
-          "Guided install is not supported on Windows yet. Install the OpenWork-pinned Codex version manually, then restart OpenWork.",
+          "Guided install is not supported on Windows yet. Install the Sofia-pinned Codex version manually, then restart Sofia App.",
       };
     }
 
@@ -2333,8 +2323,8 @@ export function createRuntimeManager({
     };
   }
 
-  async function sandboxCleanupOpenworkContainers() {
-    const candidates = await listOpenworkManagedContainers().catch((error) => {
+  async function sandboxCleanupSofiaContainers() {
+    const candidates = await listSofiaManagedContainers().catch((error) => {
       throw error;
     });
     const removed = [];
@@ -2369,7 +2359,7 @@ export function createRuntimeManager({
     engineInstall,
     codexEngineInstall,
     codexEngineStatus: () => {
-      const resolver = resolveCodexBinary();
+      const resolver = resolveSofiaBinary();
       return {
         available: Boolean(resolver),
         path: resolver?.path ?? null,
@@ -2377,9 +2367,9 @@ export function createRuntimeManager({
         pinnedVersion: resolveCodexPinnedVersion(),
       };
     },
-    openworkServerInfo,
-    openworkServerRestart: (options) => withRuntimeLifecycle(() => openworkServerRestart(options)),
+    sofiaServerInfo,
+    sofiaServerRestart: (options) => withRuntimeLifecycle(() => sofiaServerRestart(options)),
     opencodeMcpAuth,
-    sandboxCleanupOpenworkContainers,
+    sandboxCleanupSofiaContainers,
   };
 }

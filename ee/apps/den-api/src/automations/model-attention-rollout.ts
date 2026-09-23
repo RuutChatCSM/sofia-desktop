@@ -1,4 +1,4 @@
-import { AUTOMATION_FREE_MODEL } from "@openwork/types/automations"
+import { AUTOMATION_FREE_MODEL } from "@sofia/types/automations"
 
 type ModelSelection = { providerId: string; modelId: string }
 type ModelAccessFailure = {

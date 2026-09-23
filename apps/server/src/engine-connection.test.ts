@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { inheritWorkspaceEngineConnection, resolveWorkspaceEngineConnection } from "./engine-connection.js";
 
 describe("resolveWorkspaceEngineConnection", () => {
-  test("falls back to server-level OpenCode settings when a workspace entry is missing them", () => {
+  test("falls back to server-level Sofia engine settings when a workspace entry is missing them", () => {
     const connection = resolveWorkspaceEngineConnection(
       {
         opencodeBaseUrl: "http://127.0.0.1:54235",
@@ -48,7 +48,7 @@ describe("resolveWorkspaceEngineConnection", () => {
 });
 
 describe("inheritWorkspaceEngineConnection", () => {
-  test("copies server-level OpenCode connection into new local workspaces", () => {
+  test("copies server-level Sofia engine connection into new local workspaces", () => {
     expect(
       inheritWorkspaceEngineConnection({
         opencodeBaseUrl: "http://127.0.0.1:54235",

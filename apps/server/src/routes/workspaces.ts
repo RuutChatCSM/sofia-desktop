@@ -6,8 +6,8 @@ import { inheritWorkspaceEngineConnection, resolveWorkspaceEngineConnection } fr
 import { externalFetch } from "../server-fetch.js";
 import type { ServerConfig, WorkspaceInfo } from "../types.js";
 import { ensureDir, exists, shortId } from "../utils.js";
-import { defaultWorkspaceOpenworkConfig, ensureWorkspaceFiles } from "../workspace-init.js";
-import { seedOpenworkWorkspaceConfigIfEmpty } from "../openwork-workspace-config-store.js";
+import { defaultWorkspaceSofiaConfig, ensureWorkspaceFiles } from "../workspace-init.js";
+import { seedSofiaWorkspaceConfigIfEmpty } from "../sofia-workspace-config-store.js";
 import { workspaceIdForPath, workspaceIdForRemote } from "../workspaces.js";
 import { addRoute, type Route } from "./registry.js";
 
@@ -48,7 +48,7 @@ function normalizeRemoteDirectory(value: unknown): string {
   return value.trim().replace(/\\/g, "/").replace(/\/+$/, "");
 }
 
-function parseOpenworkWorkspaceIdFromUrl(input: string | null | undefined): string | null {
+function parseSofiaWorkspaceIdFromUrl(input: string | null | undefined): string | null {
   const raw = input?.trim() ?? "";
   if (!raw) return null;
   try {
@@ -71,7 +71,7 @@ function parseOpenworkWorkspaceIdFromUrl(input: string | null | undefined): stri
   }
 }
 
-function stripOpenworkWorkspaceMount(input: string | null | undefined): string | null {
+function stripSofiaWorkspaceMount(input: string | null | undefined): string | null {
   const raw = input?.trim() ?? "";
   if (!raw) return null;
   try {
@@ -90,8 +90,8 @@ function stripOpenworkWorkspaceMount(input: string | null | undefined): string |
   }
 }
 
-function openworkRemoteWorkspaceId(hostUrl: string, workspaceId: string | null | undefined): string {
-  const remoteWorkspaceId = workspaceId?.trim() || parseOpenworkWorkspaceIdFromUrl(hostUrl);
+function sofiaRemoteWorkspaceId(hostUrl: string, workspaceId: string | null | undefined): string {
+  const remoteWorkspaceId = workspaceId?.trim() || parseSofiaWorkspaceIdFromUrl(hostUrl);
   return remoteWorkspaceId ? `rem_${remoteWorkspaceId}` : workspaceIdForRemote(hostUrl, null);
 }
 
@@ -102,7 +102,7 @@ function workspaceDirectoryCandidates(workspace: Record<string, unknown>): strin
     .filter(Boolean);
 }
 
-function selectOpenworkWorkspaceForConnection(list: unknown, directory: string | null): Record<string, unknown> | null {
+function selectSofiaWorkspaceForConnection(list: unknown, directory: string | null): Record<string, unknown> | null {
   if (!isRecord(list)) return null;
   const rawItems = Array.isArray(list.items)
     ? list.items
@@ -121,15 +121,15 @@ function selectOpenworkWorkspaceForConnection(list: unknown, directory: string |
   return (activeId ? items.find((item) => readStringField(item, "id") === activeId) : null) ?? items[0] ?? null;
 }
 
-function openworkWorkspaceDisplayName(workspace: Record<string, unknown>): string | null {
+function sofiaWorkspaceDisplayName(workspace: Record<string, unknown>): string | null {
   return readStringField(workspace, "displayName")
-    || readStringField(workspace, "openworkWorkspaceName")
+    || readStringField(workspace, "sofiaWorkspaceName")
     || readStringField(workspace, "name")
     || readStringField(workspace, "id")
     || null;
 }
 
-async function fetchOpenworkWorkspaceList(hostUrl: string, token: string, hostToken: string): Promise<unknown> {
+async function fetchSofiaWorkspaceList(hostUrl: string, token: string, hostToken: string): Promise<unknown> {
   const url = `${hostUrl.replace(/\/+$/, "")}/workspaces`;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8_000);
@@ -142,14 +142,14 @@ async function fetchOpenworkWorkspaceList(hostUrl: string, token: string, hostTo
     if (!response.ok) {
       throw new ApiError(
         502,
-        "openwork_workspace_discovery_failed",
-        `OpenWork workspace discovery failed (${response.status} ${response.statusText || "HTTP error"})`,
+        "sofia_workspace_discovery_failed",
+        `Sofia App workspace discovery failed (${response.status} ${response.statusText || "HTTP error"})`,
       );
     }
     return await response.json();
   } catch (error) {
     if (error instanceof ApiError) throw error;
-    throw new ApiError(502, "openwork_workspace_discovery_failed", "OpenWork workspace discovery failed", {
+    throw new ApiError(502, "sofia_workspace_discovery_failed", "Sofia App workspace discovery failed", {
       error: String(error),
     });
   } finally {
@@ -157,14 +157,14 @@ async function fetchOpenworkWorkspaceList(hostUrl: string, token: string, hostTo
   }
 }
 
-async function discoverOpenworkWorkspace(input: {
+async function discoverSofiaWorkspace(input: {
   hostUrl: string;
   token: string;
   hostToken: string;
   directory: string | null;
 }): Promise<Record<string, unknown> | null> {
-  const list = await fetchOpenworkWorkspaceList(input.hostUrl, input.token, input.hostToken);
-  return selectOpenworkWorkspaceForConnection(list, input.directory);
+  const list = await fetchSofiaWorkspaceList(input.hostUrl, input.token, input.hostToken);
+  return selectSofiaWorkspaceForConnection(list, input.directory);
 }
 
 function ensurePlainObject(value: unknown): Record<string, unknown> {
@@ -200,10 +200,10 @@ function serializeWorkspaceConfigEntry(workspace: WorkspaceInfo): Record<string,
     ...(!isLocalWorkspace && workspace.baseUrl ? { baseUrl: workspace.baseUrl } : {}),
     ...(!isLocalWorkspace && workspace.directory ? { directory: workspace.directory } : {}),
     ...(workspace.displayName ? { displayName: workspace.displayName } : {}),
-    ...(workspace.openworkHostUrl ? { openworkHostUrl: workspace.openworkHostUrl } : {}),
-    ...(workspace.openworkToken ? { openworkToken: workspace.openworkToken } : {}),
-    ...(workspace.openworkWorkspaceId ? { openworkWorkspaceId: workspace.openworkWorkspaceId } : {}),
-    ...(workspace.openworkWorkspaceName ? { openworkWorkspaceName: workspace.openworkWorkspaceName } : {}),
+    ...(workspace.sofiaHostUrl ? { sofiaHostUrl: workspace.sofiaHostUrl } : {}),
+    ...(workspace.sofiaToken ? { sofiaToken: workspace.sofiaToken } : {}),
+    ...(workspace.sofiaWorkspaceId ? { sofiaWorkspaceId: workspace.sofiaWorkspaceId } : {}),
+    ...(workspace.sofiaWorkspaceName ? { sofiaWorkspaceName: workspace.sofiaWorkspaceName } : {}),
     ...(workspace.sandboxBackend ? { sandboxBackend: workspace.sandboxBackend } : {}),
     ...(workspace.sandboxRunId ? { sandboxRunId: workspace.sandboxRunId } : {}),
     ...(workspace.sandboxContainerName ? { sandboxContainerName: workspace.sandboxContainerName } : {}),
@@ -284,12 +284,12 @@ export function registerWorkspaceRoutes(options: RegisterWorkspaceRoutesOptions)
     await ensureWorkspaceFiles(workspacePath, preset);
 
     const workspaceId = workspaceIdForPath(workspacePath);
-    // Seed the per-workspace openwork config in the runtime DB (replaces the
-    // legacy `.opencode/openwork.json` file). No-op if a row already exists.
-    await seedOpenworkWorkspaceConfigIfEmpty(
+    // Seed the per-workspace sofia config in the runtime DB (replaces the
+    // legacy `.opencode/sofia.json` file). No-op if a row already exists.
+    await seedSofiaWorkspaceConfigIfEmpty(
       config,
       workspaceId,
-      defaultWorkspaceOpenworkConfig(workspacePath, preset),
+      defaultWorkspaceSofiaConfig(workspacePath, preset),
     );
 
     const workspace: WorkspaceInfo = {
@@ -336,61 +336,61 @@ export function registerWorkspaceRoutes(options: RegisterWorkspaceRoutesOptions)
       throw new ApiError(400, "invalid_payload", "baseUrl must start with http:// or https://");
     }
 
-    const remoteType = readStringField(body, "remoteType") === "opencode" ? "opencode" : "openwork";
+    const remoteType = readStringField(body, "remoteType") === "opencode" ? "opencode" : "sofia";
     const directory = readStringField(body, "directory") || null;
     const displayName = readStringField(body, "displayName") || null;
-    const rawOpenworkHostUrl = readStringField(body, "openworkHostUrl") || null;
-    const openworkHostUrl = remoteType === "openwork"
-      ? stripOpenworkWorkspaceMount(rawOpenworkHostUrl ?? baseUrl)
-      : rawOpenworkHostUrl;
-    const openworkToken = readStringField(body, "openworkToken");
-    const openworkHostToken = readStringField(body, "openworkHostToken");
+    const rawSofiaHostUrl = readStringField(body, "sofiaHostUrl") || null;
+    const sofiaHostUrl = remoteType === "sofia"
+      ? stripSofiaWorkspaceMount(rawSofiaHostUrl ?? baseUrl)
+      : rawSofiaHostUrl;
+    const sofiaToken = readStringField(body, "sofiaToken");
+    const sofiaHostToken = readStringField(body, "sofiaHostToken");
     const sandboxBackend = readStringField(body, "sandboxBackend");
     const sandboxRunId = readStringField(body, "sandboxRunId");
     const sandboxContainerName = readStringField(body, "sandboxContainerName");
-    let openworkWorkspaceId = remoteType === "openwork"
-      ? readStringField(body, "openworkWorkspaceId")
-        || parseOpenworkWorkspaceIdFromUrl(rawOpenworkHostUrl)
-        || parseOpenworkWorkspaceIdFromUrl(baseUrl)
+    let sofiaWorkspaceId = remoteType === "sofia"
+      ? readStringField(body, "sofiaWorkspaceId")
+        || parseSofiaWorkspaceIdFromUrl(rawSofiaHostUrl)
+        || parseSofiaWorkspaceIdFromUrl(baseUrl)
       : "";
-    let openworkWorkspaceName = readStringField(body, "openworkWorkspaceName") || null;
+    let sofiaWorkspaceName = readStringField(body, "sofiaWorkspaceName") || null;
 
-    if (remoteType === "openwork" && !openworkWorkspaceId) {
-      const discovered = await discoverOpenworkWorkspace({
-        hostUrl: openworkHostUrl ?? baseUrl,
-        token: openworkToken,
-        hostToken: openworkHostToken,
+    if (remoteType === "sofia" && !sofiaWorkspaceId) {
+      const discovered = await discoverSofiaWorkspace({
+        hostUrl: sofiaHostUrl ?? baseUrl,
+        token: sofiaToken,
+        hostToken: sofiaHostToken,
         directory,
       });
-      openworkWorkspaceId = discovered ? readStringField(discovered, "id") : "";
-      openworkWorkspaceName = discovered ? openworkWorkspaceDisplayName(discovered) : openworkWorkspaceName;
-      if (!openworkWorkspaceId) {
+      sofiaWorkspaceId = discovered ? readStringField(discovered, "id") : "";
+      sofiaWorkspaceName = discovered ? sofiaWorkspaceDisplayName(discovered) : sofiaWorkspaceName;
+      if (!sofiaWorkspaceId) {
         throw new ApiError(
           400,
-          "openwork_workspace_not_found",
+          "sofia_workspace_not_found",
           directory
-            ? `OpenWork server has no workspace matching ${directory}.`
-            : "OpenWork server returned no workspaces.",
+            ? `Sofia App server has no workspace matching ${directory}.`
+            : "Sofia App server returned no workspaces.",
         );
       }
     }
 
     const workspace: WorkspaceInfo = {
-      id: remoteType === "openwork"
-        ? openworkRemoteWorkspaceId(openworkHostUrl ?? baseUrl, openworkWorkspaceId)
+      id: remoteType === "sofia"
+        ? sofiaRemoteWorkspaceId(sofiaHostUrl ?? baseUrl, sofiaWorkspaceId)
         : workspaceIdForRemote(baseUrl, directory),
-      name: displayName ?? openworkWorkspaceName ?? "Remote workspace",
+      name: displayName ?? sofiaWorkspaceName ?? "Remote workspace",
       path: directory ?? "",
       preset: "remote",
       workspaceType: "remote",
       remoteType,
-      baseUrl: remoteType === "openwork" ? (openworkHostUrl ?? baseUrl) : baseUrl,
+      baseUrl: remoteType === "sofia" ? (sofiaHostUrl ?? baseUrl) : baseUrl,
       ...(directory ? { directory } : {}),
       ...(displayName ? { displayName } : {}),
-      ...(remoteType === "openwork" && openworkHostUrl ? { openworkHostUrl } : {}),
-      ...(openworkToken ? { openworkToken } : {}),
-      ...(remoteType === "openwork" && openworkWorkspaceId ? { openworkWorkspaceId } : {}),
-      ...(remoteType === "openwork" && openworkWorkspaceName ? { openworkWorkspaceName } : {}),
+      ...(remoteType === "sofia" && sofiaHostUrl ? { sofiaHostUrl } : {}),
+      ...(sofiaToken ? { sofiaToken } : {}),
+      ...(remoteType === "sofia" && sofiaWorkspaceId ? { sofiaWorkspaceId } : {}),
+      ...(remoteType === "sofia" && sofiaWorkspaceName ? { sofiaWorkspaceName } : {}),
       ...(sandboxBackend ? { sandboxBackend } : {}),
       ...(sandboxRunId ? { sandboxRunId } : {}),
       ...(sandboxContainerName ? { sandboxContainerName } : {}),
@@ -506,7 +506,7 @@ export function registerWorkspaceRoutes(options: RegisterWorkspaceRoutesOptions)
       actor: ctx.actor ?? { type: "host" },
       action: "workspace.delete",
       target: "workspace",
-      summary: "Deleted workspace from OpenWork server",
+      summary: "Deleted workspace from Sofia App server",
       timestamp: Date.now(),
     });
 

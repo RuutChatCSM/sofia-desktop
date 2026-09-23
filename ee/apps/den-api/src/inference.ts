@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto"
-import { and, eq, inArray, isNull, sql } from "@openwork-ee/den-db/drizzle"
+import { and, eq, inArray, isNull, sql } from "@sofia-ee/den-db/drizzle"
 import {
   InferenceKeyTable,
   InferenceOrgLimitPolicyTable,
@@ -10,21 +10,21 @@ import {
   LlmProviderTable,
   MemberTable,
   OrganizationTable,
-} from "@openwork-ee/den-db/schema"
-import { createDenTypeId, type DenTypeId } from "@openwork-ee/utils/typeid"
+} from "@sofia-ee/den-db/schema"
+import { createDenTypeId, type DenTypeId } from "@sofia-ee/utils/typeid"
 import {
   INFERENCE_RESET_STRATEGY_BY_WINDOW_TYPE,
   INFERENCE_TIER_LIMITS,
   INFERENCE_WINDOW_DURATIONS_MS,
-} from "@openwork/types/den/inference"
-import type { InferenceOrganizationMetadata, InferenceTier, InferenceWindowType } from "@openwork/types/den/inference"
+} from "@sofia/types/den/inference"
+import type { InferenceOrganizationMetadata, InferenceTier, InferenceWindowType } from "@sofia/types/den/inference"
 import { db } from "./db.js"
 import { env } from "./env.js"
 
 type OrgId = typeof OrganizationTable.$inferSelect.id
 type MemberId = typeof MemberTable.$inferSelect.id
 
-const OPENWORK_PROVIDER_ID = "openwork"
+const SOFIA_PROVIDER_ID = "sofia"
 const OPENROUTER_PROVIDER = "openrouter"
 const OPENROUTER_KEYS_URL = "https://openrouter.ai/api/v1/keys"
 
@@ -93,13 +93,13 @@ function currentWindow(input: { anchorAt: Date | null; currentEnd: Date | null; 
   return { start, end }
 }
 
-function buildOpenWorkProviderConfig() {
+function buildSofiaProviderConfig() {
   return {
-    id: OPENWORK_PROVIDER_ID,
-    name: "OpenWork",
+    id: SOFIA_PROVIDER_ID,
+    name: "Sofia",
     npm: "@openrouter/ai-sdk-provider",
-    env: ["OPENWORK_API_KEY"],
-    doc: "OpenWork-managed inference proxy for organization models.",
+    env: ["SOFIA_API_KEY"],
+    doc: "Sofia-managed inference proxy for organization models.",
     api: `${env.inferenceProxyBaseUrl.replace(/\/+$/, "")}/api/v1`,
     options: {
       baseURL: `${env.inferenceProxyBaseUrl.replace(/\/+$/, "")}/api/v1`,
@@ -114,18 +114,18 @@ async function revokeMemberInferenceKeys(memberId: MemberId) {
     .where(and(eq(InferenceKeyTable.org_membership_id, memberId), eq(InferenceKeyTable.status, "active")))
 }
 
-async function deleteOpenWorkProviders(where: { organizationId: OrgId; memberId?: MemberId }) {
+async function deleteSofiaProviders(where: { organizationId: OrgId; memberId?: MemberId }) {
   const providerWhere = where.memberId
     ? and(
         eq(LlmProviderTable.organizationId, where.organizationId),
         eq(LlmProviderTable.createdByOrgMembershipId, where.memberId),
-        eq(LlmProviderTable.source, "openwork"),
-        eq(LlmProviderTable.providerId, OPENWORK_PROVIDER_ID),
+        eq(LlmProviderTable.source, "sofia"),
+        eq(LlmProviderTable.providerId, SOFIA_PROVIDER_ID),
       )
     : and(
         eq(LlmProviderTable.organizationId, where.organizationId),
-        eq(LlmProviderTable.source, "openwork"),
-        eq(LlmProviderTable.providerId, OPENWORK_PROVIDER_ID),
+        eq(LlmProviderTable.source, "sofia"),
+        eq(LlmProviderTable.providerId, SOFIA_PROVIDER_ID),
       )
 
   const providers = await db.select({ id: LlmProviderTable.id }).from(LlmProviderTable).where(providerWhere)
@@ -147,7 +147,7 @@ async function createMemberInferenceKey(input: { organizationId: OrgId; memberId
     id: createDenTypeId("inferenceKey"),
     organization_id: input.organizationId,
     org_membership_id: input.memberId,
-    name: "OpenWork Models",
+    name: "Sofia Models",
     key_hash: sha256(key),
     key_prefix: keyPrefix(key),
     status: "active",
@@ -155,7 +155,7 @@ async function createMemberInferenceKey(input: { organizationId: OrgId; memberId
   return key
 }
 
-async function ensureOpenWorkLlmProviderForMember(input: { organizationId: OrgId; memberId: MemberId; inferenceKey: string }) {
+async function ensureSofiaLlmProviderForMember(input: { organizationId: OrgId; memberId: MemberId; inferenceKey: string }) {
   const now = new Date()
   const providerRows = await db
     .select({ id: LlmProviderTable.id })
@@ -163,19 +163,19 @@ async function ensureOpenWorkLlmProviderForMember(input: { organizationId: OrgId
     .where(and(
       eq(LlmProviderTable.organizationId, input.organizationId),
       eq(LlmProviderTable.createdByOrgMembershipId, input.memberId),
-      eq(LlmProviderTable.source, "openwork"),
-      eq(LlmProviderTable.providerId, OPENWORK_PROVIDER_ID),
+      eq(LlmProviderTable.source, "sofia"),
+      eq(LlmProviderTable.providerId, SOFIA_PROVIDER_ID),
     ))
     .limit(1)
 
-  const providerConfig = buildOpenWorkProviderConfig()
+  const providerConfig = buildSofiaProviderConfig()
   const providerId = providerRows[0]?.id ?? createDenTypeId("llmProvider")
 
   await db.transaction(async (tx) => {
     if (providerRows[0]) {
       await tx
         .update(LlmProviderTable)
-        .set({ name: "OpenWork Models", providerConfig, apiKey: input.inferenceKey, updatedAt: now })
+        .set({ name: "Sofia Models", providerConfig, apiKey: input.inferenceKey, updatedAt: now })
         .where(eq(LlmProviderTable.id, providerId))
       await tx.delete(LlmProviderModelTable).where(eq(LlmProviderModelTable.llmProviderId, providerId))
       await tx.delete(LlmProviderAccessTable).where(eq(LlmProviderAccessTable.llmProviderId, providerId))
@@ -184,9 +184,9 @@ async function ensureOpenWorkLlmProviderForMember(input: { organizationId: OrgId
         id: providerId,
         organizationId: input.organizationId,
         createdByOrgMembershipId: input.memberId,
-        source: "openwork",
-        providerId: OPENWORK_PROVIDER_ID,
-        name: "OpenWork Models",
+        source: "sofia",
+        providerId: SOFIA_PROVIDER_ID,
+        name: "Sofia Models",
         providerConfig,
         apiKey: input.inferenceKey,
         createdAt: now,
@@ -206,18 +206,18 @@ async function ensureOpenWorkLlmProviderForMember(input: { organizationId: OrgId
 
 async function ensureMemberInferenceAccess(input: { organizationId: OrgId; memberId: MemberId }) {
   const key = await createMemberInferenceKey(input)
-  await ensureOpenWorkLlmProviderForMember({ ...input, inferenceKey: key })
+  await ensureSofiaLlmProviderForMember({ ...input, inferenceKey: key })
 }
 
-async function memberHasOpenWorkInferenceAccess(input: { organizationId: OrgId; memberId: MemberId }) {
+async function memberHasSofiaInferenceAccess(input: { organizationId: OrgId; memberId: MemberId }) {
   const [provider] = await db
     .select({ id: LlmProviderTable.id })
     .from(LlmProviderTable)
     .where(and(
       eq(LlmProviderTable.organizationId, input.organizationId),
       eq(LlmProviderTable.createdByOrgMembershipId, input.memberId),
-      eq(LlmProviderTable.source, "openwork"),
-      eq(LlmProviderTable.providerId, OPENWORK_PROVIDER_ID),
+      eq(LlmProviderTable.source, "sofia"),
+      eq(LlmProviderTable.providerId, SOFIA_PROVIDER_ID),
     ))
     .limit(1)
   const [key] = await db
@@ -234,7 +234,7 @@ async function memberHasOpenWorkInferenceAccess(input: { organizationId: OrgId; 
 }
 
 /**
- * Re-provision this member's OpenWork Models key + LLM provider when the org
+ * Re-provision this member's Sofia Models key + LLM provider when the org
  * has inference enabled but the member row was deleted or never created.
  * Safe to call from member-facing list endpoints (self-heal).
  */
@@ -253,7 +253,7 @@ export async function repairMemberInferenceAccessIfNeeded(input: {
     return false
   }
 
-  if (await memberHasOpenWorkInferenceAccess(input)) {
+  if (await memberHasSofiaInferenceAccess(input)) {
     return false
   }
 
@@ -293,7 +293,7 @@ export async function syncInferenceAfterMemberChange(input: {
 }) {
   if (input.change === "removed") {
     await revokeMemberInferenceKeys(input.memberId)
-    await deleteOpenWorkProviders({ organizationId: input.organizationId, memberId: input.memberId })
+    await deleteSofiaProviders({ organizationId: input.organizationId, memberId: input.memberId })
   }
 
   const [organization] = await db
@@ -403,7 +403,7 @@ async function createOpenRouterOrgApiKey(input: { organizationId: OrgId }) {
   }
 
   const body: Record<string, unknown> = {
-    name: `OpenWork org ${input.organizationId}`,
+    name: `Sofia org ${input.organizationId}`,
     include_byok_in_limit: false,
   }
   if (env.openRouterWorkspaceId) {
@@ -612,7 +612,7 @@ export async function setInferenceEnabled(input: { organizationId: OrgId; enable
         .set({ status: "revoked", revoked_at: new Date() })
         .where(and(eq(InferenceKeyTable.organization_id, input.organizationId), inArray(InferenceKeyTable.org_membership_id, members.map((member) => member.id))))
     }
-    await deleteOpenWorkProviders({ organizationId: input.organizationId })
+    await deleteSofiaProviders({ organizationId: input.organizationId })
     return getInferenceStatus(input.organizationId)
   }
 

@@ -1,8 +1,8 @@
 // Codex session manager: owns a ManagedCodexEngine and exposes a small,
-// OpenWork-shaped session surface for the codex runtime. This is additive —
+// Sofia-shaped session surface for the codex runtime. This is additive —
 // opencode routes are untouched. Each workspace gets its own engine process
 // (mirroring how opencode is managed per workspace) and threads are mapped to
-// OpenWork session ids via a `codex-<threadId>` scheme.
+// Sofia App session ids via a `codex-<threadId>` scheme.
 import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
@@ -62,7 +62,7 @@ export class CodexSteerError extends Error {
 }
 
 /**
- * True when the codex app-server reports that a thread has no persisted
+ * True when the Sofia app-server reports that a thread has no persisted
  * rollout (e.g. a session created but never run, or already removed). Such
  * threads have nothing to archive/delete, so callers treat it as a no-op
  * instead of surfacing a 502.
@@ -111,7 +111,7 @@ export type CodexEngineHandle = {
 };
 
 export type CodexSession = {
-  id: string; // OpenWork-facing session id: `codex-<threadId>`
+  id: string; // Sofia-facing session id: `codex-<threadId>`
   threadId: string;
   title: string;
   workspaceId: string;
@@ -157,10 +157,11 @@ export class CodexSessionManager {
   private starting: Promise<void> | null = null;
   private approvalQueue: { sessionId: string; threadId: string; params: unknown; resolve: () => void; reject: (reason?: unknown) => void }[] = [];
   private threadAliases: Record<string, string>;
+  private loadedThreads = new Set<string>();
 
   private activeEngine(): ManagedCodexEngine {
     const engine = this.engine;
-    if (!engine) throw new Error("codex app-server failed to start");
+    if (!engine) throw new Error("Sofia app-server failed to start");
     return engine;
   }
 
@@ -220,13 +221,15 @@ export class CodexSessionManager {
     return messages.slice(-16_000);
   }
 
-  private async replaceMissingThread(session: CodexSession, engine: ManagedCodexEngine): Promise<void> {
+  private async replaceMissingThread(session: CodexSession, engine: ManagedCodexEngine, selection?: { model?: string; providerId?: string }): Promise<void> {
     const context = this.recoveredContext(session);
     const developerInstructions = buildSofiaDeveloperInstructions({
       workspaceId: session.workspaceId,
       cwd: session.cwd ?? this.handle.cwd,
     });
     const replacementId = await engine.startThread({
+      model: selection?.model ?? session.model,
+      modelProvider: selection?.providerId ?? session.providerId,
       cwd: session.cwd ?? this.handle.cwd,
       developerInstructions: context
         ? `${developerInstructions}\n\n<recovered_thread_context>\n${context}\n</recovered_thread_context>`
@@ -234,8 +237,33 @@ export class CodexSessionManager {
     });
     const originalThreadId = session.id.slice("codex-".length);
     session.threadId = replacementId;
+    this.loadedThreads.add(replacementId);
     this.threadAliases[originalThreadId] = replacementId;
     this.persistThreadAliases();
+  }
+
+  private async loadThread(
+    session: CodexSession,
+    engine: ManagedCodexEngine,
+    selection?: { model?: string; providerId?: string },
+  ): Promise<void> {
+    if (this.loadedThreads.has(session.threadId)) return;
+    const overrides = { model: selection?.model, modelProvider: selection?.providerId };
+    try {
+      await engine.resumeThread(session.threadId, overrides);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!isMissingRolloutError(error) && !/thread not found/i.test(message)) throw error;
+      // Imported sessions belong to another engine home. Resume their durable
+      // rollout explicitly instead of sending a turn to an unloaded thread.
+      const path = session.rolloutPath ?? this.findRolloutPath(session.threadId);
+      if (path && existsSync(path)) {
+        await engine.resumeThread(session.threadId, { ...overrides, path });
+      } else {
+        await this.replaceMissingThread(session, engine, selection);
+      }
+    }
+    this.loadedThreads.add(session.threadId);
   }
 
   private setupEngineListeners(engine: ManagedCodexEngine): void {
@@ -339,7 +367,14 @@ export class CodexSessionManager {
     // not in the store until the thread is loaded. Resume (best-effort) so
     // `thread/items/list` can return the transcript, then fall back to the
     // rollout JSONL for legacy/CLI sessions the store doesn't know.
-    await this.engine.resumeThread(session.threadId).catch(() => undefined);
+    if (!this.loadedThreads.has(session.threadId)) {
+      try {
+        await this.engine.resumeThread(session.threadId);
+        this.loadedThreads.add(session.threadId);
+      } catch {
+        // Transcript reads can use the rollout without changing the session.
+      }
+    }
     try {
       const items = await this.engine.listThreadItems(session.threadId, { limit: options?.limit });
       if (items.length > 0) return items;
@@ -474,6 +509,7 @@ export class CodexSessionManager {
     }
     if (this.starting) return await this.starting;
     const starting = (async () => {
+      this.loadedThreads.clear();
       const engine = new ManagedCodexEngine({
         bin: this.handle.bin,        cwd: this.handle.cwd,
         codexHome: this.handle.codexHome,
@@ -617,7 +653,7 @@ export class CodexSessionManager {
         const threadId = typeof row.id === "string" ? row.id : "";
         if (!threadId || this.sessions.has(codexSessionId(threadId))) continue;
         // Only import sessions whose project matches this workspace's path
-        // (codex groups by project cwd; OpenWork groups by workspace).
+        // (codex groups by project cwd; Sofia App groups by workspace).
         const rowCwd = typeof row.cwd === "string" ? row.cwd : "";
         if (workspacePath && rowCwd && !pathsMatch(workspacePath, rowCwd)) continue;
         const createdRaw = row.created_at;
@@ -629,7 +665,7 @@ export class CodexSessionManager {
           threadId,
           title: typeof row.title === "string" && row.title.trim()
             ? row.title.trim().slice(0, 200)
-            : "Codex session",
+            : "Sofia task",
           workspaceId: this.workspaceId ?? "local",
           created,
           turnId: null,
@@ -647,6 +683,7 @@ export class CodexSessionManager {
     await this.engine?.close();
     this.engine = null;
     this.starting = null;
+    this.loadedThreads.clear();
   }
 
   /** Create a thread (session) and optionally start a turn with a prompt. */
@@ -660,7 +697,7 @@ export class CodexSessionManager {
   }): Promise<CodexSession> {
     await this.start();
     this.workspaceId = input.workspaceId;
-    if (!this.engine) throw new Error("codex engine is not running");
+    if (!this.engine) throw new Error("Sofia engine is not running");
     const threadId = await this.engine.startThread({
       cwd: input.cwd ?? this.handle.cwd,
       ...(input.model ? { model: input.model } : {}),
@@ -682,6 +719,7 @@ export class CodexSessionManager {
       ...(input.model ? { model: input.model } : {}),
       ...(input.providerId ? { providerId: input.providerId } : {}),
     };
+    this.loadedThreads.add(threadId);
     await this.engine.renameThread(threadId, input.title);
     this.sessions.set(session.id, session);
     this.emit({ type: "session.created", session });
@@ -705,7 +743,7 @@ export class CodexSessionManager {
           session = {
             id: sessionId,
             threadId,
-            title: typeof thread.preview === "string" && thread.preview.trim() ? thread.preview.trim() : "Codex session",
+            title: typeof thread.preview === "string" && thread.preview.trim() ? thread.preview.trim() : "Sofia task",
             workspaceId: this.workspaceId ?? "local",
             created: new Date().toISOString(),
             turnId: null,
@@ -718,35 +756,24 @@ export class CodexSessionManager {
         // The thread may genuinely no longer exist; preserve the normal error.
       }
     }
-    if (!session) throw new Error(`unknown codex session: ${sessionId}`);
-    // A thread listed from the on-disk store carries metadata only until it is
-    // loaded into this app-server process; `turn/start` (and settings updates)
-    // fail with "thread not found" until it is resumed. Resume first so the
-    // transcript is preserved, and only synthesize a replacement thread when the
-    // thread is genuinely gone.
-    try {
-      await engine.resumeThread(session.threadId);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (/thread not found/.test(message)) {
-        await this.replaceMissingThread(session, engine);
-      }
-    }
+    if (!session) throw new Error(`unknown Sofia session: ${sessionId}`);
     if (session.status === "running") throw new Error("This Sofia task is still running. Stop it or wait before sending another turn.");
-    if ((opts?.model && opts.model !== session.model) || (opts?.providerId && opts.providerId !== session.providerId)) {
-      await engine.updateThreadSettings({
-        threadId: session.threadId,
-        ...(opts.model ? { model: opts.model } : {}),
-        ...(opts.providerId ? { modelProvider: opts.providerId } : {}),
-      });
-      if (opts.model) session.model = opts.model;
-      if (opts.providerId) session.providerId = opts.providerId;
-    }
+    // Reserve the task before any RPC so concurrent prompts cannot start two turns.
     session.status = "running";
     session.cwd = opts?.cwd ?? session.cwd ?? this.handle.cwd;
     this.emit({ type: "session.updated", session: { ...session } });
     let turnId: string | null;
     try {
+      await this.loadThread(session, engine, opts);
+      if ((opts?.model && opts.model !== session.model) || (opts?.providerId && opts.providerId !== session.providerId)) {
+        await engine.updateThreadSettings({
+          threadId: session.threadId,
+          ...(opts.model ? { model: opts.model } : {}),
+          ...(opts.providerId ? { modelProvider: opts.providerId } : {}),
+        });
+        if (opts.model) session.model = opts.model;
+        if (opts.providerId) session.providerId = opts.providerId;
+      }
       turnId = await engine.startTurn({
         ...codexTurnPermissions(readCodexAccessMode(this.handle.codexHome)),
         threadId: session.threadId,
@@ -754,30 +781,12 @@ export class CodexSessionManager {
         cwd: session.cwd,
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (/thread not found/.test(message)) {
-        await this.replaceMissingThread(session, engine);
-        turnId = await engine.startTurn({
-          ...codexTurnPermissions(readCodexAccessMode(this.handle.codexHome)),
-          threadId: session.threadId,
-          input: [{ text }],
-          cwd: session.cwd,
-        });
-      } else if (/codex app-server (?:is not running|exited)/.test(message)) {
-      const deadEngine = this.engine;
-      this.engine = null;
-      await deadEngine?.close().catch(() => undefined);
-      await this.start();
-      const restartedEngine = this.activeEngine();
-      turnId = await restartedEngine.startTurn({
-        ...codexTurnPermissions(readCodexAccessMode(this.handle.codexHome)),
-        threadId: session.threadId,
-        input: [{ text }],
-        cwd: session.cwd,
-      });
-      } else {
-        throw error;
-      }
+      // A failed resume/settings/start is retryable by the user; never leave a
+      // task stuck running or hide the original provider/configuration error.
+      session.status = "error";
+      session.turnId = null;
+      this.emit({ type: "session.updated", session: { ...session } });
+      throw error;
     }
     session.turnId = turnId;
     this.emit({ type: "session.updated", session: { ...session } });
@@ -795,7 +804,7 @@ export class CodexSessionManager {
   async steer(sessionId: string, text: string): Promise<CodexSession> {
     await this.start();
     const session = this.sessions.get(sessionId);
-    if (!session || !this.engine) throw new Error(`unknown codex session: ${sessionId}`);
+    if (!session || !this.engine) throw new Error(`unknown Sofia session: ${sessionId}`);
     if (!text.trim()) throw new CodexSteerError("empty_input", "Cannot steer with an empty message");
     if (!session.turnId || session.status !== "running") {
       throw new CodexSteerError("no_active_turn", "There is no active Sofia turn to steer");
@@ -827,7 +836,7 @@ export class CodexSessionManager {
   async forkSession(sessionId: string, prompt: string): Promise<CodexSession> {
     await this.start();
     const session = this.sessions.get(sessionId);
-    if (!session || !this.engine) throw new Error(`unknown codex session: ${sessionId}`);
+    if (!session || !this.engine) throw new Error(`unknown Sofia session: ${sessionId}`);
     const newThreadId = await this.engine.forkThread({ threadId: session.threadId, input: [{ text: prompt }] });
     if (!newThreadId) throw new Error("thread/fork returned no threadId");
     const created = new Date().toISOString();
@@ -850,7 +859,7 @@ export class CodexSessionManager {
   async setArchived(sessionId: string, archived: boolean): Promise<CodexSession> {
     await this.start();
     const session = this.sessions.get(sessionId);
-    if (!session) throw new Error(`unknown codex session: ${sessionId}`);
+    if (!session) throw new Error(`unknown Sofia session: ${sessionId}`);
     // A thread with no persisted rollout has nothing to archive; treat the
     // engine's "no rollout found" as already-archived rather than failing.
     await this.activeEngine()

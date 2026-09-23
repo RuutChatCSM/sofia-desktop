@@ -15,9 +15,9 @@ import { type CloudImportedPlugin } from "@/app/cloud/import-state";
 import { createDenClient, readDenSettings } from "@/app/lib/den";
 import { denSettingsChangedEvent } from "@/app/lib/den-session-events";
 import type {
-  OpenworkServerClient,
-  OpenworkSessionSnapshot,
-} from "@/app/lib/openwork-server";
+  SofiaServerClient,
+  SofiaSessionSnapshot,
+} from "@/app/lib/sofia-server";
 import type {
   ComposerAttachment,
   ComposerDraft,
@@ -34,7 +34,7 @@ import {
   publishInspectorSlice,
   recordInspectorEvent,
 } from "@/app/lib/app-inspector";
-import { useControlAction, type OpenworkControlAction } from "@/react-app/shell/control/control-provider";
+import { useControlAction, type SofiaControlAction } from "@/react-app/shell/control/control-provider";
 import { attemptSilentMcpReauth } from "@/react-app/domains/connections/mcp-silent-reauth";
 import type {
   CloudMcpSubmissionGateState,
@@ -49,7 +49,7 @@ import { parseSlashCommandInvocation } from "./composer/slash-command";
 import { connectSkillPrompt, parseConnectSkillToken } from "./composer/connect-skill-token";
 import { createPastedTextChip, resolvePastedTextPlaceholders } from "./composer/pasted-text";
 import { DevProfiler } from "@/react-app/shell/dev-profiler";
-import { PaperGrainGradient } from "@openwork/ui/react";
+import { PaperGrainGradient } from "@sofia/ui/react";
 import { useShellConfig } from "@/react-app/shell/shell-config";
 import { useReactRenderWatchdog } from "@/react-app/shell/react-render-watchdog";
 import { SessionDebugPanel } from "./debug-panel";
@@ -121,7 +121,7 @@ const DEFAULT_COMPOSER_CONTROL_TEXT = "Help me outline the next Sofia App task."
 const SESSION_SURFACE_SELECTOR = "[data-session-surface-id]";
 const MARKDOWN_PRIMITIVE_EVAL_TEXT = `# Markdown proof heading
 
-This shared renderer keeps **bold proof text**, inline \`renderMarkdownHtml\`, and [Sofia App link](https://openworklabs.com) readable in one message.
+This shared renderer keeps **bold proof text**, inline \`renderMarkdownHtml\`, and [Sofia App link](https://sofia.ruut.chat) readable in one message.
 
 \`\`\`ts
 const pipeline = "shared markdown primitive";
@@ -235,7 +235,7 @@ function createChatTranscriptEvalMessages(sessionId: string) {
         },
         {
           type: "dynamic-tool",
-          toolName: "openwork-cloud_execute_capability",
+          toolName: "sofia-cloud_execute_capability",
           toolCallId: "eval-transcript-capability",
           state: "output-available",
           input: { name: "getCapabilitiesGoogleWorkspaceCalendarEvents", body: {} },
@@ -262,7 +262,7 @@ function createChatTranscriptEvalMessages(sessionId: string) {
           toolName: "edit",
           toolCallId: "eval-transcript-edit-1",
           state: "output-available",
-          input: { filePath: "/tmp/openwork-eval/plan-tomorrow.md", oldString: "", newString: "" },
+          input: { filePath: "/tmp/sofia-eval/plan-tomorrow.md", oldString: "", newString: "" },
           output: "",
         },
         {
@@ -270,7 +270,7 @@ function createChatTranscriptEvalMessages(sessionId: string) {
           toolName: "read",
           toolCallId: "eval-transcript-read-1",
           state: "output-available",
-          input: { filePath: "/tmp/openwork-eval/meeting-notes.md" },
+          input: { filePath: "/tmp/sofia-eval/meeting-notes.md" },
           output: "",
         },
         {
@@ -283,7 +283,7 @@ function createChatTranscriptEvalMessages(sessionId: string) {
         },
         {
           type: "text",
-          text: "Your plan is drafted — details in [Sofia App](https://openworklabs.com). Search token: chat-transcript-proof.",
+          text: "Your plan is drafted — details in [Sofia App](https://sofia.ruut.chat). Search token: chat-transcript-proof.",
         },
       ],
       // `completed` makes the finished turn fold behind a real
@@ -296,14 +296,14 @@ function createChatTranscriptEvalMessages(sessionId: string) {
 }
 
 export type SessionSurfaceProps = {
-  client: OpenworkServerClient;
-  environmentClient?: OpenworkServerClient | null;
+  client: SofiaServerClient;
+  environmentClient?: SofiaServerClient | null;
   workspaceId: string;
   workspaceRoot: string;
   sessionId: string;
   isControlTarget: boolean;
   opencodeBaseUrl: string;
-  openworkToken: string;
+  sofiaToken: string;
   /** Optional composer action-row accessory (e.g. the codex approval-mode control). */
   approvalAccessory?: ReactNode;
   developerMode: boolean;
@@ -317,9 +317,9 @@ export type SessionSurfaceProps = {
   /** providerID → modelID → provider model, for per-session variant options. */
   providerCatalog?: ProviderCatalog;
   /** Den/import includes Hosted models for this org member (not just local sync). */
-  openWorkModelsEntitled?: boolean;
+  sofiaModelsEntitled?: boolean;
   /** The server is waiting to reload this workspace with Hosted models. */
-  openWorkModelsSyncing?: boolean;
+  sofiaModelsSyncing?: boolean;
   onRefreshOrganizationModels?: () => void | Promise<void>;
   onModelPickerOpenChange: (open: boolean) => void;
   onModelChange: (model: ModelRef, variant?: string | null) => void;
@@ -419,7 +419,7 @@ function resolveFindOwnerSessionId() {
   return firstMountedSessionSurfaceId();
 }
 
-function statusLabel(snapshot: OpenworkSessionSnapshot | undefined, busy: boolean) {
+function statusLabel(snapshot: SofiaSessionSnapshot | undefined, busy: boolean) {
   if (busy) return "Running...";
   if (snapshot?.status.type === "busy") return "Running...";
   if (snapshot?.status.type === "retry") return `Retrying: ${snapshot.status.message}`;
@@ -695,7 +695,7 @@ function withoutRevertTarget(draft: ComposerDraft | null): ComposerDraft | null 
   return { ...draft, revertMessageId: undefined };
 }
 
-function hiddenMessageCount(snapshot: OpenworkSessionSnapshot, revertMessageId: string): number {
+function hiddenMessageCount(snapshot: SofiaSessionSnapshot, revertMessageId: string): number {
   const index = snapshot.messages.findIndex((message) => message.info.id === revertMessageId);
   return index < 0 ? snapshot.messages.length : snapshot.messages.length - index;
 }
@@ -775,7 +775,7 @@ export function SessionSurface(props: SessionSurfaceProps) {
   const [restoringRevertedMessages, setRestoringRevertedMessages] = useState(false);
   const [showDelayedLoading, setShowDelayedLoading] = useState(false);
   const [awaitingAssistantBaseline, setAwaitingAssistantBaseline] = useState<number | null>(null);
-  const [rendered, setRendered] = useState<{ sessionId: string; snapshot: OpenworkSessionSnapshot } | null>(null);
+  const [rendered, setRendered] = useState<{ sessionId: string; snapshot: SofiaSessionSnapshot } | null>(null);
   const [toolSkills, setToolSkills] = useState<SkillCard[]>([]);
   const [toolMcpServers, setToolMcpServers] = useState<McpServerEntry[]>([]);
   const [toolMcpStatus, setToolMcpStatus] = useState<string | null>(null);
@@ -797,8 +797,8 @@ export function SessionSurface(props: SessionSurfaceProps) {
   const autoOpenedTargetRef = useRef<string | null>(null);
   const initializedAutoOpenSessionRef = useRef<string | null>(null);
   const opencodeClient = useMemo(
-    () => createClient(props.opencodeBaseUrl, undefined, { token: props.openworkToken, mode: "openwork" }),
-    [props.opencodeBaseUrl, props.openworkToken],
+    () => createClient(props.opencodeBaseUrl, undefined, { token: props.sofiaToken, mode: "sofia" }),
+    [props.opencodeBaseUrl, props.sofiaToken],
   );
 
   const snapshotQueryKey = useMemo(
@@ -814,7 +814,7 @@ export function SessionSurface(props: SessionSurfaceProps) {
     [props.workspaceId, props.sessionId],
   );
   const isCodexSession = props.sessionId.startsWith("codex-");
-  const snapshotQuery = useQuery<OpenworkSessionSnapshot>({
+  const snapshotQuery = useQuery<SofiaSessionSnapshot>({
     queryKey: snapshotQueryKey,
     // Sofia sessions are owned by the Sofia engine: never query opencode for
     // their snapshot (opencode returns 502 "request failed"). The transcript
@@ -964,7 +964,7 @@ export function SessionSurface(props: SessionSurfaceProps) {
 
     return [...baseRenderedMessages, ...evalMarkdownMessages];
   }, [baseRenderedMessages, evalMarkdownMessages]);
-  const seedMarkdownPrimitiveControlAction = useMemo<OpenworkControlAction | null>(() => {
+  const seedMarkdownPrimitiveControlAction = useMemo<SofiaControlAction | null>(() => {
     if (!import.meta.env.DEV) return null;
 
     return {
@@ -985,7 +985,7 @@ export function SessionSurface(props: SessionSurfaceProps) {
     };
   }, [props.sessionId]);
   useControlAction(props.isControlTarget ? seedMarkdownPrimitiveControlAction : null);
-  const seedMarkdownMathControlAction = useMemo<OpenworkControlAction | null>(() => {
+  const seedMarkdownMathControlAction = useMemo<SofiaControlAction | null>(() => {
     if (!import.meta.env.DEV) return null;
 
     return {
@@ -1009,7 +1009,7 @@ export function SessionSurface(props: SessionSurfaceProps) {
     };
   }, [props.sessionId]);
   useControlAction(props.isControlTarget ? seedMarkdownMathControlAction : null);
-  const seedChatTranscriptControlAction = useMemo<OpenworkControlAction | null>(() => {
+  const seedChatTranscriptControlAction = useMemo<SofiaControlAction | null>(() => {
     if (!import.meta.env.DEV) return null;
 
     return {
@@ -1550,7 +1550,7 @@ export function SessionSurface(props: SessionSurfaceProps) {
   };
 
   const typeComposerText = useCallback(async (text: string, revertMessageId?: string | null) => {
-    window.dispatchEvent(new Event("openwork:focusPrompt"));
+    window.dispatchEvent(new Event("sofia:focusPrompt"));
     replaceComposerDraft(props.sessionId, text, revertMessageId);
     await waitForControl(40);
   }, [props.sessionId, replaceComposerDraft]);
@@ -1569,11 +1569,11 @@ export function SessionSurface(props: SessionSurfaceProps) {
         length: text.length,
       });
     };
-    window.addEventListener("openwork:voice-transcript", handleVoiceTranscript);
-    return () => window.removeEventListener("openwork:voice-transcript", handleVoiceTranscript);
+    window.addEventListener("sofia:voice-transcript", handleVoiceTranscript);
+    return () => window.removeEventListener("sofia:voice-transcript", handleVoiceTranscript);
   }, [attachments, buildDraft, props.onDraftChange, props.sessionId, props.workspaceId, typeComposerText]);
 
-  const composerSetTextControlAction = useMemo<OpenworkControlAction>(() => ({
+  const composerSetTextControlAction = useMemo<SofiaControlAction>(() => ({
     id: "composer.set_text",
     label: "Type into the composer",
     description: "Replace the current session draft and type the supplied text visibly.",
@@ -1593,7 +1593,7 @@ export function SessionSurface(props: SessionSurfaceProps) {
   }), [attachments, buildDraft, props.onDraftChange, typeComposerText]);
   useControlAction(props.isControlTarget ? composerSetTextControlAction : null);
 
-  const composerSendControlAction = useMemo<OpenworkControlAction>(() => ({
+  const composerSendControlAction = useMemo<SofiaControlAction>(() => ({
     id: "composer.send",
     label: "Send the composer prompt",
     description: "Send the currently visible composer draft to the active session.",
@@ -1607,7 +1607,7 @@ export function SessionSurface(props: SessionSurfaceProps) {
   }), [attachments.length, draft, handleSend, model.transitionState, props.modelUnavailable]);
   useControlAction(props.isControlTarget ? composerSendControlAction : null);
 
-  const composerStopControlAction = useMemo<OpenworkControlAction>(() => ({
+  const composerStopControlAction = useMemo<SofiaControlAction>(() => ({
     id: "composer.stop",
     label: "Stop the current run",
     description: "Stop the current streaming session run.",
@@ -1666,7 +1666,7 @@ export function SessionSurface(props: SessionSurfaceProps) {
       name: entry.name,
       config: entry.config as McpServerEntry["config"],
       source: entry.source,
-      origin: entry.name === "openwork-cloud" ? "openwork-connect" : "local",
+      origin: entry.name === "sofia-cloud" ? "sofia-connect" : "local",
     } satisfies McpServerEntry));
 
     void connectPromise.then((connect) => {
@@ -1803,10 +1803,10 @@ export function SessionSurface(props: SessionSurfaceProps) {
     const resetReconnectState = () => {
       useChatMcpReconnectStore.getState().reset();
       clearCloudInventoryCache();
-      setToolSkills((current) => current.filter((skill) => skill.origin !== "openwork-connect"));
-      setToolMcpServers((current) => current.filter((server) => server.origin !== "openwork-connect"));
+      setToolSkills((current) => current.filter((skill) => skill.origin !== "sofia-connect"));
+      setToolMcpServers((current) => current.filter((server) => server.origin !== "sofia-connect"));
       setToolMcpStatuses((current) => Object.fromEntries(
-        Object.entries(current).filter(([key]) => !key.startsWith("openwork-connect:")),
+        Object.entries(current).filter(([key]) => !key.startsWith("sofia-connect:")),
       ));
     };
     const refreshImportedPlugins = () => {
@@ -1944,7 +1944,7 @@ export function SessionSurface(props: SessionSurfaceProps) {
       .finally(() => setRestoringRevertedMessages(false));
   }, [props.onRestoreRevertedSession, props.sessionId, restoringRevertedMessages]);
 
-  const sessionScrollTopControlAction = useMemo<OpenworkControlAction>(() => ({
+  const sessionScrollTopControlAction = useMemo<SofiaControlAction>(() => ({
     id: "session.scroll_top",
     label: "Go to the top of the session",
     description: "Scroll the visible session transcript to the first messages.",
@@ -1959,7 +1959,7 @@ export function SessionSurface(props: SessionSurfaceProps) {
   }), []);
   useControlAction(props.isControlTarget ? sessionScrollTopControlAction : null);
 
-  const sessionScrollBottomControlAction = useMemo<OpenworkControlAction>(() => ({
+  const sessionScrollBottomControlAction = useMemo<SofiaControlAction>(() => ({
     id: "session.scroll_bottom",
     label: "Go to the bottom of the session",
     description: "Scroll the visible session transcript to the newest messages and composer area.",
@@ -1972,7 +1972,7 @@ export function SessionSurface(props: SessionSurfaceProps) {
   }), [sessionScroll.jumpToLatest]);
   useControlAction(props.isControlTarget ? sessionScrollBottomControlAction : null);
 
-  const sessionLatestMessageControlAction = useMemo<OpenworkControlAction>(() => ({
+  const sessionLatestMessageControlAction = useMemo<SofiaControlAction>(() => ({
     id: "session.latest_message",
     label: "Read the latest session message",
     description: "Return the latest visible message in the current session transcript.",
@@ -1993,7 +1993,7 @@ export function SessionSurface(props: SessionSurfaceProps) {
   }), [props.sessionId, renderedMessages]);
   useControlAction(props.isControlTarget ? sessionLatestMessageControlAction : null);
 
-  const sessionReadTranscriptControlAction = useMemo<OpenworkControlAction>(() => ({
+  const sessionReadTranscriptControlAction = useMemo<SofiaControlAction>(() => ({
     id: "session.read_transcript",
     label: "Read the current session transcript",
     description: "Return the last messages from the current session transcript as readable text, including the session ID, title, and message count.",
@@ -2216,8 +2216,8 @@ export function SessionSurface(props: SessionSurfaceProps) {
         statusLabel={statusLabel(snapshot ?? undefined, chatStreaming)}
         modelPickerOpen={modelPickerOpen}
         selectedModel={sessionModel.selectedModel}
-        openWorkModelsEntitled={props.openWorkModelsEntitled}
-        openWorkModelsSyncing={props.openWorkModelsSyncing}
+        sofiaModelsEntitled={props.sofiaModelsEntitled}
+        sofiaModelsSyncing={props.sofiaModelsSyncing}
         onRefreshOrganizationModels={props.onRefreshOrganizationModels}
         onModelPickerOpenChange={handleModelPickerOpenChange}
         onModelChange={handleModelChange}

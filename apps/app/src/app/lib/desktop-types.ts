@@ -3,7 +3,7 @@
 // packages/types/src/desktop-ipc.ts (shared with the Electron main process);
 // this module re-exports them as the app-side import path.
 
-import type { WorkspaceWire } from "@openwork/types/workspace";
+import type { WorkspaceWire } from "@sofia/types/workspace";
 
 export type {
   AppBuildInfo,
@@ -34,21 +34,20 @@ export type {
   NukeReceipt,
   NukeReceiptError,
   OpencodeCommandDraft,
-  OpencodeConfigFile,
   OpencodeExecutionEnvEntry,
   OpencodeExecutionSnapshot,
-  OpenworkDockerCleanupResult,
-  OpenworkServerInfo,
+  SofiaDockerCleanupResult,
+  SofiaServerInfo,
   UpdaterEnvironment,
   WorkspaceCreateInput,
   WorkspaceCreateRemoteInput,
   WorkspaceExportSummary,
   WorkspaceList,
-  WorkspaceOpenworkConfig,
+  WorkspaceSofiaConfig,
   WorkspaceUpdateRemoteInput,
-} from "@openwork/types/desktop-ipc";
+} from "@sofia/types/desktop-ipc";
 
-// Canonical wire shape shared with openwork-server and the desktop bridge.
+// Canonical wire shape shared with sofia-server and the desktop bridge.
 // Single source of truth: packages/types/src/workspace.ts.
 export type WorkspaceInfo = WorkspaceWire;
 

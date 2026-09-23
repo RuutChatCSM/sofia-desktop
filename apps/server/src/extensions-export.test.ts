@@ -35,15 +35,15 @@ function serverConfig(root: string): ServerConfig {
 }
 
 async function withWorkspace(fn: (input: { root: string; config: ServerConfig }) => Promise<void>) {
-  const root = await mkdtemp(join(tmpdir(), "openwork-extensions-export-"));
-  const previousDb = process.env.OPENWORK_RUNTIME_DB;
-  process.env.OPENWORK_RUNTIME_DB = join(root, "runtime.sqlite");
+  const root = await mkdtemp(join(tmpdir(), "sofia-extensions-export-"));
+  const previousDb = process.env.SOFIA_RUNTIME_DB;
+  process.env.SOFIA_RUNTIME_DB = join(root, "runtime.sqlite");
   try {
     await mkdir(join(root, ".git"), { recursive: true });
     await fn({ root, config: serverConfig(root) });
   } finally {
-    if (previousDb === undefined) delete process.env.OPENWORK_RUNTIME_DB;
-    else process.env.OPENWORK_RUNTIME_DB = previousDb;
+    if (previousDb === undefined) delete process.env.SOFIA_RUNTIME_DB;
+    else process.env.SOFIA_RUNTIME_DB = previousDb;
     await rm(root, { recursive: true, force: true });
   }
 }
@@ -51,7 +51,7 @@ async function withWorkspace(fn: (input: { root: string; config: ServerConfig })
 const SKILL_CONTENT = "---\nname: release-notes\ndescription: Draft release notes\n---\n\nDo the thing.\n";
 
 async function writeSkill(root: string) {
-  const dir = join(root, ".opencode", "skills", "release-notes");
+  const dir = join(root, ".sofia", "skills", "release-notes");
   await mkdir(dir, { recursive: true });
   await writeFile(join(dir, "SKILL.md"), SKILL_CONTENT, "utf8");
 }
@@ -209,9 +209,9 @@ describe("POST /workspace/:id/extensions/export", () => {
 
 describe("bundled agent tool surface", () => {
   test("keeps portable export out of every chat", async () => {
-    const { OpenWorkExtensionsPreview } = await import("./opencode-plugins/openwork-extensions-preview.js");
-    const plugin = await OpenWorkExtensionsPreview();
+    const { SofiaExtensionsPreview } = await import("./opencode-plugins/sofia-extensions-preview.js");
+    const plugin = await SofiaExtensionsPreview();
 
-    expect(Object.keys(plugin.tool)).not.toContain("openwork_extensions_export");
+    expect(Object.keys(plugin.tool)).not.toContain("sofia_extensions_export");
   });
 });

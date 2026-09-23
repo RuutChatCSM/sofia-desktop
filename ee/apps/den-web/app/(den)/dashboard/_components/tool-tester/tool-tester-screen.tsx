@@ -404,7 +404,7 @@ export function ToolTesterScreen() {
       icon={Wrench}
       title="Tool Tester"
       colors={["#CFFAFE", "#155E75", "#0E7490", "#67E8F9"]}
-      description="Run any tool your connections expose, inspect the request on the wire, and control which tools your organization can use. Runs execute with your credential and are never written to OpenWork logs."
+      description="Run any tool your connections expose, inspect the request on the wire, and control which tools your organization can use. Runs execute with your credential and are never written to Sofia logs."
     >
       {connectionsQuery.error ? (
         <DenNotice className="mb-4" message={connectionsQuery.error instanceof Error ? connectionsQuery.error.message : "Failed to load connections."} />
@@ -454,7 +454,7 @@ export function ToolTesterScreen() {
                 <DenToggleRow
                   icon={Shield}
                   title="Tools enabled for your organization"
-                  description={`Turn off to block every ${selectedConnection.name} tool at the OpenWork layer — agents can't discover or call them, members can't run them.`}
+                  description={`Turn off to block every ${selectedConnection.name} tool at the Sofia layer — agents can't discover or call them, members can't run them.`}
                   checked={!policy.allDisabled}
                   disabled={updatePolicy.isPending}
                   onChange={(checked) => {
@@ -468,7 +468,7 @@ export function ToolTesterScreen() {
                 {policy.allDisabled ? (
                   <DenNotice
                     tone="warning"
-                    message={`${selectedConnection.name} tools are disabled for your organization. Agents can't discover or call them, and members can't run them from OpenWork.${policy.updatedBy ? ` Turned off${policyAttribution(policy)}` : ""}`}
+                    message={`${selectedConnection.name} tools are disabled for your organization. Agents can't discover or call them, and members can't run them from Sofia.${policy.updatedBy ? ` Turned off${policyAttribution(policy)}` : ""}`}
                   />
                 ) : null}
                 {policyError ? <DenNotice message={policyError} /> : null}
@@ -579,7 +579,7 @@ export function ToolTesterScreen() {
 
               <RecentToolRuns
                 runs={recentRuns}
-                caption="Kept in this browser for this session only — OpenWork never stores run results."
+                caption="Kept in this browser for this session only — Sofia never stores run results."
                 onLoad={loadRun}
               />
             </>

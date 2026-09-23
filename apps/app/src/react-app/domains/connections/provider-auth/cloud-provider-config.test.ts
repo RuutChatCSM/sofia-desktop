@@ -88,16 +88,16 @@ describe("isCloudProviderOutOfSync", () => {
 });
 
 describe("buildCloudProviderConfig", () => {
-  test("omits empty models for openwork so catalog models can remain", () => {
+  test("omits empty models for sofia so catalog models can remain", () => {
     const provider: DenOrgLlmProviderConnection = {
-      id: "lpr_openwork",
-      source: "openwork",
-      providerId: "openwork",
+      id: "lpr_sofia",
+      source: "sofia",
+      providerId: "sofia",
       name: "Hosted models",
       providerConfig: {
         npm: "@openrouter/ai-sdk-provider",
-        api: "https://inference.openworklabs.com/api/v1",
-        env: ["OPENWORK_API_KEY"],
+        api: "https://sofia-inference.ruut.chat/api/v1",
+        env: ["SOFIA_API_KEY"],
       },
       hasApiKey: true,
       models: [],
@@ -112,7 +112,7 @@ describe("buildCloudProviderConfig", () => {
     expect(config.name).toBe("Hosted models");
   });
 
-  test("keeps an empty models map for non-openwork cloud providers", () => {
+  test("keeps an empty models map for non-sofia cloud providers", () => {
     const provider: DenOrgLlmProviderConnection = {
       id: "lpr_custom",
       source: "custom",

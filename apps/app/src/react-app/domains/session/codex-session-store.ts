@@ -33,13 +33,13 @@ export type SofiaErrorDetails = {
 /**
  * Turn a raw engine/provider error into conversation-level prose instead of
  * dumping JSON into the chat. The structured `{"error":{"message":...}}` body,
- * `codex rpc error (…):` prefix, and known failure shapes (missing credentials)
+ * `Sofia RPC error (…):` prefix, and known failure shapes (missing credentials)
  * are unwrapped so the primary content reads like a sentence, not a payload.
  */
 export function describeSofiaError(message: string): SofiaErrorDetails {
   const raw = message;
   // Unwrap the JSON error body if one is embedded anywhere in the message.
-  let detail = message.replace(/^codex rpc error \([^)]*\):\s*/i, "").trim();
+  let detail = message.replace(/^(?:sofia|codex) rpc error \([^)]*\):\s*/i, "").trim();
   const jsonStart = detail.indexOf("{");
   if (jsonStart >= 0) {
     try {

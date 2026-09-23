@@ -7,7 +7,7 @@ import { listCommands, upsertCommand } from "./commands.js";
 
 describe("commands", () => {
   test("upsertCommand omits null model from frontmatter", async () => {
-    const workspace = await mkdtemp(join(tmpdir(), "openwork-commands-"));
+    const workspace = await mkdtemp(join(tmpdir(), "sofia-commands-"));
 
     const path = await upsertCommand(workspace, {
       name: "learn-files",
@@ -22,8 +22,8 @@ describe("commands", () => {
   });
 
   test("listCommands repairs legacy null model frontmatter", async () => {
-    const workspace = await mkdtemp(join(tmpdir(), "openwork-commands-"));
-    const commandsDir = join(workspace, ".opencode", "commands");
+    const workspace = await mkdtemp(join(tmpdir(), "sofia-commands-"));
+    const commandsDir = join(workspace, ".sofia", "commands");
     const commandPath = join(commandsDir, "learn-files.md");
 
     await mkdir(commandsDir, { recursive: true });

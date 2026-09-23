@@ -77,12 +77,12 @@ export type AutomationAction = z.infer<typeof automationActionSchema>
 
 /**
  * Canonical identity for the free Automation starter model. Runtime provider
- * configuration belongs to the desktop's OpenCode installation, not Den.
+ * configuration belongs to the desktop's Sofia engine installation, not Den.
  */
 export const AUTOMATION_FREE_MODEL = {
   providerId: "opencode",
   modelId: "big-pickle",
-  providerName: "OpenCode Zen",
+  providerName: "Sofia Zen",
   modelName: "Big Pickle",
 } as const
 
@@ -165,7 +165,7 @@ export const automationExecutionThreadSchema = z.object({
   automationId: idSchema,
   automationRunId: idSchema,
   engineKind: idSchema,
-  /** Native OpenCode session identity for agent runs. */
+  /** Native Sofia engine session identity for agent runs. */
   nativeThreadId: idSchema.nullable().optional(),
   workspaceId: idSchema.nullable().optional(),
 })
@@ -176,7 +176,7 @@ export const automationExecutionTargetSchema = z.enum(["desktop", "cloud"])
 export type AutomationExecutionTarget = z.infer<typeof automationExecutionTargetSchema>
 
 export const AUTOMATION_MODEL_ATTENTION_CAPABILITY = "model_attention_v1" as const
-export const AUTOMATION_MODEL_ATTENTION_CAPABILITY_HEADER = "x-openwork-automation-model-attention" as const
+export const AUTOMATION_MODEL_ATTENTION_CAPABILITY_HEADER = "x-sofia-automation-model-attention" as const
 export const automationDesktopRunnerCapabilitySchema = z.literal(AUTOMATION_MODEL_ATTENTION_CAPABILITY)
 export type AutomationDesktopRunnerCapability = z.infer<typeof automationDesktopRunnerCapabilitySchema>
 
@@ -337,7 +337,7 @@ const actionCreateAutomationSchema = z.object({
   if (!validPair) {
     context.addIssue({
       code: z.ZodIssueCode.custom,
-      message: "Action-based Automations are created by Web and run in OpenWork Cloud.",
+      message: "Action-based Automations are created by Web and run in Sofia Cloud.",
       path: ["executionTarget"],
     })
   }

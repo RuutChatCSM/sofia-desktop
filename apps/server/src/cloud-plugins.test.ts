@@ -29,14 +29,14 @@ function serverConfig(root: string): ServerConfig {
 }
 
 async function withWorkspace(fn: (input: { root: string; config: ServerConfig }) => Promise<void>) {
-  const root = await mkdtemp(join(tmpdir(), "openwork-cloud-plugin-"));
-  const previousDb = process.env.OPENWORK_RUNTIME_DB;
-  process.env.OPENWORK_RUNTIME_DB = join(root, "runtime.sqlite");
+  const root = await mkdtemp(join(tmpdir(), "sofia-cloud-plugin-"));
+  const previousDb = process.env.SOFIA_RUNTIME_DB;
+  process.env.SOFIA_RUNTIME_DB = join(root, "runtime.sqlite");
   try {
     await fn({ root, config: serverConfig(root) });
   } finally {
-    if (previousDb === undefined) delete process.env.OPENWORK_RUNTIME_DB;
-    else process.env.OPENWORK_RUNTIME_DB = previousDb;
+    if (previousDb === undefined) delete process.env.SOFIA_RUNTIME_DB;
+    else process.env.SOFIA_RUNTIME_DB = previousDb;
     await rm(root, { recursive: true, force: true });
   }
 }
@@ -109,7 +109,7 @@ describe("cloud plugin installs", () => {
       expect(installed.plugins.plugin_1?.name).toBe("Creative Brief Plugin");
       expect(installed.marketplaces.marketplace_1?.pluginIds).toEqual(["plugin_1"]);
 
-      const skillPath = join(root, ".opencode", "skills", "creative-brief-plugin", "brief-builder", "SKILL.md");
+      const skillPath = join(root, ".sofia", "skills", "creative-brief-plugin", "brief-builder", "SKILL.md");
       expect(await readFile(skillPath, "utf8")).toContain("OWP_BRIEF_TEST_TOKEN");
       expect((await readRuntimeOpencodeConfig(config, WORKSPACE_ID)).mcp?.brief).toMatchObject({
         type: "remote",
@@ -202,13 +202,13 @@ describe("cloud plugin installs", () => {
       });
       const imported = result.item;
 
-      const agentPath = join(root, ".opencode", "agents", "review-plugin", "fancy-code-reviewer.md");
-      const commandPath = join(root, ".opencode", "commands", "review-plugin", "release-notes.md");
-      const contextPath = join(root, ".opencode", "context", "review-plugin", "style-guide.md");
+      const agentPath = join(root, ".sofia", "agents", "review-plugin", "fancy-code-reviewer.md");
+      const commandPath = join(root, ".sofia", "commands", "review-plugin", "release-notes.md");
+      const contextPath = join(root, ".sofia", "context", "review-plugin", "style-guide.md");
       expect(imported.files.map((file) => file.path).sort()).toEqual([
-        ".opencode/agents/review-plugin/fancy-code-reviewer.md",
-        ".opencode/commands/review-plugin/release-notes.md",
-        ".opencode/context/review-plugin/style-guide.md",
+        ".sofia/agents/review-plugin/fancy-code-reviewer.md",
+        ".sofia/commands/review-plugin/release-notes.md",
+        ".sofia/context/review-plugin/style-guide.md",
       ]);
       expect(result.warnings).toEqual([]);
 
@@ -277,7 +277,7 @@ describe("cloud plugin installs", () => {
       });
       expect(result.warnings).toEqual([]);
 
-      const agentPath = join(root, ".opencode", "agents", "triage-plugin", "triage.md");
+      const agentPath = join(root, ".sofia", "agents", "triage-plugin", "triage.md");
       const agentContent = await readFile(agentPath, "utf8");
       expect(agentContent).toContain("model: opencode/claude-haiku-4-5");
       expect(agentContent).toContain("read: true");

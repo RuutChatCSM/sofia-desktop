@@ -78,7 +78,7 @@ function startWorkspaceReloadWatcher(input: {
 }): WorkspaceReloadWatcher {
   const { workspace, reloadEvents, logger, debounceMs } = input;
   const root = resolve(workspace.path);
-  const opencodeRoot = join(root, ".opencode");
+  const sofiaRoot = join(root, ".sofia");
 
   const trees: DirectoryTreeWatcher[] = [];
   const baselines = new Map<ReloadReason, string>();
@@ -86,7 +86,7 @@ function startWorkspaceReloadWatcher(input: {
 
   let closed = false;
   let rootWatcher: FSWatcher | null = null;
-  let opencodeRootWatcher: FSWatcher | null = null;
+  let sofiaRootWatcher: FSWatcher | null = null;
 
   const closeAll = () => {
     closed = true;
@@ -98,7 +98,7 @@ function startWorkspaceReloadWatcher(input: {
       tree.close();
     }
     rootWatcher?.close();
-    opencodeRootWatcher?.close();
+    sofiaRootWatcher?.close();
   };
 
   const refreshBaseline = async (reasons: ReloadReason[] = fingerprintedReloadReasons) => {
@@ -121,21 +121,10 @@ function startWorkspaceReloadWatcher(input: {
     if (trigger) return trigger;
     const recent = lastNamedTrigger.get(reason);
     if (recent && Date.now() - recent.at <= NAMED_TRIGGER_TTL_MS) return recent.trigger;
-    // Last line of defense: macOS fs.watch can coalesce a config-file write
-    // into a single directory-level event (e.g. ".opencode") and never
-    // deliver a file-named event at all. If a config/agents fingerprint
-    // change is about to be recorded with no trigger, infer it from the
-    // files that can produce it — same inference the watch callbacks use.
-    if (reason === "config") {
-      const candidates = [
-        join(root, "opencode.jsonc"),
-        join(root, "opencode.json"),
-        join(opencodeRoot, "opencode.jsonc"),
-        join(opencodeRoot, "opencode.json"),
-      ];
-      const found = candidates.find((candidate) => existsSync(candidate));
-      if (found) return { type: "config", name: basename(found), action: "updated", path: found };
-    }
+    // Last line of defense: macOS fs.watch can coalesce a directory write into
+    // a single directory-level event and never deliver a file-named event at
+    // all. If an agents fingerprint change is about to be recorded with no
+    // trigger, infer it from the files that can produce it.
     if (reason === "agents") {
       const agentsPath = join(root, "AGENTS.md");
       if (existsSync(agentsPath)) return { type: "agent", action: "updated", path: agentsPath };
@@ -177,41 +166,23 @@ function startWorkspaceReloadWatcher(input: {
     pendingChecks.set(reason, { timer, trigger: trigger ?? existing?.trigger });
   };
 
-  const ensureOpencodeRootWatcher = () => {
-    if (!existsSync(opencodeRoot)) {
-      opencodeRootWatcher?.close();
-      opencodeRootWatcher = null;
+  const ensureSofiaRootWatcher = () => {
+    if (!existsSync(sofiaRoot)) {
+      sofiaRootWatcher?.close();
+      sofiaRootWatcher = null;
       return;
     }
-    if (opencodeRootWatcher) return;
+    if (sofiaRootWatcher) return;
 
     try {
-      opencodeRootWatcher = watch(
-        opencodeRoot,
+      sofiaRootWatcher = watch(
+        sofiaRoot,
         { persistent: false },
         (_eventType, filename) => {
           const raw = filename ? filename.toString() : "";
           const name = raw.trim();
           if (!name) {
-            const inferredConfigPath = existsSync(join(opencodeRoot, "opencode.jsonc"))
-              ? join(opencodeRoot, "opencode.jsonc")
-              : existsSync(join(opencodeRoot, "opencode.json"))
-                ? join(opencodeRoot, "opencode.json")
-                : null;
-            scheduleReasonCheck("config", inferredConfigPath
-              ? { type: "config", name: basename(inferredConfigPath), action: "updated", path: inferredConfigPath }
-              : undefined);
             for (const tree of trees) tree.scheduleRescan();
-            return;
-          }
-
-          if (name === "opencode.json" || name === "opencode.jsonc") {
-            scheduleReasonCheck("config", {
-              type: "config",
-              name,
-              action: "updated",
-              path: join(opencodeRoot, name),
-            });
             return;
           }
 
@@ -220,15 +191,15 @@ function startWorkspaceReloadWatcher(input: {
           }
         },
       );
-      opencodeRootWatcher.on("error", (error) => {
-        logger?.log("warn", "Reload watcher .opencode error", {
+      sofiaRootWatcher.on("error", (error) => {
+        logger?.log("warn", "Reload watcher .sofia error", {
           workspaceId: workspace.id,
           workspacePath: root,
           error: error instanceof Error ? error.message : String(error),
         });
       });
     } catch (error) {
-      logger?.log("warn", "Reload watcher .opencode failed", {
+      logger?.log("warn", "Reload watcher .sofia failed", {
         workspaceId: workspace.id,
         workspacePath: root,
         error: error instanceof Error ? error.message : String(error),
@@ -247,31 +218,13 @@ function startWorkspaceReloadWatcher(input: {
           const name = raw.trim();
           if (!name) {
             // macOS fs.watch may omit the filename for directory events.
-            // Infer the trigger like ensureOpencodeRootWatcher does so config
+            // Infer the trigger like ensureSofiaRootWatcher does so config
             // reload events keep their trigger {name, path} on macOS.
-            const inferredConfigPath = existsSync(join(root, "opencode.jsonc"))
-              ? join(root, "opencode.jsonc")
-              : existsSync(join(root, "opencode.json"))
-                ? join(root, "opencode.json")
-                : null;
-            scheduleReasonCheck("config", inferredConfigPath
-              ? { type: "config", name: basename(inferredConfigPath), action: "updated", path: inferredConfigPath }
-              : undefined);
             const agentsPath = join(root, "AGENTS.md");
             scheduleReasonCheck("agents", existsSync(agentsPath)
               ? { type: "agent", action: "updated", path: agentsPath }
               : undefined);
             for (const tree of trees) tree.scheduleRescan();
-            return;
-          }
-
-          if (name === "opencode.json" || name === "opencode.jsonc") {
-            scheduleReasonCheck("config", {
-              type: "config",
-              name,
-              action: "updated",
-              path: join(root, name),
-            });
             return;
           }
 
@@ -284,10 +237,9 @@ function startWorkspaceReloadWatcher(input: {
             return;
           }
 
-          // If .opencode is created/removed, rescan the relevant trees.
-          if (name === ".opencode") {
-            ensureOpencodeRootWatcher();
-            scheduleReasonCheck("config");
+          // If .sofia is created/removed, rescan the relevant trees.
+          if (name === ".sofia") {
+            ensureSofiaRootWatcher();
             for (const tree of trees) tree.scheduleRescan();
           }
         },
@@ -308,11 +260,11 @@ function startWorkspaceReloadWatcher(input: {
     }
   }
 
-  ensureOpencodeRootWatcher();
+  ensureSofiaRootWatcher();
 
   trees.push(
     createDirectoryTreeWatcher({
-      rootDir: join(opencodeRoot, "skills"),
+      rootDir: join(sofiaRoot, "skills"),
       workspace,
       reason: "skills",
       triggerType: "skill",
@@ -322,7 +274,7 @@ function startWorkspaceReloadWatcher(input: {
   );
   trees.push(
     createDirectoryTreeWatcher({
-      rootDir: join(opencodeRoot, "commands"),
+      rootDir: join(sofiaRoot, "commands"),
       workspace,
       reason: "commands",
       triggerType: "command",
@@ -332,7 +284,7 @@ function startWorkspaceReloadWatcher(input: {
   );
   trees.push(
     createDirectoryTreeWatcher({
-      rootDir: join(opencodeRoot, "plugins"),
+      rootDir: join(sofiaRoot, "plugins"),
       workspace,
       reason: "plugins",
       triggerType: "plugin",
@@ -342,7 +294,7 @@ function startWorkspaceReloadWatcher(input: {
   );
   trees.push(
     createDirectoryTreeWatcher({
-      rootDir: join(opencodeRoot, "agents"),
+      rootDir: join(sofiaRoot, "agents"),
       workspace,
       reason: "agents",
       triggerType: "agent",
@@ -352,7 +304,7 @@ function startWorkspaceReloadWatcher(input: {
   );
   trees.push(
     createDirectoryTreeWatcher({
-      rootDir: join(opencodeRoot, "agent"),
+      rootDir: join(sofiaRoot, "agent"),
       workspace,
       reason: "agents",
       triggerType: "agent",

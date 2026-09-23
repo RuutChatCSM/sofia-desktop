@@ -1,9 +1,9 @@
 import { createHash } from "node:crypto"
-import { createHeadlessThreadClient, type HeadlessThreadTranscript } from "@openwork/headless-threads"
-import { and, asc, eq, isNull } from "@openwork-ee/den-db/drizzle"
-import { MemberTable, OrganizationTable, WorkerTable } from "@openwork-ee/den-db/schema"
-import { normalizeDenTypeId } from "@openwork-ee/utils/typeid"
-import type { AutomationAction, AutomationError, AutomationUsage } from "@openwork/types/automations"
+import { createHeadlessThreadClient, type HeadlessThreadTranscript } from "@sofia/headless-threads"
+import { and, asc, eq, isNull } from "@sofia-ee/den-db/drizzle"
+import { MemberTable, OrganizationTable, WorkerTable } from "@sofia-ee/den-db/schema"
+import { normalizeDenTypeId } from "@sofia-ee/utils/typeid"
+import type { AutomationAction, AutomationError, AutomationUsage } from "@sofia/types/automations"
 import { db } from "../db.js"
 import { env } from "../env.js"
 import { loadCloudWorkerAccess, type CloudWorkerAccess } from "../workers/worker-access.js"
@@ -180,8 +180,8 @@ async function readWorkspace(access: CloudWorkerAccess, signal: AbortSignal) {
 
 async function readyWorker(scope: OwnerScope, signal: AbortSignal) {
   const worker = await ownerCloudWorker(scope)
-  if (!worker) return { ok: false as const, message: "Set up OpenWork Cloud before creating a Cloud Automation." }
-  if (worker.status === "failed") return { ok: false as const, message: "The OpenWork Cloud runtime needs repair before this Automation can run." }
+  if (!worker) return { ok: false as const, message: "Set up Sofia Cloud before creating a Cloud Automation." }
+  if (worker.status === "failed") return { ok: false as const, message: "The Sofia Cloud runtime needs repair before this Automation can run." }
   if (worker.status === "stopped") await abortable(wakeCloudWorker(worker.id), signal)
   const deadline = Date.now() + WORKER_READY_TIMEOUT_MS
   while (!signal.aborted && Date.now() < deadline) {
@@ -198,7 +198,7 @@ async function readyWorker(scope: OwnerScope, signal: AbortSignal) {
     if (current.status === "stopped") await abortable(wakeCloudWorker(current.id), signal)
     await abortableSleep(WORKER_READY_POLL_MS, signal)
   }
-  return { ok: false as const, message: "OpenWork Cloud could not be started for this Automation run." }
+  return { ok: false as const, message: "Sofia Cloud could not be started for this Automation run." }
 }
 
 async function connectHealth(input: {
@@ -228,10 +228,10 @@ async function connectHealth(input: {
     const value: unknown = await response.json()
     return isRecord(value) ? value : null
   }
-  let value = await request("GET", `/workspace/${encodedWorkspace}/mcp/openwork-cloud/health?${query}`)
+  let value = await request("GET", `/workspace/${encodedWorkspace}/mcp/sofia-cloud/health?${query}`)
   let health = value
   if (health?.usable !== true || health.usableByCurrentModel !== true) {
-    value = await request("POST", `/workspace/${encodedWorkspace}/mcp/openwork-cloud/engine-refresh`, {
+    value = await request("POST", `/workspace/${encodedWorkspace}/mcp/sofia-cloud/engine-refresh`, {
       provider: input.action.model.providerId,
       model: input.action.model.modelId,
       trigger: "automation_run",
@@ -240,7 +240,7 @@ async function connectHealth(input: {
   }
   if (health?.usable === true && health.usableByCurrentModel === true) return { ok: true }
   if (health?.usable === true && health.usableByCurrentModel !== true) {
-    return { ok: false, code: "model_access_lost", message: "The selected model cannot use the current OpenWork Connect capabilities." }
+    return { ok: false, code: "model_access_lost", message: "The selected model cannot use the current Sofia Connect capabilities." }
   }
   const failure = isRecord(health?.firstFailure) ? health.firstFailure : null
   return {
@@ -248,7 +248,7 @@ async function connectHealth(input: {
     code: "connect_access_unavailable",
     message: typeof failure?.message === "string"
       ? failure.message
-      : "OpenWork Connect is not ready in the Cloud runtime. Reconnect it before retrying this Automation.",
+      : "Sofia Connect is not ready in the Cloud runtime. Reconnect it before retrying this Automation.",
   }
 }
 
@@ -358,7 +358,7 @@ export async function executeCloudAgent(input: CloudAgentExecutorInput): Promise
         status: cancelled ? "cancelled" : "failed",
         code: cancelled ? "cancelled" : deadlineController.signal.aborted ? "execution_timed_out" : "execution_runtime_unavailable",
         message: cancelled ? "The Automation run was cancelled."
-          : deadlineController.signal.aborted ? "The Automation run exceeded its maximum runtime while starting OpenWork Cloud." : runtime.message,
+          : deadlineController.signal.aborted ? "The Automation run exceeded its maximum runtime while starting Sofia Cloud." : runtime.message,
         retryable: false,
         needsAttention: !cancelled && !deadlineController.signal.aborted,
       }
@@ -419,7 +419,7 @@ export async function executeCloudAgent(input: CloudAgentExecutorInput): Promise
           ok: false,
           status: "failed",
           code: "execution_failed",
-          message: "Model authority was revoked, but OpenWork Cloud could not confirm that the native thread stopped. Inspect the native run before retrying.",
+          message: "Model authority was revoked, but Sofia Cloud could not confirm that the native thread stopped. Inspect the native run before retrying.",
           retryable: false,
           needsAttention: true,
           events: [{ type: "warning", payload: { code: "authority_revoked_abort_not_observed", nativeThreadId } }],
@@ -450,7 +450,7 @@ export async function executeCloudAgent(input: CloudAgentExecutorInput): Promise
           ok: false,
           status: "failed",
           code: "execution_failed",
-          message: "OpenWork Cloud could not confirm that the cancelled agent thread stopped. Inspect the native run before retrying.",
+          message: "Sofia Cloud could not confirm that the cancelled agent thread stopped. Inspect the native run before retrying.",
           retryable: false,
           needsAttention: true,
           events: [{ type: "warning", payload: { code: "abort_not_observed", nativeThreadId } }],
@@ -469,7 +469,7 @@ export async function executeCloudAgent(input: CloudAgentExecutorInput): Promise
     const transcript = await client.exportTranscript(nativeThreadId, { signal })
     const usage = usageFromTranscript(transcript.usage)
     if (transcript.terminalError) return terminalFailure({ error: transcript.terminalError, transcript, usage })
-    const resultSummary = transcript.finalAssistantText.trim() || "OpenWork Cloud completed the Automation run."
+    const resultSummary = transcript.finalAssistantText.trim() || "Sofia Cloud completed the Automation run."
     return {
       ok: true,
       threadId: nativeThreadId,
@@ -494,7 +494,7 @@ export async function executeCloudAgent(input: CloudAgentExecutorInput): Promise
           ok: false,
           status: "failed",
           code: "execution_failed",
-          message: "OpenWork Cloud could not confirm that the interrupted agent thread stopped. Inspect the native run before retrying.",
+          message: "Sofia Cloud could not confirm that the interrupted agent thread stopped. Inspect the native run before retrying.",
           retryable: false,
           needsAttention: true,
           events: [{ type: "warning", payload: { code: "abort_not_observed", nativeThreadId } }],

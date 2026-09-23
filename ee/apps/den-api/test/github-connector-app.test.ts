@@ -59,7 +59,7 @@ describe("github connector app helpers", () => {
         }
 
         if (String(url).endsWith("/contents/.claude-plugin/marketplace.json")) {
-          if (String(url).includes("different-ai/openwork")) {
+          if (String(url).includes("RuutChatCSM/sofia-desktop")) {
             const content = Buffer.from(JSON.stringify({ plugins: [{ name: "a" }, { name: "b" }, { name: "c" }] })).toString("base64")
             return new Response(JSON.stringify({ content, encoding: "base64" }), { status: 200 })
           }
@@ -67,7 +67,7 @@ describe("github connector app helpers", () => {
         }
 
         if (String(url).endsWith("/contents/.claude-plugin/plugin.json")) {
-          if (String(url).includes("different-ai/opencode")) {
+          if (String(url).includes("RuutChatCSM/opencode")) {
             return new Response(JSON.stringify({ name: "plugin.json" }), { status: 200 })
           }
           return new Response(JSON.stringify({ message: "not found" }), { status: 404 })
@@ -75,8 +75,8 @@ describe("github connector app helpers", () => {
 
         return new Response(JSON.stringify({
           repositories: [
-            { default_branch: "main", full_name: "different-ai/openwork", id: 42, private: true },
-            { default_branch: "dev", full_name: "different-ai/opencode", id: 99, private: false },
+            { default_branch: "main", full_name: "RuutChatCSM/sofia-desktop", id: 42, private: true },
+            { default_branch: "dev", full_name: "RuutChatCSM/opencode", id: 99, private: false },
           ],
         }), { status: 200 })
       },
@@ -89,18 +89,18 @@ describe("github connector app helpers", () => {
       "https://api.github.com/installation/repositories?per_page=100&page=1",
     ])
     expect(requestUrls.slice(2).sort()).toEqual([
-      "https://api.github.com/repos/different-ai/openwork/contents/.claude-plugin/marketplace.json",
-      "https://api.github.com/repos/different-ai/opencode/contents/.claude-plugin/marketplace.json",
-      "https://api.github.com/repos/different-ai/opencode/contents/.claude-plugin/plugin.json",
+      "https://api.github.com/repos/RuutChatCSM/sofia-desktop/contents/.claude-plugin/marketplace.json",
+      "https://api.github.com/repos/RuutChatCSM/opencode/contents/.claude-plugin/marketplace.json",
+      "https://api.github.com/repos/RuutChatCSM/opencode/contents/.claude-plugin/plugin.json",
     ].sort())
-    expect(requestUrls.filter((url) => url.includes("/repos/different-ai/opencode/contents/"))).toEqual([
-      "https://api.github.com/repos/different-ai/opencode/contents/.claude-plugin/marketplace.json",
-      "https://api.github.com/repos/different-ai/opencode/contents/.claude-plugin/plugin.json",
+    expect(requestUrls.filter((url) => url.includes("/repos/RuutChatCSM/opencode/contents/"))).toEqual([
+      "https://api.github.com/repos/RuutChatCSM/opencode/contents/.claude-plugin/marketplace.json",
+      "https://api.github.com/repos/RuutChatCSM/opencode/contents/.claude-plugin/plugin.json",
     ])
     expect(requestUrls).not.toContain("https://api.github.com/installation/repositories?per_page=100&page=2")
     expect(repositories).toEqual([
-      { defaultBranch: "main", fullName: "different-ai/openwork", hasPluginManifest: true, id: 42, manifestKind: "marketplace", marketplacePluginCount: 3, private: true },
-      { defaultBranch: "dev", fullName: "different-ai/opencode", hasPluginManifest: true, id: 99, manifestKind: "plugin", marketplacePluginCount: null, private: false },
+      { defaultBranch: "main", fullName: "RuutChatCSM/sofia-desktop", hasPluginManifest: true, id: 42, manifestKind: "marketplace", marketplacePluginCount: 3, private: true },
+      { defaultBranch: "dev", fullName: "RuutChatCSM/opencode", hasPluginManifest: true, id: 99, manifestKind: "plugin", marketplacePluginCount: null, private: false },
     ])
   })
 
@@ -126,7 +126,7 @@ describe("github connector app helpers", () => {
               ? []
               : Array.from({ length: count }, (_, index) => {
                   const id = firstId + index
-                  return { default_branch: "main", full_name: `different-ai/repo-${id}`, id, private: false }
+                  return { default_branch: "main", full_name: `RuutChatCSM/repo-${id}`, id, private: false }
                 }),
           }), { status: 200 })
         }
@@ -192,9 +192,9 @@ describe("github connector app helpers", () => {
     const app = await getGithubAppSummary({
       config: { appId: "123456", privateKey: privateKeyPem },
       fetchFn: async () => new Response(JSON.stringify({
-        html_url: "https://github.com/apps/openwork-test",
-        name: "OpenWork Test",
-        slug: "openwork-test",
+        html_url: "https://github.com/apps/sofia-test",
+        name: "Sofia Test",
+        slug: "sofia-test",
       }), { status: 200 }),
     })
 
@@ -206,7 +206,7 @@ describe("github connector app helpers", () => {
       userId: "user_123",
     })
 
-    expect(buildGithubAppInstallUrl({ app, state: token })).toBe(`https://github.com/apps/openwork-test/installations/new?state=${encodeURIComponent(token)}`)
+    expect(buildGithubAppInstallUrl({ app, state: token })).toBe(`https://github.com/apps/sofia-test/installations/new?state=${encodeURIComponent(token)}`)
     expect(verifyGithubInstallStateToken({ now: new Date("2026-04-21T19:05:00.000Z"), secret: "secret-123", token })).toMatchObject({
       orgId: "org_123",
       returnPath: "/dashboard/integrations/github",
@@ -222,7 +222,7 @@ describe("github connector app helpers", () => {
         if (String(url).endsWith("/app/installations/777")) {
           return new Response(JSON.stringify({
             account: {
-              login: "different-ai",
+              login: "RuutChatCSM",
               type: "Organization",
             },
             id: 777,
@@ -234,9 +234,9 @@ describe("github connector app helpers", () => {
     })
 
     expect(installation).toEqual({
-      accountLogin: "different-ai",
+      accountLogin: "RuutChatCSM",
       accountType: "Organization",
-      displayName: "different-ai",
+      displayName: "RuutChatCSM",
       installationId: 777,
       repositorySelection: "all",
       settingsUrl: null,
@@ -255,7 +255,7 @@ describe("github connector app helpers", () => {
       installationId: 777,
       path,
       ref: "main",
-      repositoryFullName: "different-ai/openwork",
+      repositoryFullName: "RuutChatCSM/sofia-desktop",
       token: "installation-token",
     })
 
@@ -280,8 +280,8 @@ describe("github connector app helpers", () => {
       { rawSourceText: "# imported from skills/d/SKILL.md", status: "fetched" },
     ])
     expect(contentRequests).toEqual([
-      "https://api.github.com/repos/different-ai/openwork/contents/skills/c/SKILL.md?ref=main",
-      "https://api.github.com/repos/different-ai/openwork/contents/skills/d/SKILL.md?ref=main",
+      "https://api.github.com/repos/RuutChatCSM/sofia-desktop/contents/skills/c/SKILL.md?ref=main",
+      "https://api.github.com/repos/RuutChatCSM/sofia-desktop/contents/skills/d/SKILL.md?ref=main",
     ])
   })
 
@@ -338,15 +338,15 @@ describe("github connector app helpers", () => {
           return new Response(JSON.stringify({ token: "installation-token" }), { status: 201 })
         }
 
-        if (String(url).endsWith("/repos/different-ai/openwork")) {
+        if (String(url).endsWith("/repos/RuutChatCSM/sofia-desktop")) {
           return new Response(JSON.stringify({
             default_branch: "main",
-            full_name: "different-ai/openwork",
+            full_name: "RuutChatCSM/sofia-desktop",
             id: 42,
           }), { status: 200 })
         }
 
-        if (String(url).endsWith("/repos/different-ai/openwork/branches/main")) {
+        if (String(url).endsWith("/repos/RuutChatCSM/sofia-desktop/branches/main")) {
           return new Response(JSON.stringify({ name: "main" }), { status: 200 })
         }
 
@@ -354,7 +354,7 @@ describe("github connector app helpers", () => {
       },
       installationId: 777,
       ref: "refs/heads/main",
-      repositoryFullName: "different-ai/openwork",
+      repositoryFullName: "RuutChatCSM/sofia-desktop",
       repositoryId: 42,
     })
 

@@ -36,7 +36,7 @@ import {
 
 type ModelAccessMode = "open" | "managed";
 
-type OpenWorkKeyRow = {
+type SofiaKeyRow = {
   id: string;
   name: string;
   email: string;
@@ -47,11 +47,11 @@ const ADMIN_EXCEPTION_POLICY_NAME = "Admins may add providers";
 const ADMIN_EXCEPTION_ROLES: DenDesktopPolicyRole[] = ["owner", "admin"];
 
 function getProviderSourceLabel(source: DenLlmProviderSource) {
-  if (source === "openwork") return "OpenWork";
+  if (source === "sofia") return "Sofia";
   return source === "custom" ? "Custom" : "Catalog";
 }
 
-const openWorkKeyColumns: readonly DenTableColumn<OpenWorkKeyRow>[] = [
+const sofiaKeyColumns: readonly DenTableColumn<SofiaKeyRow>[] = [
   {
     key: "member",
     header: "Member",
@@ -117,13 +117,13 @@ export function LlmProvidersScreen() {
     setZenAllowed(defaultPolicy?.policy.allowZenModel !== false);
   }, [defaultPolicy, adminExceptionPolicies]);
 
-  const openWorkProviders = useMemo(
-    () => llmProviders.filter((provider) => provider.source === "openwork"),
+  const sofiaProviders = useMemo(
+    () => llmProviders.filter((provider) => provider.source === "sofia"),
     [llmProviders],
   );
 
   const customProviders = useMemo(
-    () => llmProviders.filter((provider) => provider.source !== "openwork"),
+    () => llmProviders.filter((provider) => provider.source !== "sofia"),
     [llmProviders],
   );
 
@@ -146,8 +146,8 @@ export function LlmProvidersScreen() {
     });
   }, [customProviders, query]);
 
-  const openWorkKeyRows = useMemo(() => {
-    const rows = openWorkProviders.flatMap((provider) =>
+  const sofiaKeyRows = useMemo(() => {
+    const rows = sofiaProviders.flatMap((provider) =>
       provider.access.members.map((member) => ({
         id: `${provider.id}:${member.id}`,
         name: member.user.name || member.user.email,
@@ -157,7 +157,7 @@ export function LlmProvidersScreen() {
     );
     rows.sort((a, b) => a.name.localeCompare(b.name));
     return rows;
-  }, [openWorkProviders]);
+  }, [sofiaProviders]);
 
   const modelNames = useMemo(() => {
     const names = llmProviders.flatMap((provider) =>
@@ -407,14 +407,14 @@ export function LlmProvidersScreen() {
         </div>
       ) : (
       <div className="grid gap-8">
-        {openWorkKeyRows.length > 0 ? (
+        {sofiaKeyRows.length > 0 ? (
           <section className="overflow-hidden rounded-[28px] border border-gray-200 bg-white">
             <DenSectionHeader
               className="border-b border-gray-100 px-6 py-4"
-              title="OpenWork Model Keys"
-              description="Members in this organization with an OpenWork Models key."
+              title="Sofia Model Keys"
+              description="Members in this organization with an Sofia Models key."
             />
-            <DenTable columns={openWorkKeyColumns} rows={openWorkKeyRows} getRowKey={(row) => row.id} />
+            <DenTable columns={sofiaKeyColumns} rows={sofiaKeyRows} getRowKey={(row) => row.id} />
           </section>
         ) : null}
 

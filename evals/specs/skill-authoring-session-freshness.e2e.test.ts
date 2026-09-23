@@ -1,13 +1,13 @@
-import { denFetch } from "@openwork/behaviors";
-import type { DenSession } from "@openwork/behaviors";
+import { denFetch } from "@sofia/behaviors";
+import type { DenSession } from "@sofia/behaviors";
 import { expect } from "vitest";
-import { localMysqlIsRunning, needs, queryDenDatabase, server, test } from "@openwork/testkit";
+import { localMysqlIsRunning, needs, queryDenDatabase, server, test } from "@sofia/testkit";
 
-const e2eTestsEnabled = process.env.OPENWORK_EVAL_E2E_TESTS === "1";
-const localPlacement = process.env.OPENWORK_EVAL_DAYTONA !== "1" && !process.env.OPENWORK_EVAL_DEN_API_URL?.trim();
+const e2eTestsEnabled = process.env.SOFIA_EVAL_E2E_TESTS === "1";
+const localPlacement = process.env.SOFIA_EVAL_DAYTONA !== "1" && !process.env.SOFIA_EVAL_DEN_API_URL?.trim();
 const mysqlOpen = await localMysqlIsRunning();
 const title = !e2eTestsEnabled
-  ? "skill authoring session freshness skipped — needs: set OPENWORK_EVAL_E2E_TESTS=1"
+  ? "skill authoring session freshness skipped — needs: set SOFIA_EVAL_E2E_TESTS=1"
   : !localPlacement
     ? "skill authoring session freshness skipped — needs a real local Den"
     : !mysqlOpen
@@ -28,12 +28,12 @@ function requireItem(body: unknown, label: string): Record<string, unknown> {
 function auth(session: DenSession, orgId?: string): Record<string, string> {
   return {
     authorization: `Bearer ${session.token}`,
-    ...(orgId ? { "x-openwork-org-id": orgId } : {}),
+    ...(orgId ? { "x-sofia-org-id": orgId } : {}),
   };
 }
 
 test.skipIf(!e2eTestsEnabled || !localPlacement || !mysqlOpen)(title, async ({ evidence, place }) => {
-  needs({ optIn: ["OPENWORK_EVAL_E2E_TESTS"] });
+  needs({ optIn: ["SOFIA_EVAL_E2E_TESTS"] });
 
   const unique = `${Date.now().toString(36)}${process.pid.toString(36)}`;
   const organizationName = `Skill Freshness ${unique}`;

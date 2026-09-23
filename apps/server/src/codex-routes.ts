@@ -81,7 +81,7 @@ export function registerCodexRoutes(options: RegisterCodexRoutesOptions): void {
       return await operation();
     } catch (error) {
       if (error instanceof ApiError) throw error;
-      console.error("[openwork-server] Sofia request failed:", error instanceof Error ? error.message : String(error));
+      console.error("[sofia-server] Sofia request failed:", error instanceof Error ? error.message : String(error));
       throw new ApiError(502, "sofia_request_failed", "Sofia request failed", {
         cause: error instanceof Error ? error.message : String(error),
       });

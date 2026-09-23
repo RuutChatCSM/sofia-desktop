@@ -1,15 +1,15 @@
 import { createServer } from "node:net";
 import { expect } from "vitest";
-import { signIn } from "@openwork/behaviors";
-import { localMysqlIsRunning, needs, server, test } from "@openwork/testkit";
+import { signIn } from "@sofia/behaviors";
+import { localMysqlIsRunning, needs, server, test } from "@sofia/testkit";
 
-const e2eTestsEnabled = process.env.OPENWORK_EVAL_E2E_TESTS === "1";
-const localPlacement = process.env.OPENWORK_EVAL_DAYTONA !== "1";
+const e2eTestsEnabled = process.env.SOFIA_EVAL_E2E_TESTS === "1";
+const localPlacement = process.env.SOFIA_EVAL_DAYTONA !== "1";
 const mysqlOpen = await localMysqlIsRunning();
 const title = !e2eTestsEnabled
-  ? "testkit local server skipped: set OPENWORK_EVAL_E2E_TESTS=1 to opt in"
+  ? "testkit local server skipped: set SOFIA_EVAL_E2E_TESTS=1 to opt in"
   : !localPlacement
-    ? "testkit local server skipped: unset OPENWORK_EVAL_DAYTONA for the local boot selftest"
+    ? "testkit local server skipped: unset SOFIA_EVAL_DAYTONA for the local boot selftest"
     : !mysqlOpen
       ? "testkit local server skipped: run pnpm dev:den:mysql"
       : "testkit boots and fully disposes an isolated local Den";
@@ -22,9 +22,9 @@ async function portCanBind(port: number): Promise<boolean> {
   });
 }
 
-test("skipped — needs: set OPENWORK_TESTKIT_INTENTIONALLY_MISSING", ({ place }) => {
+test("skipped — needs: set SOFIA_TESTKIT_INTENTIONALLY_MISSING", ({ place }) => {
   void place;
-  needs({ env: ["OPENWORK_TESTKIT_INTENTIONALLY_MISSING"] });
+  needs({ env: ["SOFIA_TESTKIT_INTENTIONALLY_MISSING"] });
 });
 
 test.skipIf(!e2eTestsEnabled || !localPlacement || !mysqlOpen)(title, async ({ place }) => {

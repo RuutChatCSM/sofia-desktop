@@ -8,7 +8,7 @@ import type {
   Session,
 } from "@/app/lib/engine-types";
 import type { createClient } from "./lib/opencode";
-import type { OpencodeConfigFile, WorkspaceInfo } from "./lib/desktop-types";
+import type { WorkspaceInfo } from "./lib/desktop-types";
 
 export type Client = ReturnType<typeof createClient>;
 
@@ -211,7 +211,7 @@ export type WorkspaceConnectionState = {
   checkedAt?: number | null;
 };
 
-export type ResetOpenworkMode = "onboarding" | "all";
+export type ResetSofiaMode = "onboarding" | "all";
 
 export type WorkspaceBlueprintStarterKind = "prompt" | "session" | "action";
 
@@ -264,7 +264,7 @@ export type WorkspaceBlueprint = {
   } | null;
 };
 
-export type WorkspaceOpenworkConfig = {
+export type WorkspaceSofiaConfig = {
   version: number;
   workspace?: {
     name?: string | null;
@@ -279,7 +279,7 @@ export type WorkspaceOpenworkConfig = {
   } | null;
 };
 
-export type CapabilityOrigin = "local" | "openwork-connect";
+export type CapabilityOrigin = "local" | "sofia-connect";
 
 export type SkillCard = {
   name: string;
@@ -447,7 +447,6 @@ export type WorkspaceState = {
 
 export type PluginState = {
   scope: PluginScope;
-  config: OpencodeConfigFile | null;
   list: string[];
 };
 

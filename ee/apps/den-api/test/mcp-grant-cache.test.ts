@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, expect, mock, test } from "bun:test"
-import { createDenTypeId } from "@openwork-ee/utils/typeid"
+import { createDenTypeId } from "@sofia-ee/utils/typeid"
 
 const grantId = createDenTypeId("oauthConsent")
 const cachedValues = new Map<string, string>()
@@ -36,12 +36,12 @@ const redis = {
 }
 
 beforeAll(async () => {
-  process.env.DATABASE_URL = process.env.DATABASE_URL ?? "mysql://root:password@127.0.0.1:3306/openwork_test"
+  process.env.DATABASE_URL = process.env.DATABASE_URL ?? "mysql://root:password@127.0.0.1:3306/sofia_test"
   process.env.DEN_DB_ENCRYPTION_KEY = process.env.DEN_DB_ENCRYPTION_KEY ?? "x".repeat(32)
   process.env.BETTER_AUTH_SECRET = process.env.BETTER_AUTH_SECRET ?? "y".repeat(32)
   process.env.BETTER_AUTH_URL = process.env.BETTER_AUTH_URL ?? "http://127.0.0.1:8790"
 
-  mock.module("@openwork-ee/den-db/schema", () => ({
+  mock.module("@sofia-ee/den-db/schema", () => ({
     AuthSessionTable,
     AuthUserTable,
     InvitationTable,
@@ -49,7 +49,7 @@ beforeAll(async () => {
     OAuthConsentTable,
     OrganizationTable,
   }))
-  mock.module("@openwork-ee/den-db/drizzle", () => ({
+  mock.module("@sofia-ee/den-db/drizzle", () => ({
     and: (...conditions: unknown[]) => ({ conditions }),
     asc: (field: unknown) => field,
     eq: (field: unknown, value: unknown) => ({ field, value }),

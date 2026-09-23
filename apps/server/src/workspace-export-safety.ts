@@ -8,25 +8,7 @@ export type WorkspaceExportWarning = {
   detail: string;
 };
 
-const CONFIG_SECTION_METADATA: Record<string, { warningId: string; label: string; intro: string }> = {
-  mcp: {
-    warningId: "mcp-config",
-    label: "MCP servers",
-    intro: "Contains secret-like MCP config",
-  },
-  plugin: {
-    warningId: "plugin-config",
-    label: "Plugin settings",
-    intro: "Contains secret-like plugin config",
-  },
-  provider: {
-    warningId: "provider-config",
-    label: "Provider settings",
-    intro: "Contains secret-like provider config",
-  },
-};
-
-const PORTABLE_FILE_PREFIXES = [".opencode/plugins/", ".opencode/tools/"] as const;
+const PORTABLE_FILE_PREFIXES = [".sofia/plugins/", ".sofia/tools/"] as const;
 
 const COMMON_SECRET_KEY_PATTERNS = [
   { id: "apiKey", test: (tokens: string[], normalized: string) => normalized.includes("apikey") || hasWordPair(tokens, "api", "key") },
@@ -59,10 +41,6 @@ const GENERIC_KEY_ASSIGNMENT_PATTERNS = [
   /\bkey\b\s*[:=]\s*["'`]([^"'`\n]{12,})["'`]/gi,
   /["'`]key["'`]\s*:\s*["'`]([^"'`\n]{12,})["'`]/gi,
 ] as const;
-
-function cloneJson<T>(value: T): T {
-  return JSON.parse(JSON.stringify(value));
-}
 
 function hasWordPair(tokens: string[], left: string, right: string): boolean {
   return tokens.includes(left) && tokens.includes(right);
@@ -192,72 +170,14 @@ function describeSignals(intro: string, signals: string[]): string {
   return `${intro}: ${unique.slice(0, 4).join(", ")}${unique.length > 4 ? ", ..." : ""}.`;
 }
 
-function sanitizeValue(value: unknown, keyHint?: string): unknown {
-  const directSignals = new Set<string>();
-  if (keyHint) {
-    for (const match of detectSensitiveKeySignals(keyHint, value)) {
-      directSignals.add(match);
-    }
-  }
-  if (typeof value === "string") {
-    for (const match of detectSensitiveStringSignals(value)) {
-      directSignals.add(match);
-    }
-    return directSignals.size ? undefined : value;
-  }
-
-  if (directSignals.size) return undefined;
-
-  if (Array.isArray(value)) {
-    const items = value
-      .map((item) => sanitizeValue(item))
-      .filter((item) => item !== undefined);
-    return items;
-  }
-
-  if (value && typeof value === "object") {
-    const next: Record<string, unknown> = {};
-    for (const [childKey, childValue] of Object.entries(value as Record<string, unknown>)) {
-      const sanitized = sanitizeValue(childValue, childKey);
-      if (sanitized === undefined) continue;
-      if (Array.isArray(sanitized) && sanitized.length === 0) continue;
-      if (sanitized && typeof sanitized === "object" && !Array.isArray(sanitized) && Object.keys(sanitized as Record<string, unknown>).length === 0) {
-        continue;
-      }
-      next[childKey] = sanitized;
-    }
-    return next;
-  }
-
-  return value;
-}
-
 function isPortableFileCandidate(path: string): boolean {
   return PORTABLE_FILE_PREFIXES.some((prefix) => path.startsWith(prefix));
 }
 
 export function collectWorkspaceExportWarnings(input: {
-  opencode: Record<string, unknown> | null | undefined;
   files: PortableFile[];
 }): WorkspaceExportWarning[] {
   const warnings = new Map<string, WorkspaceExportWarning>();
-  const opencode = input.opencode ?? {};
-
-  for (const [sectionKey, sectionValue] of Object.entries(opencode)) {
-    const signals = collectSignals(sectionValue);
-    if (!signals.length) continue;
-    const metadata =
-      CONFIG_SECTION_METADATA[sectionKey] ?? {
-        warningId: `config-${sectionKey}`,
-        label: formatSectionLabel(sectionKey),
-        intro: `Contains secret-like ${sectionKey} config`,
-      };
-    warnings.set(metadata.warningId, {
-      id: metadata.warningId,
-      label: metadata.label,
-      detail: describeSignals(metadata.intro, signals),
-    });
-  }
 
   for (const file of input.files) {
     const path = String(file.path ?? "").trim();
@@ -275,35 +195,10 @@ export function collectWorkspaceExportWarnings(input: {
 }
 
 export function stripSensitiveWorkspaceExportData(input: {
-  opencode: Record<string, unknown> | null | undefined;
   files: PortableFile[];
 }): {
-  opencode: Record<string, unknown>;
   files: PortableFile[];
 } {
-  const opencode = cloneJson(
-    input.opencode && typeof input.opencode === "object" && !Array.isArray(input.opencode)
-      ? input.opencode
-      : {},
-  ) as Record<string, unknown>;
-
-  for (const [sectionKey, sectionValue] of Object.entries(opencode)) {
-    const sanitized = sanitizeValue(sectionValue);
-    if (sanitized === undefined) {
-      delete opencode[sectionKey];
-      continue;
-    }
-    if (sanitized && typeof sanitized === "object" && !Array.isArray(sanitized) && Object.keys(sanitized as Record<string, unknown>).length === 0) {
-      delete opencode[sectionKey];
-      continue;
-    }
-    if (Array.isArray(sanitized) && sanitized.length === 0) {
-      delete opencode[sectionKey];
-      continue;
-    }
-    opencode[sectionKey] = sanitized;
-  }
-
   const files = input.files
     .filter((file) => {
       const path = String(file.path ?? "").trim();
@@ -312,12 +207,6 @@ export function stripSensitiveWorkspaceExportData(input: {
     })
     .map((file) => ({ ...file }));
 
-  return { opencode, files };
+  return { files };
 }
 
-function formatSectionLabel(sectionKey: string): string {
-  return sectionKey
-    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
-    .replace(/[-_]+/g, " ")
-    .replace(/^./, (char) => char.toUpperCase());
-}

@@ -6,10 +6,10 @@ import {
   cloudMcpDeliveryState,
   CloudMcpDeliveryStateStore,
   calculateCloudMcpDesiredRevision,
-  clearOpenworkCloudMcpProbeFlights,
-  OPENWORK_CLOUD_EXPECTED_TOOLS,
-  OPENWORK_CLOUD_PLUGIN_CANARIES,
-  readOpenworkCloudMcpHealth,
+  clearSofiaCloudMcpProbeFlights,
+  SOFIA_CLOUD_EXPECTED_TOOLS,
+  SOFIA_CLOUD_PLUGIN_CANARIES,
+  readSofiaCloudMcpHealth,
 } from "./cloud-mcp-health.js";
 import type {
   EngineMcpStatus,
@@ -31,7 +31,7 @@ const workspace: WorkspaceInfo = {
   workspaceType: "local",
 };
 
-const previousRuntimeDb = process.env.OPENWORK_RUNTIME_DB;
+const previousRuntimeDb = process.env.SOFIA_RUNTIME_DB;
 const previousFetch = globalThis.fetch;
 const roots: string[] = [];
 const runtimeDbRoots: string[] = [];
@@ -46,7 +46,7 @@ type ReadHealthOptions = {
 afterEach(async () => {
   globalThis.fetch = previousFetch;
   cloudMcpDeliveryState.clear();
-  clearOpenworkCloudMcpProbeFlights();
+  clearSofiaCloudMcpProbeFlights();
   while (stops.length) stops.pop()?.();
   while (roots.length) await rm(roots.pop() ?? "", { recursive: true, force: true });
   if (process.platform === "win32") {
@@ -56,8 +56,8 @@ afterEach(async () => {
   } else {
     while (runtimeDbRoots.length) await rm(runtimeDbRoots.pop() ?? "", { recursive: true, force: true });
   }
-  if (previousRuntimeDb === undefined) delete process.env.OPENWORK_RUNTIME_DB;
-  else process.env.OPENWORK_RUNTIME_DB = previousRuntimeDb;
+  if (previousRuntimeDb === undefined) delete process.env.SOFIA_RUNTIME_DB;
+  else process.env.SOFIA_RUNTIME_DB = previousRuntimeDb;
 });
 
 async function createRoot(prefix: string): Promise<string> {
@@ -118,13 +118,13 @@ function startMockOpencode(initialMode: DirectProbeMode) {
       if (url.pathname === "/global/health") return Response.json({ healthy: true, version: "1.17.11" });
       if (url.pathname === "/mcp" && request.method === "GET") {
         return Response.json({
-          "openwork-cloud": { status: "connected" },
+          "sofia-cloud": { status: "connected" },
           "sibling-remote": { status: "failed", error: "fetch failed" },
         });
       }
       if (url.pathname === "/experimental/tool/ids") {
         if (toolIdsBarrier) await toolIdsBarrier.enter();
-        return Response.json([...OPENWORK_CLOUD_EXPECTED_TOOLS, ...OPENWORK_CLOUD_PLUGIN_CANARIES]);
+        return Response.json([...SOFIA_CLOUD_EXPECTED_TOOLS, ...SOFIA_CLOUD_PLUGIN_CANARIES]);
       }
       if (url.pathname === "/cloud-mcp/mcp/agent" && request.method === "POST") {
         const body: unknown = await request.json();
@@ -141,7 +141,7 @@ function startMockOpencode(initialMode: DirectProbeMode) {
             result: {
               capabilities: { tools: {} },
               protocolVersion: "2025-06-18",
-              serverInfo: { name: "openwork-cloud-test", version: "1.0.0" },
+              serverInfo: { name: "sofia-cloud-test", version: "1.0.0" },
             },
           });
         }
@@ -313,7 +313,7 @@ async function setupDirectProbeHarness(mode: DirectProbeMode, workspaceIds = ["w
   const baseUrl = `http://127.0.0.1:${engine.server.port}`;
   const workspaces: WorkspaceInfo[] = [];
   for (const id of workspaceIds) {
-    const root = await createRoot(`openwork-cloud-health-${id}-`);
+    const root = await createRoot(`sofia-cloud-health-${id}-`);
     workspaces.push({
       id,
       name: `Workspace ${id}`,
@@ -328,7 +328,7 @@ async function setupDirectProbeHarness(mode: DirectProbeMode, workspaceIds = ["w
   const config = serverConfig(primary.path, primary);
   config.workspaces = workspaces;
   config.authorizedRoots = workspaces.map((entry) => entry.path);
-  process.env.OPENWORK_RUNTIME_DB = await createRuntimeDbPath("openwork-cloud-health-runtime-");
+  process.env.SOFIA_RUNTIME_DB = await createRuntimeDbPath("sofia-cloud-health-runtime-");
   const directUrl = `${baseUrl}/cloud-mcp/mcp/agent`;
   const desiredConfig = {
     type: "remote",
@@ -342,14 +342,14 @@ async function setupDirectProbeHarness(mode: DirectProbeMode, workspaceIds = ["w
       ...current,
       mcp: {
         ...current.mcp,
-        "openwork-cloud": desiredConfig,
+        "sofia-cloud": desiredConfig,
       },
     }));
   }
   const read = async (workspaceId = primary.id, providerModel?: { provider: string; model: string }) => {
     const testWorkspace = workspaces.find((entry) => entry.id === workspaceId);
     if (!testWorkspace) throw new Error(`Unknown direct-probe workspace ${workspaceId}`);
-    return readOpenworkCloudMcpHealth({
+    return readSofiaCloudMcpHealth({
       config,
       workspace: testWorkspace,
       directory: testWorkspace.path,
@@ -364,7 +364,7 @@ async function setupDirectProbeHarness(mode: DirectProbeMode, workspaceIds = ["w
 async function readHealthForDirectProbe(mode: DirectProbeMode, options: ReadHealthOptions = {}) {
   const harness = await setupDirectProbeHarness(mode, [`ws_${mode}`]);
   options.beforeRead?.(harness.directUrl);
-  const health = options.probe ? await harness.read() : await readOpenworkCloudMcpHealth({
+  const health = options.probe ? await harness.read() : await readSofiaCloudMcpHealth({
     config: harness.config,
     workspace: harness.primary,
     directory: harness.primary.path,
@@ -419,7 +419,7 @@ describe("cloud MCP health foundation", () => {
   test("desired revisions detect token metadata change without embedding raw tokens", () => {
     const config = {
       type: "remote",
-      url: "https://api.openworklabs.com/mcp/agent",
+      url: "https://sofia-api.ruut.chat/mcp/agent",
       headers: { Authorization: "Bearer owt_super_secret" },
       oauth: false,
     };
@@ -455,58 +455,58 @@ describe("cloud MCP health foundation", () => {
     expect(changed.appliedRevision).toBeNull();
   });
 
-  test("diagnoses project and global OpenCode tool denies for exact Cloud IDs", () => {
+  test("diagnoses project and global Sofia engine tool denies for exact Cloud IDs", () => {
     const denies = diagnoseMcpToolDeniesFromConfigs({
-      name: "openwork-cloud",
-      toolIds: [...OPENWORK_CLOUD_EXPECTED_TOOLS],
+      name: "sofia-cloud",
+      toolIds: [...SOFIA_CLOUD_EXPECTED_TOOLS],
       projectConfig: {
         tools: {
-          "openwork-cloud_search_capabilities": false,
+          "sofia-cloud_search_capabilities": false,
         },
       },
       globalConfig: {
         permission: [
-          { permission: "tool", pattern: "openwork-cloud_execute_capability", action: "deny" },
+          { permission: "tool", pattern: "sofia-cloud_execute_capability", action: "deny" },
         ],
       },
     });
 
     expect(denies.map((deny) => deny.source).sort()).toEqual(["config.global", "config.project"]);
     expect(denies.map((deny) => deny.matched).sort()).toEqual([
-      "openwork-cloud_execute_capability",
-      "openwork-cloud_search_capabilities",
+      "sofia-cloud_execute_capability",
+      "sofia-cloud_search_capabilities",
     ]);
   });
 
   test("project tool allows override global denies for matching Cloud tool IDs", () => {
     const denies = diagnoseMcpToolDeniesFromConfigs({
-      name: "openwork-cloud",
-      toolIds: [...OPENWORK_CLOUD_EXPECTED_TOOLS],
+      name: "sofia-cloud",
+      toolIds: [...SOFIA_CLOUD_EXPECTED_TOOLS],
       projectConfig: {
         tools: {
-          "openwork-cloud_search_capabilities": true,
+          "sofia-cloud_search_capabilities": true,
         },
       },
       globalConfig: {
-        tools: { deny: ["openwork-cloud_*"] },
+        tools: { deny: ["sofia-cloud_*"] },
       },
     });
 
     expect(denies).toHaveLength(1);
     expect(denies[0]).toMatchObject({
       source: "config.global",
-      pattern: "openwork-cloud_*",
-      matched: "openwork-cloud_execute_capability",
+      pattern: "sofia-cloud_*",
+      matched: "sofia-cloud_execute_capability",
     });
   });
 
   test("plugin canary denies are not reported as Cloud tool denies", () => {
     const denies = diagnoseMcpToolDeniesFromConfigs({
-      name: "openwork-cloud",
-      toolIds: [...OPENWORK_CLOUD_EXPECTED_TOOLS],
+      name: "sofia-cloud",
+      toolIds: [...SOFIA_CLOUD_EXPECTED_TOOLS],
       projectConfig: {
         tools: {
-          openwork_query: false,
+          sofia_query: false,
         },
       },
       globalConfig: {},
@@ -525,7 +525,7 @@ describe("cloud MCP health foundation", () => {
 
     expect(health.usable).toBe(true);
     expect(health.phase).toBe("ready");
-    expect(health.tools.present.sort()).toEqual([...OPENWORK_CLOUD_EXPECTED_TOOLS].sort());
+    expect(health.tools.present.sort()).toEqual([...SOFIA_CLOUD_EXPECTED_TOOLS].sort());
     expect(health.tools.missing).toEqual([]);
     expect(health.tools.direct.checked).toBe(false);
     expect(directFetchCount).toBe(0);
@@ -587,7 +587,7 @@ describe("cloud MCP health foundation", () => {
     const providerInitialize = harness.blockInitialize();
     const providerChecks = [
       harness.read("ws_a", { provider: "anthropic", model: "claude" }),
-      harness.read("ws_a", { provider: "openwork", model: "gpt-5" }),
+      harness.read("ws_a", { provider: "sofia", model: "gpt-5" }),
     ];
     await providerToolIds.waitForEntries(2);
     providerToolIds.release();
@@ -622,7 +622,7 @@ describe("cloud MCP health foundation", () => {
     };
     await writeRuntimeOpencodeConfig(harness.config, workspaceA.id, (current) => ({
       ...current,
-      mcp: { ...current.mcp, "openwork-cloud": changedConfig },
+      mcp: { ...current.mcp, "sofia-cloud": changedConfig },
     }));
     const changedAuthToolIds = harness.blockToolIds();
     const changedAuthCheck = harness.read("ws_a");
@@ -715,7 +715,7 @@ describe("cloud MCP health foundation", () => {
     expect(health.engineInspection.cloudPresent).toBe(true);
     expect(health.engineInspection.serverCount).toBe(2);
     expect(health.engineInspection.servers).toEqual([
-      { name: "openwork-cloud", status: "connected" },
+      { name: "sofia-cloud", status: "connected" },
       { name: "sibling-remote", status: "failed", error: "fetch failed" },
     ]);
   });
@@ -731,7 +731,7 @@ describe("cloud MCP health foundation", () => {
       expect(step.latencyMs).toBeGreaterThanOrEqual(0);
     }
     expect(trace?.steps[0]?.httpStatus).toBe(200);
-    expect(trace?.serverInfo).toEqual({ name: "openwork-cloud-test", version: "1.0.0" });
+    expect(trace?.serverInfo).toEqual({ name: "sofia-cloud-test", version: "1.0.0" });
     expect(trace?.protocolVersion).toBe("2025-06-18");
     expect(health.durationMs).toBeGreaterThanOrEqual(0);
   });
@@ -766,7 +766,7 @@ describe("cloud MCP health foundation", () => {
     });
 
     // The engine stays authoritative, but the probe failure must carry the
-    // cause that OpenCode itself collapses to a bare "fetch failed".
+    // cause that Sofia engine itself collapses to a bare "fetch failed".
     expect(health.tools.direct.failure?.code).toBe("probe_unreachable");
     const details = JSON.stringify(health.tools.direct.failure?.details);
     expect(details).toContain("SELF_SIGNED_CERT_IN_CHAIN");

@@ -1,4 +1,4 @@
-import type { ExternalMcpOAuthCallbackMode } from "@openwork-ee/den-db/schema"
+import type { ExternalMcpOAuthCallbackMode } from "@sofia-ee/den-db/schema"
 import { env } from "../env.js"
 
 function configuredPublicApiBaseUrl(): string {

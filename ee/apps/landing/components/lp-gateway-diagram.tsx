@@ -1,7 +1,7 @@
 import { Plug, Sparkles } from "lucide-react";
 
 import { BrandLogo } from "./lp-brand-logos";
-import { OpenWorkMark } from "./openwork-mark";
+import { SofiaMark } from "./sofia-mark";
 
 type SourceLogo = "notion" | "hubspot" | "chrome";
 
@@ -71,7 +71,7 @@ export function LpGatewayDiagram() {
       <div className="flex w-full shrink-0 flex-col items-center rounded-[20px] bg-white px-5 py-[26px] text-center shadow-[0_10px_30px_rgba(1,22,39,0.08)] md:w-[216px]">
         <Plug className="mb-3 h-5 w-5" strokeWidth={1.75} aria-hidden="true" />
         <div className="text-[16px] font-semibold text-[var(--lp-ink)]">
-          OpenWork Connect
+          Sofia Connect
         </div>
         <div className="mt-1 text-[11px] font-bold tracking-[0.1em] text-[var(--lp-blue)]">
           MCP GATEWAY
@@ -90,7 +90,7 @@ export function LpGatewayDiagram() {
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-3 rounded-[10px] bg-white px-3.5 py-2.5 text-[13.5px] font-medium text-[var(--lp-ink)]">
             <span className="flex w-4 shrink-0 justify-center">
-              <OpenWorkMark className="h-4 w-4 object-contain" />
+              <SofiaMark className="h-4 w-4 object-contain" />
             </span>
             Teammates on desktop &amp; web
           </div>

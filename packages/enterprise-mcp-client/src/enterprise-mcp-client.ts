@@ -154,7 +154,7 @@ export function createEnterpriseMcpClient(options: EnterpriseMcpClientOptions): 
     closeTimeoutMs: options.closeTimeoutMs ?? DEFAULT_CLOSE_TIMEOUT_MS,
     authorizationTransactionTtlMs: options.authorizationTransactionTtlMs ?? DEFAULT_AUTHORIZATION_TRANSACTION_TTL_MS,
     expirationSkewMs: options.expirationSkewMs ?? DEFAULT_EXPIRATION_SKEW_MS,
-    clientName: options.clientName ?? "OpenWork",
+    clientName: options.clientName ?? "Sofia",
     clientVersion: options.clientVersion ?? "1.0.0",
   }))
   const {

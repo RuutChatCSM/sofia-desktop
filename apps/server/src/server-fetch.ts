@@ -36,7 +36,7 @@ export function externalFetch(input: string, init?: RequestInit): Promise<Respon
 
 /**
  * Rule: external egress → externalFetch; loopback → loopbackFetch; bare fetch is banned in apps/server/src.
- * Use loopbackFetch only for 127.0.0.1, localhost, and managed OpenCode engine traffic where CA trust is irrelevant and streaming performance matters.
+ * Use loopbackFetch only for 127.0.0.1, localhost, and managed Sofia engine traffic where CA trust is irrelevant and streaming performance matters.
  */
 export function loopbackFetch(
   input: Parameters<typeof globalThis.fetch>[0],
@@ -56,7 +56,7 @@ export type RuntimeDiagnosticTransportInfo = {
 /**
  * Identifies the JavaScript runtime and fetch transport behind
  * runtimeDiagnosticFetch, so a diagnostic can attribute its own egress path
- * instead of implying it exercised Chromium networking or the OpenCode engine.
+ * instead of implying it exercised Chromium networking or the Sofia engine.
  */
 export function runtimeDiagnosticTransportInfo(): RuntimeDiagnosticTransportInfo {
   const versions: Record<string, string | undefined> = process.versions;
@@ -70,8 +70,8 @@ export function runtimeDiagnosticTransportInfo(): RuntimeDiagnosticTransportInfo
  * Deliberate runtime-diagnostic egress. Unlike externalFetch, this must stay
  * on the embedding JavaScript runtime's own fetch stack (Node/undici inside
  * Electron main and standalone Node, Bun's fetch in the compiled binary) and
- * must never route through Chromium's electronNet or the OpenCode engine —
- * that independence is what lets diagnostics compare the OpenWork runtime's
+ * must never route through Chromium's electronNet or the Sofia engine —
+ * that independence is what lets diagnostics compare the Sofia App runtime's
  * network path against the engine's report. Pair every use with
  * runtimeDiagnosticTransportInfo so reports state which stack actually ran.
  */

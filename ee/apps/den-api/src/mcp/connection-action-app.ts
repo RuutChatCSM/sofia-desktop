@@ -5,18 +5,18 @@ import {
 } from "@modelcontextprotocol/ext-apps/server"
 import type { McpUiResourceMeta } from "@modelcontextprotocol/ext-apps"
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
-import { connectionActionAppHtml } from "@openwork/mcp-apps/connection-action"
+import { connectionActionAppHtml } from "@sofia/mcp-apps/connection-action"
 import {
   connectionActionAppResourceUri,
   connectionActionAppSchemaVersion,
   connectionActionPayloadSchema,
   connectionActionToolName,
   type ConnectionActionPayload,
-} from "@openwork/types/connection-action-app"
+} from "@sofia/types/connection-action-app"
 import { z } from "zod"
 import type { ExternalConnectionStatus } from "./external-capabilities.js"
 
-export { connectionActionPayloadSchema } from "@openwork/types/connection-action-app"
+export { connectionActionPayloadSchema } from "@sofia/types/connection-action-app"
 
 export const CONNECTION_ACTION_APP_RESOURCE_URI = connectionActionAppResourceUri
 export const CONNECTION_ACTION_TOOL_NAME = connectionActionToolName
@@ -84,7 +84,7 @@ export function connectionActionTextFallback(payload: ConnectionActionPayload): 
 
 /**
  * The same-server MCP App launch reference for one connection status result.
- * Attached as `_meta["openwork/mcpApp"]` (no connectionId, so OpenWork hosts
+ * Attached as `_meta["sofia/mcpApp"]` (no connectionId, so Sofia hosts
  * resolve the app tool and ui:// resource from this same gateway).
  */
 export function connectionActionLaunch(payload: ConnectionActionPayload) {
@@ -107,7 +107,7 @@ export function connectionActionErrorCard(status: ExternalConnectionStatus): {
   const payload = connectionActionPayloadFromStatus(status)
   return {
     structuredContent: { ...payload },
-    meta: { "openwork/mcpApp": connectionActionLaunch(payload) },
+    meta: { "sofia/mcpApp": connectionActionLaunch(payload) },
   }
 }
 
@@ -164,7 +164,7 @@ export function registerAgentConnectionActionApp(input: {
 export function registerAgentConnectionActionResource(server: McpServer) {
   registerAppResource(
     server,
-    "OpenWork Connection Action",
+    "Sofia Connection Action",
     CONNECTION_ACTION_APP_RESOURCE_URI,
     {
       description: "An actionable status card for one Connect connection: who acts, where, and the exact next step.",

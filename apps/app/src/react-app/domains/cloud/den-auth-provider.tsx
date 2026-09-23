@@ -35,7 +35,7 @@ import {
   deepLinkBridgeEvent,
   drainPendingDeepLinks,
 } from "../../../app/lib/deep-link-bridge";
-import { parseDenAuthDeepLink } from "../../../app/lib/openwork-links";
+import { parseDenAuthDeepLink } from "../../../app/lib/sofia-links";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -159,7 +159,7 @@ function pendingServerSwitchForDeepLink(input: {
   const bootstrap = readDenBootstrapConfig();
   // An enterprise activation permanently binds the installation to the issuing
   // Den, so confirm a control-plane change even when no bootstrap file
-  // provisioned one. Otherwise any openwork://den-auth link can repoint the
+  // provisioned one. Otherwise any sofia://den-auth link can repoint the
   // control plane and activate the app in a single unattended step.
   if (bootstrap.source !== "file" && !input.isEnterpriseActivation) return null;
 
@@ -202,7 +202,7 @@ export function DenAuthProvider({ children }: DenAuthProviderProps) {
   }, []);
 
   const syncDesktopSentrySession = useCallback((nextUser: DenUser | null) => {
-    if (typeof window === "undefined" || !window.__OPENWORK_ELECTRON__) return;
+    if (typeof window === "undefined" || !window.__SOFIA_ELECTRON__) return;
     const settings = readDenSettings();
     const userId = nextUser?.id?.trim() ?? "";
     const orgId = settings.activeOrgId?.trim() ?? "";
@@ -211,7 +211,7 @@ export function DenAuthProvider({ children }: DenAuthProviderProps) {
   }, []);
 
   const clearDesktopSentrySession = useCallback(() => {
-    if (typeof window === "undefined" || !window.__OPENWORK_ELECTRON__) return;
+    if (typeof window === "undefined" || !window.__SOFIA_ELECTRON__) return;
     void desktopBridge.desktopSentryClearSession().catch(() => undefined);
   }, []);
 
@@ -300,7 +300,7 @@ export function DenAuthProvider({ children }: DenAuthProviderProps) {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (!window.__OPENWORK_ELECTRON__) return;
+    if (!window.__SOFIA_ELECTRON__) return;
 
     if (status === "signed_out") return clearDesktopSentrySession();
 

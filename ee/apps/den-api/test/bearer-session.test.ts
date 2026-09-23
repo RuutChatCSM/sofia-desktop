@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeAll, expect, mock, setSystemTime, test } from "bun:test"
-import { createDenTypeId } from "@openwork-ee/utils/typeid"
+import { createDenTypeId } from "@sofia-ee/utils/typeid"
 import { Hono } from "hono"
 import { generateSignedCookie } from "hono/cookie"
 import { getDenSessionExpiresAt, getDenSessionRefreshCutoff } from "../src/session-lifetime.js"
@@ -48,7 +48,7 @@ const cacheDeletes: string[] = []
 let sessionModule: typeof import("../src/session.js")
 
 function seedRequiredEnv() {
-  process.env.DATABASE_URL = process.env.DATABASE_URL ?? "mysql://root:password@127.0.0.1:3306/openwork_test"
+  process.env.DATABASE_URL = process.env.DATABASE_URL ?? "mysql://root:password@127.0.0.1:3306/sofia_test"
   process.env.DEN_DB_ENCRYPTION_KEY = process.env.DEN_DB_ENCRYPTION_KEY ?? "x".repeat(32)
   process.env.BETTER_AUTH_SECRET = process.env.BETTER_AUTH_SECRET ?? "y".repeat(32)
   process.env.BETTER_AUTH_URL = process.env.BETTER_AUTH_URL ?? "http://127.0.0.1:8790"
@@ -104,7 +104,7 @@ function makeStoredSession(input: { now: Date; updatedAt: Date; expiresAt: Date 
       createdAt: input.now,
       updatedAt: input.updatedAt,
       ipAddress: null,
-      userAgent: "OpenWork desktop",
+      userAgent: "Sofia desktop",
     },
     user: {
       id: userId,
@@ -191,11 +191,11 @@ beforeAll(async () => {
       handler: () => Promise.resolve(new Response(JSON.stringify({ keys: [] }), { status: 200 })),
     },
     DEN_MCP_OPAQUE_ACCESS_TOKEN_PREFIX: "ow_mcp_at_",
-    DEN_MCP_ORG_ID_CLAIM: "https://openworklabs.com/org_id",
+    DEN_MCP_ORG_ID_CLAIM: "https://sofia.ruut.chat/org_id",
     DEN_MCP_RESOURCE: "http://127.0.0.1:8790/mcp",
-    DEN_MCP_RESOURCE_CLAIM: "https://openworklabs.com/resource",
+    DEN_MCP_RESOURCE_CLAIM: "https://sofia.ruut.chat/resource",
     DEN_MCP_RESOURCES: ["http://127.0.0.1:8790/mcp"],
-    DEN_MCP_TOKEN_USE_CLAIM: "https://openworklabs.com/token_use",
+    DEN_MCP_TOKEN_USE_CLAIM: "https://sofia.ruut.chat/token_use",
   }))
 
   mock.module("../src/db.js", () => ({

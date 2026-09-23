@@ -20,9 +20,9 @@ import { useWorkspace } from "@/react-app/shell/workspace-provider";
 import { useCheckDesktopRestriction } from "@/react-app/domains/cloud/desktop-config-provider";
 import { useDenAuth } from "@/react-app/domains/cloud/den-auth-provider";
 import {
-  OPENWORK_MODELS_PROVIDER_ID,
-  OPENWORK_MODELS_PROVIDER_NAME,
-} from "@/react-app/domains/cloud/openwork-models-promo";
+  SOFIA_MODELS_PROVIDER_ID,
+  SOFIA_MODELS_PROVIDER_NAME,
+} from "@/react-app/domains/cloud/sofia-models-promo";
 import { getConnectedProviderItems, useProviderListQuery } from "@/react-app/infra/provider-list-query";
 import { useSelectedEngine } from "@/react-app/domains/session/engine-selection-store";
 import { filterEntitledModelOptions } from "@/react-app/domains/connections/provider-auth/provider-policy";
@@ -206,9 +206,9 @@ interface ModelSelectProps {
   /** When set, "All models" opens the full picker scoped to this session. */
   sessionId?: string;
   /** Den/import includes Hosted models. Kept for callers; picker no longer upsells here. */
-  openWorkModelsEntitled?: boolean;
+  sofiaModelsEntitled?: boolean;
   /** The server is waiting to reload this workspace with Hosted models. */
-  openWorkModelsSyncing?: boolean;
+  sofiaModelsSyncing?: boolean;
   /** Member-scoped models available before a workspace OpenCode client exists. */
   fallbackOptions?: readonly ModelOption[];
   behaviorValue?: string | null;
@@ -225,7 +225,7 @@ export function ModelSelect({
   onChange,
   disabled = false,
   sessionId,
-  openWorkModelsSyncing = false,
+  sofiaModelsSyncing = false,
   fallbackOptions = [],
   behaviorValue = null,
   behaviorLabel,
@@ -362,17 +362,17 @@ export function ModelSelect({
             />
           </CommandHeader>
           <CommandEmpty>No models found.</CommandEmpty>
-          {openWorkModelsSyncing ? (
+          {sofiaModelsSyncing ? (
             <div className="mx-1 mb-1 flex items-center gap-2 rounded-md border border-amber-6/60 bg-amber-2/40 px-2 py-1.5">
               <ProviderIcon
-                providerId={OPENWORK_MODELS_PROVIDER_ID}
-                providerName={OPENWORK_MODELS_PROVIDER_NAME}
+                providerId={SOFIA_MODELS_PROVIDER_ID}
+                providerName={SOFIA_MODELS_PROVIDER_NAME}
                 className="size-3.5 shrink-0 text-amber-11"
                 size={14}
               />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-xs font-medium text-foreground">
-                  {OPENWORK_MODELS_PROVIDER_NAME}
+                  {SOFIA_MODELS_PROVIDER_NAME}
                 </span>
                 <span className="block truncate text-[11px] text-muted-foreground">
                   Included — pending workspace reload…

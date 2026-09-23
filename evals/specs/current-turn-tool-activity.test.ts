@@ -1,5 +1,5 @@
 import { expect } from "vitest";
-import { test } from "@openwork/testkit";
+import { test } from "@sofia/testkit";
 import { collectLatestAssistantToolParts } from "../../apps/app/src/lib/latest-assistant-tool-parts";
 
 type MessageHistory = Parameters<typeof collectLatestAssistantToolParts>[0];
@@ -15,7 +15,7 @@ const staleHistory: MessageHistory = [
     role: "assistant",
     parts: [{
       type: "dynamic-tool",
-      toolName: "openwork_execute",
+      toolName: "sofia_execute",
       toolCallId: "old-call",
       state: "input-streaming",
       input: {},
@@ -60,7 +60,7 @@ test("live activity ignores unfinished tools from earlier turns", ({ evidence })
 
   evidence.recordAssertionEvidence(
     "A live turn never reports stale tool activity",
-    "A pending openwork_execute was excluded after both a replacement assistant response and a newer user message, while the newest assistant response retained its current tool.",
+    "A pending sofia_execute was excluded after both a replacement assistant response and a newer user message, while the newest assistant response retained its current tool.",
     true,
   );
 });

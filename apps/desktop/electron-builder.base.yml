@@ -9,12 +9,12 @@ files:
   - from: .electron-runtime/node_modules
     to: node_modules
 extraResources:
-  - from: .electron-runtime/openwork-sentry.json
-    to: openwork-sentry.json
+  - from: .electron-runtime/sofia-sentry.json
+    to: sofia-sentry.json
   - from: ../app/dist
     to: app-dist
   - from: ../../packages/docs
-    to: openwork-docs
+    to: sofia-docs
     filter:
       - "**/*.md"
       - "**/*.mdx"
@@ -42,16 +42,16 @@ mac:
     - from: resources/sidecars
       to: sidecars
       filter:
-        - codex
-        - codex-aarch64-apple-darwin
-        - codex-x86_64-apple-darwin
+        - sofia
+        - sofia-aarch64-apple-darwin
+        - sofia-x86_64-apple-darwin
         - versions.json
         - versions.json-aarch64-apple-darwin
         - versions.json-x86_64-apple-darwin
     - from: resources/helpers
       to: helpers
       filter:
-        - "OpenWork Computer Use.app/**"
+        - "Sofia Computer Use.app/**"
   target:
     - dmg
     - zip
@@ -66,9 +66,9 @@ linux:
     - from: resources/sidecars
       to: sidecars
       filter:
-        - codex
-        - codex-aarch64-unknown-linux-gnu
-        - codex-x86_64-unknown-linux-gnu
+        - sofia
+        - sofia-aarch64-unknown-linux-gnu
+        - sofia-x86_64-unknown-linux-gnu
         - versions.json
         - versions.json-aarch64-unknown-linux-gnu
         - versions.json-x86_64-unknown-linux-gnu
@@ -83,9 +83,9 @@ win:
     - from: resources/sidecars
       to: sidecars
       filter:
-        - codex.exe
-        - codex-aarch64-pc-windows-msvc.exe
-        - codex-x86_64-pc-windows-msvc.exe
+        - sofia.exe
+        - sofia-aarch64-pc-windows-msvc.exe
+        - sofia-x86_64-pc-windows-msvc.exe
         - versions.json
         - versions.json-aarch64-pc-windows-msvc.exe
         - versions.json-x86_64-pc-windows-msvc.exe

@@ -18,7 +18,7 @@ test("builds safe OAuth token rate-limit diagnostics from Basic auth", async () 
     headers: {
       authorization: `Basic ${btoa(`${clientId}:${clientSecret}`)}`,
       "content-type": "application/x-www-form-urlencoded",
-      "user-agent": "OpenWork Desktop/1.2.3",
+      "user-agent": "Sofia Desktop/1.2.3",
     },
     body: new URLSearchParams({
       grant_type: "refresh_token",
@@ -35,7 +35,7 @@ test("builds safe OAuth token rate-limit diagnostics from Basic auth", async () 
     grant_type: "refresh_token",
     client_id_fingerprint: "sha256:1d87be5e8568249d",
     retry_after: "42",
-    user_agent_category: "openwork",
+    user_agent_category: "sofia",
   })
   const serialized = JSON.stringify(fields)
   for (const secret of [clientId, clientSecret, "never-log-this-refresh-token", "body-client-must-not-win"]) {

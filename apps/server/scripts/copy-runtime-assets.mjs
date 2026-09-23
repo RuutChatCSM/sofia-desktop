@@ -4,8 +4,8 @@ import { fileURLToPath } from "node:url";
 
 const scriptsDir = dirname(fileURLToPath(import.meta.url));
 const serverRoot = resolve(scriptsDir, "..");
-const source = resolve(serverRoot, "src", "openwork-browser-repl.mjs");
-const destination = resolve(serverRoot, "dist", "openwork-browser-repl.mjs");
+const source = resolve(serverRoot, "src", "sofia-browser-repl.mjs");
+const destination = resolve(serverRoot, "dist", "sofia-browser-repl.mjs");
 
 await mkdir(dirname(destination), { recursive: true });
 await copyFile(source, destination);

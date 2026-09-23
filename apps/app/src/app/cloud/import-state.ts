@@ -26,7 +26,7 @@ export type CloudImportedPluginFile = {
   path: string;
   updatedAt: string | null;
   skillName?: string;
-  skillOrigin?: "openwork-connect";
+  skillOrigin?: "sofia-connect";
   marketplaceName?: string;
   pluginName?: string;
   connectCapabilityName?: string;

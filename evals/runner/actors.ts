@@ -10,7 +10,7 @@ export type ActorSpec = Actor | "owner" | "fresh" | {
   prefix?: string;
 };
 
-const FRESH_PASSWORD = "OpenWorkEval123!";
+const FRESH_PASSWORD = "SofiaEval123!";
 const PROCESS_RUNSTAMP = new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -26,7 +26,7 @@ function isActor(value: unknown): value is Actor {
 }
 
 function runStamp(env: NodeJS.ProcessEnv): string {
-  const configured = env.OPENWORK_EVAL_RUNSTAMP?.trim() || env.OPENWORK_EVAL_RUN_STAMP?.trim();
+  const configured = env.SOFIA_EVAL_RUNSTAMP?.trim() || env.SOFIA_EVAL_RUN_STAMP?.trim();
   if (configured) return configured.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-|-$/g, "") || "run";
   return PROCESS_RUNSTAMP;
 }
@@ -45,14 +45,14 @@ export const persona = {
     return {
       name: "owner",
       email: env.DEN_DEMO_OWNER_EMAIL ?? "alex@acme.test",
-      password: env.DEN_DEMO_OWNER_PASSWORD ?? "OpenWorkDemo123!",
+      password: env.DEN_DEMO_OWNER_PASSWORD ?? "SofiaDemo123!",
       role: "owner",
     };
   },
   fresh(prefix: string, env: NodeJS.ProcessEnv): Actor {
     return {
       name: prefix,
-      email: `${emailPrefix(prefix)}-${runStamp(env)}@eval.openwork.test`,
+      email: `${emailPrefix(prefix)}-${runStamp(env)}@eval.sofia.test`,
       password: FRESH_PASSWORD,
       role: "fresh",
     };

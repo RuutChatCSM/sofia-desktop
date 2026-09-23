@@ -6,14 +6,14 @@ export type ServerTelemetryContext = {
   requestSignal?: AbortSignal;
 };
 
-export type OpenworkDesktopTelemetry = {
+export type SofiaDesktopTelemetry = {
   captureException: (error: unknown, context?: ServerTelemetryContext) => boolean;
 };
 
 declare global {
   // Provided by the Electron host when the embedded server runs in desktop mode.
-  // The standalone openwork-server package leaves this unset.
-  var __openworkDesktopTelemetry: OpenworkDesktopTelemetry | undefined;
+  // The standalone sofia-server package leaves this unset.
+  var __sofiaDesktopTelemetry: SofiaDesktopTelemetry | undefined;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -45,7 +45,7 @@ export function isExpectedRequestCancellation(error: unknown, requestSignal: Abo
 export function captureServerException(error: unknown, context: ServerTelemetryContext = {}): boolean {
   const { requestSignal, ...telemetryContext } = context;
   if (isExpectedRequestCancellation(error, requestSignal)) return false;
-  return globalThis.__openworkDesktopTelemetry?.captureException(error, {
+  return globalThis.__sofiaDesktopTelemetry?.captureException(error, {
     surface: "server",
     ...telemetryContext,
   }) ?? false;

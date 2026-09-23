@@ -280,9 +280,9 @@ export const DEN_ROLE_PERMISSION_OPTIONS = {
   security_configuration: ["manage"],
 } as const;
 
-export const PENDING_ORG_INVITATION_STORAGE_KEY = "openwork:web:pending-org-invitation";
-export const PENDING_WORKSPACE_CLAIM_STORAGE_KEY = "openwork:web:pending-workspace-claim";
-export const PENDING_ORG_SELECTION_STORAGE_KEY = "openwork:web:pending-org-selection";
+export const PENDING_ORG_INVITATION_STORAGE_KEY = "sofia:web:pending-org-invitation";
+export const PENDING_WORKSPACE_CLAIM_STORAGE_KEY = "sofia:web:pending-workspace-claim";
+export const PENDING_ORG_SELECTION_STORAGE_KEY = "sofia:web:pending-org-selection";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -1001,7 +1001,7 @@ export function parseInvitationPreviewPayload(payload: unknown): DenInvitationPr
       slug: organizationSlug,
       allowedEmailDomains: asStringArray(organization.allowedEmailDomains),
       branding: {
-        appName: asString(branding?.appName) ?? "OpenWork",
+        appName: asString(branding?.appName) ?? "Sofia",
         logoUrl: asString(branding?.logoUrl),
         iconUrl: asString(branding?.iconUrl),
       },

@@ -24,14 +24,14 @@ import { createClient, unwrap } from "@/app/lib/opencode";
 import { abortSessionSafe, forkSession, listCommands, revertSession, setSessionArchived, shellInSession, unrevertSession } from "@/app/lib/opencode-session";
 import { useSessionManagementStore as sessionManagementStore } from "@/react-app/domains/session/sidebar/session-management-store";
 import {
-  buildOpenworkWorkspaceBaseUrl,
-  readOpenworkServerSettings,
-} from "@/app/lib/openwork-server";
+  buildSofiaWorkspaceBaseUrl,
+  readSofiaServerSettings,
+} from "@/app/lib/sofia-server";
 import {
   workspaceServerId,
   type ResolvedWorkspaceEndpoint,
 } from "@/app/lib/workspace-endpoint";
-import { buildOpenworkEnvRuntimeKey } from "@/app/lib/openwork-env-runtime";
+import { buildSofiaEnvRuntimeKey } from "@/app/lib/sofia-env-runtime";
 import {
   getDesktopHomeDir,
   joinDesktopPath,
@@ -43,7 +43,7 @@ import {
   workspaceForget,
   workspaceSetRuntimeActive,
   workspaceSetSelected,
-  type OpenworkServerInfo,
+  type SofiaServerInfo,
   type WorkspaceInfo,
   type WorkspaceList,
 } from "@/app/lib/desktop";
@@ -125,7 +125,7 @@ import { useCheckDesktopRestriction } from "@/react-app/domains/cloud/desktop-co
 import { useRestrictionNotice } from "@/react-app/domains/cloud/restriction-notice-provider";
 import { ReactSessionRuntime } from "@/react-app/domains/session/sync/runtime-sync";
 import { useSessionActivityStore } from "@/react-app/domains/session/status/session-activity-store";
-import { buildOpenworkEnvSystemContext } from "@/react-app/domains/session/sync/env-context";
+import { buildSofiaEnvSystemContext } from "@/react-app/domains/session/sync/env-context";
 import {
   applySessionRevert,
   applySessionUnrevert,
@@ -172,9 +172,9 @@ import { RenameWorkspaceModal } from "@/react-app/domains/workspace/rename-works
 import { useRemoteWorkspaceConnectionEditor } from "@/react-app/domains/workspace/use-remote-workspace-connection-editor";
 import { useDenAuth } from "@/react-app/domains/cloud/den-auth-provider";
 import {
-  hasOpenWorkModelsAvailable,
-  shouldShowOpenWorkModelsSyncing,
-} from "@/react-app/domains/cloud/openwork-models-promo";
+  hasSofiaModelsAvailable,
+  shouldShowSofiaModelsSyncing,
+} from "@/react-app/domains/cloud/sofia-models-promo";
 import {
   diagnoseRemoteWorkspaceTaskLoadFailure,
   getRemoteWorkspaceConnectionKey,
@@ -203,7 +203,7 @@ import {
 } from "../../app/lib/app-inspector";
 import { saveSessionDraft } from "@/react-app/domains/session/sync/draft-store";
 import { useComposerStateStore } from "@/react-app/domains/session/surface/composer-state-store";
-import { useControlAction, type OpenworkControlAction } from "./control/control-provider";
+import { useControlAction, type SofiaControlAction } from "./control/control-provider";
 import { useReactRenderWatchdog } from "./react-render-watchdog";
 import { useBootOverlayVisible } from "./boot-state";
 
@@ -216,8 +216,8 @@ import {
 import { denSessionUpdatedEvent, denSettingsChangedEvent } from "@/app/lib/den-session-events";
 
 import { filterProviderList } from "@/app/utils/providers";
-import { ensureDesktopLocalOpenworkConnection } from "./desktop-local-openwork";
-import { resolveOpenworkConnection } from "./openwork-connection";
+import { ensureDesktopLocalSofiaConnection } from "./desktop-local-sofia";
+import { resolveSofiaConnection } from "./sofia-connection";
 import { useReloadCoordinator } from "./reload-coordinator";
 import { useShellConfig } from "./shell-config";
 import { useShellShortcuts } from "./use-shell-shortcuts";
@@ -301,7 +301,7 @@ function describeTaskCreateError(error: unknown) {
     lower.includes("internal_error") ||
     lower.includes("unexpected server error")
   ) {
-    return "OpenCode is unavailable for this workspace. Retry once it restarts, or restart Sofia App if the problem continues.";
+    return "The engine is unavailable for this workspace. Retry once it restarts, or restart Sofia App if the problem continues.";
   }
   return message;
 }
@@ -372,7 +372,7 @@ function readProviderBaseUrl(provider: ProviderListResponse["all"][number]): str
 
 function focusPromptSoon() {
   if (typeof window === "undefined") return;
-  const focus = () => window.dispatchEvent(new Event("openwork:focusPrompt"));
+  const focus = () => window.dispatchEvent(new Event("sofia:focusPrompt"));
   [0, 80, 240, 600].forEach((delay) => window.setTimeout(focus, delay));
 }
 
@@ -617,12 +617,12 @@ export function SessionRoute() {
   const checkDesktopRestriction = useCheckDesktopRestriction();
   const restrictionNotice = useRestrictionNotice();
   const [activeOrganizationRole, setActiveOrganizationRole] = useState<DenOrgRole | null>(null);
-  const [openworkServerHostInfoState, setOpenworkServerHostInfoState] = useState<OpenworkServerInfo | null>(null);
-  const [openworkServerSettingsVersion, setOpenworkServerSettingsVersion] = useState(0);
+  const [sofiaServerHostInfoState, setSofiaServerHostInfoState] = useState<SofiaServerInfo | null>(null);
+  const [sofiaServerSettingsVersion, setSofiaServerSettingsVersion] = useState(0);
 
   const [developerMode, setDeveloperMode] = useState(() => {
     if (typeof window === "undefined") return false;
-    return window.localStorage.getItem("openwork.developerMode") === "1";
+    return window.localStorage.getItem("sofia.developerMode") === "1";
   });
   const {
     navigateToWorkspaceSession,
@@ -673,8 +673,8 @@ export function SessionRoute() {
   } = useWorkspaceRouteState({
     developerMode,
     workspaceRoute: automationsRouteActive ? "automations" : "session",
-    onServerSettingsChanged: () => setOpenworkServerSettingsVersion((value) => value + 1),
-    onHostInfo: setOpenworkServerHostInfoState,
+    onServerSettingsChanged: () => setSofiaServerSettingsVersion((value) => value + 1),
+    onHostInfo: setSofiaServerHostInfoState,
   });
   const cloudWorkspace = useCloudWorkspaceStatus();
   const bootOverlayVisible = useBootOverlayVisible();
@@ -685,8 +685,8 @@ export function SessionRoute() {
           baseUrl: selectedWorkspaceEndpoint.baseUrl,
           token: selectedWorkspaceServerToken ?? "",
           hostToken: selectedWorkspaceEndpoint.isRemote
-            ? selectedWorkspace?.openworkHostToken ?? undefined
-            : openworkServerHostInfoState?.hostToken ?? undefined,
+            ? selectedWorkspace?.sofiaHostToken ?? undefined
+            : sofiaServerHostInfoState?.hostToken ?? undefined,
           workspaceId: selectedWorkspaceEndpoint.workspaceId,
           displayWorkspaceId: selectedWorkspaceId,
         }
@@ -777,9 +777,9 @@ export function SessionRoute() {
   // options for whichever model is currently selected so the composer's
   // behavior pill actually shows its options (bug: was empty before).
 
-  const openworkServerSettings = useMemo(
-    () => readOpenworkServerSettings(),
-    [openworkServerSettingsVersion],
+  const sofiaServerSettings = useMemo(
+    () => readSofiaServerSettings(),
+    [sofiaServerSettingsVersion],
   );
 
   const activeReloadBlockingSessions = useMemo(
@@ -809,9 +809,9 @@ export function SessionRoute() {
     [selectedWorkspaceId, sessionsByWorkspaceId],
   );
   const remoteAccessRestart = useRemoteAccessRestart({
-    isEnabled: () => openworkServerSettings.remoteAccessEnabled === true,
-    onHostInfo: setOpenworkServerHostInfoState,
-    onSettingsChanged: () => setOpenworkServerSettingsVersion((value) => value + 1),
+    isEnabled: () => sofiaServerSettings.remoteAccessEnabled === true,
+    onHostInfo: setSofiaServerHostInfoState,
+    onSettingsChanged: () => setSofiaServerSettingsVersion((value) => value + 1),
   });
 
   const { engineReloadVersion, routeEngineInfo, reloadWorkspaceEngineFromUi } = useEngineReload({
@@ -825,12 +825,12 @@ export function SessionRoute() {
   });
 
   const environmentRuntimeKey = useMemo(
-    () => buildOpenworkEnvRuntimeKey({
+    () => buildSofiaEnvRuntimeKey({
       baseUrl: client?.baseUrl ?? null,
-      pid: openworkServerHostInfoState?.pid ?? null,
-      port: openworkServerHostInfoState?.port ?? null,
+      pid: sofiaServerHostInfoState?.pid ?? null,
+      port: sofiaServerHostInfoState?.port ?? null,
     }),
-    [client?.baseUrl, openworkServerHostInfoState?.pid, openworkServerHostInfoState?.port],
+    [client?.baseUrl, sofiaServerHostInfoState?.pid, sofiaServerHostInfoState?.port],
   );
 
   const handleApplyEnvironmentChanges = useCallback(async () => {
@@ -851,8 +851,8 @@ export function SessionRoute() {
 
   const shareWorkspaceState = useShareWorkspaceState({
     workspaces,
-    openworkServerHostInfo: openworkServerHostInfoState,
-    openworkServerSettings,
+    sofiaServerHostInfo: sofiaServerHostInfoState,
+    sofiaServerSettings,
     engineInfo: routeEngineInfo,
     exportWorkspaceBusy: false,
     openLink: (url) => platform.openLink(url),
@@ -977,7 +977,7 @@ export function SessionRoute() {
     selectedWorkspaceEndpoint,
     selectedWorkspaceRoot,
     selectedWorkspaceId,
-    localServerHostToken: openworkServerHostInfoState?.hostToken?.trim() ?? "",
+    localServerHostToken: sofiaServerHostInfoState?.hostToken?.trim() ?? "",
     setProviders,
     setProviderDefaults,
     setProviderConnectedIds,
@@ -1023,18 +1023,18 @@ export function SessionRoute() {
   const handleModelPickerOpen = useCallback(() => {
     void refreshCloudProviderSync("model_picker_open");
   }, [refreshCloudProviderSync]);
-  const openWorkModelsEntitled = useMemo(() => {
+  const sofiaModelsEntitled = useMemo(() => {
     if (!denAuth.isSignedIn) return false;
     const fromOrg = sessionProviderAuthSnapshot.cloudOrgProviders.some(
       (provider) =>
         [provider.providerId, provider.source].some(
-          (value) => value?.trim().toLowerCase() === "openwork",
+          (value) => value?.trim().toLowerCase() === "sofia",
         ),
     );
     const fromImport = Object.values(sessionProviderAuthSnapshot.importedCloudProviders ?? {}).some(
       (provider) =>
         [provider.providerId, provider.source, provider.sourceProviderId].some(
-          (value) => value?.trim().toLowerCase() === "openwork",
+          (value) => value?.trim().toLowerCase() === "sofia",
         ),
     );
     return fromOrg || fromImport;
@@ -1075,13 +1075,13 @@ export function SessionRoute() {
     providerListQuery.data,
     restrictToCloudProviders,
   ]);
-  const openWorkModelsAvailable = hasOpenWorkModelsAvailable({
+  const sofiaModelsAvailable = hasSofiaModelsAvailable({
     providerConnectedIds,
     providers,
   });
-  const openWorkModelsSyncing = shouldShowOpenWorkModelsSyncing({
-    entitled: openWorkModelsEntitled,
-    available: openWorkModelsAvailable,
+  const sofiaModelsSyncing = shouldShowSofiaModelsSyncing({
+    entitled: sofiaModelsEntitled,
+    available: sofiaModelsAvailable,
     workspaceReady: Boolean(selectedWorkspaceId && opencodeClient),
     reloadPending: sessionProviderAuthSnapshot.cloudProviderServerSync?.reloadPending === true,
   });
@@ -1151,7 +1151,7 @@ export function SessionRoute() {
     signedIn: denAuth.isSignedIn,
     selectedModelUsesCloudProvider,
     cloudProviderSyncReady,
-    openWorkModelsSyncing,
+    sofiaModelsSyncing,
   });
   const selectedModelUnavailable = codexEngine.enabled
     ? Boolean(codexEngine.config && local.prefs.defaultModel &&
@@ -1292,7 +1292,7 @@ export function SessionRoute() {
     const applyProviderState = (value: ProviderListResponse) => {
       if (cancelled) return;
       // When not signed in, filter out every cloud-managed provider key so
-      // stale org imports and the hosted `openwork` catalog do not reappear.
+      // stale org imports and the hosted `sofia` catalog do not reappear.
       const hasCloudAuth = !!readDenSettings().authToken?.trim();
       const all = hasCloudAuth
         ? ((value.all ?? []) as ProviderListItem[])
@@ -1419,7 +1419,7 @@ export function SessionRoute() {
     }
 
     // Note: do NOT include `client`, `workspaceId`, `sessionId`,
-    // `opencodeBaseUrl`, or `openworkToken` here. SessionPage forwards those
+    // `opencodeBaseUrl`, or `sofiaToken` here. SessionPage forwards those
     // explicitly to SessionSurface from the per-workspace endpoint resolved
     // by `resolveWorkspaceEndpoint`. If we leak them in here, the spread of
     // `surfaceProps` in SessionPage overrides those correct values with the
@@ -1440,8 +1440,8 @@ export function SessionRoute() {
       modelUnavailableMessage,
       organizationModelsEmpty,
       selectedModel: local.prefs.defaultModel ?? { providerID: "", modelID: "" },
-      openWorkModelsEntitled,
-      openWorkModelsSyncing,
+      sofiaModelsEntitled,
+      sofiaModelsSyncing,
       onRefreshOrganizationModels: refreshOrganizationModelAccess,
       onModelPickerOpenChange: (open: boolean) => {
         modelPicker.setCompactOpen(open);
@@ -1594,7 +1594,7 @@ export function SessionRoute() {
                 }
 
                 const parts = await draftToParts(draft, selectedWorkspaceRoot, targetSessionId, selectedWorkspaceEndpoint);
-                const envSystemContext = await buildOpenworkEnvSystemContext(client, {
+                const envSystemContext = await buildSofiaEnvSystemContext(client, {
                   cacheKey: targetSessionId,
                   runtimeKey: environmentRuntimeKey,
                 });
@@ -1753,8 +1753,8 @@ export function SessionRoute() {
     modelVariantValue,
     navigate,
     providerCatalog,
-    openWorkModelsEntitled,
-    openWorkModelsSyncing,
+    sofiaModelsEntitled,
+    sofiaModelsSyncing,
     refreshCloudProviderSync,
     refreshOrganizationModelAccess,
     opencodeBaseUrl,
@@ -1819,8 +1819,8 @@ export function SessionRoute() {
         }));
         modelPicker.setCompactOpen(false);
       },
-      openWorkModelsEntitled,
-      openWorkModelsSyncing,
+      sofiaModelsEntitled,
+      sofiaModelsSyncing,
       modelVariantLabel,
       modelVariant: modelVariantValue,
       modelBehaviorOptions,
@@ -1867,8 +1867,8 @@ export function SessionRoute() {
     modelVariantLabel,
     modelVariantValue,
     opencodeClient,
-    openWorkModelsEntitled,
-    openWorkModelsSyncing,
+    sofiaModelsEntitled,
+    sofiaModelsSyncing,
     organizationAssignedModelOptions,
     organizationModelsEmpty,
     refreshCloudProviderSync,
@@ -2043,7 +2043,7 @@ export function SessionRoute() {
         if (!targetEndpoint) throw new Error("The selected workspace is unavailable");
         const targetClient = createCodexSessionClient({
           baseUrl: targetEndpoint.baseUrl, token: targetEndpoint.token,
-          hostToken: targetEndpoint.isRemote ? workspace.openworkHostToken ?? undefined : openworkServerHostInfoState?.hostToken ?? undefined,
+          hostToken: targetEndpoint.isRemote ? workspace.sofiaHostToken ?? undefined : sofiaServerHostInfoState?.hostToken ?? undefined,
           workspaceId: targetEndpoint.workspaceId,
         });
         const result = await targetClient.createSession({
@@ -2073,7 +2073,7 @@ export function SessionRoute() {
     const workspaceClient = createClient(
       endpoint.opencodeBaseUrl,
       workspace.path?.trim() || undefined,
-      { token: endpoint.token, mode: "openwork" },
+      { token: endpoint.token, mode: "sofia" },
     );
     try {
       setErrorsByWorkspaceId((current) => ({ ...current, [workspaceId]: null }));
@@ -2111,7 +2111,7 @@ export function SessionRoute() {
       const message = describeTaskCreateError(error);
       setRouteError(message);
       setErrorsByWorkspaceId((current) => ({ ...current, [workspaceId]: message }));
-      toast.error("OpenCode unavailable", {
+      toast.error("Engine unavailable", {
         id: taskCreateUnavailableToastId(workspaceId),
         description: message,
         action: {
@@ -2209,7 +2209,7 @@ export function SessionRoute() {
     selectedWorkspaceRoot,
     selectedSessionId,
     canCreateTask,
-    openworkClient: client,
+    sofiaClient: client,
     opencodeClient,
     navigateToSession: navigateToSessionForControl,
     navigateToSessionRoot: navigateToSessionRootForControl,
@@ -2218,7 +2218,7 @@ export function SessionRoute() {
     refreshRouteState,
   });
 
-  const seedUnavailableModelControlAction = useMemo<OpenworkControlAction | null>(() => {
+  const seedUnavailableModelControlAction = useMemo<SofiaControlAction | null>(() => {
     if (!import.meta.env.DEV) return null;
     return {
       id: "eval.model_not_available.seed",
@@ -2227,7 +2227,7 @@ export function SessionRoute() {
       sideEffect: "mutation",
       disabled: !opencodeClient,
       execute: async () => {
-        if (!opencodeClient) return { ok: false, error: "OpenCode client is not connected." };
+        if (!opencodeClient) return { ok: false, error: "Sofia engine is not connected." };
 
         const providerList = await ensureProviderListQuery(getReactQueryClient(), {
           client: opencodeClient,
@@ -2276,7 +2276,7 @@ export function SessionRoute() {
   }, [checkDesktopRestriction, disabledProviderIds, local, modelPicker.setQuery, modelPicker.setRecentProviderIds, opencodeBaseUrl, opencodeClient, selectedSessionId, selectedWorkspaceId, selectedWorkspaceRoot]);
   useControlAction(seedUnavailableModelControlAction);
 
-  const seedActiveSessionSidebarControlAction = useMemo<OpenworkControlAction | null>(() => {
+  const seedActiveSessionSidebarControlAction = useMemo<SofiaControlAction | null>(() => {
     if (!import.meta.env.DEV) return null;
     return {
       id: "eval.session_sidebar.seed_active",
@@ -2295,7 +2295,7 @@ export function SessionRoute() {
   }, [selectedSessionId, selectedWorkspaceId]);
   useControlAction(seedActiveSessionSidebarControlAction);
 
-  const commandPaletteControlAction = useMemo<OpenworkControlAction>(() => ({
+  const commandPaletteControlAction = useMemo<SofiaControlAction>(() => ({
     id: "command_palette.open",
     label: "Open the command palette",
     description: "Open the in-app command palette so the next choice is visible.",
@@ -2305,7 +2305,7 @@ export function SessionRoute() {
   }), []);
   useControlAction(commandPaletteControlAction);
 
-  const addProviderControlAction = useMemo<OpenworkControlAction>(() => ({
+  const addProviderControlAction = useMemo<SofiaControlAction>(() => ({
     id: "settings.provider.add",
     label: "Add a model provider",
     description: "Open the provider connection modal, optionally pre-filtered to a specific provider.",
@@ -2449,7 +2449,7 @@ export function SessionRoute() {
       setCommandPaletteOpen(false);
       setDeveloperMode((current) => {
         const next = !current;
-        try { window.localStorage.setItem("openwork.developerMode", next ? "1" : "0"); } catch {}
+        try { window.localStorage.setItem("sofia.developerMode", next ? "1" : "0"); } catch {}
         return next;
       });
     },
@@ -2460,9 +2460,9 @@ export function SessionRoute() {
     canReloadWorkspace: reloadCoordinator.canReloadWorkspaceEngine,
     clientConnected: canCreateTask,
     developerMode,
-    hostInfo: openworkServerHostInfoState,
-    openworkServerStatus: client ? "connected" : "disconnected",
-    openworkServerUrl: baseUrl,
+    hostInfo: sofiaServerHostInfoState,
+    sofiaServerStatus: client ? "connected" : "disconnected",
+    sofiaServerUrl: baseUrl,
     runtimeWorkspaceId: selectedWorkspaceEndpoint?.workspaceId ?? null,
   }), [
     activeReloadBlockingSessions.length,
@@ -2470,7 +2470,7 @@ export function SessionRoute() {
     canCreateTask,
     client,
     developerMode,
-    openworkServerHostInfoState,
+    sofiaServerHostInfoState,
     reloadCoordinator.canReloadWorkspaceEngine,
     selectedWorkspaceEndpoint?.workspaceId,
   ]);
@@ -2502,7 +2502,7 @@ export function SessionRoute() {
       try {
         const json = await buildCommandDiagnosticsBundle();
         const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-        downloadTextAsFile(`openwork-diagnostics-${timestamp}.json`, json, "application/json");
+        downloadTextAsFile(`sofia-diagnostics-${timestamp}.json`, json, "application/json");
         toast.success(t("session.diagnostics_exported"));
       } catch (error) {
         toast.error(t("session.diagnostics_failed"), { description: describeRouteError(error) });
@@ -2645,14 +2645,14 @@ export function SessionRoute() {
       let sessionBaseUrl = baseUrl;
       let sessionToken = token;
       if (targetWorkspace && isDesktopRuntime()) {
-        await ensureDesktopLocalOpenworkConnection({
+        await ensureDesktopLocalSofiaConnection({
           route: "session",
           workspace: targetWorkspace,
           allWorkspaces: list.workspaces,
         }).catch(() => undefined);
         // The engine boot can restart the server with fresh tokens; re-resolve
         // so the first-session creation below doesn't use stale credentials.
-        const fresh = await resolveOpenworkConnection().catch(() => null);
+        const fresh = await resolveSofiaConnection().catch(() => null);
         if (fresh?.normalizedBaseUrl && fresh.resolvedToken) {
           sessionBaseUrl = fresh.normalizedBaseUrl;
           sessionToken = fresh.resolvedToken;
@@ -2671,9 +2671,9 @@ export function SessionRoute() {
         // its supplied prompt; ordinary creation lands on the New task state.
         const session = createdOnServer && sessionBaseUrl && sessionToken && (firstTaskPrompt || firstTaskAttachments.length > 0)
           ? await createClient(
-              `${(buildOpenworkWorkspaceBaseUrl(sessionBaseUrl, targetWorkspaceId) ?? sessionBaseUrl).replace(/\/+$/, "")}/opencode`,
+              `${(buildSofiaWorkspaceBaseUrl(sessionBaseUrl, targetWorkspaceId) ?? sessionBaseUrl).replace(/\/+$/, "")}/opencode`,
               workspacePath || undefined,
-              { token: sessionToken, mode: "openwork" },
+              { token: sessionToken, mode: "sofia" },
             ).session.create({ directory: workspacePath || undefined })
               .then((result) => unwrap(result))
               .catch(() => null)
@@ -2749,7 +2749,7 @@ export function SessionRoute() {
     })();
   }, [handleCreateWorkspace, handleOpenCreateWorkspace]);
 
-  const createWorkspaceControlAction = useMemo<OpenworkControlAction>(() => ({
+  const createWorkspaceControlAction = useMemo<SofiaControlAction>(() => ({
     id: "workspace.create",
     label: "Create a local workspace",
     description: "Create a workspace at the given folder path without showing the file picker dialog, optionally labeling its project for analytics.",
@@ -2772,21 +2772,21 @@ export function SessionRoute() {
   useControlAction(createWorkspaceControlAction);
 
   const handleCreateRemoteWorkspace = useCallback(async (input: {
-    openworkHostUrl?: string | null;
-    openworkToken?: string | null;
+    sofiaHostUrl?: string | null;
+    sofiaToken?: string | null;
     directory?: string | null;
     displayName?: string | null;
   }) => {
-    const baseUrlValue = input.openworkHostUrl?.trim() ?? "";
+    const baseUrlValue = input.sofiaHostUrl?.trim() ?? "";
     if (!baseUrlValue) return false;
     setCreateWorkspaceRemoteBusy(true);
     setCreateWorkspaceRemoteError(null);
     try {
-      const remoteType: "openwork" = "openwork";
+      const remoteType: "sofia" = "sofia";
       const payload = {
         baseUrl: baseUrlValue,
-        openworkHostUrl: baseUrlValue,
-        openworkToken: input.openworkToken?.trim() || null,
+        sofiaHostUrl: baseUrlValue,
+        sofiaToken: input.sofiaToken?.trim() || null,
         displayName: input.displayName?.trim() || null,
         directory: input.directory?.trim() || null,
         remoteType,
@@ -2822,7 +2822,7 @@ export function SessionRoute() {
     <WorkspaceProvider
       client={opencodeClient}
       opencodeBaseUrl={opencodeBaseUrl}
-      openworkServerClient={selectedWorkspaceEndpoint?.client ?? null}
+      sofiaServerClient={selectedWorkspaceEndpoint?.client ?? null}
       workspaceId={selectedWorkspaceEndpoint?.workspaceId ?? ""}
       selectedWorkspaceRoot={selectedWorkspaceRoot}
     >
@@ -2837,7 +2837,7 @@ export function SessionRoute() {
         sessionId={selectedSessionId}
         activeSessionIds={activeSelectedWorkspaceSessionIds}
         opencodeBaseUrl={opencodeBaseUrl}
-        openworkToken={selectedWorkspaceServerToken}
+        sofiaToken={selectedWorkspaceServerToken}
         enabled
         onSessionCreated={handleRuntimeSessionCreated}
         onSessionUpdated={handleRuntimeSessionUpdated}
@@ -2860,10 +2860,10 @@ export function SessionRoute() {
       opencodeBaseUrl={opencodeBaseUrl}
       workspaces={workspaces}
       clientConnected={canCreateTask}
-      openworkServerStatus={client ? "connected" : "disconnected"}
-      openworkServerClient={selectedWorkspaceEndpoint?.client ?? client}
+      sofiaServerStatus={client ? "connected" : "disconnected"}
+      sofiaServerClient={selectedWorkspaceEndpoint?.client ?? client}
       environmentClient={client}
-      openworkServerToken={selectedWorkspaceServerToken}
+      sofiaServerToken={selectedWorkspaceServerToken}
       developerMode={developerMode}
       codexEngine={codexEngine.enabled ? {
         enabled: true,
@@ -2931,7 +2931,7 @@ export function SessionRoute() {
           workspaceId={selectedWorkspaceId}
           onClose={() => {
             try {
-              window.dispatchEvent(new CustomEvent("openwork-close-right-pane"));
+              window.dispatchEvent(new CustomEvent("sofia-close-right-pane"));
             } catch {
               // ignore
             }
@@ -3009,7 +3009,7 @@ export function SessionRoute() {
                 const firstTaskPrompt = prompt.trim();
                 const targetWorkspace = workspaces.find((item) => item.id === workspaceId);
                 const session = await codexEngine.createSession({
-                  title: firstTaskPrompt.slice(0, 60) || "New codex task",
+                  title: firstTaskPrompt.slice(0, 60) || "New Sofia task",
                   prompt: firstTaskPrompt || undefined,
                   cwd: targetWorkspace?.path?.trim() || undefined,
                 });
@@ -3037,7 +3037,7 @@ export function SessionRoute() {
             const workspaceClient = createClient(
               endpoint.opencodeBaseUrl,
               workspace.path?.trim() || undefined,
-              { token: endpoint.token, mode: "openwork" },
+              { token: endpoint.token, mode: "sofia" },
             );
             try {
               const session = unwrap(
@@ -3109,7 +3109,7 @@ export function SessionRoute() {
               remoteAccess:
                 isDesktopRuntime() && shareWorkspaceState.shareWorkspace?.workspaceType === "local"
                   ? {
-                      enabled: openworkServerSettings.remoteAccessEnabled === true,
+                      enabled: sofiaServerSettings.remoteAccessEnabled === true,
                       busy: remoteAccessRestart.busy,
                       error: remoteAccessRestart.error,
                       status: remoteAccessRestart.status,
@@ -3174,7 +3174,7 @@ export function SessionRoute() {
         loading: showPreparingStatus,
         reloadBusy: reloadCoordinator.reloadBusy,
         reloadError: reloadCoordinator.reloadError,
-        openWorkConnectState: sessionMcpMaintenance,
+        sofiaConnectState: sessionMcpMaintenance,
       }}
       notFoundMessage={gatedRouteNotFoundMessage}
       mainContentTakeover={
@@ -3253,14 +3253,14 @@ export function SessionRoute() {
       accessibleTargets={paletteAccessibleTargets}
       onOpenAccessibleTarget={(target) => {
         try {
-          window.dispatchEvent(new CustomEvent("openwork-open-accessible-target", { detail: target }));
+          window.dispatchEvent(new CustomEvent("sofia-open-accessible-target", { detail: target }));
         } catch {
           // ignore event dispatch failures
         }
       }}
       onHideAccessibleTarget={(target) => {
         try {
-          window.dispatchEvent(new CustomEvent("openwork-hide-accessible-target", { detail: target }));
+          window.dispatchEvent(new CustomEvent("sofia-hide-accessible-target", { detail: target }));
         } catch {
           // ignore event dispatch failures
         }
@@ -3334,7 +3334,7 @@ export function SessionRoute() {
             : [...current, providerId];
           const result = await updateManagedDisabledProviders({
             opencodeClient,
-            openworkClient: selectedWorkspaceEndpoint?.client ?? null,
+            sofiaClient: selectedWorkspaceEndpoint?.client ?? null,
             workspaceId: selectedWorkspaceEndpoint?.workspaceId ?? null,
             workspaceType: selectedWorkspace?.workspaceType ?? "local",
             disabledProviders: next,
@@ -3355,8 +3355,8 @@ export function SessionRoute() {
         handleOpenSettings("/settings/general");
       }}
       onClose={() => { modelPicker.setOpen(false); modelPicker.setRecentProviderIds(new Set()); }}
-      openWorkModelsEntitled={openWorkModelsEntitled}
-      openWorkModelsSyncing={openWorkModelsSyncing}
+      sofiaModelsEntitled={sofiaModelsEntitled}
+      sofiaModelsSyncing={sofiaModelsSyncing}
       onRefreshOrganizationModels={refreshOrganizationModelAccess}
       restrictToCloud={restrictToCloudProviders}
     />

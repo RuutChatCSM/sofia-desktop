@@ -1,14 +1,14 @@
 import { expect } from "vitest";
-import { clickButton, denFetch, evalIn, fill, signIn, visibleText, waitFor } from "@openwork/behaviors";
-import { localMysqlIsRunning, localRedisIsRunning, queryDenDatabase, server, test } from "@openwork/testkit";
-import { navigate } from "@openwork/cdp";
-import { chrome } from "@openwork/hosts";
+import { clickButton, denFetch, evalIn, fill, signIn, visibleText, waitFor } from "@sofia/behaviors";
+import { localMysqlIsRunning, localRedisIsRunning, queryDenDatabase, server, test } from "@sofia/testkit";
+import { navigate } from "@sofia/cdp";
+import { chrome } from "@sofia/hosts";
 
-const localPlacement = process.env.OPENWORK_EVAL_DAYTONA !== "1" && !process.env.OPENWORK_EVAL_DEN_API_URL?.trim();
+const localPlacement = process.env.SOFIA_EVAL_DAYTONA !== "1" && !process.env.SOFIA_EVAL_DEN_API_URL?.trim();
 const mysqlOpen = await localMysqlIsRunning();
 const redisOpen = await localRedisIsRunning();
 const title = !localPlacement
-  ? "Initial administrator bootstrap skipped — needs local placement without OPENWORK_EVAL_DEN_API_URL"
+  ? "Initial administrator bootstrap skipped — needs local placement without SOFIA_EVAL_DEN_API_URL"
   : !mysqlOpen
     ? "Initial administrator bootstrap skipped — needs MySQL on 127.0.0.1:3306"
     : !redisOpen
@@ -56,15 +56,15 @@ test.skipIf(!localPlacement || !mysqlOpen || !redisOpen)(title, { timeout: 600_0
   const normalizedAdminEmail = adminEmail.toLowerCase();
   const otherAdminEmail = `second.${runId}@example.com`;
   const setupCode = `eval-initial-admin-code-${runId}`;
-  const adminPassword = "OpenWorkEval123!";
+  const adminPassword = "SofiaEval123!";
 
   await using den = await server({
     place,
     provision: false,
     env: {
       DEN_ORG_MODE: "single_org",
-      DEN_SINGLE_ORG_NAME: "Private OpenWork",
-      DEN_SINGLE_ORG_SLUG: "private-openwork",
+      DEN_SINGLE_ORG_NAME: "Private Sofia App",
+      DEN_SINGLE_ORG_SLUG: "private-sofia",
       DEN_SINGLE_ORG_ALLOW_PUBLIC_SIGNUP: "false",
       DEN_SINGLE_ORG_OWNER_EMAILS: `${adminEmail},${otherAdminEmail}`,
       DEN_BOOTSTRAP_ADMIN_EMAILS: adminEmail,
@@ -213,7 +213,7 @@ test.skipIf(!localPlacement || !mysqlOpen || !redisOpen)(title, { timeout: 600_0
   expect(factsAfterSetup.orgs).toBe(1);
   expect(factsAfterSetup.members).toBe(1);
   expect(factsAfterSetup.firstMemberRole).toBe("owner");
-  expect(factsAfterSetup.firstOrgSlug).toBe("private-openwork");
+  expect(factsAfterSetup.firstOrgSlug).toBe("private-sofia");
   expect(factsAfterSetup.adminAllowlistRows).toBe(1);
   evidence.recordAssertionEvidence(
     "Successful setup creates exactly one user, singleton organization, owner membership, and platform-admin authorization",
@@ -222,7 +222,7 @@ test.skipIf(!localPlacement || !mysqlOpen || !redisOpen)(title, { timeout: 600_0
       && factsAfterSetup.orgs === 1
       && factsAfterSetup.members === 1
       && factsAfterSetup.firstMemberRole === "owner"
-      && factsAfterSetup.firstOrgSlug === "private-openwork"
+      && factsAfterSetup.firstOrgSlug === "private-sofia"
       && factsAfterSetup.adminAllowlistRows === 1,
   );
 
@@ -298,8 +298,8 @@ test.skipIf(!localPlacement || !mysqlOpen || !redisOpen)(title, { timeout: 600_0
     web: false,
     env: {
       DEN_ORG_MODE: "single_org",
-      DEN_SINGLE_ORG_NAME: "Race OpenWork",
-      DEN_SINGLE_ORG_SLUG: "race-openwork",
+      DEN_SINGLE_ORG_NAME: "Race Sofia App",
+      DEN_SINGLE_ORG_SLUG: "race-sofia",
       DEN_SINGLE_ORG_ALLOW_PUBLIC_SIGNUP: "false",
       DEN_SINGLE_ORG_OWNER_EMAILS: `${adminEmail},${otherAdminEmail}`,
       DEN_BOOTSTRAP_ADMIN_EMAILS: `${adminEmail},${otherAdminEmail}`,

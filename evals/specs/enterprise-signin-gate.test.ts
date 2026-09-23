@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { expect } from "vitest";
-import { test } from "@openwork/testkit";
+import { test } from "@sofia/testkit";
 import {
   ENTERPRISE_DESKTOP_DISTRIBUTION,
   enterprisePreactivationCommandAllowed,
@@ -54,15 +54,15 @@ test("the enterprise gate is a sign-in door with a server field, not a waiting w
   const { normalizeOrganizationServerInput } = await import(
     "../../apps/app/src/app/lib/organization-server-input"
   );
-  expect(normalizeOrganizationServerInput("https://openwork.acme.com/werpiweur")).toBe("https://openwork.acme.com");
-  expect(normalizeOrganizationServerInput("  openwork.acme.com  ")).toBe("https://openwork.acme.com");
+  expect(normalizeOrganizationServerInput("https://sofia.acme.com/werpiweur")).toBe("https://sofia.acme.com");
+  expect(normalizeOrganizationServerInput("  sofia.acme.com  ")).toBe("https://sofia.acme.com");
   expect(normalizeOrganizationServerInput("http://localhost:3005/dashboard?x=1#y")).toBe("http://localhost:3005");
   expect(normalizeOrganizationServerInput("http://127.0.0.1:3005")).toBe("http://127.0.0.1:3005");
   expect(normalizeOrganizationServerInput("http://[::1]:3005")).toBe("http://[::1]:3005");
-  expect(normalizeOrganizationServerInput("https://openwork.acme.com:8443/path")).toBe("https://openwork.acme.com:8443");
-  expect(normalizeOrganizationServerInput("http://openwork.acme.com")).toBe(null);
+  expect(normalizeOrganizationServerInput("https://sofia.acme.com:8443/path")).toBe("https://sofia.acme.com:8443");
+  expect(normalizeOrganizationServerInput("http://sofia.acme.com")).toBe(null);
   expect(normalizeOrganizationServerInput("http://den.internal:8080")).toBe(null);
-  expect(normalizeOrganizationServerInput("ftp://openwork.acme.com")).toBe(null);
+  expect(normalizeOrganizationServerInput("ftp://sofia.acme.com")).toBe(null);
   expect(normalizeOrganizationServerInput("")).toBe(null);
   expect(normalizeOrganizationServerInput("not a url at all")).toBe(null);
   evidence.recordAssertionEvidence(
@@ -112,8 +112,8 @@ test("enterprise onboarding is workspace-address-first with a silent paste recov
   expect(gateSource).toContain("Link this app to your organization");
   expect(gateSource).toContain("Enter your workspace address — the page where you downloaded this app. Sign-in finishes in your browser and returns here.");
   expect(gateSource).toContain("{pendingConfirmation ? null : (");
-  expect(gateSource).not.toContain("OpenWork link");
-  expect(gateSource).not.toContain("enterprise-openwork-link-connect");
+  expect(gateSource).not.toContain("Sofia App link");
+  expect(gateSource).not.toContain("enterprise-sofia-link-connect");
   expect(gateSource).not.toContain("enterprise-connection-method-toggle");
   expect(gateSource).not.toContain("manualAuthOpen");
   expect(gateSource).not.toMatch(/(?:paste|hide) sign-in code/i);
@@ -126,13 +126,13 @@ test("enterprise onboarding is workspace-address-first with a silent paste recov
   );
 
   // The install guide's connect step hands the user the exact address to type,
-  // and the workspace-claim page still copies the complete OpenWork URL for the
+  // and the workspace-claim page still copies the complete Sofia App URL for the
   // desktop's silent paste recovery.
   expect(installGuideSource).toContain('data-testid="install-workspace-address"');
   expect(installGuideSource).toContain("In the app, enter your workspace address:");
-  expect(installGuideSource).not.toContain("Copy OpenWork link");
-  expect(workspaceClaimSource).toContain("const openworkUrl = await createDesktopHandoff();");
-  expect(workspaceClaimSource).toContain("await navigator.clipboard.writeText(openworkUrl);");
+  expect(installGuideSource).not.toContain("Copy Sofia App link");
+  expect(workspaceClaimSource).toContain("const sofiaUrl = await createDesktopHandoff();");
+  expect(workspaceClaimSource).toContain("await navigator.clipboard.writeText(sofiaUrl);");
   expect(workspaceClaimSource).not.toMatch(/sign-in code/i);
   expect(workspaceClaimSource).not.toContain("getDesktopGrant");
 
@@ -144,11 +144,11 @@ test("enterprise onboarding is workspace-address-first with a silent paste recov
 
   evidence.recordAssertionEvidence(
     "The guide hands over the workspace address, not a credential",
-    "The install guide's connect step shows the exact workspace address to type, keeps macOS, Windows, and Linux install guidance, avoids activation-link language, and the workspace-claim page still copies a complete OpenWork URL.",
+    "The install guide's connect step shows the exact workspace address to type, keeps macOS, Windows, and Linux install guidance, avoids activation-link language, and the workspace-claim page still copies a complete Sofia App URL.",
     true,
   );
 
-  // The single address field silently accepts a pasted openwork:// URL, and a
+  // The single address field silently accepts a pasted sofia:// URL, and a
   // pasted URL still reaches the explicit origin confirmation before its
   // one-time grant is exchanged.
   expect(gateSource).toContain("const pastedLink = parseManualAuthInput(serverInput);");
@@ -159,7 +159,7 @@ test("enterprise onboarding is workspace-address-first with a silent paste recov
   );
 
   evidence.recordAssertionEvidence(
-    "Pasted openwork:// URLs recover through the same field with confirmation",
+    "Pasted sofia:// URLs recover through the same field with confirmation",
     "parseManualAuthInput runs on the workspace-address input, and a pasted URL's origin reaches the named confirmation before exchangeHandoffAndSignIn.",
     true,
   );

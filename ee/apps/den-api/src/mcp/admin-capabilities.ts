@@ -18,7 +18,7 @@ type AdminToolResult = {
 async function withAdminClient<T>(run: (client: Client) => Promise<T>): Promise<T> {
   const server = new McpServer({ name: "den-admin-agent-bridge", version: DEN_ADMIN_MCP_VERSION })
   registerAdminMcpTools(server)
-  const client = new Client({ name: "openwork-agent", version: "1.0.0" })
+  const client = new Client({ name: "sofia-agent", version: "1.0.0" })
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
 
   await server.connect(serverTransport)
@@ -56,7 +56,7 @@ async function listAdminCapabilityMatches(query?: string): Promise<CapabilityMat
             ["admin", "platform"],
           )
           : 1,
-        summary: `[OpenWork Admin] ${tool.description ?? tool.name}`,
+        summary: `[Sofia Admin] ${tool.description ?? tool.name}`,
         pathParams: [],
         queryParams: [],
         hasBody,

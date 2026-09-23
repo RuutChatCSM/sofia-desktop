@@ -4,7 +4,7 @@ import {
   OAuthAccessTokenTable,
   OAuthConsentTable,
   OAuthRefreshTokenTable,
-} from "@openwork-ee/den-db/schema"
+} from "@sofia-ee/den-db/schema"
 
 const selectedRows = {
   sessions: [{ id: "session_one" }, { id: "session_two" }],
@@ -42,7 +42,7 @@ function resetCalls() {
 let credentialRevocationModule: typeof import("../src/credential-revocation.js")
 
 beforeAll(async () => {
-  process.env.DATABASE_URL = process.env.DATABASE_URL ?? "mysql://root:password@127.0.0.1:3306/openwork_test"
+  process.env.DATABASE_URL = process.env.DATABASE_URL ?? "mysql://root:password@127.0.0.1:3306/sofia_test"
   process.env.DEN_DB_ENCRYPTION_KEY = process.env.DEN_DB_ENCRYPTION_KEY ?? "x".repeat(32)
   process.env.BETTER_AUTH_SECRET = process.env.BETTER_AUTH_SECRET ?? "y".repeat(32)
   process.env.BETTER_AUTH_URL = process.env.BETTER_AUTH_URL ?? "http://127.0.0.1:8790"

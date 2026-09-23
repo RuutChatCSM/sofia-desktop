@@ -24,12 +24,12 @@ export type LegacyConfigSweepOptions = {
   now?: Date;
 };
 
-const OPENWORK_PLUGIN_MARKERS = [
-  "openwork-extensions-preview",
-  "openwork-capabilities-knowledge",
-  "openwork-office-attachments",
-  "openwork-anthropic-adaptive-thinking",
-  "openwork-anthropic-tool-schema",
+const SOFIA_PLUGIN_MARKERS = [
+  "sofia-extensions-preview",
+  "sofia-capabilities-knowledge",
+  "sofia-office-attachments",
+  "sofia-anthropic-adaptive-thinking",
+  "sofia-anthropic-tool-schema",
 ];
 
 const formattingOptions = { insertSpaces: true, tabSize: 2, eol: "\n" };
@@ -63,8 +63,8 @@ function legacyConfigTargets(homeDir: string): string[] {
   ];
 }
 
-function matchesOpenworkPlugin(value: string): boolean {
-  return value.includes("opencode-plugins/openwork-") || OPENWORK_PLUGIN_MARKERS.some((marker) => value.includes(marker));
+function matchesSofiaPlugin(value: string): boolean {
+  return value.includes("opencode-plugins/sofia-") || SOFIA_PLUGIN_MARKERS.some((marker) => value.includes(marker));
 }
 
 function parseJsoncObject(content: string): Record<string, unknown> {
@@ -72,7 +72,7 @@ function parseJsoncObject(content: string): Record<string, unknown> {
   const parsed: unknown = parse(content, errors, { allowTrailingComma: true });
   if (errors.length > 0) {
     const details = errors.map((error) => printParseErrorCode(error.error)).join(", ");
-    throw new Error(`Failed to parse legacy OpenCode config (${details})`);
+    throw new Error(`Failed to parse legacy Sofia engine config (${details})`);
   }
   return isRecord(parsed) ? parsed : {};
 }
@@ -90,23 +90,23 @@ export function sweepLegacyConfigContent(content: string): { content: string; re
   const removedKeys: string[] = [];
   let updated = content;
 
-  if (isRecord(parsed.mcp) && Object.hasOwn(parsed.mcp, "openwork-cloud")) {
-    updated = removeJsoncPath(updated, ["mcp", "openwork-cloud"]);
-    removedKeys.push("mcp.openwork-cloud");
+  if (isRecord(parsed.mcp) && Object.hasOwn(parsed.mcp, "sofia-cloud")) {
+    updated = removeJsoncPath(updated, ["mcp", "sofia-cloud"]);
+    removedKeys.push("mcp.sofia-cloud");
   }
 
-  if (isRecord(parsed.agent) && Object.hasOwn(parsed.agent, "openwork")) {
-    updated = removeJsoncPath(updated, ["agent", "openwork"]);
-    removedKeys.push("agent.openwork");
+  if (isRecord(parsed.agent) && Object.hasOwn(parsed.agent, "sofia")) {
+    updated = removeJsoncPath(updated, ["agent", "sofia"]);
+    removedKeys.push("agent.sofia");
   }
 
-  if (parsed.default_agent === "openwork") {
+  if (parsed.default_agent === "sofia") {
     updated = removeJsoncPath(updated, ["default_agent"]);
     removedKeys.push("default_agent");
   }
 
   if (Array.isArray(parsed.plugin)) {
-    const nextPlugin = parsed.plugin.filter((entry) => typeof entry !== "string" || !matchesOpenworkPlugin(entry));
+    const nextPlugin = parsed.plugin.filter((entry) => typeof entry !== "string" || !matchesSofiaPlugin(entry));
     if (nextPlugin.length !== parsed.plugin.length) {
       updated = nextPlugin.length > 0
         ? setJsoncPath(updated, ["plugin"], nextPlugin)
@@ -186,7 +186,7 @@ export async function sweepLegacyOpenCodeConfig(
       };
 
       if (swept.removedKeys.length > 0) {
-        const backupPath = `${path}.openwork-backup-${backupTimestamp(now)}`;
+        const backupPath = `${path}.sofia-backup-${backupTimestamp(now)}`;
         await copyFile(path, backupPath);
         await writeFile(path, swept.content, "utf8");
         file.backupPath = backupPath;

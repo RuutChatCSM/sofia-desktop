@@ -4,7 +4,7 @@ import type { Agent } from "@/app/lib/engine-types";
 
 import type { CloudImportedPlugin } from "@/app/cloud/import-state";
 import { createDenClient, readDenSettings } from "@/app/lib/den";
-import type { OpenworkServerClient } from "@/app/lib/openwork-server";
+import type { SofiaServerClient } from "@/app/lib/sofia-server";
 import type { ComposerAttachment, McpServerEntry, McpStatusMap, ModelOption, ModelRef, SkillCard, SlashCommandOption } from "@/app/types";
 import { t } from "@/i18n";
 import type { ComposerSettingsSection } from "@/react-app/domains/settings/library";
@@ -30,7 +30,7 @@ import { resolveAttachmentFileMetadata } from "@/react-app/domains/session/sync/
  * hero creates.
  */
 export type NewTaskComposerContext = {
-  client: OpenworkServerClient | null;
+  client: SofiaServerClient | null;
   workspaceId: string | null;
   selectedModel: ModelRef;
   modelOptions?: readonly ModelOption[];
@@ -41,8 +41,8 @@ export type NewTaskComposerContext = {
   modelPickerOpen: boolean;
   onModelPickerOpenChange: (open: boolean) => void;
   onModelChange: (model: ModelRef, variant?: string | null) => void;
-  openWorkModelsEntitled?: boolean;
-  openWorkModelsSyncing?: boolean;
+  sofiaModelsEntitled?: boolean;
+  sofiaModelsSyncing?: boolean;
   modelVariantLabel: string;
   modelVariant: string | null;
   modelBehaviorOptions?: { value: string | null; label: string }[];
@@ -134,7 +134,7 @@ export function NewTaskComposer(props: NewTaskComposerProps) {
           name: entry.name,
           config: entry.config as McpServerEntry["config"],
           source: entry.source,
-          origin: entry.name === "openwork-cloud" ? "openwork-connect" : "local",
+          origin: entry.name === "sofia-cloud" ? "sofia-connect" : "local",
         } satisfies McpServerEntry));
         void connectPromise.then((connect) => {
           if (mcpConnectPushRef.current !== pushId) return;
@@ -272,8 +272,8 @@ export function NewTaskComposer(props: NewTaskComposerProps) {
       modelPickerOpen={context?.modelPickerOpen ?? false}
       selectedModel={context?.selectedModel ?? FALLBACK_MODEL}
       modelOptions={context?.modelOptions}
-      openWorkModelsEntitled={context?.openWorkModelsEntitled}
-      openWorkModelsSyncing={context?.openWorkModelsSyncing}
+      sofiaModelsEntitled={context?.sofiaModelsEntitled}
+      sofiaModelsSyncing={context?.sofiaModelsSyncing}
       onRefreshOrganizationModels={context?.onRefreshOrganizationModels}
       onModelPickerOpenChange={context?.onModelPickerOpenChange ?? noop}
       onModelChange={context?.onModelChange ?? noop}

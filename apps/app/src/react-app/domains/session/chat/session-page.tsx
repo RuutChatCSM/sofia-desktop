@@ -6,10 +6,10 @@ import { Cloud, FileText, Globe, Mic2, MoreHorizontal, PanelRight, TextSearch, Z
 
 import { resolveExtensionIconSrc } from "@/react-app/design-system/extension-icon-src";
 import { t } from "../../../../i18n";
-import { OPENWORK_EXTENSION_CATALOG } from "../../../../app/constants";
+import { SOFIA_EXTENSION_CATALOG } from "../../../../app/constants";
 import { buildDenAuthUrl, readDenBootstrapConfig } from "../../../../app/lib/den";
 import { markDesktopSignInInitiated } from "../../../../app/lib/den-sign-in-intent";
-import { type OpenworkServerClient, type OpenworkServerStatus } from "../../../../app/lib/openwork-server";
+import { type SofiaServerClient, type SofiaServerStatus } from "../../../../app/lib/sofia-server";
 import { getDisplaySessionTitle } from "../../../../app/lib/session-title";
 import type { BootPhase } from "../../../../app/lib/startup-boot";
 import { openDesktopPath, revealDesktopItemInDir, type WorkspaceInfo } from "../../../../app/lib/desktop";
@@ -87,8 +87,8 @@ import { getSidePanelSessionKey } from "../panel/side-panel-session";
 import { TerminalDock } from "../terminal/terminal-dock";
 import { useActivePanelTab, usePanelTabStore, useSessionPanelState } from "../panel/panel-tab-store";
 import { useWorkspaceShellLayout } from "../../../shell/workspace-shell-layout";
-import { useControlAction, type OpenworkControlAction } from "../../../shell/control/control-provider";
-import { getExtensionId, isOpenWorkExtensionEnabled, OPENWORK_EXTENSION_STATE_CHANGED } from "../../settings/extension-state";
+import { useControlAction, type SofiaControlAction } from "../../../shell/control/control-provider";
+import { getExtensionId, isSofiaExtensionEnabled, SOFIA_EXTENSION_STATE_CHANGED } from "../../settings/extension-state";
 import { cn } from "@/lib/utils";
 import {
   canNavigateSelectedConversationHistory,
@@ -105,7 +105,7 @@ const STARTUP_SKELETON_ROWS = [
   { id: "middle", titleWidth: "56%", bodyWidth: "88%" },
   { id: "final", titleWidth: "36%", bodyWidth: "74%" },
 ];
-const GLOBAL_VOICE_SIDE_PANEL_KEY = "__openwork_voice__";
+const GLOBAL_VOICE_SIDE_PANEL_KEY = "__sofia_voice__";
 const EMPTY_TRANSCRIPT_TARGETS: OpenTarget[] = [];
 const EMPTY_SESSION_TABS: WorkbenchSessionTab[] = [];
 
@@ -125,7 +125,7 @@ type StatusBarOverrides = {
   showSettingsButton: boolean;
   reloadBusy: boolean;
   reloadError: string | null;
-  openWorkConnectState: SessionCloudMcpMaintenanceState;
+  sofiaConnectState: SessionCloudMcpMaintenanceState;
 };
 
 export type SessionPageHistoryControls = {
@@ -170,7 +170,7 @@ export type SessionPageSidebarProps = {
 
 export type SessionPageSurfaceProps = Omit<
   SessionSurfaceProps,
-  "client" | "workspaceId" | "sessionId" | "opencodeBaseUrl" | "openworkToken" | "isControlTarget"
+  "client" | "workspaceId" | "sessionId" | "opencodeBaseUrl" | "sofiaToken" | "isControlTarget"
 >;
 
 /**
@@ -211,10 +211,10 @@ export type SessionPageProps = {
   opencodeBaseUrl?: string | null;
   workspaces: WorkspaceInfo[];
   clientConnected: boolean;
-  openworkServerStatus: OpenworkServerStatus;
-  openworkServerClient: OpenworkServerClient | null;
-  environmentClient?: OpenworkServerClient | null;
-  openworkServerToken?: string | null;
+  sofiaServerStatus: SofiaServerStatus;
+  sofiaServerClient: SofiaServerClient | null;
+  environmentClient?: SofiaServerClient | null;
+  sofiaServerToken?: string | null;
   developerMode: boolean;
   /** When the selected engine is codex, codex sessions replace opencode sessions. */
   codexEngine?: SessionPageCodexEngine | null;
@@ -297,7 +297,7 @@ function absoluteWorkspacePath(root: string | null | undefined, value: string) {
 
 function hiddenAccessibleTargetsStorageKey(workspaceId: string | null | undefined, sessionId: string | null | undefined) {
   if (!workspaceId || !sessionId) return null;
-  return `openwork.session.hiddenAccessibleTargets.v1:${workspaceId}:${sessionId}`;
+  return `sofia.session.hiddenAccessibleTargets.v1:${workspaceId}:${sessionId}`;
 }
 
 function readHiddenAccessibleTargetIds(workspaceId: string | null | undefined, sessionId: string | null | undefined): Set<string> {
@@ -376,10 +376,10 @@ export function SessionPage(props: SessionPageProps) {
   const panelRailActive = activeSidePanel === "panel";
   const voiceRailActive = activeSidePanel === "voice";
   const voiceExtension = useMemo(
-    () => OPENWORK_EXTENSION_CATALOG.find((entry) => getExtensionId(entry) === "openwork-voice") ?? null,
+    () => SOFIA_EXTENSION_CATALOG.find((entry) => getExtensionId(entry) === "sofia-voice") ?? null,
     [],
   );
-  const voiceExtensionEnabled = voiceExtension ? isOpenWorkExtensionEnabled(voiceExtension) : false;
+  const voiceExtensionEnabled = voiceExtension ? isSofiaExtensionEnabled(voiceExtension) : false;
   const showCloudSignIn = shellConfig.cloudSignin && !denAuth.isSignedIn && denAuth.status !== "checking";
   const openCloudSignIn = useCallback(() => {
     const baseUrl = readDenBootstrapConfig().baseUrl;
@@ -445,7 +445,7 @@ export function SessionPage(props: SessionPageProps) {
   // the panel opened and doesn't render the unified panel chrome.
   useEffect(() => {
     if (!isElectronRuntime()) return;
-    const browser = (window as Window).__OPENWORK_ELECTRON__?.browser;
+    const browser = (window as Window).__SOFIA_ELECTRON__?.browser;
     if (!browser) return;
     const unsubOpen = browser.onPanelOpened?.(() => {
       if (preserveSidePanelOnPanelOpenRef.current) {
@@ -487,11 +487,11 @@ export function SessionPage(props: SessionPageProps) {
     return target.value;
   }, []);
   const downloadOpenTarget = useCallback(async (target: OpenTarget) => {
-    if (target.kind !== "file" || !props.openworkServerClient || !props.runtimeWorkspaceId) {
+    if (target.kind !== "file" || !props.sofiaServerClient || !props.runtimeWorkspaceId) {
       return;
     }
 
-    const result = await props.openworkServerClient.downloadWorkspaceFile(props.runtimeWorkspaceId, target.value);
+    const result = await props.sofiaServerClient.downloadWorkspaceFile(props.runtimeWorkspaceId, target.value);
     const url = URL.createObjectURL(new Blob([result.data], { type: result.contentType ?? "application/octet-stream" }));
     const anchor = document.createElement("a");
 
@@ -500,13 +500,13 @@ export function SessionPage(props: SessionPageProps) {
     anchor.click();
 
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }, [props.openworkServerClient, props.runtimeWorkspaceId]);
+  }, [props.sofiaServerClient, props.runtimeWorkspaceId]);
   const openTarget = useCallback((target: OpenTarget, options?: OpenTargetOptions, sourceSessionId?: string) => {
     if (target.kind === "url" || target.preview === "browser") {
       const url = browserUrlForTarget(target);
       if (isElectronRuntime()) {
         setCurrentSidePanel("panel");
-        void window.__OPENWORK_ELECTRON__?.browser?.createTab?.(url);
+        void window.__SOFIA_ELECTRON__?.browser?.createTab?.(url);
       } else {
         window.open(url, "_blank", "noopener,noreferrer");
       }
@@ -565,7 +565,7 @@ export function SessionPage(props: SessionPageProps) {
     // panel that forces the user to click "+".
     toggleCurrentSidePanel("panel");
   }, [hasBrowserTabs, toggleCurrentSidePanel]);
-  const openBrowserUrlControlAction = useMemo<OpenworkControlAction>(() => ({
+  const openBrowserUrlControlAction = useMemo<SofiaControlAction>(() => ({
     id: "browser.open_url",
     label: "Open URL in built-in browser",
     description: "Create or select an Sofia App built-in browser tab, navigate it to a URL, and return the CDP handle for browser automation.",
@@ -585,23 +585,23 @@ export function SessionPage(props: SessionPageProps) {
         return { ok: false, error: `Browser provider is not available yet: ${provider}` };
       }
       setCurrentSidePanel("panel");
-      return window.__OPENWORK_ELECTRON__?.browser?.openUrl?.(url, provider);
+      return window.__SOFIA_ELECTRON__?.browser?.openUrl?.(url, provider);
     },
   }), [setCurrentSidePanel]);
   useControlAction(openBrowserUrlControlAction);
-  const setBrowserProxyControlAction = useMemo<OpenworkControlAction>(() => ({
+  const setBrowserProxyControlAction = useMemo<SofiaControlAction>(() => ({
     id: "browser.set_proxy",
     label: "Set built-in browser proxy",
     description: "Route all built-in browser traffic through an HTTP/SOCKS proxy (e.g. to browse from another location). Applies to every built-in browser tab until cleared. Pass an empty proxy to restore system network settings.",
     sideEffect: "mutation",
     args: [
-      { name: "proxy", type: "string", description: "Proxy URL like http://user:pass@host:8080 or socks5://host:1080, env:NAME to use the OPENWORK_BROWSER_PROXY_NAME environment variable, or empty to clear." },
+      { name: "proxy", type: "string", description: "Proxy URL like http://user:pass@host:8080 or socks5://host:1080, env:NAME to use the SOFIA_BROWSER_PROXY_NAME environment variable, or empty to clear." },
     ],
     previewArgs: { proxy: "env:DE" },
     disabled: !isElectronRuntime(),
     execute: async (args) => {
       const proxy = controlStringArg(args, "proxy") || "";
-      const setProxy = window.__OPENWORK_ELECTRON__?.browser?.setProxy;
+      const setProxy = window.__SOFIA_ELECTRON__?.browser?.setProxy;
       if (!setProxy) return { ok: false, error: "Built-in browser is not available." };
       return setProxy(proxy);
     },
@@ -672,24 +672,24 @@ export function SessionPage(props: SessionPageProps) {
       const target = accessibleTargets.find((item) => item.id === requested?.id || item.value === requested?.value);
       if (target) removeAccessibleTarget(target);
     };
-    window.addEventListener("openwork-open-accessible-target", open);
-    window.addEventListener("openwork-hide-accessible-target", hide);
+    window.addEventListener("sofia-open-accessible-target", open);
+    window.addEventListener("sofia-hide-accessible-target", hide);
     return () => {
-      window.removeEventListener("openwork-open-accessible-target", open);
-      window.removeEventListener("openwork-hide-accessible-target", hide);
+      window.removeEventListener("sofia-open-accessible-target", open);
+      window.removeEventListener("sofia-hide-accessible-target", hide);
     };
   }, [accessibleTargets, openTarget, removeAccessibleTarget]);
   useEffect(() => {
     const handler = () => setCurrentSidePanel(null);
-    window.addEventListener("openwork-close-right-pane", handler);
-    return () => window.removeEventListener("openwork-close-right-pane", handler);
+    window.addEventListener("sofia-close-right-pane", handler);
+    return () => window.removeEventListener("sofia-close-right-pane", handler);
   }, [setCurrentSidePanel]);
   useEffect(() => {
     const refresh = () => setExtensionStateVersion((value) => value + 1);
-    window.addEventListener(OPENWORK_EXTENSION_STATE_CHANGED, refresh);
+    window.addEventListener(SOFIA_EXTENSION_STATE_CHANGED, refresh);
     window.addEventListener("storage", refresh);
     return () => {
-      window.removeEventListener(OPENWORK_EXTENSION_STATE_CHANGED, refresh);
+      window.removeEventListener(SOFIA_EXTENSION_STATE_CHANGED, refresh);
       window.removeEventListener("storage", refresh);
     };
   }, []);
@@ -699,7 +699,7 @@ export function SessionPage(props: SessionPageProps) {
     }
   }, [activeSidePanel, setCurrentSidePanel, voiceExtensionEnabled]);
 
-  const openVoicePanelControlAction = useMemo<OpenworkControlAction | null>(() => (
+  const openVoicePanelControlAction = useMemo<SofiaControlAction | null>(() => (
     voiceExtensionEnabled ? {
       id: "voice.panel.open",
       label: "Open Voice Mode",
@@ -714,7 +714,7 @@ export function SessionPage(props: SessionPageProps) {
   ), [setCurrentSidePanel, voiceExtensionEnabled]);
   useControlAction(openVoicePanelControlAction);
 
-  const closeVoicePanelControlAction = useMemo<OpenworkControlAction | null>(() => (
+  const closeVoicePanelControlAction = useMemo<SofiaControlAction | null>(() => (
     voiceExtensionEnabled && activeSidePanel === "voice" ? {
       id: "voice.panel.close",
       label: "Close Voice Mode",
@@ -856,17 +856,17 @@ export function SessionPage(props: SessionPageProps) {
   const selectedWorkspaceErrorTitle =
     props.selectedWorkspaceDisplay.workspaceType === "remote"
       ? "Remote workspace unavailable"
-      : "OpenCode unavailable";
+      : "Engine unavailable";
 
   const reactSessionBaseUrl = props.opencodeBaseUrl?.trim() ?? "";
   const reactSessionToken =
-    props.openworkServerToken?.trim() ||
-    props.openworkServerClient?.token?.trim() ||
+    props.sofiaServerToken?.trim() ||
+    props.sofiaServerClient?.token?.trim() ||
     "";
   const canRenderReactSurface = Boolean(
     props.selectedSessionId &&
       props.runtimeWorkspaceId &&
-      props.openworkServerClient &&
+      props.sofiaServerClient &&
       reactSessionBaseUrl &&
       reactSessionToken &&
       props.surface,
@@ -911,7 +911,7 @@ export function SessionPage(props: SessionPageProps) {
     props.sidebar.onOpenSession(workspaceId, sessionId);
   }, [focusWorkbenchPane, openWorkbenchTab, props.sidebar]);
 
-  const focusWorkbenchSessionControlAction = useMemo<OpenworkControlAction>(() => ({
+  const focusWorkbenchSessionControlAction = useMemo<SofiaControlAction>(() => ({
     id: "workbench.session.focus",
     label: "Focus an open session",
     description: "Focus a session already visible in either split-screen pane, or reuse its existing tab without opening a duplicate.",
@@ -1096,7 +1096,7 @@ export function SessionPage(props: SessionPageProps) {
           extensionsActive={props.extensionsActive}
           status={{
             clientConnected: props.clientConnected,
-            openworkServerStatus: props.openworkServerStatus,
+            sofiaServerStatus: props.sofiaServerStatus,
             developerMode: props.developerMode,
             showConnectionStatus: Boolean(props.selectedWorkspaceId),
             providerConnectedIds: props.providerConnectedIds,
@@ -1105,7 +1105,7 @@ export function SessionPage(props: SessionPageProps) {
             showSettingsButton: props.statusBar?.showSettingsButton,
             reloadBusy: props.statusBar?.reloadBusy,
             reloadError: props.statusBar?.reloadError,
-            openWorkConnectState: props.statusBar?.openWorkConnectState,
+            sofiaConnectState: props.statusBar?.sofiaConnectState,
             onSendFeedback: props.onSendFeedback,
           }}
         />
@@ -1247,8 +1247,8 @@ export function SessionPage(props: SessionPageProps) {
                   className="hidden lg:inline-flex"
                   onClick={() => {
                     try {
-                      window.localStorage.removeItem("openwork.acknowledgedProviders");
-                      window.localStorage.removeItem("openwork.orgOnboardingSeen");
+                      window.localStorage.removeItem("sofia.acknowledgedProviders");
+                      window.localStorage.removeItem("sofia.orgOnboardingSeen");
                     } catch {}
                   }}
                   title="Clears acknowledged providers + org onboarding so they trigger again"
@@ -1341,17 +1341,17 @@ export function SessionPage(props: SessionPageProps) {
                         // Spread `surface` first so the explicit per-workspace
                         // routing props below CAN'T be silently overridden by
                         // anything that leaks into `surface`. SessionSurface's
-                        // server target (client/workspaceId/sessionId/opencodeBaseUrl/openworkToken)
+                        // server target (client/workspaceId/sessionId/opencodeBaseUrl/sofiaToken)
                         // must come from the resolved workspace endpoint passed by
                         // SessionRoute, not from anything in `surface`.
                         {...props.surface!}
-                        client={props.openworkServerClient!}
+                        client={props.sofiaServerClient!}
                         environmentClient={props.environmentClient}
                         workspaceId={props.runtimeWorkspaceId!}
                         sessionId={props.selectedSessionId!}
                         isControlTarget={activeWorkbenchPane === "primary"}
                         opencodeBaseUrl={reactSessionBaseUrl}
-                        openworkToken={reactSessionToken}
+                        sofiaToken={reactSessionToken}
                         todos={props.todos}
                         activePermission={props.activePermission}
                         permissionReplyBusy={props.permissionReplyBusy}
@@ -1376,13 +1376,13 @@ export function SessionPage(props: SessionPageProps) {
                         >
                           <SessionSurface
                             {...props.surface!}
-                            client={props.openworkServerClient!}
+                            client={props.sofiaServerClient!}
                             environmentClient={props.environmentClient}
                             workspaceId={props.runtimeWorkspaceId!}
                             sessionId={splitSessionId!}
                             isControlTarget={activeWorkbenchPane === "secondary"}
                             opencodeBaseUrl={reactSessionBaseUrl}
-                            openworkToken={reactSessionToken}
+                            sofiaToken={reactSessionToken}
                             todos={[]}
                             onOpenTarget={openTarget}
                           />
@@ -1506,7 +1506,7 @@ export function SessionPage(props: SessionPageProps) {
                     </div>
                   ) : activeSidePanel === "voice" ? (
                     <VoicePanel
-                      client={props.openworkServerClient}
+                      client={props.sofiaServerClient}
                       workspaceId={props.runtimeWorkspaceId}
                       sessionId={props.selectedSessionId}
                       onClose={closeRightPane}
@@ -1514,7 +1514,7 @@ export function SessionPage(props: SessionPageProps) {
                   ) : activeSidePanel === "panel" ? (
                     <SidePanel
                       sessionId={sidePanelSessionKey}
-                      client={props.openworkServerClient}
+                      client={props.sofiaServerClient}
                       workspaceId={props.runtimeWorkspaceId}
                       workspaceRoot={props.selectedWorkspaceRoot}
                       isRemoteWorkspace={props.surface?.isRemoteWorkspace ?? false}
@@ -1549,7 +1549,7 @@ export function SessionPage(props: SessionPageProps) {
                       </div>
                     ) : activeSidePanel === "voice" ? (
                       <VoicePanel
-                        client={props.openworkServerClient}
+                        client={props.sofiaServerClient}
                         workspaceId={props.runtimeWorkspaceId}
                         sessionId={props.selectedSessionId}
                         onClose={closeRightPane}
@@ -1557,7 +1557,7 @@ export function SessionPage(props: SessionPageProps) {
                     ) : activeSidePanel === "panel" ? (
                       <SidePanel
                         sessionId={sidePanelSessionKey}
-                        client={props.openworkServerClient}
+                        client={props.sofiaServerClient}
                         workspaceId={props.runtimeWorkspaceId}
                         workspaceRoot={props.selectedWorkspaceRoot}
                         isRemoteWorkspace={props.surface?.isRemoteWorkspace ?? false}

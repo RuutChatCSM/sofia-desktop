@@ -32,7 +32,7 @@ function userAgentCategory(userAgent: string | null) {
   if (/claude-code/i.test(userAgent)) return "claude_code"
   if (/codex-mcp-client/i.test(userAgent)) return "codex"
   if (/opencode/i.test(userAgent)) return "opencode"
-  if (/openwork/i.test(userAgent)) return "openwork"
+  if (/sofia/i.test(userAgent)) return "sofia"
   if (/mozilla\//i.test(userAgent)) return "browser"
   if (/curl|wget|httpie/i.test(userAgent)) return "cli"
   return "other"

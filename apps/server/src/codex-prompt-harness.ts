@@ -1,6 +1,6 @@
-// Sofia prompt harness: builds the small OpenWork-specific developer context
+// Sofia prompt harness: builds the small Sofia-specific developer context
 // added to every new thread. The engine keeps ownership of its base prompt,
-// project-instruction discovery, skills, and normal Codex behavior.
+// project-instruction discovery, skills, and normal Sofia behavior.
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -12,12 +12,12 @@ export type PromptHarnessContext = {
 /** Build factual host context without changing the engine's behavior policy. */
 export function buildSofiaDeveloperInstructions(context: PromptHarnessContext): string {
   return [
-    "<openwork_context>",
-    "OpenWork is hosting this Codex engine and displaying its thread in the Sofia interface.",
+    "<sofia_context>",
+    "Sofia is running this thread and displaying it in the Sofia app.",
     `Workspace id: ${context.workspaceId}`,
     `Working directory: ${context.cwd}`,
     "Use the runtime capabilities and skills that are available in this thread.",
-    "</openwork_context>",
+    "</sofia_context>",
   ].join("\n");
 }
 

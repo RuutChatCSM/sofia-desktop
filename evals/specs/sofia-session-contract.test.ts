@@ -1,6 +1,6 @@
 import path from "node:path";
 import { expect } from "vitest";
-import { test } from "@openwork/testkit";
+import { test } from "@sofia/testkit";
 import { CodexSessionManager, type CodexSession } from "../../apps/server/src/codex-sessions.ts";
 import { registerCodexRoutes, type CodexSessionRegistry } from "../../apps/server/src/codex-routes.ts";
 import { matchRoute, type Route } from "../../apps/server/src/routes/registry.ts";
@@ -77,7 +77,7 @@ test("Sofia archive/rename routes enforce write scope and stream cancellation re
 
 test("Sofia releases are opt-in and cannot target upstream repositories", () => {
   expect(resolveSofiaRelease().stable).toBe("");
-  expect(() => resolveSofiaRelease({ repository: "different-ai/openwork" })).toThrow("Sofia-owned");
+  expect(() => resolveSofiaRelease({ repository: "RuutChatCSM/sofia-desktop" })).toThrow("Sofia-owned");
   expect(() => resolveSofiaRelease({ repository: "openai/codex" })).toThrow("Sofia-owned");
   expect(resolveSofiaRelease({ repository: "example/sofia" }).stable).toBe("https://github.com/example/sofia/releases/latest/download");
 });

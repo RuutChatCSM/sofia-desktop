@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import type { McpDirectoryInfo } from "../src/app/constants";
 import { submitMcpEntry } from "../src/react-app/domains/connections/modals/add-mcp-submission";
-import type { OpenworkServerStore } from "../src/react-app/domains/connections/openwork-server-store";
+import type { SofiaServerStore } from "../src/react-app/domains/connections/sofia-server-store";
 import { createConnectionsStore } from "../src/react-app/domains/connections/store";
 
 const originalWindow = globalThis.window;
@@ -10,7 +10,7 @@ const originalWindow = globalThis.window;
 function installDesktopWindow() {
   Object.defineProperty(globalThis, "window", {
     configurable: true,
-    value: { __OPENWORK_ELECTRON__: {} },
+    value: { __SOFIA_ELECTRON__: {} },
   });
 }
 
@@ -26,28 +26,28 @@ describe("local MCP server recovery", () => {
     installDesktopWindow();
     let recoveryAttempts = 0;
     const stalledRecovery = new Promise<never>(() => undefined);
-    const openworkServer = {
+    const sofiaServer = {
       getSnapshot: () => ({
-        openworkServerStatus: "disconnected",
-        openworkServerClient: null,
-        openworkServerCapabilities: null,
+        sofiaServerStatus: "disconnected",
+        sofiaServerClient: null,
+        sofiaServerCapabilities: null,
       }),
-      ensureLocalOpenworkServerClient: () => {
+      ensureLocalSofiaServerClient: () => {
         recoveryAttempts += 1;
         return stalledRecovery;
       },
-    } as unknown as OpenworkServerStore;
+    } as unknown as SofiaServerStore;
     const store = createConnectionsStore({
       client: () => null,
       setClient: () => undefined,
-      projectDir: () => "/tmp/openwork-mcp-recovery",
+      projectDir: () => "/tmp/sofia-mcp-recovery",
       selectedWorkspaceId: () => "workspace_local",
-      selectedWorkspaceRoot: () => "/tmp/openwork-mcp-recovery",
+      selectedWorkspaceRoot: () => "/tmp/sofia-mcp-recovery",
       workspaceType: () => "local",
-      openworkServer,
+      sofiaServer,
       runtimeWorkspaceId: () => null,
       ensureRuntimeWorkspaceId: async () => "workspace_local",
-      localOpenworkServerRecoveryTimeoutMs: 10,
+      localSofiaServerRecoveryTimeoutMs: 10,
       developerMode: () => false,
     });
     const entry: McpDirectoryInfo = {

@@ -63,7 +63,7 @@ import { buildDenFeedbackUrl } from "../../_lib/feedback";
 import { OrgSelectionScreen } from "./org-selection-screen";
 import { UserProfileDialog } from "./user-profile-dialog";
 
-const OPENWORK_DOCS_URL = "/docs";
+const SOFIA_DOCS_URL = "/docs";
 
 type DashboardNavChild = {
   href: string;
@@ -102,14 +102,14 @@ function OrgMark({ name }: { name: string }) {
   );
 }
 
-function OpenWorkMark({ className = "h-9 w-auto" }: { className?: string }) {
+function SofiaMark({ className = "h-9 w-auto" }: { className?: string }) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 834 649"
       fill="none"
       className={className}
-      aria-label="OpenWork"
+      aria-label="Sofia"
     >
       <path
         fill="#011627"
@@ -163,7 +163,7 @@ export function SidebarBrandMark({
   if (!iconUrl || failedUrl === iconUrl) {
     return (
       <div data-sidebar-brand-icon="fallback">
-        <OpenWorkMark />
+        <SofiaMark />
       </div>
     );
   }
@@ -184,7 +184,7 @@ export function SidebarBrandMark({
   );
 }
 
-const DEFAULT_WORKSPACE_FAVICON_HREF = "/openwork-mark.svg";
+const DEFAULT_WORKSPACE_FAVICON_HREF = "/sofia-mark.svg";
 
 export function WorkspaceFavicon({
   metadata,
@@ -279,10 +279,10 @@ function getDashboardPageTitle(pathname: string, orgSlug: string | null) {
     return "Diagnostics";
   }
   if (pathname.startsWith(getInferenceRoute(orgSlug))) {
-    return "OpenWork Models";
+    return "Sofia Models";
   }
   if (pathname.startsWith(getWebRoute(orgSlug))) {
-    return "OpenWork Web";
+    return "Sofia Web";
   }
   if (pathname.startsWith(getLibraryRoute(orgSlug))) {
     return "My Library";
@@ -437,27 +437,27 @@ export function OrgDashboardShell({ children }: { children: React.ReactNode }) {
     ...(showWeb
       ? [{
           href: activeOrg ? getWebRoute(activeOrg.slug) : "#",
-          label: "OpenWork Web",
+          label: "Sofia Web",
           icon: Globe,
           badge: "Alpha",
         }]
       : []),
   ];
-  // OpenWork Models are a hosted OpenWork Cloud offering; self-hosted
+  // Sofia Models are a hosted Sofia Cloud offering; self-hosted
   // (single-org) deployments only manage their own LLM providers. Default
   // hidden until the runtime config confirms a hosted (multi-org) deployment.
-  const showOpenWorkModels = runtimeConfigLoaded && runtimeConfig.orgMode === "multi_org";
+  const showSofiaModels = runtimeConfigLoaded && runtimeConfig.orgMode === "multi_org";
   const modelsGroup: DashboardNavItem | null = access.isAdmin && activeOrg
     ? {
-        href: showOpenWorkModels
+        href: showSofiaModels
           ? getInferenceRoute(activeOrg.slug)
           : getCustomLlmProvidersRoute(activeOrg.slug),
         label: "Models",
         icon: Sparkles,
         badge: "Providers",
         children: [
-          ...(showOpenWorkModels
-            ? [{ href: getInferenceRoute(activeOrg.slug), label: "OpenWork Models" }]
+          ...(showSofiaModels
+            ? [{ href: getInferenceRoute(activeOrg.slug), label: "Sofia Models" }]
             : []),
           { href: getCustomLlmProvidersRoute(activeOrg.slug), label: "Bring your Own Keys" },
         ],
@@ -577,7 +577,7 @@ export function OrgDashboardShell({ children }: { children: React.ReactNode }) {
         aria-haspopup="dialog"
       >
         <div className="flex min-w-0 items-center gap-3">
-          <OrgMark name={activeOrg?.name ?? "OpenWork"} />
+          <OrgMark name={activeOrg?.name ?? "Sofia"} />
           <div className="min-w-0">
             <p className="truncate text-[14px] font-medium text-gray-900">
               {activeOrg?.name ?? "Loading..."}
@@ -604,7 +604,7 @@ export function OrgDashboardShell({ children }: { children: React.ReactNode }) {
         >
           <div className="min-w-0 px-3 py-1.5">
             <p className="truncate text-[13px] font-medium text-gray-900">
-              {user?.email ?? "OpenWork user"}
+              {user?.email ?? "Sofia user"}
             </p>
           </div>
           
@@ -874,7 +874,7 @@ export function OrgDashboardShell({ children }: { children: React.ReactNode }) {
               </a>
             ) : null}
             <a
-              href={OPENWORK_DOCS_URL}
+              href={SOFIA_DOCS_URL}
               target="_blank"
               rel="noreferrer"
               className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700"

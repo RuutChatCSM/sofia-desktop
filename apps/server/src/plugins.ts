@@ -2,8 +2,7 @@ import { homedir } from "node:os";
 import { join, relative } from "node:path";
 import { readdir } from "node:fs/promises";
 import type { PluginItem, ServerConfig } from "./types.js";
-import { readJsoncFile } from "./jsonc.js";
-import { opencodeConfigPath, projectPluginsDir } from "./workspace-files.js";
+import { projectPluginsDir } from "./workspace-files.js";
 import { exists } from "./utils.js";
 import { validatePluginSpec } from "./validators.js";
 import { readRuntimeOpencodeConfig, runtimePluginList, writeRuntimeOpencodeConfig } from "./runtime-opencode-config-store.js";
@@ -22,13 +21,6 @@ export function normalizePluginSpec(spec: string): string {
   }
   const atIndex = trimmed.indexOf("@");
   return atIndex > 0 ? trimmed.slice(0, atIndex) : trimmed;
-}
-
-function pluginListFromConfig(config: Record<string, unknown>): string[] {
-  const plugin = config.plugin;
-  if (typeof plugin === "string") return [plugin];
-  if (Array.isArray(plugin)) return plugin.filter((item) => typeof item === "string") as string[];
-  return [];
 }
 
 async function listPluginFiles(dir: string, scope: "project" | "global", workspaceRoot?: string): Promise<PluginItem[]> {
@@ -51,8 +43,9 @@ async function listPluginFiles(dir: string, scope: "project" | "global", workspa
 }
 
 export async function listPlugins(serverConfig: ServerConfig, workspaceId: string, workspaceRoot: string, includeGlobal: boolean): Promise<{ items: PluginItem[]; loadOrder: string[] }> {
-  const { data: config } = await readJsoncFile(opencodeConfigPath(workspaceRoot), {} as Record<string, unknown>, { allowInvalid: true });
-  const pluginSpecs = pluginListFromConfig(config);
+  // Sofia no longer reads OpenCode's config file: configured plugins come from
+  // the runtime config store the server generates the engine config from.
+  const pluginSpecs: string[] = [];
   const runtimeSpecs = runtimePluginList(await readRuntimeOpencodeConfig(serverConfig, workspaceId));
   const items: PluginItem[] = pluginSpecs.map((spec) => ({
     spec,
@@ -76,7 +69,7 @@ export async function listPlugins(serverConfig: ServerConfig, workspaceId: strin
   items.push(...(await listPluginFiles(projectDir, "project", workspaceRoot)));
 
   if (includeGlobal) {
-    const globalDir = join(homedir(), ".config", "opencode", "plugins");
+    const globalDir = join(homedir(), ".sofia", "plugins");
     items.push(...(await listPluginFiles(globalDir, "global")));
   }
 

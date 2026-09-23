@@ -1,5 +1,5 @@
 {
-  "name": "@openwork/behaviors",
+  "name": "@sofia/behaviors",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -31,9 +31,9 @@
     }
   },
   "dependencies": {
-    "@openwork/cdp": "workspace:*",
-    "@openwork/labs": "workspace:*",
-    "@openwork/matchers": "workspace:*",
-    "@openwork/timeline": "workspace:*"
+    "@sofia/cdp": "workspace:*",
+    "@sofia/labs": "workspace:*",
+    "@sofia/matchers": "workspace:*",
+    "@sofia/timeline": "workspace:*"
   }
 }

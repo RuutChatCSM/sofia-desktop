@@ -1,0 +1,30 @@
+{
+  "name": "sofia-ui-mcp",
+  "version": "0.2.0",
+  "description": "MCP server for Sofia app context and semantic UI control",
+  "author": "Sofia <support@ruut.chat>",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "sofia-ui-mcp": "index.mjs"
+  },
+  "files": [
+    "index.mjs"
+  ],
+  "scripts": {
+    "check": "node --check index.mjs",
+    "test": "node --check index.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RuutChatCSM/sofia-desktop.git",
+    "directory": "packages/sofia-ui-mcp"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^3.25.76"
+  }
+}

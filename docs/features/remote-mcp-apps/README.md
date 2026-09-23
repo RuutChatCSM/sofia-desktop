@@ -1,7 +1,7 @@
 # Native MCP Apps
 
-OpenWork supports MCP Apps delivered by standard MCP servers connected through
-OpenWork Connect. A server advertises the stable
+Sofia supports MCP Apps delivered by standard MCP servers connected through
+Sofia Connect. A server advertises the stable
 `io.modelcontextprotocol/ui` extension, a tool binds an exact UI resource with
 `_meta.ui.resourceUri`, the host reads that resource with `resources/read`, and
 tool inputs and results move over the standard MCP Apps bridge.
@@ -17,11 +17,11 @@ resource loading or a standalone URL-App installation path.
 ## Standard MCP server path
 
 Connect continues to own server configuration, authentication, access grants,
-per-member credentials, and tool policy. The OpenWork Cloud control server
+per-member credentials, and tool policy. The Sofia Cloud control server
 publishes a member-scoped resource at:
 
 ```text
-openwork://connect/mcp-servers/index.json
+sofia://connect/mcp-servers/index.json
 ```
 
 The signed-in Desktop session mints a separate short-lived App-host credential
@@ -31,7 +31,7 @@ OpenCode. It reads the index with that credential and advertises the
 `mcp-app-host-v1` client capability. Den returns a non-empty provider index only
 when the server-verified scope, client capability, and both rollout gates are
 present. A normal model or legacy MCP token cannot unlock the index by spoofing
-an audience or capability header. Desktop never writes `openwork-connect-*`
+an audience or capability header. Desktop never writes `sofia-connect-*`
 entries to the OpenCode runtime or any model-visible MCP registry. A connection
 is proxied at:
 
@@ -41,7 +41,7 @@ is proxied at:
 
 Current Desktop clients never register these provider descriptors in OpenCode;
 the model discovers and invokes ordinary provider operations only through the
-central `openwork-cloud` `search_capabilities` and `execute_capability` tools.
+central `sofia-cloud` `search_capabilities` and `execute_capability` tools.
 For stale published clients that still retain an old per-connection entry, the
 proxy exposes only a compatibility pair named `search_capabilities` and
 `execute_capability`. It never returns the provider catalog, MCP App launch
@@ -66,7 +66,7 @@ The app-host view preserves:
 - one server identity per Connect connection, preserving the same-server
   tool-call boundary.
 
-OpenWork access grants, disabled-tool policy, and approval rules still apply at
+Sofia access grants, disabled-tool policy, and approval rules still apply at
 the proxy boundary. The App-host credential authorizes only this bounded proxy
 surface; it is not a provider credential and grants no direct cross-server
 access.
@@ -80,11 +80,11 @@ Native MCP Apps fail closed behind two existing gates:
 
 Both default off. No additional user-facing flag controls standalone URL Apps.
 When either native-App gate is off, ordinary connected MCP tools remain
-available through `search_capabilities` and `execute_capability`, but OpenWork
+available through `search_capabilities` and `execute_capability`, but Sofia
 removes MCP App classification and launch metadata, publishes no provider App
 endpoint in the member index, clears the private App-host catalog, and renders
 no App UI. Reconciliation also removes and disconnects stale
-`openwork-connect-*` OpenCode entries while preserving user-authored MCPs and
+`sofia-connect-*` OpenCode entries while preserving user-authored MCPs and
 all durable Connect records.
 
 The provider proxy advertises `listChanged: false` because the current
@@ -105,7 +105,7 @@ change. In the current product:
   standalone-App launch tool;
 - capability search returns no standalone URL-App matches;
 - model and App-host catalogs contain no standalone URL-App tools;
-- no `ui://openwork/library-apps/...` resources are registered;
+- no `ui://sofia/library-apps/...` resources are registered;
 - member server indexes and launch metadata contain no standalone URL Apps;
 - REST calls under `/v1/remote-mcp-apps` are not registered and are therefore
   unavailable.

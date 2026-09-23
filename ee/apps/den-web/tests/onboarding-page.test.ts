@@ -14,25 +14,25 @@ const publicInstallers = read("_lib", "public-installers.ts");
 
 describe("Marketplace onboarding page", () => {
   test("reuses the landing download card and den choice cards", () => {
-    expect(screen).toContain("DownloadOpenWorkCard");
+    expect(screen).toContain("DownloadSofiaCard");
     expect(screen).toContain("DenChoiceCard");
     expect(screen).toContain("DenSectionHeader");
     expect(screen).toContain("DenBadge");
     expect(page).toContain("getPublicInstallers");
-    expect(publicInstallers).toContain('name.startsWith("openwork-cloud-")');
-    expect(publicInstallers).toContain('name.startsWith("openwork-enterprise-")');
+    expect(publicInstallers).toContain('name.startsWith("sofia-cloud-")');
+    expect(publicInstallers).toContain('name.startsWith("sofia-enterprise-")');
   });
 
-  test("offers OpenWork Models and Bring your Own Keys as the model path", () => {
-    expect(screen).toContain("onboarding-choice-openwork-models");
+  test("offers Sofia Models and Bring your Own Keys as the model path", () => {
+    expect(screen).toContain("onboarding-choice-sofia-models");
     expect(screen).toContain("onboarding-choice-byok");
     expect(screen).toContain("Turn on models");
     expect(screen).toContain("Bring your Own Keys");
-    expect(screen).toContain("/openwork-mark.svg");
+    expect(screen).toContain("/sofia-mark.svg");
   });
 
   test("keeps the installed flag and inference check", () => {
-    expect(screen).toContain("openwork:onboarding:app-installed");
+    expect(screen).toContain("sofia:onboarding:app-installed");
     expect(screen).toContain("/v1/inference");
     expect(screen).toContain("onboarding-app-installed");
   });

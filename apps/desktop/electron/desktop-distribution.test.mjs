@@ -21,9 +21,9 @@ describe("resolveDesktopDistribution", () => {
       }),
       {
         flavor: "cloud",
-        appName: "OpenWork Cloud",
-        appIdentifier: "com.differentai.openwork",
-        protocolScheme: "openwork",
+        appName: "Sofia App Cloud",
+        appIdentifier: "com.differentai.sofia",
+        protocolScheme: "sofia",
         requireSignin: true,
         requireActivation: false,
       },
@@ -39,9 +39,9 @@ describe("resolveDesktopDistribution", () => {
 
     assert.deepEqual(distribution, {
       flavor: "enterprise",
-      appName: "OpenWork Enterprise",
-      appIdentifier: "com.differentai.openwork",
-      protocolScheme: "openwork",
+      appName: "Sofia App Enterprise",
+      appIdentifier: "com.differentai.sofia",
+      protocolScheme: "sofia",
       requireSignin: true,
       requireActivation: true,
     });
@@ -112,7 +112,7 @@ describe("enterpriseActivationComplete", () => {
     assert.equal(enterpriseActivationComplete({
       enterpriseActivation: {
         activatedAt: "2026-07-27T10:00:00.000Z",
-        denBaseUrl: "https://app.openworklabs.com",
+        denBaseUrl: "https://sofia-app.ruut.chat",
       },
     }), true);
   });

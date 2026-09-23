@@ -43,7 +43,7 @@ export function LoadingOverlay() {
   useEffect(() => {
     if (!error) return;
     let cancelled = false;
-    const bridge = window.__OPENWORK_ELECTRON__?.recovery;
+    const bridge = window.__SOFIA_ELECTRON__?.recovery;
     if (!bridge?.list) return;
     const cachedPolicy = {
       versions: [],
@@ -57,7 +57,7 @@ export function LoadingOverlay() {
         if (!cancelled && result.ok) setReleases(result.releases);
       })
       .catch(() => undefined);
-    if (window.__openworkRecoveryControl) {
+    if (window.__sofiaRecoveryControl) {
       return () => {
         cancelled = true;
       };
@@ -92,7 +92,7 @@ export function LoadingOverlay() {
     }
   };
 
-  const useRelease = window.__OPENWORK_ELECTRON__?.recovery?.use;
+  const useRelease = window.__SOFIA_ELECTRON__?.recovery?.use;
 
   if (!visible || (suppressForGateway && !error)) return null;
 
@@ -116,7 +116,7 @@ export function LoadingOverlay() {
               type="button"
               disabled={!releases.some((release) => release.marking === "previous")}
               className="rounded-md bg-dls-accent px-3 py-2 font-medium text-dls-accent-foreground disabled:opacity-50"
-              onClick={() => void runRecovery(window.__OPENWORK_ELECTRON__?.recovery?.restorePrevious)}
+              onClick={() => void runRecovery(window.__SOFIA_ELECTRON__?.recovery?.restorePrevious)}
             >
               Restore previous version
             </button>

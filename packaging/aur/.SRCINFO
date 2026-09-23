@@ -1,8 +1,8 @@
-pkgbase = openwork
+pkgbase = sofia
 	pkgdesc = An Open source alternative to Claude Cowork
 	pkgver = 0.0.0
 	pkgrel = 1
-	url = https://github.com/different-ai/openwork
+	url = https://github.com/RuutChatCSM/sofia-desktop
 	arch = x86_64
 	arch = aarch64
 	license = MIT
@@ -19,9 +19,9 @@ pkgbase = openwork
 	depends = dbus
 	depends = hicolor-icon-theme
 	options = !strip
-	source_x86_64 = openwork-0.0.0-x64.tar.gz::https://github.com/different-ai/openwork/releases/download/v0.0.0/openwork-linux-x64-0.0.0.tar.gz
+	source_x86_64 = sofia-0.0.0-x64.tar.gz::https://github.com/RuutChatCSM/sofia-desktop/releases/download/v0.0.0/sofia-linux-x64-0.0.0.tar.gz
 	sha256sums_x86_64 = 0000000000000000000000000000000000000000000000000000000000000000
-	source_aarch64 = openwork-0.0.0-arm64.tar.gz::https://github.com/different-ai/openwork/releases/download/v0.0.0/openwork-linux-arm64-0.0.0.tar.gz
+	source_aarch64 = sofia-0.0.0-arm64.tar.gz::https://github.com/RuutChatCSM/sofia-desktop/releases/download/v0.0.0/sofia-linux-arm64-0.0.0.tar.gz
 	sha256sums_aarch64 = 0000000000000000000000000000000000000000000000000000000000000000
 
-pkgname = openwork
+pkgname = sofia

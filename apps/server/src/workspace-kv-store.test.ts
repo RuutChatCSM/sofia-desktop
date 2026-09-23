@@ -5,7 +5,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { installCloudPlugin, readInstalledCloudPlugins } from "./cloud-plugins.js";
-import { readOpenworkWorkspaceConfig, writeOpenworkWorkspaceConfig } from "./openwork-workspace-config-store.js";
+import { readSofiaWorkspaceConfig, writeSofiaWorkspaceConfig } from "./sofia-workspace-config-store.js";
 import { readRuntimeOpencodeConfig, writeRuntimeOpencodeConfig } from "./runtime-opencode-config-store.js";
 import { readSessionGroupState, writeSessionGroupState } from "./session-groups.js";
 import type { ServerConfig } from "./types.js";
@@ -13,15 +13,15 @@ import { createWorkspaceKvStore, isRecord, workspaceKvStoreCacheStatsForTests } 
 
 const WORKSPACE_ID = "ws_workspace_kv_store";
 const roots: string[] = [];
-const previousRuntimeDb = process.env.OPENWORK_RUNTIME_DB;
+const previousRuntimeDb = process.env.SOFIA_RUNTIME_DB;
 
 afterEach(async () => {
   while (roots.length) {
     const root = roots.pop();
     if (root) await rm(root, { recursive: true, force: true });
   }
-  if (previousRuntimeDb === undefined) delete process.env.OPENWORK_RUNTIME_DB;
-  else process.env.OPENWORK_RUNTIME_DB = previousRuntimeDb;
+  if (previousRuntimeDb === undefined) delete process.env.SOFIA_RUNTIME_DB;
+  else process.env.SOFIA_RUNTIME_DB = previousRuntimeDb;
 });
 
 function serverConfig(root: string): ServerConfig {
@@ -45,10 +45,10 @@ function serverConfig(root: string): ServerConfig {
 }
 
 async function tempWorkspace(): Promise<{ root: string; dbPath: string; config: ServerConfig }> {
-  const root = await mkdtemp(join(tmpdir(), "openwork-workspace-kv-store-"));
+  const root = await mkdtemp(join(tmpdir(), "sofia-workspace-kv-store-"));
   roots.push(root);
   const dbPath = join(root, "runtime.sqlite");
-  process.env.OPENWORK_RUNTIME_DB = dbPath;
+  process.env.SOFIA_RUNTIME_DB = dbPath;
   return { root, dbPath, config: serverConfig(root) };
 }
 
@@ -74,7 +74,7 @@ function corruptStoreJson(dbPath: string): void {
   const sqlite = new Database(dbPath);
   try {
     sqlite.query("UPDATE runtime_opencode_configs SET config_json = ? WHERE workspace_id = ?").run("{", WORKSPACE_ID);
-    sqlite.query("UPDATE openwork_workspace_configs SET config_json = ? WHERE workspace_id = ?").run("{", WORKSPACE_ID);
+    sqlite.query("UPDATE sofia_workspace_configs SET config_json = ? WHERE workspace_id = ?").run("{", WORKSPACE_ID);
     sqlite.query("UPDATE cloud_plugin_install_configs SET config_json = ? WHERE workspace_id = ?").run("{", WORKSPACE_ID);
     sqlite.query("UPDATE session_group_states SET state_json = ? WHERE workspace_id = ?").run("{", WORKSPACE_ID);
   } finally {
@@ -143,12 +143,12 @@ describe("workspace kv store", () => {
     const { root, config, dbPath } = await tempWorkspace();
 
     expect(await readRuntimeOpencodeConfig(config, WORKSPACE_ID)).toEqual({});
-    expect(await readOpenworkWorkspaceConfig(config, WORKSPACE_ID)).toEqual({});
+    expect(await readSofiaWorkspaceConfig(config, WORKSPACE_ID)).toEqual({});
     expect(await readInstalledCloudPlugins(config, WORKSPACE_ID)).toEqual({ skills: {}, providers: {}, marketplaces: {}, plugins: {} });
     expect(await readSessionGroupState(config, WORKSPACE_ID)).toEqual({ state: { groups: [], assignments: {} }, updatedAt: null });
 
     await writeRuntimeOpencodeConfig(config, WORKSPACE_ID, () => ({ plugin: ["runtime-plugin"] }));
-    await writeOpenworkWorkspaceConfig(config, WORKSPACE_ID, () => ({ workspace: { name: "Runtime" } }));
+    await writeSofiaWorkspaceConfig(config, WORKSPACE_ID, () => ({ workspace: { name: "Runtime" } }));
     await installCloudPlugin({
       serverConfig: config,
       workspaceId: WORKSPACE_ID,
@@ -167,7 +167,7 @@ describe("workspace kv store", () => {
     corruptStoreJson(dbPath);
 
     expect(await readRuntimeOpencodeConfig(config, WORKSPACE_ID)).toEqual({});
-    expect(await readOpenworkWorkspaceConfig(config, WORKSPACE_ID)).toEqual({});
+    expect(await readSofiaWorkspaceConfig(config, WORKSPACE_ID)).toEqual({});
     expect(await readInstalledCloudPlugins(config, WORKSPACE_ID)).toEqual({ skills: {}, providers: {}, marketplaces: {}, plugins: {} });
     expect(await readSessionGroupState(config, WORKSPACE_ID)).toEqual({ state: { groups: [], assignments: {} }, updatedAt: session.updatedAt });
   });

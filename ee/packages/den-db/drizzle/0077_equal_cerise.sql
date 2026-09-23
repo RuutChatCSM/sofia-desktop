@@ -1,0 +1,1 @@
+ALTER TABLE `llm_provider` MODIFY COLUMN `source` enum('models_dev','custom','sofia') NOT NULL;

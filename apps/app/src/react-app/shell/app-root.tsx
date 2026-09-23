@@ -33,14 +33,15 @@ import { useVisualViewportInset } from "../../hooks/use-visual-viewport-inset";
 import { DevProfiler, DevProfilerOverlay } from "./dev-profiler";
 import { ReactRenderWatchdogOverlay } from "./react-render-watchdog-overlay";
 import { CloudWorkspaceOverlay, CloudWorkspaceStatusProvider } from "./cloud-workspace-overlay";
+import { SOFIA_CLOUD_AVAILABLE } from "@/app/cloud-availability";
 import { AppMenuProvider } from "./app-menu";
 import {
-  OpenworkControlProvider,
-  OpenworkRouteControlActions,
+  SofiaControlProvider,
+  SofiaRouteControlActions,
   useControlAction,
-  type OpenworkControlAction,
+  type SofiaControlAction,
 } from "./control/control-provider";
-import { OpenworkContextPublisher } from "./openwork-context-publisher";
+import { SofiaContextPublisher } from "./sofia-context-publisher";
 import { SessionRoute } from "./session-route";
 import { SettingsRoute } from "./settings-route";
 import { ShellConfigProvider } from "./shell-config";
@@ -85,12 +86,14 @@ function DenSigninGate({ children }: DenSigninGateProps) {
     readDenBootstrapSnapshot,
     readDenBootstrapSnapshot,
   );
-  const requireSignin = bootstrap.requireSignin;
+  // Hosted-cloud sign-in is only reachable once the cloud ships.
+  const requireSignin = SOFIA_CLOUD_AVAILABLE && bootstrap.requireSignin;
   const path = location.pathname.toLowerCase();
   const onSignin = path === "/signin" || path.startsWith("/signin/");
   const onOnboarding = path === "/onboarding" || path.startsWith("/onboarding/");
   const hasPreparedBootstrap = Boolean(bootstrap.prepared);
   const redirectingPreparedWorkspace =
+    SOFIA_CLOUD_AVAILABLE &&
     denAuth.status !== "checking" &&
     !requireSignin &&
     !denAuth.isSignedIn &&
@@ -217,13 +220,13 @@ function DenSigninGate({ children }: DenSigninGateProps) {
 }
 
 /**
- * Control actions for cloud auth. Placed inside OpenworkControlProvider so
+ * Control actions for cloud auth. Placed inside SofiaControlProvider so
  * the actions are available on every route (including /welcome and /signin).
  */
 function DenAuthControlActions() {
   const denAuth = useDenAuth();
 
-  const exchangeGrantAction = useMemo<OpenworkControlAction>(() => ({
+  const exchangeGrantAction = useMemo<SofiaControlAction>(() => ({
     id: "auth.exchange-grant",
     label: "Sign in with a handoff grant",
     description: "Exchange a desktop handoff grant string to sign in without the browser flow.",
@@ -253,7 +256,7 @@ function DenAuthControlActions() {
   }), []);
   useControlAction(exchangeGrantAction);
 
-  const authStatusAction = useMemo<OpenworkControlAction>(() => ({
+  const authStatusAction = useMemo<SofiaControlAction>(() => ({
     id: "auth.status",
     label: "Get auth status",
     description: "Return the current cloud sign-in status and user.",
@@ -267,7 +270,7 @@ function DenAuthControlActions() {
   }), [denAuth.status, denAuth.user]);
   useControlAction(authStatusAction);
 
-  const setEvalBaseUrlAction = useMemo<OpenworkControlAction | null>(() => {
+  const setEvalBaseUrlAction = useMemo<SofiaControlAction | null>(() => {
     if (!import.meta.env.DEV) return null;
     return {
       id: "eval.auth.set-base-url",
@@ -306,10 +309,10 @@ function DenAuthControlActions() {
 
 /**
  * Control action for eval automation: inject brand theme (logo, icon, accent color)
- * via the dev-only desktop config bridge. Placed inside OpenworkControlProvider.
+ * via the dev-only desktop config bridge. Placed inside SofiaControlProvider.
  */
 function BrandThemeControlActions() {
-  const applyAction = useMemo<OpenworkControlAction | null>(() => {
+  const applyAction = useMemo<SofiaControlAction | null>(() => {
     if (!import.meta.env.DEV) return null;
     return {
       id: "eval.brand_theme.apply",
@@ -322,7 +325,7 @@ function BrandThemeControlActions() {
         { name: "brandAccentColor", type: "string", description: "Radix color family" },
       ],
       execute: (args) => {
-        const bridge = (window as unknown as Record<string, unknown>).__openworkApplyDesktopConfig;
+        const bridge = (window as unknown as Record<string, unknown>).__sofiaApplyDesktopConfig;
         if (typeof bridge !== "function") {
           return { ok: false, error: "Desktop config bridge not available (dev mode only)." };
         }
@@ -333,7 +336,7 @@ function BrandThemeControlActions() {
   }, []);
   useControlAction(applyAction);
 
-  const relaunchAction = useMemo<OpenworkControlAction | null>(() => {
+  const relaunchAction = useMemo<SofiaControlAction | null>(() => {
     if (!import.meta.env.DEV) return null;
     return {
       id: "eval.app.relaunch",
@@ -380,9 +383,9 @@ export function AppRoot() {
       <DevProfiler id="AppRoot">
         <ShellConfigProvider>
         <AppMenuProvider>
-        <OpenworkControlProvider>
-          <OpenworkRouteControlActions />
-          <OpenworkContextPublisher />
+        <SofiaControlProvider>
+          <SofiaRouteControlActions />
+          <SofiaContextPublisher />
           <DenAuthControlActions />
           <BrandThemeControlActions />
           <CloudWorkspaceStatusProvider>
@@ -393,7 +396,7 @@ export function AppRoot() {
                 path="/signin"
                 element={
                   <DevProfiler id="SigninRoute">
-                    <ForcedSigninPage developerMode={false} />
+                    {SOFIA_CLOUD_AVAILABLE ? <ForcedSigninPage developerMode={false} /> : <Navigate to="/welcome" replace />}
                   </DevProfiler>
                 }
               />
@@ -401,7 +404,7 @@ export function AppRoot() {
                 path="/onboarding"
                 element={
                   <DevProfiler id="OrgOnboarding">
-                    <OrgOnboardingPage />
+                    {SOFIA_CLOUD_AVAILABLE ? <OrgOnboardingPage /> : <Navigate to="/welcome" replace />}
                   </DevProfiler>
                 }
               />
@@ -494,9 +497,9 @@ export function AppRoot() {
           </DenSigninGate>
           <LoadingOverlay />
           </EnterpriseActivationGate>
-          <CloudWorkspaceOverlay />
+          {SOFIA_CLOUD_AVAILABLE ? <CloudWorkspaceOverlay /> : null}
           </CloudWorkspaceStatusProvider>
-        </OpenworkControlProvider>
+        </SofiaControlProvider>
         </AppMenuProvider>
         </ShellConfigProvider>
       </DevProfiler>

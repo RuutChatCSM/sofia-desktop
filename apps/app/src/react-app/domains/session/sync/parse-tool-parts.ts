@@ -5,7 +5,7 @@ import {
   connectionActionAppSchemaVersion,
   connectionActionPayloadSchema,
   connectionActionToolName,
-} from "@openwork/types/connection-action-app";
+} from "@sofia/types/connection-action-app";
 
 import { safeStringify } from "@/app/utils";
 import { normalizeErrorText } from "@/lib/error-text";
@@ -56,7 +56,7 @@ function connectionActionMcpResultFromError(error: string): JSONValue | null {
     content: [{ type: "text", text: error }],
     structuredContent: payload.data,
     _meta: {
-      "openwork/mcpApp": {
+      "sofia/mcpApp": {
         toolName: connectionActionToolName,
         resourceUri: connectionActionAppResourceUri,
         arguments: { connectionId: payload.data.connectionId },
@@ -67,16 +67,16 @@ function connectionActionMcpResultFromError(error: string): JSONValue | null {
 
 function toolCallProviderMetadata(part: ToolPart): ProviderMetadata {
   const stateMetadata = "metadata" in part.state && isRecord(part.state.metadata) ? part.state.metadata : {};
-  const persistedMcpResult = isJsonValue(stateMetadata.openworkMcpResult)
-    ? stateMetadata.openworkMcpResult
-    : isJsonValue(stateMetadata.openworkMcpApp)
-      ? stateMetadata.openworkMcpApp
+  const persistedMcpResult = isJsonValue(stateMetadata.sofiaMcpResult)
+    ? stateMetadata.sofiaMcpResult
+    : isJsonValue(stateMetadata.sofiaMcpApp)
+      ? stateMetadata.sofiaMcpApp
       : null;
   const mcpResult = persistedMcpResult
     ?? (part.state.status === "error" ? connectionActionMcpResultFromError(part.state.error) : null);
   return {
     opencode: { partId: part.id },
-    ...(mcpResult ? { openwork: { mcpResult } } : {}),
+    ...(mcpResult ? { sofia: { mcpResult } } : {}),
   };
 }
 

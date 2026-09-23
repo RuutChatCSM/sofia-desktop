@@ -1,4 +1,4 @@
-# Releasing OpenWork
+# Releasing Sofia
 
 Releases are **pure GitHub Actions + GitHub Releases**: versions live in git
 tags, every committed `package.json` holds the permanent `0.0.0-dev`
@@ -31,7 +31,7 @@ pnpm release:review         # sanity: placeholders intact, opencode pin present
    `scripts/release/stamp-version.mjs`, which writes the version into
    `apps/{app,desktop,server}/package.json` in the CI workspace only. That is
    what electron-builder, `app.getVersion()`, the Vite renderer bundle, and
-   the `openwork-server` npm publish all read.
+   the `sofia-server` npm publish all read.
 5. `publish-release` flips the draft public once required assets exist. From
    that moment den-api serves the new version to orgs: it reads published
    releases from the GitHub Releases API at runtime
@@ -81,7 +81,7 @@ a normal reviewed PR and close the loop there.
 - **Rerun an existing tag** (infra failure, replay AUR/Daytona):
 
   ```bash
-  gh workflow run "Release App" --repo different-ai/openwork -f tag=vX.Y.Z
+  gh workflow run "Release App" --repo RuutChatCSM/sofia-desktop -f tag=vX.Y.Z
   ```
 
   Recovery runs skip tag creation and monotonicity. Sources are pinned to the
@@ -91,7 +91,7 @@ a normal reviewed PR and close the loop there.
 - **A tagged version turned out defective before publish**: leave the release
   as a draft or delete it (`gh release delete vX.Y.Z`), fix forward on `dev`,
   and cut the next patch. If the bad version reached npm, deprecate it:
-  `npm deprecate openwork-server@X.Y.Z "<reason — use X.Y.Z+1>"`.
+  `npm deprecate sofia-server@X.Y.Z "<reason — use X.Y.Z+1>"`.
 
 ## Rolling back a published release
 
@@ -126,7 +126,7 @@ git push origin vX.Y.Z+1
 ### 3. Deprecate npm
 
 ```bash
-npm deprecate openwork-server@<bad-version> "rolled back — use <next>"
+npm deprecate sofia-server@<bad-version> "rolled back — use <next>"
 ```
 
 | Client state | Recovery |
@@ -152,15 +152,15 @@ npm publish. It does **not** require:
 ## Verification checklist
 
 ```bash
-gh run list --repo different-ai/openwork --workflow "Release App" --limit 3
-gh release view vX.Y.Z --repo different-ai/openwork   # published, not draft
+gh run list --repo RuutChatCSM/sofia-desktop --workflow "Release App" --limit 3
+gh release view vX.Y.Z --repo RuutChatCSM/sofia-desktop   # published, not draft
 ```
 
 - Release is **not a draft** and marked Latest
 - Asset count looks right (macOS + Linux + Windows + updater `latest*.yml`
   manifests — the desktop updater 404s until the manifests are published)
-- `npm view openwork-server version` shows the new version
-- `curl -s https://api.openworklabs.com/v1/app-version` lists the new version
+- `npm view sofia-server version` shows the new version
+- `curl -s https://sofia-api.ruut.chat/v1/app-version` lists the new version
   once den-api's cache refreshes (≤5 minutes)
 
 ## Where versions live now

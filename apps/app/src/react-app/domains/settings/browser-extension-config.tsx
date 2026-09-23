@@ -4,12 +4,12 @@ import { MonitorSmartphone } from "lucide-react";
 import { surfaceCardClass } from "../workspace/modal-styles";
 import { registerExtensionConfig } from "./extension-registry";
 
-const openWorkBrowserConfigFactory = () => <OpenWorkBrowserConfig />;
+const sofiaBrowserConfigFactory = () => <SofiaBrowserConfig />;
 
-registerExtensionConfig("openwork.browser.settings", openWorkBrowserConfigFactory);
-registerExtensionConfig("openwork-browser", openWorkBrowserConfigFactory);
+registerExtensionConfig("sofia.browser.settings", sofiaBrowserConfigFactory);
+registerExtensionConfig("sofia-browser", sofiaBrowserConfigFactory);
 
-function OpenWorkBrowserConfig() {
+function SofiaBrowserConfig() {
   return (
     <div className={`${surfaceCardClass} space-y-3 p-4`}>
       <div className="flex items-start gap-3">

@@ -9,11 +9,11 @@ import { SiteFooter } from "../../components/site-footer";
 import { SiteNav } from "../../components/site-nav";
 import { getGithubData } from "../../lib/github";
 
-const CLOUD_SIGNUP_URL = "https://app.openworklabs.com";
-const GATEWAY_URL = "https://api.openworklabs.com/mcp/agent";
+const CLOUD_SIGNUP_URL = "https://sofia-app.ruut.chat";
+const GATEWAY_URL = "https://sofia-api.ruut.chat/mcp/agent";
 
 export const metadata: Metadata = {
-  title: "OpenWork Connect — the MCP gateway for your team",
+  title: "Sofia Connect — the MCP gateway for your team",
   description:
     "The MCP gateway for your whole org. Add a server or skill once — every teammate and agent gets it instantly, with auth, roles, and policies applied on the way through.",
   alternates: { canonical: "/connect" }
@@ -28,7 +28,7 @@ const steps = [
   {
     number: "02",
     title: "Share one URL",
-    body: "Teammates sign in with their OpenWork account — from OpenWork or any MCP client."
+    body: "Teammates sign in with their Sofia account — from Sofia or any MCP client."
   },
   {
     number: "03",
@@ -57,7 +57,7 @@ export default async function ConnectPage() {
           <section className="pt-16 md:pt-[88px]">
             <div className="flex flex-col justify-between gap-10 lg:flex-row lg:items-end">
               <div className="max-w-[660px]">
-                <div className="mb-5 text-[15px] text-[var(--lp-muted)]">OpenWork Connect</div>
+                <div className="mb-5 text-[15px] text-[var(--lp-muted)]">Sofia Connect</div>
                 <h1 className="text-[46px] font-light leading-[51px] tracking-[-0.02em] md:text-[58px] md:leading-[62px]">
                   <span className="block">Set up your MCPs once.</span>
                   <span className="font-pixel block font-normal">Shared with everyone.</span>
@@ -67,7 +67,7 @@ export default async function ConnectPage() {
                 <p className="text-[16px] leading-[25px]">
                   The MCP gateway for your whole org. Add a server or skill once — every teammate and agent gets it instantly, with auth, roles, and policies applied on the way through.
                 </p>
-                <p className="mt-4 text-[14px] leading-[22px] text-[var(--lp-body)]">One URL. Works in OpenWork and any MCP-compatible client.</p>
+                <p className="mt-4 text-[14px] leading-[22px] text-[var(--lp-body)]">One URL. Works in Sofia and any MCP-compatible client.</p>
               </div>
             </div>
             <div className="mt-10 flex flex-col items-start gap-5 sm:flex-row sm:items-center">
@@ -79,10 +79,10 @@ export default async function ConnectPage() {
             </div>
           </section>
 
-          <section className="mt-[88px]" aria-label="OpenWork Connect gateway flow">
+          <section className="mt-[88px]" aria-label="Sofia Connect gateway flow">
             <LpGatewayDiagram />
             <div className="mt-6"><LpCopyBar value={GATEWAY_URL} /></div>
-            <p className="mt-3 text-[13.5px] text-[var(--lp-muted)]">One URL for your whole org — skills, MCPs, roles, and policies included. Works with your OpenWork account.</p>
+            <p className="mt-3 text-[13.5px] text-[var(--lp-muted)]">One URL for your whole org — skills, MCPs, roles, and policies included. Works with your Sofia account.</p>
           </section>
 
           <section className="mt-[120px]">

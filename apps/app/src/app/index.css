@@ -19,22 +19,22 @@
 
 @custom-variant dark (&:is(.dark, .dark *, [data-theme="dark"], [data-theme="dark"] *));
 @custom-variant electron {
-  html.openwork-electron & {
+  html.sofia-electron & {
     @slot;
   }
 }
 @custom-variant windows {
-  html.openwork-electron.openwork-platform-windows & {
+  html.sofia-electron.sofia-platform-windows & {
     @slot;
   }
 }
 @custom-variant mac {
-  html.openwork-electron.openwork-platform-mac & {
+  html.sofia-electron.sofia-platform-mac & {
     @slot;
   }
 }
 @custom-variant linux {
-  html.openwork-electron.openwork-platform-linux & {
+  html.sofia-electron.sofia-platform-linux & {
     @slot;
   }
 }
@@ -185,7 +185,7 @@ body {
 }
 
 html {
-  font-size: var(--openwork-font-size, 16px);
+  font-size: var(--sofia-font-size, 16px);
 }
 
 body {
@@ -209,21 +209,21 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-.markdown-content [data-openwork-code-block] pre {
+.markdown-content [data-sofia-code-block] pre {
   margin: 0;
   background: transparent !important;
 }
 
-.markdown-content [data-openwork-code-block] .shiki {
+.markdown-content [data-sofia-code-block] .shiki {
   background: transparent !important;
 }
 
-:is(.dark, [data-theme="dark"]) .markdown-content [data-openwork-code-block] .shiki,
-:is(.dark, [data-theme="dark"]) .markdown-content [data-openwork-code-block] .shiki span {
+:is(.dark, [data-theme="dark"]) .markdown-content [data-sofia-code-block] .shiki,
+:is(.dark, [data-theme="dark"]) .markdown-content [data-sofia-code-block] .shiki span {
   color: var(--shiki-dark) !important;
 }
 
-:is(.dark, [data-theme="dark"]) .markdown-content [data-openwork-code-block] .shiki span {
+:is(.dark, [data-theme="dark"]) .markdown-content [data-sofia-code-block] .shiki span {
   font-style: var(--shiki-dark-font-style) !important;
   font-weight: var(--shiki-dark-font-weight) !important;
   text-decoration: var(--shiki-dark-text-decoration) !important;
@@ -244,7 +244,7 @@ body {
   padding: 0.25rem 0;
 }
 
-.markdown-content [data-openwork-math-error] {
+.markdown-content [data-sofia-math-error] {
   color: var(--color-red-11, inherit);
 }
 

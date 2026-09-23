@@ -14,15 +14,15 @@ export const CODEX_AUTH_STORE_FILE = "sofia-auth.json";
 export type CodexAuthStore = Record<string, string>;
 
 export function codexAuthStorePath(opts?: { env?: NodeJS.ProcessEnv }): string {
-  // The engine home is pinned by the desktop (OPENWORK_CODEX_HOME) to a real
+  // The engine home is pinned by the desktop (SOFIA_CODEX_HOME) to a real
   // path shared across dev/prod. Keep the credential store in that same home so
   // dev (sandbox HOME) and prod read/write the same sofia-auth.json; otherwise
   // the app writes keys where the engine can't find them. Mirrors
-  // `codexHomeFor` in codex-registry.ts (OPENWORK_CODEX_HOME, then CODEX_HOME,
-  // then ~/.config/openwork/sofia).
+  // `codexHomeFor` in codex-registry.ts (SOFIA_CODEX_HOME, then CODEX_HOME,
+  // then ~/.config/sofia/sofia).
   const env = opts?.env ?? process.env;
   if (env.SOFIA_PROVIDER_HOME?.trim()) return join(env.SOFIA_PROVIDER_HOME.trim(), CODEX_AUTH_STORE_FILE);
-  const pinnedHome = env.OPENWORK_CODEX_HOME?.trim() || env.CODEX_HOME?.trim();
+  const pinnedHome = env.SOFIA_HOME?.trim() || env.SOFIA_CODEX_HOME?.trim() || env.CODEX_HOME?.trim();
   if (pinnedHome) return join(pinnedHome, CODEX_AUTH_STORE_FILE);
   const home = env.HOME?.trim() || homedir();
   return join(home, ".sofia", CODEX_AUTH_STORE_FILE);

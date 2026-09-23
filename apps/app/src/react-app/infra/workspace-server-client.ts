@@ -30,14 +30,14 @@ function normalizeLocalServer(localServer: LocalServerHandle): NormalizedLocalSe
 }
 
 function remoteBaseUrl(workspace: NonNullable<WorkspaceServerClientWorkspace>): string {
-  return trim(workspace.baseUrl) || trim(workspace.openworkHostUrl);
+  return trim(workspace.baseUrl) || trim(workspace.sofiaHostUrl);
 }
 
 function remoteToken(workspace: NonNullable<WorkspaceServerClientWorkspace>): string {
   return (
-    trim(workspace.openworkToken) ||
-    trim(workspace.openworkClientToken) ||
-    trim(workspace.openworkHostToken)
+    trim(workspace.sofiaToken) ||
+    trim(workspace.sofiaClientToken) ||
+    trim(workspace.sofiaHostToken)
   );
 }
 

@@ -2,6 +2,8 @@
 import { Dithering } from "@paper-design/shaders-react";
 import { useState, useSyncExternalStore, type FormEvent, type ReactNode } from "react";
 
+import { SOFIA_CLOUD_AVAILABLE } from "@/app/cloud-availability";
+
 import {
   buildDenAuthUrl,
   createDenClient,
@@ -36,7 +38,8 @@ export function useEnterpriseActivationRequired() {
     readDenBootstrapConfig,
     readDenBootstrapConfig,
   );
-  return enterpriseActivationRequired(readDesktopDistributionInfo(), bootstrap);
+  // Activation runs through the hosted control plane, which has not shipped.
+  return SOFIA_CLOUD_AVAILABLE && enterpriseActivationRequired(readDesktopDistributionInfo(), bootstrap);
 }
 
 function EnterpriseActivationPage() {
@@ -51,7 +54,7 @@ function EnterpriseActivationPage() {
   const submitServer = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    // The address field quietly accepts a pasted openwork:// sign-in link as
+    // The address field quietly accepts a pasted sofia:// sign-in link as
     // the recovery path when the browser round trip cannot come back.
     const pastedLink = parseManualAuthInput(serverInput);
     if (pastedLink?.baseUrl && pastedLink.grant) {
@@ -191,7 +194,7 @@ function EnterpriseActivationPage() {
         >
           <div className="flex items-center gap-2.5">
             <img
-              src={resolveExtensionIconSrc("/openwork-mark.svg")}
+              src={resolveExtensionIconSrc("/sofia-mark.svg")}
               alt=""
               width={26}
               height={26}
@@ -227,7 +230,7 @@ function EnterpriseActivationPage() {
                     data-testid="organization-server-input"
                     value={serverInput}
                     onChange={(event) => setServerInput(event.currentTarget.value)}
-                    placeholder="openwork.acme.com"
+                    placeholder="sofia.acme.com"
                     autoCapitalize="none"
                     autoCorrect="off"
                     spellCheck={false}

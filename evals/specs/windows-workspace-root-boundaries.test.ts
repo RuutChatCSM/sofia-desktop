@@ -1,5 +1,5 @@
 import { expect } from "vitest";
-import { briefTest, claim, testBrief } from "@openwork/testkit";
+import { briefTest, claim, testBrief } from "@sofia/testkit";
 import { normalizeWorkspaceRootPath } from "../../packages/paths/index.mjs";
 import { prepareRuntimeWorkspaceRoot } from "../../apps/desktop/electron/runtime.mjs";
 
@@ -32,8 +32,8 @@ briefTest(testBrief({
   );
 
   const deviceRoots = [
-    "\\\\.\\pipe\\openwork",
-    "//./PIPE/openwork",
+    "\\\\.\\pipe\\sofia",
+    "//./PIPE/sofia",
     "\\\\.\\PhysicalDrive0",
   ];
   for (const deviceRoot of deviceRoots) {

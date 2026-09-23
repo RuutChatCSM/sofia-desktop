@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, RefreshCw, Save, TestTube2, Trash2 } from "lucide-react";
-import type { WorkflowDetail, WorkflowTestResult } from "@openwork/types/workflows";
+import type { WorkflowDetail, WorkflowTestResult } from "@sofia/types/workflows";
 import { DenButton } from "../../_components/ui/button";
 import { DenInput } from "../../_components/ui/input";
 import { DenTextarea } from "../../_components/ui/textarea";

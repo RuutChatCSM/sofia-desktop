@@ -6,10 +6,10 @@ import {
   selectModel,
   sendComposerMessage,
   waitFor,
-} from "@openwork/behaviors";
-import { screenshot, validate } from "@openwork/test-evidence";
-import { app, eventually, needs, server, test, unmetNeeds } from "@openwork/testkit";
-import type { TestNeeds } from "@openwork/testkit";
+} from "@sofia/behaviors";
+import { screenshot, validate } from "@sofia/test-evidence";
+import { app, eventually, needs, server, test, unmetNeeds } from "@sofia/testkit";
+import type { TestNeeds } from "@sofia/testkit";
 
 /**
  * ACCEPTANCE TAPE — a config reload moves new work to a fresh engine without
@@ -24,7 +24,7 @@ import type { TestNeeds } from "@openwork/testkit";
 
 const requirements: TestNeeds = {
   env: ["ANTHROPIC_API_KEY"],
-  optIn: ["OPENWORK_EVAL_E2E_TESTS", "OPENWORK_EVAL_ENGINE_ROLLOVER_E2E_TEST"],
+  optIn: ["SOFIA_EVAL_E2E_TESTS", "SOFIA_EVAL_ENGINE_ROLLOVER_E2E_TEST"],
 };
 const missingRequirements = unmetNeeds(requirements, process.env);
 const title = missingRequirements.length > 0
@@ -34,7 +34,7 @@ const title = missingRequirements.length > 0
 const COMPLETE_MARKER = "ROLLOVER-LIVE-TASK-COMPLETE";
 const FRESH_MARKER = "ROLLOVER-FRESH-ENGINE-OK";
 const stopEnabledExpression = `(() => {
-  const stop = window.__openworkControl?.listActions().find((action) => action.id === "composer.stop");
+  const stop = window.__sofiaControl?.listActions().find((action) => action.id === "composer.stop");
   return Boolean(stop && !stop.disabled);
 })()`;
 
@@ -55,7 +55,7 @@ function readGenerations(value: unknown): Generation[] {
   });
 }
 
-const runtimeStatusExpression = `window.__OPENWORK_ELECTRON__.invokeDesktop("runtimeStatus")`;
+const runtimeStatusExpression = `window.__SOFIA_ELECTRON__.invokeDesktop("runtimeStatus")`;
 
 test.skipIf(missingRequirements.length > 0)(title, { timeout: 900_000 }, async ({ evidence, place }) => {
   needs(requirements);
@@ -65,8 +65,8 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 900_000 }, async (
   const anthropicKey = process.env.ANTHROPIC_API_KEY?.trim() ?? "";
 
   const configured = await evalIn(desktopApp, `(async () => {
-    const port = localStorage.getItem("openwork.server.port");
-    const token = localStorage.getItem("openwork.server.token");
+    const port = localStorage.getItem("sofia.server.port");
+    const token = localStorage.getItem("sofia.server.token");
     const request = async (path, init) => {
       const response = await fetch("http://127.0.0.1:" + port + path, {
         ...init,
@@ -93,13 +93,13 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 900_000 }, async (
 
   const restarted = await evalIn(
     desktopApp,
-    `window.__OPENWORK_ELECTRON__.invokeDesktop("engineRestart", { engineRollover: true })`,
+    `window.__SOFIA_ELECTRON__.invokeDesktop("engineRestart", { engineRollover: true })`,
     { awaitPromise: true, timeoutMs: 120_000 },
   );
   expect(isRecord(restarted) && restarted.running === true).toBe(true);
   await eventually(async () => evalIn(desktopApp, `(async () => {
-    const port = localStorage.getItem("openwork.server.port");
-    const token = localStorage.getItem("openwork.server.token");
+    const port = localStorage.getItem("sofia.server.port");
+    const token = localStorage.getItem("sofia.server.token");
     const response = await fetch("http://127.0.0.1:" + port + "/capabilities", {
       headers: { Authorization: "Bearer " + token },
     });
@@ -124,8 +124,8 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 900_000 }, async (
   await waitFor(desktopApp, stopEnabledExpression, { timeoutMs: 60_000, label: "long task became active" });
 
   const reloadResult = await evalIn(desktopApp, `(async () => {
-    const port = localStorage.getItem("openwork.server.port");
-    const token = localStorage.getItem("openwork.server.token");
+    const port = localStorage.getItem("sofia.server.port");
+    const token = localStorage.getItem("sofia.server.token");
     const workspaceId = ${JSON.stringify(workspaceId)};
     const headers = { Authorization: "Bearer " + token, "Content-Type": "application/json" };
     const patch = await fetch("http://127.0.0.1:" + port + "/workspace/" + encodeURIComponent(workspaceId) + "/config", {
@@ -163,8 +163,8 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 900_000 }, async (
   );
 
   const newSession = await evalIn(desktopApp, `(async () => {
-    const port = localStorage.getItem("openwork.server.port");
-    const token = localStorage.getItem("openwork.server.token");
+    const port = localStorage.getItem("sofia.server.port");
+    const token = localStorage.getItem("sofia.server.token");
     const response = await fetch("http://127.0.0.1:" + port + "/workspace/" + encodeURIComponent(${JSON.stringify(workspaceId)}) + "/opencode/session", {
       method: "POST",
       headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },

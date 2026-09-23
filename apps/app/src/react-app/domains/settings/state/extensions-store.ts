@@ -14,7 +14,6 @@ import { addOpencodeCacheHint, isDesktopRuntime, normalizeDirectoryPath } from "
 import skillCreatorTemplate from "../../../../app/data/skill-creator.md?raw";
 import {
   isPluginInstalled,
-  loadPluginsFromConfig as loadPluginsFromConfigHelpers,
   parsePluginListFromContent,
   stripPluginVersion,
 } from "../../../../app/utils/plugins";
@@ -26,21 +25,18 @@ import {
   openDesktopPath,
   pickDirectory,
   readLocalSkill,
-  readOpencodeConfig,
   revealDesktopItemInDir,
   uninstallSkill as uninstallSkillCommand,
-  workspaceOpenworkRead,
-  workspaceOpenworkWrite,
+  workspaceSofiaRead,
+  workspaceSofiaWrite,
   writeLocalSkill,
-  writeOpencodeConfig,
-  type OpencodeConfigFile,
 } from "../../../../app/lib/desktop";
 import type {
-  OpenworkClaudePluginPreview,
-  OpenworkServerCapabilities,
-  OpenworkServerClient,
-  OpenworkServerStatus,
-} from "../../../../app/lib/openwork-server";
+  SofiaClaudePluginPreview,
+  SofiaServerCapabilities,
+  SofiaServerClient,
+  SofiaServerStatus,
+} from "../../../../app/lib/sofia-server";
 import {
   DenApiError,
   createDenClient,
@@ -63,7 +59,7 @@ import {
   type PendingCloudPluginChange,
 } from "../../../../app/cloud/desktop-cloud-sync";
 import { notifyEvent } from "../../../shell/notifications";
-import type { OpenworkServerStore } from "../../connections/openwork-server-store";
+import type { SofiaServerStore } from "../../connections/sofia-server-store";
 import { clearCloudInventoryCache } from "../../connections/cloud-inventory-cache";
 import {
   denLibraryPluginCreateRequest,
@@ -94,8 +90,6 @@ export type ExtensionsStoreSnapshot = {
   importedCloudPlugins: Record<string, CloudImportedPlugin>;
   pendingCloudPluginChanges: Record<string, PendingCloudPluginChange>;
   pluginScope: PluginScope;
-  pluginConfig: OpencodeConfigFile | null;
-  pluginConfigPath: string | null;
   pluginList: PluginListEntry[];
   pluginInput: string;
   pluginStatus: string | null;
@@ -117,8 +111,6 @@ type MutableState = {
   importedCloudPlugins: Record<string, CloudImportedPlugin>;
   pendingCloudPluginChanges: Record<string, PendingCloudPluginChange>;
   pluginScope: PluginScope;
-  pluginConfig: OpencodeConfigFile | null;
-  pluginConfigPath: string | null;
   pluginList: PluginListEntry[];
   pluginInput: string;
   pluginStatus: string | null;
@@ -355,11 +347,11 @@ export function createExtensionsStore(options: {
   selectedWorkspaceId: () => string;
   selectedWorkspaceRoot: () => string;
   workspaceType: () => "local" | "remote";
-  openworkServer: OpenworkServerStore;
-  openworkServerConnection?: () => {
-    openworkServerClient: OpenworkServerClient | null;
-    openworkServerStatus: OpenworkServerStatus;
-    openworkServerCapabilities: OpenworkServerCapabilities | null;
+  sofiaServer: SofiaServerStore;
+  sofiaServerConnection?: () => {
+    sofiaServerClient: SofiaServerClient | null;
+    sofiaServerStatus: SofiaServerStatus;
+    sofiaServerCapabilities: SofiaServerCapabilities | null;
   };
   runtimeWorkspaceId: () => string | null;
   ensureRuntimeWorkspaceId?: () => Promise<string | null | undefined>;
@@ -373,7 +365,7 @@ export function createExtensionsStore(options: {
 
   let disposed = false;
   let started = false;
-  let stopOpenworkSubscription: (() => void) | null = null;
+  let stopSofiaSubscription: (() => void) | null = null;
   let stopDenSessionListener: (() => void) | null = null;
   let lastWorkspaceContextKey = "";
   let snapshot: ExtensionsStoreSnapshot;
@@ -404,8 +396,6 @@ export function createExtensionsStore(options: {
     importedCloudPlugins: {},
     pendingCloudPluginChanges: {},
     pluginScope: "project",
-    pluginConfig: null,
-    pluginConfigPath: null,
     pluginList: [],
     pluginInput: "",
     pluginStatus: null,
@@ -426,33 +416,33 @@ export function createExtensionsStore(options: {
     return `${workspaceType}:${workspaceId}:${root}:${runtimeWorkspaceId}`;
   };
 
-  const getOpenworkServerSnapshot = () => {
-    const snapshot = options.openworkServer.getSnapshot();
-    const connection = options.openworkServerConnection?.();
-    if (!connection?.openworkServerClient) return snapshot;
+  const getSofiaServerSnapshot = () => {
+    const snapshot = options.sofiaServer.getSnapshot();
+    const connection = options.sofiaServerConnection?.();
+    if (!connection?.sofiaServerClient) return snapshot;
     return {
       ...snapshot,
-      openworkServerClient: connection.openworkServerClient,
-      openworkServerStatus: connection.openworkServerStatus,
-      openworkServerCapabilities: connection.openworkServerCapabilities,
+      sofiaServerClient: connection.sofiaServerClient,
+      sofiaServerStatus: connection.sofiaServerStatus,
+      sofiaServerCapabilities: connection.sofiaServerCapabilities,
     };
   };
 
   const resolveWorkspaceServerTarget = async () => {
-    const openworkSnapshot = getOpenworkServerSnapshot();
-    const openworkClient = openworkSnapshot.openworkServerClient;
-    let openworkWorkspaceId = options.runtimeWorkspaceId()?.trim() || null;
-    if (!openworkWorkspaceId && openworkSnapshot.openworkServerStatus === "connected" && openworkClient) {
-      openworkWorkspaceId = (await options.ensureRuntimeWorkspaceId?.())?.trim() || null;
+    const sofiaSnapshot = getSofiaServerSnapshot();
+    const sofiaClient = sofiaSnapshot.sofiaServerClient;
+    let sofiaWorkspaceId = options.runtimeWorkspaceId()?.trim() || null;
+    if (!sofiaWorkspaceId && sofiaSnapshot.sofiaServerStatus === "connected" && sofiaClient) {
+      sofiaWorkspaceId = (await options.ensureRuntimeWorkspaceId?.())?.trim() || null;
     }
-    const hasOpenworkTarget =
-      openworkSnapshot.openworkServerStatus === "connected" &&
-      Boolean(openworkClient && openworkWorkspaceId);
+    const hasSofiaTarget =
+      sofiaSnapshot.sofiaServerStatus === "connected" &&
+      Boolean(sofiaClient && sofiaWorkspaceId);
     return {
-      openworkSnapshot,
-      openworkClient,
-      openworkWorkspaceId,
-      hasOpenworkTarget,
+      sofiaSnapshot,
+      sofiaClient,
+      sofiaWorkspaceId,
+      hasSofiaTarget,
     };
   };
 
@@ -468,8 +458,6 @@ export function createExtensionsStore(options: {
       importedCloudPlugins: state.importedCloudPlugins,
       pendingCloudPluginChanges: state.pendingCloudPluginChanges,
       pluginScope: state.pluginScope,
-      pluginConfig: state.pluginConfig,
-      pluginConfigPath: state.pluginConfigPath,
       pluginList: state.pluginList,
       pluginInput: state.pluginInput,
       pluginStatus: state.pluginStatus,
@@ -497,56 +485,56 @@ export function createExtensionsStore(options: {
 
   const formatSkillPath = (location: string) => location.replace(/[/\\]SKILL\.md$/i, "");
 
-  const readWorkspaceOpenworkConfigRecord = async (): Promise<Record<string, unknown>> => {
+  const readWorkspaceSofiaConfigRecord = async (): Promise<Record<string, unknown>> => {
     const root = options.selectedWorkspaceRoot().trim();
     const isLocalWorkspace = options.workspaceType() === "local";
-    const { openworkSnapshot, openworkClient, openworkWorkspaceId, hasOpenworkTarget } =
+    const { sofiaSnapshot, sofiaClient, sofiaWorkspaceId, hasSofiaTarget } =
       await resolveWorkspaceServerTarget();
-    const canUseOpenworkServer =
-      hasOpenworkTarget &&
-      openworkSnapshot.openworkServerCapabilities?.config?.read !== false;
+    const canUseSofiaServer =
+      hasSofiaTarget &&
+      sofiaSnapshot.sofiaServerCapabilities?.config?.read !== false;
 
-    if (canUseOpenworkServer && openworkClient && openworkWorkspaceId) {
-      const config = await openworkClient.getConfig(openworkWorkspaceId);
-      return config.openwork ?? {};
+    if (canUseSofiaServer && sofiaClient && sofiaWorkspaceId) {
+      const config = await sofiaClient.getConfig(sofiaWorkspaceId);
+      return config.sofia ?? {};
     }
 
-    if (hasOpenworkTarget) {
+    if (hasSofiaTarget) {
       return {};
     }
 
     if (isLocalWorkspace && isDesktopRuntime() && root) {
-      return await workspaceOpenworkRead({ workspacePath: root }) as unknown as Record<string, unknown>;
+      return await workspaceSofiaRead({ workspacePath: root }) as unknown as Record<string, unknown>;
     }
 
     return {};
   };
 
-  const writeWorkspaceOpenworkConfigRecord = async (config: Record<string, unknown>) => {
+  const writeWorkspaceSofiaConfigRecord = async (config: Record<string, unknown>) => {
     const root = options.selectedWorkspaceRoot().trim();
     const isLocalWorkspace = options.workspaceType() === "local";
-    const { openworkSnapshot, openworkClient, openworkWorkspaceId, hasOpenworkTarget } =
+    const { sofiaSnapshot, sofiaClient, sofiaWorkspaceId, hasSofiaTarget } =
       await resolveWorkspaceServerTarget();
-    const canUseOpenworkServer =
-      hasOpenworkTarget &&
-      openworkSnapshot.openworkServerCapabilities?.config?.write !== false;
+    const canUseSofiaServer =
+      hasSofiaTarget &&
+      sofiaSnapshot.sofiaServerCapabilities?.config?.write !== false;
 
-    if (canUseOpenworkServer && openworkClient && openworkWorkspaceId) {
-      await openworkClient.patchConfig(openworkWorkspaceId, { openwork: config });
+    if (canUseSofiaServer && sofiaClient && sofiaWorkspaceId) {
+      await sofiaClient.patchConfig(sofiaWorkspaceId, { sofia: config });
       return true;
     }
 
-    if (hasOpenworkTarget) {
+    if (hasSofiaTarget) {
       return false;
     }
 
     if (isLocalWorkspace && isDesktopRuntime() && root) {
-      const result = (await workspaceOpenworkWrite({
+      const result = (await workspaceSofiaWrite({
         workspacePath: root,
         config: config as never,
       })) as { ok: boolean; stderr?: string; stdout?: string };
       if (!result.ok) {
-        throw new Error(result.stderr || result.stdout || "Failed to write .opencode/openwork.json");
+        throw new Error(result.stderr || result.stdout || "Failed to write .opencode/sofia.json");
       }
       return true;
     }
@@ -557,17 +545,17 @@ export function createExtensionsStore(options: {
   const refreshPendingCloudPluginChanges = async (installedPlugins?: Record<string, CloudImportedPlugin>) => {
     try {
       const target = await resolveWorkspaceServerTarget();
-      if (!target.openworkClient || !target.openworkWorkspaceId) {
+      if (!target.sofiaClient || !target.sofiaWorkspaceId) {
         setStateField("pendingCloudPluginChanges", {});
         return;
       }
       const syncResult = await refreshDesktopCloudSync({
-        openworkClient: target.openworkClient,
-        workspaceId: target.openworkWorkspaceId,
+        sofiaClient: target.sofiaClient,
+        workspaceId: target.sofiaWorkspaceId,
       }).catch(() => null);
       const changes = syncResult
         ? syncResult.changes
-        : readPendingCloudSyncChanges(await target.openworkClient.getDesktopCloudSync(target.openworkWorkspaceId));
+        : readPendingCloudSyncChanges(await target.sofiaClient.getDesktopCloudSync(target.sofiaWorkspaceId));
       const pending = derivePendingCloudPluginChanges({
         changes,
         installedPlugins: installedPlugins ?? snapshot.importedCloudPlugins,
@@ -609,14 +597,14 @@ export function createExtensionsStore(options: {
   const refreshImportedCloudPlugins = async () => {
     try {
       const target = await resolveWorkspaceServerTarget();
-      if (target.openworkClient && target.openworkWorkspaceId) {
-        const result = await target.openworkClient.listCloudPlugins(target.openworkWorkspaceId);
+      if (target.sofiaClient && target.sofiaWorkspaceId) {
+        const result = await target.sofiaClient.listCloudPlugins(target.sofiaWorkspaceId);
         setStateField("importedCloudMarketplaces", result.marketplaces);
         setStateField("importedCloudPlugins", result.plugins);
         void refreshPendingCloudPluginChanges(result.plugins);
         return result.plugins;
       }
-      const config = await readWorkspaceOpenworkConfigRecord();
+      const config = await readWorkspaceSofiaConfigRecord();
       const cloudImports = readWorkspaceCloudImports(config);
       setStateField("importedCloudMarketplaces", cloudImports.marketplaces);
       setStateField("importedCloudPlugins", cloudImports.plugins);
@@ -630,14 +618,14 @@ export function createExtensionsStore(options: {
   };
 
   const persistImportedCloudMarketplaces = async (nextMarketplaces: Record<string, CloudImportedMarketplace>) => {
-    const config = await readWorkspaceOpenworkConfigRecord();
+    const config = await readWorkspaceSofiaConfigRecord();
     const cloudImports = readWorkspaceCloudImports(config);
     const nextCloudImports = {
       ...cloudImports,
       marketplaces: nextMarketplaces,
     };
     const nextConfig = withWorkspaceCloudImports(config, nextCloudImports);
-    const persisted = await writeWorkspaceOpenworkConfigRecord(nextConfig);
+    const persisted = await writeWorkspaceSofiaConfigRecord(nextConfig);
     if (!persisted) {
       throw new Error("Sofia App server unavailable. Connect to manage imported cloud marketplaces.");
     }
@@ -646,14 +634,14 @@ export function createExtensionsStore(options: {
   };
 
   const persistImportedCloudPlugins = async (nextPlugins: Record<string, CloudImportedPlugin>) => {
-    const config = await readWorkspaceOpenworkConfigRecord();
+    const config = await readWorkspaceSofiaConfigRecord();
     const cloudImports = readWorkspaceCloudImports(config);
     const nextCloudImports = {
       ...cloudImports,
       plugins: nextPlugins,
     };
     const nextConfig = withWorkspaceCloudImports(config, nextCloudImports);
-    const persisted = await writeWorkspaceOpenworkConfigRecord(nextConfig);
+    const persisted = await writeWorkspaceSofiaConfigRecord(nextConfig);
     if (!persisted) {
       throw new Error("Sofia App server unavailable. Connect to manage imported cloud plugins.");
     }
@@ -681,18 +669,18 @@ export function createExtensionsStore(options: {
     const isRemoteWorkspace = options.workspaceType() === "remote";
     const isLocalWorkspace = options.workspaceType() === "local";
     const root = options.selectedWorkspaceRoot().trim();
-    const { openworkSnapshot, openworkClient, openworkWorkspaceId, hasOpenworkTarget } =
+    const { sofiaSnapshot, sofiaClient, sofiaWorkspaceId, hasSofiaTarget } =
       await resolveWorkspaceServerTarget();
-    const canUseOpenworkServer =
-      hasOpenworkTarget &&
-      openworkSnapshot.openworkServerCapabilities?.skills?.write !== false;
+    const canUseSofiaServer =
+      hasSofiaTarget &&
+      sofiaSnapshot.sofiaServerCapabilities?.skills?.write !== false;
 
-    if (canUseOpenworkServer && openworkClient && openworkWorkspaceId) {
-      await openworkClient.deleteSkill(openworkWorkspaceId, name);
+    if (canUseSofiaServer && sofiaClient && sofiaWorkspaceId) {
+      await sofiaClient.deleteSkill(sofiaWorkspaceId, name);
       return;
     }
 
-    if (hasOpenworkTarget) {
+    if (hasSofiaTarget) {
       throw new Error("Sofia App server cannot remove skills for this workspace.");
     }
 
@@ -880,7 +868,7 @@ export function createExtensionsStore(options: {
     const version = object.latestVersion;
     const payload = version?.normalizedPayloadJson ?? parseJsonRecord(version?.rawSourceText ?? null);
     if (!payload) return null;
-    if (payload.openworkManaged === "den_external_mcp") {
+    if (payload.sofiaManaged === "den_external_mcp") {
       const id = readNonEmptyString(payload.externalMcpConnectionId);
       if (id) return id;
     }
@@ -890,7 +878,7 @@ export function createExtensionsStore(options: {
     ].filter((entry): entry is Record<string, unknown> => Boolean(entry));
     for (const container of containers) {
       for (const config of Object.values(container)) {
-        if (!isRecord(config) || config.openworkManaged !== "den_external_mcp") continue;
+        if (!isRecord(config) || config.sofiaManaged !== "den_external_mcp") continue;
         const id = readNonEmptyString(config.externalMcpConnectionId);
         if (id) return id;
       }
@@ -899,32 +887,32 @@ export function createExtensionsStore(options: {
   };
 
   const upsertPluginMcpConfig = async (name: string, config: Record<string, unknown>) => {
-    const openworkSnapshot = getOpenworkServerSnapshot();
-    const openworkClient = openworkSnapshot.openworkServerClient;
-    const openworkWorkspaceId = options.runtimeWorkspaceId();
+    const sofiaSnapshot = getSofiaServerSnapshot();
+    const sofiaClient = sofiaSnapshot.sofiaServerClient;
+    const sofiaWorkspaceId = options.runtimeWorkspaceId();
     if (
-      openworkSnapshot.openworkServerStatus === "connected" &&
-      openworkClient &&
-      openworkWorkspaceId &&
-      openworkSnapshot.openworkServerCapabilities?.mcp?.write
+      sofiaSnapshot.sofiaServerStatus === "connected" &&
+      sofiaClient &&
+      sofiaWorkspaceId &&
+      sofiaSnapshot.sofiaServerCapabilities?.mcp?.write
     ) {
-      await openworkClient.addMcp(openworkWorkspaceId, { name, config });
+      await sofiaClient.addMcp(sofiaWorkspaceId, { name, config });
       return;
     }
     throw new Error("Sofia App server unavailable. Connect to import MCP servers into this workspace.");
   };
 
   const deletePluginMcpConfig = async (name: string) => {
-    const openworkSnapshot = getOpenworkServerSnapshot();
-    const openworkClient = openworkSnapshot.openworkServerClient;
-    const openworkWorkspaceId = options.runtimeWorkspaceId();
+    const sofiaSnapshot = getSofiaServerSnapshot();
+    const sofiaClient = sofiaSnapshot.sofiaServerClient;
+    const sofiaWorkspaceId = options.runtimeWorkspaceId();
     if (
-      openworkSnapshot.openworkServerStatus === "connected" &&
-      openworkClient &&
-      openworkWorkspaceId &&
-      openworkSnapshot.openworkServerCapabilities?.mcp?.write
+      sofiaSnapshot.sofiaServerStatus === "connected" &&
+      sofiaClient &&
+      sofiaWorkspaceId &&
+      sofiaSnapshot.sofiaServerCapabilities?.mcp?.write
     ) {
-      await openworkClient.removeMcp(openworkWorkspaceId, name);
+      await sofiaClient.removeMcp(sofiaWorkspaceId, name);
       return;
     }
     throw new Error("Sofia App server unavailable. Connect to remove imported MCP servers from this workspace.");
@@ -946,16 +934,16 @@ export function createExtensionsStore(options: {
   };
 
   const writePluginWorkspaceFile = async (path: string, content: string) => {
-    const { openworkSnapshot, openworkClient, openworkWorkspaceId, hasOpenworkTarget } =
+    const { sofiaSnapshot, sofiaClient, sofiaWorkspaceId, hasSofiaTarget } =
       await resolveWorkspaceServerTarget();
     if (
-      hasOpenworkTarget &&
-      openworkClient &&
-      openworkWorkspaceId &&
-      openworkSnapshot.openworkServerCapabilities?.config?.write !== false &&
-      typeof openworkClient.writeWorkspaceFile === "function"
+      hasSofiaTarget &&
+      sofiaClient &&
+      sofiaWorkspaceId &&
+      sofiaSnapshot.sofiaServerCapabilities?.config?.write !== false &&
+      typeof sofiaClient.writeWorkspaceFile === "function"
     ) {
-      await openworkClient.writeWorkspaceFile(openworkWorkspaceId, { path, content, force: true });
+      await sofiaClient.writeWorkspaceFile(sofiaWorkspaceId, { path, content, force: true });
       return;
     }
     throw new Error("Sofia App server unavailable. Connect to import plugin files into this workspace.");
@@ -963,16 +951,16 @@ export function createExtensionsStore(options: {
 
   const deletePluginWorkspaceFiles = async (files: Array<{ path: string; recursive?: boolean }>) => {
     if (files.length === 0) return;
-    const { openworkSnapshot, openworkClient, openworkWorkspaceId, hasOpenworkTarget } =
+    const { sofiaSnapshot, sofiaClient, sofiaWorkspaceId, hasSofiaTarget } =
       await resolveWorkspaceServerTarget();
     if (
-      hasOpenworkTarget &&
-      openworkClient &&
-      openworkWorkspaceId &&
-      openworkSnapshot.openworkServerCapabilities?.config?.write !== false &&
-      typeof openworkClient.deleteWorkspaceFiles === "function"
+      hasSofiaTarget &&
+      sofiaClient &&
+      sofiaWorkspaceId &&
+      sofiaSnapshot.sofiaServerCapabilities?.config?.write !== false &&
+      typeof sofiaClient.deleteWorkspaceFiles === "function"
     ) {
-      const results = await openworkClient.deleteWorkspaceFiles(openworkWorkspaceId, files);
+      const results = await sofiaClient.deleteWorkspaceFiles(sofiaWorkspaceId, files);
       const failed = results.filter((result) => !result.ok && result.code !== "file_not_found");
       if (failed.length > 0) {
         throw new Error(
@@ -1247,9 +1235,9 @@ export function createExtensionsStore(options: {
       const client = createDenClient({ baseUrl: settings.baseUrl, token });
       const resolved = await client.getOrgPluginResolved(orgId, plugin);
       const target = await resolveWorkspaceServerTarget();
-      if (target.openworkClient && target.openworkWorkspaceId) {
+      if (target.sofiaClient && target.sofiaWorkspaceId) {
         const marketplace = marketplaceId ? findCloudMarketplace(marketplaceId) : null;
-        const result = await target.openworkClient.installCloudPlugin(target.openworkWorkspaceId, {
+        const result = await target.sofiaClient.installCloudPlugin(target.sofiaWorkspaceId, {
           marketplaceId,
           marketplace,
           resolved,
@@ -1282,12 +1270,12 @@ export function createExtensionsStore(options: {
     }
   }
 
-  async function previewClaudePlugin(url: string): Promise<OpenworkClaudePluginPreview> {
+  async function previewClaudePlugin(url: string): Promise<SofiaClaudePluginPreview> {
     const target = await resolveWorkspaceServerTarget();
-    if (!target.openworkClient || !target.openworkWorkspaceId) {
+    if (!target.sofiaClient || !target.sofiaWorkspaceId) {
       throw new Error("Sofia App server unavailable. Connect to install plugins from GitHub.");
     }
-    const result = await target.openworkClient.previewClaudePlugin(target.openworkWorkspaceId, { url });
+    const result = await target.sofiaClient.previewClaudePlugin(target.sofiaWorkspaceId, { url });
     return result.preview;
   }
 
@@ -1296,10 +1284,10 @@ export function createExtensionsStore(options: {
     options.setError(null);
     try {
       const target = await resolveWorkspaceServerTarget();
-      if (!target.openworkClient || !target.openworkWorkspaceId) {
+      if (!target.sofiaClient || !target.sofiaWorkspaceId) {
         throw new Error("Sofia App server unavailable. Connect to install plugins from GitHub.");
       }
-      const result = await target.openworkClient.installClaudePlugin(target.openworkWorkspaceId, { url });
+      const result = await target.sofiaClient.installClaudePlugin(target.sofiaWorkspaceId, { url });
       await refreshSkills({ force: true });
       await refreshImportedCloudPlugins();
       return {
@@ -1322,8 +1310,8 @@ export function createExtensionsStore(options: {
 
     try {
       const target = await resolveWorkspaceServerTarget();
-      if (target.openworkClient && target.openworkWorkspaceId) {
-        const result = await target.openworkClient.removeCloudPlugin(target.openworkWorkspaceId, pluginId);
+      if (target.sofiaClient && target.sofiaWorkspaceId) {
+        const result = await target.sofiaClient.removeCloudPlugin(target.sofiaWorkspaceId, pluginId);
         await refreshSkills({ force: true });
         await refreshCloudOrgMarketplaces({ force: true });
         void refreshPendingCloudPluginChanges();
@@ -1379,35 +1367,16 @@ export function createExtensionsStore(options: {
   const isPluginInstalledByName = (pluginName: string, aliases: string[] = []) =>
     isPluginInstalled(snapshot.pluginList.map((entry) => entry.name), pluginName, aliases);
 
-  const loadPluginsFromConfig = (config: OpencodeConfigFile | null) => {
-    const nextPluginNames: string[] = [];
-    let nextPluginStatus: string | null = null;
-    loadPluginsFromConfigHelpers(
-      config,
-      (value) => {
-        nextPluginNames.splice(0, nextPluginNames.length, ...applyStateAction(nextPluginNames, value));
-      },
-      (message) => {
-        nextPluginStatus = message;
-      },
-    );
-    mutateState((current) => ({
-      ...current,
-      pluginList: toConfigPluginListEntries(nextPluginNames),
-      pluginStatus: nextPluginStatus,
-    }));
-  };
-
   async function refreshSkills(optionsOverride?: { force?: boolean }) {
     const root = options.selectedWorkspaceRoot().trim();
     const isLocalWorkspace = options.workspaceType() === "local";
-    const { openworkSnapshot, openworkClient, openworkWorkspaceId, hasOpenworkTarget } =
+    const { sofiaSnapshot, sofiaClient, sofiaWorkspaceId, hasSofiaTarget } =
       await resolveWorkspaceServerTarget();
-    const canUseOpenworkServer =
-      hasOpenworkTarget &&
-      openworkSnapshot.openworkServerCapabilities?.skills?.read !== false;
+    const canUseSofiaServer =
+      hasSofiaTarget &&
+      sofiaSnapshot.sofiaServerCapabilities?.skills?.read !== false;
 
-    if (!root && !hasOpenworkTarget) {
+    if (!root && !hasSofiaTarget) {
       mutateState((current) => ({
         ...current,
         skills: [],
@@ -1416,8 +1385,8 @@ export function createExtensionsStore(options: {
       return;
     }
 
-    if (canUseOpenworkServer && openworkClient && openworkWorkspaceId) {
-      const skillCacheKey = root || openworkWorkspaceId;
+    if (canUseSofiaServer && sofiaClient && sofiaWorkspaceId) {
+      const skillCacheKey = root || sofiaWorkspaceId;
       if (skillCacheKey !== skillsRoot) skillsLoaded = false;
       if (!optionsOverride?.force && skillsLoaded) return;
       if (refreshSkillsInFlight) return;
@@ -1426,7 +1395,7 @@ export function createExtensionsStore(options: {
       refreshSkillsAborted = false;
       try {
         setStateField("skillsStatus", null);
-        const response = await openworkClient.listSkills(openworkWorkspaceId, { includeGlobal: isLocalWorkspace });
+        const response = await sofiaClient.listSkills(sofiaWorkspaceId, { includeGlobal: isLocalWorkspace });
         if (refreshSkillsAborted) return;
         const next: SkillCard[] = Array.isArray(response.items)
           ? response.items.map((entry) => ({
@@ -1457,7 +1426,7 @@ export function createExtensionsStore(options: {
       return;
     }
 
-    if (hasOpenworkTarget) {
+    if (hasSofiaTarget) {
       mutateState((current) => ({
         ...current,
         skills: [],
@@ -1525,7 +1494,7 @@ export function createExtensionsStore(options: {
     try {
       setStateField("skillsStatus", null);
       const rawClient = client as unknown as { _client?: { get: (input: { url: string }) => Promise<unknown> } };
-      if (!rawClient._client) throw new Error("OpenCode client unavailable.");
+      if (!rawClient._client) throw new Error("Sofia engine is not connected.");
       const result = await rawClient._client.get({ url: "/skill" }) as {
         data?: Array<{ name: string; description: string; location: string }>;
         error?: unknown;
@@ -1566,11 +1535,11 @@ export function createExtensionsStore(options: {
   async function refreshPlugins(scopeOverride?: PluginScope) {
     const isRemoteWorkspace = options.workspaceType() === "remote";
     const isLocalWorkspace = options.workspaceType() === "local";
-    const { openworkSnapshot, openworkClient, openworkWorkspaceId, hasOpenworkTarget } =
+    const { sofiaSnapshot, sofiaClient, sofiaWorkspaceId, hasSofiaTarget } =
       await resolveWorkspaceServerTarget();
-    const canUseOpenworkServer =
-      hasOpenworkTarget &&
-      openworkSnapshot.openworkServerCapabilities?.plugins?.read !== false;
+    const canUseSofiaServer =
+      hasSofiaTarget &&
+      sofiaSnapshot.sofiaServerCapabilities?.plugins?.read !== false;
 
     if (refreshPluginsInFlight) return;
     refreshPluginsInFlight = true;
@@ -1591,17 +1560,13 @@ export function createExtensionsStore(options: {
       return;
     }
 
-    if (scope === "project" && canUseOpenworkServer && openworkClient && openworkWorkspaceId) {
-      mutateState((current) => ({
-        ...current,
-        pluginConfig: null,
-        pluginConfigPath: `opencode.json (${isRemoteWorkspace ? "remote" : "openwork"} server)`,
-      }));
+    if (scope === "project" && canUseSofiaServer && sofiaClient && sofiaWorkspaceId) {
+
 
       try {
         mutateState((current) => ({ ...current, pluginStatus: null, sidebarPluginStatus: null }));
         if (refreshPluginsAborted) return;
-        const result = await openworkClient.listPlugins(openworkWorkspaceId, { includeGlobal: false });
+        const result = await sofiaClient.listPlugins(sofiaWorkspaceId, { includeGlobal: false });
         if (refreshPluginsAborted) return;
         const projectItems = result.items.filter((item) => item.scope === "project");
         const list = toProjectPluginListEntries(projectItems);
@@ -1628,7 +1593,7 @@ export function createExtensionsStore(options: {
       return;
     }
 
-    if (scope === "project" && hasOpenworkTarget) {
+    if (scope === "project" && hasSofiaTarget) {
       mutateState((current) => ({
         ...current,
         pluginStatus: "Sofia App server cannot read plugins for this workspace.",
@@ -1652,7 +1617,7 @@ export function createExtensionsStore(options: {
       return;
     }
 
-    if (!isLocalWorkspace && !canUseOpenworkServer) {
+    if (!isLocalWorkspace && !canUseSofiaServer) {
       mutateState((current) => ({
         ...current,
         pluginStatus: "Sofia App server unavailable. Connect to manage plugins.",
@@ -1676,67 +1641,15 @@ export function createExtensionsStore(options: {
       return;
     }
 
-    try {
-      mutateState((current) => ({ ...current, pluginStatus: null, sidebarPluginStatus: null }));
-      if (refreshPluginsAborted) return;
-      const config = (await readOpencodeConfig(scope, targetDir)) as OpencodeConfigFile;
-      if (refreshPluginsAborted) return;
-      mutateState((current) => ({ ...current, pluginConfig: (config as OpencodeConfigFile | null), pluginConfigPath: config.path ?? null }));
-
-      if (!config.exists) {
-        mutateState((current) => ({
-          ...current,
-          pluginList: [],
-          pluginStatus: t("skills.no_opencode_found"),
-          sidebarPluginList: [],
-          sidebarPluginStatus: t("skills.no_opencode_workspace"),
-        }));
-        return;
-      }
-
-      let nextSidebarPluginList: string[] = [];
-      let nextSidebarPluginStatus: string | null = null;
-      try {
-        nextSidebarPluginList = parsePluginListFromContent(config.content ?? "");
-      } catch {
-        nextSidebarPluginList = [];
-        nextSidebarPluginStatus = t("skills.failed_parse_opencode");
-      }
-
-      const nextPluginNames: string[] = [];
-      let nextPluginStatus: string | null = null;
-      loadPluginsFromConfigHelpers(
-        config as never,
-        (value) => {
-          nextPluginNames.splice(0, nextPluginNames.length, ...applyStateAction(nextPluginNames, value));
-        },
-        (message) => {
-          nextPluginStatus = message;
-        },
-      );
-
-      mutateState((current) => ({
-        ...current,
-        pluginList: toConfigPluginListEntries(nextPluginNames),
-        pluginStatus: nextPluginStatus,
-        sidebarPluginList: nextSidebarPluginList,
-        sidebarPluginStatus: nextSidebarPluginStatus,
-        pluginsContextKey: getWorkspaceContextKey(),
-      }));
-    } catch (error) {
-      if (refreshPluginsAborted) return;
-      mutateState((current) => ({
-        ...current,
-        pluginConfig: null,
-        pluginConfigPath: null,
-        pluginList: [],
-        pluginStatus: error instanceof Error ? error.message : t("skills.failed_load_opencode"),
-        sidebarPluginStatus: t("skills.failed_load_active"),
-        sidebarPluginList: [],
-      }));
-    } finally {
-      refreshPluginsInFlight = false;
-    }
+    // Sofia no longer reads a workspace engine config file: plugins come from
+    // the Sofia App server's plugin API.
+    mutateState((current) => ({
+      ...current,
+      pluginList: [],
+      pluginStatus: "Sofia App server unavailable. Connect to manage plugins.",
+      sidebarPluginList: [],
+      sidebarPluginStatus: null,
+    }));
   }
 
   async function addPlugin(pluginNameOverride?: string) {
@@ -1745,11 +1658,11 @@ export function createExtensionsStore(options: {
     const triggerName = stripPluginVersion(pluginName);
 
     const isLocalWorkspace = options.workspaceType() === "local";
-    const { openworkSnapshot, openworkClient, openworkWorkspaceId, hasOpenworkTarget } =
+    const { sofiaSnapshot, sofiaClient, sofiaWorkspaceId, hasSofiaTarget } =
       await resolveWorkspaceServerTarget();
-    const canUseOpenworkServer =
-      hasOpenworkTarget &&
-      openworkSnapshot.openworkServerCapabilities?.plugins?.write !== false;
+    const canUseSofiaServer =
+      hasSofiaTarget &&
+      sofiaSnapshot.sofiaServerCapabilities?.plugins?.write !== false;
 
     if (!pluginName) {
       if (isManualInput) setStateField("pluginStatus", t("skills.enter_plugin_name"));
@@ -1761,10 +1674,10 @@ export function createExtensionsStore(options: {
       return;
     }
 
-    if (snapshot.pluginScope === "project" && canUseOpenworkServer && openworkClient && openworkWorkspaceId) {
+    if (snapshot.pluginScope === "project" && canUseSofiaServer && sofiaClient && sofiaWorkspaceId) {
       try {
         setStateField("pluginStatus", null);
-        await openworkClient.addPlugin(openworkWorkspaceId, pluginName);
+        await sofiaClient.addPlugin(sofiaWorkspaceId, pluginName);
         options.markReloadRequired?.("plugins", { type: "plugin", name: triggerName, action: "added" });
         if (isManualInput) setStateField("pluginInput", "");
         await refreshPlugins("project");
@@ -1774,7 +1687,7 @@ export function createExtensionsStore(options: {
       return;
     }
 
-    if (snapshot.pluginScope === "project" && hasOpenworkTarget) {
+    if (snapshot.pluginScope === "project" && hasSofiaTarget) {
       setStateField("pluginStatus", "Sofia App server cannot write plugins for this workspace.");
       return;
     }
@@ -1789,46 +1702,11 @@ export function createExtensionsStore(options: {
       return;
     }
 
-    const scope = snapshot.pluginScope;
-    const targetDir = options.projectDir().trim();
-
-    if (scope === "project" && !targetDir) {
-      setStateField("pluginStatus", t("skills.pick_project_for_plugins"));
-      return;
-    }
-
-    try {
-      setStateField("pluginStatus", null);
-      const config = (await readOpencodeConfig(scope, targetDir)) as OpencodeConfigFile;
-      const raw = config.content ?? "";
-
-      if (!raw.trim()) {
-        const payload = { $schema: "https://opencode.ai/config.json", plugin: [pluginName] };
-        await writeOpencodeConfig(scope, targetDir, `${JSON.stringify(payload, null, 2)}\n`);
-        options.markReloadRequired?.("plugins", { type: "plugin", name: triggerName, action: "added" });
-        if (isManualInput) setStateField("pluginInput", "");
-        await refreshPlugins(scope);
-        return;
-      }
-
-      const plugins = parsePluginListFromContent(raw);
-      const desired = stripPluginVersion(pluginName).toLowerCase();
-      if (plugins.some((entry) => stripPluginVersion(entry).toLowerCase() === desired)) {
-        setStateField("pluginStatus", t("skills.plugin_already_listed"));
-        return;
-      }
-
-      const next = [...plugins, pluginName];
-      const edits = modify(raw, ["plugin"], next, { formattingOptions: { insertSpaces: true, tabSize: 2 } });
-      const updated = applyEdits(raw, edits);
-      await writeOpencodeConfig(scope, targetDir, updated);
-      options.markReloadRequired?.("plugins", { type: "plugin", name: triggerName, action: "added" });
-      if (isManualInput) setStateField("pluginInput", "");
-      await refreshPlugins(scope);
-    } catch (error) {
-      setStateField("pluginStatus", error instanceof Error ? error.message : t("skills.failed_update_opencode"));
-    }
+    // Sofia no longer edits a workspace engine config file: plugin changes go
+    // through the Sofia App server plugins API.
+    setStateField("pluginStatus", "Sofia App server unavailable. Connect to manage plugins.");
   }
+
 
   async function removePlugin(pluginName: string) {
     const name = pluginName.trim();
@@ -1841,21 +1719,21 @@ export function createExtensionsStore(options: {
     }
 
     const isLocalWorkspace = options.workspaceType() === "local";
-    const { openworkSnapshot, openworkClient, openworkWorkspaceId, hasOpenworkTarget } =
+    const { sofiaSnapshot, sofiaClient, sofiaWorkspaceId, hasSofiaTarget } =
       await resolveWorkspaceServerTarget();
-    const canUseOpenworkServer =
-      hasOpenworkTarget &&
-      openworkSnapshot.openworkServerCapabilities?.plugins?.write !== false;
+    const canUseSofiaServer =
+      hasSofiaTarget &&
+      sofiaSnapshot.sofiaServerCapabilities?.plugins?.write !== false;
 
     if (snapshot.pluginScope !== "project" && !isLocalWorkspace) {
       setStateField("pluginStatus", "Global plugins are only available for local workers.");
       return;
     }
 
-    if (snapshot.pluginScope === "project" && canUseOpenworkServer && openworkClient && openworkWorkspaceId) {
+    if (snapshot.pluginScope === "project" && canUseSofiaServer && sofiaClient && sofiaWorkspaceId) {
       try {
         setStateField("pluginStatus", null);
-        await openworkClient.removePlugin(openworkWorkspaceId, name);
+        await sofiaClient.removePlugin(sofiaWorkspaceId, name);
         options.markReloadRequired?.("plugins", { type: "plugin", name: triggerName, action: "removed" });
         await refreshPlugins("project");
       } catch (error) {
@@ -1864,7 +1742,7 @@ export function createExtensionsStore(options: {
       return;
     }
 
-    if (snapshot.pluginScope === "project" && hasOpenworkTarget) {
+    if (snapshot.pluginScope === "project" && hasSofiaTarget) {
       setStateField("pluginStatus", "Sofia App server cannot write plugins for this workspace.");
       return;
     }
@@ -1879,38 +1757,9 @@ export function createExtensionsStore(options: {
       return;
     }
 
-    const scope = snapshot.pluginScope;
-    const targetDir = options.projectDir().trim();
-    if (scope === "project" && !targetDir) {
-      setStateField("pluginStatus", t("skills.pick_project_for_plugins"));
-      return;
-    }
-
-    try {
-      setStateField("pluginStatus", null);
-      const config = (await readOpencodeConfig(scope, targetDir)) as OpencodeConfigFile;
-      const raw = config.content ?? "";
-      if (!raw.trim()) {
-        setStateField("pluginStatus", "No plugins configured yet.");
-        return;
-      }
-
-      const plugins = parsePluginListFromContent(raw);
-      const desired = stripPluginVersion(name).toLowerCase();
-      const next = plugins.filter((entry) => stripPluginVersion(entry).toLowerCase() !== desired);
-      if (next.length === plugins.length) {
-        setStateField("pluginStatus", "Plugin not found.");
-        return;
-      }
-
-      const edits = modify(raw, ["plugin"], next, { formattingOptions: { insertSpaces: true, tabSize: 2 } });
-      const updated = applyEdits(raw, edits);
-      await writeOpencodeConfig(scope, targetDir, updated);
-      options.markReloadRequired?.("plugins", { type: "plugin", name: triggerName, action: "removed" });
-      await refreshPlugins(scope);
-    } catch (error) {
-      setStateField("pluginStatus", error instanceof Error ? error.message : t("skills.failed_update_opencode"));
-    }
+    // Sofia no longer edits a workspace engine config file: plugin changes go
+    // through the Sofia App server's plugin API.
+    setStateField("pluginStatus", "Sofia App server unavailable. Connect to manage plugins.");
   }
 
   async function importLocalSkill() {
@@ -1956,18 +1805,18 @@ export function createExtensionsStore(options: {
   async function installSkillCreator(): Promise<{ ok: boolean; message: string }> {
     const isRemoteWorkspace = options.workspaceType() === "remote";
     const isLocalWorkspace = options.workspaceType() === "local";
-    const { openworkSnapshot, openworkClient, openworkWorkspaceId, hasOpenworkTarget } =
+    const { sofiaSnapshot, sofiaClient, sofiaWorkspaceId, hasSofiaTarget } =
       await resolveWorkspaceServerTarget();
-    const canUseOpenworkServer =
-      hasOpenworkTarget &&
-      openworkSnapshot.openworkServerCapabilities?.skills?.write !== false;
+    const canUseSofiaServer =
+      hasSofiaTarget &&
+      sofiaSnapshot.sofiaServerCapabilities?.skills?.write !== false;
 
-    if (canUseOpenworkServer && openworkClient && openworkWorkspaceId) {
+    if (canUseSofiaServer && sofiaClient && sofiaWorkspaceId) {
       options.setBusy(true);
       options.setError(null);
       setStateField("skillsStatus", t("skills.installing_skill_creator"));
       try {
-        await openworkClient.upsertSkill(openworkWorkspaceId, { name: "skill-creator", content: skillCreatorTemplate });
+        await sofiaClient.upsertSkill(sofiaWorkspaceId, { name: "skill-creator", content: skillCreatorTemplate });
         const message = t("skills.skill_creator_installed");
         setStateField("skillsStatus", message);
         options.markReloadRequired?.("skills", { type: "skill", name: "skill-creator", action: "added" });
@@ -1984,7 +1833,7 @@ export function createExtensionsStore(options: {
       }
     }
 
-    if (hasOpenworkTarget) {
+    if (hasSofiaTarget) {
       const message = "Sofia App server cannot write skills for this workspace.";
       setStateField("skillsStatus", message);
       return { ok: false, message };
@@ -2108,16 +1957,16 @@ export function createExtensionsStore(options: {
     const root = options.selectedWorkspaceRoot().trim();
     const isRemoteWorkspace = options.workspaceType() === "remote";
     const isLocalWorkspace = options.workspaceType() === "local";
-    const { openworkSnapshot, openworkClient, openworkWorkspaceId, hasOpenworkTarget } =
+    const { sofiaSnapshot, sofiaClient, sofiaWorkspaceId, hasSofiaTarget } =
       await resolveWorkspaceServerTarget();
-    const canUseOpenworkServer =
-      hasOpenworkTarget &&
-      openworkSnapshot.openworkServerCapabilities?.skills?.read !== false;
+    const canUseSofiaServer =
+      hasSofiaTarget &&
+      sofiaSnapshot.sofiaServerCapabilities?.skills?.read !== false;
 
-    if (canUseOpenworkServer && openworkClient && openworkWorkspaceId) {
+    if (canUseSofiaServer && sofiaClient && sofiaWorkspaceId) {
       try {
         setStateField("skillsStatus", null);
-        const result = await openworkClient.getSkill(openworkWorkspaceId, trimmed, { includeGlobal: isLocalWorkspace });
+        const result = await sofiaClient.getSkill(sofiaWorkspaceId, trimmed, { includeGlobal: isLocalWorkspace });
         return { name: result.item.name, path: result.item.path, content: result.content };
       } catch (error) {
         setStateField("skillsStatus", error instanceof Error ? error.message : t("skills.failed_to_load"));
@@ -2125,7 +1974,7 @@ export function createExtensionsStore(options: {
       }
     }
 
-    if (hasOpenworkTarget) {
+    if (hasSofiaTarget) {
       setStateField("skillsStatus", "Sofia App server cannot read skills for this workspace.");
       return null;
     }
@@ -2164,18 +2013,18 @@ export function createExtensionsStore(options: {
     const root = options.selectedWorkspaceRoot().trim();
     const isRemoteWorkspace = options.workspaceType() === "remote";
     const isLocalWorkspace = options.workspaceType() === "local";
-    const { openworkSnapshot, openworkClient, openworkWorkspaceId, hasOpenworkTarget } =
+    const { sofiaSnapshot, sofiaClient, sofiaWorkspaceId, hasSofiaTarget } =
       await resolveWorkspaceServerTarget();
-    const canUseOpenworkServer =
-      hasOpenworkTarget &&
-      openworkSnapshot.openworkServerCapabilities?.skills?.write !== false;
+    const canUseSofiaServer =
+      hasSofiaTarget &&
+      sofiaSnapshot.sofiaServerCapabilities?.skills?.write !== false;
 
-    if (canUseOpenworkServer && openworkClient && openworkWorkspaceId) {
+    if (canUseSofiaServer && sofiaClient && sofiaWorkspaceId) {
       options.setBusy(true);
       options.setError(null);
       setStateField("skillsStatus", null);
       try {
-        await openworkClient.upsertSkill(openworkWorkspaceId, {
+        await sofiaClient.upsertSkill(sofiaWorkspaceId, {
           name: trimmed,
           content: input.content,
           description: input.description,
@@ -2192,7 +2041,7 @@ export function createExtensionsStore(options: {
       return;
     }
 
-    if (hasOpenworkTarget) {
+    if (hasSofiaTarget) {
       setStateField("skillsStatus", "Sofia App server cannot write skills for this workspace.");
       return;
     }
@@ -2320,11 +2169,11 @@ export function createExtensionsStore(options: {
         cloudOrgMarketplacesLoaded = false;
         touch();
       };
-      window.addEventListener("openwork-den-session-updated", onDenSessionUpdated);
-      stopDenSessionListener = () => window.removeEventListener("openwork-den-session-updated", onDenSessionUpdated);
+      window.addEventListener("sofia-den-session-updated", onDenSessionUpdated);
+      stopDenSessionListener = () => window.removeEventListener("sofia-den-session-updated", onDenSessionUpdated);
     }
 
-    stopOpenworkSubscription = options.openworkServer.subscribe(() => {
+    stopSofiaSubscription = options.sofiaServer.subscribe(() => {
       syncFromOptions();
     });
 
@@ -2336,8 +2185,8 @@ export function createExtensionsStore(options: {
     disposed = true;
     started = false;
     abortRefreshes();
-    stopOpenworkSubscription?.();
-    stopOpenworkSubscription = null;
+    stopSofiaSubscription?.();
+    stopSofiaSubscription = null;
     stopDenSessionListener?.();
     stopDenSessionListener = null;
     listeners.clear();
@@ -2387,8 +2236,6 @@ export function createExtensionsStore(options: {
       const resolved = applyStateAction(state.pluginScope, value);
       setStateField("pluginScope", resolved);
     },
-    pluginConfig: () => snapshot.pluginConfig,
-    pluginConfigPath: () => snapshot.pluginConfigPath,
     pluginList: () => snapshot.pluginList,
     pluginInput: () => snapshot.pluginInput,
     setPluginInput(value: SetStateAction<string>) {

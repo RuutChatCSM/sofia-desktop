@@ -3,17 +3,17 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { expect } from "vitest";
-import { test } from "@openwork/testkit";
+import { test } from "@sofia/testkit";
 
 const repoRoot = resolve(import.meta.dirname, "../..");
 
 test("MCP OAuth grants outlive login sessions and revoke with consent", ({ evidence }) => {
-  const reportDir = mkdtempSync(join(tmpdir(), "openwork-mcp-grant-liveness-"));
+  const reportDir = mkdtempSync(join(tmpdir(), "sofia-mcp-grant-liveness-"));
   try {
     // The witnesses exercise real den-api modules whose import chains reach
-    // @openwork-ee/utils and @openwork-ee/den-db. Bun resolves those package
+    // @sofia-ee/utils and @sofia-ee/den-db. Bun resolves those package
     // exports through dist, which the eval lane does not prebuild.
-    for (const workspacePackage of ["@openwork-ee/utils", "@openwork-ee/den-db"]) {
+    for (const workspacePackage of ["@sofia-ee/utils", "@sofia-ee/den-db"]) {
       const build = spawnSync("pnpm", ["--filter", workspacePackage, "build"], {
         cwd: repoRoot,
         encoding: "utf8",
@@ -35,7 +35,7 @@ test("MCP OAuth grants outlive login sessions and revoke with consent", ({ evide
       const reportPath = join(reportDir, `bun-junit-${index}.xml`);
       const result = spawnSync("pnpm", [
         "--filter",
-        "@openwork-ee/den-api",
+        "@sofia-ee/den-api",
         "exec",
         "bun",
         "test",

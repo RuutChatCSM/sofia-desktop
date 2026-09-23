@@ -7,7 +7,7 @@
 // `unwrap`/`assertNoClientError` call sites stay unchanged.
 import { desktopFetch } from "./desktop";
 import { isDesktopRuntime } from "./runtime-env";
-import { parseOpenworkWorkspaceIdFromUrl } from "./openwork-server";
+import { parseSofiaWorkspaceIdFromUrl } from "./sofia-server";
 import type {
   Agent,
   Config,
@@ -32,7 +32,7 @@ export type OpencodeAuth = {
   username?: string;
   password?: string;
   token?: string;
-  mode?: "basic" | "openwork";
+  mode?: "basic" | "sofia";
 };
 
 export type EngineResult<T> =
@@ -75,7 +75,7 @@ type EngineMount = {
 
 function resolveEngineMount(baseUrl: string, directory?: string): EngineMount {
   const raw = baseUrl.replace(/\/+$/, "");
-  const workspaceId = parseOpenworkWorkspaceIdFromUrl(raw) ?? directory?.trim() ?? null;
+  const workspaceId = parseSofiaWorkspaceIdFromUrl(raw) ?? directory?.trim() ?? null;
   let host = raw;
   try {
     const url = new URL(raw);
@@ -92,7 +92,7 @@ function resolveEngineMount(baseUrl: string, directory?: string): EngineMount {
 }
 
 function buildAuthHeader(auth?: OpencodeAuth): string | undefined {
-  if (auth?.mode === "openwork" && auth.token) return `Bearer ${auth.token}`;
+  if (auth?.mode === "sofia" && auth.token) return `Bearer ${auth.token}`;
   if (auth?.token) return `Bearer ${auth.token}`;
   if (auth?.username && auth.password) {
     const token = `${auth.username}:${auth.password}`;
@@ -906,6 +906,14 @@ export function createEngineClient(options: EngineClientOptions) {
         return await request<Record<string, never>>(
           `${workspacePath(id)}/codex/auth/${encodeURIComponent(params.providerID)}`,
           { method: "PUT", body: { key: params.auth.key ?? "" }, timeoutMs: 30_000 },
+        );
+      },
+      async remove(params: { providerID: string }): Promise<EngineResult<Record<string, never>>> {
+        const id = workspaceId();
+        if (!id) return failResult("Workspace is not mounted on this server.", "/codex/auth");
+        return await request<Record<string, never>>(
+          `${workspacePath(id)}/codex/auth/${encodeURIComponent(params.providerID)}`,
+          { method: "DELETE", timeoutMs: 30_000 },
         );
       },
     },

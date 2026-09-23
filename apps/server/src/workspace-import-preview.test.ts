@@ -27,9 +27,9 @@ afterEach(async () => {
 });
 
 async function makeWorkspace(): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), "openwork-import-preview-"));
+  const dir = await mkdtemp(join(tmpdir(), "sofia-import-preview-"));
   tempDirs.push(dir);
-  await mkdir(join(dir, ".opencode"), { recursive: true });
+  await mkdir(join(dir, ".sofia"), { recursive: true });
   return dir;
 }
 
@@ -108,7 +108,7 @@ async function requestWorkspaceImportWithPreview(
 async function silenceExpectedServerError<T>(run: () => Promise<T>): Promise<T> {
   const originalError = console.error;
   console.error = (...args: unknown[]) => {
-    if (args[0] === "[openwork-server] Unhandled error:") return;
+    if (args[0] === "[sofia-server] Unhandled error:") return;
     originalError(...args);
   };
   try {
@@ -136,21 +136,18 @@ describe("workspace import preview", () => {
   test("summarizes workspace import changes without writing files", async () => {
     const workspace = await makeWorkspace();
     await writeFile(join(workspace, "opencode.jsonc"), '{ "plugin": ["old-plugin"] }\n', "utf8");
-    await mkdir(join(workspace, ".opencode", "skills", "demo"), { recursive: true });
-    await writeFile(join(workspace, ".opencode", "skills", "demo", "SKILL.md"), "old skill\n", "utf8");
-    await mkdir(join(workspace, ".opencode", "commands"), { recursive: true });
-    await writeFile(join(workspace, ".opencode", "commands", "old.md"), "old command\n", "utf8");
-    await mkdir(join(workspace, ".opencode", "tools"), { recursive: true });
-    await mkdir(join(workspace, ".opencode", "plugins"), { recursive: true });
-    await writeFile(join(workspace, ".opencode", "tools", "existing.ts"), "old tool\n", "utf8");
-    await writeFile(join(workspace, ".opencode", "plugins", "removed.ts"), "removed plugin\n", "utf8");
+    await mkdir(join(workspace, ".sofia", "skills", "demo"), { recursive: true });
+    await writeFile(join(workspace, ".sofia", "skills", "demo", "SKILL.md"), "old skill\n", "utf8");
+    await mkdir(join(workspace, ".sofia", "commands"), { recursive: true });
+    await writeFile(join(workspace, ".sofia", "commands", "old.md"), "old command\n", "utf8");
+    await mkdir(join(workspace, ".sofia", "tools"), { recursive: true });
+    await mkdir(join(workspace, ".sofia", "plugins"), { recursive: true });
+    await writeFile(join(workspace, ".sofia", "tools", "existing.ts"), "old tool\n", "utf8");
+    await writeFile(join(workspace, ".sofia", "plugins", "removed.ts"), "removed plugin\n", "utf8");
 
     const preview = await buildWorkspaceImportPreview(workspace, {
       mode: { skills: "replace", commands: "replace", files: "replace" },
-      opencode: {
-        plugin: ["old-plugin", "new-plugin"],
-      },
-      openwork: {
+      sofia: {
         blueprint: {
           materialized: {
             sessions: { items: [{ templateId: "old", sessionId: "ses_123" }] },
@@ -166,53 +163,31 @@ describe("workspace import preview", () => {
         { name: "new-command", template: "run new command" },
       ],
       files: [
-        { path: ".opencode/tools/existing.ts", content: "new tool\n" },
-        { path: ".opencode/agents/new.md", content: "new agent\n" },
+        { path: ".sofia/tools/existing.ts", content: "new tool\n" },
+        { path: ".sofia/agents/new.md", content: "new agent\n" },
       ],
     });
 
     expect(preview.summary).toEqual({
-      total: 9,
-      create: 4,
+      total: 8,
+      create: 3,
       update: 4,
       replace: 0,
       delete: 1,
       unchanged: 0,
     });
     expect(preview.changes.map((change) => [change.kind, change.action, change.path])).toEqual([
-      ["opencode", "update", "opencode.jsonc"],
-      ["openwork", "create", ".opencode/openwork.json"],
-      ["skill", "update", ".opencode/skills/demo/SKILL.md"],
-      ["skill", "create", ".opencode/skills/new-skill/SKILL.md"],
-      ["command", "update", ".opencode/commands/old.md"],
-      ["command", "create", ".opencode/commands/new-command.md"],
-      ["file", "update", ".opencode/tools/existing.ts"],
-      ["file", "create", ".opencode/agents/new.md"],
-      ["file", "delete", ".opencode/plugins/removed.ts"],
+      ["sofia", "update", "sofia-workspace-config"],
+      ["skill", "update", ".sofia/skills/demo/SKILL.md"],
+      ["skill", "create", ".sofia/skills/new-skill/SKILL.md"],
+      ["command", "update", ".sofia/commands/old.md"],
+      ["command", "create", ".sofia/commands/new-command.md"],
+      ["file", "update", ".sofia/tools/existing.ts"],
+      ["file", "create", ".sofia/agents/new.md"],
+      ["file", "delete", ".sofia/plugins/removed.ts"],
     ]);
 
-    expect(await readFile(join(workspace, ".opencode", "tools", "existing.ts"), "utf8")).toBe("old tool\n");
-  });
-
-  test("marks identical config as unchanged and excludes it from approval paths", async () => {
-    const workspace = await makeWorkspace();
-    await writeFile(join(workspace, "opencode.jsonc"), '{ "plugin": ["demo"] }\n', "utf8");
-
-    const preview = await buildWorkspaceImportPreview(workspace, {
-      opencode: { plugin: ["demo"] },
-    });
-
-    expect(preview.summary).toEqual({
-      total: 1,
-      create: 0,
-      update: 0,
-      replace: 0,
-      delete: 0,
-      unchanged: 1,
-    });
-    expect(preview.changes[0]?.action).toBe("unchanged");
-    expect(workspaceImportPreviewApprovalPaths(preview)).toEqual([]);
-    expect(summarizeWorkspaceImportPreview(preview)).toBe("Import workspace config (no changes)");
+    expect(await readFile(join(workspace, ".sofia", "tools", "existing.ts"), "utf8")).toBe("old tool\n");
   });
 
   test("marks identical skills and commands unchanged", async () => {
@@ -229,10 +204,10 @@ describe("workspace import preview", () => {
     };
     const skillContent = buildSkillContent(skill);
     const commandContent = buildCommandContent(command);
-    await mkdir(join(workspace, ".opencode", "skills", "demo"), { recursive: true });
-    await mkdir(join(workspace, ".opencode", "commands"), { recursive: true });
-    await writeFile(join(workspace, ".opencode", "skills", "demo", "SKILL.md"), skillContent.content, "utf8");
-    await writeFile(join(workspace, ".opencode", "commands", "demo-command.md"), commandContent.content, "utf8");
+    await mkdir(join(workspace, ".sofia", "skills", "demo"), { recursive: true });
+    await mkdir(join(workspace, ".sofia", "commands"), { recursive: true });
+    await writeFile(join(workspace, ".sofia", "skills", "demo", "SKILL.md"), skillContent.content, "utf8");
+    await writeFile(join(workspace, ".sofia", "commands", "demo-command.md"), commandContent.content, "utf8");
 
     const preview = await buildWorkspaceImportPreview(workspace, {
       skills: [skill],
@@ -240,8 +215,8 @@ describe("workspace import preview", () => {
     });
 
     expect(preview.changes.map((change) => [change.kind, change.action, change.path])).toEqual([
-      ["skill", "unchanged", ".opencode/skills/demo/SKILL.md"],
-      ["command", "unchanged", ".opencode/commands/demo-command.md"],
+      ["skill", "unchanged", ".sofia/skills/demo/SKILL.md"],
+      ["command", "unchanged", ".sofia/commands/demo-command.md"],
     ]);
     expect(workspaceImportPreviewApprovalPaths(preview)).toEqual([]);
     expect(publicWorkspaceImportPreview(preview).changes[0]).not.toHaveProperty("absolutePath");
@@ -253,14 +228,14 @@ describe("workspace import preview", () => {
     await writeFile(join(workspace, "opencode.jsonc"), '{ "plugin": ["old"] }\n', "utf8");
 
     const preview = await buildWorkspaceImportPreview(workspace, {
-      mode: { opencode: "replace" },
-      opencode: { plugin: ["new"] },
+      mode: { sofia: "replace" },
+      sofia: { version: 2 },
     });
 
     expect(preview.changes[0]).toMatchObject({
-      kind: "opencode",
+      kind: "sofia",
       action: "replace",
-      path: "opencode.jsonc",
+      path: "sofia-workspace-config",
     });
     expect(summarizeWorkspaceImportPreview(preview)).toBe("Import workspace config (update 1)");
     expect(summarizeWorkspaceImportApplied(preview)).toBe("Imported workspace config (update 1)");
@@ -271,19 +246,19 @@ describe("workspace import preview", () => {
 
     await expect(
       buildWorkspaceImportPreview(workspace, {
-        files: [{ path: ".opencode/.env", content: "SECRET=value\n" }],
+        files: [{ path: ".sofia/.env", content: "SECRET=value\n" }],
       }),
     ).rejects.toThrow(/Portable file path is not allowed/i);
   });
 
   test("replace preview treats empty sections as delete all", async () => {
     const workspace = await makeWorkspace();
-    await mkdir(join(workspace, ".opencode", "skills", "old-skill"), { recursive: true });
-    await mkdir(join(workspace, ".opencode", "commands"), { recursive: true });
-    await mkdir(join(workspace, ".opencode", "agents"), { recursive: true });
-    await writeFile(join(workspace, ".opencode", "skills", "old-skill", "SKILL.md"), "old skill\n", "utf8");
-    await writeFile(join(workspace, ".opencode", "commands", "old-command.md"), "old command\n", "utf8");
-    await writeFile(join(workspace, ".opencode", "agents", "old.md"), "old agent\n", "utf8");
+    await mkdir(join(workspace, ".sofia", "skills", "old-skill"), { recursive: true });
+    await mkdir(join(workspace, ".sofia", "commands"), { recursive: true });
+    await mkdir(join(workspace, ".sofia", "agents"), { recursive: true });
+    await writeFile(join(workspace, ".sofia", "skills", "old-skill", "SKILL.md"), "old skill\n", "utf8");
+    await writeFile(join(workspace, ".sofia", "commands", "old-command.md"), "old command\n", "utf8");
+    await writeFile(join(workspace, ".sofia", "agents", "old.md"), "old agent\n", "utf8");
 
     const preview = await buildWorkspaceImportPreview(workspace, {
       mode: { skills: "replace", commands: "replace", files: "replace" },
@@ -297,20 +272,20 @@ describe("workspace import preview", () => {
       delete: 3,
     });
     expect(preview.changes.map((change) => [change.kind, change.action, change.path])).toEqual([
-      ["skill", "delete", ".opencode/skills/old-skill"],
-      ["command", "delete", ".opencode/commands/old-command.md"],
-      ["file", "delete", ".opencode/agents/old.md"],
+      ["skill", "delete", ".sofia/skills/old-skill"],
+      ["command", "delete", ".sofia/commands/old-command.md"],
+      ["file", "delete", ".sofia/agents/old.md"],
     ]);
   });
 
   test("preview route returns public changes and no-op import does not audit", async () => {
     const workspace = await makeWorkspace();
-    const dataDir = await mkdtemp(join(tmpdir(), "openwork-import-preview-data-"));
+    const dataDir = await mkdtemp(join(tmpdir(), "sofia-import-preview-data-"));
     tempDirs.push(dataDir);
     await writeFile(join(workspace, "opencode.jsonc"), '{ "plugin": ["demo"] }\n', "utf8");
 
-    const originalDataDir = process.env.OPENWORK_DATA_DIR;
-    process.env.OPENWORK_DATA_DIR = dataDir;
+    const originalDataDir = process.env.SOFIA_DATA_DIR;
+    process.env.SOFIA_DATA_DIR = dataDir;
     const server = await startServer(makeServerConfig(workspace, dataDir)) as {
       port: number;
       stop: (force?: boolean) => void;
@@ -321,7 +296,7 @@ describe("workspace import preview", () => {
         Authorization: "Bearer test-token",
         "Content-Type": "application/json",
       };
-      const body = JSON.stringify({ opencode: { plugin: ["demo"] } });
+      const body = JSON.stringify({ sofia: { version: 2 } });
 
       const previewResponse = await fetch(`${baseUrl}/workspace/workspace/import/preview`, {
         method: "POST",
@@ -334,33 +309,31 @@ describe("workspace import preview", () => {
       expect((preview.changes as Array<Record<string, unknown>>)[0]).not.toHaveProperty("absolutePath");
       expect((preview.changes as Array<Record<string, unknown>>)[0]).not.toHaveProperty("beforeDigest");
 
-      const importResponse = await fetch(`${baseUrl}/workspace/workspace/import`, {
+      const unreviewedImport = await fetch(`${baseUrl}/workspace/workspace/import`, {
         method: "POST",
         headers,
         body,
       });
-      expect(importResponse.status).toBe(200);
-      const imported = await importResponse.json() as Record<string, unknown>;
-      expect(imported.preview).toEqual(preview);
+      expect(unreviewedImport.status).toBe(409);
       expect(await pathExists(auditLogPath("workspace"))).toBe(false);
     } finally {
       server.stop(true);
       if (originalDataDir === undefined) {
-        delete process.env.OPENWORK_DATA_DIR;
+        delete process.env.SOFIA_DATA_DIR;
       } else {
-        process.env.OPENWORK_DATA_DIR = originalDataDir;
+        process.env.SOFIA_DATA_DIR = originalDataDir;
       }
     }
   });
 
   test("no-op import validates preview fingerprint shape", async () => {
     const workspace = await makeWorkspace();
-    const dataDir = await mkdtemp(join(tmpdir(), "openwork-import-preview-data-"));
+    const dataDir = await mkdtemp(join(tmpdir(), "sofia-import-preview-data-"));
     tempDirs.push(dataDir);
     await writeFile(join(workspace, "opencode.jsonc"), '{ "plugin": ["demo"] }\n', "utf8");
 
-    const originalDataDir = process.env.OPENWORK_DATA_DIR;
-    process.env.OPENWORK_DATA_DIR = dataDir;
+    const originalDataDir = process.env.SOFIA_DATA_DIR;
+    process.env.SOFIA_DATA_DIR = dataDir;
     const server = await startServer(makeServerConfig(workspace, dataDir)) as {
       port: number;
       stop: (force?: boolean) => void;
@@ -373,7 +346,7 @@ describe("workspace import preview", () => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          opencode: { plugin: ["demo"] },
+          sofia: { version: 2 },
           previewFingerprint: 123,
         }),
       });
@@ -385,20 +358,20 @@ describe("workspace import preview", () => {
     } finally {
       server.stop(true);
       if (originalDataDir === undefined) {
-        delete process.env.OPENWORK_DATA_DIR;
+        delete process.env.SOFIA_DATA_DIR;
       } else {
-        process.env.OPENWORK_DATA_DIR = originalDataDir;
+        process.env.SOFIA_DATA_DIR = originalDataDir;
       }
     }
   });
 
   test("changed import requires a reviewed preview fingerprint", async () => {
     const workspace = await makeWorkspace();
-    const dataDir = await mkdtemp(join(tmpdir(), "openwork-import-preview-data-"));
+    const dataDir = await mkdtemp(join(tmpdir(), "sofia-import-preview-data-"));
     tempDirs.push(dataDir);
 
-    const originalDataDir = process.env.OPENWORK_DATA_DIR;
-    process.env.OPENWORK_DATA_DIR = dataDir;
+    const originalDataDir = process.env.SOFIA_DATA_DIR;
+    process.env.SOFIA_DATA_DIR = dataDir;
     const server = await startServer(makeServerConfig(workspace, dataDir)) as {
       port: number;
       stop: (force?: boolean) => void;
@@ -411,37 +384,37 @@ describe("workspace import preview", () => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          opencode: { plugin: ["demo"] },
+          sofia: { version: 2 },
         }),
       });
 
       expect(response.status).toBe(409);
       const body = await response.json() as {
         code: string;
-        preview: { fingerprint: string; summary: { create: number } };
+        preview: { fingerprint: string; summary: { create: number; update: number } };
       };
       expect(body.code).toBe("workspace_import_preview_required");
       expect(typeof body.preview.fingerprint).toBe("string");
-      expect(body.preview.summary.create).toBe(1);
+      expect(body.preview.summary.update).toBe(1);
       expect(await pathExists(join(workspace, "opencode.jsonc"))).toBe(false);
       expect(await pathExists(auditLogPath("workspace"))).toBe(false);
     } finally {
       server.stop(true);
       if (originalDataDir === undefined) {
-        delete process.env.OPENWORK_DATA_DIR;
+        delete process.env.SOFIA_DATA_DIR;
       } else {
-        process.env.OPENWORK_DATA_DIR = originalDataDir;
+        process.env.SOFIA_DATA_DIR = originalDataDir;
       }
     }
   });
 
   test("import route writes changed items and records audit", async () => {
     const workspace = await makeWorkspace();
-    const dataDir = await mkdtemp(join(tmpdir(), "openwork-import-preview-data-"));
+    const dataDir = await mkdtemp(join(tmpdir(), "sofia-import-preview-data-"));
     tempDirs.push(dataDir);
 
-    const originalDataDir = process.env.OPENWORK_DATA_DIR;
-    process.env.OPENWORK_DATA_DIR = dataDir;
+    const originalDataDir = process.env.SOFIA_DATA_DIR;
+    process.env.SOFIA_DATA_DIR = dataDir;
     const server = await startServer(makeServerConfig(workspace, dataDir)) as {
       port: number;
       stop: (force?: boolean) => void;
@@ -453,7 +426,7 @@ describe("workspace import preview", () => {
         "Content-Type": "application/json",
       };
       const response = await requestWorkspaceImportWithPreview(baseUrl, headers, {
-        opencode: { plugin: ["demo"] },
+        sofia: { version: 2 },
         skills: [
           {
             name: "demo",
@@ -461,29 +434,28 @@ describe("workspace import preview", () => {
             content: "Use this skill for demo work.",
           },
         ],
-        files: [{ path: ".opencode/agents/demo.md", content: "Demo agent\n" }],
+        files: [{ path: ".sofia/agents/demo.md", content: "Demo agent\n" }],
       });
 
       expect(response.status).toBe(200);
       const body = await response.json() as { preview: { summary: { create: number } } };
-      expect(body.preview.summary.create).toBe(3);
-      expect(await readFile(join(workspace, "opencode.jsonc"), "utf8")).toContain('"plugin"');
-      expect(await readFile(join(workspace, ".opencode", "skills", "demo", "SKILL.md"), "utf8")).toContain("Demo skill");
-      expect(await readFile(join(workspace, ".opencode", "agents", "demo.md"), "utf8")).toBe("Demo agent\n");
+      expect(body.preview.summary.create).toBe(2);
+      expect(await readFile(join(workspace, ".sofia", "skills", "demo", "SKILL.md"), "utf8")).toContain("Demo skill");
+      expect(await readFile(join(workspace, ".sofia", "agents", "demo.md"), "utf8")).toBe("Demo agent\n");
       expect(await readFile(auditLogPath("workspace"), "utf8")).toContain("Imported workspace config");
     } finally {
       server.stop(true);
       if (originalDataDir === undefined) {
-        delete process.env.OPENWORK_DATA_DIR;
+        delete process.env.SOFIA_DATA_DIR;
       } else {
-        process.env.OPENWORK_DATA_DIR = originalDataDir;
+        process.env.SOFIA_DATA_DIR = originalDataDir;
       }
     }
   });
 
   test("replace import route removes extra skills, commands, and portable files", async () => {
     const workspace = await makeWorkspace();
-    const dataDir = await mkdtemp(join(tmpdir(), "openwork-import-preview-data-"));
+    const dataDir = await mkdtemp(join(tmpdir(), "sofia-import-preview-data-"));
     tempDirs.push(dataDir);
 
     const keepSkill = {
@@ -499,19 +471,19 @@ describe("workspace import preview", () => {
     const keepSkillContent = buildSkillContent(keepSkill).content;
     const keepCommandContent = buildCommandContent(keepCommand).content;
 
-    await mkdir(join(workspace, ".opencode", "skills", "keep"), { recursive: true });
-    await mkdir(join(workspace, ".opencode", "skills", "remove-me"), { recursive: true });
-    await mkdir(join(workspace, ".opencode", "commands"), { recursive: true });
-    await mkdir(join(workspace, ".opencode", "tools"), { recursive: true });
-    await writeFile(join(workspace, ".opencode", "skills", "keep", "SKILL.md"), keepSkillContent, "utf8");
-    await writeFile(join(workspace, ".opencode", "skills", "remove-me", "SKILL.md"), "legacy skill\n", "utf8");
-    await writeFile(join(workspace, ".opencode", "commands", "keep-command.md"), keepCommandContent, "utf8");
-    await writeFile(join(workspace, ".opencode", "commands", "remove-me.md"), "legacy command\n", "utf8");
-    await writeFile(join(workspace, ".opencode", "tools", "shared.ts"), "shared tool\n", "utf8");
-    await writeFile(join(workspace, ".opencode", "tools", "remove-me.ts"), "legacy tool\n", "utf8");
+    await mkdir(join(workspace, ".sofia", "skills", "keep"), { recursive: true });
+    await mkdir(join(workspace, ".sofia", "skills", "remove-me"), { recursive: true });
+    await mkdir(join(workspace, ".sofia", "commands"), { recursive: true });
+    await mkdir(join(workspace, ".sofia", "tools"), { recursive: true });
+    await writeFile(join(workspace, ".sofia", "skills", "keep", "SKILL.md"), keepSkillContent, "utf8");
+    await writeFile(join(workspace, ".sofia", "skills", "remove-me", "SKILL.md"), "legacy skill\n", "utf8");
+    await writeFile(join(workspace, ".sofia", "commands", "keep-command.md"), keepCommandContent, "utf8");
+    await writeFile(join(workspace, ".sofia", "commands", "remove-me.md"), "legacy command\n", "utf8");
+    await writeFile(join(workspace, ".sofia", "tools", "shared.ts"), "shared tool\n", "utf8");
+    await writeFile(join(workspace, ".sofia", "tools", "remove-me.ts"), "legacy tool\n", "utf8");
 
-    const originalDataDir = process.env.OPENWORK_DATA_DIR;
-    process.env.OPENWORK_DATA_DIR = dataDir;
+    const originalDataDir = process.env.SOFIA_DATA_DIR;
+    process.env.SOFIA_DATA_DIR = dataDir;
     const server = await startServer(makeServerConfig(workspace, dataDir)) as {
       port: number;
       stop: (force?: boolean) => void;
@@ -526,7 +498,7 @@ describe("workspace import preview", () => {
         mode: { skills: "replace", commands: "replace", files: "replace" },
         skills: [keepSkill],
         commands: [keepCommand],
-        files: [{ path: ".opencode/tools/shared.ts", content: "shared tool\n" }],
+        files: [{ path: ".sofia/tools/shared.ts", content: "shared tool\n" }],
       });
 
       expect(response.status).toBe(200);
@@ -535,37 +507,37 @@ describe("workspace import preview", () => {
       };
       expect(body.preview.summary.delete).toBe(3);
       expect(body.preview.summary.unchanged).toBe(3);
-      expect(await pathExists(join(workspace, ".opencode", "skills", "remove-me"))).toBe(false);
-      expect(await pathExists(join(workspace, ".opencode", "commands", "remove-me.md"))).toBe(false);
-      expect(await pathExists(join(workspace, ".opencode", "tools", "remove-me.ts"))).toBe(false);
-      expect(await readFile(join(workspace, ".opencode", "skills", "keep", "SKILL.md"), "utf8")).toBe(keepSkillContent);
-      expect(await readFile(join(workspace, ".opencode", "commands", "keep-command.md"), "utf8")).toBe(keepCommandContent);
-      expect(await readFile(join(workspace, ".opencode", "tools", "shared.ts"), "utf8")).toBe("shared tool\n");
+      expect(await pathExists(join(workspace, ".sofia", "skills", "remove-me"))).toBe(false);
+      expect(await pathExists(join(workspace, ".sofia", "commands", "remove-me.md"))).toBe(false);
+      expect(await pathExists(join(workspace, ".sofia", "tools", "remove-me.ts"))).toBe(false);
+      expect(await readFile(join(workspace, ".sofia", "skills", "keep", "SKILL.md"), "utf8")).toBe(keepSkillContent);
+      expect(await readFile(join(workspace, ".sofia", "commands", "keep-command.md"), "utf8")).toBe(keepCommandContent);
+      expect(await readFile(join(workspace, ".sofia", "tools", "shared.ts"), "utf8")).toBe("shared tool\n");
       expect(await readFile(auditLogPath("workspace"), "utf8")).toContain("Imported workspace config (remove 3)");
     } finally {
       server.stop(true);
       if (originalDataDir === undefined) {
-        delete process.env.OPENWORK_DATA_DIR;
+        delete process.env.SOFIA_DATA_DIR;
       } else {
-        process.env.OPENWORK_DATA_DIR = originalDataDir;
+        process.env.SOFIA_DATA_DIR = originalDataDir;
       }
     }
   });
 
   test("replace import route honors empty sections", async () => {
     const workspace = await makeWorkspace();
-    const dataDir = await mkdtemp(join(tmpdir(), "openwork-import-preview-data-"));
+    const dataDir = await mkdtemp(join(tmpdir(), "sofia-import-preview-data-"));
     tempDirs.push(dataDir);
 
-    await mkdir(join(workspace, ".opencode", "skills", "old-skill"), { recursive: true });
-    await mkdir(join(workspace, ".opencode", "commands"), { recursive: true });
-    await mkdir(join(workspace, ".opencode", "agents"), { recursive: true });
-    await writeFile(join(workspace, ".opencode", "skills", "old-skill", "SKILL.md"), "old skill\n", "utf8");
-    await writeFile(join(workspace, ".opencode", "commands", "old-command.md"), "old command\n", "utf8");
-    await writeFile(join(workspace, ".opencode", "agents", "old.md"), "old agent\n", "utf8");
+    await mkdir(join(workspace, ".sofia", "skills", "old-skill"), { recursive: true });
+    await mkdir(join(workspace, ".sofia", "commands"), { recursive: true });
+    await mkdir(join(workspace, ".sofia", "agents"), { recursive: true });
+    await writeFile(join(workspace, ".sofia", "skills", "old-skill", "SKILL.md"), "old skill\n", "utf8");
+    await writeFile(join(workspace, ".sofia", "commands", "old-command.md"), "old command\n", "utf8");
+    await writeFile(join(workspace, ".sofia", "agents", "old.md"), "old agent\n", "utf8");
 
-    const originalDataDir = process.env.OPENWORK_DATA_DIR;
-    process.env.OPENWORK_DATA_DIR = dataDir;
+    const originalDataDir = process.env.SOFIA_DATA_DIR;
+    process.env.SOFIA_DATA_DIR = dataDir;
     const server = await startServer(makeServerConfig(workspace, dataDir)) as {
       port: number;
       stop: (force?: boolean) => void;
@@ -588,27 +560,27 @@ describe("workspace import preview", () => {
         preview: { summary: { delete: number } };
       };
       expect(body.preview.summary.delete).toBe(3);
-      expect(await pathExists(join(workspace, ".opencode", "skills", "old-skill"))).toBe(false);
-      expect(await pathExists(join(workspace, ".opencode", "commands", "old-command.md"))).toBe(false);
-      expect(await pathExists(join(workspace, ".opencode", "agents", "old.md"))).toBe(false);
+      expect(await pathExists(join(workspace, ".sofia", "skills", "old-skill"))).toBe(false);
+      expect(await pathExists(join(workspace, ".sofia", "commands", "old-command.md"))).toBe(false);
+      expect(await pathExists(join(workspace, ".sofia", "agents", "old.md"))).toBe(false);
     } finally {
       server.stop(true);
       if (originalDataDir === undefined) {
-        delete process.env.OPENWORK_DATA_DIR;
+        delete process.env.SOFIA_DATA_DIR;
       } else {
-        process.env.OPENWORK_DATA_DIR = originalDataDir;
+        process.env.SOFIA_DATA_DIR = originalDataDir;
       }
     }
   });
 
   test("import route rejects a stale reviewed preview", async () => {
     const workspace = await makeWorkspace();
-    const dataDir = await mkdtemp(join(tmpdir(), "openwork-import-preview-data-"));
+    const dataDir = await mkdtemp(join(tmpdir(), "sofia-import-preview-data-"));
     tempDirs.push(dataDir);
     await writeFile(join(workspace, "opencode.jsonc"), '{ "plugin": ["old"] }\n', "utf8");
 
-    const originalDataDir = process.env.OPENWORK_DATA_DIR;
-    process.env.OPENWORK_DATA_DIR = dataDir;
+    const originalDataDir = process.env.SOFIA_DATA_DIR;
+    process.env.SOFIA_DATA_DIR = dataDir;
     const server = await startServer(makeServerConfig(workspace, dataDir)) as {
       port: number;
       stop: (force?: boolean) => void;
@@ -619,7 +591,10 @@ describe("workspace import preview", () => {
         Authorization: "Bearer test-token",
         "Content-Type": "application/json",
       };
-      const payload = { opencode: { plugin: ["new"] } };
+      const payload = {
+        mode: { skills: "replace" },
+        skills: [{ name: "demo", description: "Demo skill", content: "---\nname: demo\ndescription: Demo skill\n---\nbody\n" }],
+      };
 
       const previewResponse = await fetch(`${baseUrl}/workspace/workspace/import/preview`, {
         method: "POST",
@@ -629,7 +604,8 @@ describe("workspace import preview", () => {
       expect(previewResponse.status).toBe(200);
       const preview = await previewResponse.json() as { fingerprint: string };
 
-      await writeFile(join(workspace, "opencode.jsonc"), '{ "plugin": ["changed-after-preview"] }\n', "utf8");
+      await mkdir(join(workspace, ".sofia", "skills", "added-after-preview"), { recursive: true });
+      await writeFile(join(workspace, ".sofia", "skills", "added-after-preview", "SKILL.md"), "added after preview\n", "utf8");
 
       const importResponse = await fetch(`${baseUrl}/workspace/workspace/import`, {
         method: "POST",
@@ -643,26 +619,26 @@ describe("workspace import preview", () => {
       };
       expect(rejected.code).toBe("workspace_import_preview_stale");
       expect(rejected.preview.fingerprint).not.toBe(preview.fingerprint);
-      expect(await readFile(join(workspace, "opencode.jsonc"), "utf8")).toContain("changed-after-preview");
+      expect(await readFile(join(workspace, ".sofia", "skills", "added-after-preview", "SKILL.md"), "utf8")).toContain("added after preview");
       expect(await pathExists(auditLogPath("workspace"))).toBe(false);
     } finally {
       server.stop(true);
       if (originalDataDir === undefined) {
-        delete process.env.OPENWORK_DATA_DIR;
+        delete process.env.SOFIA_DATA_DIR;
       } else {
-        process.env.OPENWORK_DATA_DIR = originalDataDir;
+        process.env.SOFIA_DATA_DIR = originalDataDir;
       }
     }
   });
 
   test("import route revalidates the preview after approval", async () => {
     const workspace = await makeWorkspace();
-    const dataDir = await mkdtemp(join(tmpdir(), "openwork-import-preview-data-"));
+    const dataDir = await mkdtemp(join(tmpdir(), "sofia-import-preview-data-"));
     tempDirs.push(dataDir);
     await writeFile(join(workspace, "opencode.jsonc"), '{ "plugin": ["old"] }\n', "utf8");
 
-    const originalDataDir = process.env.OPENWORK_DATA_DIR;
-    process.env.OPENWORK_DATA_DIR = dataDir;
+    const originalDataDir = process.env.SOFIA_DATA_DIR;
+    process.env.SOFIA_DATA_DIR = dataDir;
     const serverConfig = makeServerConfig(workspace, dataDir);
     serverConfig.approval = { mode: "ask", timeoutMs: 5000 };
     const server = await startServer(serverConfig) as {
@@ -675,7 +651,10 @@ describe("workspace import preview", () => {
         Authorization: "Bearer test-token",
         "Content-Type": "application/json",
       };
-      const payload = { opencode: { plugin: ["new"] } };
+      const payload = {
+        mode: { skills: "replace" },
+        skills: [{ name: "demo", description: "Demo skill", content: "---\nname: demo\ndescription: Demo skill\n---\nbody\n" }],
+      };
       const preview = await requestWorkspaceImportPreview(baseUrl, headers, payload);
 
       const importPromise = fetch(`${baseUrl}/workspace/workspace/import`, {
@@ -685,7 +664,8 @@ describe("workspace import preview", () => {
       });
 
       const approvalId = await waitForPendingApproval(baseUrl);
-      await writeFile(join(workspace, "opencode.jsonc"), '{ "plugin": ["changed-during-approval"] }\n', "utf8");
+      await mkdir(join(workspace, ".sofia", "skills", "added-during-approval"), { recursive: true });
+      await writeFile(join(workspace, ".sofia", "skills", "added-during-approval", "SKILL.md"), "added during approval\n", "utf8");
       const approvalResponse = await fetch(`${baseUrl}/approvals/${approvalId}`, {
         method: "POST",
         headers: {
@@ -704,25 +684,25 @@ describe("workspace import preview", () => {
       };
       expect(rejected.code).toBe("workspace_import_preview_stale");
       expect(rejected.preview.fingerprint).not.toBe(preview.fingerprint);
-      expect(await readFile(join(workspace, "opencode.jsonc"), "utf8")).toContain("changed-during-approval");
+      expect(await readFile(join(workspace, ".sofia", "skills", "added-during-approval", "SKILL.md"), "utf8")).toContain("added during approval");
       expect(await pathExists(auditLogPath("workspace"))).toBe(false);
     } finally {
       server.stop(true);
       if (originalDataDir === undefined) {
-        delete process.env.OPENWORK_DATA_DIR;
+        delete process.env.SOFIA_DATA_DIR;
       } else {
-        process.env.OPENWORK_DATA_DIR = originalDataDir;
+        process.env.SOFIA_DATA_DIR = originalDataDir;
       }
     }
   });
 
   test("import route validates preview fingerprint shape", async () => {
     const workspace = await makeWorkspace();
-    const dataDir = await mkdtemp(join(tmpdir(), "openwork-import-preview-data-"));
+    const dataDir = await mkdtemp(join(tmpdir(), "sofia-import-preview-data-"));
     tempDirs.push(dataDir);
 
-    const originalDataDir = process.env.OPENWORK_DATA_DIR;
-    process.env.OPENWORK_DATA_DIR = dataDir;
+    const originalDataDir = process.env.SOFIA_DATA_DIR;
+    process.env.SOFIA_DATA_DIR = dataDir;
     const server = await startServer(makeServerConfig(workspace, dataDir)) as {
       port: number;
       stop: (force?: boolean) => void;
@@ -735,7 +715,7 @@ describe("workspace import preview", () => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          opencode: { plugin: ["demo"] },
+          sofia: { version: 2 },
           previewFingerprint: 123,
         }),
       });
@@ -746,24 +726,24 @@ describe("workspace import preview", () => {
     } finally {
       server.stop(true);
       if (originalDataDir === undefined) {
-        delete process.env.OPENWORK_DATA_DIR;
+        delete process.env.SOFIA_DATA_DIR;
       } else {
-        process.env.OPENWORK_DATA_DIR = originalDataDir;
+        process.env.SOFIA_DATA_DIR = originalDataDir;
       }
     }
   });
 
   test("replace import keeps existing items when an incoming write fails", async () => {
     const workspace = await makeWorkspace();
-    const dataDir = await mkdtemp(join(tmpdir(), "openwork-import-preview-data-"));
+    const dataDir = await mkdtemp(join(tmpdir(), "sofia-import-preview-data-"));
     tempDirs.push(dataDir);
 
-    await mkdir(join(workspace, ".opencode", "skills", "old"), { recursive: true });
-    await writeFile(join(workspace, ".opencode", "skills", "old", "SKILL.md"), "old skill\n", "utf8");
-    await writeFile(join(workspace, ".opencode", "skills", "new"), "blocks new skill directory\n", "utf8");
+    await mkdir(join(workspace, ".sofia", "skills", "old"), { recursive: true });
+    await writeFile(join(workspace, ".sofia", "skills", "old", "SKILL.md"), "old skill\n", "utf8");
+    await writeFile(join(workspace, ".sofia", "skills", "new"), "blocks new skill directory\n", "utf8");
 
-    const originalDataDir = process.env.OPENWORK_DATA_DIR;
-    process.env.OPENWORK_DATA_DIR = dataDir;
+    const originalDataDir = process.env.SOFIA_DATA_DIR;
+    process.env.SOFIA_DATA_DIR = dataDir;
     const server = await startServer(makeServerConfig(workspace, dataDir)) as {
       port: number;
       stop: (force?: boolean) => void;
@@ -789,16 +769,16 @@ describe("workspace import preview", () => {
 
       expect(response.ok).toBe(false);
       expect(response.status).toBe(500);
-      expect(await readFile(join(workspace, ".opencode", "skills", "old", "SKILL.md"), "utf8")).toBe("old skill\n");
-      expect(await readFile(join(workspace, ".opencode", "skills", "new"), "utf8")).toBe(
+      expect(await readFile(join(workspace, ".sofia", "skills", "old", "SKILL.md"), "utf8")).toBe("old skill\n");
+      expect(await readFile(join(workspace, ".sofia", "skills", "new"), "utf8")).toBe(
         "blocks new skill directory\n",
       );
     } finally {
       server.stop(true);
       if (originalDataDir === undefined) {
-        delete process.env.OPENWORK_DATA_DIR;
+        delete process.env.SOFIA_DATA_DIR;
       } else {
-        process.env.OPENWORK_DATA_DIR = originalDataDir;
+        process.env.SOFIA_DATA_DIR = originalDataDir;
       }
     }
   });

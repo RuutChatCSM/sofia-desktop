@@ -1,19 +1,19 @@
 import { dirname, join } from "node:path";
 import { appendFile, readFile } from "node:fs/promises";
-import { openworkServerDataDir } from "@openwork/paths";
+import { sofiaServerDataDir } from "@sofia/paths";
 import type { AuditEntry } from "./types.js";
 import { ensureDir, exists } from "./utils.js";
 
-function resolveOpenworkDataDir(): string {
-  return openworkServerDataDir();
+function resolveSofiaDataDir(): string {
+  return sofiaServerDataDir();
 }
 
 export function auditLogPath(workspaceId: string): string {
-  return join(resolveOpenworkDataDir(), "audit", `${workspaceId}.jsonl`);
+  return join(resolveSofiaDataDir(), "audit", `${workspaceId}.jsonl`);
 }
 
 export function legacyAuditLogPath(workspaceRoot: string): string {
-  return join(workspaceRoot, ".opencode", "openwork", "audit.jsonl");
+  return join(workspaceRoot, ".sofia", "sofia", "audit.jsonl");
 }
 
 async function resolveReadableAuditPath(workspaceRoot: string, workspaceId: string): Promise<string | null> {

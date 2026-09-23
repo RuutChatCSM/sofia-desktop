@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import type { UIMessage } from "ai";
 
-import type { OpenworkSessionSnapshot } from "../src/app/lib/openwork-server";
+import type { SofiaSessionSnapshot } from "../src/app/lib/sofia-server";
 import {
   deriveRenderedSessionMessages,
   resolveRenderedSessionSnapshot,
@@ -16,7 +16,7 @@ import { describeOpencodeSessionError } from "../src/react-app/domains/session/s
 function snapshotWithMessages(
   messages: Array<{ id: string; role: "user" | "assistant"; text: string; created?: number }>,
   sessionId = "ses_test",
-): OpenworkSessionSnapshot {
+): SofiaSessionSnapshot {
   return {
     session: {
       id: sessionId,
@@ -45,7 +45,7 @@ function snapshotWithMessages(
     })),
     todos: [],
     status: { type: "idle" },
-  } as unknown as OpenworkSessionSnapshot;
+  } as unknown as SofiaSessionSnapshot;
 }
 
 function uiMessage(id: string, role: "user" | "assistant", text: string, created?: number): UIMessage {
@@ -57,7 +57,7 @@ function uiMessage(id: string, role: "user" | "assistant", text: string, created
   };
 }
 
-function snapshotWithText(text: string, sessionId = "ses_test"): OpenworkSessionSnapshot {
+function snapshotWithText(text: string, sessionId = "ses_test"): SofiaSessionSnapshot {
   return snapshotWithMessages([{ id: "msg_user", role: "user", text }], sessionId);
 }
 
@@ -372,7 +372,7 @@ describe("applyRevertCursor", () => {
   ];
 
   it("hides the reverted message itself and everything after it", () => {
-    // OpenCode marks revert.messageID as the FIRST reverted message.
+    // Sofia engine marks revert.messageID as the FIRST reverted message.
     const result = applyRevertCursor(transcript, "msg_3");
     expect(result.map((message) => message.id)).toEqual(["msg_1", "msg_2"]);
   });

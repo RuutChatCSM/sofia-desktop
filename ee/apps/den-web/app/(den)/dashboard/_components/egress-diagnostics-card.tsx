@@ -5,7 +5,7 @@ import {
   egressDiagnosticRunSchema,
   type EgressDiagnosticRun,
   type EgressDiagnosticStep,
-} from "@openwork/types/den/egress-diagnostics";
+} from "@sofia/types/den/egress-diagnostics";
 import {
   Activity,
   Check,
@@ -35,7 +35,7 @@ function StatusIcon({ status }: { status: EgressDiagnosticStep["status"] }) {
 
 function ownerLabel(owner: EgressDiagnosticStep["owner"]) {
   if (owner === "network-administrator") return "Network administrator";
-  if (owner === "openwork-support") return "OpenWork support";
+  if (owner === "sofia-support") return "Sofia support";
   return "Den operator";
 }
 

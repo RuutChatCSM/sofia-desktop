@@ -82,7 +82,7 @@ async function parseSkillEntry(
   try {
     content = await readFile(skillPath, "utf8");
   } catch (error) {
-    console.warn("[openwork:skills] Skipping unreadable skill file", {
+    console.warn("[sofia:skills] Skipping unreadable skill file", {
       path: skillPath,
       entryName,
       scope,
@@ -104,7 +104,7 @@ async function parseSkillEntry(
     } catch {
       return null;
     }
-    console.warn("[openwork:skills] Found invalid skill frontmatter", {
+    console.warn("[sofia:skills] Found invalid skill frontmatter", {
       path: skillPath,
       entryName,
       scope,
@@ -189,18 +189,18 @@ export async function listSkills(workspaceRoot: string, includeGlobal: boolean):
   const roots = await findWorkspaceRoots(workspaceRoot);
   const dirs: { dir: string; scope: "project" | "global" }[] = [];
   for (const root of roots) {
-    const opencodeDir = join(root, ".opencode", "skills");
+    const sofiaDir = projectSkillsDir(root);
     const claudeDir = join(root, ".claude", "skills");
-    dirs.push({ dir: opencodeDir, scope: "project" });
+    dirs.push({ dir: sofiaDir, scope: "project" });
     dirs.push({ dir: claudeDir, scope: "project" });
   }
 
   if (includeGlobal) {
-    const globalOpenWork = join(homedir(), ".config", "opencode", "skills");
+    const globalSofiaApp = join(homedir(), ".sofia", "skills");
     const globalClaude = join(homedir(), ".claude", "skills");
     const globalAgents = join(homedir(), ".agents", "skills");
     const globalAgentLegacy = join(homedir(), ".agent", "skills");
-    dirs.push({ dir: globalOpenWork, scope: "global" });
+    dirs.push({ dir: globalSofiaApp, scope: "global" });
     dirs.push({ dir: globalClaude, scope: "global" });
     dirs.push({ dir: globalAgents, scope: "global" });
     dirs.push({ dir: globalAgentLegacy, scope: "global" });

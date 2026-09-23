@@ -1,11 +1,11 @@
 import { expect } from "vitest";
-import { denFetch } from "@openwork/behaviors";
-import type { DenFetchResult, DenSession } from "@openwork/behaviors";
-import { mcpMock, needs, server, test, unmetNeeds } from "@openwork/testkit";
-import type { TestNeeds } from "@openwork/testkit";
+import { denFetch } from "@sofia/behaviors";
+import type { DenFetchResult, DenSession } from "@sofia/behaviors";
+import { mcpMock, needs, server, test, unmetNeeds } from "@sofia/testkit";
+import type { TestNeeds } from "@sofia/testkit";
 
 const requirements: TestNeeds = {
-  optIn: ["OPENWORK_EVAL_E2E_TESTS"],
+  optIn: ["SOFIA_EVAL_E2E_TESTS"],
 };
 const missingRequirements = unmetNeeds(requirements, process.env);
 const slackClientId = "enterprise-mcp-test-client";

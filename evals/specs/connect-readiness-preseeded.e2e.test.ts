@@ -1,8 +1,8 @@
 import { expect, onTestFinished } from "vitest";
-import { createOrgConnection, deleteConnection, denFetch, evalIn, go } from "@openwork/behaviors";
-import type { DenSession } from "@openwork/behaviors";
-import { screenshot, validate } from "@openwork/test-evidence";
-import type { Surface } from "@openwork/cdp";
+import { createOrgConnection, deleteConnection, denFetch, evalIn, go } from "@sofia/behaviors";
+import type { DenSession } from "@sofia/behaviors";
+import { screenshot, validate } from "@sofia/test-evidence";
+import type { Surface } from "@sofia/cdp";
 import {
   app,
   eventually,
@@ -12,13 +12,13 @@ import {
   readConnectState,
   server,
   test,
-} from "@openwork/testkit";
+} from "@sofia/testkit";
 
-const e2eTestsEnabled = process.env.OPENWORK_EVAL_E2E_TESTS === "1";
-const remotePlacement = process.env.OPENWORK_EVAL_DAYTONA === "1" || Boolean(process.env.OPENWORK_EVAL_DEN_API_URL?.trim());
+const e2eTestsEnabled = process.env.SOFIA_EVAL_E2E_TESTS === "1";
+const remotePlacement = process.env.SOFIA_EVAL_DAYTONA === "1" || Boolean(process.env.SOFIA_EVAL_DEN_API_URL?.trim());
 const mysqlOpen = remotePlacement || await localMysqlIsRunning();
 const title = !e2eTestsEnabled
-  ? "preseeded Connect readiness skipped — needs: set OPENWORK_EVAL_E2E_TESTS=1"
+  ? "preseeded Connect readiness skipped — needs: set SOFIA_EVAL_E2E_TESTS=1"
   : !mysqlOpen
     ? "preseeded Connect readiness skipped — needs: MySQL on 127.0.0.1:3306 for local placement"
     : "bundled engine connects to preseeded organization skills and connections";
@@ -66,7 +66,7 @@ async function organizationId(session: DenSession): Promise<string> {
 async function mintMcpToken(session: DenSession, orgId: string): Promise<string> {
   const result = await denFetch(session, "/v1/mcp/token", {
     method: "POST",
-    headers: { authorization: `Bearer ${session.token}`, "x-openwork-org-id": orgId },
+    headers: { authorization: `Bearer ${session.token}`, "x-sofia-org-id": orgId },
     body: JSON.stringify({}),
   });
   const mcpToken = isRecord(result.body) && typeof result.body.token === "string" ? result.body.token : "";
@@ -108,11 +108,11 @@ async function callTool(
 
 async function readCloudMcpHealth(surface: Surface, workspaceId: string): Promise<Record<string, unknown>> {
   const raw = await evalIn(surface, `(async () => {
-    const port = localStorage.getItem("openwork.server.port");
-    const token = localStorage.getItem("openwork.server.token");
+    const port = localStorage.getItem("sofia.server.port");
+    const token = localStorage.getItem("sofia.server.token");
     if (!port || !token) return JSON.stringify({ error: "missing local server credentials" });
     const response = await fetch(
-      "http://127.0.0.1:" + port + "/workspace/" + encodeURIComponent(${JSON.stringify(workspaceId)}) + "/mcp/openwork-cloud/health?probe=1",
+      "http://127.0.0.1:" + port + "/workspace/" + encodeURIComponent(${JSON.stringify(workspaceId)}) + "/mcp/sofia-cloud/health?probe=1",
       { headers: { Authorization: "Bearer " + token } },
     );
     const text = await response.text();
@@ -131,29 +131,29 @@ function healthIsReady(health: Record<string, unknown>): boolean {
     && health.usable === true
     && engine?.status === "connected"
     && Array.isArray(tools?.present)
-    && tools.present.includes("openwork-cloud_search_capabilities")
-    && tools.present.includes("openwork-cloud_execute_capability")
+    && tools.present.includes("sofia-cloud_search_capabilities")
+    && tools.present.includes("sofia-cloud_execute_capability")
     && Array.isArray(direct?.present)
     && direct.present.includes("search_capabilities")
     && direct.present.includes("execute_capability");
 }
 
 test.skipIf(!e2eTestsEnabled || !mysqlOpen)(title, async ({ evidence, place }) => {
-  needs({ optIn: ["OPENWORK_EVAL_E2E_TESTS"] });
+  needs({ optIn: ["SOFIA_EVAL_E2E_TESTS"] });
   const run = Date.now();
   const skillName = `pr3806-connect-proof-${run}`;
   const connectionName = `PR3806 conn ${String(run).slice(-6)}`;
   const nonsenseName = `no-such-capability-${run}`;
-  const rawSourceText = `---\nname: ${skillName}\ndescription: Proves preseeded Connect skill discovery on OpenCode 1.18.18.\n---\n\nReturn the PR 3806 Connect proof phrase.`;
+  const rawSourceText = `---\nname: ${skillName}\ndescription: Proves preseeded Connect skill discovery on Sofia engine 1.18.18.\n---\n\nReturn the PR 3806 Connect proof phrase.`;
 
   await using den = await server({
     place,
     org: {
       name: `PR 3806 Connect Readiness ${run}`,
       admin: {
-        email: `pr3806-connect-admin-${run}@openwork.test`,
+        email: `pr3806-connect-admin-${run}@sofia.test`,
         name: "PR 3806 Connect Admin",
-        password: "OpenWorkEval123!",
+        password: "SofiaEval123!",
       },
     },
     mocks: { connector: mcpMock() },
@@ -162,7 +162,7 @@ test.skipIf(!e2eTestsEnabled || !mysqlOpen)(title, async ({ evidence, place }) =
   const orgId = await organizationId(den.admin);
   const createdSkill = await denFetch(den.admin, "/v1/plugins", {
     method: "POST",
-    headers: { authorization: `Bearer ${den.admin.token}`, "x-openwork-org-id": orgId },
+    headers: { authorization: `Bearer ${den.admin.token}`, "x-sofia-org-id": orgId },
     body: JSON.stringify({
       name: skillName,
       orgWide: true,
@@ -177,7 +177,7 @@ test.skipIf(!e2eTestsEnabled || !mysqlOpen)(title, async ({ evidence, place }) =
   onTestFinished(async () => {
     await denFetch(den.admin, `/v1/plugins/${encodeURIComponent(pluginId)}/archive`, {
       method: "POST",
-      headers: { authorization: `Bearer ${den.admin.token}`, "x-openwork-org-id": orgId },
+      headers: { authorization: `Bearer ${den.admin.token}`, "x-sofia-org-id": orgId },
     }).catch(() => undefined);
   });
 
@@ -217,7 +217,7 @@ test.skipIf(!e2eTestsEnabled || !mysqlOpen)(title, async ({ evidence, place }) =
       );
       const shot = await screenshot(surface);
       const seen = await validate(shot, [
-        "The OpenWork desktop is visible before organization sign-in",
+        "The Sofia App desktop is visible before organization sign-in",
         "No crash or error dialog is visible",
       ]);
       expect(seen.ok, seen.why).toBe(true);
@@ -241,7 +241,7 @@ test.skipIf(!e2eTestsEnabled || !mysqlOpen)(title, async ({ evidence, place }) =
 
   const health = await eventually(() => readCloudMcpHealth(desktopApp, desktopApp.workspaceId), {
     within: 180_000,
-    label: "OpenCode 1.18.18 openwork-cloud engine and agent-tool readiness",
+    label: "Sofia engine 1.18.18 sofia-cloud engine and agent-tool readiness",
     until: healthIsReady,
   });
   const engine = requireRecord(health.engine, "Cloud MCP engine health");
@@ -253,11 +253,11 @@ test.skipIf(!e2eTestsEnabled || !mysqlOpen)(title, async ({ evidence, place }) =
   expect(engine.status).not.toBe("failed");
   expect(engine.status).not.toBe("needs_client_registration");
   expect(tools.present).toEqual(expect.arrayContaining([
-    "openwork-cloud_search_capabilities",
-    "openwork-cloud_execute_capability",
+    "sofia-cloud_search_capabilities",
+    "sofia-cloud_execute_capability",
   ]));
   evidence.recordAssertionEvidence(
-    "OpenCode 1.18.18 connects openwork-cloud with both agent tools",
+    "Sofia engine 1.18.18 connects sofia-cloud with both agent tools",
     `Health payload: ${JSON.stringify({ phase: health.phase, usable: health.usable, engine, tools: tools.present })}.`,
     healthIsReady(health)
       && engine.status !== "needs_auth"

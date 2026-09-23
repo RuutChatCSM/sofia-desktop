@@ -20,7 +20,7 @@ import {
   shouldWaitForCloudProviderSyncBeforePolicyReconcile,
   type OrganizationModelsRefreshReason,
 } from "./managed-models-recovery";
-import { createSessionOpenworkServer } from "./session-openwork-server";
+import { createSessionSofiaServer } from "./session-sofia-server";
 import { createProviderAuthStore, useProviderAuthStoreSnapshot } from "./store";
 
 const emptyWorkspaceDisplay: WorkspaceDisplay = {
@@ -132,7 +132,7 @@ export function useSessionProviderAuth(input: UseSessionProviderAuthInput) {
         // server's providerSync capability and host-token auth so sign-in
         // pushes the Den session to the local server and sync runs
         // server-side; remote workspaces keep the config-only shape.
-        openworkServer: createSessionOpenworkServer({
+        sofiaServer: createSessionSofiaServer({
           endpoint: () => stateRef.current.selectedWorkspaceEndpoint ?? null,
           hostToken: () => stateRef.current.localServerHostToken ?? "",
         }),
@@ -213,7 +213,7 @@ export function useSessionProviderAuth(input: UseSessionProviderAuthInput) {
     policyProviderReconcileInFlightRef.current = true;
     void reconcilePolicyDisabledProviders({
       opencodeClient,
-      openworkClient: selectedWorkspaceEndpoint?.client ?? null,
+      sofiaClient: selectedWorkspaceEndpoint?.client ?? null,
       workspaceId: selectedWorkspaceEndpoint?.workspaceId ?? null,
       workspaceType: selectedWorkspace?.workspaceType ?? null,
       allProviders: providers,

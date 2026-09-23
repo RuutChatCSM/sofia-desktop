@@ -3,13 +3,13 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { expect, onTestFinished } from "vitest";
-import { createAndSelectWorkspace, evalIn, waitFor } from "@openwork/behaviors";
-import { desktop } from "@openwork/hosts";
-import { needs, test, unmetNeeds } from "@openwork/testkit";
-import type { TestNeeds } from "@openwork/testkit";
+import { createAndSelectWorkspace, evalIn, waitFor } from "@sofia/behaviors";
+import { desktop } from "@sofia/hosts";
+import { needs, test, unmetNeeds } from "@sofia/testkit";
+import type { TestNeeds } from "@sofia/testkit";
 
 const requirements: TestNeeds = {
-  optIn: ["OPENWORK_EVAL_E2E_TESTS"],
+  optIn: ["SOFIA_EVAL_E2E_TESTS"],
 };
 const missingRequirements = unmetNeeds(requirements, process.env);
 const title = missingRequirements.length > 0
@@ -63,7 +63,7 @@ async function startUnconfiguredServer(
 
   const port = await new Promise<number>((resolvePort, reject) => {
     const timer = setTimeout(
-      () => reject(new Error("Unconfigured OpenWork server did not report a port within 30s.")),
+      () => reject(new Error("Unconfigured Sofia App server did not report a port within 30s.")),
       30_000,
     );
     let stdout = "";
@@ -82,7 +82,7 @@ async function startUnconfiguredServer(
     });
     child.on("exit", (code) => {
       clearTimeout(timer);
-      reject(new Error(`Unconfigured OpenWork server exited early (${code}): ${stderr.slice(0, 500)}`));
+      reject(new Error(`Unconfigured Sofia App server exited early (${code}): ${stderr.slice(0, 500)}`));
     });
     child.on("error", (error) => {
       clearTimeout(timer);
@@ -97,7 +97,7 @@ async function startUnconfiguredServer(
 
 test(title, async ({ evidence }) => {
   needs(requirements);
-  const localWorkspacePath = await mkdtemp(join(tmpdir(), "openwork-notification-shell-"));
+  const localWorkspacePath = await mkdtemp(join(tmpdir(), "sofia-notification-shell-"));
   onTestFinished(async () => {
     await rm(localWorkspacePath, { recursive: true, force: true });
   });
@@ -143,24 +143,24 @@ test(title, async ({ evidence }) => {
   })()`)).toBe(true);
 
   const switchedServer = await evalIn(app, `(async () => {
-    const invoke = window.__OPENWORK_ELECTRON__?.invokeDesktop;
+    const invoke = window.__SOFIA_ELECTRON__?.invokeDesktop;
     if (!invoke) return false;
-    localStorage.setItem("openwork.server.urlOverride", ${JSON.stringify(server.appBaseUrl)});
-    localStorage.setItem("openwork.server.token", ${JSON.stringify(serverToken)});
-    localStorage.removeItem("openwork.server.hostToken");
+    localStorage.setItem("sofia.server.urlOverride", ${JSON.stringify(server.appBaseUrl)});
+    localStorage.setItem("sofia.server.token", ${JSON.stringify(serverToken)});
+    localStorage.removeItem("sofia.server.hostToken");
     await invoke("engineStop");
-    window.dispatchEvent(new CustomEvent("openwork-server-settings-changed"));
+    window.dispatchEvent(new CustomEvent("sofia-server-settings-changed"));
     return true;
   })()`, { awaitPromise: true, timeoutMs: 30_000 });
   expect(switchedServer).toBe(true);
-  await waitFor(app, `window.__openworkControl.listActions()
+  await waitFor(app, `window.__sofiaControl.listActions()
     .some((action) => action.id === "session.create_task" && !action.disabled)`, {
     timeoutMs: 60_000,
     label: "New task action for unconfigured workspace",
   });
   const createResult = await evalIn(
     app,
-    `window.__openworkControl.execute("session.create_task", null)`,
+    `window.__sofiaControl.execute("session.create_task", null)`,
     { awaitPromise: true, timeoutMs: 30_000 },
   );
   expect(isRecord(createResult) ? createResult.ok : null).toBe(false);

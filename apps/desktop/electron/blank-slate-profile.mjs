@@ -13,13 +13,13 @@ export const BLANK_SLATE_PATH_ENV_KEYS = Object.freeze([
   "XDG_STATE_HOME",
   "APPDATA",
   "LOCALAPPDATA",
-  "OPENWORK_ELECTRON_USERDATA",
-  "OPENWORK_DESKTOP_BOOTSTRAP_PATH",
-  "OPENWORK_SERVER_CONFIG",
-  "OPENWORK_ENV_STORE",
-  "OPENWORK_TOKEN_STORE",
-  "OPENWORK_RUNTIME_DB",
-  "OPENWORK_DATA_DIR",
+  "SOFIA_ELECTRON_USERDATA",
+  "SOFIA_DESKTOP_BOOTSTRAP_PATH",
+  "SOFIA_SERVER_CONFIG",
+  "SOFIA_ENV_STORE",
+  "SOFIA_TOKEN_STORE",
+  "SOFIA_RUNTIME_DB",
+  "SOFIA_DATA_DIR",
   "OPENCODE_CONFIG_DIR",
   "OPENCODE_DB",
 ]);
@@ -43,10 +43,10 @@ export function prepareBlankSlateProfile({
   }
 
   const paths = pathApi(platform);
-  const rootPath = createTempRoot(paths.join(temporaryDirectory, "openwork-test-profile-"));
+  const rootPath = createTempRoot(paths.join(temporaryDirectory, "sofia-test-profile-"));
   const userDataPath = paths.join(rootPath, "electron", "user-data");
   const homePath = paths.join(rootPath, "home");
-  const openworkConfigPath = paths.join(rootPath, "openwork", "config");
+  const sofiaConfigPath = paths.join(rootPath, "sofia", "config");
   const opencodeDataPath = paths.join(rootPath, "opencode", "data");
   const environment = {
     HOME: homePath,
@@ -57,13 +57,13 @@ export function prepareBlankSlateProfile({
     XDG_STATE_HOME: paths.join(rootPath, "xdg", "state"),
     APPDATA: paths.join(rootPath, "windows", "app-data", "roaming"),
     LOCALAPPDATA: paths.join(rootPath, "windows", "app-data", "local"),
-    OPENWORK_ELECTRON_USERDATA: userDataPath,
-    OPENWORK_DESKTOP_BOOTSTRAP_PATH: paths.join(openworkConfigPath, "desktop-bootstrap.json"),
-    OPENWORK_SERVER_CONFIG: paths.join(openworkConfigPath, "server.json"),
-    OPENWORK_ENV_STORE: paths.join(openworkConfigPath, "env.json"),
-    OPENWORK_TOKEN_STORE: paths.join(openworkConfigPath, "tokens.json"),
-    OPENWORK_RUNTIME_DB: paths.join(openworkConfigPath, "runtime.sqlite"),
-    OPENWORK_DATA_DIR: paths.join(rootPath, "openwork", "data"),
+    SOFIA_ELECTRON_USERDATA: userDataPath,
+    SOFIA_DESKTOP_BOOTSTRAP_PATH: paths.join(sofiaConfigPath, "desktop-bootstrap.json"),
+    SOFIA_SERVER_CONFIG: paths.join(sofiaConfigPath, "server.json"),
+    SOFIA_ENV_STORE: paths.join(sofiaConfigPath, "env.json"),
+    SOFIA_TOKEN_STORE: paths.join(sofiaConfigPath, "tokens.json"),
+    SOFIA_RUNTIME_DB: paths.join(sofiaConfigPath, "runtime.sqlite"),
+    SOFIA_DATA_DIR: paths.join(rootPath, "sofia", "data"),
     OPENCODE_CONFIG_DIR: paths.join(rootPath, "opencode", "config"),
     OPENCODE_DB: paths.join(opencodeDataPath, "opencode.db"),
   };
@@ -77,8 +77,8 @@ export function prepareBlankSlateProfile({
     environment.XDG_STATE_HOME,
     environment.APPDATA,
     environment.LOCALAPPDATA,
-    openworkConfigPath,
-    environment.OPENWORK_DATA_DIR,
+    sofiaConfigPath,
+    environment.SOFIA_DATA_DIR,
     environment.OPENCODE_CONFIG_DIR,
     opencodeDataPath,
   ]);

@@ -1,10 +1,10 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { ErrorCode, McpError, type ToolAnnotations } from "@modelcontextprotocol/sdk/types.js"
 import { StreamableHTTPTransport } from "@hono/mcp"
-import { eq } from "@openwork-ee/den-db/drizzle"
-import { OrganizationTable } from "@openwork-ee/den-db/schema"
-import { normalizeDenTypeId } from "@openwork-ee/utils/typeid"
-import { openworkCloudMcpConnectionActionSchema } from "@openwork/types/den/mcp-connection-action"
+import { eq } from "@sofia-ee/den-db/drizzle"
+import { OrganizationTable } from "@sofia-ee/den-db/schema"
+import { normalizeDenTypeId } from "@sofia-ee/utils/typeid"
+import { sofiaCloudMcpConnectionActionSchema } from "@sofia/types/den/mcp-connection-action"
 import type { Hono } from "hono"
 import type { RequestIdVariables } from "hono/request-id"
 import { z } from "zod"
@@ -115,14 +115,14 @@ export const EXECUTE_CAPABILITY_ANNOTATIONS: ToolAnnotations = {
   openWorldHint: true,
 }
 
-const connectionStatusOutputSchema = openworkCloudMcpConnectionActionSchema.extend({
+const connectionStatusOutputSchema = sofiaCloudMcpConnectionActionSchema.extend({
   layer: z.enum(["mcp_connection", "downstream_provider"]),
   errorCode: z.enum(["not_connected", "invalid_refresh_token", "invalid_grant", "unauthorized", "provider_error"]),
   message: z.string(),
   action: z.object({
-    type: z.enum(["connect", "reconnect", "update_credentials", "inspect_connection", "fix_provider", "fix_network", "contact_openwork"]),
+    type: z.enum(["connect", "reconnect", "update_credentials", "inspect_connection", "fix_provider", "fix_network", "contact_sofia"]),
     label: z.string(),
-    surface: z.enum(["openwork_your_connections", "openwork_organization_connections", "provider_admin_console", "network_infrastructure", "openwork_support"]),
+    surface: z.enum(["sofia_your_connections", "sofia_organization_connections", "provider_admin_console", "network_infrastructure", "sofia_support"]),
     retry: z.literal("search_capabilities"),
     url: z.string().url().optional(),
   }),
@@ -155,25 +155,25 @@ export const SEARCH_CAPABILITIES_OUTPUT_SCHEMA = z.object({
 })
 
 export const AGENT_MCP_INSTRUCTIONS = [
-  "This OpenWork Cloud MCP server uses standard MCP tools, resources, structured results, and list-changed notifications.",
+  "This Sofia Cloud MCP server uses standard MCP tools, resources, structured results, and list-changed notifications.",
   "Use create_skill to create one private Cloud skill in a new Plugin, and update_skill to publish a new immutable version of an existing skill. Both return a standard skill-created MCP App result plus a text fallback; do not route these flows through execute_capability, postPlugins, or postConfigObjectsVersions.",
-  "Standard MCP Apps supplied by connected MCP servers are discovered through search_capabilities. A match with kind mcp_app must be executed through execute_capability like any other exact match; compatible OpenWork hosts preserve the current _meta.ui.resourceUri and render it without a generated direct-tool name.",
+  "Standard MCP Apps supplied by connected MCP servers are discovered through search_capabilities. A match with kind mcp_app must be executed through execute_capability like any other exact match; compatible Sofia hosts preserve the current _meta.ui.resourceUri and render it without a generated direct-tool name.",
   "Standalone URL-imported Apps are deferred future work and are not part of this release. Do not offer, search for, import, or launch them.",
   "Skills teach how to perform work. Workflows are saved procedures discovered through search_capabilities and run through execute_capability using the exact capability name returned by search.",
   "Author an ad hoc procedure with execute_capability_script. Workflow runs produce artifacts rendered by render_workflow_artifact, and Automations trigger Workflows.",
-  "When a member asks to keep a successful Code Mode result, save it as a Workflow inside the existing OpenWork Connect Plugin they name by passing that pluginId to the Workflow save operation. Omit pluginId only for a private Workflow in the member's My Workflows Plugin. A Workflow inherits discovery and sharing from its Plugin and any Marketplace containing that Plugin; do not create a separate Workflow package or marketplace entry.",
+  "When a member asks to keep a successful Code Mode result, save it as a Workflow inside the existing Sofia Connect Plugin they name by passing that pluginId to the Workflow save operation. Omit pluginId only for a private Workflow in the member's My Workflows Plugin. A Workflow inherits discovery and sharing from its Plugin and any Marketplace containing that Plugin; do not create a separate Workflow package or marketplace entry.",
   "Capabilities include native Google Workspace operations (Gmail read/search, Calendar list/create, Drive search/read, and Gmail draft creation) executed with the signed-in member's organization credentials, plus any MCP connections the organization has added.",
-  "Allowlisted platform admins can also discover namespaced OpenWork Admin capabilities through this same connection; other members cannot discover or execute them.",
+  "Allowlisted platform admins can also discover namespaced Sofia Admin capabilities through this same connection; other members cannot discover or execute them.",
   "Always call search_capabilities first with 2-4 keyword variants before concluding something is unavailable. Use execute_capability only with exact names returned by search_capabilities.",
   "Built-in remote skills create-skill, share-plugin, add-to-marketplace, and add-user-to-marketplace are always listed in the skill index. Retrieve and follow the matching one by executing its exact capability; do not invent a local copy to access them.",
   "For a request to add a public GitHub plugin to an organization marketplace, search for the marketplace list, GitHub plugin import preview, GitHub plugin marketplace import, and resolved marketplace detail capabilities. Preview first; do not recreate the plugin by hand.",
   "Before importing, confirm the target marketplace, selected skill/server keys, and who can use them. Do not choose one authentication type for every server: the import route resolves known presets and plugin declarations, while the request authType is only a fallback for unknown servers.",
   "After importing, retrieve the resolved marketplace detail and report each plugin's cloudReadiness. An import or plugin binding is not proof that an MCP connection is usable. Relay needs_admin_setup or needs_signin as the next human action instead of claiming the connection is ready.",
-  "Do not invent OAuth-client, credential, or local-extension setup. Organization connections are managed in the OpenWork Cloud dashboard / Settings > Connect. When a returned connection or marketplace readiness state requires administrator setup or member sign-in, relay that exact action.",
-  "A successful search_capabilities call proves this OpenWork Cloud MCP connection is authorized. Never tell the user to reconnect OpenWork Cloud because a downstream connector failed.",
+  "Do not invent OAuth-client, credential, or local-extension setup. Organization connections are managed in the Sofia Cloud dashboard / Settings > Connect. When a returned connection or marketplace readiness state requires administrator setup or member sign-in, relay that exact action.",
+  "A successful search_capabilities call proves this Sofia Cloud MCP connection is authorized. Never tell the user to reconnect Sofia Cloud because a downstream connector failed.",
   "External MCP matches include the provider-advertised argumentsSchema, schemaDigest, and invocation.argumentsField. Put an object matching argumentsSchema in execute_capability.body and copy schemaDigest into execute_capability.schemaDigest.",
   "Do not import, convert, or browse for a standalone HTML URL when a connected capability already appears with kind mcp_app. Execute that exact match and let the host resolve its originating ui:// resource.",
-  "OpenWork always attempts the downstream provider call when local schema checks find a mismatch. schemaGuidance is advisory and appears alongside the provider result: if the provider succeeded, accept that result and do not retry solely because of the warning; if it failed, use the warning to correct the arguments or search again.",
+  "Sofia always attempts the downstream provider call when local schema checks find a mismatch. schemaGuidance is advisory and appears alongside the provider result: if the provider succeeded, accept that result and do not retry solely because of the warning; if it failed, use the warning to correct the arguments or search again.",
   "If the provider returns invalid_capability_arguments, correct the listed issues and retry once with changed arguments; never retry the same arguments unchanged. If it returns unknown_capability, call search_capabilities again before retrying.",
   "When a match has kind connection_status, execute that exact match once: it returns the live status and renders an actionable connection card for the member in compatible hosts. Also name connectionStatus.connectionName and relay connectionStatus.action exactly in text. Distinguish the member's Your Connections page, the organization Connections dashboard, and the provider's own admin console.",
   "When execute_capability fails with needs_connection or connection_not_connected, execute that connection's status capability (mcp:<connectionId>:*) once so the member gets the same actionable connection card, then relay the action in text.",
@@ -285,7 +285,7 @@ export async function executeCapabilityWithBudget<T extends ExecuteCapabilityToo
 
 export function createAgentMcpServer(): McpServer {
   return new McpServer({
-    name: "openwork-den-api-agent",
+    name: "sofia-den-api-agent",
     version: "1.0.0",
   }, {
     capabilities: {
@@ -306,7 +306,7 @@ export function registerAgentSkillResources(input: {
 }) {
   input.server.registerResource("agent-skills-index", AGENT_SKILL_INDEX_URI, {
     title: "Available Agent Skills",
-    description: "Authorized Agent Skills discovery index for this OpenWork member.",
+    description: "Authorized Agent Skills discovery index for this Sofia member.",
     mimeType: "application/json",
   }, async () => ({
     contents: [{
@@ -357,7 +357,7 @@ export function registerAgentSkillResources(input: {
  * name directly.
  *
  * `/mcp/agent` is a *different* endpoint for a *different* consumer: the
- * desktop app's "OpenWork Cloud Control" connection, which is what an
+ * desktop app's "Sofia Cloud Control" connection, which is what an
  * OpenCode/Claude Code/Codex-style harness actually sees. It always registers
  * `search_capabilities`, `execute_capability`, and `create_skill`, and
  * conditionally registers Code Mode and Artifact presentation tools. Workflows
@@ -523,10 +523,10 @@ export function registerAgentMcpRoutes<T extends { Variables: RequestIdVariables
             ? "Search for a capability by keyword. This connection also exposes execute_capability, create_skill, update_skill, and execute_capability_script —"
             : "Search for a capability by keyword. This connection also exposes execute_capability, create_skill, and update_skill —",
           "there is no list of individually-named tools to browse. Always search first.",
-          "Search covers native Google Workspace capabilities (Gmail, Calendar, Drive, Gmail drafts), org-connected external MCPs, and namespaced OpenWork Admin tools for allowlisted platform admins.",
+          "Search covers native Google Workspace capabilities (Gmail, Calendar, Drive, Gmail drafts), org-connected external MCPs, and namespaced Sofia Admin tools for allowlisted platform admins.",
           "When Workflows are enabled, accessible Workflows appear as marketplace matches with kind workflow and execute through execute_capability like every other exact search result.",
           "Try 2-4 keyword variants before deciding a capability is unavailable.",
-          "Native API matches include a connector-namespaced name, pathParams, queryParams, hasBody, and bodySchema. External MCP matches include argumentsSchema, schemaDigest, and invocation.argumentsField. A match with kind mcp_app is a standard MCP App launch capability from a connected MCP server; execute it normally and the OpenWork host will render its advertised ui:// resource.",
+          "Native API matches include a connector-namespaced name, pathParams, queryParams, hasBody, and bodySchema. External MCP matches include argumentsSchema, schemaDigest, and invocation.argumentsField. A match with kind mcp_app is a standard MCP App launch capability from a connected MCP server; execute it normally and the Sofia host will render its advertised ui:// resource.",
           "Built-in and marketplace skill matches return SKILL.md content when executed.",
         ].join(" "),
         annotations: SEARCH_CAPABILITIES_ANNOTATIONS,
@@ -554,7 +554,7 @@ export function registerAgentMcpRoutes<T extends { Variables: RequestIdVariables
           "Call a capability found via search_capabilities, by its exact name.",
           "Pass path/query/body only as described by that match's pathParams/queryParams/hasBody.",
           "For external MCP capabilities, provider-advertised schema mismatches are returned as advisory schemaGuidance alongside the provider result; they do not block the downstream call.",
-          "When the exact capability is a standard MCP App launch tool, this call preserves its originating tool and ui:// binding so compatible OpenWork hosts render it without requiring a generated direct-tool name.",
+          "When the exact capability is a standard MCP App launch tool, this call preserves its originating tool and ui:// binding so compatible Sofia hosts render it without requiring a generated direct-tool name.",
           "For skill capabilities listed in the remote skill catalog, this returns their authorized SKILL.md content.",
           "Returns unknown_capability if name doesn't match a current capability — call search_capabilities again.",
         ].join(" "),
@@ -593,7 +593,7 @@ export function registerAgentMcpRoutes<T extends { Variables: RequestIdVariables
           return {
             ok: false,
             error: "mcp_membership_revoked",
-            message: "The OpenWork Cloud membership for this connection is unavailable.",
+            message: "The Sofia Cloud membership for this connection is unavailable.",
           }
         }
         try {
@@ -653,7 +653,7 @@ export function registerAgentMcpRoutes<T extends { Variables: RequestIdVariables
           return {
             ok: false,
             error: "mcp_membership_revoked",
-            message: "The OpenWork Cloud membership for this connection is unavailable.",
+            message: "The Sofia Cloud membership for this connection is unavailable.",
           }
         }
         try {

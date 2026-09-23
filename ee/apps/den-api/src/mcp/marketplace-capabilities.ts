@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull, notExists } from "@openwork-ee/den-db/drizzle"
+import { and, desc, eq, inArray, isNull, notExists } from "@sofia-ee/den-db/drizzle"
 import {
   ConfigObjectAccessGrantTable,
   ConfigObjectTable,
@@ -10,8 +10,8 @@ import {
   PluginAccessGrantTable,
   PluginConfigObjectTable,
   PluginTable,
-} from "@openwork-ee/den-db/schema"
-import { normalizeDenTypeId, type DenTypeId } from "@openwork-ee/utils/typeid"
+} from "@sofia-ee/den-db/schema"
+import { normalizeDenTypeId, type DenTypeId } from "@sofia-ee/utils/typeid"
 import {
   listExternalMcpConnections,
   listUsableExternalMcpConnections,
@@ -26,7 +26,7 @@ import { EXTERNAL_MCP_PRESETS } from "../capability-sources/external-mcp-presets
 import { getConnectedAccount, getOrgOAuthClient } from "../capability-sources/oauth-credentials.js"
 import { db } from "../db.js"
 import { resolvePluginArchGrantRole } from "../routes/org/plugin-system/access.js"
-import { openworkOrganizationConnectionsUrl, openworkYourConnectionsUrl } from "./connection-navigation.js"
+import { sofiaOrganizationConnectionsUrl, sofiaYourConnectionsUrl } from "./connection-navigation.js"
 import { parseCodemodeScriptPayload, type CodemodeScriptInputIssue } from "./codemode-script-object.js"
 import { type BuiltCodemodeTools } from "./codemode-tools.js"
 import { executeWorkflow } from "./workflow-service.js"
@@ -122,7 +122,7 @@ export type MarketplaceMcpRequirementState = "needs_admin_setup" | "needs_connec
 export type MarketplaceMcpRequirementAction = {
   type: "connect" | "none" | "reconnect" | "setup_connection"
   label: string
-  surface: "none" | "openwork_organization_connections" | "openwork_your_connections"
+  surface: "none" | "sofia_organization_connections" | "sofia_your_connections"
   retry: "execute_capability" | "search_capabilities"
   url?: string
 }
@@ -660,7 +660,7 @@ async function filterVisibleRows(input: {
     // Administrative visibility in Den must not silently publish every
     // capability to that administrator's personal desktop catalog. Desktop
     // discovery follows the same explicit member, team, and org-wide grants
-    // for every role so admins can curate what OpenWork exposes to them.
+    // for every role so admins can curate what Sofia exposes to them.
     if (grantRole(input.member, configObjectGrants.get(row.configObject.id) ?? [])) return true
     if (grantRole(input.member, pluginGrants.get(row.plugin.id) ?? [])) return true
     return row.marketplace
@@ -930,18 +930,18 @@ function marketplaceRequirementAction(input: {
     return {
       type: input.state === "reconnect" ? "reconnect" : "connect",
       label: `${input.state === "reconnect" ? "Reconnect" : "Connect"} ${connectionName}`,
-      surface: "openwork_your_connections",
+      surface: "sofia_your_connections",
       retry: "search_capabilities",
-      url: openworkYourConnectionsUrl(input.connectionId),
+      url: sofiaYourConnectionsUrl(input.connectionId),
     }
   }
 
   return {
     type: "setup_connection",
     label: `Ask an org admin to configure Connections for ${input.pluginName}`,
-    surface: "openwork_organization_connections",
+    surface: "sofia_organization_connections",
     retry: "search_capabilities",
-    url: openworkOrganizationConnectionsUrl(),
+    url: sofiaOrganizationConnectionsUrl(),
   }
 }
 
@@ -971,7 +971,7 @@ function requirementHint(input: {
   if (input.requirement.state === "needs_connection" || input.requirement.state === "reconnect") {
     return `${input.capabilityName} belongs to marketplace plugin "${input.requirement.pluginName}", which requires "${input.requirement.name}". ${input.requirement.action.label} from Your Connections, then try again.`
   }
-  return `${input.capabilityName} belongs to marketplace plugin "${input.requirement.pluginName}", which needs an org admin to configure its required MCP connection before it can run in OpenWork Cloud.`
+  return `${input.capabilityName} belongs to marketplace plugin "${input.requirement.pluginName}", which needs an org admin to configure its required MCP connection before it can run in Sofia Cloud.`
 }
 
 function connectionById(connections: ExternalMcpConnectionRow[]) {
@@ -1402,7 +1402,7 @@ async function mcpHint(input: {
 
   return {
     status: "needs_connection",
-    hint: `This plugin declares an MCP server but OpenWork will not auto-provision it. Ask an org admin to add it in OpenWork Cloud -> Connectors, or install "${input.row.plugin.name}" locally.`,
+    hint: `This plugin declares an MCP server but Sofia will not auto-provision it. Ask an org admin to add it in Sofia Cloud -> Connectors, or install "${input.row.plugin.name}" locally.`,
   }
 }
 
@@ -1730,7 +1730,7 @@ export async function executeMarketplaceCapability(input: {
       ...basePayload(row),
       definition: version.rawSourceText,
       status: "unsupported",
-      hint: "Marketplace plugin hooks are not supported on the OpenWork capability rail yet.",
+      hint: "Marketplace plugin hooks are not supported on the Sofia capability rail yet.",
     },
   }
 }

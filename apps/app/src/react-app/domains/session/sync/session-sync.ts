@@ -21,7 +21,7 @@ import {
   parseStructuredOutputUIPart,
   STRUCTURED_OUTPUT_TOOL,
 } from "./parse-tool-parts";
-import type { OpenworkSessionSnapshot } from "@/app/lib/openwork-server";
+import type { SofiaSessionSnapshot } from "@/app/lib/sofia-server";
 import { applyRevertCursor, reconcileTranscriptMessages } from "./transcript-reconcile";
 import {
   useSessionActivityStore,
@@ -37,7 +37,7 @@ import {
 type SyncOptions = {
   workspaceId: string;
   baseUrl: string;
-  openworkToken: string;
+  sofiaToken: string;
   onSessionCreated?: (session: Session) => void;
   onSessionUpdated?: (update: { sessionId: string; info: Record<string, unknown> }) => void;
   onSessionDeleted?: (sessionId: string) => void;
@@ -54,7 +54,7 @@ type PendingDelta = {
 
 type SyncEntry = {
   input: SyncOptions;
-  openworkToken: string;
+  sofiaToken: string;
   refs: number;
   dispose: () => void;
   disposeTimer: ReturnType<typeof setTimeout> | null;
@@ -77,31 +77,31 @@ type SyncEntry = {
 
 const idleStatus: SessionStatus = { type: "idle" };
 const syncs = new Map<string, SyncEntry>();
-const sessionSnapshotFetchStarts = new WeakMap<OpenworkSessionSnapshot, number>();
+const sessionSnapshotFetchStarts = new WeakMap<SofiaSessionSnapshot, number>();
 const workspaceSyncDisposeGraceMs = 2_000;
 const retainedSessionTtlMs = 10 * 60_000;
 const idleRetainedSessionTtlMs = 10_000;
 
 type SyncSubscriptionFactory = (
   baseUrl: string,
-  openworkToken: string,
+  sofiaToken: string,
   signal: AbortSignal,
 ) => Promise<AsyncIterable<unknown>>;
 
 type SessionStatusFetcher = (
   baseUrl: string,
-  openworkToken: string,
+  sofiaToken: string,
   signal: AbortSignal,
 ) => Promise<Record<string, SessionStatus>>;
 
-const defaultSyncSubscriptionFactory: SyncSubscriptionFactory = async (baseUrl, openworkToken, signal) => {
-  const client = createClient(baseUrl, undefined, { token: openworkToken, mode: "openwork" });
+const defaultSyncSubscriptionFactory: SyncSubscriptionFactory = async (baseUrl, sofiaToken, signal) => {
+  const client = createClient(baseUrl, undefined, { token: sofiaToken, mode: "sofia" });
   const subscription = await client.event.subscribe(undefined, { signal });
   return subscription.stream;
 };
 
-const defaultSessionStatusFetcher: SessionStatusFetcher = async (baseUrl, openworkToken, signal) => {
-  const client = createClient(baseUrl, undefined, { token: openworkToken, mode: "openwork" });
+const defaultSessionStatusFetcher: SessionStatusFetcher = async (baseUrl, sofiaToken, signal) => {
+  const client = createClient(baseUrl, undefined, { token: sofiaToken, mode: "sofia" });
   const result = await client.session.status(undefined, { signal });
   if (result.data !== undefined) return result.data;
   throw result.error;
@@ -110,7 +110,7 @@ const defaultSessionStatusFetcher: SessionStatusFetcher = async (baseUrl, openwo
 let syncSubscriptionFactory = defaultSyncSubscriptionFactory;
 let sessionStatusFetcher = defaultSessionStatusFetcher;
 
-export function markSessionSnapshotFetchStart(snapshot: OpenworkSessionSnapshot, startedAt: number) {
+export function markSessionSnapshotFetchStart(snapshot: SofiaSessionSnapshot, startedAt: number) {
   sessionSnapshotFetchStarts.set(snapshot, startedAt);
 }
 
@@ -688,11 +688,11 @@ function applyEvent(entry: SyncEntry, workspaceId: string, event: OpencodeEvent)
     // renderer derives the visible transcript from this cursor, so a revert
     // (or its cleanup on the next prompt) must reach the snapshot cache or
     // the transcript stays frozen on stale history.
-    queryClient.setQueryData<OpenworkSessionSnapshot>(
+    queryClient.setQueryData<SofiaSessionSnapshot>(
       snapshotKey(workspaceId, update.sessionId),
       (current) => {
         if (!current) return current;
-        const revert = (update.info as { revert?: OpenworkSessionSnapshot["session"]["revert"] }).revert;
+        const revert = (update.info as { revert?: SofiaSessionSnapshot["session"]["revert"] }).revert;
         return { ...current, session: { ...current.session, revert } };
       },
     );
@@ -907,7 +907,7 @@ function applyEvent(entry: SyncEntry, workspaceId: string, event: OpencodeEvent)
     queryClient.setQueryData<UIMessage[]>(transcriptKey(workspaceId, props.sessionID), (current = []) =>
       current.filter((message) => message.id !== props.messageID),
     );
-    queryClient.setQueryData<OpenworkSessionSnapshot>(
+    queryClient.setQueryData<SofiaSessionSnapshot>(
       snapshotKey(workspaceId, props.sessionID),
       (current) => {
         if (!current) return current;
@@ -1156,7 +1156,7 @@ function startSync(input: SyncOptions, entry: SyncEntry) {
     const connectionController = new AbortController();
     activeConnectionController = connectionController;
     try {
-      const stream = await syncSubscriptionFactory(input.baseUrl, entry.openworkToken, connectionController.signal);
+      const stream = await syncSubscriptionFactory(input.baseUrl, entry.sofiaToken, connectionController.signal);
       retryDelayMs = 1_000;
       lastEventAt = Date.now();
       void reconcileSessionRunStatuses(entry, input, connectionController.signal);
@@ -1203,7 +1203,7 @@ async function reconcileSessionRunStatuses(entry: SyncEntry, input: SyncOptions,
   const startedAt = Date.now();
   let statuses: Record<string, SessionStatus>;
   try {
-    statuses = await sessionStatusFetcher(input.baseUrl, entry.openworkToken, signal);
+    statuses = await sessionStatusFetcher(input.baseUrl, entry.sofiaToken, signal);
   } catch {
     return;
   }
@@ -1226,7 +1226,7 @@ export function ensureWorkspaceSessionSync(input: SyncOptions) {
   const key = syncKey(input);
   const existing = syncs.get(key);
   if (existing) {
-    existing.openworkToken = input.openworkToken;
+    existing.sofiaToken = input.sofiaToken;
     if (existing.disposeTimer) {
       clearTimeout(existing.disposeTimer);
       existing.disposeTimer = null;
@@ -1241,7 +1241,7 @@ export function ensureWorkspaceSessionSync(input: SyncOptions) {
 
   const created: SyncEntry = {
     input,
-    openworkToken: input.openworkToken,
+    sofiaToken: input.sofiaToken,
     refs: 1,
     dispose: () => {},
     disposeTimer: null,
@@ -1258,7 +1258,7 @@ export function ensureWorkspaceSessionSync(input: SyncOptions) {
   };
   created.titleRecovery = createSessionTitleRecovery({
     fetch: async (sessionId) => {
-      const client = createClient(input.baseUrl, undefined, { token: created.openworkToken, mode: "openwork" });
+      const client = createClient(input.baseUrl, undefined, { token: created.sofiaToken, mode: "sofia" });
       const [session, messages] = await Promise.all([
         client.session.get({ sessionID: sessionId }).then(unwrap),
         client.session.messages({ sessionID: sessionId, limit: 20 }).then(unwrap),
@@ -1273,7 +1273,7 @@ export function ensureWorkspaceSessionSync(input: SyncOptions) {
       };
     },
     onResolved: (sessionId, title) => {
-      getReactQueryClient().setQueryData<OpenworkSessionSnapshot>(
+      getReactQueryClient().setQueryData<SofiaSessionSnapshot>(
         snapshotKey(input.workspaceId, sessionId),
         (current) => current
           ? { ...current, session: { ...current.session, title } }
@@ -1318,7 +1318,7 @@ function releaseWorkspaceSessionSync(input: SyncOptions) {
   }, workspaceSyncDisposeGraceMs);
 }
 
-export function seedSessionState(workspaceId: string, snapshot: OpenworkSessionSnapshot) {
+export function seedSessionState(workspaceId: string, snapshot: SofiaSessionSnapshot) {
   const queryClient = getReactQueryClient();
   const key = transcriptKey(workspaceId, snapshot.session.id);
   const incoming = snapshotToUIMessages(snapshot);
@@ -1367,7 +1367,7 @@ export function applySessionRevert(workspaceId: string, session: Session) {
   const queryClient = getReactQueryClient();
   const revertMessageId = session.revert?.messageID ?? null;
 
-  queryClient.setQueryData<OpenworkSessionSnapshot>(
+  queryClient.setQueryData<SofiaSessionSnapshot>(
     snapshotKey(workspaceId, session.id),
     (current) => (current ? { ...current, session: { ...current.session, revert: session.revert } } : current),
   );
@@ -1382,7 +1382,7 @@ export function applySessionRevert(workspaceId: string, session: Session) {
 export function applySessionUnrevert(workspaceId: string, sessionId: string) {
   const queryClient = getReactQueryClient();
   void queryClient.cancelQueries({ queryKey: snapshotKey(workspaceId, sessionId) });
-  queryClient.setQueryData<OpenworkSessionSnapshot>(
+  queryClient.setQueryData<SofiaSessionSnapshot>(
     snapshotKey(workspaceId, sessionId),
     (current) => (current ? { ...current, session: { ...current.session, revert: undefined } } : current),
   );
@@ -1437,7 +1437,7 @@ export function __createWorkspaceSessionSyncForTest(input: SyncOptions) {
   const key = syncKey(input);
   syncs.set(key, {
     input,
-    openworkToken: input.openworkToken,
+    sofiaToken: input.sofiaToken,
     refs: 1,
     dispose: () => {},
     disposeTimer: null,

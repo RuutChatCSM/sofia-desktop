@@ -54,14 +54,14 @@ function rowsForTable(table: unknown) {
 }
 
 beforeAll(async () => {
-  mock.module("@openwork-ee/den-db/schema", () => ({
+  mock.module("@sofia-ee/den-db/schema", () => ({
     AuthSessionTable,
     MemberTable,
     OAuthAccessTokenTable,
     OAuthConsentTable,
     OAuthRefreshTokenTable,
   }))
-  mock.module("@openwork-ee/den-db/drizzle", () => ({
+  mock.module("@sofia-ee/den-db/drizzle", () => ({
     and: (...conditions: unknown[]) => ({ operator: "and", conditions }),
     eq: (field: unknown, value: unknown) => ({ operator: "eq", field, value }),
     inArray: (field: unknown, values: unknown[]) => ({ operator: "inArray", field, values }),

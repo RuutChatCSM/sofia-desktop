@@ -1,5 +1,5 @@
-import { Tool, toolError } from "@openwork/codemode"
-import type { DenTypeId } from "@openwork-ee/utils/typeid"
+import { Tool, toolError } from "@sofia/codemode"
+import type { DenTypeId } from "@sofia-ee/utils/typeid"
 import { Effect } from "effect"
 import type { Hono } from "hono"
 import { z } from "zod"
@@ -308,7 +308,7 @@ export function externalCapabilitySuccessToolResult(
     : {}
   const meta = {
     ...providerMeta,
-    ...(result.mcpApp ? { "openwork/mcpApp": result.mcpApp } : {}),
+    ...(result.mcpApp ? { "sofia/mcpApp": result.mcpApp } : {}),
   }
   if (!result.schemaGuidance) {
     return {
@@ -574,7 +574,7 @@ const externalMcpSource: CapabilitySource = {
       return {
         content: textContent(connectionActionTextFallback(payload)),
         structuredContent: { ...payload },
-        _meta: { "openwork/mcpApp": connectionActionLaunch(payload) },
+        _meta: { "sofia/mcpApp": connectionActionLaunch(payload) },
       }
     }
     const result = await executeExternalCapability({

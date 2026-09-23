@@ -1,12 +1,12 @@
 import { expect } from "vitest";
-import { control, createAndSelectWorkspace, evalIn, waitFor } from "@openwork/behaviors";
-import { desktop } from "@openwork/hosts";
-import { needs, test } from "@openwork/testkit";
+import { control, createAndSelectWorkspace, evalIn, waitFor } from "@sofia/behaviors";
+import { desktop } from "@sofia/hosts";
+import { needs, test } from "@sofia/testkit";
 
-const e2eTestsEnabled = process.env.OPENWORK_EVAL_E2E_TESTS === "1";
+const e2eTestsEnabled = process.env.SOFIA_EVAL_E2E_TESTS === "1";
 const title = e2eTestsEnabled
   ? "the per-workspace New task plus stays clickable over a long truncated workspace name"
-  : "workspace new-task hit target skipped — needs: set OPENWORK_EVAL_E2E_TESTS=1";
+  : "workspace new-task hit target skipped — needs: set SOFIA_EVAL_E2E_TESTS=1";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -52,11 +52,11 @@ const plusHitExpression = `(() => {
 })()`;
 
 test.skipIf(!e2eTestsEnabled)(title, async ({ evidence }) => {
-  needs({ optIn: ["OPENWORK_EVAL_E2E_TESTS"] });
+  needs({ optIn: ["SOFIA_EVAL_E2E_TESTS"] });
 
   await using app = await desktop({ name: "workspace-new-task-hit-target" });
   await createAndSelectWorkspace(app, {
-    path: `/tmp/openwork-kitchen-vercel-env-hit-target-${Date.now()}`,
+    path: `/tmp/sofia-kitchen-vercel-env-hit-target-${Date.now()}`,
   });
 
   await waitFor(app, `Boolean(document.querySelector(${JSON.stringify(plusSelector)}))`, {

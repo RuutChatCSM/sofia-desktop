@@ -4,8 +4,8 @@ set -euo pipefail
 # Start the Den server stack inside a Daytona sandbox.
 # Services: MySQL, Den API, Den Web, and worker proxy.
 
-if [ -n "${OPENWORK_WORKSPACE_DIR:-}" ]; then
-  REPO_DIR="$OPENWORK_WORKSPACE_DIR"
+if [ -n "${SOFIA_WORKSPACE_DIR:-}" ]; then
+  REPO_DIR="$SOFIA_WORKSPACE_DIR"
 elif [ -f /workspace/package.json ]; then
   REPO_DIR="/workspace"
 else
@@ -17,7 +17,7 @@ cd "$REPO_DIR"
 DEN_API_PORT="${DEN_API_PORT:-8788}"
 DEN_WEB_PORT="${DEN_WEB_PORT:-3005}"
 DEN_WORKER_PROXY_PORT="${DEN_WORKER_PROXY_PORT:-8789}"
-PNPM_STORE="${PNPM_STORE:-$REPO_DIR/.openwork-daytona/pnpm-store}"
+PNPM_STORE="${PNPM_STORE:-$REPO_DIR/.sofia-daytona/pnpm-store}"
 
 DEN_API_PUBLIC_URL="${DEN_API_PUBLIC_URL:-http://localhost:$DEN_API_PORT}"
 DEN_WEB_PUBLIC_URL="${DEN_WEB_PUBLIC_URL:-http://localhost:$DEN_WEB_PORT}"
@@ -26,12 +26,12 @@ DEN_WEB_PUBLIC_HOST="${DEN_WEB_PUBLIC_URL#http://}"
 DEN_WEB_PUBLIC_HOST="${DEN_WEB_PUBLIC_HOST#https://}"
 DEN_WEB_PUBLIC_HOST="${DEN_WEB_PUBLIC_HOST%%/*}"
 
-export OPENWORK_DEV_MODE="${OPENWORK_DEV_MODE:-1}"
+export SOFIA_DEV_MODE="${SOFIA_DEV_MODE:-1}"
 export DEN_ORG_MODE="${DEN_ORG_MODE:-multi_org}"
 # Eval sign-ups must not depend on the HIBP API.
 export DEN_PASSWORD_BREACH_SCREENING_ENABLED="${DEN_PASSWORD_BREACH_SCREENING_ENABLED:-false}"
 export DEN_GENERATED_ARTIFACT_VIEWS_ENABLED="${DEN_GENERATED_ARTIFACT_VIEWS_ENABLED:-false}"
-export DATABASE_URL="${DATABASE_URL:-mysql://root:password@127.0.0.1:3306/openwork_den}"
+export DATABASE_URL="${DATABASE_URL:-mysql://root:password@127.0.0.1:3306/sofia_den}"
 export DEN_DB_ENCRYPTION_KEY="${DEN_DB_ENCRYPTION_KEY:-daytona-den-db-encryption-key-please-change-1234567890}"
 export BETTER_AUTH_SECRET="${BETTER_AUTH_SECRET:-daytona-den-auth-secret-please-change-1234567890}"
 export BETTER_AUTH_URL="${BETTER_AUTH_URL:-$DEN_WEB_PUBLIC_URL}"
@@ -41,7 +41,7 @@ export DEN_MCP_RESOURCE_URL="${DEN_MCP_RESOURCE_URL:-$DEN_API_PUBLIC_URL/mcp}"
 export DEN_API_BASE="${DEN_API_BASE:-http://127.0.0.1:$DEN_API_PORT}"
 export DEN_AUTH_ORIGIN="${DEN_AUTH_ORIGIN:-$DEN_WEB_PUBLIC_URL}"
 export DEN_AUTH_FALLBACK_BASE="${DEN_AUTH_FALLBACK_BASE:-http://127.0.0.1:$DEN_API_PORT}"
-export NEXT_PUBLIC_OPENWORK_AUTH_CALLBACK_URL="${NEXT_PUBLIC_OPENWORK_AUTH_CALLBACK_URL:-$DEN_WEB_PUBLIC_URL}"
+export NEXT_PUBLIC_SOFIA_AUTH_CALLBACK_URL="${NEXT_PUBLIC_SOFIA_AUTH_CALLBACK_URL:-$DEN_WEB_PUBLIC_URL}"
 export DEN_PROVISIONER_MODE="${DEN_PROVISIONER_MODE:-stub}"
 export DEN_WORKER_URL_TEMPLATE="${DEN_WORKER_URL_TEMPLATE:-https://workers.local/{workerId}}"
 export DAYTONA_WORKER_PROXY_BASE_URL="${DAYTONA_WORKER_PROXY_BASE_URL:-$DEN_WORKER_PROXY_PUBLIC_URL}"
@@ -103,7 +103,7 @@ wait_for_http() {
 }
 
 echo "==> Starting MySQL..."
-run_root service mysql start >/tmp/openwork-mysql-service.log 2>&1 || run_root service mariadb start >/tmp/openwork-mysql-service.log 2>&1
+run_root service mysql start >/tmp/sofia-mysql-service.log 2>&1 || run_root service mariadb start >/tmp/sofia-mysql-service.log 2>&1
 
 for _ in $(seq 1 60); do
   if mysql -uroot -ppassword -e "SELECT 1" >/dev/null 2>&1; then
@@ -118,7 +118,7 @@ for _ in $(seq 1 60); do
 done
 
 "${MYSQL_ROOT_CMD[@]}" <<'SQL'
-CREATE DATABASE IF NOT EXISTS openwork_den;
+CREATE DATABASE IF NOT EXISTS sofia_den;
 ALTER USER 'root'@'localhost' IDENTIFIED BY 'password';
 CREATE USER IF NOT EXISTS 'root'@'%' IDENTIFIED BY 'password';
 GRANT ALL PRIVILEGES ON *.* TO 'root'@'localhost' WITH GRANT OPTION;
@@ -127,8 +127,8 @@ FLUSH PRIVILEGES;
 SQL
 
 echo "==> Installing dependencies if needed..."
-mkdir -p "$PNPM_STORE" .openwork-daytona
-baseline=.openwork-daytona/pnpm-lock.sha256
+mkdir -p "$PNPM_STORE" .sofia-daytona
+baseline=.sofia-daytona/pnpm-lock.sha256
 current="$(sha256sum pnpm-lock.yaml | cut -d " " -f 1)"
 if [ ! -d node_modules ] || [ ! -f "$baseline" ] || [ "$(cat "$baseline")" != "$current" ]; then
   CI=1 pnpm install --store-dir "$PNPM_STORE" --frozen-lockfile || CI=1 pnpm install --store-dir "$PNPM_STORE"
@@ -138,10 +138,10 @@ else
 fi
 
 echo "==> Pushing Den DB schema..."
-pnpm --filter @openwork-ee/den-db db:push > /tmp/den-db-push.log 2>&1
+pnpm --filter @sofia-ee/den-db db:push > /tmp/den-db-push.log 2>&1
 
 echo "==> Building Den API runtime assets..."
-pnpm --filter @openwork-ee/den-api run build:mcp-apps
+pnpm --filter @sofia-ee/den-api run build:mcp-apps
 
 echo "==> Starting Den API on :$DEN_API_PORT..."
 # The den-api process cmdline is "tsx watch src/main.ts" (cwd-relative), so a
@@ -166,15 +166,15 @@ nohup env \
   DEN_ORG_MODE="$DEN_ORG_MODE" \
   DEN_PASSWORD_BREACH_SCREENING_ENABLED="$DEN_PASSWORD_BREACH_SCREENING_ENABLED" \
   DEN_GENERATED_ARTIFACT_VIEWS_ENABLED="$DEN_GENERATED_ARTIFACT_VIEWS_ENABLED" \
-  OPENWORK_DEV_MODE="$OPENWORK_DEV_MODE" \
+  SOFIA_DEV_MODE="$SOFIA_DEV_MODE" \
   NODE_OPTIONS="--conditions=development" \
-  pnpm --filter @openwork-ee/den-api exec tsx watch src/main.ts > /tmp/den-api.log 2>&1 &
+  pnpm --filter @sofia-ee/den-api exec tsx watch src/main.ts > /tmp/den-api.log 2>&1 &
 
 wait_for_http "http://127.0.0.1:$DEN_API_PORT/health" "Den API" 180
 
 if [ "${RUN_SEED:-0}" = "1" ]; then
   demo_email="${DEN_DEMO_OWNER_EMAIL:-alex@acme.test}"
-  demo_password="${DEN_DEMO_OWNER_PASSWORD:-OpenWorkDemo123!}"
+  demo_password="${DEN_DEMO_OWNER_PASSWORD:-SofiaDemo123!}"
   signin_ok() {
     curl -sf -o /dev/null -X POST "http://127.0.0.1:$DEN_API_PORT/api/auth/sign-in/email" \
       -H 'content-type: application/json' \
@@ -191,7 +191,7 @@ if [ "${RUN_SEED:-0}" = "1" ]; then
       BETTER_AUTH_URL="$BETTER_AUTH_URL" \
       DEN_API_PUBLIC_URL="$DEN_API_PUBLIC_URL" \
       DEN_ORG_MODE="$DEN_ORG_MODE" \
-      OPENWORK_DEV_MODE="$OPENWORK_DEV_MODE" \
+      SOFIA_DEV_MODE="$SOFIA_DEV_MODE" \
       DEN_DEMO_SEED_FETCH_GITHUB="${DEN_DEMO_SEED_FETCH_GITHUB:-0}" \
       node --conditions=development --import tsx scripts/seed-demo-org.ts) > /tmp/den-seed.log 2>&1
     if signin_ok; then
@@ -210,13 +210,13 @@ pkill -f "tsx watch src/server.ts" >/dev/null 2>&1 || true
 nohup env \
   PORT="$DEN_WORKER_PROXY_PORT" \
   DATABASE_URL="$DATABASE_URL" \
-  OPENWORK_DEV_MODE="$OPENWORK_DEV_MODE" \
+  SOFIA_DEV_MODE="$SOFIA_DEV_MODE" \
   DAYTONA_API_URL="${DAYTONA_API_URL:-}" \
   DAYTONA_API_KEY="${DAYTONA_API_KEY:-}" \
   DAYTONA_TARGET="${DAYTONA_TARGET:-}" \
-  DAYTONA_OPENWORK_PORT="${DAYTONA_OPENWORK_PORT:-8787}" \
+  DAYTONA_SOFIA_PORT="${DAYTONA_SOFIA_PORT:-8787}" \
   DAYTONA_SIGNED_PREVIEW_EXPIRES_SECONDS="${DAYTONA_SIGNED_PREVIEW_EXPIRES_SECONDS:-86400}" \
-  pnpm --filter @openwork-ee/den-worker-proxy exec tsx watch src/server.ts > /tmp/den-worker-proxy.log 2>&1 &
+  pnpm --filter @sofia-ee/den-worker-proxy exec tsx watch src/server.ts > /tmp/den-worker-proxy.log 2>&1 &
 
 wait_for_http_status() {
   local url="$1"
@@ -247,13 +247,13 @@ if ! env \
   DEN_API_BASE="$DEN_API_BASE" \
   DEN_AUTH_ORIGIN="$DEN_AUTH_ORIGIN" \
   DEN_AUTH_FALLBACK_BASE="$DEN_AUTH_FALLBACK_BASE" \
-  NEXT_PUBLIC_OPENWORK_AUTH_CALLBACK_URL="$NEXT_PUBLIC_OPENWORK_AUTH_CALLBACK_URL" \
+  NEXT_PUBLIC_SOFIA_AUTH_CALLBACK_URL="$NEXT_PUBLIC_SOFIA_AUTH_CALLBACK_URL" \
   NEXT_PUBLIC_POSTHOG_KEY= \
   NEXT_PUBLIC_POSTHOG_API_KEY= \
   DEN_ORG_MODE="$DEN_ORG_MODE" \
-  OPENWORK_DEV_MODE="$OPENWORK_DEV_MODE" \
+  SOFIA_DEV_MODE="$SOFIA_DEV_MODE" \
   DEN_WEB_ALLOWED_DEV_ORIGINS="$DEN_WEB_ALLOWED_DEV_ORIGINS" \
-  bash -c 'pnpm --filter @openwork/ui build && pnpm --filter @openwork-ee/utils build && pnpm --filter @openwork-ee/den-web build' > /tmp/den-web-build.log 2>&1; then
+  bash -c 'pnpm --filter @sofia/ui build && pnpm --filter @sofia-ee/utils build && pnpm --filter @sofia-ee/den-web build' > /tmp/den-web-build.log 2>&1; then
   echo "ERROR: Den Web build failed. Last 80 lines:" >&2
   tail -n 80 /tmp/den-web-build.log >&2
   exit 1
@@ -267,17 +267,17 @@ nohup env \
   DEN_API_BASE="$DEN_API_BASE" \
   DEN_AUTH_ORIGIN="$DEN_AUTH_ORIGIN" \
   DEN_AUTH_FALLBACK_BASE="$DEN_AUTH_FALLBACK_BASE" \
-  NEXT_PUBLIC_OPENWORK_AUTH_CALLBACK_URL="$NEXT_PUBLIC_OPENWORK_AUTH_CALLBACK_URL" \
+  NEXT_PUBLIC_SOFIA_AUTH_CALLBACK_URL="$NEXT_PUBLIC_SOFIA_AUTH_CALLBACK_URL" \
   NEXT_PUBLIC_POSTHOG_KEY= \
   NEXT_PUBLIC_POSTHOG_API_KEY= \
   DEN_ORG_MODE="$DEN_ORG_MODE" \
-  OPENWORK_DEV_MODE="$OPENWORK_DEV_MODE" \
+  SOFIA_DEV_MODE="$SOFIA_DEV_MODE" \
   DEN_WEB_ALLOWED_DEV_ORIGINS="$DEN_WEB_ALLOWED_DEV_ORIGINS" \
-  pnpm --filter @openwork-ee/den-web exec next start --hostname 0.0.0.0 --port "$DEN_WEB_PORT" > /tmp/den-web.log 2>&1 &
+  pnpm --filter @sofia-ee/den-web exec next start --hostname 0.0.0.0 --port "$DEN_WEB_PORT" > /tmp/den-web.log 2>&1 &
 
 wait_for_http "http://127.0.0.1:$DEN_WEB_PORT/api/den/health" "Den Web" 180
 
-cat > .openwork-daytona/server-env <<EOF
+cat > .sofia-daytona/server-env <<EOF
 DEN_API_URL=$DEN_API_PUBLIC_URL
 DEN_WEB_URL=$DEN_WEB_PUBLIC_URL
 DEN_WORKER_PROXY_URL=$DEN_WORKER_PROXY_PUBLIC_URL
@@ -288,7 +288,7 @@ EOF
 
 echo ""
 echo "============================================"
-echo "  OpenWork Daytona server stack ready"
+echo "  Sofia Daytona server stack ready"
 echo ""
 echo "  Den Web:       $DEN_WEB_PUBLIC_URL"
 echo "  Den API:       $DEN_API_PUBLIC_URL"

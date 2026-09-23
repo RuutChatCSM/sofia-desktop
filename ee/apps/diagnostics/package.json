@@ -1,5 +1,5 @@
 {
-  "name": "@openwork-ee/diagnostics",
+  "name": "@sofia-ee/diagnostics",
   "private": true,
   "version": "0.0.0",
   "scripts": {
@@ -10,7 +10,7 @@
     "test": "bun test"
   },
   "dependencies": {
-    "@openwork/types": "workspace:*",
+    "@sofia/types": "workspace:*",
     "next": "16.2.11",
     "react": "catalog:",
     "react-dom": "catalog:"

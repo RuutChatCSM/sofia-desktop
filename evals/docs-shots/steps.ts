@@ -1,6 +1,6 @@
 import { setTimeout as delay } from "node:timers/promises";
-import { fill } from "@openwork/behaviors";
-import type { Surface } from "@openwork/cdp";
+import { fill } from "@sofia/behaviors";
+import type { Surface } from "@sofia/cdp";
 import { inPage } from "./inpage.ts";
 
 export type Step<T extends Surface = Surface> = (surface: T) => Promise<void>;

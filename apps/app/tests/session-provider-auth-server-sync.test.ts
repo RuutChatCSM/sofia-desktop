@@ -1,17 +1,17 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { clearDenSession } from "../src/app/lib/den";
-import { createOpenworkServerClient } from "../src/app/lib/openwork-server";
+import { createSofiaServerClient } from "../src/app/lib/sofia-server";
 import { createClient } from "../src/app/lib/opencode";
 import type { ResolvedWorkspaceEndpoint } from "../src/app/lib/workspace-endpoint";
 import type { ProviderListItem, WorkspaceDisplay } from "../src/app/types";
-import { createSessionOpenworkServer } from "../src/react-app/domains/connections/provider-auth/session-openwork-server";
+import { createSessionSofiaServer } from "../src/react-app/domains/connections/provider-auth/session-sofia-server";
 import { createProviderAuthStore } from "../src/react-app/domains/connections/provider-auth/store";
 
 /**
  * Regression tests for #3671 (org-published LLM providers never reach
  * signed-in desktops): the session route — the app's default surface — used to
- * feed the provider-auth store a fabricated openwork-server snapshot without
+ * feed the provider-auth store a fabricated sofia-server snapshot without
  * the `providerSync` capability or host-token auth, so
  * `serverHandlesProviderSync()` was permanently false there. After sign-in
  * the store therefore never PUT the Den session to the local server
@@ -19,7 +19,7 @@ import { createProviderAuthStore } from "../src/react-app/domains/connections/pr
  * import loop against Den.
  *
  * These tests drive the real store through the real session-route snapshot
- * builder (`createSessionOpenworkServer`) and assert the store takes the
+ * builder (`createSessionSofiaServer`) and assert the store takes the
  * server-side path for local endpoints: PUT /den-session with the host token,
  * POST /cloud-provider-sync/run, and zero renderer-side Den provider fetches.
  */
@@ -27,7 +27,7 @@ import { createProviderAuthStore } from "../src/react-app/domains/connections/pr
 const originalWindow = globalThis.window;
 const originalFetch = globalThis.fetch;
 const originalConsoleInfo = console.info;
-const originalDeployment = process.env.VITE_OPENWORK_DEPLOYMENT;
+const originalDeployment = process.env.VITE_SOFIA_DEPLOYMENT;
 
 const LOCAL_SERVER_ORIGIN = "http://127.0.0.1:7899";
 const REMOTE_SERVER_ORIGIN = "https://worker.example";
@@ -83,16 +83,16 @@ function installWindow(): Storage {
       },
       localStorage,
       location: { origin: "https://self-hosted.example" },
-      __OPENWORK_GATEWAY__: undefined,
+      __SOFIA_GATEWAY__: undefined,
     },
   });
   return localStorage;
 }
 
 function installCloudSession(storage: Storage) {
-  storage.setItem("openwork.den.baseUrl", "https://den.example");
-  storage.setItem("openwork.den.authToken", "den-token");
-  storage.setItem("openwork.den.activeOrgId", "org_test");
+  storage.setItem("sofia.den.baseUrl", "https://den.example");
+  storage.setItem("sofia.den.authToken", "den-token");
+  storage.setItem("sofia.den.activeOrgId", "org_test");
 }
 
 function getRequestUrl(input: RequestInfo | URL): string {
@@ -184,7 +184,7 @@ function installFetchMock(
         return jsonResponse({ hasSession: true, lastRun: null, providers: [] });
       }
       if (url.pathname === "/workspace/ws_1/config" && method === "GET") {
-        return jsonResponse({ opencode: {}, openwork: {} });
+        return jsonResponse({ opencode: {}, sofia: {} });
       }
       if (url.pathname === "/workspace/ws_1/config" && method === "PATCH") {
         return jsonResponse({ updatedAt: 1 });
@@ -202,7 +202,7 @@ function installFetchMock(
         return jsonResponse({ healthy: true, version: "1.17.11" });
       }
       if (url.pathname === "/health") {
-        return jsonResponse({ healthy: true, version: "1.17.11" });
+        return jsonResponse({ ok: true, version: "1.17.11" });
       }
       if (url.pathname === "/provider") {
         return jsonResponse({ all: [], connected: [], default: {} });
@@ -228,7 +228,7 @@ function installFetchMock(
 }
 
 function makeEndpoint(options: { origin: string; isRemote: boolean }): ResolvedWorkspaceEndpoint {
-  const client = createOpenworkServerClient({ baseUrl: options.origin, token: "client-token" });
+  const client = createSofiaServerClient({ baseUrl: options.origin, token: "client-token" });
   const mountedBaseUrl = `${options.origin}/workspace/ws_1`;
   return {
     baseUrl: options.origin,
@@ -248,7 +248,7 @@ function createSessionRouteStore(options: {
 }) {
   const opencodeClient = createClient("https://engine.example", "/tmp/workspace_test", {
     token: "engine-token",
-    mode: "openwork",
+    mode: "sofia",
   }, (input, init) => globalThis.fetch(input, init));
   const workspace = {
     id: "workspace_test",
@@ -274,7 +274,7 @@ function createSessionRouteStore(options: {
     selectedWorkspaceRoot: () => "/tmp/workspace_test",
     runtimeWorkspaceId: () => "ws_1",
     // The exact snapshot builder the session route mounts.
-    openworkServer: createSessionOpenworkServer({
+    sofiaServer: createSessionSofiaServer({
       endpoint: () => options.endpoint,
       hostToken: () => options.hostToken,
     }),
@@ -296,7 +296,7 @@ function createSessionRouteStore(options: {
 
 describe("session-route cloud provider sync wiring", () => {
   beforeEach(() => {
-    process.env.VITE_OPENWORK_DEPLOYMENT = "web";
+    process.env.VITE_SOFIA_DEPLOYMENT = "web";
     console.info = () => undefined;
   });
 
@@ -304,8 +304,8 @@ describe("session-route cloud provider sync wiring", () => {
     Object.defineProperty(globalThis, "window", { configurable: true, value: originalWindow });
     Object.defineProperty(globalThis, "fetch", { configurable: true, value: originalFetch });
     console.info = originalConsoleInfo;
-    if (originalDeployment === undefined) delete process.env.VITE_OPENWORK_DEPLOYMENT;
-    else process.env.VITE_OPENWORK_DEPLOYMENT = originalDeployment;
+    if (originalDeployment === undefined) delete process.env.VITE_SOFIA_DEPLOYMENT;
+    else process.env.VITE_SOFIA_DEPLOYMENT = originalDeployment;
   });
 
   test("startup hydrates assigned organization models without a workspace endpoint", async () => {
@@ -374,7 +374,7 @@ describe("session-route cloud provider sync wiring", () => {
   test("logout removes connected provider credentials and resets their saved default", async () => {
     const storage = installWindow();
     installCloudSession(storage);
-    storage.setItem("openwork.defaultModel", "anthropic/claude-fable-5");
+    storage.setItem("sofia.defaultModel", "anthropic/claude-fable-5");
     const requests: RecordedRequest[] = [];
     installFetchMock(requests);
     const store = createSessionRouteStore({
@@ -387,17 +387,17 @@ describe("session-route cloud provider sync wiring", () => {
     clearDenSession();
     for (let attempt = 0; attempt < 20; attempt += 1) {
       if (requests.some((request) =>
-        request.method === "DELETE" && new URL(request.url).pathname === "/auth/anthropic"
+        request.method === "DELETE" && new URL(request.url).pathname.endsWith("/codex/auth/anthropic")
       )) break;
       await new Promise((resolve) => setTimeout(resolve, 0));
     }
 
     expect(
       requests.filter((request) =>
-        request.method === "DELETE" && new URL(request.url).pathname === "/auth/anthropic"
+        request.method === "DELETE" && new URL(request.url).pathname.endsWith("/codex/auth/anthropic")
       ),
     ).toHaveLength(1);
-    expect(storage.getItem("openwork.defaultModel")).not.toBe("anthropic/claude-fable-5");
+    expect(storage.getItem("sofia.defaultModel")).not.toBe("anthropic/claude-fable-5");
     store.dispose();
   });
 
@@ -470,7 +470,7 @@ describe("session-route cloud provider sync wiring", () => {
   test("falls back to the persisted host token for loopback servers when live host info is absent", async () => {
     const storage = installWindow();
     installCloudSession(storage);
-    storage.setItem("openwork.server.hostToken", "host-token-stored");
+    storage.setItem("sofia.server.hostToken", "host-token-stored");
     const requests: RecordedRequest[] = [];
     installFetchMock(requests, { runStatuses: [{ status: "no_session" }, { status: "noop" }] });
     const store = createSessionRouteStore({
@@ -491,7 +491,7 @@ describe("session-route cloud provider sync wiring", () => {
     const storage = installWindow();
     installCloudSession(storage);
     // Even a (stale) persisted local host token must not leak to a remote worker.
-    storage.setItem("openwork.server.hostToken", "host-token-stored");
+    storage.setItem("sofia.server.hostToken", "host-token-stored");
     const requests: RecordedRequest[] = [];
     installFetchMock(requests);
     const store = createSessionRouteStore({

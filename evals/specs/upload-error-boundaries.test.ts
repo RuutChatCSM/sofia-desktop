@@ -1,5 +1,5 @@
 import { expect } from "vitest";
-import { test } from "@openwork/testkit";
+import { test } from "@sofia/testkit";
 
 import { safeAttachmentFilename } from "../../apps/app/src/react-app/domains/session/sync/attachment-file-part";
 import { normalizeWorkspaceRelativePath } from "../../apps/server/src/routes/files";

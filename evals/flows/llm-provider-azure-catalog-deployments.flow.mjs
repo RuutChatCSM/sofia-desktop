@@ -14,14 +14,14 @@
  *      deployment id and the detail page shows exactly that model.
  *
  * Required env:
- * - OPENWORK_EVAL_DEN_WEB_URL          Den web origin
- * - OPENWORK_EVAL_DEN_EMAIL            Seeded admin email
- * - OPENWORK_EVAL_DEN_PASSWORD         Seeded admin password
- * - OPENWORK_EVAL_AZURE_FOUNDRY_RESOURCE  Azure AI Foundry resource name
- * - OPENWORK_EVAL_AZURE_FOUNDRY_API_KEY   Azure AI Foundry key (throwaway)
+ * - SOFIA_EVAL_DEN_WEB_URL          Den web origin
+ * - SOFIA_EVAL_DEN_EMAIL            Seeded admin email
+ * - SOFIA_EVAL_DEN_PASSWORD         Seeded admin password
+ * - SOFIA_EVAL_AZURE_FOUNDRY_RESOURCE  Azure AI Foundry resource name
+ * - SOFIA_EVAL_AZURE_FOUNDRY_API_KEY   Azure AI Foundry key (throwaway)
  */
 
-const RESOURCE_NAME = process.env.OPENWORK_EVAL_AZURE_FOUNDRY_RESOURCE ?? "";
+const RESOURCE_NAME = process.env.SOFIA_EVAL_AZURE_FOUNDRY_RESOURCE ?? "";
 const PROVIDER_NAME = "Acme Azure (Catalog)";
 const DEPLOYMENT = "gpt-5-mini";
 const CATALOG_NOISE = "gpt-4o";
@@ -52,17 +52,17 @@ export default {
   title: "Catalog Azure provider offers only the resource's real deployments",
   spec: "evals/cloud-provider-sync-flows.md",
   requiredEnv: [
-    "OPENWORK_EVAL_DEN_WEB_URL",
-    "OPENWORK_EVAL_DEN_EMAIL",
-    "OPENWORK_EVAL_DEN_PASSWORD",
-    "OPENWORK_EVAL_AZURE_FOUNDRY_RESOURCE",
-    "OPENWORK_EVAL_AZURE_FOUNDRY_API_KEY",
+    "SOFIA_EVAL_DEN_WEB_URL",
+    "SOFIA_EVAL_DEN_EMAIL",
+    "SOFIA_EVAL_DEN_PASSWORD",
+    "SOFIA_EVAL_AZURE_FOUNDRY_RESOURCE",
+    "SOFIA_EVAL_AZURE_FOUNDRY_API_KEY",
   ],
   steps: [
     {
       name: "Signed-in dashboard session (signs in if needed)",
       run: async (ctx) => {
-        const origin = ctx.env.OPENWORK_EVAL_DEN_WEB_URL.trim().replace(/\/+$/, "");
+        const origin = ctx.env.SOFIA_EVAL_DEN_WEB_URL.trim().replace(/\/+$/, "");
         await ctx.eval(`(() => { location.href = ${JSON.stringify(`${origin}/`)}; return true; })()`);
         await ctx.waitFor(
           `location.origin === ${JSON.stringify(origin)} && document.readyState === "complete"`,
@@ -79,8 +79,8 @@ export default {
               headers: { "content-type": "application/json" },
               credentials: "include",
               body: JSON.stringify({
-                email: ${JSON.stringify(ctx.env.OPENWORK_EVAL_DEN_EMAIL)},
-                password: ${JSON.stringify(ctx.env.OPENWORK_EVAL_DEN_PASSWORD)},
+                email: ${JSON.stringify(ctx.env.SOFIA_EVAL_DEN_EMAIL)},
+                password: ${JSON.stringify(ctx.env.SOFIA_EVAL_DEN_PASSWORD)},
               }),
             });
             return response.status;
@@ -93,7 +93,7 @@ export default {
     {
       name: "Pick Azure from the catalog: the models.dev list shows",
       run: async (ctx) => {
-        const origin = ctx.env.OPENWORK_EVAL_DEN_WEB_URL.trim().replace(/\/+$/, "");
+        const origin = ctx.env.SOFIA_EVAL_DEN_WEB_URL.trim().replace(/\/+$/, "");
         await ctx.eval(`(() => { location.href = ${JSON.stringify(`${origin}/dashboard/custom-llm-providers/new`)}; return true; })()`);
         await ctx.waitForText("Add a new LLM provider", { timeoutMs: 45_000 });
         await ctx.eval(fillInputExpr(
@@ -157,7 +157,7 @@ export default {
               ));
               await ctx.eval(fillInputExpr(
                 `[...document.querySelectorAll('input[type="password"]')].find((el) => el.placeholder.includes("AZURE_API_KEY"))`,
-                ctx.env.OPENWORK_EVAL_AZURE_FOUNDRY_API_KEY,
+                ctx.env.SOFIA_EVAL_AZURE_FOUNDRY_API_KEY,
               ));
             },
             assert: async () => {

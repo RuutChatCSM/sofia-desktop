@@ -9,17 +9,17 @@ import {
   commandMatchesPackagedSidecar,
   createRuntimeManager,
   embeddedServerImportUrl,
-  migrateOpenworkServerTokenStore,
+  migrateSofiaServerTokenStore,
   prepareRuntimeWorkspaceRoot,
   prioritizeWorkspacePaths,
   resetRuntimeStatesAfterFailedServerStart,
   resolveEngineRolloverPreference,
   resolveEvalLocalServerDelayMs,
-  resolveOpenworkServerConfigPath,
+  resolveSofiaServerConfigPath,
   seedWorkspacePathsForEmbeddedServer,
-  selectStickyOpenworkPortWorkspace,
+  selectStickySofiaPortWorkspace,
   snapshotEngineState,
-  snapshotOpenworkServerState,
+  snapshotSofiaServerState,
 } from "./runtime.mjs";
 
 describe("workspace root preparation", () => {
@@ -49,11 +49,11 @@ describe("workspace root preparation", () => {
   });
 
   it("returns the runtime lifecycle to idle after root preparation fails", async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), "openwork-runtime-root-"));
+    const root = await mkdtemp(path.join(os.tmpdir(), "sofia-runtime-root-"));
     try {
       const manager = createRuntimeManager({
         app: {
-          getPath: (name) => name === "exe" ? path.join(root, "OpenWork.exe") : root,
+          getPath: (name) => name === "exe" ? path.join(root, "Sofia App.exe") : root,
           isPackaged: false,
         },
         desktopRoot: path.dirname(fileURLToPath(import.meta.url)),
@@ -73,19 +73,19 @@ describe("workspace root preparation", () => {
       assert.equal(status.lifecycleState, "idle");
       assert.equal(status.engine.running, false);
       assert.equal(status.engine.projectDir, null);
-      assert.equal(status.openworkServer.running, false);
+      assert.equal(status.sofiaServer.running, false);
     } finally {
       await rm(root, { recursive: true, force: true });
     }
   });
 });
 
-describe("bundled OpenCode runtime", () => {
+describe("bundled Sofia engine runtime", () => {
   it("pins the engine release containing the timestamp-based session loop repair", async () => {
     const constantsPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../constants.json");
     const constants = JSON.parse(await readFile(constantsPath, "utf8"));
 
-    // OpenCode #40990 stops old assistant messages with lexicographically
+    // Sofia engine #40990 stops old assistant messages with lexicographically
     // later IDs from short-circuiting a newly appended user turn.
     assert.equal(constants.opencodeVersion, "v1.18.18");
   });
@@ -100,7 +100,7 @@ describe("engine rollover preference", () => {
   });
 
   it("reports the active mode in the desktop server snapshot", () => {
-    const snapshot = snapshotOpenworkServerState({
+    const snapshot = snapshotSofiaServerState({
       child: null,
       childExited: true,
       inProcess: true,
@@ -143,17 +143,17 @@ describe("seedWorkspacePathsForEmbeddedServer", () => {
   });
 });
 
-describe("selectStickyOpenworkPortWorkspace", () => {
+describe("selectStickySofiaPortWorkspace", () => {
   it("uses the requested workspace even when server config owns workspace loading", () => {
     assert.equal(
-      selectStickyOpenworkPortWorkspace(["/workspace/current"], []),
+      selectStickySofiaPortWorkspace(["/workspace/current"], []),
       "/workspace/current",
     );
   });
 
   it("falls back to server workspace paths when no requested path is available", () => {
     assert.equal(
-      selectStickyOpenworkPortWorkspace([], ["/workspace/from-server"]),
+      selectStickySofiaPortWorkspace([], ["/workspace/from-server"]),
       "/workspace/from-server",
     );
   });
@@ -161,11 +161,11 @@ describe("selectStickyOpenworkPortWorkspace", () => {
 
 describe("resolveEvalLocalServerDelayMs", () => {
   it("enables only positive finite eval delays", () => {
-    assert.equal(resolveEvalLocalServerDelayMs({ OPENWORK_EVAL_LOCAL_SERVER_DELAY_MS: "3000" }), 3000);
-    assert.equal(resolveEvalLocalServerDelayMs({ OPENWORK_EVAL_LOCAL_SERVER_DELAY_MS: "0" }), 0);
-    assert.equal(resolveEvalLocalServerDelayMs({ OPENWORK_EVAL_LOCAL_SERVER_DELAY_MS: "-1" }), 0);
-    assert.equal(resolveEvalLocalServerDelayMs({ OPENWORK_EVAL_LOCAL_SERVER_DELAY_MS: "Infinity" }), 0);
-    assert.equal(resolveEvalLocalServerDelayMs({ OPENWORK_EVAL_LOCAL_SERVER_DELAY_MS: "invalid" }), 0);
+    assert.equal(resolveEvalLocalServerDelayMs({ SOFIA_EVAL_LOCAL_SERVER_DELAY_MS: "3000" }), 3000);
+    assert.equal(resolveEvalLocalServerDelayMs({ SOFIA_EVAL_LOCAL_SERVER_DELAY_MS: "0" }), 0);
+    assert.equal(resolveEvalLocalServerDelayMs({ SOFIA_EVAL_LOCAL_SERVER_DELAY_MS: "-1" }), 0);
+    assert.equal(resolveEvalLocalServerDelayMs({ SOFIA_EVAL_LOCAL_SERVER_DELAY_MS: "Infinity" }), 0);
+    assert.equal(resolveEvalLocalServerDelayMs({ SOFIA_EVAL_LOCAL_SERVER_DELAY_MS: "invalid" }), 0);
   });
 });
 
@@ -173,8 +173,8 @@ describe("commandMatchesPackagedSidecar", () => {
   it("matches packaged opencode sidecars with platform suffixes", () => {
     assert.equal(
       commandMatchesPackagedSidecar(
-        "/Applications/OpenWork.app/Contents/Resources/sidecars/opencode-aarch64-apple-darwin serve --hostname 127.0.0.1 --port 49174 --cors *",
-        ["/Applications/OpenWork.app/Contents/Resources/sidecars"],
+        "/Applications/Sofia App.app/Contents/Resources/sidecars/opencode-aarch64-apple-darwin serve --hostname 127.0.0.1 --port 49174 --cors *",
+        ["/Applications/Sofia App.app/Contents/Resources/sidecars"],
       ),
       true,
     );
@@ -184,7 +184,7 @@ describe("commandMatchesPackagedSidecar", () => {
     assert.equal(
       commandMatchesPackagedSidecar(
         "/usr/local/bin/opencode serve --hostname 127.0.0.1 --port 49174",
-        ["/Applications/OpenWork.app/Contents/Resources/sidecars"],
+        ["/Applications/Sofia App.app/Contents/Resources/sidecars"],
       ),
       false,
     );
@@ -193,7 +193,7 @@ describe("commandMatchesPackagedSidecar", () => {
 
 describe("embeddedServerImportUrl", () => {
   it("returns the same file URL for unchanged metadata", async () => {
-    const dir = await mkdtemp(path.join(os.tmpdir(), "openwork-runtime-"));
+    const dir = await mkdtemp(path.join(os.tmpdir(), "sofia-runtime-"));
     try {
       const embeddedPath = path.join(dir, "embedded.js");
       await writeFile(embeddedPath, "export const value = 1;\n");
@@ -213,7 +213,7 @@ describe("embeddedServerImportUrl", () => {
   });
 
   it("changes when the file metadata changes", async () => {
-    const dir = await mkdtemp(path.join(os.tmpdir(), "openwork-runtime-"));
+    const dir = await mkdtemp(path.join(os.tmpdir(), "sofia-runtime-"));
     try {
       const embeddedPath = path.join(dir, "embedded.js");
       await writeFile(embeddedPath, "export const value = 1;\n");
@@ -228,32 +228,32 @@ describe("embeddedServerImportUrl", () => {
   });
 
   it("falls back to the plain file URL if stat fails", () => {
-    const missingPath = path.join(os.tmpdir(), "openwork-missing-embedded.js");
+    const missingPath = path.join(os.tmpdir(), "sofia-missing-embedded.js");
 
     assert.equal(embeddedServerImportUrl(missingPath), pathToFileURL(missingPath).href);
   });
 });
 
-describe("resolveOpenworkServerConfigPath", () => {
+describe("resolveSofiaServerConfigPath", () => {
   it("respects explicit server config path", () => {
     assert.equal(
-      resolveOpenworkServerConfigPath({ OPENWORK_SERVER_CONFIG: "/tmp/openwork/server.json" }),
-      "/tmp/openwork/server.json",
+      resolveSofiaServerConfigPath({ SOFIA_SERVER_CONFIG: "/tmp/sofia/server.json" }),
+      "/tmp/sofia/server.json",
     );
   });
 
   it("uses XDG config home on Unix", () => {
     if (process.platform === "win32") return;
     assert.equal(
-      resolveOpenworkServerConfigPath({ XDG_CONFIG_HOME: "/tmp/xdg" }),
-      "/tmp/xdg/openwork/server.json",
+      resolveSofiaServerConfigPath({ XDG_CONFIG_HOME: "/tmp/xdg" }),
+      "/tmp/xdg/sofia/server.json",
     );
   });
 });
 
-describe("OpenWork server credential persistence", () => {
+describe("Sofia App server credential persistence", () => {
   it("deterministically migrates legacy workspace credentials into one server bundle", () => {
-    const migrated = migrateOpenworkServerTokenStore({
+    const migrated = migrateSofiaServerTokenStore({
       version: 1,
       workspaces: {
         "/workspace/z": {
@@ -286,12 +286,12 @@ describe("OpenWork server credential persistence", () => {
         updatedAt: 20,
       },
     });
-    assert.deepEqual(migrateOpenworkServerTokenStore(migrated), migrated);
+    assert.deepEqual(migrateSofiaServerTokenStore(migrated), migrated);
   });
 });
 
 describe("snapshotEngineState", () => {
-  it("reports server-managed OpenCode liveness and pid without a child handle", () => {
+  it("reports server-managed Sofia engine liveness and pid without a child handle", () => {
     const snapshot = snapshotEngineState({
       child: null,
       childExited: false,

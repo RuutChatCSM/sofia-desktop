@@ -60,10 +60,10 @@ const GlobalSDKContext = createContext<GlobalSDKContextValue | undefined>(
   undefined,
 );
 
-function readOpenworkToken(): string {
+function readSofiaToken(): string {
   if (typeof window === "undefined") return "";
   try {
-    return (window.localStorage.getItem("openwork.server.token") ?? "").trim();
+    return (window.localStorage.getItem("sofia.server.token") ?? "").trim();
   } catch {
     return "";
   }
@@ -119,7 +119,7 @@ export function GlobalSDKProvider({ children }: GlobalSDKProviderProps) {
   }
   const emitter = emitterRef.current;
 
-  const token = readOpenworkToken();
+  const token = readSofiaToken();
   const headers =
     token && server.url.includes("/opencode")
       ? { Authorization: `Bearer ${token}` }

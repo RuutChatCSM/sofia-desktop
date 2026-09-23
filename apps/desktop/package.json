@@ -1,5 +1,5 @@
 {
-  "name": "@openwork/desktop",
+  "name": "@sofia/desktop",
   "private": true,
   "version": "0.0.0-dev",
   "desktopName": "app.sofia.desktop",
@@ -30,8 +30,8 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@opencode-ai/sdk": "^1.18.15",
-    "@openwork/enterprise-mcp-client": "workspace:*",
-    "@openwork/paths": "workspace:*",
+    "@sofia/enterprise-mcp-client": "workspace:*",
+    "@sofia/paths": "workspace:*",
     "@sentry/electron": "^7.16.0",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
@@ -49,7 +49,7 @@
   "devDependencies": {
     "@electron/asar": "^3.4.1",
     "@electron/rebuild": "^4.2.0",
-    "@openwork/types": "workspace:*",
+    "@sofia/types": "workspace:*",
     "electron": "^43.2.0",
     "electron-builder": "^26.15.3",
     "electron-devtools-installer": "^4.0.0"

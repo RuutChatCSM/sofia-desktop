@@ -1,14 +1,14 @@
 import { expect } from "vitest";
-import { denFetch, evalIn, waitFor } from "@openwork/behaviors";
-import { closeTarget, navigate, newPageTarget, reattachSurface } from "@openwork/cdp";
-import { screenshot, validate } from "@openwork/test-evidence";
-import { chrome } from "@openwork/hosts";
-import { needs, server, sleep, test, unmetNeeds } from "@openwork/testkit";
-import type { DenSession, DenFetchResult } from "@openwork/behaviors";
-import type { TestNeeds } from "@openwork/testkit";
+import { denFetch, evalIn, waitFor } from "@sofia/behaviors";
+import { closeTarget, navigate, newPageTarget, reattachSurface } from "@sofia/cdp";
+import { screenshot, validate } from "@sofia/test-evidence";
+import { chrome } from "@sofia/hosts";
+import { needs, server, sleep, test, unmetNeeds } from "@sofia/testkit";
+import type { DenSession, DenFetchResult } from "@sofia/behaviors";
+import type { TestNeeds } from "@sofia/testkit";
 
 const requirements: TestNeeds = {
-  optIn: ["OPENWORK_EVAL_E2E_TESTS"],
+  optIn: ["SOFIA_EVAL_E2E_TESTS"],
 };
 const missingRequirements = unmetNeeds(requirements, process.env);
 const title = missingRequirements.length > 0
@@ -139,8 +139,8 @@ test(title, async ({ evidence, place }) => {
   expect(signInOk, `Browser sign-in failed: ${JSON.stringify(rawSignIn)}`).toBe(true);
 
   const tokenStored = await evalIn(browser, `(() => {
-    localStorage.setItem("openwork:web:auth-token", ${JSON.stringify(den.admin.token)});
-    return localStorage.getItem("openwork:web:auth-token") === ${JSON.stringify(den.admin.token)};
+    localStorage.setItem("sofia:web:auth-token", ${JSON.stringify(den.admin.token)});
+    return localStorage.getItem("sofia:web:auth-token") === ${JSON.stringify(den.admin.token)};
   })()`);
   expect(tokenStored).toBe(true);
   await navigate(browser.client, `${den.ref.webUrl}/admin`);
@@ -191,7 +191,7 @@ test(title, async ({ evidence, place }) => {
     const section = row?.querySelector('[data-testid="admin-usage-section"]');
     const reset = section?.querySelector('[data-testid="admin-usage-reset-open"]');
     return Boolean(section)
-      && (section?.textContent ?? "").includes("OpenWork model consumption")
+      && (section?.textContent ?? "").includes("Sofia App model consumption")
       && (section?.textContent ?? "").includes("No organization consumption windows are available for this user.")
       && reset?.disabled === true;
   })()`, {
@@ -204,7 +204,7 @@ test(title, async ({ evidence, place }) => {
     const text = section?.textContent ?? "";
     const reset = section?.querySelector('[data-testid="admin-usage-reset-open"]');
     return {
-      heading: text.includes("OpenWork model consumption"),
+      heading: text.includes("Sofia App model consumption"),
       empty: text.includes("No organization consumption windows are available for this user."),
       resetDisabled: reset?.disabled === true,
       hasWindowUsage: text.includes("Shared:") || text.includes("No current five-hour, weekly, or monthly windows.")
@@ -217,7 +217,7 @@ test(title, async ({ evidence, place }) => {
     && emptyUsageState.hasWindowUsage === false;
   expect(emptyUsageProved, JSON.stringify(emptyUsageState)).toBe(true);
   evidence.recordAssertionEvidence(
-    "An expanded user shows OpenWork model consumption's explicit empty state, no window usage, and a disabled reset",
+    "An expanded user shows Sofia App model consumption's explicit empty state, no window usage, and a disabled reset",
     JSON.stringify(emptyUsageState),
     emptyUsageProved,
   );
@@ -226,13 +226,13 @@ test(title, async ({ evidence, place }) => {
   {
     const shot = await screenshot(browser);
     const seen = await validate(shot, [
-      "An expanded user row shows a section headed OpenWork model consumption",
+      "An expanded user row shows a section headed Sofia App model consumption",
       "That section says no organization consumption windows are available for this user",
     ]);
     expect(seen.ok, seen.why).toBe(true);
   }
 
-  const addedEmail = `added-admin-${stamp}@openwork.test`;
+  const addedEmail = `added-admin-${stamp}@sofia.test`;
   const addedNote = `Admin model limits eval ${stamp}`;
   let addedAdminId = "";
   try {

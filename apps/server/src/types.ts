@@ -1,8 +1,8 @@
-import type { WorkspaceWire } from "@openwork/types/workspace";
+import type { WorkspaceWire } from "@sofia/types/workspace";
 
 export type WorkspaceType = "local" | "remote";
 
-export type RemoteType = "opencode" | "openwork";
+export type RemoteType = "opencode" | "sofia";
 
 export type ApprovalMode = "manual" | "auto" | "ask" | "approve" | "full";
 
@@ -24,10 +24,10 @@ export interface WorkspaceConfig {
   baseUrl?: string;
   directory?: string;
   displayName?: string;
-  openworkHostUrl?: string;
-  openworkToken?: string;
-  openworkWorkspaceId?: string;
-  openworkWorkspaceName?: string;
+  sofiaHostUrl?: string;
+  sofiaToken?: string;
+  sofiaWorkspaceId?: string;
+  sofiaWorkspaceName?: string;
   sandboxBackend?: string;
   sandboxRunId?: string;
   sandboxContainerName?: string;
@@ -45,10 +45,10 @@ export interface WorkspaceInfo {
   baseUrl?: string;
   directory?: string;
   displayName?: string;
-  openworkHostUrl?: string;
-  openworkToken?: string;
-  openworkWorkspaceId?: string;
-  openworkWorkspaceName?: string;
+  sofiaHostUrl?: string;
+  sofiaToken?: string;
+  sofiaWorkspaceId?: string;
+  sofiaWorkspaceName?: string;
   sandboxBackend?: string;
   sandboxRunId?: string;
   sandboxContainerName?: string;
@@ -109,7 +109,7 @@ export interface ServerConfig {
    * old one is closed once its runs finish. Off by default (alpha).
    */
   engineRollover?: boolean;
-  /** In-memory secure key custody supplied by an embedding host such as OpenWork Desktop. */
+  /** In-memory secure key custody supplied by an embedding host such as Sofia App Desktop. */
   localManagedMcpVaultKey?: LocalManagedMcpVaultKeyProvider;
 }
 
@@ -118,7 +118,7 @@ export interface Capabilities {
   serverVersion: string;
   opencodeVersion: string;
   providerSync: true;
-  skills: { read: boolean; write: boolean; source: "openwork" | "opencode" };
+  skills: { read: boolean; write: boolean; source: "sofia" | "opencode" };
   plugins: { read: boolean; write: boolean };
   mcp: { read: boolean; write: boolean };
   commands: { read: boolean; write: boolean };

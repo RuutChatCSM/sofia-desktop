@@ -1,5 +1,5 @@
 {
-  "name": "@openwork/evals",
+  "name": "@sofia/evals",
   "private": true,
   "type": "module",
   "scripts": {
@@ -15,14 +15,14 @@
     "typecheck": "tsc -p ."
   },
   "dependencies": {
-    "@openwork/behaviors": "workspace:*",
-    "@openwork/cdp": "workspace:*",
-    "@openwork/test-artifacts": "workspace:*",
-    "@openwork/test-evidence": "workspace:*",
-    "@openwork/hosts": "workspace:*",
-    "@openwork/labs": "workspace:*",
-    "@openwork/matchers": "workspace:*",
-    "@openwork/testkit": "workspace:*"
+    "@sofia/behaviors": "workspace:*",
+    "@sofia/cdp": "workspace:*",
+    "@sofia/test-artifacts": "workspace:*",
+    "@sofia/test-evidence": "workspace:*",
+    "@sofia/hosts": "workspace:*",
+    "@sofia/labs": "workspace:*",
+    "@sofia/matchers": "workspace:*",
+    "@sofia/testkit": "workspace:*"
   },
   "devDependencies": {
     "vitest": "^3.2.4"

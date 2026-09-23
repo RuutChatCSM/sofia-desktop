@@ -12,13 +12,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export type HeadlessRuntimePids = {
   launcher: number;
   web: number | null;
-  openworkServer: number | null;
+  sofiaServer: number | null;
 };
 
 export type HeadlessRuntimeManifest = {
   mode: "local-server";
   webUrl: string;
-  openworkUrl: string;
+  sofiaUrl: string;
   healthUrl: string;
   workspace: string;
   token: string;
@@ -42,7 +42,7 @@ export function buildDetachedRespawnArgs(argv: string[]): string[] {
 
 /** Normalizes a Den control-plane target to a bare origin. */
 export function normalizeDenTarget(value: string | undefined): string {
-  const raw = (value ?? "https://app.openworklabs.com").trim();
+  const raw = (value ?? "https://sofia-app.ruut.chat").trim();
   const withProtocol = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
   return new URL(withProtocol).origin;
 }
@@ -54,7 +54,7 @@ export function normalizeDenTarget(value: string | undefined): string {
 export function isHeadlessStackCommand(command: string): boolean {
   return (
     command.includes("dev-headless-web") ||
-    command.includes("openwork-server") ||
+    command.includes("sofia-server") ||
     command.includes("apps/server/src/cli.ts") ||
     command.includes("vite")
   );
@@ -179,7 +179,7 @@ export function buildHeadlessCorsOrigins(input: {
 // No --workspace flag: a CLI workspace makes the server ignore the config
 // file's persisted `workspaces` list at boot, which would drop workspaces the
 // user added through the UI. The merged config carries the workspace instead.
-export function buildOpenworkServerArgs(input: {
+export function buildSofiaServerArgs(input: {
   host: string;
   port: number;
   configPath: string;
@@ -202,7 +202,7 @@ export function buildOpenworkServerArgs(input: {
 
 export function buildHeadlessRuntimeManifest(input: {
   webUrl: string;
-  openworkUrl: string;
+  sofiaUrl: string;
   workspace: string;
   token: string;
   hostToken: string;
@@ -213,7 +213,7 @@ export function buildHeadlessRuntimeManifest(input: {
   denTarget?: string | null;
   pid?: number;
   webPid?: number | null;
-  openworkServerPid?: number | null;
+  sofiaServerPid?: number | null;
   startedAt?: string;
 }): HeadlessRuntimeManifest {
   const denTarget = input.denTarget ?? null;
@@ -221,8 +221,8 @@ export function buildHeadlessRuntimeManifest(input: {
   return {
     mode: "local-server",
     webUrl: input.webUrl,
-    openworkUrl: input.openworkUrl,
-    healthUrl: `${input.openworkUrl.replace(/\/+$/, "")}/health`,
+    sofiaUrl: input.sofiaUrl,
+    healthUrl: `${input.sofiaUrl.replace(/\/+$/, "")}/health`,
     workspace: path.resolve(input.workspace),
     token: input.token,
     hostToken: input.hostToken,
@@ -233,13 +233,35 @@ export function buildHeadlessRuntimeManifest(input: {
     denTarget,
     denApiUrl: denTarget ? `${input.webUrl.replace(/\/+$/, "")}/api/den` : null,
     notes:
-      "Local openwork-server session. Workspace auth uses token/hostToken; both are stable across relaunches, and the server config is merged (never rewritten) so registered workspaces survive --replace. Den/Cloud API calls go same-origin through denApiUrl (Vite proxies them to denTarget; the app is pinned there via VITE_DEN_API_BASE_URL), so no CORS and no stale localStorage base URLs. Sign-in opens the Den web flow in the browser.",
+      "Local sofia-server session. Workspace auth uses token/hostToken; both are stable across relaunches, and the server config is merged (never rewritten) so registered workspaces survive --replace. Den/Cloud API calls go same-origin through denApiUrl (Vite proxies them to denTarget; the app is pinned there via VITE_DEN_API_BASE_URL), so no CORS and no stale localStorage base URLs. Sign-in opens the Den web flow in the browser.",
     startedAt: input.startedAt ?? new Date().toISOString(),
     pid: launcherPid,
     pids: {
       launcher: launcherPid,
       web: input.webPid ?? null,
-      openworkServer: input.openworkServerPid ?? null,
+      sofiaServer: input.sofiaServerPid ?? null,
     },
   };
+}
+
+/**
+ * Engine home for the headless stack. Isolated under the repo `tmp/` by
+ * default so a headless stack never runs a second engine against the
+ * desktop's `~/.sofia` state (SQLite/rollout store). Override with
+ * SOFIA_HOME.
+ */
+export function resolveHeadlessSofiaHome(cwd: string, env: NodeJS.ProcessEnv = process.env): string {
+  return env.SOFIA_HOME?.trim() || env.SOFIA_CODEX_HOME?.trim() || path.join(cwd, "tmp", "headless-sofia-home");
+}
+
+/**
+ * Provider catalog home. Shared with the desktop (`~/.sofia`) so connected
+ * providers, models, and credentials stay common; only engine state is
+ * isolated. Override with SOFIA_PROVIDER_HOME.
+ */
+export function resolveHeadlessProviderHome(env: NodeJS.ProcessEnv = process.env): string | null {
+  const explicit = env.SOFIA_PROVIDER_HOME?.trim();
+  if (explicit) return explicit;
+  const home = env.HOME?.trim() || env.USERPROFILE?.trim();
+  return home ? path.join(home, ".sofia") : null;
 }

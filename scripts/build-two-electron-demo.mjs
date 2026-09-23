@@ -24,4 +24,4 @@ function build(config) {
 }
 
 await Promise.all(configs.map(build));
-console.log("Packaged OpenWork Demo A and OpenWork Demo B.");
+console.log("Packaged Sofia Demo A and Sofia Demo B.");

@@ -157,20 +157,20 @@ test("defaultDaytonaExec handles stdin EPIPE when the child exits", async () => 
 
 test("Daytona previewUrl parses the first https URL and caches by port", async () => {
   const { exec, calls } = createFakeExec(() => "https://9825-preview.example.test/json/list");
-  const host = createDaytonaHost({ sandboxId: "openwork-test-1", log: () => undefined, exec, repoRoot: "/repo" });
+  const host = createDaytonaHost({ sandboxId: "sofia-test-1", log: () => undefined, exec, repoRoot: "/repo" });
 
   assert.equal(await host.previewUrl(9825), "https://9825-preview.example.test/json/list");
   assert.equal(await host.previewUrl(9825), "https://9825-preview.example.test/json/list");
 
   assert.equal(calls.filter((call) => call.args[0] === "preview-url").length, 1);
-  assert.deepEqual(calls[0]?.args, ["preview-url", "openwork-test-1", "-p", "9825"]);
+  assert.deepEqual(calls[0]?.args, ["preview-url", "sofia-test-1", "-p", "9825"]);
 });
 
 test("spawnElectron starts isolated Daytona Electron profiles and writes bootstrap over base64", async () => {
   const polled: string[] = [];
   const { exec, calls } = createFakeExec((port) => `https://cdp-${port}.example.test`);
   const host = createDaytonaHost({
-    sandboxId: "openwork-test-electron",
+    sandboxId: "sofia-test-electron",
     log: () => undefined,
     exec,
     repoRoot: "/repo",
@@ -183,44 +183,44 @@ test("spawnElectron starts isolated Daytona Electron profiles and writes bootstr
 
   assert.equal(first.meta?.cdpPort, "9825");
   assert.equal(second.meta?.cdpPort, "9830");
-  assert.match(first.profileDir ?? "", /\/workspace\/\.openwork-daytona\/profiles\/owner-\d{17}$/);
-  assert.match(second.profileDir ?? "", /\/workspace\/\.openwork-daytona\/profiles\/member-\d{17}$/);
+  assert.match(first.profileDir ?? "", /\/workspace\/\.sofia-daytona\/profiles\/owner-\d{17}$/);
+  assert.match(second.profileDir ?? "", /\/workspace\/\.sofia-daytona\/profiles\/member-\d{17}$/);
   assert.equal(first.meta?.profileOwner, "host");
   assert.equal(second.meta?.profileOwner, "host");
   assert.deepEqual(polled, ["https://cdp-9825.example.test/json/list", "https://cdp-9830.example.test/json/list"]);
 
   const bootstrapCall = findCall(calls, "base64 -d");
   assert.equal(Buffer.from(base64AfterEcho(bootstrapCall), "base64").toString("utf8"), `${JSON.stringify(bootstrap, null, 2)}\n`);
-  assert(argsText(bootstrapCall).includes("/workspace/.openwork-daytona/profiles/owner-"));
+  assert(argsText(bootstrapCall).includes("/workspace/.sofia-daytona/profiles/owner-"));
   assert(argsText(bootstrapCall).includes("/bootstrap.json"));
 
   const startCalls = calls.filter((call) => argsText(call).includes("/workspace/.devcontainer/start-daytona-electron.sh"));
   assert.equal(startCalls.length, 2);
   const firstStart = argsText(startCalls[0]);
   const secondStart = argsText(startCalls[1]);
-  assert(firstStart.includes("openwork-test-electron"));
-  assert(firstStart.includes("OPENWORK_ELECTRON_REMOTE_DEBUG_PORT="));
+  assert(firstStart.includes("sofia-test-electron"));
+  assert(firstStart.includes("SOFIA_ELECTRON_REMOTE_DEBUG_PORT="));
   assert(firstStart.includes("9825"));
-  assert(firstStart.includes("OPENWORK_ELECTRON_USERDATA="));
-  assert(firstStart.includes("/workspace/.openwork-daytona/profiles/owner-"));
+  assert(firstStart.includes("SOFIA_ELECTRON_USERDATA="));
+  assert(firstStart.includes("/workspace/.sofia-daytona/profiles/owner-"));
   assert(firstStart.includes("/electron-userdata"));
-  assert(firstStart.includes("OPENWORK_DESKTOP_BOOTSTRAP_PATH="));
-  assert(firstStart.includes("/workspace/.openwork-daytona/profiles/owner-"));
+  assert(firstStart.includes("SOFIA_DESKTOP_BOOTSTRAP_PATH="));
+  assert(firstStart.includes("/workspace/.sofia-daytona/profiles/owner-"));
   assert(firstStart.includes("/bootstrap.json"));
   assert(firstStart.includes("DAYTONA_ELECTRON_LOG="));
   assert(/\/tmp\/electron-owner-\d+/.test(firstStart));
   assert(firstStart.includes("--detach"));
-  assert(secondStart.includes("OPENWORK_ELECTRON_REMOTE_DEBUG_PORT="));
+  assert(secondStart.includes("SOFIA_ELECTRON_REMOTE_DEBUG_PORT="));
   assert(secondStart.includes("9830"));
-  assert(secondStart.includes("OPENWORK_ELECTRON_USERDATA="));
-  assert(secondStart.includes("/workspace/.openwork-daytona/profiles/member-"));
+  assert(secondStart.includes("SOFIA_ELECTRON_USERDATA="));
+  assert(secondStart.includes("/workspace/.sofia-daytona/profiles/member-"));
   assert(secondStart.includes("/electron-userdata"));
 });
 
 test("spawnElectron preserves a caller-owned Daytona profile while generated profiles are removed", async () => {
   const { exec, calls } = createFakeExec((port) => `https://cdp-${port}.example.test`);
   const host = createDaytonaHost({
-    sandboxId: "openwork-test-profile-owner",
+    sandboxId: "sofia-test-profile-owner",
     log: () => undefined,
     exec,
     repoRoot: "/repo",
@@ -249,7 +249,7 @@ test("spawnElectron preserves a caller-owned Daytona profile while generated pro
 test("spawnElectron skips reserved Daytona CDP ports", async () => {
   const { exec } = createFakeExec((port) => `https://cdp-${port}.example.test`);
   const host = createDaytonaHost({
-    sandboxId: "openwork-test-electron-reserved",
+    sandboxId: "sofia-test-electron-reserved",
     log: () => undefined,
     exec,
     repoRoot: "/repo",
@@ -266,7 +266,7 @@ test("spawnChrome launches Chromium with Daytona CDP flags and allocates a secon
   const polled: string[] = [];
   const { exec, calls } = createFakeExec((port) => `https://chrome-${port}.example.test`);
   const host = createDaytonaHost({
-    sandboxId: "openwork-test-chrome",
+    sandboxId: "sofia-test-chrome",
     log: () => undefined,
     exec,
     repoRoot: "/repo",
@@ -300,14 +300,14 @@ test("spawnChrome launches Chromium with Daytona CDP flags and allocates a secon
 
 test("disposeSurface uses self-match-safe pkill patterns in separate execs", async () => {
   const { exec, calls } = createFakeExec(() => "https://unused.example.test");
-  const host = createDaytonaHost({ sandboxId: "openwork-test-dispose", log: () => undefined, exec, repoRoot: "/repo" });
+  const host = createDaytonaHost({ sandboxId: "sofia-test-dispose", log: () => undefined, exec, repoRoot: "/repo" });
   const electronHandle: SurfaceHandle = {
     name: "desktop",
     kind: "electron",
     hostKind: "daytona",
     cdpUrl: "https://unused.example.test",
-    sandboxId: "openwork-test-dispose",
-    profileDir: "/workspace/.openwork-daytona/profiles/desktop",
+    sandboxId: "sofia-test-dispose",
+    profileDir: "/workspace/.sofia-daytona/profiles/desktop",
     meta: { cdpPort: "9825", log: "/tmp/electron-desktop.log" },
   };
   const chromeHandle: SurfaceHandle = {
@@ -315,7 +315,7 @@ test("disposeSurface uses self-match-safe pkill patterns in separate execs", asy
     kind: "chrome",
     hostKind: "daytona",
     cdpUrl: "https://unused.example.test",
-    sandboxId: "openwork-test-dispose",
+    sandboxId: "sofia-test-dispose",
     profileDir: "/tmp/daytona-chrome-browser",
     meta: { cdpPort: "9222", log: "/tmp/daytona-chrome-browser.log" },
   };
@@ -336,17 +336,17 @@ test("disposeSurface uses self-match-safe pkill patterns in separate execs", asy
   assert(!chromePkill.includes("--user-data-dir=/tmp/daytona-chrome-browser"));
 });
 
-test("Daytona host requires a sandbox option or OPENWORK_EVAL_DAYTONA_SANDBOX", async () => {
-  const previous = process.env.OPENWORK_EVAL_DAYTONA_SANDBOX;
-  delete process.env.OPENWORK_EVAL_DAYTONA_SANDBOX;
+test("Daytona host requires a sandbox option or SOFIA_EVAL_DAYTONA_SANDBOX", async () => {
+  const previous = process.env.SOFIA_EVAL_DAYTONA_SANDBOX;
+  delete process.env.SOFIA_EVAL_DAYTONA_SANDBOX;
   const { exec } = createFakeExec(() => "https://unused.example.test");
   const host = createDaytonaHost({ log: () => undefined, exec, repoRoot: "/repo" });
 
   try {
     await assert.rejects(host.previewUrl(9825), /create one with bash \.devcontainer\/test-on-daytona\.sh <ref> or pass sandboxId/);
   } finally {
-    if (previous === undefined) delete process.env.OPENWORK_EVAL_DAYTONA_SANDBOX;
-    else process.env.OPENWORK_EVAL_DAYTONA_SANDBOX = previous;
+    if (previous === undefined) delete process.env.SOFIA_EVAL_DAYTONA_SANDBOX;
+    else process.env.SOFIA_EVAL_DAYTONA_SANDBOX = previous;
   }
 });
 
@@ -362,7 +362,7 @@ test("enterprise TLS edge commands keep the full lifecycle in one Daytona sandbo
   for (const command of [commands.start, commands.probe, commands.requests, commands.installRoot, commands.removeRoot, commands.stop]) {
     assert.deepEqual(command.slice(0, 3), ["exec", "desktop-sandbox", "--"]);
   }
-  const runtimeRoot = "/tmp/openwork-enterprise-tls-runtime";
+  const runtimeRoot = "/tmp/sofia-enterprise-tls-runtime";
   const localSources = [
     fileURLToPath(new URL("../../../scripts/enterprise-tls-edge.mts", import.meta.url)),
     fileURLToPath(new URL("../../labs/src/egress.ts", import.meta.url)),
@@ -408,7 +408,7 @@ test("enterprise TLS edge commands keep the full lifecycle in one Daytona sandbo
     assert.ok(finalize?.includes(`test \"$actual_bytes\" -eq ${content.byteLength}`));
   }
   const start = commands.start[3] ?? "";
-  assert.match(start, /\/tmp\/openwork-enterprise-tls-runtime\/evals\/scripts\/enterprise-tls-edge\.mts/);
+  assert.match(start, /\/tmp\/sofia-enterprise-tls-runtime\/evals\/scripts\/enterprise-tls-edge\.mts/);
   assert.ok(!start.includes("/workspace/evals/scripts/enterprise-tls-edge.mts"));
   assert.ok(!start.includes("&;"));
   assert.ok(start.includes("</dev/null &\nattempt=0\nuntil /usr/bin/curl"));
@@ -465,14 +465,14 @@ test("enterprise TLS edge commands reject steering and port collisions", () => {
 
 test("startDen attaches to preset Den env without running daytona exec", async () => {
   const server = await startRuntimeConfigStub("single_org");
-  const previousApi = process.env.OPENWORK_EVAL_DEN_API_URL;
-  const previousWeb = process.env.OPENWORK_EVAL_DEN_WEB_URL;
+  const previousApi = process.env.SOFIA_EVAL_DEN_API_URL;
+  const previousWeb = process.env.SOFIA_EVAL_DEN_WEB_URL;
   const { exec, calls } = createFakeExec(() => "https://unused.example.test");
-  const host = createDaytonaHost({ sandboxId: "openwork-test-den", log: () => undefined, exec, repoRoot: "/repo" });
+  const host = createDaytonaHost({ sandboxId: "sofia-test-den", log: () => undefined, exec, repoRoot: "/repo" });
 
   try {
-    process.env.OPENWORK_EVAL_DEN_API_URL = "https://den-api.example.test";
-    process.env.OPENWORK_EVAL_DEN_WEB_URL = server.url;
+    process.env.SOFIA_EVAL_DEN_API_URL = "https://den-api.example.test";
+    process.env.SOFIA_EVAL_DEN_WEB_URL = server.url;
     const handle = await host.startDen();
 
     assert.equal(handle.webUrl, server.url);
@@ -481,10 +481,10 @@ test("startDen attaches to preset Den env without running daytona exec", async (
     assert.equal(handle.hostKind, "daytona");
     assert.equal(calls.length, 0);
   } finally {
-    if (previousApi === undefined) delete process.env.OPENWORK_EVAL_DEN_API_URL;
-    else process.env.OPENWORK_EVAL_DEN_API_URL = previousApi;
-    if (previousWeb === undefined) delete process.env.OPENWORK_EVAL_DEN_WEB_URL;
-    else process.env.OPENWORK_EVAL_DEN_WEB_URL = previousWeb;
+    if (previousApi === undefined) delete process.env.SOFIA_EVAL_DEN_API_URL;
+    else process.env.SOFIA_EVAL_DEN_API_URL = previousApi;
+    if (previousWeb === undefined) delete process.env.SOFIA_EVAL_DEN_WEB_URL;
+    else process.env.SOFIA_EVAL_DEN_WEB_URL = previousWeb;
     await server.close();
   }
 });

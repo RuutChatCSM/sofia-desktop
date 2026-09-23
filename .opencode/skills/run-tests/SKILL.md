@@ -1,6 +1,6 @@
 ---
 name: run-tests
-description: Run the tests, run one spec, run e2e locally or on Daytona, investigate a skipped spec. Use for executing @openwork/testkit agent-first verification.
+description: Run the tests, run one spec, run e2e locally or on Daytona, investigate a skipped spec. Use for executing @sofia/testkit agent-first verification.
 ---
 
 # Skill: Run Tests
@@ -14,9 +14,9 @@ description: Run the tests, run one spec, run e2e locally or on Daytona, investi
 ## Choose the execution environment
 
 - Prefer Daytona when Daytona credentials, tooling, and service access are
-  available. Set `OPENWORK_EVAL_DAYTONA=1` for that run.
+  available. Set `SOFIA_EVAL_DAYTONA=1` for that run.
 - If Daytona is unavailable, run the same spec locally with
-  `OPENWORK_EVAL_DAYTONA` unset. Missing Daytona access is an expected path for
+  `SOFIA_EVAL_DAYTONA` unset. Missing Daytona access is an expected path for
   OSS contributors and does not make the verdict fail or incomplete.
 - Determine fallback eligibility before execution: use local only when Daytona
   credentials, tooling, or service access are unavailable, or when the user
@@ -32,16 +32,16 @@ description: Run the tests, run one spec, run e2e locally or on Daytona, investi
 ## Prepare local fallback
 
 ```bash
-pnpm --filter @openwork/types build
-pnpm --filter @openwork-ee/den-db build
-pnpm --filter @openwork/email build
+pnpm --filter @sofia/types build
+pnpm --filter @sofia-ee/den-db build
+pnpm --filter @sofia/email build
 pnpm dev:den:mysql
 ```
 
 - Local `server()` requires MySQL at `127.0.0.1:3306`.
 - Build those workspace dependencies before local Den; otherwise den-api imports
   can fail.
-- If the checkout path contains spaces, set `OPENWORK_EVAL_SURFACES_DIR` to a
+- If the checkout path contains spaces, set `SOFIA_EVAL_SURFACES_DIR` to a
   space-free path before E2E tests. node-gyp and electron-rebuild require it.
 
 ## Choose one lane
@@ -57,10 +57,10 @@ pnpm evals:pr specs/<name>.test.ts
 ```bash
 pnpm evals:e2e <name>
 # Fallback:
-OPENWORK_EVAL_E2E_TESTS=1 pnpm --dir evals exec vitest run --config vitest.config.ts --project e2e specs/<name>.e2e.test.ts
+SOFIA_EVAL_E2E_TESTS=1 pnpm --dir evals exec vitest run --config vitest.config.ts --project e2e specs/<name>.e2e.test.ts
 ```
 
-- The commands above use Daytona when `OPENWORK_EVAL_DAYTONA=1` is set and
+- The commands above use Daytona when `SOFIA_EVAL_DAYTONA=1` is set and
   isolated local resources when it is unset.
 
 ## Read the verdict
@@ -72,7 +72,7 @@ OPENWORK_EVAL_E2E_TESTS=1 pnpm --dir evals exec vitest run --config vitest.confi
 
 ## Iterate, then cold-boot
 
-- While iterating, reuse a warm Den with `OPENWORK_EVAL_DEN_API_URL`.
+- While iterating, reuse a warm Den with `SOFIA_EVAL_DEN_API_URL`.
 - Before declaring `Passed`, remove the reuse override and cold-boot through
   `server()` on the same commit.
 - Inject secrets with `infisical run --silent --`; never print or echo values.

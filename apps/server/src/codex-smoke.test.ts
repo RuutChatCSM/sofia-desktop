@@ -4,7 +4,7 @@ import { test, expect } from "bun:test";
 import { ManagedCodexEngine } from "./managed-codex.js";
 
 test("codex binary resolves when installed", () => {
-  const bin = process.env.OPENWORK_CODEX_BIN || "codex";
+  const bin = process.env.SOFIA_CODEX_BIN || "codex";
   // If the binary isn't present, this is expected on a dev machine without it.
   expect(typeof bin).toBe("string");
 });

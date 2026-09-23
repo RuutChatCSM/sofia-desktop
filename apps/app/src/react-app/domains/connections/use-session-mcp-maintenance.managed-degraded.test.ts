@@ -11,16 +11,16 @@ declare const expect: (value: unknown) => {
 
 import type { DenMcpToken, DenSettings } from "../../../app/lib/den";
 import {
-  OpenworkServerError,
-  type OpenworkCloudMcpHealth,
-} from "../../../app/lib/openwork-server";
+  SofiaServerError,
+  type SofiaCloudMcpHealth,
+} from "../../../app/lib/sofia-server";
 import { __setCloudMcpUserStateStorageForTest } from "./cloud-mcp-user-state";
 import { syncCloudControlMcpInBackground } from "./use-session-mcp-maintenance";
 
 const NOW = Date.parse("2026-08-15T12:00:00.000Z");
 const WORKSPACE_ID = "workspace_1";
 const SETTINGS: DenSettings = {
-  baseUrl: "https://app.openwork.test",
+  baseUrl: "https://app.sofia.test",
   authToken: "session-token",
   activeOrgId: "organization_1",
 };
@@ -31,10 +31,10 @@ const MINTED: DenMcpToken = {
   appHostExpiresAt: new Date(NOW + 7 * 24 * 60 * 60 * 1000).toISOString(),
   organizationId: "organization_1",
   scopes: ["mcp:read", "mcp:write"],
-  resource: "https://api.openwork.test/mcp",
+  resource: "https://api.sofia.test/mcp",
 };
 
-function cloudHealth(usable: boolean): OpenworkCloudMcpHealth {
+function cloudHealth(usable: boolean): SofiaCloudMcpHealth {
   return {
     schemaVersion: 1,
     phase: usable ? "ready" : "missing_desired",
@@ -44,7 +44,7 @@ function cloudHealth(usable: boolean): OpenworkCloudMcpHealth {
     workspace: { id: WORKSPACE_ID, type: "local", directory: "/workspace", path: "/workspace" },
     desired: {
       present: usable,
-      name: "openwork-cloud",
+      name: "sofia-cloud",
       revision: usable ? "rev_ready" : null,
       config: null,
       token: { present: usable, metadata: {} },
@@ -59,9 +59,9 @@ function cloudHealth(usable: boolean): OpenworkCloudMcpHealth {
     },
     engine: { status: usable ? "connected" : "not_checked" },
     tools: {
-      expected: ["openwork-cloud_search_capabilities", "openwork-cloud_execute_capability"],
-      present: usable ? ["openwork-cloud_search_capabilities", "openwork-cloud_execute_capability"] : [],
-      missing: usable ? [] : ["openwork-cloud_search_capabilities", "openwork-cloud_execute_capability"],
+      expected: ["sofia-cloud_search_capabilities", "sofia-cloud_execute_capability"],
+      present: usable ? ["sofia-cloud_search_capabilities", "sofia-cloud_execute_capability"] : [],
+      missing: usable ? [] : ["sofia-cloud_search_capabilities", "sofia-cloud_execute_capability"],
       direct: {
         checked: false,
         source: "mcp_tools_list",
@@ -71,15 +71,15 @@ function cloudHealth(usable: boolean): OpenworkCloudMcpHealth {
       },
       providerProjection: {
         checked: usable,
-        provider: "openwork",
+        provider: "sofia",
         model: "gpt-5",
-        present: usable ? ["openwork-cloud_search_capabilities", "openwork-cloud_execute_capability"] : [],
+        present: usable ? ["sofia-cloud_search_capabilities", "sofia-cloud_execute_capability"] : [],
         missing: [],
       },
     },
     pluginCanaries: { expected: [], present: [], missing: [] },
     compatibility: {
-      openwork: { serverVersion: null, app: null },
+      sofia: { serverVersion: null, app: null },
       opencode: { expectedVersion: null, actualVersion: null, probe: "not_checked" },
       pluginFileHashes: [],
       supportedFeatures: {
@@ -132,16 +132,16 @@ describe("managed MCP secure-storage degradation in session maintenance", () => 
   test("a structured listMcp server error surfaces its own code and message instead of the generic banner", async () => {
     let reconcileCalls = 0;
     const client = {
-      baseUrl: "https://worker.openwork.test",
+      baseUrl: "https://worker.sofia.test",
       listMcp: async (): Promise<never> => {
-        throw new OpenworkServerError(
+        throw new SofiaServerError(
           503,
           "managed_mcp_secure_storage_unavailable",
           "Secure storage for Sofia App-managed MCP credentials is unavailable.",
         );
       },
-      getOpenworkCloudMcpHealth: async () => cloudHealth(false),
-      reconcileOpenworkCloudMcp: async () => {
+      getSofiaCloudMcpHealth: async () => cloudHealth(false),
+      reconcileSofiaCloudMcp: async () => {
         reconcileCalls += 1;
         return cloudHealth(true);
       },
@@ -169,17 +169,17 @@ describe("managed MCP secure-storage degradation in session maintenance", () => 
   test("a degraded-but-valid listMcp response still proceeds to the reconciler", async () => {
     let reconcileCalls = 0;
     const client = {
-      baseUrl: "https://worker.openwork.test",
+      baseUrl: "https://worker.sofia.test",
       listMcp: async () => ({
         items: [{
-          name: "openwork-cloud",
-          config: { type: "remote", enabled: true, url: "https://api.openwork.test/mcp/agent" },
+          name: "sofia-cloud",
+          config: { type: "remote", enabled: true, url: "https://api.sofia.test/mcp/agent" },
           source: "config.remote" as const,
         }],
         managedOAuthState: { available: false, recovery: null },
       }),
-      getOpenworkCloudMcpHealth: async () => cloudHealth(false),
-      reconcileOpenworkCloudMcp: async () => {
+      getSofiaCloudMcpHealth: async () => cloudHealth(false),
+      reconcileSofiaCloudMcp: async () => {
         reconcileCalls += 1;
         return cloudHealth(true);
       },

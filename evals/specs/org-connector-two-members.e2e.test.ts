@@ -1,6 +1,6 @@
 import { expect, onTestFinished } from "vitest";
-import { screenshot, validate } from "@openwork/test-evidence";
-import { daytonaSandbox } from "@openwork/hosts";
+import { screenshot, validate } from "@sofia/test-evidence";
+import { daytonaSandbox } from "@sofia/hosts";
 import {
   clickButton,
   createOrgConnection,
@@ -17,10 +17,10 @@ import {
   waitForConnectionCard,
   waitForText,
   writeComposerText,
-} from "@openwork/behaviors";
-import { app, mcpMock, needs, server, test, unmetNeeds } from "@openwork/testkit";
-import type { Surface } from "@openwork/cdp";
-import type { TestNeeds } from "@openwork/testkit";
+} from "@sofia/behaviors";
+import { app, mcpMock, needs, server, test, unmetNeeds } from "@sofia/testkit";
+import type { Surface } from "@sofia/cdp";
+import type { TestNeeds } from "@sofia/testkit";
 
 /**
  * CORE JOURNEY: an admin publishes one organization MCP connector; two different
@@ -36,7 +36,7 @@ import type { TestNeeds } from "@openwork/testkit";
  *    rather than trusting the app's own "Connected" text.
  *  - The tool call is a real agent task through the product's composer.
  *
- * PLACEMENT: set OPENWORK_EVAL_DAYTONA_SANDBOX_A and _B to put each member's
+ * PLACEMENT: set SOFIA_EVAL_DAYTONA_SANDBOX_A and _B to put each member's
  * desktop on its own Daytona sandbox (the driver must run outside any sandbox).
  * That is the reliable shape: two desktops plus two engines starve renderers on
  * one 9GB sandbox. Without A/B both desktops use the testkit's resolved place.
@@ -45,40 +45,40 @@ import type { TestNeeds } from "@openwork/testkit";
  * loopback: Den dials it server-side (discovery, DCR, token, tool calls), each
  * desktop's browser opens its /authorize, and the driver polls /requests. Host
  * it somewhere all three can reach and point
- * OPENWORK_EVAL_CONNECTOR_MOCK_PUBLIC_URL at it (ISSUER must be that same URL).
+ * SOFIA_EVAL_CONNECTOR_MOCK_PUBLIC_URL at it (ISSUER must be that same URL).
  *
  * OPT-IN because it needs provisioned placement, not because anything is broken.
  * (An earlier revision blamed a product defect for a blank connections surface;
  * that was this spec racing the app's route rewrite and the panel's first paint,
  * both fixed here and in org-connection-lifecycle. Retracted.)
  * The tool-call phase runs two desktops and two engines at once — more than one
- * eval sandbox reliably gives. Run it with OPENWORK_EVAL_DAYTONA_SANDBOX_A/_B
+ * eval sandbox reliably gives. Run it with SOFIA_EVAL_DAYTONA_SANDBOX_A/_B
  * placing each desktop on its own sandbox, a Den both can reach, and the mock
- * published at OPENWORK_EVAL_CONNECTOR_MOCK_PUBLIC_URL.
+ * published at SOFIA_EVAL_CONNECTOR_MOCK_PUBLIC_URL.
  *
  * Testkit migration: needs() now owns the model, env, and exact opt-in skips;
  * server()/mcpMock() own reused-Den, member, and connector lifecycle; app() owns
  * the workspace-then-sign-in dance; ambient evidence replaces explicit visual-evidence recording.
- * The three route/paint waits moved verbatim to @openwork/behaviors so this spec
+ * The three route/paint waits moved verbatim to @sofia/behaviors so this spec
  * no longer carries private copies of shared product behavior.
  */
 
 const requirements: TestNeeds = {
   model: "tool-capable",
-  env: ["OPENWORK_EVAL_DEN_API_URL"],
-  optIn: ["OPENWORK_EVAL_E2E_TESTS", "OPENWORK_EVAL_CONNECTOR_E2E_TEST"],
+  env: ["SOFIA_EVAL_DEN_API_URL"],
+  optIn: ["SOFIA_EVAL_E2E_TESTS", "SOFIA_EVAL_CONNECTOR_E2E_TEST"],
 };
 const missingRequirements = unmetNeeds(requirements, process.env);
 const title = missingRequirements.length > 0
   ? `org connector two members skipped — needs: ${missingRequirements.join(", ")}`
   : "two members each connect their own account to one org connector and call its tools";
 
-const password = process.env.OPENWORK_EVAL_DEMO_PASSWORD?.trim() || "OpenWorkDemo123!";
-const aEmail = process.env.OPENWORK_EVAL_MEMBER_EMAIL?.trim() || "jordan.demo@acme.test";
-const bEmail = process.env.OPENWORK_EVAL_MEMBER_B_EMAIL?.trim() || "riley.demo@acme.test";
-const modelId = process.env.OPENWORK_EVAL_MODEL?.trim() || "";
-const sandboxA = process.env.OPENWORK_EVAL_DAYTONA_SANDBOX_A?.trim() ?? "";
-const sandboxB = process.env.OPENWORK_EVAL_DAYTONA_SANDBOX_B?.trim() ?? "";
+const password = process.env.SOFIA_EVAL_DEMO_PASSWORD?.trim() || "SofiaDemo123!";
+const aEmail = process.env.SOFIA_EVAL_MEMBER_EMAIL?.trim() || "jordan.demo@acme.test";
+const bEmail = process.env.SOFIA_EVAL_MEMBER_B_EMAIL?.trim() || "riley.demo@acme.test";
+const modelId = process.env.SOFIA_EVAL_MODEL?.trim() || "";
+const sandboxA = process.env.SOFIA_EVAL_DAYTONA_SANDBOX_A?.trim() ?? "";
+const sandboxB = process.env.SOFIA_EVAL_DAYTONA_SANDBOX_B?.trim() ?? "";
 
 async function openConnectionDetail(appSurface: Surface, name: string): Promise<void> {
   await waitFor(appSurface, `(() => {
@@ -94,7 +94,7 @@ test(title, async ({ evidence, place }) => {
   needs(requirements);
   // Half-specified placement would silently recreate the one-sandbox squeeze.
   if (Boolean(sandboxA) !== Boolean(sandboxB)) {
-    throw new Error("Set both OPENWORK_EVAL_DAYTONA_SANDBOX_A and _B (or neither).");
+    throw new Error("Set both SOFIA_EVAL_DAYTONA_SANDBOX_A and _B (or neither).");
   }
   if (sandboxA) expect(sandboxA).not.toBe(sandboxB);
 
@@ -103,8 +103,8 @@ test(title, async ({ evidence, place }) => {
     place,
     mocks: {
       connector: mcpMock({
-        port: Number(process.env.OPENWORK_EVAL_CONNECTOR_MOCK_PORT ?? 3979),
-        publicUrl: process.env.OPENWORK_EVAL_CONNECTOR_MOCK_PUBLIC_URL?.trim() || undefined,
+        port: Number(process.env.SOFIA_EVAL_CONNECTOR_MOCK_PORT ?? 3979),
+        publicUrl: process.env.SOFIA_EVAL_CONNECTOR_MOCK_PUBLIC_URL?.trim() || undefined,
       }),
     },
     reuseMembers: {
@@ -256,7 +256,7 @@ test(title, async ({ evidence, place }) => {
   {
     const shot = await screenshot(appB);
     const seen = await validate(shot, [
-      "An OpenWork session surface is visible with a task that used the connected organization tool",
+      "An Sofia App session surface is visible with a task that used the connected organization tool",
       "No 'Something went wrong' crash message is visible",
     ]);
     expect(seen.ok, seen.why).toBe(true);
