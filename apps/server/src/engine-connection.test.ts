@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { inheritWorkspaceOpencodeConnection, resolveWorkspaceOpencodeConnection } from "./opencode-connection.js";
+import { inheritWorkspaceEngineConnection, resolveWorkspaceEngineConnection } from "./engine-connection.js";
 
-describe("resolveWorkspaceOpencodeConnection", () => {
+describe("resolveWorkspaceEngineConnection", () => {
   test("falls back to server-level OpenCode settings when a workspace entry is missing them", () => {
-    const connection = resolveWorkspaceOpencodeConnection(
+    const connection = resolveWorkspaceEngineConnection(
       {
         opencodeBaseUrl: "http://127.0.0.1:54235",
         opencodeUsername: "user",
@@ -24,7 +24,7 @@ describe("resolveWorkspaceOpencodeConnection", () => {
   });
 
   test("prefers workspace-specific settings when present", () => {
-    const connection = resolveWorkspaceOpencodeConnection(
+    const connection = resolveWorkspaceEngineConnection(
       {
         opencodeBaseUrl: "http://127.0.0.1:54235",
         opencodeUsername: "user",
@@ -47,10 +47,10 @@ describe("resolveWorkspaceOpencodeConnection", () => {
   });
 });
 
-describe("inheritWorkspaceOpencodeConnection", () => {
+describe("inheritWorkspaceEngineConnection", () => {
   test("copies server-level OpenCode connection into new local workspaces", () => {
     expect(
-      inheritWorkspaceOpencodeConnection({
+      inheritWorkspaceEngineConnection({
         opencodeBaseUrl: "http://127.0.0.1:54235",
         opencodeUsername: "user",
         opencodePassword: "pass",

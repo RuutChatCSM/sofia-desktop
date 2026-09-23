@@ -11,7 +11,7 @@ import {
   type OpenWorkConnectMcpServerIndex,
 } from "./connect-mcp-server-catalog.js";
 import { readRuntimeOpencodeConfig, writeRuntimeOpencodeConfig } from "./runtime-opencode-config-store.js";
-import { inspectEngineMcpRegistration, registerTrustedOpencodeProcess, startServer } from "./server.js";
+import { inspectEngineMcpRegistration, registerTrustedEngineProcess, startServer } from "./server.js";
 import type { ServerConfig, WorkspaceInfo } from "./types.js";
 
 type EngineRequest = {
@@ -408,7 +408,7 @@ describe("openwork-cloud MCP strict reconcile", () => {
     const mock = startMockOpencode({ connectAfterStatusReads: 2 });
     const baseUrl = `http://127.0.0.1:${mock.server.port}`;
     const openwork = await startOpenwork([workspace("ws_1", root, baseUrl)]);
-    registerTrustedOpencodeProcess(openwork.config, {
+    registerTrustedEngineProcess(openwork.config, {
       baseUrl,
       identity: "cloud-reconcile-live-heal",
       isAlive: () => true,

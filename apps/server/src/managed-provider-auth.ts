@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-import { resolveWorkspaceOpencodeConnection } from "./opencode-connection.js";
+import { resolveWorkspaceEngineConnection } from "./engine-connection.js";
 import { readGlobalRuntimeOpencodeConfig, runtimeProviderMap } from "./runtime-opencode-config-store.js";
 import type { ServerConfig } from "./types.js";
 import { findManagedEngineWorkspace } from "./workspaces.js";
@@ -80,7 +80,7 @@ export async function syncManagedProviderAuth(input: ManagedProviderAuthInput): 
   const workspace = findManagedEngineWorkspace(input.config.workspaces) ?? input.config.workspaces[0];
   if (!workspace) return result;
 
-  const connection = resolveWorkspaceOpencodeConnection(input.config, workspace);
+  const connection = resolveWorkspaceEngineConnection(input.config, workspace);
   const baseUrl = connection.baseUrl?.replace(/\/+$/, "");
   if (!baseUrl) return result;
 

@@ -128,9 +128,6 @@ export interface Capabilities {
   approvals: { mode: ApprovalMode; timeoutMs: number };
   sandbox: { enabled: boolean; backend: SandboxBackend };
   tokens: { scoped: boolean; scopes: TokenScope[] };
-  proxy: {
-    opencode: boolean;
-  };
   toolProviders: {
     browser: {
       enabled: boolean;

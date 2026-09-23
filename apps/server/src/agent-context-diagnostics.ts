@@ -49,7 +49,7 @@ import {
   type McpConfigCollision,
   type McpInventoryInspection,
 } from "./mcp.js";
-import { resolveWorkspaceOpencodeConnection } from "./opencode-connection.js";
+import { resolveWorkspaceEngineConnection } from "./engine-connection.js";
 import { buildOpenworkRuntimeConfigObjectFromSnapshot } from "./openwork-runtime-config.js";
 import {
   inspectRuntimeOpencodeConfigState,
@@ -1252,7 +1252,7 @@ export async function runAgentContextDiagnostics(input: {
   const startedMs = now();
   const startedAt = new Date(startedMs).toISOString();
   const runId = uuid();
-  const engineConfigured = Boolean(resolveWorkspaceOpencodeConnection(input.config, input.workspace).baseUrl?.trim());
+  const engineConfigured = Boolean(resolveWorkspaceEngineConnection(input.config, input.workspace).baseUrl?.trim());
 
   let effectiveEngine: EffectiveEngineSnapshot | null = null;
   let engineApiReadPerformed = false;

@@ -6,7 +6,7 @@ import { join } from "node:path";
 import {
   inspectEngineMcpRegistration,
   inspectEngineMcpRegistrationDetails,
-  registerTrustedOpencodeProcess,
+  registerTrustedEngineProcess,
   refreshEngineMcpRegistrationFromLiveStatus,
   startServer,
   syncAllWorkspacesRuntimeMcpToEngine,
@@ -115,10 +115,10 @@ async function startOpenworkServer(
     logRequests: false,
   };
   const trustedProcessIdentity = options?.trustedProcessIdentity === undefined
-    ? `test-managed-opencode-${++nextTestProcessGeneration}`
+    ? `test-managed-engine-${++nextTestProcessGeneration}`
     : options.trustedProcessIdentity;
   if (trustedProcessIdentity) {
-    registerTrustedOpencodeProcess(config, {
+    registerTrustedEngineProcess(config, {
       baseUrl: opencodeBaseUrl,
       identity: trustedProcessIdentity,
       isAlive: options?.isAlive ?? (() => true),
@@ -616,7 +616,7 @@ describe("runtime MCP engine sync", () => {
       expect(response.status).toBe(200);
       expect(inspectEngineMcpRegistration(openwork.config, workspace, "posthog", POSTHOG_CONFIG)).toBe("connected");
 
-      registerTrustedOpencodeProcess(openwork.config, {
+      registerTrustedEngineProcess(openwork.config, {
         baseUrl,
         identity: "managed-process-b",
         isAlive: () => true,
@@ -629,7 +629,7 @@ describe("runtime MCP engine sync", () => {
 
       // Reusing an older opaque value starts another monotonic generation and
       // cannot revive evidence recorded for either prior process.
-      registerTrustedOpencodeProcess(openwork.config, {
+      registerTrustedEngineProcess(openwork.config, {
         baseUrl,
         identity: "managed-process-a",
         isAlive: () => true,

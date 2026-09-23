@@ -33,7 +33,7 @@ import { buildOpenworkRuntimeConfigObjectFromSnapshot } from "./openwork-runtime
 import { runtimeDbPath } from "./runtime-db.js";
 import {
   inspectEngineMcpRegistration,
-  registerTrustedOpencodeProcess,
+  registerTrustedEngineProcess,
   startServer,
   syncAllWorkspacesRuntimeMcpToEngine,
 } from "./server.js";
@@ -377,7 +377,7 @@ function startRecordingServer() {
 async function startOpenwork(config: ServerConfig) {
   const baseUrl = config.workspaces[0]?.baseUrl ?? config.opencodeBaseUrl;
   if (baseUrl) {
-    registerTrustedOpencodeProcess(config, {
+    registerTrustedEngineProcess(config, {
       baseUrl,
       identity: `diagnostics-test-managed-process:${baseUrl}`,
       isAlive: () => true,

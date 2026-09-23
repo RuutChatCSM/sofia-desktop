@@ -196,10 +196,6 @@ describe("global runtime providers", () => {
     expect(await readJsonObject(removalAttempt)).toMatchObject({ ok: true, changed: true, reload: "reloaded" });
     expect(engineRequests.filter((request) => request === "POST /instance/dispose")).toHaveLength(4);
 
-    const readback = await fetch(`${base}/opencode/config`, { headers: clientHeaders() });
-    expect(readback.status).toBe(200);
-    expect(providerFromPayload(await readJsonObject(readback))).toEqual({});
-
     const globalRuntime = await readGlobalRuntimeOpencodeConfig(config);
     expect(runtimeProviderMap(globalRuntime)).toEqual({});
   });

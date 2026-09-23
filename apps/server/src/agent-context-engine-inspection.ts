@@ -1,4 +1,3 @@
-const MAX_ENGINE_RESPONSE_BYTES = 2 * 1024 * 1024;
 const MAX_ENGINE_AGENT_COUNT = 200;
 const MAX_ENGINE_PERMISSION_RULES = 2_000;
 const MAX_ENGINE_MCP_COUNT = 200;
@@ -168,67 +167,4 @@ export function effectiveToolDecision(
   if (winning?.pattern === "*" && winning.action === "deny") return "deny";
   if (winning?.pattern === "*" && winning.action === "ask") return "ask";
   return "allow";
-}
-
-async function cancelResponse(response: Response): Promise<void> {
-  try {
-    await response.body?.cancel();
-  } catch {
-    // Cancellation is best effort; callers receive only a stable safe error.
-  }
-}
-
-async function bufferBoundedResponse(response: Response, maxBytes: number): Promise<Response> {
-  const declared = Number(response.headers.get("content-length"));
-  if (Number.isFinite(declared) && declared > maxBytes) {
-    await cancelResponse(response);
-    throw new Error("agent_diagnostics_engine_response_too_large");
-  }
-  if (!response.body) return response;
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  try {
-    while (true) {
-      const next = await reader.read();
-      if (next.done) break;
-      size += next.value.byteLength;
-      if (size > maxBytes) {
-        await reader.cancel();
-        throw new Error("agent_diagnostics_engine_response_too_large");
-      }
-      chunks.push(next.value);
-    }
-  } catch (error) {
-    void reader.cancel().catch(() => undefined);
-    throw error;
-  }
-  const body = new Uint8Array(size);
-  let offset = 0;
-  for (const chunk of chunks) {
-    body.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return new Response(body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers: response.headers,
-  });
-}
-
-/** A dedicated fetch wrapper for the two diagnostics engine reads. */
-export function createAgentDiagnosticsEngineFetch(
-  fetchImpl: typeof fetch,
-  maxBytes = MAX_ENGINE_RESPONSE_BYTES,
-): typeof fetch {
-  const run = async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
-    const request = input instanceof Request ? input : new Request(input, init);
-    const response = await fetchImpl(new Request(request, { redirect: "manual" }));
-    if (response.status >= 300 && response.status < 400) {
-      await cancelResponse(response);
-      throw new Error("agent_diagnostics_engine_redirect_rejected");
-    }
-    return bufferBoundedResponse(response, maxBytes);
-  };
-  return Object.assign(run, { preconnect: fetchImpl.preconnect });
 }

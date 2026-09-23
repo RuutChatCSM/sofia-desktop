@@ -2,7 +2,7 @@ import { readFile, rename, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, resolve } from "node:path";
 import { recordAudit } from "../audit.js";
 import { ApiError } from "../errors.js";
-import { inheritWorkspaceOpencodeConnection, resolveWorkspaceOpencodeConnection } from "../opencode-connection.js";
+import { inheritWorkspaceEngineConnection, resolveWorkspaceEngineConnection } from "../engine-connection.js";
 import { externalFetch } from "../server-fetch.js";
 import type { ServerConfig, WorkspaceInfo } from "../types.js";
 import { ensureDir, exists, shortId } from "../utils.js";
@@ -298,7 +298,7 @@ export function registerWorkspaceRoutes(options: RegisterWorkspaceRoutesOptions)
       path: workspacePath,
       preset,
       workspaceType: "local",
-      ...inheritWorkspaceOpencodeConnection(config),
+      ...inheritWorkspaceEngineConnection(config),
     };
 
     config.workspaces = [workspace, ...config.workspaces.filter((entry) => entry.id !== workspace.id)];
@@ -478,7 +478,7 @@ export function registerWorkspaceRoutes(options: RegisterWorkspaceRoutesOptions)
       timestamp: Date.now(),
     });
     // Re-activating the already-active workspace must not dispose its engine instance; switch reloads stay (#870).
-    if (!wasActive && workspace.workspaceType === "local" && resolveWorkspaceOpencodeConnection(config, workspace).baseUrl?.trim()) {
+    if (!wasActive && workspace.workspaceType === "local" && resolveWorkspaceEngineConnection(config, workspace).baseUrl?.trim()) {
       await reloadOpencodeEngine(config, workspace, { awaitPostRefreshSync: false });
     }
     return jsonResponse({ activeId: workspace.id, workspace: serializeWorkspace(workspace), persisted });
