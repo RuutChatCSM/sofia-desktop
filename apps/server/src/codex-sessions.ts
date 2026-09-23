@@ -719,6 +719,19 @@ export class CodexSessionManager {
       }
     }
     if (!session) throw new Error(`unknown codex session: ${sessionId}`);
+    // A thread listed from the on-disk store carries metadata only until it is
+    // loaded into this app-server process; `turn/start` (and settings updates)
+    // fail with "thread not found" until it is resumed. Resume first so the
+    // transcript is preserved, and only synthesize a replacement thread when the
+    // thread is genuinely gone.
+    try {
+      await engine.resumeThread(session.threadId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (/thread not found/.test(message)) {
+        await this.replaceMissingThread(session, engine);
+      }
+    }
     if (session.status === "running") throw new Error("This Sofia task is still running. Stop it or wait before sending another turn.");
     if ((opts?.model && opts.model !== session.model) || (opts?.providerId && opts.providerId !== session.providerId)) {
       await engine.updateThreadSettings({
