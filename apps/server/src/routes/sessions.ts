@@ -1,5 +1,5 @@
 import { realpath } from "node:fs/promises";
-import type { createOpencodeClient } from "@opencode-ai/sdk/v2/client";
+import type { EngineResult, WorkspaceEngineClient } from "../engine/workspace-engine-client.js";
 import { ApiError } from "../errors.js";
 import { buildSession, buildSessionList, buildSessionMessages, buildSessionSnapshot } from "../session-read-model.js";
 import {
@@ -24,11 +24,8 @@ type ParseOptionalBoolean = (value: string | null, name: string) => boolean | un
 type ParseOptionalPositiveInteger = (value: string | null, name: string) => number | undefined;
 type ParseOptionalNonNegativeInteger = (value: string | null, name: string) => number | undefined;
 type ReadJsonBody = (request: Request) => Promise<Record<string, unknown>>;
-type WorkspaceOpencodeClient = ReturnType<typeof createOpencodeClient>;
-type OpencodeClientResult<T, E> =
-  | { data: T | undefined; error: undefined; response: Response }
-  | { data: undefined; error: E; response?: Response };
-type UnwrapOpencodeResult = <T, E>(result: OpencodeClientResult<T, E>, path: string) => NonNullable<T>;
+type WorkspaceOpencodeClient = WorkspaceEngineClient;
+type UnwrapOpencodeResult = <T>(result: EngineResult<T>, path: string) => NonNullable<T>;
 
 interface RegisterSessionRoutesOptions {
   routes: Route[];

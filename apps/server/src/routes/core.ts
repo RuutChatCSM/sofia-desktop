@@ -1,6 +1,6 @@
 import { appendFile, mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
-import type { createOpencodeClient } from "@opencode-ai/sdk/v2/client";
+import type { WorkspaceEngineClient } from "../engine/workspace-engine-client.js";
 import {
   type ConnectSnapshotOptions,
   getConnectSnapshot,
@@ -30,7 +30,7 @@ type JsonResponse = (data: unknown, status?: number) => Response;
 type ReadJsonBody = (request: Request) => Promise<Record<string, unknown>>;
 type ParseOptionalBoolean = (value: string | null, name: string) => boolean | undefined;
 type FetchRuntimeControl = (path: string, init?: { method?: string; body?: unknown }) => Promise<unknown>;
-type WorkspaceOpencodeClient = ReturnType<typeof createOpencodeClient>;
+type WorkspaceOpencodeClient = WorkspaceEngineClient;
 
 interface RegisterCoreRoutesOptions {
   routes: Route[];

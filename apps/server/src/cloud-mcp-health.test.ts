@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { createOpencodeClient } from "@opencode-ai/sdk/v2/client";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -12,6 +11,13 @@ import {
   OPENWORK_CLOUD_PLUGIN_CANARIES,
   readOpenworkCloudMcpHealth,
 } from "./cloud-mcp-health.js";
+import type {
+  EngineMcpStatus,
+  EngineProviderList,
+  EngineResult,
+  EngineSessionInfo,
+  WorkspaceEngineClient,
+} from "./engine/workspace-engine-client.js";
 import { sanitizeDiagnosticValue } from "./diagnostic-sanitizer.js";
 import { diagnoseMcpToolDeniesFromConfigs } from "./mcp.js";
 import { writeRuntimeOpencodeConfig } from "./runtime-opencode-config-store.js";
@@ -186,6 +192,102 @@ function startMockOpencode(initialMode: DirectProbeMode) {
   };
 }
 
+function createMockEngineClient(baseUrl: string): WorkspaceEngineClient {
+  async function read<T>(path: string, init?: RequestInit): Promise<{ response: Response; data: T | undefined }> {
+    const response = await fetch(`${baseUrl}${path}`, init);
+    if (!response.ok) return { response, data: undefined };
+    const data: T = await response.json();
+    return { response, data };
+  }
+  const failed = (response: Response, error: unknown): EngineResult<never> => ({
+    data: undefined,
+    error,
+    response,
+  });
+  const ok = <T>(data: T): EngineResult<T> => ({
+    data,
+    error: undefined,
+    response: new Response(null, { status: 200 }),
+  });
+  return {
+    session: {
+      async list() {
+        return ok<EngineSessionInfo[]>([]);
+      },
+      async create() {
+        return failed(new Response(null, { status: 501 }), { code: "not_implemented" });
+      },
+      async get() {
+        return failed(new Response(null, { status: 404 }), { code: "not_found" });
+      },
+      async messages() {
+        return ok([]);
+      },
+      async todo() {
+        return ok([]);
+      },
+      async status() {
+        return ok({});
+      },
+      async promptAsync() {
+        return ok({});
+      },
+      async abort() {
+        return ok({});
+      },
+      async delete() {
+        return ok({});
+      },
+    },
+    provider: {
+      async list() {
+        const { response, data } = await read<EngineProviderList>("/provider");
+        return data === undefined ? failed(response, { status: response.status }) : ok(data);
+      },
+    },
+    config: {
+      async get() {
+        return failed(new Response(null, { status: 501 }), { code: "not_implemented" });
+      },
+    },
+    mcp: {
+      async status() {
+        const { response, data } = await read<EngineMcpStatus>("/mcp");
+        return data === undefined ? failed(response, { status: response.status }) : ok(data);
+      },
+      async disconnect() {
+        return ok({});
+      },
+      auth: {
+        async remove() {
+          return ok({});
+        },
+      },
+    },
+    tool: {
+      async ids() {
+        const { response, data } = await read<string[]>("/experimental/tool/ids");
+        return data === undefined ? failed(response, { status: response.status }) : ok(data);
+      },
+      async list() {
+        const { response, data } = await read<Array<{ id: string; description?: string }>>("/experimental/tool");
+        return data === undefined ? failed(response, { status: response.status }) : ok(data);
+      },
+    },
+    app: {
+      async agents() {
+        return ok([]);
+      },
+    },
+    global: {
+      async health() {
+        const { response, data } = await read<{ healthy: boolean; version: string | null }>("/global/health");
+        return data === undefined ? failed(response, { status: response.status }) : ok(data);
+      },
+    },
+  };
+}
+
 function serverConfig(root: string, testWorkspace: WorkspaceInfo): ServerConfig {
   return {
     host: "127.0.0.1",
@@ -253,7 +355,7 @@ async function setupDirectProbeHarness(mode: DirectProbeMode, workspaceIds = ["w
       directory: testWorkspace.path,
       providerModel,
       probe: true,
-      createWorkspaceOpencodeClient: () => createOpencodeClient({ baseUrl }),
+      createWorkspaceOpencodeClient: () => createMockEngineClient(baseUrl),
     });
   };
   return { ...engine, config, desiredConfig, directUrl, primary, read, workspaces };
@@ -266,7 +368,7 @@ async function readHealthForDirectProbe(mode: DirectProbeMode, options: ReadHeal
     config: harness.config,
     workspace: harness.primary,
     directory: harness.primary.path,
-    createWorkspaceOpencodeClient: () => createOpencodeClient({ baseUrl: `http://127.0.0.1:${harness.server.port}` }),
+    createWorkspaceOpencodeClient: () => createMockEngineClient(`http://127.0.0.1:${harness.server.port}`),
   });
   return { health, directUrl: harness.directUrl };
 }

@@ -1,7 +1,6 @@
 import { readFile, writeFile, rm, stat } from "node:fs/promises";
 import { homedir, hostname } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
-import { createOpencodeClient } from "@opencode-ai/sdk/v2/client";
 import { resolveGlobalOpencodeConfigPath } from "@openwork/paths";
 import type { ApprovalRequest, Capabilities, ServerConfig, WorkspaceInfo, Actor, ReloadReason, ReloadTrigger, TokenScope } from "./types.js";
 import { agentContextDiagnosticsRequestSchema } from "./agent-context-diagnostics-schema.js";
@@ -18,6 +17,11 @@ import {
   type EngineSpawnTemplate,
 } from "./engine-pool.js";
 import { withEngineDirectoryFence } from "./engine-directory-fence.js";
+import {
+  createWorkspaceEngineClient,
+  type EngineResult,
+  type WorkspaceEngineClient,
+} from "./engine/workspace-engine-client.js";
 import { shouldDeferInPlaceEngineReload } from "./engine-reload-defer.js";
 import { LatestTrailingWorkQueue } from "./latest-trailing-work-queue.js";
 import { buildEngineAuthProbeHeader } from "./engine-registry.js";
@@ -1290,46 +1294,15 @@ function createOpencodeDirectoryFetch(directory: string, fetchImpl: typeof fetch
   );
 }
 
-type OpencodeClientResult<T, E> =
-  | { data: T | undefined; error: undefined; response: Response }
-  | { data: undefined; error: E; response?: Response };
-
 export function createWorkspaceOpencodeClient(
   config: ServerConfig,
   workspace: WorkspaceInfo,
   options?: { boundedDiagnosticsReads?: boolean; sessionId?: string },
-) {
-  const poolRoute = workspace.workspaceType === "remote" || !options?.sessionId
-    ? null
-    : enginePoolForConfig(config)?.routeRequest("GET", `/session/${encodeURIComponent(options.sessionId)}`) ?? null;
-  const connection = poolRoute
-    ? {
-        baseUrl: poolRoute.target.baseUrl,
-        authHeader: buildEngineAuthProbeHeader(poolRoute.target.username, poolRoute.target.password),
-      }
-    : resolveWorkspaceOpencodeConnection(config, workspace);
-  const baseUrl = connection.baseUrl?.trim();
-  if (!baseUrl) {
-    throw new ApiError(400, "opencode_unconfigured", "OpenCode base URL is missing for this workspace", {
-      workspaceId: workspace.id,
-      workspaceType: workspace.workspaceType,
-    });
-  }
-  const directory = resolveOpencodeDirectory(workspace);
-  const baseFetch = directory ? createOpencodeDirectoryFetch(directory) : globalThis.fetch;
-  const clientFetch = options?.boundedDiagnosticsReads
-    ? createAgentDiagnosticsEngineFetch(baseFetch)
-    : directory ? baseFetch : undefined;
-
-  return createOpencodeClient({
-    baseUrl,
-    ...(directory ? { directory } : {}),
-    ...(clientFetch ? { fetch: clientFetch } : {}),
-    ...(connection.authHeader ? { headers: { Authorization: connection.authHeader } } : {}),
-  });
+): WorkspaceEngineClient {
+  return createWorkspaceEngineClient(config, workspace, options);
 }
 
-export function unwrapOpencodeResult<T, E>(result: OpencodeClientResult<T, E>, path: string): NonNullable<T> {
+export function unwrapOpencodeResult<T>(result: EngineResult<T>, path: string): NonNullable<T> {
   if (result.data != null) {
     return result.data;
   }

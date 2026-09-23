@@ -51,7 +51,6 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@opencode-ai/sdk": "^1.18.15",
     "@openwork/enterprise-mcp-client": "workspace:*",
     "better-sqlite3": "^13.0.2",
     "chrome-devtools-mcp": "^1.7.0",

@@ -1,4 +1,4 @@
-import type { createOpencodeClient } from "@opencode-ai/sdk/v2/client";
+import type { WorkspaceEngineClient } from "../engine/workspace-engine-client.js";
 import {
   OPENWORK_CLOUD_MCP_NAME,
   readOpenworkCloudMcpHealth,
@@ -15,7 +15,7 @@ import { addRoute, type RequestContext, type Route } from "./registry.js";
 
 type JsonResponse = (data: unknown, status?: number) => Response;
 type ReadJsonBody = (request: Request) => Promise<Record<string, unknown>>;
-type WorkspaceOpencodeClient = ReturnType<typeof createOpencodeClient>;
+type WorkspaceOpencodeClient = WorkspaceEngineClient;
 
 export type RegisterCloudMcpRoutesOptions = {
   routes: Route[];

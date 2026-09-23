@@ -1,6 +1,11 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import type { createOpencodeClient, McpStatus, ToolIds, ToolList } from "@opencode-ai/sdk/v2/client";
+import type {
+  EngineMcpServerStatus as McpStatus,
+  EngineToolIds as ToolIds,
+  EngineToolList as ToolList,
+  WorkspaceEngineClient,
+} from "./engine/workspace-engine-client.js";
 import { ApiError } from "./errors.js";
 import { diagnoseMcpToolDenies, type McpToolDeny } from "./mcp.js";
 import { openworkPluginPath } from "./openwork-extensions-plugin-path.js";
@@ -29,7 +34,7 @@ function engineProbeTimeoutMs(): number {
   return Number(process.env.OPENWORK_CLOUD_MCP_PROBE_TIMEOUT_MS ?? "") || 5_000;
 }
 
-type WorkspaceOpencodeClient = ReturnType<typeof createOpencodeClient>;
+type WorkspaceOpencodeClient = WorkspaceEngineClient;
 
 export type CloudMcpProviderModelContext = {
   provider: string;
@@ -957,36 +962,40 @@ function extractDiagnosticIds(value: unknown): { requestId?: string; referenceId
   return found;
 }
 
-function opencodeRequestFailure(stage: CloudMcpFailureStage, path: string, response: Response, error: unknown): CloudMcpFailure {
+function opencodeRequestFailure(stage: CloudMcpFailureStage, path: string, response: Response | undefined, error: unknown): CloudMcpFailure {
+  const status = response?.status;
+  if (status === undefined) {
+    return thrownOpencodeFailure(stage, path, error);
+  }
   if (stage === "engine_delivery") {
     return failure({
-      code: response.status >= 500 ? "opencode_engine_unreachable" : "opencode_mcp_sync_failed",
+      code: status >= 500 ? "opencode_engine_unreachable" : "opencode_mcp_sync_failed",
       stage,
-      retryable: response.status >= 500,
-      recommendedAction: response.status >= 500 ? "Restart OpenCode or retry when the engine is reachable" : "Check OpenCode MCP status support",
+      retryable: status >= 500,
+      recommendedAction: status >= 500 ? "Restart OpenCode or retry when the engine is reachable" : "Check OpenCode MCP status support",
       message: "OpenCode request failed while checking MCP status.",
-      aliases: response.status >= 500 ? ["opencode_unreachable"] : ["cloud_connection_failed"],
-      details: { path, status: response.status, error },
+      aliases: status >= 500 ? ["opencode_unreachable"] : ["cloud_connection_failed"],
+      details: { path, status, error },
     });
   }
-  if (stage === "tool_registration" && (response.status === 404 || response.status === 405)) {
+  if (stage === "tool_registration" && (status === 404 || status === 405)) {
     return failure({
       code: "opencode_tool_ids_unsupported",
       stage,
       retryable: false,
       recommendedAction: "Update OpenWork",
       message: "OpenCode does not support listing tool IDs.",
-      details: { path, status: response.status, error },
+      details: { path, status, error },
     });
   }
   return failure({
     code: stage === "provider_projection" ? "provider_tool_projection_missing" : "opencode_tool_ids_unavailable",
     stage,
-    retryable: response.status >= 500,
-    recommendedAction: response.status >= 500 ? "Retry after OpenCode is healthy" : "Update OpenWork",
+    retryable: status >= 500,
+    recommendedAction: status >= 500 ? "Retry after OpenCode is healthy" : "Update OpenWork",
     message: "OpenCode request failed while checking openwork-cloud MCP readiness.",
     aliases: stage === "provider_projection" ? ["provider_projection_unavailable"] : undefined,
-    details: { path, status: response.status, error },
+    details: { path, status, error },
   });
 }
 
@@ -1498,7 +1507,7 @@ async function readProviderCapability(input: {
     const provider = result.data.all.find((item) => item.id === input.providerModel.provider);
     const model = provider?.models[input.providerModel.model];
     const modelExists = Boolean(model);
-    const toolCalling = model ? model.capabilities.toolcall === true : null;
+    const toolCalling = model ? model.capabilities?.toolcall === true : null;
     const limitation = "OpenCode experimental tool APIs do not enumerate MCP tools on this engine; using provider/model tool-call capability from /provider.";
     const projectionFailure = toolCalling
       ? undefined

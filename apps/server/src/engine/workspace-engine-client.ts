@@ -1,6 +1,6 @@
 // Codex-backed workspace engine client.
 //
-// This is the adapter that replaces `@opencode-ai/sdk` in the OpenWork server:
+// This is the adapter that replaces the OpenCode SDK in the OpenWork server:
 // it exposes the small subset of the OpenCode client surface the server's
 // feature modules call, but every method is backed by the bundled Sofia/Codex
 // engine (`CodexSessionManager` + the codex provider/config stores). Feature
@@ -52,10 +52,16 @@ export type EngineSessionStatus =
   | { type: "busy" }
   | { type: "retry"; attempt: number; message: string; next: number };
 
+export type EngineProviderModel = {
+  id: string;
+  name: string;
+  capabilities?: { toolcall?: boolean };
+};
+
 export type EngineProvider = {
   id: string;
   name: string;
-  models: Record<string, { id: string; name: string }>;
+  models: Record<string, EngineProviderModel>;
 };
 
 export type EngineProviderList = {
@@ -64,7 +70,26 @@ export type EngineProviderList = {
   connected: string[];
 };
 
-export type EngineMcpStatus = Record<string, { status: string; error?: string }>;
+/**
+ * Per-server MCP status union mirroring the OpenCode SDK's `McpStatus` shape so
+ * health/reconcile logic keeps narrowing on the literal status values.
+ */
+export type EngineMcpServerStatus =
+  | { status: "connected" }
+  | { status: "disabled" }
+  | { status: "failed"; error: string }
+  | { status: "needs_auth" }
+  | { status: "needs_client_registration"; error: string };
+
+export type EngineMcpStatus = Record<string, EngineMcpServerStatus>;
+
+/** Minimal replacements for the SDK's `ToolIds` / `ToolList` aliases. */
+export type EngineToolIds = string[];
+export type EngineToolItem = { id: string; description?: string };
+export type EngineToolList = EngineToolItem[];
+
+/** Optional request options accepted for SDK call-shape compatibility. */
+export type WorkspaceEngineRequestOptions = { signal?: AbortSignal };
 
 export type WorkspaceEngineClient = {
   session: {
@@ -87,21 +112,27 @@ export type WorkspaceEngineClient = {
     list(input?: { directory?: string }): Promise<EngineResult<EngineProviderList>>;
   };
   config: {
-    get(input?: { directory?: string }): Promise<EngineResult<CodexEngineConfig>>;
+    get(
+      input?: { directory?: string },
+      options?: WorkspaceEngineRequestOptions,
+    ): Promise<EngineResult<CodexEngineConfig>>;
   };
   mcp: {
     status(input?: { directory?: string }): Promise<EngineResult<EngineMcpStatus>>;
-    disconnect(input: { name: string }): Promise<EngineResult<Record<string, never>>>;
+    disconnect(input: { name: string; directory?: string }): Promise<EngineResult<Record<string, never>>>;
     auth: {
-      remove(input: { name: string }): Promise<EngineResult<Record<string, never>>>;
+      remove(input: { name: string; directory?: string }): Promise<EngineResult<Record<string, never>>>;
     };
   };
   tool: {
-    ids(input?: { directory?: string }): Promise<EngineResult<string[]>>;
-    list(input?: { directory?: string }): Promise<EngineResult<Array<{ id: string; description?: string }>>>;
+    ids(input?: { directory?: string }): Promise<EngineResult<EngineToolIds>>;
+    list(input?: { directory?: string; provider?: string; model?: string }): Promise<EngineResult<EngineToolList>>;
   };
   app: {
-    agents(input?: { directory?: string }): Promise<EngineResult<Array<{ name: string; description?: string }>>>;
+    agents(
+      input?: { directory?: string },
+      options?: WorkspaceEngineRequestOptions,
+    ): Promise<EngineResult<Array<{ name: string; description?: string }>>>;
   };
   global: {
     health(): Promise<EngineResult<{ healthy: boolean; version: string | null }>>;
