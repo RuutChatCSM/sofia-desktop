@@ -8,8 +8,18 @@ import { createEngineClient, type EngineResult, type OpencodeAuth } from "./engi
 
 export type { EngineResult, OpencodeAuth } from "./engine-client";
 
-export function createClient(baseUrl: string, directory?: string, auth?: OpencodeAuth) {
-  return createEngineClient({ baseUrl, directory, auth });
+export function createClient(
+  baseUrl: string,
+  directory?: string,
+  auth?: OpencodeAuth,
+  fetchImpl?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>,
+) {
+  return createEngineClient({
+    baseUrl,
+    directory,
+    auth,
+    ...(fetchImpl ? { fetch: fetchImpl } : {}),
+  });
 }
 
 export type EngineClient = ReturnType<typeof createClient>;

@@ -117,6 +117,19 @@ export function registerCodexRoutes(options: RegisterCodexRoutesOptions): void {
     return jsonResponse({ ok: true, config });
   });
 
+  // Provider auth methods the app's provider-auth modal offers. The Sofia
+  // engine signs in to OpenAI via ChatGPT OAuth (browser or headless device
+  // code); every other provider is configured with an API key, which the app
+  // adds on its own.
+  addRoute(routes, "GET", "/workspace/:id/provider/auth", "client", async () => {
+    return jsonResponse({
+      openai: [
+        { type: "oauth", label: "Sign in with ChatGPT" },
+        { type: "oauth", label: "Headless device flow" },
+      ],
+    });
+  });
+
   // The app pushes its connected providers (with models.dev-backed models) here
   // so the codex engine's provider/model catalog stays in sync with what the
   // picker shows — including providers connected only via the app's auth store.

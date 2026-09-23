@@ -338,7 +338,11 @@ export function createEngineClient(options: EngineClientOptions) {
   const mount = resolveEngineMount(options.baseUrl, options.directory);
   const staticAuthHeader =
     options.headers?.Authorization ?? options.headers?.authorization ?? buildAuthHeader(options.auth);
-  const fetchImpl = options.fetch ?? (isDesktopRuntime() ? desktopFetch : globalThis.fetch.bind(globalThis));
+  const fetchImpl = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    if (options.fetch) return options.fetch(input, init);
+    const impl = isDesktopRuntime() ? desktopFetch : globalThis.fetch;
+    return impl(input, init);
+  };
 
   const workspacePath = (workspaceId: string): string => `/workspace/${encodeURIComponent(workspaceId)}`;
 
@@ -682,7 +686,9 @@ export function createEngineClient(options: EngineClientOptions) {
       },
 
       async auth(): Promise<EngineResult<ProviderAuthResponse>> {
-        return okResult<ProviderAuthResponse>({});
+        const id = workspaceId();
+        if (!id) return failResult("Workspace is not mounted on this server.", "/provider/auth");
+        return await request<ProviderAuthResponse>(`${workspacePath(id)}/provider/auth`);
       },
 
       oauth: {

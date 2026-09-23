@@ -6,7 +6,9 @@ import { createProviderAuthStore } from "../src/react-app/domains/connections/pr
 
 const originalWindow = globalThis.window;
 const originalFetch = globalThis.fetch;
-const opencodeClient = createClient("https://engine.example", "/tmp/workspace_test");
+const opencodeClient = createClient("https://engine.example", "/tmp/workspace_test", undefined, (input, init) =>
+  globalThis.fetch(input, init),
+);
 
 function installWindow(options: {
   origin: string;

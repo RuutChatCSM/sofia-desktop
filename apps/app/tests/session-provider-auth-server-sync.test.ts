@@ -201,11 +201,26 @@ function installFetchMock(
       if (url.pathname === "/global/health") {
         return jsonResponse({ healthy: true, version: "1.17.11" });
       }
+      if (url.pathname === "/health") {
+        return jsonResponse({ healthy: true, version: "1.17.11" });
+      }
       if (url.pathname === "/provider") {
         return jsonResponse({ all: [], connected: [], default: {} });
       }
       if (url.pathname === "/config") {
         return jsonResponse({ disabled_providers: [] });
+      }
+      if (url.pathname.startsWith("/workspace/")) {
+        if (url.pathname.endsWith("/codex/config")) {
+          return jsonResponse({ ok: true, config: { defaultProviderId: null, model: null, providers: [] } });
+        }
+        if (url.pathname.endsWith("/provider/auth")) {
+          return jsonResponse({ openai: [] });
+        }
+        if (url.pathname.endsWith("/config")) {
+          return method === "GET" ? jsonResponse({ opencode: {} }) : jsonResponse({ updatedAt: 1 });
+        }
+        return jsonResponse({});
       }
       return jsonResponse({});
     },
@@ -234,7 +249,7 @@ function createSessionRouteStore(options: {
   const opencodeClient = createClient("https://engine.example", "/tmp/workspace_test", {
     token: "engine-token",
     mode: "openwork",
-  });
+  }, (input, init) => globalThis.fetch(input, init));
   const workspace = {
     id: "workspace_test",
     name: "Test workspace",
