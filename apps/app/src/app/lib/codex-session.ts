@@ -183,6 +183,43 @@ export function createCodexSessionClient(options: CodexSessionClientOptions) {
         },
       ),
 
+    /** Steer the in-flight turn (codex `turn/steer`). Returns a discriminated
+     * result so the caller can fall back to starting a turn or queuing. */
+    steer: async (
+      sessionId: string,
+      text: string,
+    ): Promise<
+      | { outcome: "steered"; session: CodexSession }
+      | { outcome: "no_active_turn" }
+      | { outcome: "not_steerable" }
+      | { outcome: "turn_mismatch"; actualTurnId: string | null }
+    > => {
+      try {
+        const result = await requestJson<{ ok: boolean; session: CodexSession }>(
+          options.baseUrl,
+          `${workspacePath}/codex/sessions/${encodeURIComponent(sessionId)}/steer`,
+          {
+            token: options.token,
+            hostToken: options.hostToken,
+            method: "POST",
+            body: { text },
+            timeoutMs: 60_000,
+          },
+        );
+        return { outcome: "steered", session: result.session };
+      } catch (error) {
+        if (error instanceof OpenworkServerError) {
+          if (error.code === "codex_no_active_turn") return { outcome: "no_active_turn" };
+          if (error.code === "codex_not_steerable") return { outcome: "not_steerable" };
+          if (error.code === "codex_turn_mismatch") {
+            const details = error.details as { actualTurnId?: string } | undefined;
+            return { outcome: "turn_mismatch", actualTurnId: details?.actualTurnId ?? null };
+          }
+        }
+        throw error;
+      }
+    },
+
     abort: (sessionId: string) =>
       requestJson<{ ok: boolean }>(
         options.baseUrl,

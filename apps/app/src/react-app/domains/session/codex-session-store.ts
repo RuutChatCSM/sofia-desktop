@@ -5,10 +5,82 @@
 import { create } from "zustand";
 
 import type { CodexEvent, CodexSession, CodexSessionClient, CodexSessionStatus } from "@/app/lib/codex-session";
+import type { OpencodeSessionErrorPresentation } from "./sync/session-error";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
+
+/** Extract plain text from a codex `userMessage` item payload. */
+function userMessageText(item: Record<string, unknown>): string {
+  if (typeof item.text === "string" && item.text.trim()) return item.text;
+  if (Array.isArray(item.content)) {
+    return item.content
+      .map((part) => (isRecord(part) && typeof part.text === "string" ? part.text : ""))
+      .join("");
+  }
+  return "";
+}
+
+export type SofiaErrorDetails = {
+  title: string;
+  body: string;
+  provider: string | null;
+  variable: string | null;
+  raw: string;
+};
+
+/**
+ * Turn a raw engine/provider error into conversation-level prose instead of
+ * dumping JSON into the chat. The structured `{"error":{"message":...}}` body,
+ * `codex rpc error (…):` prefix, and known failure shapes (missing credentials)
+ * are unwrapped so the primary content reads like a sentence, not a payload.
+ */
+export function describeSofiaError(message: string): SofiaErrorDetails {
+  const raw = message;
+  // Unwrap the JSON error body if one is embedded anywhere in the message.
+  let detail = message.replace(/^codex rpc error \([^)]*\):\s*/i, "").trim();
+  const jsonStart = detail.indexOf("{");
+  if (jsonStart >= 0) {
+    try {
+      const parsed: unknown = JSON.parse(detail.slice(jsonStart));
+      const err = isRecord(parsed) && isRecord(parsed.error) ? parsed.error : null;
+      if (err && typeof err.message === "string" && err.message.trim()) {
+        detail = err.message.trim();
+      }
+    } catch {
+      // Not JSON — keep the text as-is.
+    }
+  }
+
+  const missingVar = /missing environment variable:?\s*`?([A-Z0-9_]+)`?/i.exec(detail)?.[1]
+    ?? /environment variable:?\s*`?([A-Z0-9_]+)`?/i.exec(detail)?.[1];
+  if (missingVar) {
+    const provider = missingVar.replace(/_API_KEY$/, "");
+    const name = provider.charAt(0).toUpperCase() + provider.slice(1).toLowerCase();
+    return {
+      title: `${name} credentials unavailable`,
+      body: `Missing environment variable: ${missingVar}\n\nSofia couldn't continue using ${name}.`,
+      provider: name,
+      variable: missingVar,
+      raw,
+    };
+  }
+
+  const unauthorized = /401|unauthorized|missing bearer/i.test(detail);
+  if (unauthorized) {
+    return {
+      title: "Provider authentication failed",
+      body: "The provider rejected Sofia's credentials. Reconnect the provider or check its API key.",
+      provider: null,
+      variable: null,
+      raw,
+    };
+  }
+
+  return { title: "Sofia hit an error", body: detail, provider: null, variable: null, raw };
+}
+
 
 export type CodexTranscriptMessage = {
   id: string;
@@ -29,12 +101,19 @@ export type CodexTrackedItem = {
   thinking: string;    // accumulated reasoning
   output: string;      // accumulated command output
   status: "pending" | "done" | "error";
+  /** Structured error for the transcript to render as a card (reuses the
+   * opencode session-error presentation). */
+  errorPresentation?: OpencodeSessionErrorPresentation;
 };
 
 export type CodexSessionEntry = {
   session: CodexSession;
   messages: CodexTranscriptMessage[];
   items: CodexTrackedItem[];
+  /** User messages submitted locally but not yet echoed back as a
+   * `userMessage` stream item. Rendered optimistically so a sent/steered
+   * message appears in the transcript immediately. */
+  pendingUserTexts: string[];
 };
 
 type CodexSessionState = {
@@ -58,6 +137,8 @@ type CodexSessionActions = {
   startTurn: (sessionId: string) => void;
   completeTurn: (sessionId: string) => void;
   failSession: (sessionId: string, message: string, turnId?: string) => void;
+  addPendingUserMessage: (sessionId: string, text: string) => void;
+  confirmPendingUserMessage: (sessionId: string, text?: string) => void;
   removeSession: (sessionId: string) => void;
   clear: () => void;
   setStreaming: (value: boolean) => void;
@@ -77,7 +158,7 @@ export const useCodexSessionStore = create<CodexSessionStore>((set, get) => ({
     set((state) => {
       const next: Record<string, CodexSessionEntry> = {};
       for (const session of sessions) {
-        next[session.id] = { ...(state.sessions[session.id] ?? { messages: [], items: [] }), session };
+        next[session.id] = { ...(state.sessions[session.id] ?? { messages: [], items: [], pendingUserTexts: [] }), session };
       }
       return { sessions: next, loaded: true };
     }),
@@ -90,7 +171,7 @@ export const useCodexSessionStore = create<CodexSessionStore>((set, get) => ({
           ...state.sessions,
           [session.id]: existing
             ? { ...existing, session }
-            : { session, messages: [], items: [] },
+            : { session, messages: [], items: [], pendingUserTexts: [] },
         },
       };
     }),
@@ -231,16 +312,59 @@ export const useCodexSessionStore = create<CodexSessionStore>((set, get) => ({
       const items: CodexTrackedItem[] = entry.items
         .filter((item) => item.id !== id)
         .map((item) => item.status === "pending" ? { ...item, status: "error" } : item);
+      const described = describeSofiaError(message);
+      const errorPresentation: OpencodeSessionErrorPresentation = {
+        kind: "generic",
+        title: described.title,
+        description: described.body,
+        technicalDetails: described.raw,
+        recoveryPrompt: null,
+      };
       items.push({
         id, type: "agentMessage", turnId: failureTurnId ?? id,
-        item: { id, type: "agentMessage", text: `Sofia couldn't complete this request: ${message}` },
-        text: `Sofia couldn't complete this request: ${message}`, thinking: "", output: "", status: "error",
+        item: { id, type: "agentMessage", text: described.title },
+        text: described.title, thinking: "", output: "", status: "error",
+        errorPresentation,
       });
       return {
         error: message,
         sessions: {
           ...state.sessions,
-          [sessionId]: { ...entry, session: { ...entry.session, status: "error" }, messages, items },
+          [sessionId]: { ...entry, session: { ...entry.session, status: "error" }, messages, items, pendingUserTexts: [] },
+        },
+      };
+    }),
+
+  // Optimistically render a sent/steered user message until the engine echoes
+  // it back as a `userMessage` item (see confirmPendingUserMessage).
+  addPendingUserMessage: (sessionId, text) =>
+    set((state) => {
+      const entry = state.sessions[sessionId];
+      const trimmed = text.trim();
+      if (!entry || !trimmed) return state;
+      return {
+        sessions: {
+          ...state.sessions,
+          [sessionId]: { ...entry, pendingUserTexts: [...entry.pendingUserTexts, trimmed] },
+        },
+      };
+    }),
+
+  confirmPendingUserMessage: (sessionId, text) =>
+    set((state) => {
+      const entry = state.sessions[sessionId];
+      if (!entry || entry.pendingUserTexts.length === 0) return state;
+      const trimmed = typeof text === "string" ? text.trim() : "";
+      const index = trimmed ? entry.pendingUserTexts.indexOf(trimmed) : -1;
+      // Remove the matched pending message, or the oldest one as a fallback
+      // (user messages echo back in submission order).
+      const next = index >= 0
+        ? [...entry.pendingUserTexts.slice(0, index), ...entry.pendingUserTexts.slice(index + 1)]
+        : entry.pendingUserTexts.slice(1);
+      return {
+        sessions: {
+          ...state.sessions,
+          [sessionId]: { ...entry, pendingUserTexts: next },
         },
       };
     }),
@@ -323,6 +447,11 @@ export async function runCodexStream(
               });
             }
             s.completeItem(event.sessionId, itemId, item);
+            // The engine echoed a submitted user message: drop the optimistic
+            // pending copy so it isn't rendered twice.
+            if (event.itemType === "userMessage") {
+              s.confirmPendingUserMessage(event.sessionId, userMessageText(item));
+            }
             break;
           }
           case "tool.output":

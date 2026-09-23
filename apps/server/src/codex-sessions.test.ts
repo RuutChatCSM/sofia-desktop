@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { CodexSessionManager, codexSessionId, isCodexSessionId } from "./codex-sessions.js";
+import { CodexSessionManager, codexSessionId, isCodexSessionId, isMissingRolloutError, threadBelongsToWorkspace } from "./codex-sessions.js";
 
 const roots: string[] = [];
 
@@ -61,7 +61,14 @@ async function writeFakeCodex(root: string, notifications: Array<{ method: strin
     "  } else if (msg.method === 'thread/fork') {",
     "    send({ jsonrpc: '2.0', id: msg.id, result: { threadId: 'forked-' + (++id) } });",
     "  } else if (msg.method === 'turn/steer') {",
-    "    send({ jsonrpc: '2.0', id: msg.id, result: { turnId: 'steered-' + (++id) } });",
+    "    const steerText = JSON.stringify(msg.params.input ?? '');",
+    "    if (steerText.includes('steer-no-active')) {",
+    "      send({ jsonrpc: '2.0', id: msg.id, error: { code: -32600, message: 'no active turn to steer' } });",
+    "    } else if (steerText.includes('steer-not-steerable')) {",
+    "      send({ jsonrpc: '2.0', id: msg.id, error: { code: -32600, message: 'cannot steer a review turn' } });",
+    "    } else {",
+    "      send({ jsonrpc: '2.0', id: msg.id, result: { turnId: 'steered-' + (++id) } });",
+    "    }",
     "  } else if (msg.method === 'thread/resume' || msg.method === 'thread/archive' || msg.method === 'thread/unarchive' || msg.method === 'thread/unsubscribe' || msg.method === 'turn/interrupt') {",
     "    send({ jsonrpc: '2.0', id: msg.id, result: {} });",
     "  } else {",
@@ -159,6 +166,43 @@ describe("CodexSessionManager", () => {
       expect(unarchived.archived).toBe(false);
 
       await expect(manager.unsubscribeSession(session.id)).resolves.toBeUndefined();
+    } finally {
+      await manager.close();
+    }
+  });
+
+  test("isMissingRolloutError detects the codex no-rollout failure", () => {
+    expect(isMissingRolloutError(new Error("codex rpc error (-32600): no rollout found for thread id 01abc"))).toBe(true);
+    expect(isMissingRolloutError(new Error("some other failure"))).toBe(false);
+  });
+
+  test("threadBelongsToWorkspace groups subdirectories, excludes unrelated cwds", () => {
+    // Exact workspace root matches.
+    expect(threadBelongsToWorkspace("/repo", "/repo")).toBe(true);
+    // Subdirectory session belongs to the workspace (TUI groups it the same way).
+    expect(threadBelongsToWorkspace("/repo", "/repo/tween-auth")).toBe(true);
+    // Workspace deeper than the session cwd also matches.
+    expect(threadBelongsToWorkspace("/repo/apps/server", "/repo")).toBe(true);
+    // Unrelated cwd is excluded.
+    expect(threadBelongsToWorkspace("/repo", "/somewhere/else")).toBe(false);
+    // Missing cwd is treated as a match (older stores omit it).
+    expect(threadBelongsToWorkspace("/repo", undefined)).toBe(true);
+  });
+
+  test("steer maps engine rejections to CodexSteerError codes", async () => {
+    const root = await createRoot();
+    const bin = await writeFakeCodex(root);
+    const manager = new CodexSessionManager({ bin, cwd: root, interpreter: process.execPath });
+    try {
+      const session = await manager.createSession({ title: "T", workspaceId: "ws_1", cwd: root });
+      // Keep a turn in flight so the steer reaches the engine.
+      await manager.prompt(session.id, "hold");
+      await expect(manager.steer(session.id, "steer-no-active now")).rejects.toMatchObject({
+        code: "no_active_turn",
+      });
+      await expect(manager.steer(session.id, "steer-not-steerable now")).rejects.toMatchObject({
+        code: "not_steerable",
+      });
     } finally {
       await manager.close();
     }

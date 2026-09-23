@@ -1,11 +1,15 @@
 /** @jsxImportSource react */
-import { ArrowUp, FileText, GripVertical, ListPlus, X } from "lucide-react";
-import { Fragment, useRef, useState, type DragEvent, type ReactNode } from "react";
+import { CornerDownRight, MoreHorizontal, Paperclip, Trash2 } from "lucide-react";
+import { useState } from "react";
 
-import { ImageAttachmentBadge } from "@/components/chat/image-attachment-badge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { t } from "@/i18n";
-import type { ComposerAttachment, ComposerDraft, ComposerPart } from "@/app/types";
-import { parseConnectSkillToken } from "@/react-app/domains/session/surface/composer/connect-skill-token";
+import type { ComposerDraft } from "@/app/types";
 import type { QueuedComposerItem } from "@/react-app/domains/session/surface/composer-state-store";
 
 export type QueuedMessagesPanelProps = {
@@ -17,120 +21,33 @@ export type QueuedMessagesPanelProps = {
   sending?: boolean;
 };
 
-const TOKEN_RE = /(\[attachment [^\]]+\]|\[pasted text [^\]]+\]|\[connect-skill [^\]]+\]|\[skill [^\]]+\])/;
+// Keep the pending row quiet: show a few stacked follow-ups, then a count.
+const MAX_VISIBLE = 3;
 
-function isImageAttachment(attachment: ComposerAttachment) {
-  return attachment.kind === "image" || attachment.mimeType.startsWith("image/");
+/**
+ * One-line preview of a queued draft. Inline tokens (attachments, pasted text,
+ * skills) are collapsed to short labels so the row stays compact.
+ */
+function previewText(draft: ComposerDraft): string {
+  const text = draft.text
+    .replace(/\[attachment [^\]]+\]/g, " ")
+    .replace(/\[pasted text ([^\]]+)\]/g, (_match, label: string) => `[pasted: ${label}]`)
+    .replace(/\[connect-skill [^\]]+\]/g, "[skill]")
+    .replace(/\[skill ([^\]]+)\]/g, "/$1")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (text) return text;
+  if (draft.attachments.length > 0) {
+    return t("composer.queued_attachments_only", { count: draft.attachments.length });
+  }
+  return "";
 }
 
-function pastedLines(parts: ComposerPart[], label: string) {
-  for (const part of parts) {
-    if (part.type === "paste" && part.label === label) return part.lines;
-  }
-  return 1;
-}
-
-function QueuedDraftContent(props: { draft: ComposerDraft }) {
-  const attachmentsById = new Map(props.draft.attachments.map((attachment) => [attachment.id, attachment]));
-  const text = props.draft.text;
-  if (!text.trim() && props.draft.attachments.length > 0) {
-    return (
-      <span className="inline-flex flex-wrap items-center gap-1.5">
-        {props.draft.attachments.map((attachment) => (
-          <QueuedAttachmentChip key={attachment.id} attachment={attachment} />
-        ))}
-      </span>
-    );
-  }
-
-  const nodes: ReactNode[] = [];
-  let offset = 0;
-  for (const segment of text.split(TOKEN_RE)) {
-    if (!segment) continue;
-    const key = `${offset}:${segment}`;
-    offset += segment.length;
-
-    const attachmentMatch = segment.match(/^\[attachment (.+)\]$/);
-    if (attachmentMatch?.[1]) {
-      const attachment = attachmentsById.get(attachmentMatch[1]);
-      if (attachment) {
-        nodes.push(<QueuedAttachmentChip key={key} attachment={attachment} />);
-        continue;
-      }
-    }
-
-    const pasteMatch = segment.match(/^\[pasted text (.+)\]$/);
-    if (pasteMatch?.[1]) {
-      const lines = pastedLines(props.draft.parts, pasteMatch[1]);
-      nodes.push(
-        <span
-          key={key}
-          className="mx-0.5 inline-flex items-center rounded-full border border-amber-6/35 bg-amber-3/15 px-2.5 py-1 text-xs font-medium text-amber-11 align-middle"
-          title={`Pasted text · ${pasteMatch[1]}`}
-        >
-          {`Pasted · ${lines} line${lines === 1 ? "" : "s"}`}
-        </span>,
-      );
-      continue;
-    }
-
-    const connectSkill = parseConnectSkillToken(segment);
-    const skillMatch = segment.match(/^\[skill (.+)\]$/);
-    const skillName = connectSkill?.slug ?? skillMatch?.[1];
-    if (skillName) {
-      nodes.push(
-        <span
-          key={key}
-          className="mx-0.5 inline-flex items-center rounded-full border border-violet-6/35 bg-violet-3/20 px-2.5 py-1 text-xs font-medium text-violet-11 align-middle"
-          title={`Skill: ${connectSkill?.name ?? skillName}`}
-        >
-          {`/${skillName}`}
-        </span>,
-      );
-      continue;
-    }
-
-    nodes.push(
-      <Fragment key={key}>{segment}</Fragment>,
-    );
-  }
-
-  if (nodes.length === 0) {
-    return (
-      <span className="text-gray-10">
-        {t("composer.queued_attachments_only", { count: props.draft.attachments.length })}
-      </span>
-    );
-  }
-
-  return <span className="inline">{nodes}</span>;
-}
-
-function QueuedAttachmentChip(props: { attachment: ComposerAttachment }) {
-  if (isImageAttachment(props.attachment) && props.attachment.previewUrl) {
-    return (
-      <ImageAttachmentBadge
-        src={props.attachment.previewUrl}
-        alt={props.attachment.name}
-        className="mx-0.5 align-middle"
-      />
-    );
-  }
-
-  return (
-    <span
-      className="mx-0.5 inline-flex h-10 max-w-[140px] items-center gap-1.5 rounded-xl border border-border/70 bg-muted/40 px-2 align-middle"
-      title={props.attachment.name}
-    >
-      <FileText className="size-3.5 shrink-0 text-muted-foreground" />
-      <span className="truncate text-[11px] font-medium text-foreground">{props.attachment.name}</span>
-    </span>
-  );
-}
-
-function QueuedDraftRow(props: {
+function QueuedRow(props: {
   item: QueuedComposerItem;
   ids: string[];
+  index: number;
   sending?: boolean;
   onRemove: (id: string) => void;
   onSendNow: (id: string) => void;
@@ -139,9 +56,18 @@ function QueuedDraftRow(props: {
 }) {
   const [editing, setEditing] = useState(false);
   const [draftText, setDraftText] = useState(props.item.draft.text);
-  const draggingRef = useRef(false);
 
-  const commitEdit = () => {
+  const startEdit = () => {
+    setDraftText(props.item.draft.text);
+    setEditing(true);
+  };
+
+  const cancel = () => {
+    setDraftText(props.item.draft.text);
+    setEditing(false);
+  };
+
+  const commit = () => {
     const next = draftText.trim();
     setEditing(false);
     if (!next || next === props.item.draft.text) {
@@ -151,153 +77,155 @@ function QueuedDraftRow(props: {
     props.onEdit(props.item.id, next);
   };
 
-  const moveId = (fromId: string, toId: string) => {
-    if (fromId === toId) return;
-    const from = props.ids.indexOf(fromId);
-    const to = props.ids.indexOf(toId);
-    if (from < 0 || to < 0) return;
+  const move = (delta: number) => {
+    const to = props.index + delta;
+    if (to < 0 || to >= props.ids.length) return;
     const next = [...props.ids];
-    const [moved] = next.splice(from, 1);
+    const [moved] = next.splice(props.index, 1);
     if (!moved) return;
     next.splice(to, 0, moved);
     props.onReorder(next);
   };
 
-  const onDragStart = (event: DragEvent<HTMLDivElement>) => {
-    draggingRef.current = true;
-    event.dataTransfer.setData("text/plain", props.item.id);
-    event.dataTransfer.effectAllowed = "move";
-  };
-
-  const onDragOver = (event: DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    event.dataTransfer.dropEffect = "move";
-  };
-
-  const onDrop = (event: DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    const fromId = event.dataTransfer.getData("text/plain");
-    draggingRef.current = false;
-    if (fromId) moveId(fromId, props.item.id);
-  };
-
-  return (
-    <div
-      draggable={!editing && !props.sending}
-      onDragStart={onDragStart}
-      onDragOver={onDragOver}
-      onDrop={onDrop}
-      onDragEnd={() => {
-        draggingRef.current = false;
-      }}
-      className="flex items-start gap-2 rounded-xl border border-gray-6 bg-gray-1 px-2 py-2.5"
-    >
-      <span
-        className="mt-0.5 flex size-5 shrink-0 cursor-grab items-center justify-center text-gray-9 active:cursor-grabbing"
-        title={t("composer.queued_reorder")}
-        aria-hidden="true"
-      >
-        <GripVertical size={14} />
-      </span>
-      <div className="min-w-0 flex-1">
-        {editing ? (
-          <textarea
-            autoFocus
-            value={draftText}
-            onChange={(event) => setDraftText(event.target.value)}
-            onBlur={commitEdit}
-            onKeyDown={(event) => {
-              if (event.key === "Escape") {
-                event.preventDefault();
-                setDraftText(props.item.draft.text);
-                setEditing(false);
-                return;
-              }
-              if (event.key === "Enter" && !event.shiftKey) {
-                event.preventDefault();
-                commitEdit();
-              }
-            }}
-            className="min-h-16 w-full resize-y rounded-lg border border-gray-6 bg-gray-2 px-2 py-1.5 text-sm leading-5 text-gray-12 outline-none focus:border-gray-8"
-            aria-label={t("composer.queued_edit")}
-          />
-        ) : (
+  if (editing) {
+    return (
+      <div className="rounded-xl border border-dls-border bg-dls-surface px-2.5 py-2">
+        <textarea
+          autoFocus
+          value={draftText}
+          rows={3}
+          onChange={(event) => setDraftText(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              event.preventDefault();
+              cancel();
+              return;
+            }
+            if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+              event.preventDefault();
+              commit();
+            }
+          }}
+          className="w-full resize-none rounded-lg border border-dls-border bg-dls-surface-muted px-2 py-1.5 text-[13px] leading-5 text-dls-text outline-none focus:border-gray-8"
+          aria-label={t("composer.queued_edit")}
+        />
+        <div className="mt-1.5 flex items-center justify-end gap-1.5">
           <button
             type="button"
-            disabled={props.sending}
-            onClick={() => {
-              if (draggingRef.current) return;
-              setDraftText(props.item.draft.text);
-              setEditing(true);
-            }}
-            className="w-full rounded-md px-0.5 text-left text-sm leading-5 text-gray-11 hover:text-gray-12 disabled:pointer-events-none"
-            title={t("composer.queued_edit")}
+            onClick={cancel}
+            className="rounded-md px-2 py-1 text-[12px] text-gray-10 transition-colors hover:bg-gray-3 hover:text-gray-12"
           >
-            <QueuedDraftContent draft={props.item.draft} />
+            {t("common.cancel")}
           </button>
-        )}
+          <button
+            type="button"
+            onClick={commit}
+            className="rounded-md bg-gray-12 px-2.5 py-1 text-[12px] font-medium text-gray-1 transition-opacity hover:opacity-90"
+          >
+            {t("common.save")}
+          </button>
+        </div>
       </div>
-      <div className="mt-0.5 flex shrink-0 items-center gap-0.5">
+    );
+  }
+
+  const preview = previewText(props.item.draft);
+  const hasAttachments = props.item.draft.attachments.length > 0;
+
+  return (
+    <div className="flex h-9 items-center gap-2 rounded-xl border border-dls-border bg-dls-surface-muted px-2.5">
+      <CornerDownRight size={14} className="shrink-0 text-gray-9" aria-hidden="true" />
+      <button
+        type="button"
+        disabled={props.sending}
+        onClick={startEdit}
+        title={preview || t("composer.queued_edit")}
+        className="min-w-0 flex-1 truncate text-left text-[13px] leading-5 text-gray-11 transition-colors hover:text-gray-12 disabled:pointer-events-none"
+      >
+        {hasAttachments ? (
+          <Paperclip size={12} className="mr-1 inline align-text-bottom text-gray-9" aria-hidden="true" />
+        ) : null}
+        {preview}
+      </button>
+      <div className="flex shrink-0 items-center gap-0.5">
         <button
           type="button"
-          onClick={() => props.onSendNow(props.item.id)}
           disabled={props.sending}
-          className="flex size-5 items-center justify-center rounded-md text-gray-10 transition-colors hover:bg-gray-3 hover:text-gray-12 disabled:pointer-events-none disabled:opacity-40"
-          title={t("composer.queued_send_now")}
-          aria-label={t("composer.queued_send_now")}
+          onClick={() => props.onSendNow(props.item.id)}
+          title={t("composer.queued_send_now_hint")}
+          className="rounded-md px-2 py-1 text-[12px] font-medium text-gray-11 transition-colors hover:bg-gray-3 hover:text-gray-12 disabled:pointer-events-none disabled:opacity-40"
         >
-          <ArrowUp size={13} />
+          {t("composer.queued_steer")}
         </button>
         <button
           type="button"
-          onClick={() => props.onRemove(props.item.id)}
           disabled={props.sending}
-          className="flex size-5 items-center justify-center rounded-md text-gray-10 transition-colors hover:bg-gray-3 hover:text-gray-12 disabled:pointer-events-none disabled:opacity-40"
+          onClick={() => props.onRemove(props.item.id)}
           title={t("common.remove")}
           aria-label={t("common.remove")}
+          className="flex size-7 items-center justify-center rounded-md text-gray-10 transition-colors hover:bg-gray-3 hover:text-gray-12 disabled:pointer-events-none disabled:opacity-40"
         >
-          <X size={13} />
+          <Trash2 size={14} />
         </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <button
+                type="button"
+                disabled={props.sending}
+                title={t("composer.queued_more_actions")}
+                aria-label={t("composer.queued_more_actions")}
+                className="flex size-7 items-center justify-center rounded-md text-gray-10 transition-colors hover:bg-gray-3 hover:text-gray-12 disabled:pointer-events-none disabled:opacity-40"
+              >
+                <MoreHorizontal size={15} />
+              </button>
+            }
+          />
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={startEdit}>{t("composer.queued_edit")}</DropdownMenuItem>
+            <DropdownMenuItem disabled={props.index === 0} onClick={() => move(-1)}>
+              {t("composer.queued_move_up")}
+            </DropdownMenuItem>
+            <DropdownMenuItem disabled={props.index === props.ids.length - 1} onClick={() => move(1)}>
+              {t("composer.queued_move_down")}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </div>
   );
 }
 
 /**
- * Shows the follow-up messages the user has queued while the agent is busy.
- * Each entry can be reordered, edited, sent immediately, or removed.
+ * Follow-up messages queued while the agent is busy. Compact rows sit directly
+ * above the composer: click the text to edit inline, Steer to send into the
+ * current run now, or use the menu to reorder.
  */
 export function QueuedMessagesPanel(props: QueuedMessagesPanelProps) {
   if (props.items.length === 0) return null;
+
   const ids = props.items.map((item) => item.id);
+  const visible = props.items.slice(0, MAX_VISIBLE);
+  const hiddenCount = props.items.length - visible.length;
 
   return (
-    <div className="overflow-hidden border-b border-dls-border bg-transparent">
-      <div className="border-b border-dls-border px-4 py-3">
-        <div className="flex items-center gap-2.5">
-          <div className="flex size-5 shrink-0 items-center justify-center rounded-full border border-gray-7/40 bg-gray-3/40 text-gray-11">
-            <ListPlus size={12} />
-          </div>
-          <div className="text-sm font-medium leading-5 text-gray-12">
-            {t("composer.queued_count", { count: props.items.length })}
-          </div>
-        </div>
-      </div>
-
-      <div className="max-h-48 space-y-2 overflow-auto px-4 py-3">
-        {props.items.map((item) => (
-          <QueuedDraftRow
-            key={item.id}
-            item={item}
-            ids={ids}
-            sending={props.sending}
-            onRemove={props.onRemove}
-            onSendNow={props.onSendNow}
-            onReorder={props.onReorder}
-            onEdit={props.onEdit}
-          />
-        ))}
-      </div>
+    <div className="flex flex-col gap-1.5">
+      {visible.map((item, index) => (
+        <QueuedRow
+          key={item.id}
+          item={item}
+          ids={ids}
+          index={index}
+          sending={props.sending}
+          onRemove={props.onRemove}
+          onSendNow={props.onSendNow}
+          onReorder={props.onReorder}
+          onEdit={props.onEdit}
+        />
+      ))}
+      {hiddenCount > 0 ? (
+        <div className="px-2 text-[11px] text-gray-9">{t("composer.queued_more", { count: hiddenCount })}</div>
+      ) : null}
     </div>
   );
 }

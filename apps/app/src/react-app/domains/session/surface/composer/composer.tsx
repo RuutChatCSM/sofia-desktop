@@ -27,6 +27,7 @@ import {
 } from "./slash-command";
 import { encodeConnectSkillToken } from "./connect-skill-token";
 import { FILE_URL_RE, HTTP_URL_RE, type PastedTextChip } from "./pasted-text";
+import { resolveSubmitAction } from "./submit-action";
 import { loadSessionConnectCapabilities } from "@/react-app/domains/connections/cloud-inventory-cache";
 import { useOrgMcpConnections } from "@/react-app/domains/connections/use-org-mcp-connections";
 import {
@@ -112,6 +113,9 @@ type ComposerProps = {
   compactTopSpacing?: boolean;
   /** Render inline in a page (new-task hero): no sticky dock chrome or inner max-width, aligning with sibling content. */
   flush?: boolean;
+  /** Rendered immediately above the composer panel (e.g. the pending/queued
+   * follow-up row), aligned to the composer width. */
+  aboveComposer?: ReactNode;
   topAccessory?: ReactNode;
   /** Rendered in the action row (next to the model select/send) — e.g. the
    * codex approval-mode control. */
@@ -350,9 +354,13 @@ export function ReactSessionComposer(props: ComposerProps) {
     const hasContent = props.draft.trim().length > 0 || props.attachments.length > 0;
     if (!hasContent) return;
     if (props.submissionPreparing) return;
-    if (props.busy) {
-      if (options.queue) void props.onSteer();
-      else void props.onQueue();
+    const action = resolveSubmitAction({ busy: props.busy, modifier: options.queue });
+    if (action === "queue") {
+      void props.onQueue();
+      return;
+    }
+    if (action === "steer") {
+      void props.onSteer();
       return;
     }
     void props.onSend();
@@ -1257,6 +1265,7 @@ export function ReactSessionComposer(props: ComposerProps) {
       }}
     >
       <div className={props.flush ? "" : "max-w-[800px] mx-auto"}>
+        {props.aboveComposer ? <div className="pb-2">{props.aboveComposer}</div> : null}
         {/* Main composer panel */}
         <div
           className={`relative overflow-visible rounded-[18px] border border-dls-border bg-dls-surface-muted shadow-sm transition-all focus-within:border-gray-7 focus-within:shadow-md ${panelRoundedClass}`}

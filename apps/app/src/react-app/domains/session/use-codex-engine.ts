@@ -5,6 +5,7 @@ import { useShallow } from "zustand/react/shallow";
 import { createCodexSessionClient, type CodexEngineConfigWire } from "@/app/lib/codex-session";
 import { setCodexAbortHandler } from "@/app/lib/opencode-session";
 import { useSelectedEngine } from "./engine-selection-store";
+import { shouldActivateCodexEngine } from "./engine-awareness";
 import { runCodexStream, useCodexSessionStore } from "./codex-session-store";
 import { syncCodexTranscriptToCache, restoreCodexSessionItems } from "./sync/codex-transcript-adapter";
 
@@ -22,9 +23,12 @@ export type CodexEngineEndpoint = {
  * engine is opencode, the codex store is cleared so the opencode session
  * surface takes over.
  */
-export function useCodexEngine(endpoint: CodexEngineEndpoint | null) {
+export function useCodexEngine(endpoint: CodexEngineEndpoint | null, activeSessionId?: string | null) {
   const engine = useSelectedEngine();
-  const enabled = engine === "codex" && Boolean(endpoint);
+  // Activate when the selected engine is codex OR the open session is a codex
+  // session (e.g. the workspace defaults to opencode but the user opened a
+  // Sofia session). Without this the transcript is never mirrored.
+  const enabled = shouldActivateCodexEngine(engine, activeSessionId) && Boolean(endpoint);
   const displayWorkspaceId = endpoint?.displayWorkspaceId ?? endpoint?.workspaceId;
   const endpointRef = useRef<CodexEngineEndpoint | null>(endpoint);
   endpointRef.current = endpoint;
@@ -165,6 +169,21 @@ export function useCodexEngine(endpoint: CodexEngineEndpoint | null) {
     abort: client
       ? async (sessionId: string) => {
           await client.abort(sessionId);
+        }
+      : null,
+    // Steer the in-flight turn (codex `turn/steer`). Returns a discriminated
+    // result so the caller can start a turn or queue when steering is refused.
+    steer: client
+      ? async (sessionId: string, text: string) => {
+          try {
+            return await client.steer(sessionId, text);
+          } catch (error) {
+            useCodexSessionStore.getState().failSession(
+              sessionId,
+              error instanceof Error ? error.message : "Sofia request failed",
+            );
+            throw error;
+          }
         }
       : null,
     archiveSession: client

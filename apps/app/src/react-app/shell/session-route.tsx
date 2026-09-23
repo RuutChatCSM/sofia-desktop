@@ -691,6 +691,7 @@ export function SessionRoute() {
           displayWorkspaceId: selectedWorkspaceId,
         }
       : null,
+    selectedSessionId,
   );
   const codexApproval = useCodexApprovals(
     codexEngine.enabled ? codexEngine.client : null,
@@ -1480,10 +1481,43 @@ export function SessionRoute() {
         // Sofia sessions bypass the opencode send pipeline entirely while
         // preserving the same per-session model selection as the composer.
         if (codexEngine.enabled && codexEngine.prompt && targetSessionId.startsWith("codex-")) {
-          void codexEngine.prompt(targetSessionId, text, {
+          const selection = {
             model: sendModel?.modelID,
             providerId: sendModel?.providerID,
-          });
+          };
+          // Render the user's message immediately; it is dropped once the
+          // engine echoes it back as a `userMessage` item.
+          useCodexSessionStore.getState().addPendingUserMessage(targetSessionId, text);
+          const startTurn = () => {
+            void codexEngine.prompt!(targetSessionId, text, selection);
+          };
+          const turnRunning = Boolean(codexEngine.steer) && codexEngine.sessions.some(
+            (session) => session.id === targetSessionId && session.status === "running",
+          );
+          if (turnRunning && codexEngine.steer) {
+            // Send-while-running steers the active turn (codex `turn/steer`)
+            // instead of being rejected. Fall back to starting a turn when the
+            // turn already finished, and queue when it cannot be steered.
+            void codexEngine
+              .steer(targetSessionId, text)
+              .then((result) => {
+                if (result.outcome === "not_steerable") {
+                  // Review/compact turns cannot be steered. Queue for end of
+                  // turn (codex's "Messages to be submitted at end of turn")
+                  // and drop the optimistic message so it is not duplicated
+                  // when the queued draft is drained and echoed back.
+                  useCodexSessionStore.getState().confirmPendingUserMessage(targetSessionId, text);
+                  useComposerStateStore.getState().appendQueuedDraft(targetSessionId, draft);
+                  return;
+                }
+                if (result.outcome === "no_active_turn" || result.outcome === "turn_mismatch") {
+                  startTurn();
+                }
+              })
+              .catch(() => undefined);
+          } else {
+            startTurn();
+          }
           useSessionActivityStore.getState().setRunStatus(selectedWorkspaceId, targetSessionId, { type: "busy" });
           return { outcome: "accepted" };
         }

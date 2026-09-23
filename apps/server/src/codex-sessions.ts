@@ -22,8 +22,54 @@ function pathsMatch(left: string, right: string): boolean {
   return a === b || b.startsWith(`${a}/`);
 }
 
+/**
+ * Whether a persisted thread belongs to a workspace. Codex groups sessions by
+ * project, so a thread created in a subdirectory (or from the repo root while
+ * the workspace points at a subdir) belongs to this workspace — the TUI lists
+ * it. Only an unrelated cwd is excluded. A missing cwd is treated as a match
+ * (older stores omit it).
+ */
+export function threadBelongsToWorkspace(
+  workspaceCwd: string,
+  threadCwd: string | null | undefined,
+): boolean {
+  if (!threadCwd) return true;
+  return pathsMatch(workspaceCwd, threadCwd) || pathsMatch(threadCwd, workspaceCwd);
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** Why a steer was rejected, so the caller can fall back (start a turn, queue). */
+export type CodexSteerFailureCode = "no_active_turn" | "turn_mismatch" | "not_steerable" | "empty_input";
+
+/**
+ * Structured steering failure. Mirrors codex's `turn/steer` rejection reasons
+ * (`protocol/src/turn_input.rs`): no active turn, expected-turn mismatch, a
+ * non-steerable (review/compact) turn, or empty input.
+ */
+export class CodexSteerError extends Error {
+  readonly code: CodexSteerFailureCode;
+  readonly actualTurnId: string | null;
+
+  constructor(code: CodexSteerFailureCode, message: string, actualTurnId: string | null = null) {
+    super(message);
+    this.name = "CodexSteerError";
+    this.code = code;
+    this.actualTurnId = actualTurnId;
+  }
+}
+
+/**
+ * True when the codex app-server reports that a thread has no persisted
+ * rollout (e.g. a session created but never run, or already removed). Such
+ * threads have nothing to archive/delete, so callers treat it as a no-op
+ * instead of surfacing a 502.
+ */
+export function isMissingRolloutError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /no rollout found/i.test(message);
 }
 
 /** Extract the shell command from a codex custom_tool_call "input" JS string. */
@@ -289,19 +335,25 @@ export class CodexSessionManager {
     await this.start();
     const session = this.sessions.get(sessionId);
     if (!session || !this.engine) return [];
+    // A thread listed via `thread/list` carries metadata only; its items are
+    // not in the store until the thread is loaded. Resume (best-effort) so
+    // `thread/items/list` can return the transcript, then fall back to the
+    // rollout JSONL for legacy/CLI sessions the store doesn't know.
+    await this.engine.resumeThread(session.threadId).catch(() => undefined);
     try {
-      return await this.engine.listThreadItems(session.threadId, { limit: options?.limit });
+      const items = await this.engine.listThreadItems(session.threadId, { limit: options?.limit });
+      if (items.length > 0) return items;
     } catch {
-      // Legacy (ChatGPT/Codex) sessions aren't in the app-server thread store;
-      // fall back to reading the rollout JSONL directly.
-      return this.readRolloutItems(session, options?.limit);
+      // Fall through to the rollout reader.
     }
+    return this.readRolloutItems(session, options?.limit);
   }
 
   /** Parse a legacy rollout JSONL into ThreadItem-shaped entries. */
   private readRolloutItems(session: CodexSession, limit = 200): Array<{ turnId: string; item: Record<string, unknown> }> {
-    const path = session.rolloutPath;
+    const path = session.rolloutPath ?? this.findRolloutPath(session.threadId);
     if (!path || !existsSync(path)) return [];
+    session.rolloutPath = path;
     try {
       const raw = readFileSync(path, "utf8");
       const out: Array<{ turnId: string; item: Record<string, unknown> }> = [];
@@ -485,9 +537,14 @@ export class CodexSessionManager {
           model?: string;
           model_provider?: string;
           modelProvider?: string;
+          rollout_path?: string;
+          rolloutPath?: string;
         };
         const threadId = typeof thread.id === "string" ? thread.id : "";
-        if (thread.cwd && resolve(thread.cwd) !== resolve(this.handle.cwd)) continue;
+        // Group by project, not exact path: a session created in a subdirectory
+        // (or from the repo root while the workspace points at a subdir) belongs
+        // to this workspace, and the TUI lists it. Strict equality hid them.
+        if (!threadBelongsToWorkspace(this.handle.cwd, thread.cwd)) continue;
         const originalThreadId = Object.entries(this.threadAliases).find(([, replacement]) => replacement === threadId)?.[0];
         const sessionId = codexSessionId(originalThreadId ?? threadId);
         if (!threadId || this.sessions.has(sessionId)) continue;
@@ -511,6 +568,9 @@ export class CodexSessionManager {
           ...(typeof thread.model === "string" ? { model: thread.model } : {}),
           ...(typeof (thread.modelProvider ?? thread.model_provider) === "string"
             ? { providerId: thread.modelProvider ?? thread.model_provider }
+            : {}),
+          ...(typeof (thread.rolloutPath ?? thread.rollout_path) === "string"
+            ? { rolloutPath: thread.rolloutPath ?? thread.rollout_path }
             : {}),
         };
         this.sessions.set(session.id, session);
@@ -723,8 +783,27 @@ export class CodexSessionManager {
     await this.start();
     const session = this.sessions.get(sessionId);
     if (!session || !this.engine) throw new Error(`unknown codex session: ${sessionId}`);
-    if (!session.turnId || session.status !== "running") throw new Error("There is no active Sofia turn to steer");
-    const turnId = await this.engine.steerTurn({ threadId: session.threadId, expectedTurnId: session.turnId, input: [{ text }] });
+    if (!text.trim()) throw new CodexSteerError("empty_input", "Cannot steer with an empty message");
+    if (!session.turnId || session.status !== "running") {
+      throw new CodexSteerError("no_active_turn", "There is no active Sofia turn to steer");
+    }
+    let turnId: string | null;
+    try {
+      turnId = await this.engine.steerTurn({
+        threadId: session.threadId,
+        expectedTurnId: session.turnId,
+        input: [{ text }],
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (/no active turn/i.test(message)) throw new CodexSteerError("no_active_turn", message);
+      if (/cannot steer a (?:review|compact)|not steerable|active turn cannot be steered/i.test(message)) {
+        throw new CodexSteerError("not_steerable", message);
+      }
+      const mismatch = /expected active turn id [`'"]?([^`'"\s]+)[`'"]? but found [`'"]?([^`'"\s]+)/i.exec(message);
+      if (mismatch) throw new CodexSteerError("turn_mismatch", message, mismatch[2] ?? null);
+      throw error;
+    }
     session.turnId = turnId;
     session.status = "running";
     this.emit({ type: "session.updated", session: { ...session } });
@@ -759,7 +838,13 @@ export class CodexSessionManager {
     await this.start();
     const session = this.sessions.get(sessionId);
     if (!session) throw new Error(`unknown codex session: ${sessionId}`);
-    await this.activeEngine().archiveThread(session.threadId, archived);
+    // A thread with no persisted rollout has nothing to archive; treat the
+    // engine's "no rollout found" as already-archived rather than failing.
+    await this.activeEngine()
+      .archiveThread(session.threadId, archived)
+      .catch((error: unknown) => {
+        if (!isMissingRolloutError(error)) throw error;
+      });
     session.archived = archived;
     this.emit({ type: "session.updated", session: { ...session } });
     return { ...session };
@@ -792,8 +877,11 @@ export class CodexSessionManager {
       await this.activeEngine().interruptTurn(session.threadId, session.turnId);
     }
     // Delete the persisted thread in the codex engine, not just the in-memory
-    // session, so it doesn't re-import on the next loadExistingThreads.
-    await this.activeEngine().deleteThread(session.threadId);
+    // session, so it doesn't re-import on the next loadExistingThreads. A
+    // thread with no rollout is already gone — treat it as deleted.
+    await this.activeEngine().deleteThread(session.threadId).catch((error: unknown) => {
+      if (!isMissingRolloutError(error)) throw error;
+    });
     this.sessions.delete(sessionId);
   }
 

@@ -17,7 +17,7 @@ import {
   writeCodexEngineConfigFromProviders,
 } from "./codex-providers.js";
 import type { CodexEvent, CodexSession } from "./codex-sessions.js";
-import { isCodexSessionId } from "./codex-sessions.js";
+import { CodexSteerError, isCodexSessionId } from "./codex-sessions.js";
 import { ApiError } from "./errors.js";
 import { addRoute, type RequestContext, type Route } from "./routes/registry.js";
 import type { ServerConfig, TokenScope } from "./types.js";
@@ -33,6 +33,7 @@ export interface CodexSessionRegistry {
     listSessions: () => CodexSession[];
     createSession: (input: { title: string; prompt?: string; workspaceId: string; cwd?: string; model?: string; providerId?: string }) => Promise<CodexSession>;
     prompt: (sessionId: string, text: string, opts?: { model?: string; providerId?: string }) => Promise<CodexSession>;
+    steer: (sessionId: string, text: string) => Promise<CodexSession>;
     abort: (sessionId: string) => Promise<void>;
     delete: (sessionId: string) => Promise<void>;
     setArchived: (sessionId: string, archived: boolean) => Promise<CodexSession>;
@@ -158,6 +159,33 @@ export function registerCodexRoutes(options: RegisterCodexRoutesOptions): void {
       providerId: optionalStringField(body, "providerId"),
     }));
     return jsonResponse({ ok: true, session });
+  });
+
+  // Steer an in-flight turn with a follow-up message (codex `turn/steer`).
+  // Mirrors the Codex app: while the agent is working, a new message is injected
+  // into the current turn rather than rejected. Structured 409s let the client
+  // fall back (start a turn on `no_active_turn`, queue on `not_steerable`).
+  addRoute(routes, "POST", "/workspace/:id/codex/sessions/:sessionId/steer", "client", async (ctx) => {
+    ensureWritable(options.config);
+    requireClientScope(ctx, "collaborator");
+    const body = await readJsonBody(ctx.request);
+    const text = optionalStringField(body, "text");
+    if (!text) throw new ApiError(400, "invalid_payload", "text is required");
+    const manager = await workspaceManager(ctx.params.id);
+    if (!isCodexSessionId(ctx.params.sessionId)) throw notFound("unknown codex session");
+    try {
+      const session = await manager.steer(ctx.params.sessionId, text);
+      return jsonResponse({ ok: true, session });
+    } catch (error) {
+      if (error instanceof CodexSteerError) {
+        throw new ApiError(409, `codex_${error.code}`, error.message, {
+          ...(error.actualTurnId ? { actualTurnId: error.actualTurnId } : {}),
+        });
+      }
+      throw new ApiError(502, "sofia_request_failed", "Sofia request failed", {
+        cause: error instanceof Error ? error.message : String(error),
+      });
+    }
   });
 
   // Restore a codex session's persisted items (for building a transcript).

@@ -25,7 +25,7 @@ export function codexAuthStorePath(opts?: { env?: NodeJS.ProcessEnv }): string {
   const pinnedHome = env.OPENWORK_CODEX_HOME?.trim() || env.CODEX_HOME?.trim();
   if (pinnedHome) return join(pinnedHome, CODEX_AUTH_STORE_FILE);
   const home = env.HOME?.trim() || homedir();
-  return join(home, ".config", "openwork", "sofia", CODEX_AUTH_STORE_FILE);
+  return join(home, ".sofia", CODEX_AUTH_STORE_FILE);
 }
 
 export async function readCodexAuthStore(opts?: { path?: string; env?: NodeJS.ProcessEnv }): Promise<CodexAuthStore> {

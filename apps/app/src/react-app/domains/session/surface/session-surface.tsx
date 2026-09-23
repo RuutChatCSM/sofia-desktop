@@ -2260,19 +2260,21 @@ export function SessionSurface(props: SessionSurfaceProps) {
           onUploadInboxFiles={props.onUploadInboxFiles ?? handleUploadInboxFiles}
           compactTopSpacing={Boolean(props.activeQuestion || (props.todos ?? []).some((todo) => todo.content.trim()) || props.activePermission || queuedItems.length > 0)}
           approvalAccessory={props.approvalAccessory}
+          aboveComposer={
+            queuedItems.length > 0 ? (
+              <QueuedMessagesPanel
+                items={queuedItems}
+                onRemove={removeQueuedDraft}
+                onSendNow={(id) => void sendQueuedDraftNow(id)}
+                onReorder={(ids) => reorderQueuedDrafts(props.sessionId, ids)}
+                onEdit={editQueuedDraft}
+                sending={sendingQueued}
+              />
+            ) : null
+          }
           topAccessory={
-            props.activeQuestion || (props.todos ?? []).some((todo) => todo.content.trim()) || props.activePermission || queuedItems.length > 0 ? (
+            props.activeQuestion || (props.todos ?? []).some((todo) => todo.content.trim()) || props.activePermission ? (
               <div>
-                {queuedItems.length > 0 ? (
-                  <QueuedMessagesPanel
-                    items={queuedItems}
-                    onRemove={removeQueuedDraft}
-                    onSendNow={(id) => void sendQueuedDraftNow(id)}
-                    onReorder={(ids) => reorderQueuedDrafts(props.sessionId, ids)}
-                    onEdit={editQueuedDraft}
-                    sending={sendingQueued}
-                  />
-                ) : null}
                 {props.activeQuestion ? (
                   <QuestionPanel
                     questions={props.activeQuestion.questions}

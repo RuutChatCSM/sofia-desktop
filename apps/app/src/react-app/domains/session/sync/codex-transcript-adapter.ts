@@ -14,6 +14,19 @@ import { useCodexSessionStore, type CodexTrackedItem } from "../codex-session-st
 
 /** Map a tracked codex item into UIMessage parts (mirroring opencode shapes). */
 function trackedItemToUIMessageParts(item: CodexTrackedItem, sessionId: string): UIMessage["parts"] {
+  // Errors render through the same session-error card the opencode transcript
+  // uses (title + description + collapsible technical details), instead of
+  // dumping the raw provider JSON into the conversation.
+  if (item.errorPresentation) {
+    const { title, description } = item.errorPresentation;
+    return [{
+      type: "text",
+      text: description ? `${title}\n\n${description}` : title,
+      state: "done",
+      providerMetadata: { opencode: { partId: `${item.id}:text`, sessionError: item.errorPresentation } },
+    } as UIMessage["parts"][number]];
+  }
+
   const parts = codexItemToParts(item.item, sessionId, item.id, "");
   const state = item.status === "pending" ? ("streaming" as const) : ("done" as const);
 
@@ -95,6 +108,18 @@ function buildUIMessages(workspaceId: string, sessionId: string): UIMessage[] {
     currentAssistant.parts.push(...parts);
   }
   flushAssistant();
+
+  // Optimistic tail: user messages submitted locally but not yet echoed back
+  // as a `userMessage` stream item render immediately so a send/steer doesn't
+  // briefly vanish.
+  entry.pendingUserTexts.forEach((text, index) => {
+    if (!text) return;
+    assembled.push({
+      id: `codex-user-pending-${index}`,
+      role: "user" as const,
+      parts: [{ type: "text", text, state: "done" as const }],
+    });
+  });
 
   return assembled;
 }

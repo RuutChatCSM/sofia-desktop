@@ -1017,7 +1017,7 @@ process.env.OPENWORK_ELECTRON_REMOTE_DEBUG_PORT = String(remoteDebugPort);
 // the user's own ~/.codex config. Set at module scope so the in-process server
 // inherits it regardless of the CDP broker block below.
 if (!process.env.OPENWORK_CODEX_HOME?.trim()) {
-  process.env.OPENWORK_CODEX_HOME = path.join(app.getPath("home"), ".config", "openwork", "sofia");
+  process.env.OPENWORK_CODEX_HOME = path.join(app.getPath("home"), ".sofia");
 }
 // Pin the REAL user home so the server resolves the user's actual ~/.codex
 // even in dev (the dev sandbox rewrites HOME). The server reads REAL_HOME for

@@ -270,5 +270,5 @@ export function codexRuntimeSkillsDir(codexHome: string): string {
 
 export const OPENWORK_CODEX_HOME_DEFAULT = () => {
   const home = process.env.HOME?.trim() || homedir();
-  return join(home, ".config", "openwork", "sofia");
+  return join(home, ".sofia");
 };

@@ -74,7 +74,7 @@ export function codexHomeDir(opts?: { env?: NodeJS.ProcessEnv }): string {
   const pinned = env.OPENWORK_CODEX_HOME?.trim() || env.CODEX_HOME?.trim();
   if (pinned) return pinned;
   const home = env.HOME?.trim() || homedir();
-  return join(home, ".config", "openwork", "sofia");
+  return join(home, ".sofia");
 }
 
 export function codexProvidersPath(opts?: { env?: NodeJS.ProcessEnv }): string {

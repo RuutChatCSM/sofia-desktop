@@ -1,4 +1,5 @@
 import { spawn, spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import net from "node:net";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -13,6 +14,22 @@ const defaultDevDataDir = resolve(
   ".openwork",
   "openwork-server-dev",
 );
+
+// Prefer the sibling Sofia source checkout's debug build so local dev exercises
+// codex changes without rebuilding/shipping the sidecar. An explicit
+// OPENWORK_CODEX_BIN always wins; falls back to the bundled sidecar otherwise.
+const debugCodexBinary = (() => {
+  const candidate = resolve(
+    repoRoot,
+    "..",
+    "codex",
+    "codex-rs",
+    "target",
+    "debug",
+    process.platform === "win32" ? "codex.exe" : "codex",
+  );
+  return existsSync(candidate) ? candidate : null;
+})();
 
 const pnpmCmd = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
 const nodeCmd = process.execPath;
@@ -279,13 +296,16 @@ const cdpPort = cdpPortRaw === "" || cdpPortRaw === "0" ? "" : cdpPortRaw;
 const blankSlateArgs = process.argv.includes("--blank-slate") ? ["--blank-slate"] : [];
 electronChild = run(pnpmCmd, ["exec", "electron", "./electron/main.mjs", ...blankSlateArgs], {
   cwd: desktopRoot,
-  env: {
-    ...process.env,
-    OPENWORK_DEV_MODE: process.env.OPENWORK_DEV_MODE ?? "1",
-    OPENWORK_DATA_DIR: process.env.OPENWORK_DATA_DIR ?? defaultDevDataDir,
-    OPENWORK_ELECTRON_START_URL: resolvedStartUrl,
-    ...(cdpPort ? { OPENWORK_ELECTRON_REMOTE_DEBUG_PORT: cdpPort } : {}),
-  },
+    env: {
+      ...process.env,
+      OPENWORK_DEV_MODE: process.env.OPENWORK_DEV_MODE ?? "1",
+      OPENWORK_DATA_DIR: process.env.OPENWORK_DATA_DIR ?? defaultDevDataDir,
+      OPENWORK_ELECTRON_START_URL: resolvedStartUrl,
+      ...(process.env.OPENWORK_CODEX_BIN || debugCodexBinary
+        ? { OPENWORK_CODEX_BIN: process.env.OPENWORK_CODEX_BIN || debugCodexBinary }
+        : {}),
+      ...(cdpPort ? { OPENWORK_ELECTRON_REMOTE_DEBUG_PORT: cdpPort } : {}),
+    },
 });
 
 if (cdpPort) {

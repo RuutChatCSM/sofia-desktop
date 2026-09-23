@@ -66,7 +66,7 @@ function codexHomeFor(cwd: string): string {
   // OpenWork-managed default: ~/.config/openwork/sofia (shared across dev/prod,
   // stable under the real home, distinct from ~/.codex).
   const home = process.env.HOME?.trim() || homedir();
-  if (home) return join(home, ".config", "openwork", "sofia");
+  if (home) return join(home, ".sofia");
   return join(cwd, ".codex");
 }
 
