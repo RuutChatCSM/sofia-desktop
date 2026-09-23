@@ -5,7 +5,6 @@ toolsets:
 files:
   - electron/**/*
   - server/**/*
-  - "!server/dist/opencode-plugins/**"
   - package.json
   - from: .electron-runtime/node_modules
     to: node_modules
@@ -14,10 +13,6 @@ extraResources:
     to: openwork-sentry.json
   - from: ../app/dist
     to: app-dist
-  - from: server/dist/opencode-plugins
-    to: opencode-plugins
-    filter:
-      - "*.js"
   - from: ../../packages/docs
     to: openwork-docs
     filter:
@@ -47,9 +42,6 @@ mac:
     - from: resources/sidecars
       to: sidecars
       filter:
-        - opencode
-        - opencode-aarch64-apple-darwin
-        - opencode-x86_64-apple-darwin
         - codex
         - codex-aarch64-apple-darwin
         - codex-x86_64-apple-darwin
@@ -74,9 +66,6 @@ linux:
     - from: resources/sidecars
       to: sidecars
       filter:
-        - opencode
-        - opencode-aarch64-unknown-linux-gnu
-        - opencode-x86_64-unknown-linux-gnu
         - codex
         - codex-aarch64-unknown-linux-gnu
         - codex-x86_64-unknown-linux-gnu
@@ -94,9 +83,6 @@ win:
     - from: resources/sidecars
       to: sidecars
       filter:
-        - opencode.exe
-        - opencode-aarch64-pc-windows-msvc.exe
-        - opencode-x86_64-pc-windows-msvc.exe
         - codex.exe
         - codex-aarch64-pc-windows-msvc.exe
         - codex-x86_64-pc-windows-msvc.exe
