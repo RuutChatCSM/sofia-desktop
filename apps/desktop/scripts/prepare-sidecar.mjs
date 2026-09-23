@@ -28,33 +28,12 @@ const readArg = (name) => {
   return null;
 };
 
-const sidecarOverride = process.env.OPENWORK_SIDECAR_DIR?.trim() || readArg("--outdir");
-const sidecarDir = sidecarOverride ? resolve(sidecarOverride) : join(__dirname, "..", "resources", "sidecars");
+const sidecarOverride =
+  process.env.OPENWORK_SIDECAR_DIR?.trim() || readArg("--outdir");
+const sidecarDir = sidecarOverride
+  ? resolve(sidecarOverride)
+  : join(__dirname, "..", "resources", "sidecars");
 const constantsPath = resolve(__dirname, "..", "..", "..", "constants.json");
-
-const opencodeGithubRepo = (() => {
-  const raw =
-    process.env.OPENCODE_GITHUB_REPO?.trim() ||
-    process.env.OPENWORK_OPENCODE_GITHUB_REPO?.trim() ||
-    "anomalyco/opencode";
-  const normalized = raw
-    .replace(/^https:\/\/github\.com\//i, "")
-    .replace(/\.git$/i, "")
-    .trim();
-  if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(normalized)) {
-    return "anomalyco/opencode";
-  }
-  return normalized;
-})();
-const opencodeVersion = (() => {
-  try {
-    const raw = readFileSync(constantsPath, "utf8");
-    const parsed = JSON.parse(raw);
-    return typeof parsed.opencodeVersion === "string" ? parsed.opencodeVersion.trim() || null : null;
-  } catch {
-    return null;
-  }
-})();
 
 const normalizeVersion = (value) => {
   const raw = String(value ?? "").trim();
@@ -62,8 +41,6 @@ const normalizeVersion = (value) => {
   if (raw.toLowerCase() === "latest") return null;
   return raw.startsWith("v") ? raw.slice(1) : raw;
 };
-
-const opencodeAssetOverride = process.env.OPENCODE_ASSET?.trim() || null;
 
 // Target triple for native platform binaries
 const resolvedTargetTriple = (() => {
@@ -73,27 +50,25 @@ const resolvedTargetTriple = (() => {
     process.env.TARGET;
   if (envTarget) return envTarget;
   if (process.platform === "darwin") {
-    return process.arch === "arm64" ? "aarch64-apple-darwin" : "x86_64-apple-darwin";
+    return process.arch === "arm64"
+      ? "aarch64-apple-darwin"
+      : "x86_64-apple-darwin";
   }
   if (process.platform === "linux") {
-    return process.arch === "arm64" ? "aarch64-unknown-linux-gnu" : "x86_64-unknown-linux-gnu";
+    return process.arch === "arm64"
+      ? "aarch64-unknown-linux-gnu"
+      : "x86_64-unknown-linux-gnu";
   }
   if (process.platform === "win32") {
-    return process.arch === "arm64" ? "aarch64-pc-windows-msvc" : "x86_64-pc-windows-msvc";
+    return process.arch === "arm64"
+      ? "aarch64-pc-windows-msvc"
+      : "x86_64-pc-windows-msvc";
   }
   return null;
 })();
-const isWindowsTarget = process.platform === "win32" || resolvedTargetTriple?.includes("windows") === true;
-
-const opencodeBaseName = isWindowsTarget ? "opencode.exe" : "opencode";
-const opencodePath = join(sidecarDir, opencodeBaseName);
-const opencodeTargetName = resolvedTargetTriple
-  ? `opencode-${resolvedTargetTriple}${isWindowsTarget ? ".exe" : ""}`
-  : null;
-const opencodeTargetPath = opencodeTargetName ? join(sidecarDir, opencodeTargetName) : null;
-
-const opencodeCandidatePath = opencodeTargetPath ?? opencodePath;
-let existingOpencodeVersion = null;
+const isWindowsTarget =
+  process.platform === "win32" ||
+  resolvedTargetTriple?.includes("windows") === true;
 
 // Binaries (re)written during this run. Ad-hoc macOS signatures are only applied
 // to these so an unchanged binary keeps its existing signature — and therefore
@@ -123,7 +98,11 @@ const isStubBinary = (filePath) => {
     if (stat.size < 1024) return true;
     const header = readHeader(filePath);
     if (header.startsWith("#!")) return true;
-    if (header.includes("Sidecar missing") || header.includes("Bun is required")) return true;
+    if (
+      header.includes("Sidecar missing") ||
+      header.includes("Bun is required")
+    )
+      return true;
   } catch {
     return true;
   }
@@ -150,16 +129,6 @@ const readDirectory = (dir) => {
   });
 };
 
-const findOpencodeBinary = (dir) => {
-  const candidates = readDirectory(dir);
-  return (
-    candidates.find((file) => file.endsWith(`/${opencodeBaseName}`) || file.endsWith(`\\${opencodeBaseName}`)) ??
-    candidates.find((file) => file.endsWith("/opencode.exe") || file.endsWith("\\opencode.exe")) ??
-    candidates.find((file) => file.endsWith("/opencode") || file.endsWith("\\opencode")) ??
-    null
-  );
-};
-
 const readBinaryVersion = (filePath) => {
   try {
     const result = spawnSync(filePath, ["--version"], { encoding: "utf8" });
@@ -177,7 +146,8 @@ const sha256File = (filePath) => {
 };
 
 const adHocSignDarwin = (filePath) => {
-  if (process.platform !== "darwin" || !filePath || !existsSync(filePath)) return;
+  if (process.platform !== "darwin" || !filePath || !existsSync(filePath))
+    return;
   const remove = spawnSync("codesign", ["--remove-signature", filePath], {
     encoding: "utf8",
   });
@@ -190,13 +160,17 @@ const adHocSignDarwin = (filePath) => {
   });
   if (sign.error) {
     if (sign.error.code === "ENOENT") {
-      throw new Error("codesign is required to prepare runnable macOS sidecars");
+      throw new Error(
+        "codesign is required to prepare runnable macOS sidecars",
+      );
     }
     throw sign.error;
   }
   if (sign.status !== 0) {
     const stderr = sign.stderr?.trim();
-    throw new Error(`Failed to codesign ${filePath}${stderr ? `: ${stderr}` : ""}`);
+    throw new Error(
+      `Failed to codesign ${filePath}${stderr ? `: ${stderr}` : ""}`,
+    );
   }
 };
 
@@ -211,143 +185,16 @@ const adHocSignDarwinSidecars = (paths) => {
 // in-process inside Electron via a direct import of the server library.
 // Server binary copy/sign skipped — runs in-process.
 
-if (!existingOpencodeVersion && opencodeCandidatePath) {
-  existingOpencodeVersion =
-    existsSync(opencodeCandidatePath) && !isStubBinary(opencodeCandidatePath)
-      ? readBinaryVersion(opencodeCandidatePath)
-      : null;
-}
-
-const normalizedOpencodeVersion = normalizeVersion(opencodeVersion);
-
-if (!normalizedOpencodeVersion) {
-  console.error(
-    `OpenCode version could not be resolved from ${constantsPath}.`
-  );
-  process.exit(1);
-}
-
-const opencodeAssetByTarget = {
-  "aarch64-apple-darwin": "opencode-darwin-arm64.zip",
-  "x86_64-apple-darwin": "opencode-darwin-x64-baseline.zip",
-  "x86_64-unknown-linux-gnu": "opencode-linux-x64-baseline.tar.gz",
-  "aarch64-unknown-linux-gnu": "opencode-linux-arm64.tar.gz",
-  "x86_64-pc-windows-msvc": "opencode-windows-x64-baseline.zip",
-  "aarch64-pc-windows-msvc": "opencode-windows-arm64.zip",
-};
-
-const opencodeAsset =
-  opencodeAssetOverride ?? (resolvedTargetTriple ? opencodeAssetByTarget[resolvedTargetTriple] : null);
-
-const opencodeUrl = opencodeAsset
-  ? `https://github.com/${opencodeGithubRepo}/releases/download/v${normalizedOpencodeVersion}/${opencodeAsset}`
-  : null;
-
-const shouldDownloadOpencode =
-  !opencodeCandidatePath ||
-  !existsSync(opencodeCandidatePath) ||
-  isStubBinary(opencodeCandidatePath) ||
-  !existingOpencodeVersion ||
-  existingOpencodeVersion !== normalizedOpencodeVersion;
-
-if (!shouldDownloadOpencode) {
-  console.log(`OpenCode sidecar already present (${existingOpencodeVersion}).`);
-}
-
-if (shouldDownloadOpencode) {
-  if (!opencodeAsset || !opencodeUrl) {
-    console.error(
-      `No OpenCode asset configured for target ${resolvedTargetTriple ?? "unknown"}. Set OPENCODE_ASSET to override.`
-    );
-    process.exit(1);
-  }
-
-  mkdirSync(sidecarDir, { recursive: true });
-
-  const stamp = Date.now();
-  const archivePath = join(tmpdir(), `opencode-${stamp}-${opencodeAsset}`);
-  const extractDir = join(tmpdir(), `opencode-${stamp}`);
-
-  mkdirSync(extractDir, { recursive: true });
-
-  if (process.platform === "win32") {
-    const psQuote = (value) => `'${value.replace(/'/g, "''")}'`;
-    const psScript = [
-      "$ErrorActionPreference = 'Stop'",
-      `Invoke-WebRequest -Uri ${psQuote(opencodeUrl)} -OutFile ${psQuote(archivePath)}`,
-      `Expand-Archive -Path ${psQuote(archivePath)} -DestinationPath ${psQuote(extractDir)} -Force`,
-    ].join("; ");
-
-    const result = spawnSync("powershell", ["-NoProfile", "-Command", psScript], {
-      stdio: "inherit",
-    });
-
-    if (result.status !== 0) {
-      process.exit(result.status ?? 1);
-    }
-  } else {
-    const downloadResult = spawnSync("curl", ["-fsSL", "-o", archivePath, opencodeUrl], {
-      stdio: "inherit",
-    });
-    if (downloadResult.status !== 0) {
-      process.exit(downloadResult.status ?? 1);
-    }
-
-    mkdirSync(extractDir, { recursive: true });
-
-    if (opencodeAsset.endsWith(".zip")) {
-      const unzipResult = spawnSync("unzip", ["-q", archivePath, "-d", extractDir], {
-        stdio: "inherit",
-      });
-      if (unzipResult.status !== 0) {
-        process.exit(unzipResult.status ?? 1);
-      }
-    } else if (opencodeAsset.endsWith(".tar.gz")) {
-      const tarResult = spawnSync("tar", ["-xzf", archivePath, "-C", extractDir], {
-        stdio: "inherit",
-      });
-      if (tarResult.status !== 0) {
-        process.exit(tarResult.status ?? 1);
-      }
-    } else {
-      console.error(`Unknown OpenCode archive type: ${opencodeAsset}`);
-      process.exit(1);
-    }
-  }
-
-  const extractedBinary = findOpencodeBinary(extractDir);
-  if (!extractedBinary) {
-    console.error("OpenCode binary not found after extraction.");
-    process.exit(1);
-  }
-
-  const opencodeTargets = [opencodeTargetPath, opencodePath].filter(Boolean);
-  for (const target of opencodeTargets) {
-    try {
-      if (existsSync(target)) {
-        unlinkSync(target);
-      }
-    } catch {
-      // ignore
-    }
-    copyFileSync(extractedBinary, target);
-    try {
-      chmodSync(target, 0o755);
-    } catch {
-      // ignore
-    }
-    changedBinaries.add(target);
-  }
-
-  console.log(`OpenCode sidecar updated to ${normalizedOpencodeVersion}.`);
-}
+// OpenCode sidecar removed. The desktop ships only the Codex/Sofia engine.
 
 // ── Codex sidecar ────────────────────────────────────────────────────────────
 const codexVersion = (() => {
   try {
     const raw = readFileSync(constantsPath, "utf8");
     const parsed = JSON.parse(raw);
-    return typeof parsed.codexVersion === "string" ? parsed.codexVersion.trim() || null : null;
+    return typeof parsed.codexVersion === "string"
+      ? parsed.codexVersion.trim() || null
+      : null;
   } catch {
     return null;
   }
@@ -358,15 +205,25 @@ const codexPath = join(sidecarDir, codexBaseName);
 const codexTargetName = resolvedTargetTriple
   ? `codex-${resolvedTargetTriple}${isWindowsTarget ? ".exe" : ""}`
   : null;
-const codexTargetPath = codexTargetName ? join(sidecarDir, codexTargetName) : null;
+const codexTargetPath = codexTargetName
+  ? join(sidecarDir, codexTargetName)
+  : null;
 const codexCandidatePath = codexTargetPath ?? codexPath;
 
 const findCodexBinary = (dir) => {
   const candidates = readDirectory(dir);
   return (
-    candidates.find((file) => file.endsWith(`/${codexBaseName}`) || file.endsWith(`\\${codexBaseName}`)) ??
-    candidates.find((file) => file.endsWith("/codex") || file.endsWith("\\codex")) ??
-    candidates.find((file) => file.endsWith("/codex.exe") || file.endsWith("\\codex.exe")) ??
+    candidates.find(
+      (file) =>
+        file.endsWith(`/${codexBaseName}`) ||
+        file.endsWith(`\\${codexBaseName}`),
+    ) ??
+    candidates.find(
+      (file) => file.endsWith("/codex") || file.endsWith("\\codex"),
+    ) ??
+    candidates.find(
+      (file) => file.endsWith("/codex.exe") || file.endsWith("\\codex.exe"),
+    ) ??
     // Codex release tarballs contain a single flat binary named
     // `codex-<target-triple>` (no `codex` wrapper file).
     candidates.find((file) => /codex[^/\\]*$/.test(file)) ??
@@ -405,9 +262,10 @@ const codexAssetByTarget = {
 const codexAsset =
   process.env.CODEX_ASSET?.trim() ??
   (resolvedTargetTriple ? codexAssetByTarget[resolvedTargetTriple] : null);
-const codexUrl = codexAsset && normalizedCodexVersion
-  ? `https://github.com/openai/codex/releases/download/${normalizedCodexVersion}/${codexAsset}`
-  : null;
+const codexUrl =
+  codexAsset && normalizedCodexVersion
+    ? `https://github.com/openai/codex/releases/download/${normalizedCodexVersion}/${codexAsset}`
+    : null;
 
 // The bundled codex engine is built from the mona-chen/codex source checkout
 // (never the system-installed binary). prepare-sidecar builds the CLI from this
@@ -417,11 +275,15 @@ const codexSourceDir = (() => {
   if (raw) return resolve(raw);
   // The codex checkout lives as a sibling repo next to this repo.
   const sibling = resolve(__dirname, "..", "..", "..", "..", "codex");
-  return existsSync(join(sibling, "codex-rs", "cli", "Cargo.toml")) ? sibling : null;
+  return existsSync(join(sibling, "codex-rs", "cli", "Cargo.toml"))
+    ? sibling
+    : null;
 })();
 
 if (!codexSourceDir) {
-  throw new Error("Sofia packaging requires its engine source checkout. Set CODEX_SOURCE_DIR; upstream Codex is not a compatible substitute.");
+  throw new Error(
+    "Sofia packaging requires its engine source checkout. Set CODEX_SOURCE_DIR; upstream Codex is not a compatible substitute.",
+  );
 }
 
 // When building from source, the sidecar's identity is the checkout's git
@@ -433,12 +295,25 @@ const codexSourceRev = (() => {
     cwd: codexSourceDir,
     encoding: "utf8",
   });
-  if (git.status !== 0 || !git.stdout) throw new Error("Unable to fingerprint Sofia engine source");
-  const diff = spawnSync("git", ["diff", "--binary", "HEAD"], { cwd: codexSourceDir, maxBuffer: 32 * 1024 * 1024 });
-  const untracked = spawnSync("git", ["ls-files", "--others", "--exclude-standard", "-z"], { cwd: codexSourceDir });
-  if (diff.status !== 0 || untracked.status !== 0) throw new Error("Unable to fingerprint Sofia engine changes");
+  if (git.status !== 0 || !git.stdout)
+    throw new Error("Unable to fingerprint Sofia engine source");
+  const diff = spawnSync("git", ["diff", "--binary", "HEAD"], {
+    cwd: codexSourceDir,
+    maxBuffer: 32 * 1024 * 1024,
+  });
+  const untracked = spawnSync(
+    "git",
+    ["ls-files", "--others", "--exclude-standard", "-z"],
+    { cwd: codexSourceDir },
+  );
+  if (diff.status !== 0 || untracked.status !== 0)
+    throw new Error("Unable to fingerprint Sofia engine changes");
   const hash = createHash("sha256").update(git.stdout).update(diff.stdout);
-  for (const file of untracked.stdout.toString().split("\0").filter(Boolean).sort()) {
+  for (const file of untracked.stdout
+    .toString()
+    .split("\0")
+    .filter(Boolean)
+    .sort()) {
     hash.update(file).update(readFileSync(join(codexSourceDir, file)));
   }
   return hash.digest("hex").slice(0, 20);
@@ -485,7 +360,7 @@ if (shouldDownloadCodex) {
 
   if (!extractedCodex && (!codexAsset || !codexUrl)) {
     console.error(
-      `No Codex asset configured for target ${resolvedTargetTriple ?? "unknown"} and no source checkout to build from. Set CODEX_SOURCE_DIR or CODEX_ASSET.`
+      `No Codex asset configured for target ${resolvedTargetTriple ?? "unknown"} and no source checkout to build from. Set CODEX_SOURCE_DIR or CODEX_ASSET.`,
     );
     process.exit(1);
   }
@@ -496,15 +371,23 @@ if (shouldDownloadCodex) {
     const extractDir = join(tmpdir(), `codex-${stamp}`);
     mkdirSync(extractDir, { recursive: true });
 
-    const downloadResult = spawnSync("curl", ["-fsSL", "-o", archivePath, codexUrl], {
-      stdio: "inherit",
-    });
+    const downloadResult = spawnSync(
+      "curl",
+      ["-fsSL", "-o", archivePath, codexUrl],
+      {
+        stdio: "inherit",
+      },
+    );
     if (downloadResult.status !== 0) {
       process.exit(downloadResult.status ?? 1);
     }
-    const tarResult = spawnSync("tar", ["-xzf", archivePath, "-C", extractDir], {
-      stdio: "inherit",
-    });
+    const tarResult = spawnSync(
+      "tar",
+      ["-xzf", archivePath, "-C", extractDir],
+      {
+        stdio: "inherit",
+      },
+    );
     if (tarResult.status !== 0) {
       process.exit(tarResult.status ?? 1);
     }
@@ -538,10 +421,12 @@ if (shouldDownloadCodex) {
     }
   }
   console.log(
-    `Codex sidecar updated to ${expectedCodexVersion ?? normalizedCodexVersion} (${codexBuildSource === "source" ? "built from source" : "downloaded"}).`
+    `Codex sidecar updated to ${expectedCodexVersion ?? normalizedCodexVersion} (${codexBuildSource === "source" ? "built from source" : "downloaded"}).`,
   );
 } else if (normalizedCodexVersion) {
-  console.log(`Codex sidecar already present (${existingCodexVersion ?? "unknown"}).`);
+  console.log(
+    `Codex sidecar already present (${existingCodexVersion ?? "unknown"}).`,
+  );
 }
 
 // Ad-hoc sign only the sidecars that were actually written this run. Untouched
@@ -554,7 +439,10 @@ adHocSignDarwinSidecars([
 
 const openworkServerVersion = (() => {
   try {
-    const raw = readFileSync(resolve(openworkServerDir, "package.json"), "utf8");
+    const raw = readFileSync(
+      resolve(openworkServerDir, "package.json"),
+      "utf8",
+    );
     return String(JSON.parse(raw).version ?? "").trim();
   } catch {
     return null;
@@ -562,13 +450,12 @@ const openworkServerVersion = (() => {
 })();
 
 const versions = {
-  opencode: {
-    version: normalizedOpencodeVersion,
-    sha256: opencodeCandidatePath && existsSync(opencodeCandidatePath) ? sha256File(opencodeCandidatePath) : null,
-  },
   codex: {
     version: expectedCodexVersion ?? normalizedCodexVersion,
-    sha256: codexCandidatePath && existsSync(codexCandidatePath) ? sha256File(codexCandidatePath) : null,
+    sha256:
+      codexCandidatePath && existsSync(codexCandidatePath)
+        ? sha256File(codexCandidatePath)
+        : null,
   },
   "openwork-server": {
     version: openworkServerVersion,
@@ -577,11 +464,17 @@ const versions = {
 };
 
 const missing = Object.entries(versions)
-  .filter(([name, info]) => (!info.version || !info.sha256) && ["opencode", "codex", "openwork-server"].includes(name))
+  .filter(
+    ([name, info]) =>
+      (!info.version || !info.sha256) &&
+      ["codex", "openwork-server"].includes(name),
+  )
   .map(([name]) => name);
 
 if (missing.length) {
-  console.error(`Sidecar version metadata incomplete for: ${missing.join(", ")}`);
+  console.error(
+    `Sidecar version metadata incomplete for: ${missing.join(", ")}`,
+  );
   process.exit(1);
 }
 
@@ -592,7 +485,10 @@ try {
   writeFileSync(versionsPath, content, "utf8");
   if (resolvedTargetTriple) {
     const targetSuffix = isWindowsTarget ? ".exe" : "";
-    const targetVersionsPath = join(sidecarDir, `versions.json-${resolvedTargetTriple}${targetSuffix}`);
+    const targetVersionsPath = join(
+      sidecarDir,
+      `versions.json-${resolvedTargetTriple}${targetSuffix}`,
+    );
     writeFileSync(targetVersionsPath, content, "utf8");
   }
 } catch (error) {
