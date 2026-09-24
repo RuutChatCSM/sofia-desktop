@@ -11,7 +11,11 @@ import { mcpApprovalModeFor, readCodexAccessMode } from "./codex-access.js";
 
 export type CodexRuntimeMcpServer = {
   name: string;
-  command: string;
+  command?: string;
+  url?: string;
+  httpHeaders?: Record<string, string>;
+  disabledTools?: string[];
+  startupTimeoutSec?: number;
   args?: string[];
   env?: Record<string, string>;
   cwd?: string;
@@ -31,7 +35,9 @@ const handsfreeBin = resolve(serverRoot, "packages", "handsfree", "bin", "sofia-
 export function resolveComputerUseInvocation(): { command: string; args: string[]; env: Record<string, string> } | null {
   const bin = resolveComputerUseCommand();
   if (!bin) return null;
-  return { command: process.execPath, args: [bin, "mcp"], env: { ELECTRON_RUN_AS_NODE: "1" } };
+  return /\.[cm]?js$/.test(bin)
+    ? { command: process.execPath, args: [bin, "mcp"], env: { ELECTRON_RUN_AS_NODE: "1" } }
+    : { command: bin, args: ["mcp"], env: {} };
 }
 
 /** Resolve the in-app browser Node REPL harness (mcp__node_repl__js) as a direct
@@ -68,7 +74,7 @@ function isMacOS(): boolean {
 
 /** Resolve the handsfree computer-use adapter binary for an MCP `command`. */
 export function resolveComputerUseCommand(): string | null {
-  const pinned = process.env.HANDSFREE_COMPUTER_USE_BINARY?.trim();
+  const pinned = process.env.SOFIA_COMPUTER_USE_BINARY?.trim() || process.env.HANDSFREE_COMPUTER_USE_BINARY?.trim();
   if (pinned) return pinned;
   if (existsSync(handsfreeBin)) return handsfreeBin;
   return "sofia-handsfree-computer-use";
@@ -133,6 +139,60 @@ export function defaultCodexRuntimeMcpServers(): CodexRuntimeMcpServer[] {
   }
 
   return servers;
+}
+
+/** Translate the app's saved local/remote MCP entries, including plugin components.
+ * Explicit workspace entries override automatic defaults, including disablement.
+ * An entry the engine cannot represent is skipped with a warning: one bad row
+ * must never cost the workspace its whole engine configuration. */
+export function configuredCodexMcpServers(
+  mcp: Record<string, Record<string, unknown>>,
+  defaults: CodexRuntimeMcpServer[] = defaultCodexRuntimeMcpServers(),
+): CodexRuntimeMcpServer[] {
+  const servers = new Map(defaults.map((server) => [server.name, server]));
+  for (const [name, config] of Object.entries(mcp)) {
+    const common = {
+      name,
+      enabled: config.enabled !== false,
+      defaultApprovalMode: mcpApprovalModeFor(readCodexAccessMode()),
+      ...(Array.isArray(config.enabled_tools) ? { enabledTools: strings(config.enabled_tools) } : {}),
+      ...(Array.isArray(config.disabled_tools) ? { disabledTools: strings(config.disabled_tools) } : {}),
+      ...(typeof config.timeout === "number" && Number.isFinite(config.timeout) && config.timeout > 0
+        ? { startupTimeoutSec: config.timeout / 1000 } : {}),
+    };
+    if (config.type === "local" && Array.isArray(config.command)) {
+      const [command, ...args] = strings(config.command);
+      if (!command) {
+        warnUntranslatableMcp(name, "local MCP entry has no executable");
+        continue;
+      }
+      servers.set(name, { ...common, command, args, env: stringMap(config.environment),
+        ...(typeof config.cwd === "string" ? { cwd: config.cwd } : {}),
+      });
+    } else if (config.type === "remote" && typeof config.url === "string") {
+      servers.set(name, { ...common, url: config.url, httpHeaders: stringMap(config.headers) });
+    } else {
+      warnUntranslatableMcp(name, `unsupported transport ${JSON.stringify(config.type ?? null)}`);
+    }
+  }
+  return [...servers.values()];
+}
+
+function warnUntranslatableMcp(name: string, reason: string): void {
+  console.warn("[sofia:codex] Skipping MCP entry the engine cannot represent", { name, reason });
+}
+
+function strings(value: unknown[]): string[] {
+  return value.filter((entry): entry is string => typeof entry === "string");
+}
+
+function stringMap(value: unknown): Record<string, string> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return Object.fromEntries(Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === "string"));
+}
+
+function tomlMap(value: Record<string, string>): string {
+  return `{ ${Object.entries(value).map(([key, entry]) => `${tomlKey(key)} = ${tomlString(entry)}`).join(", ")} }`;
 }
 
 /** The SKILL.md docs paired with each runtime MCP server (the "prompt harness"
@@ -259,7 +319,11 @@ export function codexMcpServersToml(servers: CodexRuntimeMcpServer[]): string {
   const sections: string[] = [];
   for (const server of servers) {
     const lines = [`[mcp_servers.${tomlKey(server.name)}]`];
-    lines.push(`command = ${tomlString(server.command)}`);
+    if (server.command) lines.push(`command = ${tomlString(server.command)}`);
+    if (server.url) lines.push(`url = ${tomlString(server.url)}`);
+    if (server.httpHeaders) lines.push(`http_headers = ${tomlMap(server.httpHeaders)}`);
+    if (server.startupTimeoutSec !== undefined) lines.push(`startup_timeout_sec = ${server.startupTimeoutSec}`);
+    if (server.disabledTools) lines.push(`disabled_tools = ${JSON.stringify(server.disabledTools)}`);
     if (server.args && server.args.length > 0) {
       lines.push(`args = [${server.args.map((arg) => tomlString(arg)).join(", ")}]`);
     }
@@ -268,7 +332,7 @@ export function codexMcpServersToml(servers: CodexRuntimeMcpServer[]): string {
       lines.push(`default_tools_approval_mode = ${tomlString(server.defaultApprovalMode)}`);
     }
     if (server.enabled !== undefined) lines.push(`enabled = ${server.enabled}`);
-    if (server.enabledTools && server.enabledTools.length > 0) {
+    if (server.enabledTools) {
       lines.push(`enabled_tools = [${server.enabledTools.map((tool) => tomlString(tool)).join(", ")}]`);
     }
     if (server.env && Object.keys(server.env).length > 0) {
@@ -280,7 +344,7 @@ export function codexMcpServersToml(servers: CodexRuntimeMcpServer[]): string {
 }
 
 function tomlKey(value: string): string {
-  return /^[A-Za-z0-9_.-]+$/.test(value) ? value : JSON.stringify(value);
+  return /^[A-Za-z0-9_-]+$/.test(value) ? value : JSON.stringify(value);
 }
 
 function tomlString(value: string): string {

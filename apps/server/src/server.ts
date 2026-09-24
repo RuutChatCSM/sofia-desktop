@@ -84,7 +84,7 @@ import { registerOperationRoutes } from "./routes/operations.js";
 import { addRoute, matchRoute, type AuthMode, type RequestContext, type Route } from "./routes/registry.js";
 import { registerSessionRoutes } from "./routes/sessions.js";
 import { registerCodexRoutes } from "./codex-routes.js";
-import { getOrCreateCodexSessionManager } from "./codex-registry.js";
+import { applyCodexWorkspaceMcpConfiguration, codexWorkspaceConfigFile, getOrCreateCodexSessionManager } from "./codex-registry.js";
 import { bridgeCodexApprovals } from "./codex-approvals.js";
 import { registerWorkspaceRoutes } from "./routes/workspaces.js";
 import { registerCloudMcpRoutes } from "./routes/cloud-mcp.js";
@@ -128,7 +128,6 @@ import {
   writeSofiaWorkspaceConfig,
 } from "./sofia-workspace-config-store.js";
 import { buildSofiaRuntimeConfigObject } from "./sofia-runtime-config.js";
-import { codexConfigTomlPath } from "./codex-providers.js";
 import { readLegacyConfigSweepState } from "./legacy-config-sweep.js";
 import { findManagedEngineWorkspace } from "./workspaces.js";
 import { CloudProviderSync, parseCloudProviderDenSession } from "./cloud-provider-sync.js";
@@ -388,12 +387,14 @@ function redactManagedRuntimeConfigContent(content: string): string {
   }
 }
 
-async function readManagedRuntimeConfigDebug(_config: ServerConfig): Promise<{
+async function readManagedRuntimeConfigDebug(config: ServerConfig, workspaceId: string): Promise<{
   managedFilePath: string;
   managedFileRebuiltAt: number | null;
   managedFileContentRedacted: string | null;
 }> {
-  const managedFilePath = codexConfigTomlPath();
+  // The engine reads its tool/provider configuration from the workspace's own
+  // generated config, not the shared home, so report that file.
+  const managedFilePath = codexWorkspaceConfigFile(config, workspaceId);
   try {
     const [metadata, content] = await Promise.all([
       stat(managedFilePath),
@@ -2039,7 +2040,7 @@ function createRoutes(
     const effectiveSofia = await readSofiaConfigForWorkspace(config, workspace);
     const legacy = legacyRuntimeConfigFromSofiaConfig(effectiveSofia);
     const effectiveRuntime = await buildSofiaRuntimeConfigObject(config, workspace.id);
-    const managedFile = await readManagedRuntimeConfigDebug(config);
+    const managedFile = await readManagedRuntimeConfigDebug(config, workspace.id);
     const sweep = await readLegacyConfigSweepState(config);
 
     return jsonResponse({
@@ -3584,6 +3585,9 @@ async function runRuntimeMcpSyncToWorkspaceEngineEngine(
   if (activeState) reconcileEngineMcpWorkspaceIdentity(activeState, workspace.id, connectionIdentity);
   if (activeState && !options?.deferred) cancelDeferredEngineMcpSync(activeState, workspace.id);
   if (!baseUrl || !connectionIdentity) {
+    // No managed engine to push to: this workspace runs the in-process codex
+    // engine, which reads MCP servers from its own generated config file.
+    if (!baseUrl) await applyCodexWorkspaceMcpConfiguration(config, workspace.id);
     return { status: "skipped", syncedNames: [], failures: [] };
   }
 
@@ -4553,7 +4557,11 @@ async function disconnectMcpFromWorkspaceEngineEngine(
 ): Promise<void> {
   const connection = resolveWorkspaceEngineConnection(config, workspace);
   const baseUrl = connection.baseUrl?.trim() ?? "";
-  if (!baseUrl) return;
+  if (!baseUrl) {
+    // In-process codex engine: removal lands by regenerating its config file.
+    await applyCodexWorkspaceMcpConfiguration(config, workspace.id);
+    return;
+  }
 
   const url = new URL(baseUrl);
   url.pathname = `/mcp/${encodeURIComponent(name)}/disconnect`;

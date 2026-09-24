@@ -9,8 +9,8 @@
 // Return values mirror the Sofia engine SDK's `{ data, error, response }` result so
 // callers can keep using `unwrapWorkspaceEngineResult`.
 import { readCodexEngineConfig, type CodexEngineConfig } from "../codex-providers.js";
-import { getOrCreateCodexSessionManager } from "../codex-registry.js";
-import { defaultCodexRuntimeMcpServers } from "../codex-runtime-mcp.js";
+import { applyCodexWorkspaceMcpConfiguration, codexWorkspaceConfigFile, getOrCreateCodexSessionManager } from "../codex-registry.js";
+import { mcpConnectionStatus } from "../codex-mcp-status.js";
 import type { CodexSession } from "../codex-sessions.js";
 import type { ServerConfig, WorkspaceInfo } from "../types.js";
 
@@ -200,8 +200,10 @@ function toProvider(providerId: string, config: CodexEngineConfig): EngineProvid
   return { id: providerId, name: provider?.providerName ?? providerId, models };
 }
 
-async function readEngineConfig(): Promise<CodexEngineConfig> {
-  return await readCodexEngineConfig();
+/** Providers come from the shared catalog; the selected model comes from the
+ * workspace's own engine config, which is what the agent actually runs with. */
+async function readEngineConfig(config: ServerConfig, workspaceId: string): Promise<CodexEngineConfig> {
+  return await readCodexEngineConfig({ tomlPath: codexWorkspaceConfigFile(config, workspaceId) });
 }
 
 /**
@@ -326,7 +328,7 @@ export function createWorkspaceEngineClient(
     provider: {
       async list() {
         try {
-          const engineConfig = await readEngineConfig();
+          const engineConfig = await readEngineConfig(config, workspace.id);
           const connected = engineConfig.providers.map((provider) => provider.providerId);
           const defaultProvider = engineConfig.defaultProviderId;
           const defaultModel = engineConfig.model;
@@ -344,7 +346,7 @@ export function createWorkspaceEngineClient(
     config: {
       async get() {
         try {
-          return ok(await readEngineConfig());
+          return ok(await readEngineConfig(config, workspace.id));
         } catch (error) {
           return fail(error);
         }
@@ -355,8 +357,8 @@ export function createWorkspaceEngineClient(
       async status() {
         try {
           const statuses: EngineMcpStatus = {};
-          for (const server of defaultCodexRuntimeMcpServers()) {
-            statuses[server.name] = { status: "connected" };
+          for (const server of await (await manager()).listMcpServers()) {
+            statuses[server.name] = mcpConnectionStatus(server);
           }
           return ok(statuses);
         } catch (error) {
@@ -365,24 +367,35 @@ export function createWorkspaceEngineClient(
       },
 
       async disconnect() {
-        // The codex engine reconciles MCP servers from config on reload; there
-        // is no live per-server disconnect call.
-        return ok<Record<string, never>>({});
+        try {
+          // Disconnecting is a configuration change for this engine: rewrite
+          // the workspace config and make the running engine re-read it.
+          await applyCodexWorkspaceMcpConfiguration(config, workspace.id);
+          return ok<Record<string, never>>({});
+        } catch (error) { return fail(error); }
       },
 
       auth: {
         async remove() {
-          return ok<Record<string, never>>({});
+          return fail(new Error("Remove authorization through the connection's managed sign-in settings."), 501);
         },
       },
     },
 
     tool: {
       async ids() {
-        return ok<string[]>([]);
+        try {
+          const servers = await (await manager()).listMcpServers();
+          return ok(servers.flatMap((server) => server.tools.map((tool) => `${server.name}_${tool.name}`)));
+        } catch (error) { return fail(error); }
       },
       async list() {
-        return ok<Array<{ id: string; description?: string }>>([]);
+        try {
+          const servers = await (await manager()).listMcpServers();
+          return ok(servers.flatMap((server) => server.tools.map((tool) => ({
+            id: `${server.name}_${tool.name}`, description: tool.description,
+          }))));
+        } catch (error) { return fail(error); }
       },
     },
 

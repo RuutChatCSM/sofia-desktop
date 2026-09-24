@@ -1,3 +1,4 @@
+import { parseMcpStatusPage, type NativeMcpServer } from "./codex-mcp-status.js";
 import { resolveSofiaPrompt } from "./sofia-commands.js";
 // Codex session manager: owns a ManagedCodexEngine and exposes a small,
 // Sofia-shaped session surface for the codex runtime. This is additive —
@@ -216,6 +217,40 @@ export class CodexSessionManager {
   private approvalQueue: { sessionId: string; threadId: string; params: unknown; resolve: () => void; reject: (reason?: unknown) => void }[] = [];
   private threadAliases: Record<string, string>;
   private loadedThreads = new Set<string>();
+  private mcpConfigSnapshot: string | null = null;
+  private mcpRefresh: Promise<void> = Promise.resolve();
+
+  /** Refresh loaded threads without terminating their active turns. */
+  async refreshMcpConfiguration(): Promise<void> {
+    const refresh = this.mcpRefresh.catch(() => undefined).then(async () => {
+      const path = this.handle.env?.SOFIA_APP_CONFIG_FILE;
+      if (!path || !this.engine?.isAlive()) return;
+      const snapshot = readFileSync(path, "utf8");
+      if (snapshot === this.mcpConfigSnapshot) return;
+      await this.engine.request("config/mcpServer/reload");
+      this.mcpConfigSnapshot = snapshot;
+    });
+    this.mcpRefresh = refresh;
+    await refresh;
+  }
+
+  async listMcpServers(): Promise<NativeMcpServer[]> {
+    await this.start();
+    await this.refreshMcpConfiguration();
+    const servers: NativeMcpServer[] = [];
+    let cursor: string | null = null;
+    const seen = new Set<string>();
+    do {
+      const page = parseMcpStatusPage(await this.activeEngine().request("mcpServerStatus/list", {
+        cursor, limit: 100, detail: "toolsAndAuthOnly",
+      }));
+      servers.push(...page.data);
+      cursor = page.nextCursor;
+      if (cursor && seen.has(cursor)) throw new Error("Sofia MCP inventory repeated a page");
+      if (cursor) seen.add(cursor);
+    } while (cursor);
+    return servers;
+  }
 
   private activeEngine(): ManagedCodexEngine {
     const engine = this.engine;

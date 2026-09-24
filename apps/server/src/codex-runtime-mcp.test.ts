@@ -11,6 +11,7 @@ import {
   codexRuntimeMcpToolNamespace,
   codexRuntimeSkill,
   codexRuntimeSkillsFor,
+  configuredCodexMcpServers,
   defaultCodexRuntimeMcpServers,
 } from "./codex-runtime-mcp.js";
 
@@ -56,8 +57,10 @@ describe("codex-runtime-mcp", () => {
 
   test("codexMcpServersToml escapes keys with dots verbatim and returns empty for none", () => {
     expect(codexMcpServersToml([])).toBe("");
+    // TOML reads an unquoted dot as a table separator, and the engine accepts
+    // server names containing dots, so the name has to be quoted to stay one key.
     const toml = codexMcpServersToml([{ name: "a.b-server", command: "x" }]);
-    expect(toml).toContain("[mcp_servers.a.b-server]");
+    expect(toml).toContain('[mcp_servers."a.b-server"]');
   });
 
   test("codexRuntimeSkill produces frontmatter with name and description", () => {
@@ -77,8 +80,9 @@ describe("codex-runtime-mcp", () => {
     // The function reads the live platform/env; it must never throw and each
     // returned server has a resolvable shape.
     for (const server of defaultCodexRuntimeMcpServers()) {
-      expect(typeof server.command).toBe("string");
-      expect(server.command.length).toBeGreaterThan(0);
+      const command = server.command;
+      expect(typeof command).toBe("string");
+      expect(command?.length ?? 0).toBeGreaterThan(0);
       // Direct node invocations carry ELECTRON_RUN_AS_NODE so the script runs
       // as Node even from an embedded Electron runtime (never `npx`).
       if (server.env) expect(server.env.ELECTRON_RUN_AS_NODE).toBe("1");
@@ -161,4 +165,77 @@ describe("codex-runtime-mcp", () => {
     }
   });
 
+});
+
+describe("configuredCodexMcpServers", () => {
+  // Deterministic stand-ins for the platform-derived built-ins, so these tests
+  // do not depend on the machine they run on.
+  const defaults: CodexRuntimeMcpServer[] = [
+    { name: "computer-use", command: "/helper/ComputerUse", args: ["mcp"], enabled: true },
+    { name: "node_repl", command: "bin", args: ["mcp"] },
+  ];
+
+  test("keeps the built-in surfaces when no MCP entry is saved", () => {
+    expect(configuredCodexMcpServers({}, defaults)).toEqual(defaults);
+  });
+
+  test("translates saved local and remote entries into engine servers", () => {
+    const servers = configuredCodexMcpServers({
+      playwright: {
+        type: "local",
+        command: ["/usr/local/bin/playwright-mcp", "--headless"],
+        environment: { TOKEN: "t" },
+        cwd: "/tmp/work",
+        timeout: 2000,
+        enabled_tools: ["browse"],
+        disabled_tools: ["delete"],
+      },
+      docs: { type: "remote", url: "https://docs.example/mcp", headers: { Authorization: "Bearer x" } },
+    }, defaults);
+
+    expect(servers).toEqual([
+      defaults[0],
+      defaults[1],
+      expect.objectContaining({
+        name: "playwright",
+        command: "/usr/local/bin/playwright-mcp",
+        args: ["--headless"],
+        env: { TOKEN: "t" },
+        cwd: "/tmp/work",
+        enabled: true,
+        enabledTools: ["browse"],
+        disabledTools: ["delete"],
+        startupTimeoutSec: 2,
+      }),
+      expect.objectContaining({
+        name: "docs",
+        url: "https://docs.example/mcp",
+        httpHeaders: { Authorization: "Bearer x" },
+        enabled: true,
+      }),
+    ]);
+  });
+
+  test("lets a saved entry replace or disable a built-in surface", () => {
+    // The user connecting (or disconnecting) Computer Use in the app wins over
+    // the automatic default, which is how the toggle reaches the engine.
+    const servers = configuredCodexMcpServers({
+      "computer-use": { type: "local", command: ["/helper/ComputerUse", "mcp"] },
+      node_repl: { type: "local", command: ["bin", "mcp"], enabled: false },
+    }, defaults);
+
+    expect(servers).toHaveLength(2);
+    expect(servers[0]).toEqual(expect.objectContaining({ name: "computer-use", command: "/helper/ComputerUse", args: ["mcp"] }));
+    expect(servers[1]).toEqual(expect.objectContaining({ name: "node_repl", enabled: false }));
+  });
+
+  test("skips an entry it cannot translate instead of failing the whole config", () => {
+    // A corrupt store row must not cost the workspace its providers and every
+    // other MCP server; the entry stays visible in the app and can be removed.
+    expect(configuredCodexMcpServers({
+      broken: { type: "local" },
+      empty: { type: "local", command: [""] },
+      unknown: { command: ["bin"] },
+    }, defaults)).toEqual(defaults);
+  });
 });

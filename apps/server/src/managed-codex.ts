@@ -327,6 +327,21 @@ export class ManagedCodexEngine {
       capabilities: { experimentalApi: true },
     });
     const response = result as { userAgent?: string; sofiaHome?: string; codexHome?: string };
+    const configFile = this.options.env?.SOFIA_APP_CONFIG_FILE;
+    if (configFile) {
+      const config = await this.request("config/read", { includeLayers: true });
+      const layers = config && typeof config === "object" ? Reflect.get(config, "layers") : null;
+      const selected = Array.isArray(layers) && layers.some((layer: unknown) => {
+        if (!layer || typeof layer !== "object") return false;
+        const name = Reflect.get(layer, "name");
+        return name && typeof name === "object" && Reflect.get(name, "type") === "user"
+          && Reflect.get(name, "file") === configFile;
+      });
+      if (!selected) {
+        await this.close();
+        throw new Error("The bundled Sofia engine does not support workspace tool configuration. Update the app and its bundled engine together.");
+      }
+    }
     this.initializeResult = {
       userAgent: response.userAgent ?? "",
       codexHome: response.sofiaHome ?? response.codexHome ?? "",

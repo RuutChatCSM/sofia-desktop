@@ -3,7 +3,7 @@
 // via setCodexBinaryForConfig (or falls back to `codex` on PATH). Additive to
 // the engine engine lifecycle.
 import { writeFile, mkdir, readFile, rename, rm } from "node:fs/promises";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -14,11 +14,11 @@ import {
   codexDirectToolNamespacesToml,
   codexMcpServersToml,
   codexRuntimeSkillsFor,
-  defaultCodexRuntimeMcpServers,
+  configuredCodexMcpServers,
 } from "./codex-runtime-mcp.js";
 import { readCodexAccessMode, sandboxModeFor } from "./codex-access.js";
 import { createCodexSessionManager, type CodexEngineHandle, type CodexSessionManager } from "./codex-sessions.js";
-import { ENGINE_GLOBAL_RUNTIME_CONFIG_ID, readRuntimeWorkspaceEngineConfig } from "./runtime-engine-config-store.js";
+import { readEffectiveRuntimeWorkspaceEngineConfig } from "./runtime-engine-config-store.js";
 import type { ServerConfig } from "./types.js";
 import { ApiError } from "./errors.js";
 
@@ -77,11 +77,22 @@ export async function codexEngineHandleForConfig(config: ServerConfig, workspace
   if (!resolver) return null;
   const cwd = workspaceCwd(config, workspaceId);
   const home = codexHomeFor(cwd);
-  await prepareCodexConfigToml(config, workspaceId, home);
+  const configFile = codexWorkspaceConfigFile(config, workspaceId);
+  await prepareCodexConfigToml(config, workspaceId, home, configFile);
   await prepareSofiaAuthInHome(home);
   // thread/start and thread/resume reload config from disk. Keep managers alive:
   // replacing them drops active turns, fresh threads and SSE subscriptions.
-  return { bin: resolver.path, cwd, codexHome: home };
+  return { bin: resolver.path, cwd, codexHome: home, env: { SOFIA_APP_CONFIG_FILE: configFile } };
+}
+
+/**
+ * The engine config a workspace runs with. Each workspace gets its own file so
+ * one project's MCP servers, providers and selection never leak into another's,
+ * and so writing them leaves the shared session home untouched.
+ */
+export function codexWorkspaceConfigFile(config: ServerConfig, workspaceId: string): string {
+  const cwd = workspaceCwd(config, workspaceId);
+  return join(codexHomeFor(cwd), "app-workspaces", createHash("sha256").update(cwd).digest("hex"), "config.toml");
 }
 
 /**
@@ -134,31 +145,31 @@ export async function prepareCodexConfigToml(
   config: ServerConfig,
   workspaceId: string,
   codexHome: string,
+  configFile = join(codexHome, "config.toml"),
 ): Promise<void> {
   try {
     await mkdir(codexHome, { recursive: true });
     let toml = "";
-    const engineConfig = await readCodexEngineConfig();
+    const runtimeConfig = await readEffectiveRuntimeWorkspaceEngineConfig(config, workspaceId);
+    // The selected provider/model live in this file (the engine's user config),
+    // so read it back: otherwise every regeneration would reset the picker to
+    // the first connected provider.
+    const engineConfig = await readCodexEngineConfig({ tomlPath: configFile });
     if (engineConfig.providers.length > 0) {
       toml = codexConfigTomlFromEngineConfig(engineConfig);
     } else {
-      const globalConfig = await readRuntimeWorkspaceEngineConfig(config, ENGINE_GLOBAL_RUNTIME_CONFIG_ID);
-      const workspaceConfig = await readRuntimeWorkspaceEngineConfig(config, workspaceId);
-      const merged = {
-        provider: { ...(globalConfig.provider ?? {}), ...(workspaceConfig.provider ?? {}) },
-      };
-      toml = codexConfigTomlFromRuntime(merged);
+      toml = codexConfigTomlFromRuntime(runtimeConfig);
     }
     // Runtime surfaces (computer-use, browser): MCP servers + the SKILL.md docs
     // that teach the agent when/how to use them. Additive and best-effort, and
     // always applied even when no provider is configured yet.
-    const runtimeServers = defaultCodexRuntimeMcpServers();
+    const runtimeServers = configuredCodexMcpServers(runtimeConfig.mcp ?? {});
     const runtimeToml = codexMcpServersToml(runtimeServers);
     if (runtimeToml) toml += `${toml ? "\n" : ""}${runtimeToml}`;
     // The engine defers MCP tools whenever the model supports `tool_search`, so
     // a registered server can still be missing from the agent's tool list. Pin
     // the runtime surfaces so the tools their SKILL.md docs name are callable.
-    const directToolsToml = codexDirectToolNamespacesToml(runtimeServers);
+    const directToolsToml = codexDirectToolNamespacesToml(runtimeServers.filter((server) => server.enabled !== false && ["computer-use", "node_repl"].includes(server.name)));
     if (directToolsToml) toml += `${toml ? "\n" : ""}${directToolsToml}`;
     // Codex's sandbox defaults to read-only, so a project is only editable when
     // we opt in. The access mode (the composer toggle) maps to codex's
@@ -173,7 +184,8 @@ export async function prepareCodexConfigToml(
         ? `sandbox_mode = "workspace-write"\n[sandbox_workspace_write]\nnetwork_access = true\n`
         : `sandbox_mode = ${JSON.stringify(sandboxMode)}\n`;
     if (sandboxBlock) toml = insertTomlTopLevelBlock(toml, sandboxBlock);
-    await writeEngineFile(join(codexHome, "config.toml"), toml);
+    await mkdir(join(configFile, ".."), { recursive: true });
+    await writeEngineFile(configFile, toml);
     await codexRuntimeSkillsFor(codexHome, runtimeServers);
   } catch (error) {
     throw new Error("Unable to prepare Sofia engine configuration", { cause: error });
@@ -211,7 +223,24 @@ export async function getOrCreateCodexSessionManager(config: ServerConfig, works
     manager = createCodexSessionManager(handle, workspaceId, enableLegacyImport);
     perWorkspace.set(workspaceId, manager);
   }
+  await manager.refreshMcpConfiguration();
   return manager;
+}
+
+/**
+ * Apply a workspace's saved MCP configuration to the codex engine.
+ *
+ * The engine has no runtime add/remove MCP RPC — it reads tool configuration
+ * from `config.toml` — so a live change has to land on disk and then be
+ * reloaded through `config/mcpServer/reload`. Only a running manager is
+ * reloaded: writing the file is enough for the next engine start, and applying
+ * configuration must never start an engine by itself.
+ */
+export async function applyCodexWorkspaceMcpConfiguration(config: ServerConfig, workspaceId: string): Promise<void> {
+  const handle = await codexEngineHandleForConfig(config, workspaceId);
+  if (!handle) return;
+  const manager = perConfigManagers.get(config)?.get(workspaceId);
+  if (manager) await manager.refreshMcpConfiguration();
 }
 
 export async function closeCodexManagersForConfig(config: ServerConfig): Promise<void> {
