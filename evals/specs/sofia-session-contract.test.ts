@@ -138,8 +138,9 @@ test("Sofia archive/rename routes enforce write scope and stream cancellation re
 
 test("Sofia releases are opt-in and cannot target upstream repositories", () => {
   expect(resolveSofiaRelease().stable).toBe("");
-  expect(() => resolveSofiaRelease({ repository: "RuutChatCSM/sofia-desktop" })).toThrow("Sofia-owned");
+  expect(() => resolveSofiaRelease({ repository: "different-ai/openwork" })).toThrow("Sofia-owned");
   expect(() => resolveSofiaRelease({ repository: "openai/codex" })).toThrow("Sofia-owned");
+  expect(resolveSofiaRelease({ repository: "RuutChatCSM/sofia-desktop" }).stable).toBe("https://github.com/RuutChatCSM/sofia-desktop/releases/latest/download");
   expect(resolveSofiaRelease({ repository: "example/sofia" }).stable).toBe("https://github.com/example/sofia/releases/latest/download");
 });
 
