@@ -194,7 +194,7 @@ function EnterpriseActivationPage() {
         >
           <div className="flex items-center gap-2.5">
             <img
-              src={resolveExtensionIconSrc("/sofia-mark.svg")}
+              src={resolveExtensionIconSrc("/sofia-mark.png")}
               alt=""
               width={26}
               height={26}

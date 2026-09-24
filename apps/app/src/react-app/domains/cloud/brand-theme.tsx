@@ -3,6 +3,7 @@ import { useEffect, useRef, type ReactNode } from "react";
 import { desktopPolicyKeys, type BrandAccentColor } from "@sofia/types/den/desktop-policies";
 
 import { useNotificationStore } from "../../kernel/notification-store";
+import { resolveExtensionIconSrc } from "../../design-system/extension-icon-src";
 import { useOrgRestrictions } from "./desktop-config-provider";
 
 // ---------------------------------------------------------------------------
@@ -78,10 +79,18 @@ export function BrandThemeEffect() {
 }
 
 /**
+ * Packaged builds load the renderer from `file://`, where a root-absolute
+ * `/sofia-mark.png` resolves outside the bundle. Keep the default behind the
+ * same base-aware resolver every other brand asset uses.
+ */
+export const DEFAULT_BRAND_LOGO_SRC = resolveExtensionIconSrc("/sofia-mark.png");
+
+/**
  * Hook returning the org's brand logo URL if set via desktop policy.
  */
-export function useBrandLogoUrl(): string | undefined {
-  return useOrgRestrictions().brandLogoUrl ?? "/sofia-mark.svg";
+export function useBrandLogoUrl(): string {
+  const brandLogoUrl = useOrgRestrictions().brandLogoUrl;
+  return brandLogoUrl ? resolveExtensionIconSrc(brandLogoUrl) : DEFAULT_BRAND_LOGO_SRC;
 }
 
 /** Organization-managed display name. It does not change the signed app identity. */

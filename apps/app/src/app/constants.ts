@@ -175,7 +175,7 @@ export const MCP_QUICK_CONNECT: McpDirectoryInfo[] = [
     oauth: true,
     managedBy: "sofia-connect",
     kind: "mcp",
-    iconSrc: "/sofia-mark.svg",
+    iconSrc: "/sofia-mark.png",
     // Auto-managed by the signed-in cloud reconciler (syncCloudControlMcp):
     // configured + enabled while signed in to Organization cloud. Hidden from the
     // default catalog; "Show hidden" reveals it.
@@ -190,7 +190,7 @@ export const MCP_QUICK_CONNECT: McpDirectoryInfo[] = [
     command: ["npx", "-y", "sofia-ui-mcp"],
     oauth: false,
     kind: "ui-control",
-    iconSrc: "/sofia-mark.svg",
+    iconSrc: "/sofia-mark.png",
     // Internal UI-control surface for agents driving the desktop app. Hidden
     // from the default catalog; "Show hidden" reveals it.
     defaultHidden: true,

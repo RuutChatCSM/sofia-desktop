@@ -1,8 +1,9 @@
 /** @jsxImportSource react */
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { ArrowRight, X, Zap } from "lucide-react";
 
 import { DEFAULT_MODEL } from "@/app/constants";
+import { getResolvedThemeMode, subscribeToTheme } from "@/app/theme";
 import type { ComposerAttachment } from "@/app/types";
 import { resolveOrganizationPromptCardContent } from "@/components/chat/task-suggestions";
 import { useCheckDesktopRestriction, useOrgRestrictions } from "@/react-app/domains/cloud/desktop-config-provider";
@@ -15,6 +16,7 @@ import {
   useSofiaModelsPromoEligibility,
 } from "@/react-app/domains/cloud/sofia-models-promo";
 import { usePlatform } from "@/react-app/kernel/platform";
+import { resolveExtensionIconSrc } from "@/react-app/design-system/extension-icon-src";
 import { NewTaskComposer, type NewTaskComposerContext } from "./new-task-composer";
 
 type HeroSuggestion = {
@@ -56,6 +58,14 @@ export function SessionEmptyHero(props: SessionEmptyHeroProps) {
   const denAuth = useDenAuth();
   const sofiaModelsPromoEligible = useSofiaModelsPromoEligibility();
   const [modelsPromoHidden, setModelsPromoHidden] = useState(isSofiaModelsPromoHidden);
+
+  // Monochrome Sofia marks product/UI presence: this hero repeats the mark the
+  // sidebar already shows in colour, so it uses the vector mark artwork, which
+  // stays crisp at 20px, instead of the full-colour rendering.
+  const resolvedTheme = useSyncExternalStore(subscribeToTheme, getResolvedThemeMode, getResolvedThemeMode);
+  const markSrc = resolveExtensionIconSrc(
+    resolvedTheme === "dark" ? "/sofia-mark-inverse.svg" : "/sofia-mark.svg",
+  );
 
   useEffect(() => {
     const handlePromoChanged = () => setModelsPromoHidden(isSofiaModelsPromoHidden());
@@ -99,7 +109,7 @@ export function SessionEmptyHero(props: SessionEmptyHeroProps) {
   return (
     <div className="mx-auto w-full max-w-[800px] space-y-5 px-4 sm:px-6">
       <h1 className="flex items-center gap-2.5 text-[15px] font-medium tracking-tight text-foreground">
-        <img src="/sofia-mark.svg" alt="" className="sofia-brand-mark size-5" />
+        <img src={markSrc} alt="" className="size-5" />
         What are we working on?
       </h1>
 

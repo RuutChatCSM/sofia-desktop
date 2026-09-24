@@ -46,7 +46,7 @@ import {
   isWindowsPlatform,
 } from "../../../../app/utils";
 import { t } from "../../../../i18n";
-import { useBrandLogoUrl } from "../../cloud/brand-theme";
+import { DEFAULT_BRAND_LOGO_SRC, useBrandLogoUrl } from "../../cloud/brand-theme";
 import { canCreateWorkspaces } from "../../../../app/lib/workspace-creation-policy";
 
 import {
@@ -1097,10 +1097,10 @@ export function AppSidebar(props: AppSidebarProps) {
           >
             <img
               src={brandLogoUrl}
-              alt={brandLogoUrl === "/sofia-mark.svg" ? "Sofia" : "Organization logo"}
-              className={`h-8 w-8 object-contain object-left ${brandLogoUrl === "/sofia-mark.svg" ? "sofia-brand-mark" : ""}`}
+              alt={brandLogoUrl === DEFAULT_BRAND_LOGO_SRC ? "Sofia" : "Organization logo"}
+              className="h-8 w-8 object-contain object-left"
             />
-            {brandLogoUrl === "/sofia-mark.svg" ? <span className="text-xl font-semibold tracking-tight">Sofia</span> : null}
+            {brandLogoUrl === DEFAULT_BRAND_LOGO_SRC ? <span className="text-xl font-semibold tracking-tight">Sofia</span> : null}
           </div>
         ) : null}
         {props.conversationHistory ? (

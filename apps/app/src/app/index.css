@@ -90,9 +90,6 @@
   }
 }
 
-.sofia-brand-mark { filter: brightness(0); }
-:is(.dark, [data-theme="dark"]) .sofia-brand-mark { filter: brightness(0) invert(1); }
-
 :root {
   color-scheme: light;
   --dls-surface: var(--slate-1);

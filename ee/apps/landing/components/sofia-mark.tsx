@@ -11,8 +11,8 @@ export function SofiaMark(props: Props) {
       alt=""
       aria-hidden="true"
       className={props.className}
-      width={834}
-      height={649}
+      width={1254}
+      height={1254}
       unoptimized
     />
   );

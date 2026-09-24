@@ -158,7 +158,7 @@ export const BUILT_IN_SOFIA_EXTENSION_MANIFESTS: SofiaExtensionManifest[] = [
     name: "Sofia App Browser",
     description: "Automate the built-in browser panel that stays visible inside Sofia App.",
     source: { format: "sofia-builtin", origin: "builtin", trusted: true },
-    icon: { src: "/sofia-mark.svg" },
+    icon: { src: "/sofia-mark.png" },
     composer: { prompt: "Use the Sofia App Browser extension to " },
     setup: {
       instructions: "Sofia App Browser is ready by default in desktop workspaces.",
@@ -190,7 +190,7 @@ export const BUILT_IN_SOFIA_EXTENSION_MANIFESTS: SofiaExtensionManifest[] = [
     description: "Mac only: control Mac apps through semantic accessibility refs, screenshots, background-safe clicks, keyboard input, and strict mode.",
     preview: true,
     source: { format: "sofia-builtin", origin: "builtin", trusted: true },
-    icon: { src: "/sofia-mark.svg" },
+    icon: { src: "/sofia-mark.png" },
     composer: { prompt: "Use Computer Use to " },
     setup: {
       instructions: "Computer Use is Mac only. It runs as a local MCP server backed by the macOS accessibility runtime. Grant Accessibility and Screen Recording permissions when macOS asks, then connect the MCP server in this workspace.",
@@ -237,7 +237,7 @@ export const BUILT_IN_SOFIA_EXTENSION_MANIFESTS: SofiaExtensionManifest[] = [
     description: "Talk to Sofia App through a Realtime voice panel that drives the same semantic UI controls as Sofia App UI MCP.",
     preview: true,
     source: { format: "sofia-builtin", origin: "builtin", trusted: true },
-    icon: { src: "/sofia-mark.svg" },
+    icon: { src: "/sofia-mark.png" },
     composer: { prompt: "Use Voice Mode to " },
     setup: {
       instructions: "Voice Mode uses OpenAI Realtime. Save an OpenAI API key in Sofia App env vars, then open the session rail panel and speak or send a typed voice command.",

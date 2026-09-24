@@ -14,7 +14,7 @@ describe("managed brand header", () => {
     expect(source).not.toContain("brand-app-name");
     expect(source).not.toContain("useBrandAppName");
     expect(source).toMatch(/className="flex h-16 shrink-0 items-center/);
-    expect(source).toMatch(/className={`h-8 w-8 object-contain object-left/);
-    expect(source).toContain("sofia-brand-mark");
+    expect(source).toMatch(/className="h-8 w-8 object-contain object-left"/);
+    expect(source).toContain("DEFAULT_BRAND_LOGO_SRC");
   });
 });
