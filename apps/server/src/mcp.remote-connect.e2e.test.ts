@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 
 import { addMcp, listMcp, removeMcp } from "./mcp.js";
-import { readRuntimeOpencodeConfig } from "./runtime-opencode-config-store.js";
+import { readRuntimeWorkspaceEngineConfig } from "./runtime-engine-config-store.js";
 import type { ServerConfig } from "./types.js";
 
 const WORKSPACE_ID = "ws_mcp_remote";
@@ -54,9 +54,9 @@ describe("mcp remote connect flow", () => {
       });
       expect(item?.source).toBe("config.remote");
 
-      await expect(readFile(join(workspaceRoot, "opencode.jsonc"), "utf8")).rejects.toThrow();
+      await expect(readFile(join(workspaceRoot, "engine.jsonc"), "utf8")).rejects.toThrow();
       await expect(stat(join(workspaceRoot, ".sofia", "sofia.json"))).rejects.toThrow();
-      expect((await readRuntimeOpencodeConfig(config, WORKSPACE_ID)).mcp?.["simple-remote"]?.url).toBe("https://example.com/mcp");
+      expect((await readRuntimeWorkspaceEngineConfig(config, WORKSPACE_ID)).mcp?.["simple-remote"]?.url).toBe("https://example.com/mcp");
 
       const removed = await removeMcp(config, WORKSPACE_ID, "simple-remote");
       expect(removed).toBe(true);

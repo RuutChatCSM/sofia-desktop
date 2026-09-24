@@ -394,7 +394,7 @@ jobs:
             /usr/bin/sofia \
             /opt/sofia/sofia \
             /opt/sofia/sofia-desktop \
-            /opt/sofia/opencode
+            /opt/sofia/engine
           do
             if [ -n "$candidate" ] && [ -x "$candidate" ]; then
               launch_bin="$candidate"

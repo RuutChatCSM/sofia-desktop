@@ -260,12 +260,12 @@ async function provisionWorkerOnRender(
     : "sofia-server"
   const buildCommand = [
     `npm install -g ${shellQuote(sofiaServerPackage)}`,
-    "node ./scripts/install-opencode.mjs",
+    "node ./scripts/install-engine.mjs",
   ].join(" && ")
   const startScript = `
 set -u
 mkdir -p /tmp/workspace
-plugin_dir="$(npm root -g)/sofia-server/dist/opencode-plugins"
+plugin_dir="$(npm root -g)/sofia-server/dist/engine-plugins"
 if [ ! -d "$plugin_dir" ]; then
   echo "sofia-server extension plugins missing at $plugin_dir" >&2
   exit 1
@@ -273,7 +273,7 @@ fi
 attempt=0
 while [ "$attempt" -lt 3 ]; do
   attempt=$((attempt + 1))
-  if SOFIA_MANAGE_OPENCODE=1 SOFIA_OPENCODE_BIN=./bin/opencode SOFIA_EXTENSIONS_PLUGIN_DIR="$plugin_dir" sofia-server --workspace /tmp/workspace --host 0.0.0.0 --port "\${PORT:-10000}" --cors '*' --approval manual --verbose; then
+  if SOFIA_MANAGE_SOFIA_ENGINE=1 SOFIA_SOFIA_ENGINE_BIN=./bin/engine SOFIA_EXTENSIONS_PLUGIN_DIR="$plugin_dir" sofia-server --workspace /tmp/workspace --host 0.0.0.0 --port "\${PORT:-10000}" --cors '*' --approval manual --verbose; then
     exit 0
   fi
   status=$?

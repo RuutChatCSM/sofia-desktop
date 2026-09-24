@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { Agent } from "@/app/lib/engine-types";
-import { AppWindowMac, ArrowUp, Check, ChevronDown, ChevronRight, FileText, LoaderCircle, Paperclip, Plus, RefreshCw, Settings, Square, Terminal, X, Zap } from "lucide-react";
+import { AppWindowMac, ArrowLeft, ArrowUp, Check, ChevronDown, ChevronRight, FileText, LoaderCircle, Paperclip, Plus, RefreshCw, Settings, Square, Terminal, X, Zap } from "lucide-react";
 import fuzzysort from "fuzzysort";
 import { toast } from "@/components/ui/sonner";
 import type { CloudImportedPlugin, CloudImportedPluginFile } from "@/app/cloud/import-state";
@@ -42,7 +42,7 @@ type MentionItem = {
   label: string;
 };
 
-type ToolMenuSection = "agents" | "commands" | "skills" | "connections" | "plugins" | `plugin:${string}`;
+type ToolMenuSection = "home" | "agents" | "commands" | "skills" | "connections" | "plugins" | `plugin:${string}`;
 
 type ComposerProps = {
   draft: string;
@@ -207,11 +207,11 @@ type ToolMenuLayout = {
 function measureToolMenuLayout(trigger: HTMLElement): ToolMenuLayout {
   const rect = trigger.getBoundingClientRect();
   const gap = 12;
-  const width = Math.min(window.innerWidth - 40, 544);
+  const width = Math.min(window.innerWidth - 32, 360);
   const header = trigger.closest("main")?.querySelector("header");
   const headerBottom = header instanceof HTMLElement ? header.getBoundingClientRect().bottom : 0;
   const ceiling = Math.max(headerBottom, 8);
-  const maxHeight = Math.max(180, Math.min(520, rect.top - gap - ceiling));
+  const maxHeight = Math.max(180, Math.min(400, rect.top - gap - ceiling));
   const left = Math.min(Math.max(16, rect.left), Math.max(16, window.innerWidth - width - 16));
   const bottom = window.innerHeight - rect.top + gap;
   return { left, bottom, width, maxHeight };
@@ -220,11 +220,11 @@ function measureToolMenuLayout(trigger: HTMLElement): ToolMenuLayout {
 function pluginSlashCommandName(file: CloudImportedPluginFile) {
   const path = file.path.trim();
   if (file.objectType === "command") {
-    const command = path.match(/^\.opencode\/(?:command|commands)\/(.+)\.md$/i)?.[1];
+    const command = path.match(/^\.sofia\/(?:command|commands)\/(.+)\.md$/i)?.[1];
     return command?.trim() || null;
   }
   if (file.objectType === "skill") {
-    const skill = path.match(/^\.opencode\/(?:skill|skills)\/(?:[^/]+\/)?([^/]+)\/SKILL\.md$/i)?.[1];
+    const skill = path.match(/^\.sofia\/(?:skill|skills)\/(?:[^/]+\/)?([^/]+)\/SKILL\.md$/i)?.[1];
     return skill?.trim() || null;
   }
   return null;
@@ -245,8 +245,10 @@ export function ReactSessionComposer(props: ComposerProps) {
   const [slashOpen, setSlashOpen] = useState(false);
   const [toolMenuOpen, setToolMenuOpen] = useState(false);
   const [toolMenuLayout, setToolMenuLayout] = useState<ToolMenuLayout | null>(null);
-  const [toolMenuSection, setToolMenuSection] = useState<ToolMenuSection>("commands");
+  const [toolMenuSection, setToolMenuSection] = useState<ToolMenuSection>("home");
   const [mentionItems, setMentionItems] = useState<MentionItem[]>([]);
+  const [mentionLoading, setMentionLoading] = useState(false);
+  const [mentionError, setMentionError] = useState<string | null>(null);
   const [mentionOpen, setMentionOpen] = useState(false);
   const [menuIndex, setMenuIndex] = useState(0);
   const menuItemRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -275,6 +277,10 @@ export function ReactSessionComposer(props: ComposerProps) {
   const [dropzoneActive, setDropzoneActive] = useState(false);
   const toolMenuRef = useRef<HTMLDivElement | null>(null);
   const toolMenuPanelRef = useRef<HTMLDivElement | null>(null);
+  useLayoutEffect(() => {
+    if (toolMenuOpen && toolMenuLayout) toolMenuPanelRef.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
+  }, [toolMenuOpen, toolMenuSection, Boolean(toolMenuLayout)]);
+
   const editorRef = useRef<LexicalPromptEditorHandle | null>(null);
   const agentMenuRef = useRef<HTMLDivElement | null>(null);
   // IME composition guard: while an IME composition is active, we must not
@@ -369,7 +375,7 @@ export function ReactSessionComposer(props: ComposerProps) {
   const slashCommandQuery = getSlashCommandQuery(props.draft);
   const slashOpenNext = slashCommandQuery !== null;
   const slashQuery = slashCommandQuery ?? "";
-  const mentionMatch = props.draft.match(/@([^\s@]*)$/);
+  const mentionMatch = props.draft.match(/(?:^|\s)@([^\s@]*)$/);
   const mentionOpenNext = Boolean(mentionMatch);
   const mentionQuery = mentionMatch?.[1] ?? "";
   const nonDefaultAgents = useMemo(() => agents.filter(isNonDefaultAgent), [agents]);
@@ -533,21 +539,26 @@ export function ReactSessionComposer(props: ComposerProps) {
   useEffect(() => {
     if (!mentionOpen) return;
     let cancelled = false;
-    void Promise.all([props.listAgents(), props.searchFiles(mentionQuery), listRunningAppsForMention()]).then(([agentList, files, apps]) => {
+    setMentionLoading(true);
+    setMentionError(null);
+    void Promise.allSettled([props.listAgents(), props.searchFiles(mentionQuery), listRunningAppsForMention()]).then(([agentResult, fileResult, appResult]) => {
       if (cancelled) return;
+      const agentList = agentResult.status === "fulfilled" ? agentResult.value : [];
+      const files = fileResult.status === "fulfilled" ? fileResult.value : [];
+      const apps = appResult.status === "fulfilled" ? appResult.value : [];
+      if (fileResult.status === "rejected") setMentionError("Could not search this workspace. Try again.");
+      setMentionLoading(false);
       const recent = props.recentFiles.slice(0, 8);
       const next: MentionItem[] = [
-        ...agentList.map((agent) => ({ id: `agent:${agent.name}`, kind: "agent" as const, value: agent.name, label: agent.name })),
         ...recent.map((file) => ({ id: `file:${file}`, kind: "file" as const, value: file, label: file })),
+        ...files.filter((file) => !recent.includes(file)).map((file) => ({ id: `file:${file}`, kind: "file" as const, value: file, label: file })),
+        ...agentList.map((agent) => ({ id: `agent:${agent.name}`, kind: "agent" as const, value: agent.name, label: agent.name })),
         // Running macOS apps (Computer Use targets). Listed after recent files
         // so an empty "@" stays file-first; fuzzy search surfaces them as the
         // user types (e.g. "@mus" → Music).
         ...apps.map((appName) => ({ id: `app:${appName}`, kind: "app" as const, value: appName, label: appName })),
-        ...files.filter((file) => !recent.includes(file)).map((file) => ({ id: `file:${file}`, kind: "file" as const, value: file, label: file })),
       ];
       setMentionItems(next);
-    }).catch(() => {
-      if (!cancelled) setMentionItems([]);
     });
     return () => {
       cancelled = true;
@@ -1201,7 +1212,7 @@ export function ReactSessionComposer(props: ComposerProps) {
   };
 
   const renderMentionMenu = () => {
-    if (!mentionOpen || mentionFiltered.length === 0) return null;
+    if (!mentionOpen) return null;
     return (
       <div className="absolute bottom-full left-[-1px] right-[-1px] z-30">
           <div className="overflow-hidden rounded-t-[20px] border border-dls-border border-b-0 bg-dls-surface shadow-[var(--dls-shell-shadow)]">
@@ -1210,6 +1221,9 @@ export function ReactSessionComposer(props: ComposerProps) {
               className="max-h-64 overflow-y-auto p-2"
               onMouseDown={(event) => event.preventDefault()}
           >
+            <div className="px-3 py-2 text-xs font-medium text-dls-secondary">Files and context</div>
+            {mentionError ? <div role="alert" className="px-3 py-2 text-xs text-red-10">{mentionError}</div> : null}
+            {!mentionFiltered.length ? <div role="status" className="px-3 py-3 text-sm text-dls-secondary">{mentionLoading ? "Finding files…" : "No matching files. Try a different name."}</div> : null}
             <div className="grid gap-1">
               {mentionFiltered.map((item, index) => (
                 <button
@@ -1264,11 +1278,11 @@ export function ReactSessionComposer(props: ComposerProps) {
         imeComposingRef.current = false;
       }}
     >
-      <div className={props.flush ? "" : "max-w-[800px] mx-auto"}>
+      <div className={props.flush ? "" : "max-w-[800px] mx-auto sofia-composer-dock"}>
         {props.aboveComposer ? <div className="pb-2">{props.aboveComposer}</div> : null}
         {/* Main composer panel */}
         <div
-          className={`relative overflow-visible rounded-[18px] border border-dls-border bg-dls-surface-muted shadow-sm transition-all focus-within:border-gray-7 focus-within:shadow-md ${panelRoundedClass}`}
+          className={`sofia-composer-panel relative overflow-visible rounded-[24px] border border-dls-border bg-dls-surface shadow-sm transition-colors ${panelRoundedClass}`}
         >
           {props.topAccessory ? <div className="relative z-10">{props.topAccessory}</div> : null}
 
@@ -1306,7 +1320,7 @@ export function ReactSessionComposer(props: ComposerProps) {
                 previewUrl: attachment.previewUrl,
               }))}
               disabled={props.disabled}
-              placeholder={t("composer.placeholder")}
+              placeholder={props.busy ? "Add a follow-up while Sofia works…" : "Ask Sofia…"}
               onChange={props.onDraftChange}
               onSubmit={handleEditorSubmit}
               onExpandPastedText={handleExpandPastedText}
@@ -1417,6 +1431,7 @@ export function ReactSessionComposer(props: ComposerProps) {
                       setMentionOpen(false);
                       setMentionItems([]);
                       setSlashOpen(false);
+                      setToolMenuSection("home");
                       setToolMenuOpen((value) => !value);
                     }}
                     aria-expanded={toolMenuOpen}
@@ -1429,17 +1444,37 @@ export function ReactSessionComposer(props: ComposerProps) {
                     ? createPortal(
                     <div
                       ref={toolMenuPanelRef}
-                      className="fixed z-[200] flex overflow-hidden rounded-[22px] border border-dls-border bg-dls-surface shadow-[var(--dls-shell-shadow)]"
+                      role="dialog"
+                      aria-label={t("composer.tools_label")}
+                      onKeyDown={(event) => {
+                        if (event.key === "Escape") {
+                          event.preventDefault();
+                          setToolMenuOpen(false);
+                          toolMenuRef.current?.querySelector("button")?.focus();
+                          return;
+                        }
+                        if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+                        const buttons = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>("button:not(:disabled)"));
+                        if (!buttons.length) return;
+                        event.preventDefault();
+                        const index = buttons.findIndex((button) => button === document.activeElement);
+                        const next = event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1 : (index + (event.key === "ArrowUp" ? -1 : 1) + buttons.length) % buttons.length;
+                        buttons[next]?.focus();
+                      }}
+                      className="fixed z-[200] flex overflow-hidden rounded-xl border border-dls-border bg-dls-surface shadow-lg"
                       style={{
                         left: toolMenuLayout.left,
                         bottom: toolMenuLayout.bottom,
                         width: toolMenuLayout.width,
-                        height: toolMenuLayout.maxHeight,
                         maxHeight: toolMenuLayout.maxHeight,
                       }}
                     >
-                      <div className="flex h-full min-h-0 min-w-0 w-full">
-                        <div className="flex h-full w-[168px] shrink-0 flex-col overflow-y-auto border-r border-dls-border bg-gray-2/30 p-2 sm:w-[192px]">
+                      <div className="flex min-h-0 min-w-0 w-full flex-col">
+                        {toolMenuSection === "home" ? <div className="flex flex-col overflow-y-auto p-1.5">
+                          <button type="button" disabled={!props.attachmentsEnabled} className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm text-gray-11 hover:bg-gray-3 disabled:opacity-50" onClick={() => { setToolMenuOpen(false); fileInput?.click(); }}>
+                            <Paperclip size={15} />{t("composer.attach_files")}
+                          </button>
+                          <div className="my-1 border-t border-dls-border" />
                           {([
                             ["agents", t("composer.agents_label")],
                             ["commands", t("dashboard.commands")],
@@ -1447,14 +1482,11 @@ export function ReactSessionComposer(props: ComposerProps) {
                             ["connections", t("composer.connections_mcps_label")],
                             ["plugins", t("extensions.filter_plugins")],
                           ] as const).map(([section, label]) => {
-                            const active = section === "plugins"
-                              ? isToolMenuPluginsSection(toolMenuSection)
-                              : toolMenuSection === section;
                             return (
                             <button
                               key={section}
                               type="button"
-                              className={`mb-1 flex w-full items-center justify-between rounded-[16px] px-3 py-2.5 text-left text-sm transition-colors ${active ? "bg-gray-3 text-gray-12" : "text-gray-11 hover:bg-gray-2"}`}
+                              className="flex w-full items-center justify-between rounded-md px-2.5 py-2 text-left text-sm text-gray-11 transition-colors hover:bg-gray-3"
                               onClick={() => setToolMenuSection(section)}
                             >
                               <span className="truncate">{label}</span>
@@ -1462,12 +1494,14 @@ export function ReactSessionComposer(props: ComposerProps) {
                             </button>
                             );
                           })}
-                        </div>
-                        <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-                          <div className="mb-2 flex shrink-0 justify-end border-b border-dls-border px-3 pb-2 pt-2">
+                        </div> : <div className="flex min-h-0 min-w-0 flex-col overflow-hidden">
+                          <div className="flex shrink-0 items-center justify-between border-b border-dls-border p-1.5">
+                            <button type="button" className="inline-flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-gray-11 hover:bg-gray-3" onClick={() => setToolMenuSection(toolMenuSection.startsWith("plugin:") ? "plugins" : "home")}>
+                              <ArrowLeft size={14} />Back
+                            </button>
                             <button
                               type="button"
-                              className="inline-flex items-center gap-1.5 rounded-full border border-dls-border px-3 py-1.5 text-[12px] font-medium text-gray-11 transition-colors hover:bg-gray-2"
+                              className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-gray-11 transition-colors hover:bg-gray-3"
                               onClick={() => {
                                 setToolMenuOpen(false);
                                 openToolMenuSettings();
@@ -1477,12 +1511,12 @@ export function ReactSessionComposer(props: ComposerProps) {
                               {t("composer.configure")}
                             </button>
                           </div>
-                          <div className="min-h-0 flex-1 overflow-y-auto p-2">
+                          <div className="min-h-0 flex-1 overflow-y-auto p-1.5">
                           {toolMenuSection === "agents" ? (
                             <div className="grid gap-1">
                               <button
                                 type="button"
-                                className={`flex w-full items-start gap-3 rounded-[16px] px-3 py-2.5 text-left transition-colors hover:bg-gray-2/70 ${props.selectedAgent === null ? "bg-gray-2 text-gray-12" : "text-gray-11"}`}
+                                className={`flex w-full items-start gap-3 rounded-md px-3 py-2 text-left transition-colors hover:bg-gray-2/70 ${props.selectedAgent === null ? "bg-gray-2 text-gray-12" : "text-gray-11"}`}
                                 onClick={() => applyAgentSelection(null)}
                               >
                                 <Zap size={14} className="mt-0.5 shrink-0 text-gray-9" />
@@ -1495,7 +1529,7 @@ export function ReactSessionComposer(props: ComposerProps) {
                                   <button
                                     key={agent.name}
                                     type="button"
-                                    className={`flex w-full items-start gap-3 rounded-[16px] px-3 py-2.5 text-left transition-colors hover:bg-gray-2/70 ${active ? "bg-gray-2 text-gray-12" : "text-gray-11"}`}
+                                    className={`flex w-full items-start gap-3 rounded-md px-3 py-2 text-left transition-colors hover:bg-gray-2/70 ${active ? "bg-gray-2 text-gray-12" : "text-gray-11"}`}
                                     onClick={() => applyAgentSelection(agent.name)}
                                   >
                                     <Zap size={14} className="mt-0.5 shrink-0 text-gray-9" />
@@ -1516,7 +1550,7 @@ export function ReactSessionComposer(props: ComposerProps) {
                                   <button
                                     key={command.id}
                                     type="button"
-                                    className="flex w-full items-start gap-3 rounded-[16px] px-3 py-2.5 text-left text-gray-11 transition-colors hover:bg-gray-2/70"
+                                    className="flex w-full items-start gap-3 rounded-md px-3 py-2 text-left text-gray-11 transition-colors hover:bg-gray-2/70"
                                     onClick={() => applyCommandSelection(command)}
                                   >
                                     <Terminal size={14} className="mt-0.5 shrink-0 text-gray-9" />
@@ -1540,7 +1574,7 @@ export function ReactSessionComposer(props: ComposerProps) {
                                   <button
                                     key={`${skill.origin ?? "local"}:${skill.path || skill.name}`}
                                     type="button"
-                                    className="flex min-w-0 w-full items-start gap-3 rounded-[16px] px-3 py-2.5 text-left text-gray-11 transition-colors hover:bg-gray-2/70"
+                                    className="flex min-w-0 w-full items-start gap-3 rounded-md px-3 py-2 text-left text-gray-11 transition-colors hover:bg-gray-2/70"
                                     onClick={() => applySkillSelection(skill)}
                                   >
                                     <Zap size={14} className="mt-0.5 shrink-0 text-gray-9" />
@@ -1579,7 +1613,7 @@ export function ReactSessionComposer(props: ComposerProps) {
                                   <button
                                     key={plugin.pluginId}
                                     type="button"
-                                    className="flex w-full items-start gap-3 rounded-[16px] px-3 py-2.5 text-left text-gray-11 transition-colors hover:bg-gray-2/70"
+                                    className="flex w-full items-start gap-3 rounded-md px-3 py-2 text-left text-gray-11 transition-colors hover:bg-gray-2/70"
                                     onClick={() => setToolMenuSection(`plugin:${plugin.pluginId}`)}
                                   >
                                     <div className="min-w-0 flex-1">
@@ -1605,7 +1639,7 @@ export function ReactSessionComposer(props: ComposerProps) {
                                   <button
                                     key={`${file.configObjectId}:${file.path}`}
                                     type="button"
-                                    className="flex w-full items-start gap-3 rounded-[16px] px-3 py-2.5 text-left text-gray-11 transition-colors hover:bg-gray-2/70"
+                                    className="flex w-full items-start gap-3 rounded-md px-3 py-2 text-left text-gray-11 transition-colors hover:bg-gray-2/70"
                                     onClick={() => applyPluginFileSelection(file)}
                                   >
                                     <FileText size={14} className="mt-0.5 shrink-0 text-gray-9" />
@@ -1629,7 +1663,7 @@ export function ReactSessionComposer(props: ComposerProps) {
                             </div>
                           ) : null}
                           </div>
-                        </div>
+                        </div>}
                       </div>
                     </div>,
                     document.body,
@@ -1768,6 +1802,10 @@ export function ReactSessionComposer(props: ComposerProps) {
                   Cmd/Ctrl+Enter still steers).
               */}
               <div className="ml-auto flex shrink-0 items-center gap-1.5">
+                {props.busy && canSend ? <>
+                  <button type="button" onClick={props.onQueue} disabled={props.disabled || props.submissionPreparing} title="Send after this turn · Enter" className="sofia-followup-button">Queue</button>
+                  <button type="button" onClick={props.onSteer} disabled={props.disabled || props.steering || props.submissionPreparing} title="Guide the current turn · ⌘/Ctrl + Enter" className="sofia-followup-button sofia-steer-button">{props.steering ? "Sending…" : "Steer"}</button>
+                </> : null}
                 {props.busy && escapeArmed ? (
                   <span className="self-center pr-1 text-[12px] font-medium text-gray-10 max-lg:hidden">
                     {t("composer.escape_to_stop")}

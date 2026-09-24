@@ -54,7 +54,7 @@ function createSnapshot(status: SessionStatus): SofiaSessionSnapshot {
 function createSyncInput(): SyncInput {
   const input = {
     workspaceId,
-    baseUrl: "https://run-status.example/opencode",
+    baseUrl: "https://run-status.example/engine",
     sofiaToken: "token",
   };
   syncInputs.push(input);

@@ -75,7 +75,7 @@ async function clickCommandItem(ctx, text) {
 
 function assertTopLevelDiagnosticsKeys(ctx, value, label) {
   ctx.assert(value && typeof value === "object" && !Array.isArray(value), `${label} is not an object`);
-  for (const key of ["capturedAt", "sofiaServer", "app", "opencodeEngine", "developerLogs"]) {
+  for (const key of ["capturedAt", "sofiaServer", "app", "engine", "developerLogs"]) {
     ctx.assert(Object.prototype.hasOwnProperty.call(value, key), `${label} missing ${key}`);
   }
 }
@@ -229,7 +229,7 @@ export default {
                 clientToken: typeof serverInfo?.clientToken === 'string' ? serverInfo.clientToken : '',
                 ownerToken: typeof serverInfo?.ownerToken === 'string' ? serverInfo.ownerToken : '',
                 hostToken: typeof serverInfo?.hostToken === 'string' ? serverInfo.hostToken : '',
-                opencodePassword: typeof engineInfo?.opencodePassword === 'string' ? engineInfo.opencodePassword : '',
+                enginePassword: typeof engineInfo?.enginePassword === 'string' ? engineInfo.enginePassword : '',
               };
             })()`, { awaitPromise: true });
             const secretValues = [
@@ -238,7 +238,7 @@ export default {
               secrets.clientToken,
               secrets.ownerToken,
               secrets.hostToken,
-              secrets.opencodePassword,
+              secrets.enginePassword,
             ].filter((value) => typeof value === "string" && value.trim().length >= 4);
             for (const secret of secretValues) {
               ctx.assert(!bundleString.includes(secret), `Bundle leaked secret value: ${secret}`);

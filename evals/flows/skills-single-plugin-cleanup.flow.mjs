@@ -6,7 +6,7 @@
  *
  * Requires an installed workspace skill so the Skills filter has content.
  * Seed one before running, e.g.
- *   mkdir -p <workspace>/.opencode/skills/release-notes-draft && write SKILL.md
+ *   mkdir -p <workspace>/.sofia/skills/release-notes-draft && write SKILL.md
  */
 
 const SKILL_TITLE = "release-notes-draft";

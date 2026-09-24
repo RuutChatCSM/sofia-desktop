@@ -38,10 +38,10 @@ describe("Daytona Sofia checkpoint start command", () => {
     })
 
     expect(command).toContain("SOFIA_STATE_MANIFEST=")
-    // The engine keeps sessions in opencode.db on the container overlay. It was
+    // The engine keeps sessions in engine.db on the container overlay. It was
     // missing from the manifest, so every recycle onto a new snapshot started
     // the user from scratch.
-    expect(command).toContain("ENGINE_STATE_PATH=${SOFIA_ENGINE_STATE_PATH:-$HOME/.local/share/opencode}")
+    expect(command).toContain("ENGINE_STATE_PATH=${SOFIA_ENGINE_STATE_PATH:-$HOME/.local/share/engine}")
     expect(command).toContain('SOFIA_STATE_MANIFEST="/tmp/sofia-data /tmp/sofia-workspace $ENGINE_STATE_PATH"')
     // Collapse the WAL first so the copied database is self-consistent.
     expect(command).toContain("PRAGMA wal_checkpoint(TRUNCATE)")

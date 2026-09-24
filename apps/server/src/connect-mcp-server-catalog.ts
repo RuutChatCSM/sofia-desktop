@@ -6,8 +6,8 @@ import { readActivatedEnterpriseDenOrigin } from "./enterprise-den-origin.js";
 import {
   readRuntimeMcpConfig,
   runtimeMcpMap,
-  writeRuntimeOpencodeConfig,
-} from "./runtime-opencode-config-store.js";
+  writeRuntimeWorkspaceEngineConfig,
+} from "./runtime-engine-config-store.js";
 import { externalFetch } from "./server-fetch.js";
 import type { ServerConfig, WorkspaceInfo } from "./types.js";
 import { createWorkspaceKvStore } from "./workspace-kv-store.js";
@@ -308,7 +308,7 @@ export async function reconcileSofiaConnectMcpServers(input: {
   await writeSofiaConnectMcpAppHostCatalog(input.config, input.workspace.id, privateCatalog);
 
   let removedNames: string[] = [];
-  await writeRuntimeOpencodeConfig(input.config, input.workspace.id, (current) => {
+  await writeRuntimeWorkspaceEngineConfig(input.config, input.workspace.id, (current) => {
     const currentMcp = runtimeMcpMap(current);
     removedNames = Object.keys(currentMcp)
       .filter((name) => name.startsWith(CONNECT_MCP_SERVER_NAME_PREFIX))

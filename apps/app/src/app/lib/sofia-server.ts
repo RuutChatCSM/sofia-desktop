@@ -18,7 +18,7 @@ import type { DenOrgMarketplace, DenOrgPluginResolved, DenResourceSnapshot } fro
 import type { CloudImportedMarketplace, CloudImportedPlugin, CloudImportedProvider } from "../cloud/import-state";
 
 export type SofiaServerCapabilities = {
-  skills: { read: boolean; write: boolean; source: "sofia" | "opencode" };
+  skills: { read: boolean; write: boolean; source: "sofia" | "engine" };
   plugins: { read: boolean; write: boolean };
   mcp: { read: boolean; write: boolean };
   commands: { read: boolean; write: boolean };
@@ -26,7 +26,7 @@ export type SofiaServerCapabilities = {
   engine?: { rollover: boolean };
   providerSync?: boolean;
   sandbox?: { enabled: boolean; backend: "none" | "docker" | "container" };
-  proxy?: { opencode: boolean };
+  proxy?: { engine: boolean };
   toolProviders?: {
     browser?: {
       enabled: boolean;
@@ -157,7 +157,7 @@ export type SofiaServerDiagnostics = {
   tokenSource: { client: string; host: string };
 };
 
-export type SofiaRuntimeServiceName = "sofia-server" | "opencode";
+export type SofiaRuntimeServiceName = "sofia-server" | "engine";
 
 export type SofiaRuntimeServiceSnapshot = {
   name: SofiaRuntimeServiceName;
@@ -193,7 +193,7 @@ export type SofiaServerSettings = {
   remoteAccessEnabled?: boolean;
 };
 
-// The shared WorkspaceWire contract now carries the opencode block; keep the
+// The shared WorkspaceWire contract now carries the engine block; keep the
 // historical name as an alias for the many existing imports.
 export type SofiaWorkspaceInfo = WorkspaceInfo;
 
@@ -276,7 +276,7 @@ export type SofiaRuntimeConfigMigrationResult = {
   migrated: boolean;
   keys: string[];
   legacyKeys: string[];
-  userOpencodeKeys: string[];
+  userWorkspaceEngineKeys: string[];
   updatedAt: number | null;
   legacyError?: string | null;
 };
@@ -306,8 +306,6 @@ export type SofiaRuntimeConfigStatus = {
   managedFileContentRedacted: string | null;
   sweep: SofiaLegacyConfigSweepState | null;
   sources?: {
-    projectOpencode: { path: string; exists: boolean; keys: string[]; config: Record<string, unknown> };
-    globalOpencode: { path: string; exists: boolean; keys: string[]; config: Record<string, unknown> };
     runtimeDatabase: { keys: string[]; config: Record<string, unknown> };
     injected: { keys: string[]; config: Record<string, unknown> };
   };
@@ -315,12 +313,6 @@ export type SofiaRuntimeConfigStatus = {
     path: string;
     keys: string[];
     error: string | null;
-  };
-  userOpencode: {
-    path: string;
-    exists: boolean;
-    keys: string[];
-    migratableKeys: string[];
   };
 };
 
@@ -498,9 +490,9 @@ export type SofiaCloudMcpFailureCode =
   | "insufficient_mcp_scope"
   | "wrong_mcp_resource"
   | "workspace_directory_ambiguous"
-  | "opencode_unconfigured"
-  | "opencode_engine_unreachable"
-  | "opencode_unreachable"
+  | "engine_unconfigured"
+  | "engine_engine_unreachable"
+  | "engine_unreachable"
   | "cloud_status_missing"
   | "cloud_disabled"
   | "sofia_cloud_auth_required"
@@ -514,8 +506,8 @@ export type SofiaCloudMcpFailureCode =
   | "cloud_connection_failed"
   | "cloud_registration_failed"
   | "cloud_tools_denied"
-  | "opencode_tool_ids_unsupported"
-  | "opencode_tool_ids_unavailable"
+  | "engine_tool_ids_unsupported"
+  | "engine_tool_ids_unavailable"
   | "cloud_tools_missing"
   | "provider_projection_unavailable"
   | "provider_projection_missing"
@@ -539,7 +531,7 @@ export type SofiaCloudMcpCompatibility = {
     serverVersion: string | null;
     app: Record<string, string | number | boolean | null> | null;
   };
-  opencode: {
+  engine: {
     expectedVersion: string | null;
     actualVersion: string | null;
     probe: "ok" | "unavailable" | "not_checked" | string;
@@ -727,7 +719,7 @@ export type SofiaCloudMcpReconcilePayload = {
   workspaceId: string;
   name: "sofia-cloud";
   config: Record<string, unknown>;
-  /** Desktop-private credential; the local server must never project it into OpenCode. */
+  /** Desktop-private credential; the local server must never project it into Sofia. */
   appHostAuthorization?: string;
   tokenMetadata?: Record<string, string | number | boolean | null>;
   org?: Record<string, string | number | boolean | null>;
@@ -743,7 +735,7 @@ export type SofiaCloudMcpReconcilePayload = {
 export type SofiaWorkspaceExport = {
   workspaceId: string;
   exportedAt: number;
-  opencode?: Record<string, unknown>;
+  engine?: Record<string, unknown>;
   sofia?: Record<string, unknown>;
   skills?: Array<{ name: string; description?: string; trigger?: string; content: string }>;
   commands?: Array<{ name: string; description?: string; template?: string }>;
@@ -751,7 +743,7 @@ export type SofiaWorkspaceExport = {
 };
 
 export type SofiaWorkspaceImportChange = {
-  kind: "opencode" | "sofia" | "skill" | "command" | "file";
+  kind: "engine" | "sofia" | "skill" | "command" | "file";
   action: "create" | "update" | "replace" | "delete" | "unchanged";
   label: string;
   path: string;
@@ -1554,7 +1546,7 @@ export function createSofiaServerClient(options: { baseUrl: string; token?: stri
       sofiaWorkspaceName?: string | null;
       displayName?: string | null;
       directory?: string | null;
-      remoteType?: "sofia" | "opencode";
+      remoteType?: "sofia" | "engine";
       sandboxBackend?: string | null;
       sandboxRunId?: string | null;
       sandboxContainerName?: string | null;
@@ -1733,7 +1725,7 @@ export function createSofiaServerClient(options: { baseUrl: string; token?: stri
         },
       ),
     getConfig: (workspaceId: string) =>
-      requestJson<{ opencode: Record<string, unknown>; sofia: Record<string, unknown>; updatedAt?: number | null }>(
+      requestJson<{ engine: Record<string, unknown>; sofia: Record<string, unknown>; updatedAt?: number | null }>(
         baseUrl,
         `/workspace/${workspaceId}/config`,
         { token, hostToken, timeoutMs: timeouts.config },
@@ -1785,7 +1777,7 @@ export function createSofiaServerClient(options: { baseUrl: string; token?: stri
         `/workspace/${encodeURIComponent(workspaceId)}/runtime-config`,
         { token, hostToken, timeoutMs: timeouts.config },
       ),
-    patchConfig: (workspaceId: string, payload: { opencode?: Record<string, unknown>; sofia?: Record<string, unknown> }) =>
+    patchConfig: (workspaceId: string, payload: { engine?: Record<string, unknown>; sofia?: Record<string, unknown> }) =>
       requestJson<{ updatedAt?: number | null }>(baseUrl, `/workspace/${workspaceId}/config`, {
         token,
         hostToken,

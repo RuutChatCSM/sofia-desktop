@@ -760,14 +760,14 @@ const DEFAULT_SOFIA_EXTENSION_MANIFESTS = [
     icon: { src: "/sofia-mark.svg" },
     composer: { prompt: "Use the Sofia Browser extension to " },
     setup: { instructions: "Sofia Browser is ready by default in desktop workspaces." },
-    resources: [{ type: "opencode-plugin", id: "opencode-chrome-devtools", packageName: "opencode-chrome-devtools", required: true }],
+    resources: [{ type: "engine-plugin", id: "engine-chrome-devtools", packageName: "engine-chrome-devtools", required: true }],
     contributions: [
       { type: "settings-panel", ref: "sofia.browser.settings", location: "settings-detail" },
       { type: "session-side-panel", ref: "sofia.browser.panel", location: "session-right-pane" },
       { type: "composer-prompt", prompt: "Use the Sofia Browser extension to ", location: "composer" },
     ],
     enablement: [{ type: "toggle-enabled", ref: "sofia-browser", label: "Enabled" }],
-    lifecycle: { reload: ["plugins", "agents"], detection: ["plugin:opencode-chrome-devtools"] },
+    lifecycle: { reload: ["plugins", "agents"], detection: ["plugin:engine-chrome-devtools"] },
     defaultEnabled: true,
   },
   {
@@ -850,7 +850,7 @@ const DEFAULT_SOFIA_EXTENSION_MANIFESTS = [
     source: { format: "sofia-builtin", origin: "builtin", trusted: true },
     icon: { src: "/ext-ollama.svg" },
     composer: { prompt: "Use the Ollama extension to " },
-    setup: { instructions: "Run Ollama locally, choose or pull a model, then add it as an OpenCode provider." },
+    setup: { instructions: "Run Ollama locally, choose or pull a model, then add it as an Sofia provider." },
     resources: [
       { type: "local-service", id: "ollama-api", label: "Ollama API", description: "http://localhost:11434", required: true },
       { type: "provider", id: "ollama", providerId: "ollama", packageName: "@ai-sdk/openai-compatible", required: true },

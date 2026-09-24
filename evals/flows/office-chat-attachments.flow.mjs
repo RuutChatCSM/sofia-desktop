@@ -179,7 +179,7 @@ async function configureMockProvider(ctx) {
   await serverJson(ctx, `/workspace/${encodeURIComponent(ctx.workspaceId)}/config`, {
     method: "PATCH",
     body: {
-      opencode: {
+      engine: {
         provider: {
           [PROVIDER_ID]: {
             npm: "@ai-sdk/openai-compatible",
@@ -460,13 +460,13 @@ function escapeRegExp(value) {
 
 function attachmentPathNoteText(messages) {
   return collectStrings(messages)
-    .filter((text) => text.includes(".opencode/sofia/inbox/chat-attachments/") || text.includes("Attached files were copied into this worker workspace"))
+    .filter((text) => text.includes(".sofia/sofia/inbox/chat-attachments/") || text.includes("Attached files were copied into this worker workspace"))
     .join("\n");
 }
 
 function parseAttachmentPathNoteReference(text, expected) {
   const filenamePattern = escapeRegExp(expected.filename);
-  const pathPattern = new RegExp(`\\.opencode/sofia/inbox/chat-attachments/[^\\s)]*${filenamePattern}`);
+  const pathPattern = new RegExp(`\\.sofia/sofia/inbox/chat-attachments/[^\\s)]*${filenamePattern}`);
   const lines = text.split(/\r?\n/).filter((line) => line.includes(expected.filename));
   for (const line of lines) {
     const path = pathPattern.exec(line)?.[0] ?? "";
@@ -553,7 +553,7 @@ function assertWorkspaceAttachmentPathNotes(ctx, messages) {
   for (const [kind, expected] of Object.entries(OFFICE_FIXTURES)) {
     const reference = parseAttachmentPathNoteReference(text, expected);
     record(ctx, Boolean(reference.path), `Submitted ${kind.toUpperCase()} path note includes a workspace-local inbox path`, reference.line || text.slice(0, 1000));
-    record(ctx, reference.path.startsWith(".opencode/sofia/inbox/chat-attachments/"), `Submitted ${kind.toUpperCase()} path note stays under chat-attachments`, reference.path);
+    record(ctx, reference.path.startsWith(".sofia/sofia/inbox/chat-attachments/"), `Submitted ${kind.toUpperCase()} path note stays under chat-attachments`, reference.path);
     record(ctx, Boolean(reference.url), `Submitted ${kind.toUpperCase()} path note includes a file: URL`, reference.line || text.slice(0, 1000));
     const filePath = reference.url ? fileURLToPath(reference.url) : "";
     const relativePath = filePath ? workspaceRelativePath(ctx.workspacePath, filePath) : "";
@@ -806,7 +806,7 @@ export default {
     {
       name: "Send normalizes Office files for provider text, tool loop writes artifacts, and sent cards are actionable",
       run: async (ctx) => {
-        await ctx.prove("Sending crosses Electron, Sofia, OpenCode, and the provider; the mock receives normalized Office text, then writes exact materialized bytes via bash", {
+        await ctx.prove("Sending crosses Electron, Sofia, Sofia, and the provider; the mock receives normalized Office text, then writes exact materialized bytes via bash", {
           voiceover: vo[2],
           action: async () => {
             const beforeHashes = resetWorkspaceOfficeArtifacts(ctx);

@@ -7,9 +7,9 @@ description: "How to connect a custom provider with Sofia"
 **Local provider setup.** A custom provider can stay entirely in your workspace. Sofia remains free, and you do not need to sign in to Sofia Cloud. For centrally managed team access, see [Adding a managed LLM provider](/cloud/share-with-your-team/managed-llm-provider).
 </Note>
 
-Because `Sofia` is built on `OpenCode` primitives, we support everything that you could modify in `.opencode.json`, like adding a [model](https://opencode.ai/docs/models/). However, our recommendation is to add it to `/path-to-your-workspace/.config/opencode/opencode.json` instead of modifying `~/.config/opencode/opencode.json`.
+Because `Sofia` is built on `Sofia` primitives, we support everything that you could modify in `.sofia.json`, like adding a [model](https://github.com/RuutChatCSM/sofia/docs/models/). However, our recommendation is to add it to `/path-to-your-workspace/.config/engine/engine.json` instead of modifying `~/.config/engine/engine.json`.
 
-Inside `/path-to-your-workspace/.config/opencode/opencode.json`:
+Inside `/path-to-your-workspace/.config/engine/engine.json`:
 ```
 {
   "provider": {

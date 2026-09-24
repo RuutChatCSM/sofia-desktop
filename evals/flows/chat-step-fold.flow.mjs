@@ -8,7 +8,7 @@ const vo = await loadVoiceoverParagraphs("chat-step-fold");
  * calls no longer fragments the aggregate summary. Proven on the
  * deterministic seeded turn (dev-only `eval.chat_transcript.seed`), which
  * ships steps and the final answer interleaved in ONE assistant message —
- * the exact shape OpenCode delivers.
+ * the exact shape Sofia delivers.
  */
 export default {
   id: "chat-step-fold",

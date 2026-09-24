@@ -1,3 +1,4 @@
+import { useCodexSessionStore } from "../codex-session-store";
 /** @jsxImportSource react */
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState, type ReactNode } from "react";
 import type { UIMessage } from "ai";
@@ -7,8 +8,8 @@ import { Check, Globe, Minimize2 } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 
 import { captureAnalyticsEvent } from "@/app/lib/analytics";
-import { createClient, unwrap } from "@/app/lib/opencode";
-import { abortSessionSafe } from "@/app/lib/opencode-session";
+import { createClient, unwrap } from "@/app/lib/engine";
+import { abortSessionSafe } from "@/app/lib/engine-session";
 import { t } from "@/i18n";
 import type { ComposerSettingsSection } from "@/react-app/domains/settings/library";
 import { type CloudImportedPlugin } from "@/app/cloud/import-state";
@@ -63,6 +64,7 @@ import { SessionFindBar } from "./find-bar";
 import { useSessionFindStore } from "./find-store";
 import { getSessionActivityStatusLabel, useSessionActivityStore, type SessionActivityStatus } from "@/react-app/domains/session/status/session-activity-store";
 import { PermissionApprovalPanel } from "@/react-app/domains/session/chat/permission-approval-modal";
+import { SessionNotice } from "@/react-app/domains/session/chat/session-notice";
 import { QuestionPanel } from "@/react-app/domains/session/modals/question-modal";
 import { QueuedMessagesPanel } from "@/react-app/domains/session/modals/queued-messages-panel";
 import { deriveOpenTargets, selectAutoOpenTarget, type OpenTarget } from "@/react-app/domains/session/artifacts/open-target";
@@ -168,13 +170,13 @@ function createMarkdownPrimitiveEvalMessages(sessionId: string) {
       id: userMessageId,
       role: "user",
       parts: [{ type: "text", text: "Show the Markdown primitive proof message." }],
-      metadata: { opencode: { created: Date.now() } },
+      metadata: { engine: { created: Date.now() } },
     },
     {
       id: assistantMessageId,
       role: "assistant",
       parts: [{ type: "text", text: MARKDOWN_PRIMITIVE_EVAL_TEXT }],
-      metadata: { opencode: { created: Date.now() + 1 } },
+      metadata: { engine: { created: Date.now() + 1 } },
     },
   ];
 
@@ -194,13 +196,13 @@ function createMarkdownMathEvalMessages(sessionId: string, stage: number) {
       id: `${sessionId}:eval-math-user`,
       role: "user",
       parts: [{ type: "text", text: "Show the LaTeX math proof message." }],
-      metadata: { opencode: { created: Date.now() } },
+      metadata: { engine: { created: Date.now() } },
     },
     {
       id: assistantMessageId,
       role: "assistant",
       parts: [{ type: "text", text }],
-      metadata: { opencode: { created: Date.now() + 1 } },
+      metadata: { engine: { created: Date.now() + 1 } },
     },
   ];
 
@@ -222,7 +224,7 @@ function createChatTranscriptEvalMessages(sessionId: string) {
         type: "text",
         text: "Plan tomorrow around my calendar and check https://linear.app for open issues.",
       }],
-      metadata: { opencode: { created: now } },
+      metadata: { engine: { created: now } },
     },
     {
       id: `${sessionId}:eval-transcript-assistant`,
@@ -288,7 +290,7 @@ function createChatTranscriptEvalMessages(sessionId: string) {
       ],
       // `completed` makes the finished turn fold behind a real
       // "Worked for 1m 35s" line, like server-synced turns do.
-      metadata: { opencode: { created: now + 1, completed: now + 95_001 } },
+      metadata: { engine: { created: now + 1, completed: now + 95_001 } },
     },
   ];
 
@@ -302,7 +304,7 @@ export type SessionSurfaceProps = {
   workspaceRoot: string;
   sessionId: string;
   isControlTarget: boolean;
-  opencodeBaseUrl: string;
+  engineBaseUrl: string;
   sofiaToken: string;
   /** Optional composer action-row accessory (e.g. the codex approval-mode control). */
   approvalAccessory?: ReactNode;
@@ -600,7 +602,7 @@ function SessionErrorCard({ error, onDismiss, onChangeModel, onOpenModelPicker }
   onOpenModelPicker?: () => void;
 }) {
   return (
-    <div className="mx-auto max-w-[720px] px-3 py-3 sm:px-5" data-testid="session-error-card" role="alert">
+    <div className="mx-auto max-w-[800px] px-3 py-3 sm:px-5" data-testid="session-error-card" role="alert">
       <div className="rounded-2xl border border-red-6/30 bg-red-3/15 px-5 py-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
@@ -703,6 +705,7 @@ function hiddenMessageCount(snapshot: SofiaSessionSnapshot, revertMessageId: str
 export function SessionSurface(props: SessionSurfaceProps) {
   const local = useLocal();
   const { config: shellConfig } = useShellConfig();
+  const engineWarning = useCodexSessionStore((state) => state.sessions[props.sessionId]?.warning);
   const showThinking = local.prefs.showThinking;
   const findOpen = useSessionFindStore((state) => state.open);
   const findSessionId = useSessionFindStore((state) => state.sessionId);
@@ -796,9 +799,9 @@ export function SessionSurface(props: SessionSurfaceProps) {
   const hydratedKeyRef = useRef<string | null>(null);
   const autoOpenedTargetRef = useRef<string | null>(null);
   const initializedAutoOpenSessionRef = useRef<string | null>(null);
-  const opencodeClient = useMemo(
-    () => createClient(props.opencodeBaseUrl, undefined, { token: props.sofiaToken, mode: "sofia" }),
-    [props.opencodeBaseUrl, props.sofiaToken],
+  const engineClient = useMemo(
+    () => createClient(props.engineBaseUrl, undefined, { token: props.sofiaToken, mode: "sofia" }),
+    [props.engineBaseUrl, props.sofiaToken],
   );
 
   const snapshotQueryKey = useMemo(
@@ -816,8 +819,8 @@ export function SessionSurface(props: SessionSurfaceProps) {
   const isCodexSession = props.sessionId.startsWith("codex-");
   const snapshotQuery = useQuery<SofiaSessionSnapshot>({
     queryKey: snapshotQueryKey,
-    // Sofia sessions are owned by the Sofia engine: never query opencode for
-    // their snapshot (opencode returns 502 "request failed"). The transcript
+    // Sofia sessions are owned by the Sofia engine: never query engine for
+    // their snapshot (engine returns 502 "request failed"). The transcript
     // and status already flow from the codex store via transcriptKey/statusKey.
     enabled: !isCodexSession,
     queryFn: async () => {
@@ -1210,7 +1213,7 @@ export function SessionSurface(props: SessionSurfaceProps) {
     }
   };
 
-  // Core sender shared by initial send and steered follow-ups. OpenCode
+  // Core sender shared by initial send and steered follow-ups. Sofia
   // accepts follow-up user turns mid-run (steering) — the running loop picks
   // up the new message — so this is safe to call while the agent is busy.
   const sendDraft = useCallback(async (nextDraft: ComposerDraft) => {
@@ -1365,7 +1368,7 @@ export function SessionSurface(props: SessionSurfaceProps) {
     // without it the server resolves the default project, finds no live run,
     // and answers `200: false` while the stream keeps going (#2014).
     const aborted = await abortSessionSafe(
-      opencodeClient,
+      engineClient,
       props.sessionId,
       props.workspaceRoot.trim() || undefined,
       {
@@ -1380,7 +1383,7 @@ export function SessionSurface(props: SessionSurfaceProps) {
     }
     captureAnalyticsEvent("task_run_stopped", {});
     await snapshotQuery.refetch();
-  }, [chatStreaming, clearQueuedDrafts, opencodeClient, props.sessionId, props.workspaceRoot, queuedItems, snapshotQuery.refetch]);
+  }, [chatStreaming, clearQueuedDrafts, engineClient, props.sessionId, props.workspaceRoot, queuedItems, snapshotQuery.refetch]);
 
   const handleDismissError = useCallback(() => {
     setError(null);
@@ -1655,7 +1658,7 @@ export function SessionSurface(props: SessionSurfaceProps) {
     const localStatusesPromise: Promise<McpStatusMap> = directory
       ? (async () => {
         try {
-          return unwrap(await opencodeClient.mcp.status({ directory })) as McpStatusMap;
+          return unwrap(await engineClient.mcp.status({ directory })) as McpStatusMap;
         } catch {
           return {};
         }
@@ -1684,14 +1687,14 @@ export function SessionSurface(props: SessionSurfaceProps) {
       // without ever opening a browser; on success the badge flips live.
       if (directory && localServers.length) {
         void attemptSilentMcpReauth({
-          client: opencodeClient,
+          client: engineClient,
           directory,
           servers: localServers,
           statuses: localStatuses,
         })
           .then(async (attempted) => {
             if (!attempted) return;
-            const healed = unwrap(await opencodeClient.mcp.status({ directory })) as McpStatusMap;
+            const healed = unwrap(await engineClient.mcp.status({ directory })) as McpStatusMap;
             if (mcpConnectPushRef.current !== pushId) return;
             setToolMcpStatuses({ ...connect.mcpStatuses, ...healed });
           })
@@ -1926,7 +1929,7 @@ export function SessionSurface(props: SessionSurfaceProps) {
   }, [props.onRevertToMessage, props.sessionId]);
 
   const handleForkAtMessage = useCallback((messageId: string) => {
-    // OpenCode's fork copies messages strictly before the given id, so pass
+    // Sofia's fork copies messages strictly before the given id, so pass
     // the next real message to make the branch include the clicked message.
     props.onForkAtMessage?.(resolveForkBoundaryId(renderedMessages, messageId), props.sessionId);
   }, [props.onForkAtMessage, props.sessionId, renderedMessages]);
@@ -2039,6 +2042,7 @@ export function SessionSurface(props: SessionSurfaceProps) {
         </div>
       ) : null}
 
+      {engineWarning ? <SessionNotice message={engineWarning} /> : null}
       <div className="relative min-h-0 flex-1">
         <div
           ref={scrollRef}
@@ -2062,7 +2066,7 @@ export function SessionSurface(props: SessionSurfaceProps) {
         >
           {/* Chat column: tighter than the composer (800px) so messages
                keep a comfortable reading width and don't feel "too big". */}
-          <div ref={contentRef} className="mx-auto w-full max-w-[720px]">
+          <div ref={contentRef} className="mx-auto w-full max-w-[800px]">
             {revertMessageId ? (
               <RevertedMessagesBanner
                 hiddenCount={revertedMessageCount}

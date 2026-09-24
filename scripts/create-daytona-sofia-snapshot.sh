@@ -35,7 +35,7 @@ SNAPSHOT_DISK="${DAYTONA_SNAPSHOT_DISK:-8}"
 LOCAL_IMAGE_TAG="${DAYTONA_LOCAL_IMAGE_TAG:-sofia-daytona-snapshot:${SNAPSHOT_NAME//[^a-zA-Z0-9_.-]/-}}"
 
 SOFIA_SERVER_VERSION="${SOFIA_SERVER_VERSION:-$(node -e 'const fs=require("fs"); const pkg=JSON.parse(fs.readFileSync(process.argv[1], "utf8")); process.stdout.write(String(pkg.version));' "$ROOT_DIR/apps/server/package.json")}"
-OPENCODE_VERSION="$(node -e 'const fs=require("fs"); const parsed=JSON.parse(fs.readFileSync(process.argv[1], "utf8")); process.stdout.write(String(parsed.opencodeVersion || "").trim().replace(/^v/, ""));' "$ROOT_DIR/constants.json")"
+SOFIA_ENGINE_VERSION="$(node -e 'const fs=require("fs"); const parsed=JSON.parse(fs.readFileSync(process.argv[1], "utf8")); process.stdout.write(String(parsed.engineVersion || "").trim().replace(/^v/, ""));' "$ROOT_DIR/constants.json")"
 
 # The image is always linux/amd64 because that is what Daytona runs. The
 # Dockerfile's runtime asserts execute the installed binaries, which only works
@@ -49,7 +49,7 @@ esac
 
 echo "Building local image $LOCAL_IMAGE_TAG" >&2
 echo "- sofia-server@$SOFIA_SERVER_VERSION" >&2
-echo "- opencode@$OPENCODE_VERSION" >&2
+echo "- engine@$SOFIA_ENGINE_VERSION" >&2
 echo "- runtime asserts: $RUNTIME_ASSERTS (host $(uname -m))" >&2
 
 docker buildx build \
@@ -57,7 +57,7 @@ docker buildx build \
   -t "$LOCAL_IMAGE_TAG" \
   -f "$DOCKERFILE" \
   --build-arg "SOFIA_SERVER_VERSION=$SOFIA_SERVER_VERSION" \
-  --build-arg "OPENCODE_VERSION=$OPENCODE_VERSION" \
+  --build-arg "SOFIA_ENGINE_VERSION=$SOFIA_ENGINE_VERSION" \
   --build-arg "RUNTIME_ASSERTS=$RUNTIME_ASSERTS" \
   --load \
   "$ROOT_DIR"

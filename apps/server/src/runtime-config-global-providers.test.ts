@@ -6,10 +6,10 @@ import { join } from "node:path";
 import { buildSofiaRuntimeConfigObject } from "./sofia-runtime-config.js";
 import {
   mergeRuntimeProviderUpdate,
-  readGlobalRuntimeOpencodeConfig,
+  readGlobalRuntimeWorkspaceEngineConfig,
   runtimeProviderMap,
-  writeGlobalRuntimeOpencodeConfig,
-} from "./runtime-opencode-config-store.js";
+  writeGlobalRuntimeWorkspaceEngineConfig,
+} from "./runtime-engine-config-store.js";
 import { startServer } from "./server.js";
 import type { ServerConfig } from "./types.js";
 
@@ -86,16 +86,16 @@ describe("global runtime providers", () => {
     const anthropic = { id: "anthropic", name: "Anthropic", env: ["ANTHROPIC_API_KEY"] };
     const openrouter = { id: "openrouter", name: "OpenRouter", env: ["OPENROUTER_API_KEY"] };
 
-    await writeGlobalRuntimeOpencodeConfig(config, (current) => ({
+    await writeGlobalRuntimeWorkspaceEngineConfig(config, (current) => ({
       ...current,
       provider: mergeRuntimeProviderUpdate(current.provider, { lpr_anthropic: anthropic }),
     }));
-    await writeGlobalRuntimeOpencodeConfig(config, (current) => ({
+    await writeGlobalRuntimeWorkspaceEngineConfig(config, (current) => ({
       ...current,
       provider: mergeRuntimeProviderUpdate(current.provider, { lpr_openrouter: openrouter, lpr_anthropic: null }),
     }));
 
-    const globalRuntime = await readGlobalRuntimeOpencodeConfig(config);
+    const globalRuntime = await readGlobalRuntimeWorkspaceEngineConfig(config);
     expect(runtimeProviderMap(globalRuntime)).toEqual({ lpr_openrouter: openrouter });
 
     const engineConfig = await buildSofiaRuntimeConfigObject(config, "ws_1");
@@ -163,7 +163,7 @@ describe("global runtime providers", () => {
     expect(await readJsonObject(removalAttempt)).toMatchObject({ ok: true, changed: true, reload: "reloaded" });
     expect(engineRequests.filter((request) => request === "POST /instance/dispose")).toHaveLength(2);
 
-    const globalRuntime = await readGlobalRuntimeOpencodeConfig(config);
+    const globalRuntime = await readGlobalRuntimeWorkspaceEngineConfig(config);
     expect(runtimeProviderMap(globalRuntime)).toEqual({});
   });
 });

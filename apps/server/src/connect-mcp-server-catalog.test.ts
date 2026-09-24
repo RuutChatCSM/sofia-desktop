@@ -16,7 +16,7 @@ import {
   writeSofiaConnectMcpAppHostAuthorization,
   writeSofiaConnectMcpAppHostCatalog,
 } from "./connect-mcp-server-catalog.js";
-import { readRuntimeOpencodeConfig, writeRuntimeOpencodeConfig } from "./runtime-opencode-config-store.js";
+import { readRuntimeWorkspaceEngineConfig, writeRuntimeWorkspaceEngineConfig } from "./runtime-engine-config-store.js";
 import type { ServerConfig } from "./types.js";
 
 const roots: string[] = [];
@@ -117,7 +117,7 @@ describe("Sofia App Connect MCP server catalog", () => {
 
   test("reconciles only Sofia-owned proxy entries and preserves user MCPs", async () => {
     const config = await fixtureConfig();
-    await writeRuntimeOpencodeConfig(config, "ws_1", () => ({
+    await writeRuntimeWorkspaceEngineConfig(config, "ws_1", () => ({
       mcp: {
         "sofia-cloud": { type: "remote", url: "https://sofia-api.ruut.chat/mcp/agent" },
         "user-server": { type: "remote", url: "https://user.example/mcp" },
@@ -137,7 +137,7 @@ describe("Sofia App Connect MCP server catalog", () => {
       fetcher: indexFetcher([]),
     });
 
-    const runtime = await readRuntimeOpencodeConfig(config, "ws_1");
+    const runtime = await readRuntimeWorkspaceEngineConfig(config, "ws_1");
     expect(result).toEqual({
       status: "synced",
       appHostNames: [connectMcpAppHostName(connectionId)],
@@ -162,7 +162,7 @@ describe("Sofia App Connect MCP server catalog", () => {
     const config = await fixtureConfig();
     const connectionId = "emc_01k28e8q8pf8r9sff9mhyqxved";
     const requests: Array<{ url: string; headers: Headers; body: Record<string, unknown> }> = [];
-    await writeRuntimeOpencodeConfig(config, "ws_1", () => ({
+    await writeRuntimeWorkspaceEngineConfig(config, "ws_1", () => ({
       mcp: {
         "sofia-cloud": { type: "remote", url: "https://sofia-api.ruut.chat/mcp/agent" },
       },
@@ -184,7 +184,7 @@ describe("Sofia App Connect MCP server catalog", () => {
   test("preserves the last known-good catalog when an opportunistic refresh is unavailable", async () => {
     const config = await fixtureConfig();
     const connectionId = "emc_01lastknowngood";
-    await writeRuntimeOpencodeConfig(config, "ws_1", () => ({
+    await writeRuntimeWorkspaceEngineConfig(config, "ws_1", () => ({
       mcp: {
         "sofia-cloud": { type: "remote", url: "https://sofia-api.ruut.chat/mcp/agent" },
       },
@@ -217,7 +217,7 @@ describe("Sofia App Connect MCP server catalog", () => {
 
   test("fails closed and purges prior runtime entries when Cloud has no index", async () => {
     const config = await fixtureConfig();
-    await writeRuntimeOpencodeConfig(config, "ws_1", () => ({
+    await writeRuntimeWorkspaceEngineConfig(config, "ws_1", () => ({
       mcp: { "sofia-connect-existing": { type: "remote", url: "https://cloud.example/existing" } },
     }));
     const result = await reconcileSofiaConnectMcpServers({
@@ -231,13 +231,13 @@ describe("Sofia App Connect MCP server catalog", () => {
       appHostNames: [],
       removedNames: ["sofia-connect-existing"],
     });
-    expect((await readRuntimeOpencodeConfig(config, "ws_1")).mcp?.["sofia-connect-existing"]).toBeUndefined();
+    expect((await readRuntimeWorkspaceEngineConfig(config, "ws_1")).mcp?.["sofia-connect-existing"]).toBeUndefined();
     expect((await readSofiaConnectMcpAppHostCatalog(config, "ws_1")).servers).toEqual([]);
   });
 
   test("an empty index removes prior Sofia-owned provider servers", async () => {
     const config = await fixtureConfig();
-    await writeRuntimeOpencodeConfig(config, "ws_1", () => ({
+    await writeRuntimeWorkspaceEngineConfig(config, "ws_1", () => ({
       mcp: {
         "user-server": { type: "remote", url: "https://user.example/mcp" },
         "sofia-connect-existing": { type: "remote", url: "https://cloud.example/existing" },
@@ -256,7 +256,7 @@ describe("Sofia App Connect MCP server catalog", () => {
       appHostNames: [],
       removedNames: ["sofia-connect-existing"],
     });
-    const runtime = await readRuntimeOpencodeConfig(config, "ws_1");
+    const runtime = await readRuntimeWorkspaceEngineConfig(config, "ws_1");
     expect(runtime.mcp?.["sofia-connect-existing"]).toBeUndefined();
     expect(runtime.mcp?.["user-server"]).toEqual({ type: "remote", url: "https://user.example/mcp" });
   });

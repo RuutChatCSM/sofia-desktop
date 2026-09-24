@@ -275,7 +275,7 @@ export function PluginsView(props: PluginsViewProps) {
             <div className="flex-1">
               <TextInput
                 label={t("plugins.add_label")}
-                placeholder="opencode-wakatime"
+                placeholder="engine-wakatime"
                 value={extensions.pluginInput()}
                 onChange={(event) =>
                   extensions.setPluginInput(event.currentTarget.value)

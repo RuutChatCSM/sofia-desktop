@@ -123,17 +123,17 @@ test("buildNukeManifest includes default macOS state roots and preserves bootstr
   assert.ok(manifest.deletePaths.includes("/Users/alice/.config/sofia/runtime.sqlite"));
   assert.ok(manifest.deletePaths.includes("/Users/alice/.config/sofia/runtime.sqlite-wal"));
   assert.ok(manifest.deletePaths.includes("/Users/alice/.config/sofia/runtime.sqlite-shm"));
-  assert.ok(manifest.deletePaths.includes("/Users/alice/.config/sofia/runtime-opencode-config.json"));
+  assert.ok(manifest.deletePaths.includes("/Users/alice/.config/sofia/runtime-engine-config.json"));
   assert.ok(manifest.deletePaths.includes("/Users/alice/.config/sofia/engine-instances.json"));
   assert.ok(manifest.deletePaths.includes("/Users/alice/.config/sofia/tokens.json"));
   assert.ok(manifest.deletePaths.includes("/Users/alice/.config/sofia/env.json"));
-  assert.ok(manifest.deletePaths.includes("/Users/alice/.local/share/opencode"));
-  assert.ok(manifest.deletePaths.includes("/Users/alice/Library/Application Support/opencode"));
-  assert.ok(manifest.deletePaths.includes("/Users/alice/.config/opencode"));
-  assert.ok(manifest.deletePaths.includes("/Users/alice/.cache/opencode"));
+  assert.ok(manifest.deletePaths.includes("/Users/alice/.local/share/engine"));
+  assert.ok(manifest.deletePaths.includes("/Users/alice/Library/Application Support/engine"));
+  assert.ok(manifest.deletePaths.includes("/Users/alice/.config/engine"));
+  assert.ok(manifest.deletePaths.includes("/Users/alice/.cache/engine"));
   assert.ok(manifest.deletePaths.includes(legacyOrchestratorPath(home)));
-  assert.ok(!manifest.deletePaths.includes("/Users/alice/.opencode/bin"));
-  assert.ok(!manifest.deletePaths.includes("/Users/alice/project/.opencode"));
+  assert.ok(!manifest.deletePaths.includes("/Users/alice/.sofia/bin"));
+  assert.ok(!manifest.deletePaths.includes("/Users/alice/project/.sofia"));
 });
 
 test("buildNukeManifest wipes session state, server audit data, and workspace registries", () => {
@@ -147,15 +147,15 @@ test("buildNukeManifest wipes session state, server audit data, and workspace re
     workspacePaths: ["/Users/alice/project", "/Users/alice/other"],
   });
 
-  assert.ok(manifest.deletePaths.includes("/Users/alice/.local/state/opencode"));
+  assert.ok(manifest.deletePaths.includes("/Users/alice/.local/state/engine"));
   assert.ok(manifest.deletePaths.includes("/Users/alice/.sofia/sofia-server"));
   assert.ok(manifest.deletePaths.includes(`${userDataPath}/sofia-workspaces.json`));
   assert.ok(manifest.deletePaths.includes(`${userDataPath}/sofia-server-tokens.json`));
   assert.ok(manifest.deletePaths.includes(`${userDataPath}/sofia-server-state.json`));
-  assert.ok(manifest.deletePaths.includes("/Users/alice/project/.opencode/sofia"));
-  assert.ok(manifest.deletePaths.includes("/Users/alice/project/.opencode/sofia.json"));
-  assert.ok(manifest.deletePaths.includes("/Users/alice/other/.opencode/sofia"));
-  assert.ok(!manifest.deletePaths.includes("/Users/alice/project/.opencode"));
+  assert.ok(manifest.deletePaths.includes("/Users/alice/project/.sofia/sofia"));
+  assert.ok(manifest.deletePaths.includes("/Users/alice/project/.sofia/sofia.json"));
+  assert.ok(manifest.deletePaths.includes("/Users/alice/other/.sofia/sofia"));
+  assert.ok(!manifest.deletePaths.includes("/Users/alice/project/.sofia"));
   assert.ok(!manifest.deletePaths.includes("/Users/alice/project"));
 });
 
@@ -184,10 +184,10 @@ test("buildNukeManifest includes default Linux state roots", () => {
 
   assert.equal(manifest.preserveBootstrapPath, "/home/alice/.config/sofia/desktop-bootstrap.json");
   assert.ok(manifest.deletePaths.includes("/home/alice/.config/com.differentai.sofia"));
-  assert.ok(manifest.deletePaths.includes("/home/alice/.local/share/opencode"));
-  assert.ok(manifest.deletePaths.includes("/home/alice/.config/opencode"));
-  assert.ok(manifest.deletePaths.includes("/home/alice/.cache/opencode"));
-  assert.ok(!manifest.deletePaths.some((targetPath) => targetPath.includes("Library/Application Support/opencode")));
+  assert.ok(manifest.deletePaths.includes("/home/alice/.local/share/engine"));
+  assert.ok(manifest.deletePaths.includes("/home/alice/.config/engine"));
+  assert.ok(manifest.deletePaths.includes("/home/alice/.cache/engine"));
+  assert.ok(!manifest.deletePaths.some((targetPath) => targetPath.includes("Library/Application Support/engine")));
 });
 
 test("buildNukeManifest includes Windows path shapes", () => {
@@ -208,9 +208,9 @@ test("buildNukeManifest includes Windows path shapes", () => {
   assert.ok(manifest.deletePaths.includes("C:\\Users\\Alice\\AppData\\Roaming\\sofia\\runtime.sqlite"));
   assert.ok(manifest.deletePaths.includes("C:\\Users\\Alice\\AppData\\Roaming\\sofia\\tokens.json"));
   assert.ok(manifest.deletePaths.includes("C:\\Users\\Alice\\AppData\\Roaming\\sofia\\env.json"));
-  assert.ok(manifest.deletePaths.includes("C:\\Users\\Alice\\AppData\\Roaming\\opencode"));
-  assert.ok(manifest.deletePaths.includes("C:\\Users\\Alice\\AppData\\Roaming\\opencode"));
-  assert.ok(manifest.deletePaths.includes("C:\\Users\\Alice\\.cache\\opencode"));
+  assert.ok(manifest.deletePaths.includes("C:\\Users\\Alice\\AppData\\Roaming\\engine"));
+  assert.ok(manifest.deletePaths.includes("C:\\Users\\Alice\\AppData\\Roaming\\engine"));
+  assert.ok(manifest.deletePaths.includes("C:\\Users\\Alice\\.cache\\engine"));
   assert.ok(manifest.deletePaths.includes("C:\\Users\\Alice\\.config\\sofia\\desktop-bootstrap.json"));
 });
 
@@ -239,9 +239,9 @@ test("buildNukeManifest redirects HOME/XDG paths in dev mode", () => {
     "/tmp/sofia-dev-userdata/sofia-dev-data/home/.config/sofia/desktop-bootstrap.json",
   );
   assert.ok(manifest.deletePaths.includes("/tmp/sofia-dev-userdata"));
-  assert.ok(manifest.deletePaths.includes("/tmp/sofia-dev-userdata/sofia-dev-data/xdg/data/opencode"));
-  assert.ok(manifest.deletePaths.includes("/tmp/sofia-dev-userdata/sofia-dev-data/config/opencode"));
-  assert.ok(manifest.deletePaths.includes("/tmp/sofia-dev-userdata/sofia-dev-data/xdg/cache/opencode"));
+  assert.ok(manifest.deletePaths.includes("/tmp/sofia-dev-userdata/sofia-dev-data/xdg/data/engine"));
+  assert.ok(manifest.deletePaths.includes("/tmp/sofia-dev-userdata/sofia-dev-data/config/engine"));
+  assert.ok(manifest.deletePaths.includes("/tmp/sofia-dev-userdata/sofia-dev-data/xdg/cache/engine"));
   assert.ok(!manifest.deletePaths.some((targetPath) => targetPath.startsWith("/Users/alice/")));
 });
 
@@ -259,10 +259,10 @@ test("buildNukeManifest never reaches production state from a non-dev isolated p
     "/Users/alice/.config/sofia",
     "/Users/alice/.config/sofia/tokens.json",
     "/Users/alice/.config/sofia/runtime.sqlite",
-    "/Users/alice/.config/opencode",
-    "/Users/alice/.cache/opencode",
-    "/Users/alice/.local/share/opencode",
-    "/Users/alice/Library/Application Support/opencode",
+    "/Users/alice/.config/engine",
+    "/Users/alice/.cache/engine",
+    "/Users/alice/.local/share/engine",
+    "/Users/alice/Library/Application Support/engine",
     legacyOrchestratorPath("/Users/alice"),
     "/Users/alice/Library/Caches/com.differentai.sofia.ShipIt",
   ]) {
@@ -294,16 +294,16 @@ test("buildNukeManifest ignores an inherited XDG_CONFIG_HOME pointing at product
   assert.ok(!manifest.deletePaths.some((targetPath) => targetPath.startsWith("/Users/alice/")));
 });
 
-test("buildNukeManifest excludes paths that would remove ~/.opencode/bin", () => {
+test("buildNukeManifest excludes paths that would remove ~/.sofia/bin", () => {
   const manifest = buildNukeManifest({
-    env: { OPENCODE_CONFIG_DIR: "/Users/alice/.opencode" },
+    env: { SOFIA_ENGINE_CONFIG_DIR: "/Users/alice/.sofia" },
     homedir: "/Users/alice",
     platform: "darwin",
     userDataPath: "/tmp/sofia-userdata",
   });
 
-  assert.ok(!manifest.deletePaths.includes("/Users/alice/.opencode"));
-  assert.ok(!manifest.deletePaths.includes("/Users/alice/.opencode/bin"));
+  assert.ok(!manifest.deletePaths.includes("/Users/alice/.sofia"));
+  assert.ok(!manifest.deletePaths.includes("/Users/alice/.sofia/bin"));
 });
 
 test("sanitizeDesktopBootstrapConfig strips secrets and keeps deployment fields", () => {

@@ -8,7 +8,7 @@ import {
   isLibraryAgent,
   isLibraryCommand,
   libraryAgentDetailId,
-  libraryAgentsFromOpencode,
+  libraryAgentsFromWorkspaceEngine,
   libraryCommandDetailId,
   libraryCommandTriggers,
   libraryCommandsFromSlashOptions,
@@ -77,7 +77,7 @@ describe("library destination", () => {
     expect(isLibraryAgent({ name: "reviewer", hidden: true })).toBe(false);
     expect(isLibraryAgent({ name: "explore", mode: "subagent" })).toBe(false);
     expect(
-      libraryAgentsFromOpencode([
+      libraryAgentsFromWorkspaceEngine([
         { name: "sofia" },
         { name: "hidden", hidden: true },
         { name: "explore", mode: "subagent" },
@@ -103,7 +103,7 @@ describe("library destination", () => {
   });
 
   test("Library agents keep prompt and mode for detail", () => {
-    const agents = libraryAgentsFromOpencode([
+    const agents = libraryAgentsFromWorkspaceEngine([
       { name: "writer", description: "Drafts", prompt: "Write clearly.", mode: "primary", native: true },
     ]);
     expect(agents[0]?.prompt).toBe("Write clearly.");

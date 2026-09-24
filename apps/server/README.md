@@ -55,10 +55,10 @@ Defaults to `~/.config/sofia/server.json` (override with `SOFIA_SERVER_CONFIG` o
 - `SOFIA_APPROVAL_TIMEOUT_MS`
 - `SOFIA_WORKSPACES` (JSON array or comma-separated list of paths)
 - `SOFIA_CORS_ORIGINS` (comma-separated list or `*`)
-- `SOFIA_OPENCODE_BASE_URL`
-- `SOFIA_OPENCODE_DIRECTORY`
-- `SOFIA_OPENCODE_USERNAME`
-- `SOFIA_OPENCODE_PASSWORD`
+- `SOFIA_SOFIA_ENGINE_BASE_URL`
+- `SOFIA_SOFIA_ENGINE_DIRECTORY`
+- `SOFIA_SOFIA_ENGINE_USERNAME`
+- `SOFIA_SOFIA_ENGINE_PASSWORD`
 
 Token management (scoped tokens):
 
@@ -110,7 +110,7 @@ Token management (host/owner auth):
 
 Inbox/outbox:
 
-- `POST /workspace/:id/inbox` (multipart upload into `.opencode/sofia/inbox/`)
+- `POST /workspace/:id/inbox` (multipart upload into `.sofia/sofia/inbox/`)
 - `GET /workspace/:id/artifacts`
 - `GET /workspace/:id/artifacts/:artifactId`
 - `POST /workspace/:id/files/sessions`
@@ -122,10 +122,10 @@ Inbox/outbox:
 - `POST /files/sessions/:sessionId/write-batch`
 - `POST /files/sessions/:sessionId/ops`
 
-OpenCode proxy:
+Sofia proxy:
 
-- `GET|POST|... /opencode/*`
-- `GET|POST|... /w/:id/opencode/*`
+- `GET|POST|... /engine/*`
+- `GET|POST|... /w/:id/engine/*`
 
 ## Approvals
 

@@ -3,8 +3,8 @@ import type { ScreenshotArtifact } from "@sofia/test-evidence";
 /** Transient product chrome that must never ship in a docs screenshot. */
 export const DEFAULT_NEVER = [
   "new notifications",
-  "opencode_unconfigured",
-  "OpenCode base URL",
+  "engine_unconfigured",
+  "Sofia base URL",
   "Loading commands",
   "Pulling in the latest messages",
   "Checking workspace access",

@@ -1,6 +1,6 @@
 // sofia-auth.json — credential store for the bundled Sofia (codex fork) engine.
 // The UI model configuration writes provider API keys here (same keys it sends
-// to opencode via its auth API); the engine reads them natively from
+// to engine via its auth API); the engine reads them natively from
 // `sofia-auth.json` in `$CODEX_HOME`, `~/.config/sofia`, then `~/.codex` (see
 // the fork's ModelProviderInfo::api_key). Written as a flat `envKey -> key`
 // map matching what the engine resolves by `env_key`.

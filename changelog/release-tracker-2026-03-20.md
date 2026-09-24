@@ -381,13 +381,13 @@ None.
 `2026-03-23T05:01:53Z`
 
 #### Title
-Exa moves into OpenCode settings
+Exa moves into Sofia settings
 
 #### One-line summary
-Surfaces the Exa search toggle in a clearer OpenCode settings section and rolls back an unready macOS path-normalization change.
+Surfaces the Exa search toggle in a clearer Sofia settings section and rolls back an unready macOS path-normalization change.
 
 #### Main changes
-- Added an OpenCode settings panel that exposes the Exa web-search toggle in a clearer place.
+- Added an Sofia settings panel that exposes the Exa web-search toggle in a clearer place.
 - Reverted the macOS path case-folding change to avoid destabilizing session and workspace matching.
 - Also removed leftover docs-plan and screenshot artifacts.
 
@@ -848,7 +848,7 @@ Separates workspace selection from runtime activation, keeps local worker ports 
 #### Main changes
 - Split selected workspace from runtime-connected workspace so browsing no longer flips the active worker.
 - Kept preferred local server ports sticky and avoided collisions across workspaces.
-- Let templates carry extra `.opencode` files and starter sessions, and materialized seeded sessions correctly.
+- Let templates carry extra `.sofia` files and starter sessions, and materialized seeded sessions correctly.
 
 #### Lines of code changed since previous release
 4896 lines changed since `v0.11.191` (3899 insertions, 997 deletions).
@@ -863,7 +863,7 @@ True
 2
 
 #### Major improvement details
-- Added richer workspace template sharing so imports can include extra `.opencode` files.
+- Added richer workspace template sharing so imports can include extra `.sofia` files.
 - Added starter sessions to workspace templates so new workspaces can open with seeded conversations.
 
 #### Major bugs resolved
@@ -970,7 +970,7 @@ True
 1
 
 #### Major improvement details
-- Enabled real automatic context compaction behavior through the app's OpenCode integration.
+- Enabled real automatic context compaction behavior through the app's Sofia integration.
 
 #### Major bugs resolved
 True
@@ -979,7 +979,7 @@ True
 3
 
 #### Major bug fix details
-- Fixed the auto compaction toggle so it actually wires through to OpenCode behavior.
+- Fixed the auto compaction toggle so it actually wires through to Sofia behavior.
 - Fixed the custom app MCP add flow so users can stay in settings instead of getting bounced out of setup.
 - Fixed automations polling so scheduled jobs keep refreshing while the page is open.
 

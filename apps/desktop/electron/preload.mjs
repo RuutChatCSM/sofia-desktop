@@ -112,10 +112,10 @@ contextBridge.exposeInMainWorld("__SOFIA_ELECTRON__", {
   },
   nuke: {
     preview(options) {
-      return ipcRenderer.invoke("sofia:desktop", "nukeSofiaAndOpencodeConfigPreview", options);
+      return ipcRenderer.invoke("sofia:desktop", "nukeSofiaAndWorkspaceEngineConfigPreview", options);
     },
     execute(options) {
-      return ipcRenderer.invoke("sofia:desktop", "nukeSofiaAndOpencodeConfigAndExit", options);
+      return ipcRenderer.invoke("sofia:desktop", "nukeSofiaAndWorkspaceEngineConfigAndExit", options);
     },
   },
   updater: {

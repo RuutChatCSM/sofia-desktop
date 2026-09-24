@@ -1,9 +1,9 @@
 # Local managed MCP OAuth
 
 Sofia desktop can own OAuth for a custom remote MCP and expose its tools to
-the bundled OpenCode engine through an authenticated loopback MCP gateway. This
+the bundled Sofia engine through an authenticated loopback MCP gateway. This
 provides a compatibility path for providers whose OAuth flow works through
-Sofia's enterprise MCP client but not through OpenCode's direct MCP client.
+Sofia's enterprise MCP client but not through Sofia's direct MCP client.
 
 ## User flow
 
@@ -14,7 +14,7 @@ Sofia's enterprise MCP client but not through OpenCode's direct MCP client.
    empty.
 3. Sofia performs OAuth discovery, DCR when needed, PKCE authorization, the
    loopback callback, token exchange, and an authenticated `tools/list` check.
-4. OpenCode receives a remote MCP entry pointing at the Sofia loopback
+4. Sofia receives a remote MCP entry pointing at the Sofia loopback
    gateway with `oauth: false`. It sees the provider tools but never receives
    the provider access token, refresh token, or OAuth client secret.
 
@@ -46,7 +46,7 @@ an internal-network request proxy.
 ## Verification
 
 Focused server coverage proves discovery and DCR, PKCE authorization, encrypted
-credential persistence, OpenCode runtime registration, gateway tool listing and
+credential persistence, Sofia runtime registration, gateway tool listing and
 invocation, refresh-token recovery, restart reconciliation with bearer
 rotation, disconnect, and the outbound URL guard. The desktop and server
 TypeScript projects and the compiled embedded server build are also checked.

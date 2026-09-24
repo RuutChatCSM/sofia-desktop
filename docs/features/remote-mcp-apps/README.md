@@ -27,19 +27,19 @@ sofia://connect/mcp-servers/index.json
 The signed-in Desktop session mints a separate short-lived App-host credential
 with a non-public `mcp:app-host` scope. Desktop stores that credential and the
 endpoint descriptors only in private App-host state; neither is projected into
-OpenCode. It reads the index with that credential and advertises the
+Sofia. It reads the index with that credential and advertises the
 `mcp-app-host-v1` client capability. Den returns a non-empty provider index only
 when the server-verified scope, client capability, and both rollout gates are
 present. A normal model or legacy MCP token cannot unlock the index by spoofing
 an audience or capability header. Desktop never writes `sofia-connect-*`
-entries to the OpenCode runtime or any model-visible MCP registry. A connection
+entries to the Sofia runtime or any model-visible MCP registry. A connection
 is proxied at:
 
 ```text
 /mcp/agent/connections/{connectionId}
 ```
 
-Current Desktop clients never register these provider descriptors in OpenCode;
+Current Desktop clients never register these provider descriptors in Sofia;
 the model discovers and invokes ordinary provider operations only through the
 central `sofia-cloud` `search_capabilities` and `execute_capability` tools.
 For stale published clients that still retain an old per-connection entry, the
@@ -84,7 +84,7 @@ available through `search_capabilities` and `execute_capability`, but Sofia
 removes MCP App classification and launch metadata, publishes no provider App
 endpoint in the member index, clears the private App-host catalog, and renders
 no App UI. Reconciliation also removes and disconnects stale
-`sofia-connect-*` OpenCode entries while preserving user-authored MCPs and
+`sofia-connect-*` Sofia entries while preserving user-authored MCPs and
 all durable Connect records.
 
 The provider proxy advertises `listChanged: false` because the current

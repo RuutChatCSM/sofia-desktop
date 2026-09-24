@@ -8,13 +8,13 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { createOpencodeClient } from "@/app/lib/engine-client";
+import { createWorkspaceEngineClient } from "@/app/lib/engine-client";
 import type { Event } from "@/app/lib/engine-types";
 
 import { usePlatform } from "./platform";
 import { useServer } from "./server-provider";
 
-type OpencodeClient = ReturnType<typeof createOpencodeClient>;
+type WorkspaceEngineClient = ReturnType<typeof createWorkspaceEngineClient>;
 
 type Listener = (payload: Event) => void;
 
@@ -52,7 +52,7 @@ function createEmitter(): GlobalEventEmitter {
 
 type GlobalSDKContextValue = {
   url: string;
-  client: OpencodeClient;
+  client: WorkspaceEngineClient;
   event: GlobalEventEmitter;
 };
 
@@ -121,12 +121,12 @@ export function GlobalSDKProvider({ children }: GlobalSDKProviderProps) {
 
   const token = readSofiaToken();
   const headers =
-    token && server.url.includes("/opencode")
+    token && server.url.includes("/engine")
       ? { Authorization: `Bearer ${token}` }
       : undefined;
 
-  const [client, setClient] = useState<OpencodeClient>(() =>
-    createOpencodeClient({
+  const [client, setClient] = useState<WorkspaceEngineClient>(() =>
+    createWorkspaceEngineClient({
       baseUrl: server.url,
       headers,
       fetch: platform.fetch,
@@ -136,7 +136,7 @@ export function GlobalSDKProvider({ children }: GlobalSDKProviderProps) {
 
   useEffect(() => {
     setClient(
-      createOpencodeClient({
+      createWorkspaceEngineClient({
         baseUrl: server.url,
         headers,
         fetch: platform.fetch,
@@ -151,7 +151,7 @@ export function GlobalSDKProvider({ children }: GlobalSDKProviderProps) {
     if (!baseUrl || !isHealthy) return;
 
     const abort = new AbortController();
-    const eventClient = createOpencodeClient({
+    const eventClient = createWorkspaceEngineClient({
       baseUrl,
       headers,
       signal: abort.signal,

@@ -5,8 +5,8 @@ connected to Sofia Cloud. His org ships a custom LLM provider (Acme Azure
 Foundry). Before this fix, signing in started an invisible fight: every cloud
 sync erased the provider import baseline, so the app re-imported the provider,
 forced an engine reload, and disposed/re-created the active workspace's
-OpenCode instance about once a second — the status bar flashed "Reloading
-OpenCode config" forever. This demo proves the loop is gone: the provider
+Sofia instance about once a second — the status bar flashed "Reloading
+Sofia config" forever. This demo proves the loop is gone: the provider
 imports once, stays imported, and the engine stays quiet.
 
 1. Alex starts on a clean workspace, signed out of the cloud — the composer is idle and the status bar is quiet.
@@ -17,4 +17,4 @@ imports once, stays imported, and the engine stays quiet.
 
 4. The org provider imported exactly once — under the hood the workspace config now remembers the import baseline, so cloud sync has nothing left to re-import.
 
-5. The proof is in the waiting: a full minute in the session and the status bar never flashes "Reloading OpenCode config" — no dispose and re-create churn, the engine connection stays stable.
+5. The proof is in the waiting: a full minute in the session and the status bar never flashes "Reloading Sofia config" — no dispose and re-create churn, the engine connection stays stable.

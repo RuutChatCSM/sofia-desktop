@@ -38,10 +38,10 @@ import { sanitizeDiagnosticString } from "./diagnostic-sanitizer.js";
 import { backupTimestamp } from "./legacy-config-sweep.js";
 import { runtimeStorageDir } from "./runtime-db.js";
 import {
-  readRuntimeOpencodeConfig,
+  readRuntimeWorkspaceEngineConfig,
   runtimeMcpMap,
-  writeRuntimeOpencodeConfig,
-} from "./runtime-opencode-config-store.js";
+  writeRuntimeWorkspaceEngineConfig,
+} from "./runtime-engine-config-store.js";
 import type { ServerConfig } from "./types.js";
 import { isRecord } from "./workspace-kv-store.js";
 import {
@@ -411,7 +411,7 @@ function isManagedGatewayRuntimeEntry(entry: Record<string, unknown>): boolean {
 async function pruneOrphanedManagedRuntimeEntries(config: ServerConfig, vault: LocalManagedMcpVault): Promise<void> {
   for (const workspace of config.workspaces) {
     try {
-      const mcp = runtimeMcpMap(await readRuntimeOpencodeConfig(config, workspace.id));
+      const mcp = runtimeMcpMap(await readRuntimeWorkspaceEngineConfig(config, workspace.id));
       for (const [name, entry] of Object.entries(mcp)) {
         if (!isManagedGatewayRuntimeEntry(entry)) continue;
         if (vault.connections[connectionKey(workspace.id, name)]) continue;
@@ -726,14 +726,14 @@ function runtimeConfig(config: ServerConfig, workspaceId: string, name: string, 
 }
 
 async function writeManagedRuntimeEntry(config: ServerConfig, workspaceId: string, name: string, enabled: boolean): Promise<void> {
-  await writeRuntimeOpencodeConfig(config, workspaceId, (current) => ({
+  await writeRuntimeWorkspaceEngineConfig(config, workspaceId, (current) => ({
     ...current,
     mcp: { ...runtimeMcpMap(current), [name]: runtimeConfig(config, workspaceId, name, enabled) },
   }));
 }
 
 async function removeManagedRuntimeEntry(config: ServerConfig, workspaceId: string, name: string): Promise<void> {
-  await writeRuntimeOpencodeConfig(config, workspaceId, (current) => {
+  await writeRuntimeWorkspaceEngineConfig(config, workspaceId, (current) => {
     const mcp = { ...runtimeMcpMap(current) };
     delete mcp[name];
     return { ...current, mcp };

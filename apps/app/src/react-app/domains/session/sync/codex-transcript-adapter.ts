@@ -1,8 +1,8 @@
 // Codex transcript adapter: bridges the codex session store into the shared
 // react-query transcript cache that the existing MessageList renders. Codex
-// items are translated into the opencode Part/UIMessage shapes the transcript
+// items are translated into the engine Part/UIMessage shapes the transcript
 // UI already renders (text, reasoning, tool calls, step starts), so tools and
-// thinking behave the same as opencode.
+// thinking behave the same as engine.
 import type { UIMessage } from "ai";
 
 import type { CodexSessionClient } from "@/app/lib/codex-session";
@@ -10,11 +10,12 @@ import { getReactQueryClient } from "../../../infra/query-client";
 import { statusKey, transcriptKey } from "./session-sync";
 import { useSessionActivityStore } from "@/react-app/domains/session/status/session-activity-store";
 import { codexItemToParts, codexItemLabel, codexItemToToolPart } from "./codex-item-translator";
+import { stripInjectedCodexContext } from "./codex-context-fragments";
 import { useCodexSessionStore, type CodexTrackedItem } from "../codex-session-store";
 
-/** Map a tracked codex item into UIMessage parts (mirroring opencode shapes). */
+/** Map a tracked codex item into UIMessage parts (mirroring engine shapes). */
 function trackedItemToUIMessageParts(item: CodexTrackedItem, sessionId: string): UIMessage["parts"] {
-  // Errors render through the same session-error card the opencode transcript
+  // Errors render through the same session-error card the engine transcript
   // uses (title + description + collapsible technical details), instead of
   // dumping the raw provider JSON into the conversation.
   if (item.errorPresentation) {
@@ -23,7 +24,7 @@ function trackedItemToUIMessageParts(item: CodexTrackedItem, sessionId: string):
       type: "text",
       text: description ? `${title}\n\n${description}` : title,
       state: "done",
-      providerMetadata: { opencode: { partId: `${item.id}:text`, sessionError: item.errorPresentation } },
+      providerMetadata: { engine: { partId: `${item.id}:text`, sessionError: item.errorPresentation } },
     } as UIMessage["parts"][number]];
   }
 
@@ -31,9 +32,9 @@ function trackedItemToUIMessageParts(item: CodexTrackedItem, sessionId: string):
   const state = item.status === "pending" ? ("streaming" as const) : ("done" as const);
 
   // Tool/command items: emit a canonical dynamic-tool marker (bash/edit/read)
-  // so opencode's aggregator renders inline "Used X, edited Y" pills like codex.
+  // so engine's aggregator renders inline "Used X, edited Y" pills like codex.
   if (item.type === "commandExecution" || item.type === "mcpToolCall" || item.type === "dynamicToolCall") {
-    const dynamicTool = codexItemToToolPart(item.item, sessionId, item.id);
+    const dynamicTool = codexItemToToolPart(item.item, sessionId, item.id, item.status === "done");
     if (!dynamicTool) return [];
     const output = item.output || (isRecord(item.item) ? item.item.aggregatedOutput as string : "") || "";
     const d = dynamicTool as Record<string, unknown>;
@@ -71,43 +72,26 @@ function buildUIMessages(workspaceId: string, sessionId: string): UIMessage[] {
   const entry = useCodexSessionStore.getState().sessions[sessionId];
   if (!entry) return [];
 
-  // Build the transcript purely from the ordered `items` list. Item.started /
-  // textDelta / completed arrive in conversation order (reasoning → tools →
-  // agentMessage), and deltas stream into the owning item, so this single pass
-  // preserves order and never duplicates (the old code also seeded from the
-  // `messages` array, which re-created assistant replies and reordered the
-  // reasoning after the answer). Each user exchange is its own turn; items of
-  // one turn coalesce into a single assistant message.
+  // Preserve engine item identity, phase and turn boundaries in both replay
+  // and streaming. The view groups activity without merging or losing items.
   const assembled: UIMessage[] = [];
-  let currentAssistant: UIMessage | null = null;
-
-  const flushAssistant = () => {
-    if (currentAssistant) {
-      assembled.push(currentAssistant);
-      currentAssistant = null;
-    }
-  };
-
   for (const item of entry.items) {
+    const phase = item.item.phase;
+    const metadata = { engine: {
+      turnId: item.turnId,
+      ...(phase === "commentary" || phase === "final_answer" ? { phase } : {}),
+    } };
     if (item.type === "userMessage") {
-      flushAssistant();
-      const content = isRecord(item.item) && Array.isArray(item.item.content)
-        ? (item.item.content as unknown[]).map((c) => isRecord(c) ? typeof c.text === "string" ? c.text : "" : "").join("")
+      const content = Array.isArray(item.item.content)
+        ? item.item.content.map((part) => isRecord(part) && typeof part.text === "string" ? part.text : "").join("")
         : "";
-      const text = item.text || content || "";
-      if (text) {
-        assembled.push({ id: `codex-user-${item.id}`, role: "user" as const, parts: [{ type: "text", text, state: "done" as const }] });
-      }
+      const text = stripInjectedCodexContext(item.text || content);
+      if (text) assembled.push({ id: `codex-user-${item.id}`, role: "user", metadata, parts: [{ type: "text", text, state: "done" }] });
       continue;
     }
     const parts = trackedItemToUIMessageParts(item, sessionId);
-    if (parts.length === 0) continue;
-    if (!currentAssistant) {
-      currentAssistant = { id: `codex-item-${item.id}`, role: "assistant" as const, parts: [] };
-    }
-    currentAssistant.parts.push(...parts);
+    if (parts.length) assembled.push({ id: `codex-item-${item.id}`, role: "assistant", metadata, parts });
   }
-  flushAssistant();
 
   // Optimistic tail: user messages submitted locally but not yet echoed back
   // as a `userMessage` stream item render immediately so a send/steer doesn't
@@ -133,11 +117,11 @@ export function syncCodexTranscriptToCache(workspaceId: string, sessionId: strin
   if (messages.length > 0) {
     queryClient.setQueryData(transcriptKey(workspaceId, sessionId), messages);
   }
-  // The UI reads `statusKey` as an opencode SessionStatus (`{ type: "busy" |
+  // The UI reads `statusKey` as an engine SessionStatus (`{ type: "busy" |
   // "idle" | "retry" ... }`), but the codex store keeps a bare `running`/`idle`/
   // `error` string. Write a shape the MessageList can interpret, and drive the
   // session-activity store so the send-time `busy` release happens even though
-  // opencode's own status sync is skipped for codex sessions (see session-sync
+  // engine's own status sync is skipped for codex sessions (see session-sync
   // `calibrateCodexGateway`/`if (normalizedSessionId.startsWith("codex-"))`).
   const uiStatus = codexStatusToSessionStatus(entry.session.status);
   queryClient.setQueryData(statusKey(workspaceId, sessionId), uiStatus);
@@ -150,7 +134,7 @@ export function syncCodexTranscriptToCache(workspaceId: string, sessionId: strin
   );
 }
 
-/** Map a codex session status to the opencode SessionStatus the UI reads. */
+/** Map a codex session status to the engine SessionStatus the UI reads. */
 function codexStatusToSessionStatus(status: "idle" | "running" | "error"): { type: "busy" | "idle" } {
   return status === "running" ? { type: "busy" } : { type: "idle" };
 }
@@ -213,7 +197,35 @@ export async function restoreCodexSessionItems(
       });
     }
     syncCodexTranscriptToCache(workspaceId, sessionId);
-  } catch {
-    // Best-effort restore.
+    useCodexSessionStore.getState().setWarning(sessionId, undefined);
+  } catch (error) {
+    // Best-effort restore must not fail silently: an explainable notice beats a
+    // blank pane when the transcript cannot be read (engine down, task held by
+    // another Sofia process, …).
+    useCodexSessionStore.getState().setWarning(sessionId, error instanceof Error ? error.message : String(error));
   }
+}
+
+/**
+ * Make sure a session's transcript is in the shared cache when it is opened.
+ *
+ * The boot-time restore writes every codex transcript with `setQueryData`, but
+ * those entries have no observer, so TanStack GC drops them once the
+ * transcript/status `gcTime` elapses (see `getReactQueryClient`). Opening the
+ * task afterwards rendered a blank pane and nothing refetched it — the snapshot
+ * query is disabled for codex sessions. Mirror the store when it already has
+ * the items (cheap) and read them back from the engine otherwise (which also
+ * raises a notice when the read fails, e.g. the thread is held elsewhere).
+ */
+export async function ensureCodexTranscriptCached(
+  client: CodexSessionClient,
+  workspaceId: string,
+  sessionId: string,
+): Promise<void> {
+  const entry = useCodexSessionStore.getState().sessions[sessionId];
+  if (entry && entry.items.length > 0) {
+    syncCodexTranscriptToCache(workspaceId, sessionId);
+    return;
+  }
+  await restoreCodexSessionItems(client, workspaceId, sessionId);
 }

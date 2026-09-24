@@ -28,10 +28,10 @@ body:
         - label: Susan (non-technical)
         - label: Other team roles
   - type: textarea
-    id: opencode_alignment
+    id: engine_alignment
     attributes:
-      label: OpenCode primitive alignment
-      description: Is there an existing OpenCode primitive or API that covers this? If not, why is a thin Sofia layer still needed?
+      label: Sofia primitive alignment
+      description: Is there an existing Sofia primitive or API that covers this? If not, why is a thin Sofia layer still needed?
       placeholder: session.*, permission.*, skills/plugins, mcp...
     validations:
       required: true

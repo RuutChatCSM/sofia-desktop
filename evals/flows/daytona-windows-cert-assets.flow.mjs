@@ -57,8 +57,8 @@ export default {
         await ctx.prove("The daytona-windows-cert skill exists with valid trigger-rich frontmatter", {
           voiceover: vo[0],
           assert: async () => {
-            const skillPath = join(ROOT, ".opencode", "skills", "daytona-windows-cert", "SKILL.md");
-            witness(ctx, await exists(skillPath), ".opencode/skills/daytona-windows-cert/SKILL.md exists");
+            const skillPath = join(ROOT, ".sofia", "skills", "daytona-windows-cert", "SKILL.md");
+            witness(ctx, await exists(skillPath), ".sofia/skills/daytona-windows-cert/SKILL.md exists");
             const skill = await readFile(skillPath, "utf8");
             const meta = frontmatter(skill);
             witness(ctx, Boolean(meta), "Skill has YAML frontmatter");
@@ -89,7 +89,7 @@ export default {
         await ctx.prove("The runbook links to the real TLS repro and doctor scripts, and those files exist", {
           voiceover: vo[1],
           assert: async () => {
-            const skillPath = join(ROOT, ".opencode", "skills", "daytona-windows-cert", "SKILL.md");
+            const skillPath = join(ROOT, ".sofia", "skills", "daytona-windows-cert", "SKILL.md");
             const skill = await readFile(skillPath, "utf8");
             const scripts = [
               "scripts/support/setup-sofia-tls-repro.ps1",
@@ -110,8 +110,8 @@ export default {
         await ctx.prove("ca-probe.js exists, passes node --check, and calls tls.getCACertificates(\"system\")", {
           voiceover: vo[2],
           assert: async () => {
-            const probePath = join(ROOT, ".opencode", "skills", "daytona-windows-cert", "scripts", "ca-probe.js");
-            witness(ctx, await exists(probePath), ".opencode/skills/daytona-windows-cert/scripts/ca-probe.js exists");
+            const probePath = join(ROOT, ".sofia", "skills", "daytona-windows-cert", "scripts", "ca-probe.js");
+            witness(ctx, await exists(probePath), ".sofia/skills/daytona-windows-cert/scripts/ca-probe.js exists");
             const probe = await readFile(probePath, "utf8");
             const check = spawnSync(process.execPath, ["--check", probePath], { encoding: "utf8" });
             witness(ctx, check.status === 0, "node --check passes for ca-probe.js", check.stderr.trim() || String(check.status));
@@ -127,7 +127,7 @@ export default {
         await ctx.prove("The skill documents every cleanup command needed to tear down the repro", {
           voiceover: vo[3],
           assert: async () => {
-            const skillPath = join(ROOT, ".opencode", "skills", "daytona-windows-cert", "SKILL.md");
+            const skillPath = join(ROOT, ".sofia", "skills", "daytona-windows-cert", "SKILL.md");
             const skill = await readFile(skillPath, "utf8");
             const commands = [
               "schtasks /end /tn SofiaTlsRepro",

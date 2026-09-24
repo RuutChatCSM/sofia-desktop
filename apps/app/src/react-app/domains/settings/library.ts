@@ -130,7 +130,7 @@ export function libraryCommandsFromSlashOptions(
   }));
 }
 
-export function libraryAgentsFromOpencode(
+export function libraryAgentsFromWorkspaceEngine(
   agents: Array<{
     name: string;
     description?: string;

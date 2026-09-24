@@ -39,7 +39,7 @@ function errorStringField(error: unknown, field: "code" | "path" | "syscall"): s
 /**
  * Build the default per-workspace sofia config metadata. The sofia
  * config is now stored in the runtime DB (see
- * `seedSofiaWorkspaceConfigIfEmpty`), not in `.opencode/sofia.json`, so
+ * `seedSofiaWorkspaceConfigIfEmpty`), not in `.sofia/sofia.json`, so
  * this no longer writes a file. Exposed so the workspace-creation route can
  * seed the DB row with the same defaults.
  */
@@ -106,7 +106,7 @@ export async function ensureLocalWorkspaceFiles(
   }
 }
 
-export async function readRawOpencodeConfig(path: string): Promise<{ exists: boolean; content: string | null }> {
+export async function readRawWorkspaceEngineConfig(path: string): Promise<{ exists: boolean; content: string | null }> {
   const hasFile = await exists(path);
   if (!hasFile) {
     return { exists: false, content: null };

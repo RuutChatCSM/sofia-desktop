@@ -79,7 +79,7 @@ export function createLatestWorkspaceCommitter(
   };
 }
 
-/** Only the routed workspace needs an OpenCode session index immediately. */
+/** Only the routed workspace needs an Sofia session index immediately. */
 export function planRouteWorkspaceLoads(
   workspaceIds: string[],
   selectedWorkspaceId: string,

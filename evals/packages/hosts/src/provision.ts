@@ -614,7 +614,7 @@ export async function provisionDenSandbox(options: DenSandboxOptions & Provision
     sandbox = reused;
     // Reused sandboxes only get fresh signed aliases: their baked
     // DEN_*_PUBLIC_URL identity is unknown here, so RFC 9728 validating MCP
-    // clients (opencode OAuth) cannot connect to a reused Den sandbox.
+    // clients (engine OAuth) cannot connect to a reused Den sandbox.
     [webUrl, apiUrl] = await timedStep(log, "Den preview URL gate", () => Promise.all([
       previewUrl(exec, sandbox, DEN_WEB_PORT),
       previewUrl(exec, sandbox, DEN_API_PORT),
@@ -628,7 +628,7 @@ export async function provisionDenSandbox(options: DenSandboxOptions & Provision
     // here is not an option either — every `daytona preview-url` call signs a
     // different hostname, while the sandbox's baked DEN_*_PUBLIC_URL is the
     // Den's OAuth issuer and MCP resource identity. RFC 9728 validating MCP
-    // clients (opencode) refuse a Den reached through a mismatched host.
+    // clients (engine) refuse a Den reached through a mismatched host.
     const urlsDir = await mkdtemp(path.join(os.tmpdir(), "sofia-den-urls-"));
     const urlsFile = path.join(urlsDir, "den-urls.env");
     try {

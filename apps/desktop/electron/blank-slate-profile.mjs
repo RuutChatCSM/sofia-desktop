@@ -20,8 +20,8 @@ export const BLANK_SLATE_PATH_ENV_KEYS = Object.freeze([
   "SOFIA_TOKEN_STORE",
   "SOFIA_RUNTIME_DB",
   "SOFIA_DATA_DIR",
-  "OPENCODE_CONFIG_DIR",
-  "OPENCODE_DB",
+  "SOFIA_ENGINE_CONFIG_DIR",
+  "SOFIA_ENGINE_DB",
 ]);
 
 function pathApi(platform) {
@@ -47,7 +47,7 @@ export function prepareBlankSlateProfile({
   const userDataPath = paths.join(rootPath, "electron", "user-data");
   const homePath = paths.join(rootPath, "home");
   const sofiaConfigPath = paths.join(rootPath, "sofia", "config");
-  const opencodeDataPath = paths.join(rootPath, "opencode", "data");
+  const engineDataPath = paths.join(rootPath, "engine", "data");
   const environment = {
     HOME: homePath,
     USERPROFILE: homePath,
@@ -64,8 +64,8 @@ export function prepareBlankSlateProfile({
     SOFIA_TOKEN_STORE: paths.join(sofiaConfigPath, "tokens.json"),
     SOFIA_RUNTIME_DB: paths.join(sofiaConfigPath, "runtime.sqlite"),
     SOFIA_DATA_DIR: paths.join(rootPath, "sofia", "data"),
-    OPENCODE_CONFIG_DIR: paths.join(rootPath, "opencode", "config"),
-    OPENCODE_DB: paths.join(opencodeDataPath, "opencode.db"),
+    SOFIA_ENGINE_CONFIG_DIR: paths.join(rootPath, "engine", "config"),
+    SOFIA_ENGINE_DB: paths.join(engineDataPath, "engine.db"),
   };
 
   const directories = new Set([
@@ -79,8 +79,8 @@ export function prepareBlankSlateProfile({
     environment.LOCALAPPDATA,
     sofiaConfigPath,
     environment.SOFIA_DATA_DIR,
-    environment.OPENCODE_CONFIG_DIR,
-    opencodeDataPath,
+    environment.SOFIA_ENGINE_CONFIG_DIR,
+    engineDataPath,
   ]);
   for (const directory of directories) createDirectory(directory);
   Object.assign(env, environment);

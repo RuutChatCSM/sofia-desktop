@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { clearDenSession } from "../src/app/lib/den";
 import { createSofiaServerClient } from "../src/app/lib/sofia-server";
-import { createClient } from "../src/app/lib/opencode";
+import { createClient } from "../src/app/lib/engine";
 import type { ResolvedWorkspaceEndpoint } from "../src/app/lib/workspace-endpoint";
 import type { ProviderListItem, WorkspaceDisplay } from "../src/app/types";
 import { createSessionSofiaServer } from "../src/react-app/domains/connections/provider-auth/session-sofia-server";
@@ -184,12 +184,12 @@ function installFetchMock(
         return jsonResponse({ hasSession: true, lastRun: null, providers: [] });
       }
       if (url.pathname === "/workspace/ws_1/config" && method === "GET") {
-        return jsonResponse({ opencode: {}, sofia: {} });
+        return jsonResponse({ engine: {}, sofia: {} });
       }
       if (url.pathname === "/workspace/ws_1/config" && method === "PATCH") {
         return jsonResponse({ updatedAt: 1 });
       }
-      if (url.pathname === "/workspace/ws_1/opencode-config") {
+      if (url.pathname === "/workspace/ws_1/engine-config") {
         return jsonResponse(null);
       }
       if (url.pathname === "/env") {
@@ -218,7 +218,7 @@ function installFetchMock(
           return jsonResponse({ openai: [] });
         }
         if (url.pathname.endsWith("/config")) {
-          return method === "GET" ? jsonResponse({ opencode: {} }) : jsonResponse({ updatedAt: 1 });
+          return method === "GET" ? jsonResponse({ engine: {} }) : jsonResponse({ updatedAt: 1 });
         }
         return jsonResponse({});
       }
@@ -237,7 +237,7 @@ function makeEndpoint(options: { origin: string; isRemote: boolean }): ResolvedW
     isRemote: options.isRemote,
     client,
     mountedBaseUrl,
-    opencodeBaseUrl: `${mountedBaseUrl}/opencode`,
+    engineBaseUrl: `${mountedBaseUrl}/engine`,
   };
 }
 
@@ -246,7 +246,7 @@ function createSessionRouteStore(options: {
   hostToken: string;
   connectedProviderIds?: string[];
 }) {
-  const opencodeClient = createClient("https://engine.example", "/tmp/workspace_test", {
+  const engineClient = createClient("https://engine.example", "/tmp/workspace_test", {
     token: "engine-token",
     mode: "sofia",
   }, (input, init) => globalThis.fetch(input, init));
@@ -263,7 +263,7 @@ function createSessionRouteStore(options: {
   let disabledProviders: string[] = [];
 
   return createProviderAuthStore({
-    client: () => opencodeClient,
+    client: () => engineClient,
     providers: () => providers,
     providerDefaults: () => providerDefaults,
     providerConnectedIds: () => providerConnectedIds,
@@ -290,7 +290,7 @@ function createSessionRouteStore(options: {
     setDisabledProviders: (value) => {
       disabledProviders = value;
     },
-    markOpencodeConfigReloadRequired: () => undefined,
+    markWorkspaceEngineConfigReloadRequired: () => undefined,
   });
 }
 
@@ -380,7 +380,7 @@ describe("session-route cloud provider sync wiring", () => {
     const store = createSessionRouteStore({
       endpoint: null,
       hostToken: "",
-      connectedProviderIds: ["opencode", "anthropic"],
+      connectedProviderIds: ["engine", "anthropic"],
     });
 
     store.start();

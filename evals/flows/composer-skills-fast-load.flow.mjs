@@ -16,7 +16,7 @@
  * Skills section still renders local skills in milliseconds while the cloud
  * request is provably in flight.
  *
- * Requires a workspace whose root contains `.opencode/skills` (the Sofia
+ * Requires a workspace whose root contains `.sofia/skills` (the Sofia
  * repo checkout at /workspace in the Daytona eval sandbox).
  */
 const PLUG_BUTTON = 'button[title="Commands, skills, and MCPs"]';

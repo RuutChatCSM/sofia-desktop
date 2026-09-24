@@ -4,21 +4,18 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   appBuildInfo as appBuildInfoCmd,
   engineInfo as engineInfoCmd,
-  engineStart as engineStartCmd,
   codexEngineStatus as codexEngineStatusCmd,
   codexEngineInstall as codexEngineInstallCmd,
   getDesktopBootstrapConfig,
   debugDesktopBootstrapConfig,
-  nukeSofiaAndOpencodeConfigPreview,
-  nukeSofiaAndOpencodeConfigAndExit,
+  nukeSofiaAndWorkspaceEngineConfigPreview,
+  nukeSofiaAndWorkspaceEngineConfigAndExit,
   openDesktopUrl,
   sofiaServerInfo as sofiaServerInfoCmd,
   sofiaServerRestart as sofiaServerRestartCmd,
-  pickFile,
   revealDesktopItemInDir,
   resetSofiaState,
   updaterEnvironment as updaterEnvironmentCmd,
-  workspaceBootstrap as workspaceBootstrapCmd,
   type AppBuildInfo,
   type CodexEngineStatus,
   type DesktopBootstrapConfig,
@@ -52,9 +49,6 @@ import type { SofiaServerStore, SofiaServerStoreSnapshot } from "../../connectio
 type DebugViewModelProps = Omit<DebugViewProps, "agentContextDiagnostics">;
 
 const STARTUP_PREFERENCE_KEY = "sofia.startupPreference";
-const ENGINE_SOURCE_KEY = "sofia.engineSource";
-const ENGINE_CUSTOM_BIN_KEY = "sofia.engineCustomBinPath";
-const OPENCODE_ENABLE_EXA_KEY = "sofia.opencodeEnableExa";
 const NUKE_CONFIRMATION_WORD = "NUKE";
 const NUKE_SIGN_OUT_TIMEOUT_MS = 5000;
 
@@ -75,33 +69,6 @@ type UseDebugViewModelOptions = {
   selectedWorkspaceRoot: string;
   setRouteError: (value: string | null) => void;
 };
-
-function readStoredString(key: string, fallback: string): string {
-  if (typeof window === "undefined") return fallback;
-  try {
-    return window.localStorage.getItem(key) ?? fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function writeStoredString(key: string, value: string): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(key, value);
-  } catch {
-    // ignore persistence failures
-  }
-}
-
-function clearStoredString(key: string): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.removeItem(key);
-  } catch {
-    // ignore persistence failures
-  }
-}
 
 function clearSofiaLocalStorageForReset(mode: ResetModalMode): void {
   if (typeof window === "undefined") return;
@@ -136,15 +103,6 @@ async function revokeDenSessionBeforeNuke(): Promise<void> {
       globalThis.setTimeout(resolve, NUKE_SIGN_OUT_TIMEOUT_MS);
     }),
   ]);
-}
-
-function readEngineSource(): "path" | "sidecar" | "custom" {
-  const raw = readStoredString(ENGINE_SOURCE_KEY, "sidecar");
-  return raw === "path" || raw === "sidecar" || raw === "custom" ? raw : "sidecar";
-}
-
-function readOpencodeEnableExa(): boolean {
-  return readStoredString(OPENCODE_ENABLE_EXA_KEY, "1") === "1";
 }
 
 function statusPill(
@@ -185,29 +143,6 @@ function auditStatusPill(status: "idle" | "loading" | "error"): {
   };
 }
 
-function describeEngine(info: EngineInfo | null) {
-  const running = Boolean(info?.running);
-  return {
-    ...statusPill(running),
-    lines: [
-      t("settings.debug_base_url", { url: info?.baseUrl ?? "—" }),
-      t("settings.debug_runtime", { runtime: info?.runtime ?? "—" }),
-      t("settings.diag_opencode_binary", { binary: formatOpencodeBinary(info) }),
-      t("settings.debug_pid", { pid: info?.pid ? String(info.pid) : "—" }),
-      t("settings.debug_hostname", { hostname: info?.hostname ?? "—" }),
-      t("settings.debug_port", { port: info?.port ? String(info.port) : "—" }),
-    ],
-    stdout: info?.lastStdout ?? null,
-    stderr: info?.lastStderr ?? null,
-    execution: info?.execution ?? null,
-    error: null as string | null,
-  };
-}
-
-function formatOpencodeBinary(info: EngineInfo | null) {
-  return formatBinaryWithSource(info?.opencodeBinPath, info?.opencodeBinSource);
-}
-
 function describeCodexEngine(info: CodexEngineStatus | null) {
   const available = Boolean(info?.available);
   return {
@@ -222,10 +157,10 @@ function describeCodexEngine(info: CodexEngineStatus | null) {
   };
 }
 
-function formatManagedOpencodeBinary(info: SofiaServerInfo | null) {
+function formatManagedWorkspaceEngineBinary(info: SofiaServerInfo | null) {
   return formatBinaryWithSource(
-    info?.managedOpencodeBinPath,
-    info?.managedOpencodeBinSource,
+    info?.managedWorkspaceEngineBinPath,
+    info?.managedWorkspaceEngineBinSource,
   );
 }
 
@@ -242,7 +177,7 @@ function describeSofiaServer(info: SofiaServerInfo | null) {
     ...statusPill(running),
     lines: [
       t("settings.debug_base_url", { url: info?.baseUrl ?? "—" }),
-      t("settings.diag_opencode_binary", { binary: formatManagedOpencodeBinary(info) }),
+      t("settings.diag_engine_binary", { binary: formatManagedWorkspaceEngineBinary(info) }),
       t("settings.debug_connect_url", { url: info?.connectUrl ?? "—" }),
       t("settings.debug_lan_url", { url: info?.lanUrl ?? "—" }),
       t("settings.debug_mdns_url", { url: info?.mdnsUrl ?? "—" }),
@@ -253,12 +188,12 @@ function describeSofiaServer(info: SofiaServerInfo | null) {
     ],
     stdout: info?.lastStdout ?? null,
     stderr: info?.lastStderr ?? null,
-    execution: info?.managedOpencodeExecution ?? null,
+    execution: info?.managedWorkspaceEngineExecution ?? null,
     error: null as string | null,
   };
 }
 
-function describeOpencodeConnect(engine: EngineInfo | null) {
+function describeWorkspaceEngineConnect(engine: EngineInfo | null) {
   const running = Boolean(engine?.baseUrl);
   return {
     ...statusPill(running),
@@ -295,17 +230,11 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
   const [runtimeConfigStatus, setRuntimeConfigStatus] = useState<SofiaRuntimeConfigStatus | null>(null);
   const [runtimeConfigStatusError, setRuntimeConfigStatusError] = useState<string | null>(null);
   const [runtimeDebugStatus, setRuntimeDebugStatus] = useState<string | null>(null);
-  const [opencodeRestarting, setOpencodeRestarting] = useState(false);
   const [sofiaServerRestarting, setSofiaServerRestarting] = useState(false);
-  const [opencodeServiceStatus, setOpencodeServiceStatus] = useState<{
-    tone: "success" | "error";
-    message: string;
-  } | null>(null);
   const [sofiaServiceStatus, setSofiaServiceStatus] = useState<{
     tone: "success" | "error";
     message: string;
   } | null>(null);
-  const [opencodeLogStatus, setOpencodeLogStatus] = useState<string | null>(null);
   const [sofiaLogStatus, setSofiaLogStatus] = useState<string | null>(null);
   const [serviceRestartError, setServiceRestartError] = useState<string | null>(null);
   const [resetModalBusy, setResetModalBusy] = useState(false);
@@ -318,10 +247,6 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
   // user explicitly asks for it. The IPC contract still speaks "preserve".
   const [nukeDeleteBootstrap, setNukeDeleteBootstrap] = useState(false);
   const [nukeManifestPreview, setNukeManifestPreview] = useState<NukeManifestPreview | null>(null);
-  const [engineSource, setEngineSourceState] = useState<"path" | "sidecar" | "custom">(readEngineSource);
-  const [engineCustomBinPath, setEngineCustomBinPath] = useState<string>(() =>
-    readStoredString(ENGINE_CUSTOM_BIN_KEY, ""),
-  );
   const [developerLog, setDeveloperLog] = useState<string[]>([]);
   const [developerLogStatus, setDeveloperLogStatus] = useState<string | null>(null);
   const [electronMigrationUrl, setElectronMigrationUrl] = useState("");
@@ -447,7 +372,7 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
     () => ({
       appVersionLabel: appBuild?.version ?? "—",
       appCommitLabel: appBuild?.gitSha ?? "—",
-      opencodeVersionLabel: engineInfoState?.baseUrl ? "managed" : "—",
+      engineVersionLabel: engineInfoState?.baseUrl ? "managed" : "—",
       sofiaServerVersionLabel: sofiaServerSnapshot.sofiaServerDiagnostics?.version ?? "—",
     }),
     [
@@ -498,14 +423,13 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
     [bootstrapConfigDebug],
   );
 
-  const engineCard = useMemo(() => describeEngine(engineInfoState), [engineInfoState]);
   const codexEngineCard = useMemo(() => describeCodexEngine(codexEngineState), [codexEngineState]);
   const sofiaCard = useMemo(
     () => describeSofiaServer(sofiaServerSnapshot.sofiaServerHostInfo),
     [sofiaServerSnapshot.sofiaServerHostInfo],
   );
-  const opencodeConnectCard = useMemo(
-    () => describeOpencodeConnect(engineInfoState),
+  const engineConnectCard = useMemo(
+    () => describeWorkspaceEngineConnect(engineInfoState),
     [engineInfoState],
   );
 
@@ -706,126 +630,6 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
     setStartupStatus(t("settings.startup_reset_hint"));
   }, []);
 
-  const onSetEngineSource = useCallback((value: "path" | "sidecar" | "custom") => {
-    setEngineSourceState(value);
-    writeStoredString(ENGINE_SOURCE_KEY, value);
-  }, []);
-
-  const onPickEngineBinary = useCallback(async () => {
-    if (!isDesktopRuntime()) {
-      setServiceRestartError(t("settings.sandbox_requires_desktop"));
-      return;
-    }
-    try {
-      const target = await pickFile({ title: t("settings.custom_binary_label"), multiple: false });
-      if (typeof target === "string" && target.trim()) {
-        setEngineCustomBinPath(target);
-        writeStoredString(ENGINE_CUSTOM_BIN_KEY, target);
-      }
-    } catch (error) {
-      setServiceRestartError(error instanceof Error ? error.message : safeStringify(error));
-    }
-  }, []);
-
-  const onClearEngineCustomBinPath = useCallback(() => {
-    setEngineCustomBinPath("");
-    clearStoredString(ENGINE_CUSTOM_BIN_KEY);
-  }, []);
-
-  const bootFullEngineStack = useCallback(async () => {
-    const workspacePath = optionsRef.current.selectedWorkspaceRoot.trim();
-    if (!workspacePath) {
-      throw new Error(
-        "Select a local workspace before starting the local server/engine.",
-      );
-    }
-
-    // Collect ALL local workspace paths so sofia-server is started with
-    // --workspace <path> for every registered local workspace. Mirrors the
-    // Solid reference (context/workspace.ts::resolveWorkspacePaths) so that
-    // `client.listWorkspaces()` later returns the full set, not just the
-    // active one.
-    const workspacePaths = [workspacePath];
-    const workspacePathSet = new Set(workspacePaths);
-    try {
-      const list = (await workspaceBootstrapCmd()) as { workspaces?: Array<{ workspaceType?: string; path?: string }> } | null;
-      for (const entry of list?.workspaces ?? []) {
-        if (entry.workspaceType === "remote") continue;
-        const path = entry.path?.trim() ?? "";
-        if (path && !workspacePathSet.has(path)) {
-          workspacePaths.push(path);
-          workspacePathSet.add(path);
-        }
-      }
-    } catch {
-      // best-effort: fall back to just the active workspace path
-    }
-
-    const info = await engineStartCmd(workspacePath, {
-      runtime: "direct",
-      workspacePaths,
-      opencodeEnableExa: readOpencodeEnableExa(),
-      sofiaRemoteAccess:
-        optionsRef.current.sofiaServerSnapshot.sofiaServerSettings
-          .remoteAccessEnabled === true,
-    });
-
-    // engine_start restarts sofia-server on a NEW port and lets that server
-    // manage OpenCode. Re-read host info and persist the fresh URL/token.
-    try {
-      const hostInfo = (await sofiaServerInfoCmd()) as {
-        baseUrl?: string;
-        ownerToken?: string;
-        clientToken?: string;
-        hostToken?: string;
-        port?: number;
-        remoteAccessEnabled?: boolean;
-      } | null;
-      if (hostInfo?.baseUrl) {
-        writeSofiaServerSettings({
-          urlOverride: hostInfo.baseUrl,
-          token: hostInfo.ownerToken?.trim() || hostInfo.clientToken?.trim() || undefined,
-          hostToken: hostInfo.hostToken?.trim() || undefined,
-          portOverride: hostInfo.port ?? undefined,
-          remoteAccessEnabled: hostInfo.remoteAccessEnabled === true,
-        });
-        if (typeof window !== "undefined") {
-          window.dispatchEvent(new CustomEvent("sofia-server-settings-changed"));
-        }
-      }
-    } catch {
-      // best-effort: if this fails, the host-info poller will catch up in ~10s.
-    }
-
-    await sofiaServerStore.reconnectSofiaServer();
-    await refreshEngineInfo();
-    return info;
-  }, [sofiaServerStore, refreshEngineInfo]);
-
-  const onRestartOpencode = useCallback(async () => {
-    if (!isDesktopRuntime()) return;
-    setOpencodeRestarting(true);
-    setOpencodeServiceStatus(null);
-    setServiceRestartError(null);
-    try {
-      await bootFullEngineStack();
-      setOpencodeServiceStatus({
-        tone: "success",
-        message: t("settings.restart_succeeded_template", { service: "Sofia engine" }),
-      });
-      pushDeveloperLog("Restarted Sofia engine via engine_start");
-    } catch (error) {
-      const message = error instanceof Error ? error.message : safeStringify(error);
-      setOpencodeServiceStatus({
-        tone: "error",
-        message: `${t("settings.restart_failed_template", { service: "Sofia engine" })} ${message}`,
-      });
-      setServiceRestartError(message);
-    } finally {
-      setOpencodeRestarting(false);
-    }
-  }, [bootFullEngineStack, pushDeveloperLog]);
-
   const onInstallCodexEngine = useCallback(async () => {
     if (!isDesktopRuntime()) return;
     setCodexInstallBusy(true);
@@ -895,38 +699,6 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
     },
     [],
   );
-
-  const onCopyOpencodeLogs = useCallback(async () => {
-    const text = formatServiceLogs(engineInfoState?.lastStdout, engineInfoState?.lastStderr);
-    if (!text) {
-      setOpencodeLogStatus(t("settings.no_logs_captured"));
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(text);
-      setOpencodeLogStatus(t("settings.copied_service_logs", { service: "Sofia engine" }));
-    } catch (error) {
-      setOpencodeLogStatus(error instanceof Error ? error.message : safeStringify(error));
-    }
-  }, [engineInfoState?.lastStderr, engineInfoState?.lastStdout, formatServiceLogs]);
-
-  const onExportOpencodeLogs = useCallback(async () => {
-    const text = formatServiceLogs(engineInfoState?.lastStdout, engineInfoState?.lastStderr);
-    if (!text) {
-      setOpencodeLogStatus(t("settings.no_logs_captured"));
-      return;
-    }
-    try {
-      downloadTextAsFile(
-        `sofia-opencode-${new Date().toISOString().replace(/[:.]/g, "-")}.log`,
-        text,
-        "text/plain",
-      );
-      setOpencodeLogStatus(t("settings.exported_developer_log"));
-    } catch (error) {
-      setOpencodeLogStatus(error instanceof Error ? error.message : safeStringify(error));
-    }
-  }, [engineInfoState?.lastStderr, engineInfoState?.lastStdout, formatServiceLogs]);
 
   const onCopySofiaLogs = useCallback(async () => {
     const info = sofiaServerSnapshot.sofiaServerHostInfo;
@@ -1001,7 +773,7 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
     setNukePreviewBusy(true);
     setNukeConfigStatus(null);
     try {
-      const preview = await nukeSofiaAndOpencodeConfigPreview({ preserveBootstrap: true });
+      const preview = await nukeSofiaAndWorkspaceEngineConfigPreview({ preserveBootstrap: true });
       setNukeManifestPreview(preview);
       setNukeConfirmationText("");
       setNukeDeleteBootstrap(false);
@@ -1019,7 +791,7 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
     setNukePreviewBusy(true);
     setNukeConfigStatus(null);
     try {
-      const preview = await nukeSofiaAndOpencodeConfigPreview({ preserveBootstrap: !deleteBootstrap });
+      const preview = await nukeSofiaAndWorkspaceEngineConfigPreview({ preserveBootstrap: !deleteBootstrap });
       setNukeManifestPreview(preview);
     } catch (error) {
       setNukeDeleteBootstrap(!deleteBootstrap);
@@ -1034,13 +806,13 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
     setNukeDialogOpen(false);
   }, [nukeConfigBusy]);
 
-  const onConfirmNukeSofiaAndOpencodeConfig = useCallback(async () => {
+  const onConfirmNukeSofiaAndWorkspaceEngineConfig = useCallback(async () => {
     if (!isDesktopRuntime() || nukeConfirmationText.trim().toUpperCase() !== NUKE_CONFIRMATION_WORD) return;
     setNukeConfigBusy(true);
     setNukeConfigStatus(null);
     try {
       await revokeDenSessionBeforeNuke();
-      await nukeSofiaAndOpencodeConfigAndExit({ preserveBootstrap: !nukeDeleteBootstrap });
+      await nukeSofiaAndWorkspaceEngineConfigAndExit({ preserveBootstrap: !nukeDeleteBootstrap });
     } catch (error) {
       setNukeConfigStatus(error instanceof Error ? error.message : safeStringify(error));
       setNukeConfigBusy(false);
@@ -1103,36 +875,23 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
       onCheckElectronAlphaUpdates,
       onStopHost,
       onResetStartupPreference,
-      engineSource,
-      onSetEngineSource,
-      engineCustomBinPath,
-      engineCustomBinPathLabel: engineCustomBinPath.trim() || t("settings.no_custom_path_set"),
-      onPickEngineBinary,
-      onClearEngineCustomBinPath,
       onOpenResetModal,
       resetModalBusy,
       resetStatus,
       startupStatus,
       workspaceDebugEventsStatus,
-      opencodeRestarting,
       sofiaServerRestarting,
-      opencodeServiceStatus,
       sofiaServiceStatus,
-      opencodeLogStatus,
       sofiaLogStatus,
-      onCopyOpencodeLogs,
-      onExportOpencodeLogs,
       onCopySofiaLogs,
       onExportSofiaLogs,
       serviceRestartError,
-      onRestartOpencode,
       onRestartSofiaServer,
       onInstallCodexEngine,
       codexInstallBusy,
       codexInstallStatus,
-      engineCard,
       codexEngineCard,
-      opencodeConnectCard,
+      engineConnectCard,
       sofiaCard,
       sofiaServerDiagnostics: sofiaServerSnapshot.sofiaServerDiagnostics,
       runtimeWorkspaceId,
@@ -1145,8 +904,8 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
       sofiaAuditEntries: sofiaServerSnapshot.sofiaAuditEntries,
       sofiaAuditStatus: auditStatusPill(sofiaServerSnapshot.sofiaAuditStatus),
       sofiaAuditError: sofiaServerSnapshot.sofiaAuditError,
-      opencodeConnectStatus: null,
-      opencodeDevModeEnabled: appBuild?.sofiaDevMode === true,
+      engineConnectStatus: null,
+      engineDevModeEnabled: appBuild?.sofiaDevMode === true,
       nukeConfigBusy,
       nukeConfigStatus,
       nukePreviewBusy,
@@ -1158,7 +917,7 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
       onCloseNukeDialog,
       onSetNukeConfirmationText: setNukeConfirmationText,
       onSetNukeDeleteBootstrap,
-      onConfirmNukeSofiaAndOpencodeConfig,
+      onConfirmNukeSofiaAndWorkspaceEngineConfig,
     }),
     [
       appBuild?.sofiaDevMode,
@@ -1175,9 +934,6 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
       electronAlphaUpdaterBusy,
       electronAlphaUpdaterChannel,
       electronAlphaUpdaterStatus,
-      engineCard,
-      engineCustomBinPath,
-      engineSource,
       nukeConfigBusy,
       nukeConfigStatus,
       nukeConfirmationText,
@@ -1186,7 +942,6 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
       nukeDeleteBootstrap,
       nukePreviewBusy,
       onClearDeveloperLog,
-      onClearEngineCustomBinPath,
       onClearWorkspaceDebugEvents,
       onCloseNukeDialog,
       onSetNukeDeleteBootstrap,
@@ -1196,30 +951,22 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
       onExportRuntimeDebugReport,
       onInstallElectronPreviewFromTauri,
       onCheckElectronAlphaUpdates,
-      onConfirmNukeSofiaAndOpencodeConfig,
+      onConfirmNukeSofiaAndWorkspaceEngineConfig,
       onOpenElectronPreviewRelease,
       onOpenNukeDialog,
       onOpenResetModal,
       onPrepareElectronMigrationSnapshot,
-      onPickEngineBinary,
       onResolveElectronAlphaArtifact,
       onRevealElectronMigrationBackup,
       onResetStartupPreference,
-      onRestartOpencode,
       onRestartSofiaServer,
       onSetElectronAlphaUpdaterChannel,
       onSetElectronMigrationSha512,
       onSetElectronMigrationUrl,
-      onSetEngineSource,
       onStopHost,
-      onCopyOpencodeLogs,
       onCopySofiaLogs,
-      onExportOpencodeLogs,
       onExportSofiaLogs,
-      opencodeConnectCard,
-      opencodeLogStatus,
-      opencodeRestarting,
-      opencodeServiceStatus,
+      engineConnectCard,
       sofiaCard,
       sofiaLogStatus,
       sofiaServiceStatus,

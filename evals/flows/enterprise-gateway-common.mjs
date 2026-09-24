@@ -424,7 +424,7 @@ async function workspaceSessionState(ctx) {
       hasWelcome: text.includes("Welcome to Sofia"),
       workspaceCreateBusy: text.includes("Creating workspace"),
       hasConnectStatus: /Sofia Connect: (Ready|Checking|Needs attention)/.test(text),
-      opencodeUnavailable: text.includes("OpenCode unavailable") || text.includes("opencode_unconfigured") || text.includes("OpenCode base URL is missing"),
+      engineUnavailable: text.includes("Sofia unavailable") || text.includes("engine_unconfigured") || text.includes("Sofia base URL is missing"),
       text: text.slice(0, 1_000),
     };
   })()`);
@@ -436,10 +436,10 @@ export async function ensureComposerReady(ctx, timeout = 90_000) {
   while (Date.now() < deadline) {
     await clickThroughWorkspaceOnboarding(ctx, "");
     last = await workspaceSessionState(ctx);
-    if (last?.hasConcreteSession && last.hasComposer && !last.opencodeUnavailable) break;
+    if (last?.hasConcreteSession && last.hasComposer && !last.engineUnavailable) break;
     await sleep(1_000);
   }
-  if (last?.opencodeUnavailable) throw new Error(`OpenCode unavailable — the workspace OpenCode base URL is still missing while waiting for the composer. Restart the app and rerun this eval so the welcome flow can spawn the managed engine. Last state: ${JSON.stringify(last)}`);
+  if (last?.engineUnavailable) throw new Error(`Sofia unavailable — the workspace Sofia base URL is still missing while waiting for the composer. Restart the app and rerun this eval so the welcome flow can spawn the managed engine. Last state: ${JSON.stringify(last)}`);
   if (!last?.hasConcreteSession) throw new Error(`Workspace did not reach a concrete /workspace/<id>/session/ses_* route within ${timeout}ms: ${JSON.stringify(last)}`);
   if (!last?.hasComposer) throw new Error(`Workspace composer did not become ready within ${timeout}ms: ${JSON.stringify(last)}`);
   await ctx.waitFor("document.body.innerText.includes('Run task')", { timeoutMs: 60_000, label: "Run task button" });
@@ -452,10 +452,10 @@ async function ensurePromptComposerReady(ctx, timeout = 90_000) {
     await clickThroughWorkspaceOnboarding(ctx, "");
     last = await workspaceSessionState(ctx);
     const onWorkspaceSessionRoute = /^#\/workspace\/[^/?#]+\/session(?:\/ses_[^/?#]+)?/.test(last?.hash ?? "");
-    if (onWorkspaceSessionRoute && last.hasComposer && !last.opencodeUnavailable) break;
+    if (onWorkspaceSessionRoute && last.hasComposer && !last.engineUnavailable) break;
     await sleep(1_000);
   }
-  if (last?.opencodeUnavailable) throw new Error(`OpenCode unavailable while waiting for the prompt composer: ${JSON.stringify(last)}`);
+  if (last?.engineUnavailable) throw new Error(`Sofia unavailable while waiting for the prompt composer: ${JSON.stringify(last)}`);
   if (!last?.hasComposer) throw new Error(`Workspace prompt composer did not become ready within ${timeout}ms: ${JSON.stringify(last)}`);
   await ctx.waitFor("document.body.innerText.includes('Run task')", { timeoutMs: 60_000, label: "Run task button" });
 }

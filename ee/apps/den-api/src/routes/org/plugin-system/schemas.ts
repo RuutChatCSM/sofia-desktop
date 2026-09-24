@@ -75,7 +75,7 @@ export const extensionSourceFormatSchema = z.enum([
   "sofia-builtin",
   "sofia-extension-manifest",
   "claude-plugin",
-  "opencode-plugin",
+  "engine-plugin",
   "mcp-directory",
   "manual",
 ])

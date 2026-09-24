@@ -125,7 +125,7 @@ Adds a clearer Library item picker, makes Desktop automations recover from crede
 - The Library Add flow now presents clear item-type choices before setup begins.
 - Desktop automations recover rejected credentials and back off repeated reconnect failures.
 - Cloud MCP health probes and GitHub token requests now have strict request budgets.
-- Added a Google Cloud deployment prompt and stronger OpenCode MCP OAuth validation.
+- Added a Google Cloud deployment prompt and stronger Sofia MCP OAuth validation.
 - Repaired npm publishing so releases can complete reliably.
 
 #### Lines of code changed since previous release
@@ -142,7 +142,7 @@ True
 
 #### Major improvement details
 - Added a clear item-type picker to the Library Add flow.
-- Added a Google Cloud deployment prompt and stronger OpenCode MCP OAuth validation.
+- Added a Google Cloud deployment prompt and stronger Sofia MCP OAuth validation.
 
 #### Major bugs resolved
 True

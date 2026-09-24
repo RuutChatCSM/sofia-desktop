@@ -7,7 +7,7 @@ import type {
   ProviderListResponse,
   Session,
 } from "@/app/lib/engine-types";
-import type { createClient } from "./lib/opencode";
+import type { createClient } from "./lib/engine";
 import type { WorkspaceInfo } from "./lib/desktop-types";
 
 export type Client = ReturnType<typeof createClient>;
@@ -147,7 +147,7 @@ export type ArtifactItem = {
   messageId?: string;
 };
 
-export type OpencodeEvent = {
+export type WorkspaceEngineEvent = {
   type: string;
   properties?: unknown;
 };
@@ -363,7 +363,7 @@ export type McpStatusMap = Record<string, McpStatus>;
 
 export type { ReloadReason } from "./extensions";
 
-export type OpencodeConnectStatus = {
+export type WorkspaceEngineConnectStatus = {
   at: number;
   baseUrl: string;
   directory?: string | null;

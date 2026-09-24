@@ -240,7 +240,7 @@ async function configureWorkspaceOpenAi(appSurface: Surface, workspaceId: string
     const workspaceId = ${JSON.stringify(workspaceId)};
     const patched = await request("/workspace/" + encodeURIComponent(workspaceId) + "/config", {
       method: "PATCH",
-      body: JSON.stringify({ opencode: { provider: { openai: { options: { apiKey: ${JSON.stringify(apiKey)} } } } } }),
+      body: JSON.stringify({ engine: { provider: { openai: { options: { apiKey: ${JSON.stringify(apiKey)} } } } } }),
     });
     if (patched !== "ok") return patched;
     return request("/workspace/" + encodeURIComponent(workspaceId) + "/engine/reload", { method: "POST" });

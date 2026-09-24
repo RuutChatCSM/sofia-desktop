@@ -30,7 +30,7 @@ type JsonResponse = (data: unknown, status?: number) => Response;
 type ReadJsonBody = (request: Request) => Promise<Record<string, unknown>>;
 type ParseOptionalBoolean = (value: string | null, name: string) => boolean | undefined;
 type FetchRuntimeControl = (path: string, init?: { method?: string; body?: unknown }) => Promise<unknown>;
-type WorkspaceOpencodeClient = WorkspaceEngineClient;
+type WorkspaceWorkspaceEngineClient = WorkspaceEngineClient;
 
 interface RegisterCoreRoutesOptions {
   routes: Route[];
@@ -38,7 +38,7 @@ interface RegisterCoreRoutesOptions {
   tokens: TokenService;
   env: EnvService;
   serverVersion: string;
-  opencodeVersion: string;
+  engineVersion: string;
   jsonResponse: JsonResponse;
   readJsonBody: ReadJsonBody;
   readOptionalJsonBody: ReadJsonBody;
@@ -47,8 +47,8 @@ interface RegisterCoreRoutesOptions {
   buildCapabilities: (config: ServerConfig) => Capabilities;
   fetchRuntimeControl: FetchRuntimeControl;
   resolveWorkspace: (config: ServerConfig, id: string) => Promise<WorkspaceInfo>;
-  resolveOpencodeDirectory: (workspace: WorkspaceInfo) => string | null;
-  createWorkspaceOpencodeClient: (config: ServerConfig, workspace: WorkspaceInfo) => WorkspaceOpencodeClient;
+  resolveWorkspaceEngineDirectory: (workspace: WorkspaceInfo) => string | null;
+  createWorkspaceWorkspaceEngineClient: (config: ServerConfig, workspace: WorkspaceInfo) => WorkspaceWorkspaceEngineClient;
   refreshRegistrationFromLiveStatus?: CloudMcpLiveStatusObserver;
   serializeWorkspace: (workspace: ServerConfig["workspaces"][number]) => unknown;
   resolveDevLogPath: () => string | null;
@@ -99,7 +99,7 @@ export function registerCoreRoutes(options: RegisterCoreRoutesOptions): void {
     tokens,
     env,
     serverVersion,
-    opencodeVersion,
+    engineVersion,
     jsonResponse,
     readJsonBody,
     readOptionalJsonBody,
@@ -108,8 +108,8 @@ export function registerCoreRoutes(options: RegisterCoreRoutesOptions): void {
     buildCapabilities,
     fetchRuntimeControl,
     resolveWorkspace,
-    resolveOpencodeDirectory,
-    createWorkspaceOpencodeClient,
+    resolveWorkspaceEngineDirectory,
+    createWorkspaceWorkspaceEngineClient,
     refreshRegistrationFromLiveStatus,
     serializeWorkspace,
     resolveDevLogPath,
@@ -120,16 +120,16 @@ export function registerCoreRoutes(options: RegisterCoreRoutesOptions): void {
   const envPendingChangesByRuntime = new Map<string, boolean>();
 
   const connectSnapshotBaseOptions = {
-    resolveOpencodeDirectory,
-    createWorkspaceOpencodeClient,
+    resolveWorkspaceEngineDirectory,
+    createWorkspaceWorkspaceEngineClient,
     refreshRegistrationFromLiveStatus,
-    serverMetadata: { serverVersion, expectedOpencodeVersion: opencodeVersion },
+    serverMetadata: { serverVersion, expectedWorkspaceEngineVersion: engineVersion },
   };
 
   const healthResponse = () => jsonResponse({
     ok: true,
     version: serverVersion,
-    opencodeVersion,
+    engineVersion,
     uptimeMs: Date.now() - config.startedAt,
   });
 
@@ -189,7 +189,7 @@ export function registerCoreRoutes(options: RegisterCoreRoutesOptions): void {
     return jsonResponse({
       ok: true,
       version: serverVersion,
-      opencodeVersion,
+      engineVersion,
       uptimeMs: Date.now() - config.startedAt,
       readOnly: config.readOnly,
       approval: config.approval,
@@ -224,7 +224,7 @@ export function registerCoreRoutes(options: RegisterCoreRoutesOptions): void {
     return jsonResponse({
       ok: true,
       version: serverVersion,
-      opencodeVersion,
+      engineVersion,
       uptimeMs: Date.now() - config.startedAt,
       readOnly: config.readOnly,
       approval: config.approval,

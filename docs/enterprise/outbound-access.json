@@ -211,10 +211,10 @@
       "host": "models.dev",
       "kind": "fetched",
       "components": ["server"],
-      "purpose": "Canonical model catalog passed to managed OpenCode as OPENCODE_MODELS_URL.",
+      "purpose": "Canonical model catalog passed to managed Sofia as SOFIA_ENGINE_MODELS_URL.",
       "requirement": "required-in-practice",
       "blockedEffect": "The model catalog is unavailable or degraded; model selection may be stale or incomplete.",
-      "override": "OPENCODE_MODELS_URL"
+      "override": "SOFIA_ENGINE_MODELS_URL"
     },
     {
       "host": "codex.cli.sh",
@@ -262,12 +262,12 @@
       "override": null
     },
     {
-      "host": "opencode.ai",
+      "host": "engine.ai",
       "kind": "fetched",
       "components": ["desktop", "renderer", "server"],
-      "purpose": "Fallback OpenCode installer command plus OpenCode auth/docs links and config schema identifiers.",
+      "purpose": "Fallback Sofia installer command plus Sofia auth/docs links and config schema identifiers.",
       "requirement": "optional",
-      "blockedEffect": "Guided fallback OpenCode installation and OpenCode web links fail; packaged builds still use bundled OpenCode.",
+      "blockedEffect": "Guided fallback Sofia installation and Sofia web links fail; packaged builds still use bundled Sofia.",
       "override": null
     },
     {

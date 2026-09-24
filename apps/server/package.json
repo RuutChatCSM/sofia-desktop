@@ -8,10 +8,10 @@
   },
   "scripts": {
     "dev": "SOFIA_DEV_MODE=1 bun --conditions=development src/cli.ts",
-    "test": "bun --conditions=development test",
+    "test": "bun --conditions=development test src",
     "test:artifacts": "bun --conditions=development test src/artifact-files.e2e.test.ts src/workspace-init.test.ts src/server.normalizeWorkspaceRelativePath.test.ts",
     "build:enterprise-mcp-client": "pnpm --filter @sofia/enterprise-mcp-client build",
-    "build": "pnpm build:enterprise-mcp-client && tsc -p tsconfig.json && pnpm build:runtime-assets && bun build src/opencode-plugins/sofia-extensions-preview.ts src/opencode-plugins/sofia-capabilities-knowledge.ts src/opencode-plugins/sofia-office-attachments.ts src/opencode-plugins/sofia-anthropic-adaptive-thinking.ts src/opencode-plugins/sofia-anthropic-tool-schema.ts --outdir dist/opencode-plugins --target node --format esm",
+    "build": "pnpm build:enterprise-mcp-client && tsc -p tsconfig.json && pnpm build:runtime-assets && bun build src/engine-plugins/sofia-extensions-preview.ts src/engine-plugins/sofia-capabilities-knowledge.ts src/engine-plugins/sofia-office-attachments.ts src/engine-plugins/sofia-anthropic-adaptive-thinking.ts src/engine-plugins/sofia-anthropic-tool-schema.ts --outdir dist/engine-plugins --target node --format esm",
     "build:runtime-assets": "node scripts/copy-runtime-assets.mjs",
     "build:bin": "pnpm build:enterprise-mcp-client && bun build --compile src/cli.ts --outfile dist/bin/sofia-server",
     "build:bin:all": "pnpm build:enterprise-mcp-client && bun ./script/build.ts --outdir dist/bin --target bun-darwin-arm64 --target bun-darwin-x64 --target bun-linux-x64 --target bun-linux-arm64 --target bun-windows-x64 --target bun-windows-arm64",
@@ -38,7 +38,6 @@
   "keywords": [
     "sofia",
     "server",
-    "opencode",
     "headless",
     "cli"
   ],

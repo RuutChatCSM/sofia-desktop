@@ -26,7 +26,7 @@ export const CONNECT_DEBUG_PROXY_SCENARIOS: readonly ConnectDebugProxyScenarioRo
   { slug: "default", breaks: "Nothing; pure pass-through.", expected: "Agent access Ready; no firstFailure; initialize and tools/list succeed." },
   { slug: "auth-expired", breaks: "Agent MCP requests return HTTP 401.", expected: "engine_needs_auth / invalid_mcp_token; probe initialize shows HTTP 401." },
   { slug: "forbidden", breaks: "Agent MCP requests return HTTP 403.", expected: "engine_needs_auth / wrong_mcp_resource; probe initialize shows HTTP 403." },
-  { slug: "down", breaks: "Agent MCP requests return HTTP 502.", expected: "Engine failed; usually opencode_mcp_sync_failed with fetch/upstream failure detail; probe initialize shows HTTP 502." },
+  { slug: "down", breaks: "Agent MCP requests return HTTP 502.", expected: "Engine failed; usually engine_mcp_sync_failed with fetch/upstream failure detail; probe initialize shows HTTP 502." },
   { slug: "den-outage", breaks: "Every proxied Den request returns HTTP 503.", expected: "Sign-in and token mint fail; no usable Agent access state can be established." },
   { slug: "slow", breaks: "Agent MCP requests wait 5–10 seconds before forwarding.", expected: "Slow probe steps; client timeout behavior depends on its configured deadline." },
   { slug: "hang", breaks: "Agent MCP requests never answer before the caller or function times out.", expected: "Engine failed with fetch/timeout detail; direct probe records a transport timeout." },

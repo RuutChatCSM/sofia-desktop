@@ -51,7 +51,7 @@ type ProviderOAuthSession = ProviderOAuthStartResult & {
 
 const PROVIDER_LABELS: Record<string, string> = {
   sofia: "Sofia App",
-  opencode: "Sofia Zen",
+  engine: "Sofia Zen",
   openai: "OpenAI",
   anthropic: "Anthropic",
   google: "Google",
@@ -149,9 +149,9 @@ export default function ProviderAuthModal(props: ProviderAuthModalProps) {
     return normalizedId === "anthropic" || normalizedName === "anthropic";
   };
 
-  const isOpencodeZenProvider = (id: string) => id.trim().toLowerCase() === "opencode";
+  const isWorkspaceEngineZenProvider = (id: string) => id.trim().toLowerCase() === "engine";
 
-  const OPENCODE_ZEN_KEY_URL = "https://opencode.ai/auth";
+  const SOFIA_ENGINE_ZEN_KEY_URL = "https://github.com/RuutChatCSM/sofia/auth";
 
   const openExternalUrl = async (url: string) => {
     if (!url) return;
@@ -681,7 +681,7 @@ export default function ProviderAuthModal(props: ProviderAuthModalProps) {
     if (method.type === "cloud") {
       return "Subscribe to Hosted models.";
     }
-    if (isOpencodeZenProvider(entry.id)) {
+    if (isWorkspaceEngineZenProvider(entry.id)) {
       return "Sign in to Sofia Zen with an API key to unlock paid models alongside the free tier.";
     }
     return "Paste a secret key that Sofia App stores locally on this device.";
@@ -861,11 +861,11 @@ export default function ProviderAuthModal(props: ProviderAuthModalProps) {
                     </div>
                   </div>
                   <div className="text-xs text-gray-10">
-                    {isOpencodeZenProvider(selectedEntry.id)
+                    {isWorkspaceEngineZenProvider(selectedEntry.id)
                       ? "Sign in with an API key from the Zen auth page."
                       : "Paste your API key to connect."}
                   </div>
-                  {isOpencodeZenProvider(selectedEntry.id) ? (
+                  {isWorkspaceEngineZenProvider(selectedEntry.id) ? (
                     <div className="rounded-lg border border-indigo-5/30 bg-indigo-3/15 px-3 py-2.5 text-xs text-indigo-12 space-y-1.5">
                       <div>
                         Sofia Zen gives you access to the best coding models. Free models keep working without a key.
@@ -873,7 +873,7 @@ export default function ProviderAuthModal(props: ProviderAuthModalProps) {
                       <button
                         type="button"
                         className="text-indigo-11 hover:text-indigo-12 underline underline-offset-2 font-medium"
-                        onClick={() => void openExternalUrl(OPENCODE_ZEN_KEY_URL)}
+                        onClick={() => void openExternalUrl(SOFIA_ENGINE_ZEN_KEY_URL)}
                       >
                         Get an API key →
                       </button>
@@ -882,7 +882,7 @@ export default function ProviderAuthModal(props: ProviderAuthModalProps) {
                   <TextInput
                     label="API key"
                     type="password"
-                    placeholder={isOpencodeZenProvider(selectedEntry.id) ? "ock_..." : "sk-..."}
+                    placeholder={isWorkspaceEngineZenProvider(selectedEntry.id) ? "ock_..." : "sk-..."}
                     value={apiKeyInput}
                     onChange={(event) => {
                       setApiKeyInput(event.currentTarget.value);

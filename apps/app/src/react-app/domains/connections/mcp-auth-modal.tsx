@@ -12,8 +12,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type { McpDirectoryInfo } from "@/app/constants";
-import { openDesktopUrl, opencodeMcpAuth } from "@/app/lib/desktop";
-import { unwrap } from "@/app/lib/opencode";
+import { openDesktopUrl, engineMcpAuth } from "@/app/lib/desktop";
+import { unwrap } from "@/app/lib/engine";
 import { validateMcpServerName } from "@/app/mcp";
 import type { Client } from "@/app/types";
 import { isDesktopRuntime, normalizeDirectoryPath } from "@/app/utils";
@@ -350,7 +350,7 @@ export function McpAuthModal(props: McpAuthModalProps) {
     setCliAuthResult(null);
 
     try {
-      const result = await opencodeMcpAuth(props.projectDir, props.entry.name) as { ok: boolean; stderr?: string; stdout?: string };
+      const result = await engineMcpAuth(props.projectDir, props.entry.name) as { ok: boolean; stderr?: string; stdout?: string };
       if (result.ok) {
         setError(null);
         setNeedsReload(true);

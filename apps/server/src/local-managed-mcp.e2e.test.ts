@@ -17,7 +17,7 @@ import {
   setLocalManagedMcpEnabled,
 } from "./local-managed-mcp.js";
 import { runtimeStorageDir } from "./runtime-db.js";
-import { readRuntimeMcpConfig, runtimeMcpMap, writeRuntimeOpencodeConfig } from "./runtime-opencode-config-store.js";
+import { readRuntimeMcpConfig, runtimeMcpMap, writeRuntimeWorkspaceEngineConfig } from "./runtime-engine-config-store.js";
 import { startServer } from "./server.js";
 import type { ServerConfig } from "./types.js";
 
@@ -58,7 +58,7 @@ async function waitFor<T>(read: () => Promise<T | null>, label: string, timeoutM
   throw new Error(`timed out waiting for ${label}${lastError ? `: ${String(lastError)}` : ""}`);
 }
 
-function startMockOpencode() {
+function startMockWorkspaceEngine() {
   const requests: EngineRequest[] = [];
   const server = Bun.serve({
     hostname: "127.0.0.1",
@@ -284,7 +284,7 @@ describe("Sofia-managed local MCP OAuth gateway", () => {
     process.env.SOFIA_DEV_MODE = "1";
 
     try {
-      const engine = startMockOpencode();
+      const engine = startMockWorkspaceEngine();
       const unavailableProviderPort = await freePort();
       const config = createConfig({
         port: await freePort(),
@@ -342,7 +342,7 @@ describe("Sofia-managed local MCP OAuth gateway", () => {
     };
 
     try {
-      const engine = startMockOpencode();
+      const engine = startMockWorkspaceEngine();
       const config = createConfig({
         port: await freePort(),
         workspaceRoot,
@@ -464,7 +464,7 @@ describe("Sofia-managed local MCP OAuth gateway", () => {
     delete process.env.SOFIA_ALLOW_PRIVATE_MCP_URLS;
 
     try {
-      const engine = startMockOpencode();
+      const engine = startMockWorkspaceEngine();
       const config = createConfig({
         port: await freePort(),
         workspaceRoot,
@@ -526,7 +526,7 @@ describe("Sofia-managed local MCP OAuth gateway", () => {
     process.env.SOFIA_DEV_MODE = "1";
 
     try {
-      const engine = startMockOpencode();
+      const engine = startMockWorkspaceEngine();
       const providerPort = await freePort();
       const providerBaseUrl = await startOAuthProvider(providerPort);
       const sofiaPort = await freePort();
@@ -676,7 +676,7 @@ describe("Sofia-managed local MCP OAuth gateway", () => {
     process.env.SOFIA_DEV_MODE = "1";
 
     try {
-      const engine = startMockOpencode();
+      const engine = startMockWorkspaceEngine();
       const providerBaseUrl = await startOAuthProvider(await freePort());
       const sofiaPort = await freePort();
       const config = createConfig({
@@ -923,7 +923,7 @@ describe("Sofia-managed local MCP OAuth gateway", () => {
         data: data.toString("base64"),
       })}\n`, "utf8");
 
-      await writeRuntimeOpencodeConfig(config, "ws_managed", (current) => ({
+      await writeRuntimeWorkspaceEngineConfig(config, "ws_managed", (current) => ({
         ...current,
         mcp: {
           ...runtimeMcpMap(current),

@@ -43,7 +43,7 @@ When you visit our Website, we collect anonymous usage data (such as pages visit
 The Desktop App does not collect, track, or transmit any data during normal use. The only instance in which information is gathered is when you explicitly choose to report a bug. When you initiate a bug report, the following diagnostic information is attached to your submission solely to help us reproduce and resolve the issue:
 
 - Application version
-- OpenCode version
+- Sofia version
 - Operating system name and version
 - Platform identifier (e.g., MacIntel)
 - Deployment type (e.g., desktop)

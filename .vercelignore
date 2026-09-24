@@ -1,7 +1,7 @@
 _archive
 _worktrees
 .git
-.opencode
+.engine
 vendor
 **/node_modules
 **/.next

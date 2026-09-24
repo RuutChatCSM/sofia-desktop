@@ -117,7 +117,7 @@ async function waitForEngineReady(
   while (Date.now() < deadline) {
     try {
       const response = await fetch(
-        `http://127.0.0.1:${credentials.port}/workspace/${encodeURIComponent(workspaceId)}/opencode/session`,
+        `http://127.0.0.1:${credentials.port}/workspace/${encodeURIComponent(workspaceId)}/engine/session`,
         { headers: { Authorization: `Bearer ${credentials.token}` }, signal: AbortSignal.timeout(15_000) },
       );
       if (response.ok) return;
@@ -330,14 +330,14 @@ test(title, async ({ evidence }) => {
     },
   });
   // Register the deterministic provider through the workspace's own
-  // opencode.json BEFORE the workspace is added. The engine reads it at
+  // engine.json BEFORE the workspace is added. The engine reads it at
   // spawn, so no config PATCH, engine reload, or renderer reload is needed —
   // reloading mid-session detaches the renderer's engine event stream and
   // would starve the live busy status this spec asserts on.
   const workspacePath = `/tmp/sofia-sequential-queue-${Date.now()}`;
   await mkdir(workspacePath, { recursive: true });
-  await writeFile(join(workspacePath, "opencode.json"), `${JSON.stringify({
-    $schema: "https://opencode.ai/config.json",
+  await writeFile(join(workspacePath, "engine.json"), `${JSON.stringify({
+    $schema: "https://github.com/RuutChatCSM/sofia/config.json",
     provider: {
       [providerId]: {
         npm: "@ai-sdk/openai-compatible",

@@ -9,14 +9,14 @@ This skill is a template + checklist for creating skills in a workspace.
 
 ## What is a skill?
 
-A local skill is a folder under `.opencode/skills/<skill-name>/` or `.claude/skills/<skill-name>/` anchored by `SKILL.md`. A remote skill is stored in Organization cloud as a plugin skill component.
+A local skill is a folder under `.sofia/skills/<skill-name>/` or `.claude/skills/<skill-name>/` anchored by `SKILL.md`. A remote skill is stored in Organization cloud as a plugin skill component.
 
 ## Sofia authoring contract
 
 Follow the runtime `Skill creation:` instruction for this workspace/model:
 
 - `Cloud`: create or update the skill in Organization cloud first when it is available, then follow the remote flow below.
-- `Local`: inspect `.opencode/skills/` and `.claude/skills/`, then write or update exactly one `.opencode/skills/<skill-name>/SKILL.md` and re-read it.
+- `Local`: inspect `.sofia/skills/` and `.claude/skills/`, then write or update exactly one `.sofia/skills/<skill-name>/SKILL.md` and re-read it.
 - Use the local flow only when the user explicitly requests a workspace-local skill. Do not create both copies. Move an existing local skill to Cloud only when the user explicitly requests migration.
 
 ## Remote Cloud flow
@@ -41,7 +41,7 @@ Use this flow only when the runtime instruction says `Cloud`:
 ## Recommended structure
 
 ```
-.opencode/
+.sofia/
   skills/
     my-skill/
       SKILL.md

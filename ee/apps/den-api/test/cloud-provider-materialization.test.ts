@@ -152,7 +152,7 @@ function makeInstance(input: {
   providerRouteServesSpa?: boolean
   runtimeVersion?: string | null
   runtimeProviders?: Record<string, unknown>
-  opencodeConfigProviders?: Record<string, unknown>
+  engineConfigProviders?: Record<string, unknown>
   missingEngineReadbacks?: number
 } = {}) {
   const calls: FetchCall[] = []
@@ -161,7 +161,7 @@ function makeInstance(input: {
   let failConfigPatches = input.failConfigPatches ?? 0
   let missingEngineReadbacks = input.missingEngineReadbacks ?? 0
   const runtimeProviders: Record<string, unknown> = { ...(input.runtimeProviders ?? {}) }
-  const engineProviders = input.opencodeConfigProviders ? { ...input.opencodeConfigProviders } : null
+  const engineProviders = input.engineConfigProviders ? { ...input.engineConfigProviders } : null
   const fetchImpl: FetchImpl = async (url, init) => {
     const parsed = new URL(url)
     const method = init?.method ?? "GET"
@@ -181,7 +181,7 @@ function makeInstance(input: {
         : jsonResponse({ error: "env_not_found" }, 404)
     }
 
-    if (method === "GET" && parsed.pathname === "/opencode/config") {
+    if (method === "GET" && parsed.pathname === "/engine/config") {
       if (missingEngineReadbacks > 0) {
         missingEngineReadbacks -= 1
         return jsonResponse({ provider: {} })
@@ -216,7 +216,7 @@ function makeInstance(input: {
       ])
       const hasReservedEntry = bodyEntries(body).some((entry) => (
         typeof entry.key === "string"
-        && /^(SOFIA_|OPENCODE_)/.test(entry.key)
+        && /^(SOFIA_|SOFIA_ENGINE_)/.test(entry.key)
         && !persistableInternalKeys.has(entry.key)
       ))
       if (hasReservedEntry) {
@@ -366,7 +366,7 @@ describe("Cloud provider materialization", () => {
     })
   })
 
-  test("writes a models.dev provider block, credential env, and reloads OpenCode", async () => {
+  test("writes a models.dev provider block, credential env, and reloads Sofia", async () => {
     const provider = makeAnthropicProvider({ apiKey: "sk-anthropic" })
     const instance = makeInstance()
 
@@ -379,11 +379,11 @@ describe("Cloud provider materialization", () => {
     expect(result.ok).toBe(true)
     expect(result.status).toBe("applied")
     expect(callMethods(instance.calls)).toEqual([
-      "GET /opencode/config",
+      "GET /engine/config",
       "GET /env/ANTHROPIC_API_KEY",
       "PUT /env",
       "PATCH /runtime-config/providers",
-      "GET /opencode/config",
+      "GET /engine/config",
     ])
     expect(instance.calls[2]?.headers["x-sofia-host-token"]).toBe("host-token")
     expect(instance.calls[2]?.body).toEqual({
@@ -428,7 +428,7 @@ describe("Cloud provider materialization", () => {
 
     expect(result).toEqual({ ok: true, status: "noop", fingerprint, providers: 1 })
     expect(callMethods(instance.calls)).toEqual([
-      "GET /opencode/config",
+      "GET /engine/config",
       "GET /env/ANTHROPIC_API_KEY",
     ])
     expect(writeCalls(instance.calls)).toHaveLength(0)
@@ -450,17 +450,17 @@ describe("Cloud provider materialization", () => {
     expect(result.ok).toBe(true)
     expect(result.status).toBe("applied")
     expect(callMethods(instance.calls)).toEqual([
-      "GET /opencode/config",
+      "GET /engine/config",
       "GET /env/ANTHROPIC_API_KEY",
       "PUT /env",
       "PATCH /runtime-config/providers",
-      "GET /opencode/config",
+      "GET /engine/config",
     ])
   })
 
   test("treats missing provider read-back as materialization failure", async () => {
     const provider = makeAnthropicProvider({ apiKey: "sk-anthropic" })
-    const instance = makeInstance({ opencodeConfigProviders: {} })
+    const instance = makeInstance({ engineConfigProviders: {} })
 
     const result = await materialize({
       providers: () => [provider],
@@ -473,11 +473,11 @@ describe("Cloud provider materialization", () => {
       expect(result.reason).toBe(`provider_readback_missing_${provider.id}`)
     }
     expect(callMethods(instance.calls)).toEqual([
-      "GET /opencode/config",
+      "GET /engine/config",
       "GET /env/ANTHROPIC_API_KEY",
       "PUT /env",
       "PATCH /runtime-config/providers",
-      "GET /opencode/config",
+      "GET /engine/config",
       "PATCH /runtime-config/providers",
       "DELETE /env/ANTHROPIC_API_KEY",
     ])
@@ -486,7 +486,7 @@ describe("Cloud provider materialization", () => {
 
   test("fails when the provider is absent from engine-visible config", async () => {
     const provider = makeAnthropicProvider({ apiKey: "sk-anthropic" })
-    const instance = makeInstance({ opencodeConfigProviders: {} })
+    const instance = makeInstance({ engineConfigProviders: {} })
 
     const result = await materialize({
       providers: () => [provider],
@@ -647,7 +647,7 @@ describe("Cloud provider materialization", () => {
 
     expect(failed.ok).toBe(false)
     expect(callMethods(instance.calls)).toEqual([
-      "GET /opencode/config",
+      "GET /engine/config",
       "GET /env/ANTHROPIC_API_KEY",
       "PUT /env",
     ])
@@ -678,7 +678,7 @@ describe("Cloud provider materialization", () => {
       expect(failed.reason).toBe("runtime_provider_patch_failed_500")
     }
     expect(callMethods(instance.calls)).toEqual([
-      "GET /opencode/config",
+      "GET /engine/config",
       "GET /env/ANTHROPIC_API_KEY",
       "PUT /env",
       "PATCH /runtime-config/providers",
@@ -742,7 +742,7 @@ describe("Cloud provider materialization", () => {
     expect(unsupported.ok).toBe(false)
     expect(unsupported.status).toBe("unsupported")
     expect(callMethods(instance.calls)).toEqual([
-      "GET /opencode/config",
+      "GET /engine/config",
       "GET /env/ANTHROPIC_API_KEY",
       "PUT /env",
       "PATCH /runtime-config/providers",

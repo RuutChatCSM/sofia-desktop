@@ -38,7 +38,7 @@ const EVIDENCE_LABEL_KEYS: Record<AgentContextDiagnosticEvidenceKind, string> = 
 const OWNER_LABEL_KEYS: Record<AgentContextDiagnosticOwner, string> = {
   "sofia-client": "connect.diagnostics_owner_sofia_client",
   "sofia-server": "connect.diagnostics_owner_sofia_server",
-  "opencode-engine": "connect.diagnostics_owner_opencode_engine",
+  "sofia-engine": "connect.diagnostics_owner_sofia_engine",
   "network-admin": "connect.diagnostics_owner_network_admin",
   "organization-admin": "connect.diagnostics_owner_organization_admin",
   member: "connect.diagnostics_owner_member",

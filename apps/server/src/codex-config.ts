@@ -1,7 +1,7 @@
-// Maps the opencode runtime provider map (the same data the UI model picker
+// Maps the engine runtime provider map (the same data the UI model picker
 // uses) to a codex `config.toml` that the bundled codex engine can consume.
-// Additive — opencode provider storage is untouched.
-import type { RuntimeOpencodeConfig } from "./runtime-opencode-config-store.js";
+// Additive — engine provider storage is untouched.
+import type { RuntimeWorkspaceEngineConfig } from "./runtime-engine-config-store.js";
 
 export type CodexWireApi = "responses" | "chatcompletions";
 
@@ -23,11 +23,11 @@ export function codexWireApiForProvider(
 }
 
 /**
- * Translate an opencode provider entry into the subset of a codex
+ * Translate an engine provider entry into the subset of a codex
  * `[model_providers.NAME]` table codex needs. Returns null when the provider
  * cannot be represented (no base_url and no api) or is explicitly skipped.
  */
-export function mapOpencodeProviderToCodex(
+export function mapWorkspaceEngineProviderToCodex(
   providerId: string,
   value: Record<string, unknown>,
 ): { name: string; baseUrl: string; envKey: string | null; wireApi: CodexWireApi } | null {
@@ -64,14 +64,14 @@ function firstString(value: unknown[] | null): string | null {
   return null;
 }
 
-/** Emit a codex `config.toml` body from the opencode runtime provider map. */
+/** Emit a codex `config.toml` body from the engine runtime provider map. */
 export function buildCodexConfigToml(
   providerMap: Record<string, Record<string, unknown>>,
 ): string {
   const sections: string[] = [];
 
   for (const [providerId, value] of Object.entries(providerMap)) {
-    const mapped = mapOpencodeProviderToCodex(providerId, value);
+    const mapped = mapWorkspaceEngineProviderToCodex(providerId, value);
     if (!mapped) continue;
 
     const lines = [`[model_providers.${tomlKey(providerId)}]`, `name = ${tomlString(mapped.name)}`];
@@ -89,7 +89,7 @@ export function pickDefaultCodexProvider(
   providerMap: Record<string, Record<string, unknown>>,
 ): { providerId: string; model: string | null } | null {
   for (const [providerId, value] of Object.entries(providerMap)) {
-    if (!mapOpencodeProviderToCodex(providerId, value)) continue;
+    if (!mapWorkspaceEngineProviderToCodex(providerId, value)) continue;
     const models = isRecord(value.models) ? Object.keys(value.models) : [];
     return { providerId, model: models[0] ?? null };
   }
@@ -110,7 +110,7 @@ export function addCodexDefaultProviderLines(
 
 /** Serialize a config.toml from the full runtime config's provider map. */
 export function codexConfigTomlFromRuntime(
-  config: RuntimeOpencodeConfig,
+  config: RuntimeWorkspaceEngineConfig,
 ): string {
   const providerMap = isRecord(config.provider) ? config.provider as Record<string, Record<string, unknown>> : {};
   const body = buildCodexConfigToml(providerMap);

@@ -78,13 +78,13 @@ browser_list({ browser_url: "https://9825-xxx.daytonaproxy01.net" })
 
 Should return the Sofia page target.
 
-### 4. Verify opencode sidecar
+### 4. Verify engine sidecar
 
 ```bash
-daytona exec sofia-test 'ps aux | grep opencode | grep -v grep'
+daytona exec sofia-test 'ps aux | grep engine | grep -v grep'
 ```
 
-If no opencode process, the workspace hasn't been created yet (expected on fresh sandbox).
+If no engine process, the workspace hasn't been created yet (expected on fresh sandbox).
 
 ---
 
@@ -133,7 +133,7 @@ If no opencode process, the workspace hasn't been created yet (expected on fresh
    browser_eval({ browser_url: CDP_URL, expression: "(function() { var btns = document.querySelectorAll('button'); for (var i = 0; i < btns.length; i++) { if (btns[i].textContent.trim() === 'Create Workspace' && !btns[i].disabled) { btns[i].click(); return 'clicked'; } } return 'not found'; })()" })
    ```
 
-8. Wait 10s for workspace creation + opencode sidecar boot.
+8. Wait 10s for workspace creation + engine sidecar boot.
 
 9. Verify navigation to session page:
    ```
@@ -141,23 +141,23 @@ If no opencode process, the workspace hasn't been created yet (expected on fresh
    → should contain "/session"
    ```
 
-10. Verify opencode sidecar started:
+10. Verify engine sidecar started:
     ```bash
-    daytona exec sofia-test 'ps aux | grep opencode | grep -v grep'
-    → should show opencode serve process
+    daytona exec sofia-test 'ps aux | grep engine | grep -v grep'
+    → should show engine serve process
     ```
 
 ### Expected outcome
 - URL contains `#/workspace/ws_.../session`
 - Sidebar shows "hello" workspace
 - Status bar shows "Sofia Ready"
-- opencode process running on a random port
+- engine process running on a random port
 
 ---
 
 ## Flow 2: Send a message in a session
 
-**Prerequisite:** Flow 1 completed (workspace exists, opencode running).
+**Prerequisite:** Flow 1 completed (workspace exists, engine running).
 
 ### Steps
 
@@ -214,7 +214,7 @@ Returns path to a PNG file. Verify it's not empty.
 ## Flow 4: Connect OpenAI via UI and run GPT-5.5
 
 **Goal:** Prove provider key setup works through the Electron UI, not by editing
-`opencode.jsonc` directly.
+`engine.jsonc` directly.
 
 ### Source references for controls
 
@@ -508,7 +508,7 @@ Daytona-hosted Den server stack.
 
 **Goal:** Prove a fresh Electron desktop app can receive a Den-managed LLM
 provider, import it into the workspace, select the managed model, and complete a
-real OpenCode task without relying on locally injected provider environment
+real Sofia task without relying on locally injected provider environment
 variables.
 
 ### Verified run: 2026-06-02
@@ -542,7 +542,7 @@ variables.
    ```
 
 4. Create a clean workspace and verify Settings -> AI Providers initially shows
-   only `OpenCode Zen`.
+   only `Sofia Zen`.
 
 5. Create a Den-managed OpenAI provider through the Den API. Do not print the API
    key; read it inside the sandbox only for the provider creation request.
@@ -615,17 +615,17 @@ latency, especially after changing Den provider payloads or desktop policy code.
 
 6. Local file checks:
    - Confirm Sofia-owned cloud import metadata is stored in the Sofia
-     runtime DB, not `.opencode/sofia.json`.
-   - Confirm the provider executable config currently lands in `opencode.jsonc`;
+     runtime DB, not `.sofia/sofia.json`.
+   - Confirm the provider executable config currently lands in `engine.jsonc`;
      this remains a follow-up if the desired end state is no cloud-managed
-     provider writes to user-owned OpenCode config.
+     provider writes to user-owned Sofia config.
 
 ### Expected outcome
 
 - Fresh desktop starts without a local OpenAI provider.
 - Den-managed provider appears as a cloud provider with `Credential ready`.
 - Imported provider config includes the executable provider config fields needed
-  by OpenCode, including the provider package metadata.
+  by Sofia, including the provider package metadata.
 - The selected model completes a real task and returns `Den LLM provisioning OK`.
 - Removing the Den provider removes the imported local provider on the next
   desktop provider sync and reload.
@@ -636,7 +636,7 @@ latency, especially after changing Den provider payloads or desktop policy code.
 
 Den returned `providerConfig` and model `config` as JSON strings. The desktop
 client must parse those stringified records; otherwise imported provider config
-is incomplete and OpenCode fails with `"undefined/chat/completions" cannot be
+is incomplete and Sofia fails with `"undefined/chat/completions" cannot be
 parsed as a URL.`
 
 ---
@@ -658,8 +658,8 @@ The reducer uses `{ key, value }` actions. If you dispatched a full state object
 **Lexical editor doesn't accept text:**
 Use `document.execCommand('insertText', false, text)` after focusing. Direct `textContent` assignment doesn't trigger Lexical's internal state update.
 
-**opencode sidecar not starting:**
-Check memory and disk. Electron + opencode + Vite needs ~6GB. Use `--memory 8`.
+**engine sidecar not starting:**
+Check memory and disk. Electron + engine + Vite needs ~6GB. Use `--memory 8`.
 Dependencies/sidecars need more than the default 3GB disk; use `--disk 10`.
 
 **CDP timeouts:**

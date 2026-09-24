@@ -26,7 +26,7 @@ const ENGINEERING_TEAM = "Engineering";
 const PROVIDER_NAME = "Acme Approved Models";
 const MODEL_IDS = ["gpt-5.4", "gpt-5.5"];
 const TARGET_REPLY = "acme-first-boot-ok";
-const RELOAD_TEXT = "Reloading OpenCode config";
+const RELOAD_TEXT = "Reloading Sofia config";
 const EDITOR_SELECTOR = '[contenteditable="true"][data-lexical-editor="true"]';
 const ADMIN_CDP_URL = cleanBaseUrl(process.env.SOFIA_EVAL_WEB_CDP_ADMIN);
 const INVITEE_CDP_URL = cleanBaseUrl(process.env.SOFIA_EVAL_WEB_CDP_INVITEE);
@@ -112,7 +112,7 @@ export default {
             },
             screenshot: {
               name: "default-policy-org-models-only",
-              requireText: ["Who can use models", "Managed", "Admins may add their own providers", "Allow OpenCode Zen models", "Model access saved."],
+              requireText: ["Who can use models", "Managed", "Admins may add their own providers", "Allow Sofia Zen models", "Model access saved."],
               rejectText: ERROR_TEXT,
             },
           });
@@ -333,7 +333,7 @@ export default {
             screenshot: {
               name: "maya-model-picker-acme-only",
               requireText: ["GPT-5.4", "GPT-5.5"],
-              rejectText: ["OpenCode Zen", "Use Sofia Models", "Subscribe to add this model", "no longer available"],
+              rejectText: ["Sofia Zen", "Use Sofia Models", "Subscribe to add this model", "no longer available"],
             },
           });
         } finally {
@@ -1287,8 +1287,8 @@ async function workspaceConfigRequest(ctx, method, body) {
   });
 }
 
-function runtimeProviderDeletes(opencode) {
-  const provider = opencode?.provider && typeof opencode.provider === "object" ? opencode.provider : {};
+function runtimeProviderDeletes(engine) {
+  const provider = engine?.provider && typeof engine.provider === "object" ? engine.provider : {};
   return Object.fromEntries(
     Object.keys(provider)
       .filter((key) => key.startsWith("lpr_"))
@@ -1306,13 +1306,13 @@ async function resetDesktopToColdFirstBoot(ctx) {
   })`, { awaitPromise: true });
   const { workspaceId, workspacePath } = await ensureEvalWorkspace(ctx);
   const current = await workspaceConfigRequest(ctx, "GET");
-  const providerDeletes = runtimeProviderDeletes(current?.opencode);
-  const cloudImports = current?.sofia?.cloudImports && typeof current.sofia.cloudImports === "object"
+  const providerDeletes = runtimeProviderDeletes(current?.engine);
+  const cloudImports = current?.engine?.cloudImports && typeof current.sofia.cloudImports === "object"
     ? current.sofia.cloudImports
     : {};
 
   await workspaceConfigRequest(ctx, "PATCH", {
-    opencode: {
+    engine: {
       disabled_providers: [],
       ...(Object.keys(providerDeletes).length > 0 ? { provider: providerDeletes } : {}),
     },
@@ -1362,14 +1362,14 @@ async function startDesktopEngine(ctx, workspacePath) {
   ctx.output("frame-5-engine-start", JSON.stringify({ baseUrlSet: Boolean(result?.baseUrl), error: result?.error ?? null }, null, 2));
   let last = null;
   for (let attempt = 0; attempt < 40; attempt += 1) {
-    last = await sofiaRequest(ctx, `/workspace/${encodeURIComponent(state.desktopWorkspaceId)}/opencode/global/health`).catch((error) => ({
+    last = await sofiaRequest(ctx, `/workspace/${encodeURIComponent(state.desktopWorkspaceId)}/engine/global/health`).catch((error) => ({
       response: { ok: false, status: 0 },
       body: error instanceof Error ? error.message : String(error),
     }));
     if (last?.response?.ok) return;
     await sleep(500);
   }
-  ctx.assert(false, `OpenCode health did not become ready before first-boot handoff: ${last?.response?.status ?? "no response"} ${safeBody(last?.body)}`);
+  ctx.assert(false, `Sofia health did not become ready before first-boot handoff: ${last?.response?.status ?? "no response"} ${safeBody(last?.body)}`);
 }
 
 async function armFirstBootProbe(ctx) {
@@ -1601,7 +1601,7 @@ async function expandModelPickerGroups(ctx) {
 }
 
 async function readEngineProviderList(ctx, workspaceId = state.desktopWorkspaceId) {
-  const result = await sofiaRequest(ctx, `/workspace/${encodeURIComponent(workspaceId)}/opencode/provider`);
+  const result = await sofiaRequest(ctx, `/workspace/${encodeURIComponent(workspaceId)}/engine/provider`);
   ctx.assert(result.response.ok, `GET /provider through workspace proxy failed: ${result.response.status} ${safeBody(result.body)}`);
   return result.body;
 }
@@ -1717,7 +1717,7 @@ async function readWorkspaceConfigState(ctx, workspaceId) {
   const config = await expectSofiaJson(ctx, `/workspace/${encodeURIComponent(workspaceId)}/config`);
   const runtimeStatus = await expectSofiaJson(ctx, `/workspace/${encodeURIComponent(workspaceId)}/runtime-config`);
   const providerList = await readEngineProviderList(ctx, workspaceId);
-  const cloudProviders = config?.sofia?.cloudImports?.providers && typeof config.sofia.cloudImports.providers === "object"
+  const cloudProviders = config?.engine?.cloudImports?.providers && typeof config.sofia.cloudImports.providers === "object"
     ? Object.keys(config.sofia.cloudImports.providers)
     : [];
   const runtimeConfig = runtimeStatus?.runtime && typeof runtimeStatus.runtime === "object"
@@ -1749,7 +1749,7 @@ async function listNotifications(ctx) {
 
 function notificationLooksReloadRelated(entry) {
   const text = `${entry?.title ?? ""} ${entry?.body ?? ""} ${entry?.actionType ?? ""} ${entry?.actionLabel ?? ""}`.toLowerCase();
-  return text.includes("reload") || text.includes("restart opencode") || text.includes("config changed");
+  return text.includes("reload") || text.includes("restart engine") || text.includes("config changed");
 }
 
 function firstLine(value) {
@@ -1765,11 +1765,11 @@ function quietBootTable(frame) {
     ["runtimeConfigWrites", String(frame.probe.counters.runtimeConfigWrites)],
     ["cloudSyncCalls", String(frame.probe.counters.cloudSyncCalls)],
     ["pageReloadsAfterArming", String(frame.probe.pageReloadsAfterArming)],
-    ["Reloading OpenCode config samples", `${frame.reloadBannerSamples.positives}/30`],
+    ["Reloading Sofia config samples", `${frame.reloadBannerSamples.positives}/30`],
     ["runtime-config sha256 samples", frame.runtimeHashes.map((entry) => `${entry.sample}:${entry.hash.slice(0, 12)}(${entry.bytes}b)`).join(", ")],
     ["runtime-config unique hashes", String(uniqueHashes.length)],
     ["cloudImports.providers", frame.configState.providers.join(", ") || "none"],
-    ["runtime opencode.provider", frame.configState.runtimeProviders.join(", ") || "none"],
+    ["runtime engine.provider", frame.configState.runtimeProviders.join(", ") || "none"],
     ["engine connected providers", frame.configState.engineConnectedProviders.join(", ") || "none"],
     ["runtime disabled_providers", frame.configState.disabledProviders.join(", ") || "none"],
     ["reload notifications", frame.reloadNotifications.length ? JSON.stringify(frame.reloadNotifications) : "none"],

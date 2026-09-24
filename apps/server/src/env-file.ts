@@ -15,11 +15,11 @@ const ENV_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 // Keys reserved for internal wiring by the desktop shell and server. This UI
 // is for service credentials, not Sofia App/Sofia engine runtime knobs; users who
-// need OPENCODE_* process settings should set them from the launching shell.
+// need SOFIA_ENGINE_* process settings should set them from the launching shell.
 // We refuse writes to these and strip them when reading for injection, so a
 // tampered file cannot shadow auth credentials, token paths, or process
 // identity.
-const RESERVED_PREFIXES = ["SOFIA_", "OPENCODE_"] as const;
+const RESERVED_PREFIXES = ["SOFIA_", "SOFIA_ENGINE_"] as const;
 const PERSISTABLE_INTERNAL_KEYS = new Set([
   "SOFIA_API_KEY",
   "SOFIA_MODELS_API_KEY",

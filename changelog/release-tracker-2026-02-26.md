@@ -119,12 +119,12 @@ True
 Get back online recovery and smarter Docker dev-up
 
 #### One-line summary
-Makes worker recovery clearer and preserves existing access, while smoothing Docker dev stacks for developers using local OpenCode config.
+Makes worker recovery clearer and preserves existing access, while smoothing Docker dev stacks for developers using local Sofia config.
 
 #### Main changes
 - Added a plain-language Get back online action for remote worker recovery.
 - Reused existing Sofia tokens during sandbox restarts so reconnects keep working.
-- Updated the legacy Docker dev stack to mount host OpenCode config and auth.
+- Updated the legacy Docker dev stack to mount host Sofia config and auth.
 
 #### Lines of code changed since previous release
 370 lines changed since `v0.11.126` (325 insertions, 45 deletions).
@@ -283,8 +283,8 @@ Service restarts and steadier local connectivity
 Adds in-app restart controls, makes router startup recover from local port conflicts, and smooths billing returns from checkout.
 
 #### Main changes
-- Added Settings actions to restart orchestrator, OpenCode, Sofia server, and OpenCodeRouter.
-- Moved OpenCodeRouter onto conflict-free localhost health ports and retried startup failures automatically.
+- Added Settings actions to restart orchestrator, Sofia, Sofia server, and SofiaRouter.
+- Moved SofiaRouter onto conflict-free localhost health ports and retried startup failures automatically.
 - Restored billing state after checkout returns and dropped Telegram self-echo loops.
 
 #### Lines of code changed since previous release
@@ -551,19 +551,19 @@ None.
 `2026-03-06T19:43:28Z`
 
 #### Title
-Bundled OpenCode version stays aligned across release paths
+Bundled Sofia version stays aligned across release paths
 
 #### One-line summary
-Pins the packaged OpenCode fallback consistently across CI, prerelease, and release builds, with no notable new app workflow changes.
+Pins the packaged Sofia fallback consistently across CI, prerelease, and release builds, with no notable new app workflow changes.
 
 #### Main changes
-Keeps the bundled OpenCode fallback pinned to the same version across CI, prerelease, and release artifacts so packaged builds drift less, without introducing new user-facing Sofia workflows.
+Keeps the bundled Sofia fallback pinned to the same version across CI, prerelease, and release artifacts so packaged builds drift less, without introducing new user-facing Sofia workflows.
 
 #### Lines of code changed since previous release
 61 lines changed since `v0.11.134` (31 insertions, 30 deletions).
 
 #### Release importance
-Minor release: tightens release-path consistency for bundled OpenCode behavior without adding new user-facing product workflows.
+Minor release: tightens release-path consistency for bundled Sofia behavior without adding new user-facing product workflows.
 
 #### Major improvements
 False
@@ -1152,7 +1152,7 @@ Shared skills can now be imported straight into an existing worker from the app.
 Also released:
 
 - Added a local Docker-backed Share publisher for self-hosted dev flows.
-- Bundled fresh OpenCode builds for Den workers and improved missing Chrome extension guidance.
+- Bundled fresh Sofia builds for Den workers and improved missing Chrome extension guidance.
 
 #### Lines of code changed since previous release
 1727 lines changed since `v0.11.146` (1551 insertions, 176 deletions).
@@ -1169,7 +1169,7 @@ True
 #### Major improvement details
 - Added an existing-worker import flow for shared skills.
 - Added a local Docker publisher flow for Sofia Share.
-- Bundled OpenCode for Den Render workers so worker provisioning is more self-contained.
+- Bundled Sofia for Den Render workers so worker provisioning is more self-contained.
 
 #### Major bugs resolved
 True
@@ -1180,7 +1180,7 @@ True
 #### Major bug fix details
 - Added in-app guidance when the Chrome control extension is missing.
 - Fixed long pasted skill previews so wrapping remains readable.
-- Stopped pinning stale OpenCode builds in Den worker provisioning.
+- Stopped pinning stale Sofia builds in Den worker provisioning.
 
 #### Deprecated features
 False

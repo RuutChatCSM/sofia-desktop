@@ -67,7 +67,7 @@ Same screen, one frame down: the static Quick Connect grid (Notion, Linear,
 Stripe, Sentry, Context7) and local entries (Sofia Browser, UI Control)
 render exactly as before.
 *Assert:* static card names present; a pre-seeded direct MCP entry in
-`opencode.jsonc` is still listed and untouched (byte-identical config).
+`engine.jsonc` is still listed and untouched (byte-identical config).
 
 **7. Regression: signed-out desktop shows nothing org-flavored**
 A signed-out state (second userdata dir or post-sign-out) renders

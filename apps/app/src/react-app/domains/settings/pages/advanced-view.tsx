@@ -3,7 +3,7 @@ import { useEffect, useReducer, useState } from "react";
 
 import { Separator } from "@/components/ui/separator";
 
-import type { OpencodeConnectStatus } from "@/app/types";
+import type { WorkspaceEngineConnectStatus } from "@/app/types";
 import type { SofiaCloudMcpHealth, SofiaRuntimeConfigStatus, SofiaServerStatus } from "@/app/lib/sofia-server";
 import { t } from "@/i18n";
 import { LayoutStack } from "../settings-layout";
@@ -36,11 +36,11 @@ type AdvancedOrganizationServerSession = Pick<
 export type AdvancedViewProps = {
   busy: boolean;
   clientConnected: boolean;
-  opencodeConnectStatus: OpencodeConnectStatus | null;
+  engineConnectStatus: WorkspaceEngineConnectStatus | null;
   sofiaServerStatus: SofiaServerStatus;
   developerMode: boolean;
   toggleDeveloperMode: () => void;
-  opencodeDevModeEnabled: boolean;
+  engineDevModeEnabled: boolean;
   openDebugDeepLink: (rawUrl: string) => Promise<{ ok: boolean; message: string }>;
   canMigrateRuntimeConfig: boolean;
   migrateRuntimeConfig: () => Promise<{ migrated: boolean; keys: string[] }>;
@@ -72,14 +72,14 @@ export function AdvancedView(props: AdvancedViewProps) {
   } = localState;
 
   const clientStatusLabel = (() => {
-    const status = props.opencodeConnectStatus?.status;
+    const status = props.engineConnectStatus?.status;
     if (status === "connecting") return t("status.connecting");
     if (status === "error") return t("settings.connection_failed");
     return props.clientConnected ? t("status.connected") : t("config.status_not_connected");
   })();
 
   const clientTone: AdvancedStatusTone = (() => {
-    const status = props.opencodeConnectStatus?.status;
+    const status = props.engineConnectStatus?.status;
     if (status === "connecting") return "warning";
     if (status === "error") return "error";
     return props.clientConnected ? "ready" : "neutral";
@@ -227,7 +227,7 @@ export function AdvancedView(props: AdvancedViewProps) {
       <AdvancedDeveloperSection
         busy={props.busy}
         developerMode={props.developerMode}
-        opencodeDevModeEnabled={props.opencodeDevModeEnabled}
+        engineDevModeEnabled={props.engineDevModeEnabled}
         deepLinkOpen={debugDeepLinkOpen}
         deepLinkInput={debugDeepLinkInput}
         deepLinkBusy={debugDeepLinkBusy}

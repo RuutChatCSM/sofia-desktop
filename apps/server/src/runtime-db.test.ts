@@ -6,7 +6,7 @@ import { join, resolve } from "node:path";
 import { installCloudPlugin, readInstalledCloudPlugins } from "./cloud-plugins.js";
 import { readSofiaWorkspaceConfig, writeSofiaWorkspaceConfig } from "./sofia-workspace-config-store.js";
 import { openRuntimeSqliteDatabase, runtimeDbPath, runtimeStorageDir } from "./runtime-db.js";
-import { readRuntimeOpencodeConfig, writeRuntimeOpencodeConfig } from "./runtime-opencode-config-store.js";
+import { readRuntimeWorkspaceEngineConfig, writeRuntimeWorkspaceEngineConfig } from "./runtime-engine-config-store.js";
 import { readSessionGroupState, writeSessionGroupState } from "./session-groups.js";
 import type { ServerConfig } from "./types.js";
 
@@ -117,7 +117,7 @@ describe("runtime DB primitive", () => {
       ...current,
       workspace: { label: "Workspace config" },
     }));
-    await writeRuntimeOpencodeConfig(config, WORKSPACE_ID, (current) => ({
+    await writeRuntimeWorkspaceEngineConfig(config, WORKSPACE_ID, (current) => ({
       ...current,
       plugin: ["runtime-plugin"],
     }));
@@ -138,7 +138,7 @@ describe("runtime DB primitive", () => {
       assignments: { ses_runtime: "grp_runtime" },
     });
     expect((await readSofiaWorkspaceConfig(config, WORKSPACE_ID)).workspace).toEqual({ label: "Workspace config" });
-    expect((await readRuntimeOpencodeConfig(config, WORKSPACE_ID)).plugin).toEqual(["runtime-plugin"]);
+    expect((await readRuntimeWorkspaceEngineConfig(config, WORKSPACE_ID)).plugin).toEqual(["runtime-plugin"]);
     expect((await readInstalledCloudPlugins(config, WORKSPACE_ID)).plugins.plugin_runtime?.name).toBe("Runtime Primitive Plugin");
 
     const sqlite = new Database(dbPath, { readonly: true, create: false });
@@ -146,9 +146,9 @@ describe("runtime DB primitive", () => {
       const tables = rowNames(sqlite.query("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").all());
       expect(tables).toEqual([
         "cloud_plugin_install_configs",
-        "sofia_workspace_configs",
-        "runtime_opencode_configs",
+        "runtime_engine_configs",
         "session_group_states",
+        "sofia_workspace_configs",
       ]);
       for (const table of tables) expect(rowCount(sqlite, table)).toBe(1);
     } finally {

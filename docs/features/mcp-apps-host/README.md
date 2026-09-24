@@ -6,7 +6,7 @@ absent, unsupported, or fails to initialize.
 
 ## Runtime flow
 
-1. OpenCode calls the configured MCP tool once.
+1. Sofia calls the configured MCP tool once.
 2. Sofia's bundled engine plugin preserves that call's standard `content`,
    `structuredContent`, and result `_meta` fields in the completed tool part.
 3. The desktop asks its local Sofia server to find the original projected
@@ -56,6 +56,6 @@ Focused server tests cover extension negotiation, projected tool naming,
 resource resolution, tool visibility, read-only same-server mediation, and
 write rejection. App tests cover result preservation, session mapping, CSP
 construction, and safe HTML injection. The Testkit scenario
-`mcp-app-inline-host.e2e.test.ts` drives a deterministic OpenCode tool call,
+`mcp-app-inline-host.e2e.test.ts` drives a deterministic Sofia tool call,
 resolves the declared `ui://` resource, mounts the sandboxed view, and captures
 the visible inline card and fallback transcript.

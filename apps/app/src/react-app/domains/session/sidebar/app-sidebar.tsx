@@ -1087,20 +1087,20 @@ export function AppSidebar(props: AppSidebarProps) {
     <SidebarContext.Provider value={contextValue}>
       <Sidebar
         collapsible="offcanvas"
-        className="border-e-0 group-data-[side=left]:border-e-0"
+        className="mac:**:data-[sidebar=sidebar]:bg-transparent border-e-0 group-data-[side=left]:border-e-0"
       >
         <div className="hidden h-12 mac:block mac:titlebar-drag"/>
         {brandLogoUrl ? (
           <div
             data-testid="brand-logo"
-            className="flex h-12 shrink-0 items-center gap-2 px-3 pb-2 pt-1 mac:pt-0"
+            className="flex h-16 shrink-0 items-center gap-3 px-5 pb-3 pt-2 mac:pt-0"
           >
             <img
               src={brandLogoUrl}
               alt={brandLogoUrl === "/sofia-mark.svg" ? "Sofia" : "Organization logo"}
-              className={`max-h-9 w-auto max-w-[140px] object-contain object-left ${brandLogoUrl === "/sofia-mark.svg" ? "sofia-brand-mark" : ""}`}
+              className={`h-8 w-8 object-contain object-left ${brandLogoUrl === "/sofia-mark.svg" ? "sofia-brand-mark" : ""}`}
             />
-            {brandLogoUrl === "/sofia-mark.svg" ? <span className="text-base font-semibold tracking-tight">Sofia</span> : null}
+            {brandLogoUrl === "/sofia-mark.svg" ? <span className="text-xl font-semibold tracking-tight">Sofia</span> : null}
           </div>
         ) : null}
         {props.conversationHistory ? (

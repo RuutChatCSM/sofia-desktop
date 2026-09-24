@@ -23,9 +23,9 @@ const publicCorsAllowHeaders = [
   "Content-Type",
   "X-Sofia-Host-Token",
   "X-Sofia-Client-Id",
-  "X-OpenCode-Directory",
-  "X-Opencode-Directory",
-  "x-opencode-directory",
+  "X-Sofia-Directory",
+  "X-WorkspaceEngine-Directory",
+  "x-engine-directory",
 ]
 type WorkerId = typeof DaytonaSandboxTable.$inferSelect.worker_id
 type WorkerTokenScope = typeof WorkerTokenTable.$inferSelect.scope

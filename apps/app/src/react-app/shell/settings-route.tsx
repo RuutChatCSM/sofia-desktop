@@ -10,7 +10,7 @@ import {
   resolveSofiaExtensionCatalogPlatform,
 } from "@/app/constants";
 import type { EnablementContext } from "@/app/enablement";
-import { createClient, unwrap } from "@/app/lib/opencode";
+import { createClient, unwrap } from "@/app/lib/engine";
 import {
   createSofiaServerClient,
   isLoopbackSofiaServerUrl,
@@ -170,8 +170,8 @@ import {
 } from "./desktop-local-sofia";
 import { reloadEngineWithDesktopFallback } from "./engine-reload-escalation";
 import { resolveSofiaConnection } from "./sofia-connection";
-import { abortSessionSafe, listCommands } from "@/app/lib/opencode-session";
-import { notifyAlert } from "./notifications";
+import { abortSessionSafe, listCommands } from "@/app/lib/engine-session";
+import { notifyAlert, notifyEvent } from "./notifications";
 import { useReloadCoordinator } from "./reload-coordinator";
 import { CommandPalette } from "./command-palette";
 import { buildCommandPaletteSessions } from "./command-palette-sessions";
@@ -198,7 +198,7 @@ import {
   type LocalProviderInstallInput,
 } from "@/react-app/domains/settings/openai-image-extension";
 import {
-  libraryAgentsFromOpencode,
+  libraryAgentsFromWorkspaceEngine,
   libraryCommandsFromSlashOptions,
   type LibraryAgentItem,
   type LibraryCommandItem,
@@ -625,11 +625,11 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
     [baseUrl, token],
   );
   const selectedWorkspaceEndpoint = useWorkspaceServerClient(selectedWorkspace, { baseUrl, token });
-  const opencodeBaseUrl = selectedWorkspaceEndpoint?.opencodeBaseUrl ?? "";
+  const engineBaseUrl = selectedWorkspaceEndpoint?.engineBaseUrl ?? "";
 
   routeStateRef.current = {
     activeClient,
-    providerBaseUrl: opencodeBaseUrl,
+    providerBaseUrl: engineBaseUrl,
     selectedWorkspaceId,
     selectedWorkspaceRoot,
     selectedWorkspaceType: selectedWorkspace?.workspaceType ?? "local",
@@ -742,11 +742,11 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
         setProviderDefaults,
         setProviderConnectedIds,
         setDisabledProviders,
-        markOpencodeConfigReloadRequired: () => {
+        markWorkspaceEngineConfigReloadRequired: () => {
           setConfigActionStatus(t("settings.config_updated"));
           reloadCoordinator.markReloadRequired("config", {
             type: "config",
-            name: "opencode.json",
+            name: "engine.json",
             action: "updated",
           });
         },
@@ -817,7 +817,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
     const workspaceId = routeStateRef.current.runtimeWorkspaceId?.trim() ?? "";
     const orgId = settings.activeOrgId?.trim() ?? "";
     if (!client || !workspaceId || !orgId) return;
-    // Settings only has a safe, exact OpenCode client/directory for the active
+    // Settings only has a safe, exact Sofia client/directory for the active
     // workspace here, so sign-out cleanup is intentionally scoped to that
     // workspace instead of guessing across every configured worker.
     await cleanupSofiaCloudMcpAfterSignOut({
@@ -828,7 +828,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
         orgId,
       },
       sofiaClient: client,
-      opencodeClient: routeStateRef.current.activeClient,
+      engineClient: routeStateRef.current.activeClient,
       directory: routeStateRef.current.selectedWorkspaceRoot,
     });
     setCloudMcpHealth(null);
@@ -961,7 +961,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
     if (!checkDesktopRestriction({ restriction: "allowZenModel" })) return;
 
     void providerAuthStore
-      .ensureProjectProviderDisabledState("opencode", true)
+      .ensureProjectProviderDisabledState("engine", true)
       .catch((error) => {
         console.warn("[desktop-app-restrictions] failed to sync Zen restriction", error);
       });
@@ -1027,10 +1027,10 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
   routeStateRef.current.runtimeWorkspaceId = runtimeWorkspaceId;
   routeStateRef.current.selectedWorkspaceSofiaClient = selectedWorkspaceEndpoint?.client ?? sofiaClient;
 
-  const opencodeClient = useMemo(() => {
+  const engineClient = useMemo(() => {
     if (!selectedWorkspaceEndpoint || !selectedWorkspaceEndpoint.token) return null;
     return createClient(
-      selectedWorkspaceEndpoint.opencodeBaseUrl,
+      selectedWorkspaceEndpoint.engineBaseUrl,
       selectedWorkspaceRoot || undefined,
       {
         token: selectedWorkspaceEndpoint.token,
@@ -1040,22 +1040,22 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
   }, [selectedWorkspaceEndpoint, selectedWorkspaceRoot]);
 
   useEffect(() => {
-    setActiveClient(opencodeClient);
-  }, [opencodeClient]);
+    setActiveClient(engineClient);
+  }, [engineClient]);
 
   const [libraryCommands, setLibraryCommands] = useState<LibraryCommandItem[]>([]);
   const [libraryAgents, setLibraryAgents] = useState<LibraryAgentItem[]>([]);
   const loadLibraryLists = useCallback(async () => {
-    if (opencodeClient) {
+    if (engineClient) {
       try {
         const [commands, agents] = await Promise.all([
-          listCommands(opencodeClient, selectedWorkspaceRoot || undefined),
-          opencodeClient.app.agents()
+          listCommands(engineClient, selectedWorkspaceRoot || undefined),
+          engineClient.app.agents()
             .then((result) => unwrap(result))
             .catch(() => []),
         ]);
         setLibraryCommands(libraryCommandsFromSlashOptions(commands));
-        setLibraryAgents(libraryAgentsFromOpencode(Array.isArray(agents) ? agents : []));
+        setLibraryAgents(libraryAgentsFromWorkspaceEngine(Array.isArray(agents) ? agents : []));
       } catch {
         setLibraryCommands([]);
         setLibraryAgents([]);
@@ -1065,7 +1065,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
       setLibraryAgents([]);
     }
     await refreshConnectCapabilities({ force: true });
-  }, [opencodeClient, refreshConnectCapabilities, selectedWorkspaceRoot]);
+  }, [engineClient, refreshConnectCapabilities, selectedWorkspaceRoot]);
   useEffect(() => {
     void loadLibraryLists();
   }, [loadLibraryLists]);
@@ -1078,13 +1078,13 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
   }, [providerAuthStore]);
   const selectedEngine = useSelectedEngine();
   const modelPicker = useModelPicker({
-    client: opencodeClient,
-    baseUrl: opencodeBaseUrl,
+    client: engineClient,
+    baseUrl: engineBaseUrl,
     workspaceRoot: selectedWorkspaceRoot,
     onOpen: handleModelPickerOpen,
     onLoadError: handleModelPickerLoadError,
     cloudProvidersEnabled: cloudSession.isSignedIn,
-    // Engine-aware: hide the built-in opencode (Zen) provider on the codex engine.
+    // Engine-aware: hide the built-in engine (Zen) provider on the codex engine.
     engine: selectedEngine,
   });
   const currentCloudMcpModel = useMemo<SofiaCloudMcpProviderModelContext | null>(() => {
@@ -1111,19 +1111,19 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
     [sessionsByWorkspaceId, selectedWorkspaceId, workspaces],
   );
   const handleCreatePaletteSession = useCallback(async () => {
-    if (!opencodeClient || !selectedWorkspaceId) {
+    if (!engineClient || !selectedWorkspaceId) {
       navigate(selectedWorkspaceId ? workspaceSessionRoute(selectedWorkspaceId) : "/session");
       return;
     }
     try {
       const session = unwrap(
-        await opencodeClient.session.create({ directory: selectedWorkspaceRoot || undefined }),
+        await engineClient.session.create({ directory: selectedWorkspaceRoot || undefined }),
       );
       navigate(workspaceSessionRoute(selectedWorkspaceId, session.id));
     } catch (error) {
       toast.error(describeRouteError(error));
     }
-  }, [navigate, opencodeClient, selectedWorkspaceId, selectedWorkspaceRoot]);
+  }, [navigate, engineClient, selectedWorkspaceId, selectedWorkspaceRoot]);
   // Settings refreshes provider auth whenever the picker opens (the session
   // route does not need this; its provider state is kept fresh elsewhere).
   useEffect(() => {
@@ -1297,7 +1297,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
     setLocalProviderError(null);
     try {
       await client.patchConfig(workspaceId, {
-        opencode: {
+        engine: {
           provider: {
             [input.providerId]: buildLocalProviderConfig({ ...input, modelId }),
           },
@@ -1310,7 +1310,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
           modelVariant: null,
         }));
       }
-      reloadCoordinator.markReloadRequired("config", { type: "config", name: "opencode.json", action: "updated" });
+      reloadCoordinator.markReloadRequired("config", { type: "config", name: "engine.json", action: "updated" });
       try {
         await reloadEngineOrRestartDesktop(client, workspaceId);
       } catch {
@@ -1483,9 +1483,12 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
         message,
         preservedWorkspaceCount: desktopWorkspaces.length,
       });
-      // Fires on mount/auto-refresh too, not just user actions.
-      notifyAlert({
+      // Fires on mount/auto-refresh too, not just user actions, and the app
+      // keeps working from the cached workspace list — so this is a notice in
+      // the notification center, not an error toast.
+      notifyEvent({
         kind: "system",
+        severity: "warning",
         title: t("notifications.refresh_failed"),
         body: message,
         dedupeKey: "settings-route-refresh",
@@ -1553,7 +1556,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
       // ignore browser event dispatch failures
     }
 
-    // OpenCode reconnects MCPs async after dispose — the store polls until
+    // Sofia reconnects MCPs async after dispose — the store polls until
     // statuses settle so users don't have to collapse/expand the card.
     void pollMcpServersAfterReloadRef.current?.();
 
@@ -1733,7 +1736,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
     };
   }, [refreshRouteState]);
 
-  // Load auto-compaction state from OpenCode config on workspace change.
+  // Load auto-compaction state from Sofia config on workspace change.
   useEffect(() => {
     if (!sofiaClient || !selectedWorkspaceId) return;
     const workspaceId = routeStateRef.current.runtimeWorkspaceId?.trim() || selectedWorkspaceId;
@@ -1742,7 +1745,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
       try {
         const config = await sofiaClient.getConfig(workspaceId);
         if (cancelled) return;
-        const compaction = config.opencode?.compaction;
+        const compaction = config.engine?.compaction;
         const auto = compaction && typeof compaction === "object" && "auto" in compaction
           ? (compaction as { auto?: boolean }).auto
           : undefined;
@@ -1764,11 +1767,11 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
     setAutoCompactContextBusy(true);
     try {
       await sofiaClient.patchConfig(workspaceId, {
-        opencode: { compaction: { auto: next } },
+        engine: { compaction: { auto: next } },
       });
       reloadCoordinator.markReloadRequired("config", {
         type: "config",
-        name: "opencode.json",
+        name: "engine.json",
         action: "updated",
       });
     } catch {
@@ -1907,10 +1910,10 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
     // chrome-devtools browser surface (either the legacy plugin name or the
     // chrome-devtools MCP server, matched by name or command).
     const browserPluginConfigured = connectionsSnapshot.mcpServers.some(
-      (s) => s.name === "chrome-devtools" || s.name === "opencode-chrome-devtools" ||
+      (s) => s.name === "chrome-devtools" || s.name === "engine-chrome-devtools" ||
         s.config.command?.some((c: string) => c.includes("chrome-devtools")),
     );
-    if (browserPluginConfigured) loadedPlugins.add("opencode-chrome-devtools");
+    if (browserPluginConfigured) loadedPlugins.add("engine-chrome-devtools");
 
     return {
       mcpStatuses: connectionsSnapshot.mcpStatuses,
@@ -2017,10 +2020,10 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
   );
   const diagnosticsUnavailableReason = selectedWorkspace?.workspaceType === "remote"
     && selectedWorkspace.remoteType !== "sofia"
-    ? "direct-remote-opencode" as const
+    ? "direct-remote-engine" as const
     : null;
   const diagnosticsWorkspaceType = selectedWorkspace?.workspaceType === "remote"
-    ? selectedWorkspace.remoteType ?? "legacy-opencode"
+    ? selectedWorkspace.remoteType ?? "legacy-engine"
     : "local";
   const diagnosticsScopeKey = useMemo(() => createOpaqueDiagnosticsScopeKey({
     client: diagnosticsClient,
@@ -2297,7 +2300,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
               }
             }}
             canDisconnectProvider={(provider) =>
-              provider.id.trim().toLowerCase() === "opencode" || provider.source !== "env"
+              provider.id.trim().toLowerCase() === "engine" || provider.source !== "env"
             }
             canAddProviders={!providerAuthStore.isProviderAddRestricted()}
             organizationName={cloudSession.activeOrgName}
@@ -2501,8 +2504,8 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
         return (
           <AdvancedView
             busy={busy}
-            clientConnected={Boolean(opencodeClient)}
-            opencodeConnectStatus={null}
+            clientConnected={Boolean(engineClient)}
+            engineConnectStatus={null}
             sofiaServerStatus={sofiaServerSnapshot.sofiaServerStatus}
             developerMode={developerMode}
             toggleDeveloperMode={() => setDeveloperMode((current) => {
@@ -2510,7 +2513,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
               try { window.localStorage.setItem("sofia.developerMode", next ? "1" : "0"); } catch {}
               return next;
             })}
-            opencodeDevModeEnabled={false}
+            engineDevModeEnabled={false}
             openDebugDeepLink={async () => ({ ok: false, message: "Debug deep links are not wired into the React settings route yet." })}
             cloudMcpUrl={sofiaCloudMcpUrl}
             canMigrateRuntimeConfig={Boolean(sofiaClient && selectedWorkspaceId)}
@@ -2579,13 +2582,13 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
         return (
           <RecoveryView
             anyActiveRuns={false}
-            workspaceConfigPath={selectedWorkspaceRoot ? `${selectedWorkspaceRoot}/.opencode/sofia.json` : ""}
+            workspaceConfigPath={selectedWorkspaceRoot ? `${selectedWorkspaceRoot}/.sofia/sofia.json` : ""}
             resetConfigBusy={resetConfigBusy}
             onResetAppConfigDefaults={() => {}}
             configActionStatus={configActionStatus}
             cacheRepairBusy={false}
             cacheRepairResult={null}
-            onRepairOpencodeCache={() => {}}
+            onRepairWorkspaceEngineCache={() => {}}
             dockerCleanupBusy={false}
             dockerCleanupResult={null}
             onCleanupSofiaDockerContainers={() => {}}
@@ -2697,7 +2700,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
         workerType={providerAuthSnapshot.providerAuthWorkerType}
         // Hide any provider the org blocks at the desktop layer so users
         // can't connect a forbidden one (dev #1505). Same helper covers
-        // opencode-provider gating via the `allowZenModel` restriction.
+        // engine-provider gating via the `allowZenModel` restriction.
         // We also strip the matching key from `authMethods` because the
         // modal builds its entry list from `Object.keys(authMethods)`,
         // not from `providers`.

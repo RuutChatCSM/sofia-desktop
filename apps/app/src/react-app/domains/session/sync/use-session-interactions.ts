@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
-import { unwrap } from "@/app/lib/opencode";
+import { unwrap } from "@/app/lib/engine";
 import type { Client, PendingPermission, PendingQuestion, TodoItem } from "@/app/types";
 import { t } from "@/i18n";
 import { getReactQueryClient } from "@/react-app/infra/query-client";
@@ -73,7 +73,7 @@ export function useSessionInteractions(input: UseSessionInteractionsInput) {
           list.push(...unwrap(await client.permission.list({ directory })));
           readSucceeded = true;
         } catch {
-          // Older/newer OpenCode permission APIs can fail independently.
+          // Older/newer Sofia permission APIs can fail independently.
         }
         try {
           list.push(...unwrap(await client.v2.session.permission.list({ sessionID: sessionId })).data);

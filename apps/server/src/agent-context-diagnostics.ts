@@ -51,11 +51,11 @@ import {
 import { resolveWorkspaceEngineConnection } from "./engine-connection.js";
 import { buildSofiaRuntimeConfigObjectFromSnapshot } from "./sofia-runtime-config.js";
 import {
-  inspectRuntimeOpencodeConfigState,
+  inspectRuntimeWorkspaceEngineConfigState,
   runtimeMcpMap,
-  type RuntimeOpencodeConfig,
-  type RuntimeOpencodeConfigInspection,
-} from "./runtime-opencode-config-store.js";
+  type RuntimeWorkspaceEngineConfig,
+  type RuntimeWorkspaceEngineConfigInspection,
+} from "./runtime-engine-config-store.js";
 import type { McpItem, ServerConfig, WorkspaceInfo } from "./types.js";
 import { exists } from "./utils.js";
 
@@ -353,7 +353,7 @@ function inspectProjectAgent(): ProjectAgentInspection {
   };
 }
 
-function runtimeOnlyMcpInventory(runtime: RuntimeOpencodeConfig): McpInventoryInspection {
+function runtimeOnlyMcpInventory(runtime: RuntimeWorkspaceEngineConfig): McpInventoryInspection {
   return {
     items: Object.entries(runtimeMcpMap(runtime)).map(([name, config]) => ({
       name,
@@ -373,7 +373,7 @@ function runtimeOnlyMcpInventory(runtime: RuntimeOpencodeConfig): McpInventoryIn
 
 async function inspectMcpInventory(
   workspace: WorkspaceInfo,
-  runtime: RuntimeOpencodeConfig,
+  runtime: RuntimeWorkspaceEngineConfig,
   signal?: AbortSignal,
 ): Promise<{ inventory: McpInventoryInspection; passiveLocalLayersAvailable: boolean }> {
   if (workspace.workspaceType !== "local" || !workspace.path.trim()) {
@@ -602,7 +602,7 @@ export function cloudCatalogCheck(probe: CloudCatalogProbe): AgentContextDiagnos
     case "http_error":
       owner = "network-admin";
       if (probe.httpStatus === 451) {
-        message = "The independent runtime endpoint probe received HTTP 451, which indicates an egress proxy, firewall, or allowlist deny rather than an Sofia Cloud catalog shape problem.";
+        message = "The independent runtime endpoint probe received HTTP 451, which indicates an egress proxy, firewall, or allowlist deny rather than a Sofia Cloud catalog shape problem.";
         action = "Add the configured Sofia Cloud MCP host and its documented redirect targets to the corporate allowlist, then rerun diagnostics.";
       } else {
         message = "The independent runtime endpoint probe could not be completed through the configured network path.";
@@ -637,7 +637,7 @@ export function cloudCatalogCheck(probe: CloudCatalogProbe): AgentContextDiagnos
     case "proxy_error":
       owner = "network-admin";
       if (probe.httpStatus === 451) {
-        message = "The independent runtime endpoint probe received HTTP 451, which indicates an egress proxy, firewall, or allowlist deny rather than an Sofia Cloud catalog shape problem.";
+        message = "The independent runtime endpoint probe received HTTP 451, which indicates an egress proxy, firewall, or allowlist deny rather than a Sofia Cloud catalog shape problem.";
         action = "Add the configured Sofia Cloud MCP host and its documented redirect targets to the corporate allowlist, then rerun diagnostics.";
       } else {
         message = "The configured proxy could not complete the independent runtime endpoint probe.";
@@ -743,7 +743,7 @@ export function cloudDifferentialCheck(probe: CloudCatalogProbe, engineReachable
       status: "failed",
       evidenceKind: "derived",
       message: "The Sofia App runtime reached the Cloud endpoint directly, but the engine registration evidence reports a failure; the engine-side connection path or registration lifecycle is implicated, not the endpoint.",
-      owner: "opencode-engine",
+      owner: "sofia-engine",
       action: "Reconnect Sofia Cloud or restart the selected workspace engine, then rerun diagnostics; the endpoint itself is reachable from this machine.",
     });
   }
@@ -773,7 +773,7 @@ export function cloudDifferentialCheck(probe: CloudCatalogProbe, engineReachable
       status: "warning",
       evidenceKind: "derived",
       message: "The engine registration evidence for Sofia Cloud is stale or was never recorded, so only the independent runtime observation is current.",
-      owner: "opencode-engine",
+      owner: "sofia-engine",
       action: "Start or reconnect the selected workspace engine to refresh its registration evidence, then rerun diagnostics.",
     });
   }
@@ -1056,7 +1056,7 @@ function engineReadUnavailableCheck(
     evidenceKind: "unavailable",
     code,
     message: `The selected engine's ${subject} could not be safely observed.`,
-    owner: "opencode-engine",
+    owner: "sofia-engine",
     action: inspectionStatus === "not-configured"
       ? "Configure or start the selected workspace engine, then rerun diagnostics."
       : "Check the selected workspace engine health and rerun diagnostics.",
@@ -1088,7 +1088,7 @@ function engineConfigCheck(
     evidenceKind: "observed",
     code: "effective_engine_config_observed",
     message: "The selected engine returned its effective merged configuration.",
-    owner: "opencode-engine",
+    owner: "sofia-engine",
     action: "No action is required.",
     details: {
       engineApiReadPerformed: true,
@@ -1123,8 +1123,8 @@ function engineAgentCheck(
     code: agent ? "effective_sofia_agent_observed" : "effective_sofia_agent_missing",
     message: agent
       ? "The selected engine resolved the Sofia App agent."
-      : "The selected engine did not resolve an Sofia App agent.",
-    owner: agent ? "opencode-engine" : "sofia-server",
+      : "The selected engine did not resolve a Sofia App agent.",
+    owner: agent ? "sofia-engine" : "sofia-server",
     action: agent
       ? "No action is required."
       : "Restore the Sofia App runtime agent injection and restart the selected workspace engine.",
@@ -1143,7 +1143,7 @@ function engineAgentCheck(
 function runtimeHealthCheck(
   workspace: WorkspaceInfo,
   engineConfigured: boolean,
-  inspection: RuntimeOpencodeConfigInspection,
+  inspection: RuntimeWorkspaceEngineConfigInspection,
   managedVault: LocalManagedMcpVaultInspection | null,
   durationMs: number,
 ): AgentContextDiagnosticCheck {
@@ -1166,7 +1166,7 @@ function runtimeHealthCheck(
   const message = corrupt
     ? "The selected workspace runtime configuration could not be safely decoded."
     : !engineConfigured
-      ? "The selected workspace does not have an Sofia engine runtime endpoint configured."
+      ? "The selected workspace does not have a Sofia engine runtime endpoint configured."
       : absent
         ? "The runtime configuration database or selected workspace row has not been initialized."
         : remote
@@ -1242,9 +1242,9 @@ export async function runAgentContextDiagnostics(input: {
 
   input.dependencies?.signal?.throwIfAborted();
   const runtimeStarted = now();
-  const runtimeInspection: RuntimeOpencodeConfigInspection = input.workspace.workspaceType === "remote"
+  const runtimeInspection: RuntimeWorkspaceEngineConfigInspection = input.workspace.workspaceType === "remote"
     ? { status: "remote-workspace", config: {} }
-    : await inspectRuntimeOpencodeConfigState(input.config, input.workspace.id, {
+    : await inspectRuntimeWorkspaceEngineConfigState(input.config, input.workspace.id, {
       signal: input.dependencies?.signal,
     });
   // Passive plaintext read of the managed MCP credential vault: surfaces
@@ -1581,7 +1581,7 @@ export async function runAgentContextDiagnostics(input: {
         : projectOverrideDetected
           ? "The configured Sofia App agent intent has project override layers and could not be confirmed live."
           : "Only the configured Sofia App agent intent was available; effective resolution was not observed.",
-      owner: effectiveEngine ? "opencode-engine" : projectOverrideDetected ? "member" : "opencode-engine",
+      owner: effectiveEngine ? "sofia-engine" : projectOverrideDetected ? "member" : "sofia-engine",
       action: effectiveEngine && effectiveAgentUsable
         ? "No action is required."
         : effectiveEngine
@@ -1621,7 +1621,7 @@ export async function runAgentContextDiagnostics(input: {
           : effectiveEngine
             ? "The effective Sofia App base prompt contains the markers but does not match the canonical configured injection."
             : "The configured Sofia App base prompt markers are present, but its digest does not match the canonical generated injection.",
-      owner: effectiveEngine ? "opencode-engine" : "sofia-server",
+      owner: effectiveEngine ? "sofia-engine" : "sofia-server",
       action: promptMatchesCanonicalIntent
         ? "No action is required."
         : "Restore the canonical Sofia App runtime agent definition.",
@@ -1659,7 +1659,7 @@ export async function runAgentContextDiagnostics(input: {
       owner: cloudToolPolicyStatus === "available"
         ? "sofia-server"
         : cloudToolPolicyStatus === "unavailable"
-          ? "opencode-engine"
+          ? "sofia-engine"
           : "member",
       action: cloudToolPolicyStatus === "denied"
         ? "Allow the denied sofia-cloud capability tool IDs in top-level or Sofia App agent permission policy, then rerun diagnostics."
@@ -1692,7 +1692,7 @@ export async function runAgentContextDiagnostics(input: {
         : effectiveEngine
           ? "The Connect steering plugin is missing from the effective engine configuration."
           : "The Connect steering plugin is missing from the configured runtime injection intent.",
-      owner: effectiveEngine ? "opencode-engine" : "sofia-server",
+      owner: effectiveEngine ? "sofia-engine" : "sofia-server",
       action: canonicalPluginSpecMatched
         ? "No action is required."
         : "Restore the canonical Sofia App runtime plugin bundle.",
@@ -1741,7 +1741,7 @@ export async function runAgentContextDiagnostics(input: {
               ? "Only server-managed runtime MCP layers were available for this workspace."
               : "The server-managed runtime and selected project/global MCP sources were inventoried without claiming complete Sofia engine resolution.",
       owner: effectiveEngine
-        ? "opencode-engine"
+        ? "sofia-engine"
         : layerHealthProblem ? "member" : inventory.collisions.length > 0 ? "member" : "sofia-server",
       action: effectiveEngine
         ? inventoryTotal > 200
@@ -1777,7 +1777,7 @@ export async function runAgentContextDiagnostics(input: {
       evidenceKind: "unavailable",
       code: "per_request_connect_context_not_observed",
       message: "The canonical Connect plugin configuration was checked, but diagnostics did not start an LLM turn and cannot prove its per-request context transform or complete tool registry execution.",
-      owner: "opencode-engine",
+      owner: "sofia-engine",
       action: "Review the canonical plugin match, effective permission, MCP registration, and cloud catalog checks together; use a controlled agent turn if execution proof is required.",
       details: {
         effectivePluginConfigurationObserved: Boolean(effectiveEngine),
@@ -1813,7 +1813,7 @@ export async function runAgentContextDiagnostics(input: {
           : remoteMcps.length > 0
             ? "Every enabled Sofia-managed MCP has a current connected registration result; configured-disabled entries are not treated as injected tools."
             : "No server-managed MCP registration was available to inspect.",
-      owner: failedRegistrationCount > 0 || missingRegistrationCount > 0 ? "opencode-engine" : "sofia-server",
+      owner: failedRegistrationCount > 0 || missingRegistrationCount > 0 ? "sofia-engine" : "sofia-server",
       action: failedRegistrationCount > 0 || missingRegistrationCount > 0
         ? staleRegistrationFailure
           ? "The engine is reachable and this evidence is stale; rerun diagnostics. No repair is needed unless it persists."
@@ -1843,7 +1843,7 @@ export async function runAgentContextDiagnostics(input: {
       evidenceKind: "unavailable",
       code: "live_mcp_status_intentionally_not_queried",
       message: "Live MCP status was not queried because that endpoint can connect every enabled MCP.",
-      owner: "opencode-engine",
+      owner: "sofia-engine",
       action: "Review the bounded Sofia Cloud catalog probe and exact managed registration response evidence instead.",
       details: {
         effectiveMcpConfigurationObserved: Boolean(effectiveEngine),

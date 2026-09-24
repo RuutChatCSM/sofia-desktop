@@ -2,7 +2,7 @@
 
 Sofia is a free, open-source desktop app (macOS, Windows, Linux) for doing
 work with AI agents on your own files — an open-source alternative to Claude
-Cowork and Codex, built on OpenCode, running any model from 50+ providers.
+Cowork and Codex, built on Sofia, running any model from 50+ providers.
 Desktop mode keeps files local; cloud is optional. Three surfaces live in this
 repo:
 
@@ -19,7 +19,7 @@ repo:
   plugins through marketplaces.
 
 The app consumes Sofia server surfaces (self-hosted or hosted) rather than
-inventing parallel behavior. Anything OpenCode can do is available in Sofia,
+inventing parallel behavior. Anything Sofia can do is available in Sofia,
 even before a dedicated UI exists.
 
 ## Verification (every change)

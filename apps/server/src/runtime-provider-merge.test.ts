@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { mergeRuntimeProviderUpdate } from "./runtime-opencode-config-store.js";
+import { mergeRuntimeProviderUpdate } from "./runtime-engine-config-store.js";
 
 describe("mergeRuntimeProviderUpdate", () => {
   const ollama = { npm: "@ai-sdk/openai-compatible", name: "Ollama" };

@@ -15,16 +15,16 @@ const MCP_PATH = "/mcp/agent";
 const PUBLIC_MCP_SERVER_URL = "https://sofia-api.ruut.chat/mcp/agent";
 const CLIENT_SCOPE = "mcp:read mcp:write offline_access";
 const CLIENT_NAME = "Sofia reliable connect eval client";
-const OPENCODE_BIN = process.env.SOFIA_EVAL_OPENCODE_BIN?.trim() || "opencode";
+const SOFIA_ENGINE_BIN = process.env.SOFIA_EVAL_SOFIA_ENGINE_BIN?.trim() || "engine";
 const DEMO_EMAIL = process.env.SOFIA_EVAL_DEMO_EMAIL?.trim() || "alex@acme.test";
 const DEMO_PASSWORD = process.env.SOFIA_EVAL_DEMO_PASSWORD?.trim() || "SofiaDemo123!";
 const SECTION_SELECTOR = "#connect-mcp";
 const INSTALL_SELECTOR = "#connect-mcp-install";
 const ACTIVE_PANEL_SELECTOR = `${INSTALL_SELECTOR} [role="tabpanel"]:not([hidden])`;
 const EXPECTED_TOOLS = ["execute_capability", "search_capabilities"];
-const OPENCODE_AUTH_COMMAND = "opencode mcp auth sofia";
-const OPENCODE_RECONNECT_COMMAND = `opencode mcp logout sofia
-opencode mcp auth sofia`;
+const SOFIA_ENGINE_AUTH_COMMAND = "engine mcp auth sofia";
+const SOFIA_ENGINE_RECONNECT_COMMAND = `engine mcp logout sofia
+engine mcp auth sofia`;
 const CODEX_COMMAND = `codex mcp add sofia --url ${PUBLIC_MCP_SERVER_URL}`;
 const CODEX_LOGIN_COMMAND = "codex mcp login sofia";
 const CODEX_RECONNECT_COMMAND = `codex mcp logout sofia
@@ -51,9 +51,9 @@ const CLIENT_EXPECTATIONS = [
     oauthNeedles: ["use /mcp in Claude Code", "Native proof is not complete"],
   },
   {
-    label: "OpenCode",
+    label: "Sofia",
     status: "Verified",
-    oauthNeedles: ["OpenCode config", OPENCODE_AUTH_COMMAND, "OpenCode native remote MCP OAuth"],
+    oauthNeedles: ["Sofia config", SOFIA_ENGINE_AUTH_COMMAND, "Sofia native remote MCP OAuth"],
   },
   {
     label: "VS Code",
@@ -318,10 +318,10 @@ function protectedResourceMetadataUrl(resource) {
 function nativeAuthFileCandidates() {
   if (!state.nativeEnv) return [];
   return [
-    path.join(state.nativeEnv.XDG_DATA_HOME, "opencode", "mcp-auth.json"),
-    path.join(state.nativeEnv.XDG_CONFIG_HOME, "opencode", "mcp-auth.json"),
-    path.join(state.nativeEnv.HOME, ".local", "share", "opencode", "mcp-auth.json"),
-    path.join(state.nativeEnv.HOME, ".config", "opencode", "mcp-auth.json"),
+    path.join(state.nativeEnv.XDG_DATA_HOME, "engine", "mcp-auth.json"),
+    path.join(state.nativeEnv.XDG_CONFIG_HOME, "engine", "mcp-auth.json"),
+    path.join(state.nativeEnv.HOME, ".local", "share", "engine", "mcp-auth.json"),
+    path.join(state.nativeEnv.HOME, ".config", "engine", "mcp-auth.json"),
   ];
 }
 
@@ -360,7 +360,7 @@ async function ensureLandingConnect(ctx) {
       return location.href === ${JSON.stringify(url)}
         && Boolean(section)
         && text.includes(${JSON.stringify(PUBLIC_MCP_SERVER_URL)})
-        && text.includes("Verified for OpenCode only");
+        && text.includes("Verified for Sofia only");
     })()`,
     { timeoutMs: 30_000, label: "landing Connect MCP installer" },
   );
@@ -710,7 +710,7 @@ function registerNativeSyncCleanup() {
   });
 }
 
-async function prepareNativeOpenCodeEnvironment() {
+async function prepareNativeSofiaEnvironment() {
   if (state.nativeTempRoot) return;
   await startNativeBrowserCaptureServer();
   const root = await mkdtemp(path.join(os.tmpdir(), `sofia-reliable-connect-${state.nativeRunId}-`));
@@ -719,9 +719,9 @@ async function prepareNativeOpenCodeEnvironment() {
   const xdgCacheHome = path.join(root, "xdg-cache");
   const home = path.join(root, "home");
   const captureBinDir = path.join(root, "bin");
-  const configDir = path.join(xdgConfigHome, "opencode");
-  const dataDir = path.join(xdgDataHome, "opencode");
-  const cacheDir = path.join(xdgCacheHome, "opencode");
+  const configDir = path.join(xdgConfigHome, "engine");
+  const dataDir = path.join(xdgDataHome, "engine");
+  const cacheDir = path.join(xdgCacheHome, "engine");
   await Promise.all([
     mkdir(configDir, { recursive: true }),
     mkdir(dataDir, { recursive: true }),
@@ -731,7 +731,7 @@ async function prepareNativeOpenCodeEnvironment() {
   ]);
 
   state.nativeTempRoot = root;
-  state.nativeConfigPath = path.join(configDir, "opencode.json");
+  state.nativeConfigPath = path.join(configDir, "engine.json");
   state.nativeAuthFilePath = path.join(dataDir, "mcp-auth.json");
   state.nativeBrowserCaptureScript = path.join(root, "capture-browser.js");
   state.nativeBrowserCaptureBinDir = captureBinDir;
@@ -748,7 +748,7 @@ async function prepareNativeOpenCodeEnvironment() {
   };
 
   const config = {
-    $schema: "https://opencode.ai/config.json",
+    $schema: "https://github.com/RuutChatCSM/sofia/config.json",
     mcp: {
       [MCP_NAME]: {
         type: "remote",
@@ -850,7 +850,7 @@ SOFIA_EVAL_BROWSER_LAUNCHER=${JSON.stringify(launcherName)} exec ${JSON.stringif
 }
 
 function nativeCommandEnv() {
-  if (!state.nativeEnv) throw new Error("Native OpenCode environment was not prepared.");
+  if (!state.nativeEnv) throw new Error("Native Sofia environment was not prepared.");
   return state.nativeEnv;
 }
 
@@ -882,11 +882,11 @@ function summarizeCommandResult(result) {
   };
 }
 
-async function runNativeOpenCode(args, label, timeoutMs = 45_000) {
-  await prepareNativeOpenCodeEnvironment();
+async function runNativeSofia(args, label, timeoutMs = 45_000) {
+  await prepareNativeSofiaEnvironment();
   const stdoutChunks = [];
   const stderrChunks = [];
-  const child = spawn(OPENCODE_BIN, args, {
+  const child = spawn(SOFIA_ENGINE_BIN, args, {
     cwd: state.nativeTempRoot,
     env: nativeCommandEnv(),
     stdio: ["ignore", "pipe", "pipe"],
@@ -905,7 +905,7 @@ async function runNativeOpenCode(args, label, timeoutMs = 45_000) {
       clearTimeout(timeout);
       resolve({
         label,
-        command: `${OPENCODE_BIN} ${args.join(" ")}`,
+        command: `${SOFIA_ENGINE_BIN} ${args.join(" ")}`,
         exitCode: null,
         signal: "error",
         stdout: commandOutputText(stdoutChunks),
@@ -918,7 +918,7 @@ async function runNativeOpenCode(args, label, timeoutMs = 45_000) {
       clearTimeout(timeout);
       resolve({
         label,
-        command: `${OPENCODE_BIN} ${args.join(" ")}`,
+        command: `${SOFIA_ENGINE_BIN} ${args.join(" ")}`,
         exitCode: code,
         signal,
         stdout: commandOutputText(stdoutChunks),
@@ -929,13 +929,13 @@ async function runNativeOpenCode(args, label, timeoutMs = 45_000) {
 }
 
 async function startNativeAuthProcess() {
-  await prepareNativeOpenCodeEnvironment();
+  await prepareNativeSofiaEnvironment();
   const stdoutChunks = [];
   const stderrChunks = [];
   state.nativeAuthResult = null;
   state.nativeAuthStdoutChunks = stdoutChunks;
   state.nativeAuthStderrChunks = stderrChunks;
-  const child = spawn(OPENCODE_BIN, ["mcp", "auth", MCP_NAME], {
+  const child = spawn(SOFIA_ENGINE_BIN, ["mcp", "auth", MCP_NAME], {
     cwd: state.nativeTempRoot,
     env: nativeCommandEnv(),
     stdio: ["ignore", "pipe", "pipe"],
@@ -946,8 +946,8 @@ async function startNativeAuthProcess() {
   nativeAuthExitPromise = new Promise((resolve) => {
     child.once("error", (error) => {
       const result = {
-        label: "opencode mcp auth",
-        command: `${OPENCODE_BIN} mcp auth ${MCP_NAME}`,
+        label: "engine mcp auth",
+        command: `${SOFIA_ENGINE_BIN} mcp auth ${MCP_NAME}`,
         exitCode: null,
         signal: "error",
         stdout: commandOutputText(stdoutChunks),
@@ -959,8 +959,8 @@ async function startNativeAuthProcess() {
     });
     child.once("close", (code, signal) => {
       const result = {
-        label: "opencode mcp auth",
-        command: `${OPENCODE_BIN} mcp auth ${MCP_NAME}`,
+        label: "engine mcp auth",
+        command: `${SOFIA_ENGINE_BIN} mcp auth ${MCP_NAME}`,
         exitCode: code,
         signal,
         stdout: commandOutputText(stdoutChunks),
@@ -1077,14 +1077,14 @@ async function waitForCapturedAuthorizeUrl(ctx) {
     if (printedUrl) return printedUrl;
     if (state.nativeAuthResult) {
       const summary = summarizeCommandResult(state.nativeAuthResult);
-      throw new Error(`Native OpenCode auth exited before opening an authorize URL: ${JSON.stringify(summary)}`);
+      throw new Error(`Native Sofia auth exited before opening an authorize URL: ${JSON.stringify(summary)}`);
     }
     await sleep(250);
   }
   const printedUrl = readPrintedAuthorizeUrl();
   if (printedUrl) return printedUrl;
   await killNativeAuthProcess(ctx);
-  throw new Error("Native OpenCode auth did not invoke the BROWSER capture executable within 60 seconds.");
+  throw new Error("Native Sofia auth did not invoke the BROWSER capture executable within 60 seconds.");
 }
 
 async function waitForNativeAuthExit(ctx) {
@@ -1094,7 +1094,7 @@ async function waitForNativeAuthExit(ctx) {
   ]);
   if (result) return result;
   await killNativeAuthProcess(ctx);
-  throw new Error("Native OpenCode auth did not exit after the loopback callback.");
+  throw new Error("Native Sofia auth did not exit after the loopback callback.");
 }
 
 function readCaseInsensitive(record, names) {
@@ -1236,7 +1236,7 @@ async function forceNativeCredentialExpired(ctx, credential) {
   const nextValue = pastExpiryValue(credential.expiresAt);
   const expiryUpdated = setFirstExpiryDeep(credential.credential, nextValue);
   const accessUpdated = setFirstAccessTokenDeep(credential.credential, "eyJhbGciOiJFZERTQSJ9.eyJleHAiOjF9.invalid");
-  ctx.assert(expiryUpdated && accessUpdated, "Native OpenCode mcp-auth.json exposes access-token and expiry fields to make the local credential stale.");
+  ctx.assert(expiryUpdated && accessUpdated, "Native Sofia mcp-auth.json exposes access-token and expiry fields to make the local credential stale.");
   await writeFile(state.nativeAuthFilePath, `${JSON.stringify(credential.parsed, null, 2)}\n`, "utf8");
 }
 
@@ -1542,7 +1542,7 @@ function renderProofPage(proof) {
   </head>
   <body>
     <main>
-      <p class="badge">Connected</p><p class="badge">No tokens shown</p><p class="badge">Native OpenCode</p>
+      <p class="badge">Connected</p><p class="badge">No tokens shown</p><p class="badge">Native Sofia</p>
       <h1>Reliable Sofia Connect proof</h1>
       <p>Landing UI contract: <code>${escapeHtml(proof.canonicalServerUrl)}</code></p>
       <p>Runtime under test: <code>${escapeHtml(proof.runtimeServerUrl)}</code>. ${escapeHtml(proof.urlContract)}</p>
@@ -1808,7 +1808,7 @@ async function cleanupNativeState(ctx) {
   await killNativeAuthProcess(ctx);
   const cleanup = { logout: null, db: null, rateLimits: null, browser: null, tempRemoved: false };
   if (state.nativeTempRoot) {
-    cleanup.logout = summarizeCommandResult(await runNativeOpenCode(["mcp", "logout", MCP_NAME], "opencode mcp logout", 30_000));
+    cleanup.logout = summarizeCommandResult(await runNativeSofia(["mcp", "logout", MCP_NAME], "engine mcp logout", 30_000));
   }
   cleanup.db = await cleanupOAuthClientById(ctx, "end").catch((error) => ({ phase: "end", errorHash: shortHash(error instanceof Error ? error.stack ?? error.message : String(error)) }));
   cleanup.browser = await clearDenWebSession(ctx)
@@ -1879,7 +1879,7 @@ export default {
           action: async () => {
             state.landingUrl = await ensureLandingConnect(ctx);
             state.landingVisiblePanels = await collectVisibleClientPanels(ctx);
-            await clickClientTab(ctx, "OpenCode");
+            await clickClientTab(ctx, "Sofia");
           },
           assert: async () => {
             const pageState = await ctx.eval(`(() => {
@@ -1898,31 +1898,31 @@ export default {
             );
             recordAssertion(
               ctx,
-              "Every client status was collected from a visible selected panel, with only OpenCode marked Verified",
-              JSON.stringify(verifiedLabels) === JSON.stringify(["OpenCode"])
+              "Every client status was collected from a visible selected panel, with only Sofia marked Verified",
+              JSON.stringify(verifiedLabels) === JSON.stringify(["Sofia"])
                 && setupLabels.length === CLIENT_EXPECTATIONS.length - 1
                 && CLIENT_EXPECTATIONS.every((client) => statuses[client.label]?.selected === client.label && statuses[client.label]?.hidden === false && statuses[client.label]?.statusVisible === true),
               { verifiedLabels, setupLabels, statuses },
             );
           },
-          screenshot: { name: "frame-1-landing-connect-mcp", requireText: [PUBLIC_MCP_SERVER_URL, "OpenCode", "Verified"] },
+          screenshot: { name: "frame-1-landing-connect-mcp", requireText: [PUBLIC_MCP_SERVER_URL, "Sofia", "Verified"] },
         });
       },
     },
     {
       name: "Frame 2",
       run: async (ctx) => {
-        await ctx.prove("Real client tabs reveal the exact OpenCode verified and Codex setup-only install, auth, and reconnect sequences.", {
+        await ctx.prove("Real client tabs reveal the exact Sofia verified and Codex setup-only install, auth, and reconnect sequences.", {
           voiceover: vo[1],
           action: async () => {
             await ensureLandingConnect(ctx);
             state.installVisiblePanels = await collectVisibleClientPanels(ctx);
-            await clickClientTab(ctx, "OpenCode");
+            await clickClientTab(ctx, "Sofia");
             await ctx.eval(`document.querySelector(${JSON.stringify(ACTIVE_PANEL_SELECTOR)})?.scrollIntoView({ block: "start", behavior: "instant" }); true`);
           },
           assert: async () => {
             const panels = state.installVisiblePanels;
-            const opencode = panels.OpenCode.text;
+            const engine = panels.Sofia.text;
             const codex = panels.Codex.text;
             const selected = await visiblePanelSnapshot(ctx);
             recordAssertion(
@@ -1940,15 +1940,15 @@ export default {
             );
             recordAssertion(
               ctx,
-              "OpenCode shows the remote JSON config, opencode auth command, and logout-then-auth reconnect sequence",
-              opencode.includes('"type": "remote"')
-                && opencode.includes('"enabled": true')
-                && opencode.includes('"oauth": {}')
-                && opencode.includes(PUBLIC_MCP_SERVER_URL)
-                && opencode.includes(OPENCODE_AUTH_COMMAND)
-                && opencode.indexOf("opencode mcp logout sofia") >= 0
-                && opencode.indexOf(OPENCODE_AUTH_COMMAND, opencode.indexOf("opencode mcp logout sofia")) > opencode.indexOf("opencode mcp logout sofia"),
-              { selected: panels.OpenCode.selected, panelText: opencode },
+              "Sofia shows the remote JSON config, engine auth command, and logout-then-auth reconnect sequence",
+              engine.includes('"type": "remote"')
+                && engine.includes('"enabled": true')
+                && engine.includes('"oauth": {}')
+                && engine.includes(PUBLIC_MCP_SERVER_URL)
+                && engine.includes(SOFIA_ENGINE_AUTH_COMMAND)
+                && engine.indexOf("engine mcp logout sofia") >= 0
+                && engine.indexOf(SOFIA_ENGINE_AUTH_COMMAND, engine.indexOf("engine mcp logout sofia")) > engine.indexOf("engine mcp logout sofia"),
+              { selected: panels.Sofia.selected, panelText: engine },
             );
             recordAssertion(
               ctx,
@@ -1961,12 +1961,12 @@ export default {
             );
             recordAssertion(
               ctx,
-              "The final visible panel is OpenCode after the real tab clicks",
-              selected.selected === "OpenCode" && selected.hidden === false,
+              "The final visible panel is Sofia after the real tab clicks",
+              selected.selected === "Sofia" && selected.hidden === false,
               selected,
             );
           },
-          screenshot: { name: "frame-2-opencode-install", requireText: ["OpenCode", OPENCODE_AUTH_COMMAND, "RECONNECT OR SWITCH ORG"] },
+          screenshot: { name: "frame-2-engine-install", requireText: ["Sofia", SOFIA_ENGINE_AUTH_COMMAND, "RECONNECT OR SWITCH ORG"] },
         });
       },
     },
@@ -1980,7 +1980,7 @@ export default {
               await applyDesktopViewport(ctx);
               const rateLimitReset = await cleanupEvalRateLimits(ctx, "start");
               ctx.recordEvidence({ type: "output", name: "Scoped Better Auth rate-limit cleanup start", text: JSON.stringify(rateLimitReset) });
-              await prepareNativeOpenCodeEnvironment();
+              await prepareNativeSofiaEnvironment();
               const startCleanup = await cleanupOAuthClientById(ctx, "start");
               ctx.recordEvidence({ type: "output", name: "Native OAuth DB cleanup start", text: JSON.stringify(startCleanup, null, 2) });
               state.unauthenticatedInitialize = await postUnauthenticatedInitialize();
@@ -2003,7 +2003,7 @@ export default {
               state.oauthState = authorize.searchParams.get("state") ?? "";
               state.nativeClientId = authorize.searchParams.get("client_id") ?? "";
               await clearDenWebSession(ctx);
-              await navigateBrowser(ctx, state.nativeAuthorizeUrl, "native OpenCode OAuth authorize URL");
+              await navigateBrowser(ctx, state.nativeAuthorizeUrl, "native Sofia OAuth authorize URL");
               await submitSignIn(ctx);
               await waitForOrganizationConsent(ctx);
               state.selectedOrganizationLabel = await selectAcmeOrganization(ctx);
@@ -2024,7 +2024,7 @@ export default {
                 } catch {
                   return false;
                 }
-              })()`, { timeoutMs: 45_000, label: "native OpenCode loopback callback" });
+              })()`, { timeoutMs: 45_000, label: "native Sofia loopback callback" });
               const callback = await ctx.eval(`(() => {
                 const url = new URL(location.href);
                 return {
@@ -2054,7 +2054,7 @@ export default {
               const callbackScreenshotUrl = await replaceCurrentUrlWithQueryless(ctx);
               ctx.recordEvidence({ type: "output", name: "Callback screenshot URL sanitization", text: JSON.stringify(callbackScreenshotUrl, null, 2) });
               await ctx.screenshot("frame-3-native-loopback-callback", {
-                claim: "The real native OpenCode loopback callback is loaded after authorization and does not expose tokens in the URL.",
+                claim: "The real native Sofia loopback callback is loaded after authorization and does not expose tokens in the URL.",
                 voiceover: vo[2],
                 rejectText: ["access_token", "refresh_token", "id_token"],
               });
@@ -2070,7 +2070,7 @@ export default {
               const expectedAuthorizationMetadataUrl = issuer ? authorizationServerMetadataUrl(issuer) : "";
               recordAssertion(
                 ctx,
-                "Native OpenCode used exact RFC9728 discovery, standards-priority authorization metadata, exact runtime resource, state, and PKCE S256",
+                "Native Sofia used exact RFC9728 discovery, standards-priority authorization metadata, exact runtime resource, state, and PKCE S256",
                 state.unauthenticatedInitialize.status === 401
                   && state.protectedResourceMetadataUrl === expectedProtectedMetadataUrl
                   && readString(state.protectedResourceMetadata, "resource") === mcpServerUrl()
@@ -2100,7 +2100,7 @@ export default {
               );
               recordAssertion(
                 ctx,
-                "The browser selected an organization and the native loopback callback contains code plus matching state only, while OpenCode exits 0 and persists mcp-auth.json",
+                "The browser selected an organization and the native loopback callback contains code plus matching state only, while Sofia exits 0 and persists mcp-auth.json",
                 state.selectedOrganizationLabel.length > 0
                   && state.callback !== null
                   && state.callback.codeLength > 0
@@ -2142,8 +2142,8 @@ export default {
               state.firstAccessToken = nativeBefore.accessToken;
               state.firstRefreshToken = nativeBefore.refreshToken;
 
-              state.nativeAuthList = await runNativeOpenCode(["mcp", "auth", "list"], "opencode mcp auth list");
-              state.nativeMcpListBeforeRefresh = await runNativeOpenCode(["mcp", "list"], "opencode mcp list before forced expiry");
+              state.nativeAuthList = await runNativeSofia(["mcp", "auth", "list"], "engine mcp auth list");
+              state.nativeMcpListBeforeRefresh = await runNativeSofia(["mcp", "list"], "engine mcp list before forced expiry");
 
               state.mcpInitialize = await mcpCall(nativeBefore.accessToken, "initialize", initializeParams());
               state.toolsList = await mcpCall(nativeBefore.accessToken, "tools/list", {});
@@ -2160,7 +2160,7 @@ export default {
               state.organizationName = extractOrganizationName(state.executePayload);
 
               await forceNativeCredentialExpired(ctx, nativeBefore);
-              state.nativeMcpListAfterRefresh = await runNativeOpenCode(["mcp", "list"], "opencode mcp list after forced expiry");
+              state.nativeMcpListAfterRefresh = await runNativeSofia(["mcp", "list"], "engine mcp list after forced expiry");
               const nativeAfter = await readNativeCredential();
               state.nativeCredentialAfterRefresh = nativeAfter;
               state.currentAccessToken = nativeAfter.accessToken;
@@ -2204,10 +2204,10 @@ export default {
               const beforeSummary = nativeCredentialSummary(state.nativeCredentialBeforeRefresh);
               const afterSummary = nativeCredentialSummary(state.nativeCredentialAfterRefresh);
               const commandSummaries = [state.nativeAuthList, state.nativeMcpListBeforeRefresh, state.nativeMcpListAfterRefresh].map((result) => summarizeCommandResult(result));
-              ctx.recordEvidence({ type: "output", name: "Redacted native OpenCode summaries", text: JSON.stringify({ beforeSummary, afterSummary, commandSummaries }, null, 2) });
+              ctx.recordEvidence({ type: "output", name: "Redacted native Sofia summaries", text: JSON.stringify({ beforeSummary, afterSummary, commandSummaries }, null, 2) });
               recordAssertion(
                 ctx,
-                "Native OpenCode mcp-auth.json contains a JWT access token, opaque refresh token, expiry, and client metadata without exposing secrets",
+                "Native Sofia mcp-auth.json contains a JWT access token, opaque refresh token, expiry, and client metadata without exposing secrets",
                 beforeSummary.accessToken.present === true
                   && beforeSummary.accessToken.jwt === true
                   && beforeSummary.refreshToken.present === true
@@ -2220,7 +2220,7 @@ export default {
               );
               recordAssertion(
                 ctx,
-                "Native opencode mcp auth list and mcp list exit successfully and report authenticated connected OAuth for sofia from real command output",
+                "Native engine mcp auth list and mcp list exit successfully and report authenticated connected OAuth for sofia from real command output",
                 commandLooksAuthenticated(state.nativeAuthList)
                   && commandLooksConnected(state.nativeMcpListBeforeRefresh),
                 commandSummaries,
@@ -2390,8 +2390,8 @@ export default {
                     && bodyText.includes('issuer is exactly')
                     && bodyText.includes('audience is exactly'),
                   hasOpaqueRefreshTokenContract: bodyText.includes('Refresh tokens are opaque rotating grants'),
-                  hasOpenCodeAuth: bodyText.includes(${JSON.stringify(OPENCODE_AUTH_COMMAND)}),
-                  hasOpenCodeReconnect: bodyText.includes('opencode mcp logout sofia') && bodyText.includes(${JSON.stringify(OPENCODE_AUTH_COMMAND)}),
+                  hasSofiaAuth: bodyText.includes(${JSON.stringify(SOFIA_ENGINE_AUTH_COMMAND)}),
+                  hasSofiaReconnect: bodyText.includes('engine mcp logout sofia') && bodyText.includes(${JSON.stringify(SOFIA_ENGINE_AUTH_COMMAND)}),
                   hasCodexAdd: bodyText.includes(${JSON.stringify(CODEX_COMMAND)}),
                   hasCodexLogin: bodyText.includes(${JSON.stringify(CODEX_LOGIN_COMMAND)}),
                   hasCodexReconnect: bodyText.includes('codex mcp logout sofia') && bodyText.includes(${JSON.stringify(CODEX_LOGIN_COMMAND)}),
@@ -2425,8 +2425,8 @@ export default {
                   && actual.hasRotationOverlap === true
                   && actual.hasJwtAccessTokenContract === true
                   && actual.hasOpaqueRefreshTokenContract === true
-                  && actual.hasOpenCodeAuth === true
-                  && actual.hasOpenCodeReconnect === true
+                  && actual.hasSofiaAuth === true
+                  && actual.hasSofiaReconnect === true
                   && actual.hasCodexAdd === true
                   && actual.hasCodexLogin === true
                   && actual.hasCodexReconnect === true
@@ -2435,9 +2435,9 @@ export default {
               );
               recordAssertion(
                 ctx,
-                "The article/main support table has exact client/status rows with only OpenCode Verified, plus RFC9728 details, troubleshooting, references, proxy warning, and no stale claims",
+                "The article/main support table has exact client/status rows with only Sofia Verified, plus RFC9728 details, troubleshooting, references, proxy warning, and no stale claims",
                 CLIENT_EXPECTATIONS.every((client) => supportRows[client.label].cells.includes(client.label) && supportRows[client.label].cells.includes(client.status))
-                  && Object.entries(supportRows).filter(([, row]) => row.cells.includes("Verified")).map(([label]) => label).join(",") === "OpenCode"
+                  && Object.entries(supportRows).filter(([, row]) => row.cells.includes("Verified")).map(([label]) => label).join(",") === "Sofia"
                   && actual.hasRfc9728 === true
                   && actual.hasExactResource === true
                   && actual.hasTroubleshooting === true

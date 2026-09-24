@@ -1,9 +1,10 @@
 import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { CodexSessionManager, codexSessionId, isCodexSessionId, isMissingRolloutError, threadBelongsToWorkspace } from "./codex-sessions.js";
+import { CodexSessionManager, codexSessionId, isCodexSessionId, isMissingRolloutError, isThreadWriterConflict, threadBelongsToWorkspace } from "./codex-sessions.js";
 
 const roots: string[] = [];
 
@@ -17,16 +18,51 @@ async function createRoot(): Promise<string> {
   return root;
 }
 
-async function writeFakeCodex(root: string, notifications: Array<{ method: string; params: Record<string, unknown> }> = []): Promise<string> {
+/** Methods the fake engine was asked for, in order. */
+function readCallLog(path: string): string[] {
+  try {
+    return readFileSync(path, "utf8").split("\n").filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+type FakeCodexOptions = {
+  /** Append every requested method here so tests can assert what was called. */
+  logPath?: string;
+  /** `thread/items/list` payload (materialized store items). */
+  items?: unknown[];
+  /** Paged `thread/items/list` payloads, oldest first; each links to the next. */
+  itemsPages?: Array<{ data: unknown[]; nextCursor?: string | null }>;
+  /** `thread/list` payload (threads restored into the session map). */
+  threads?: unknown[];
+  /** `thread/loaded/list` payload (threads loaded in this engine process). */
+  loadedThreads?: string[];
+  /** Make `thread/resume` fail the way a competing writer does. */
+  resumeConflict?: boolean;
+};
+
+async function writeFakeCodex(
+  root: string,
+  notifications: Array<{ method: string; params: Record<string, unknown> }> = [],
+  options: FakeCodexOptions = {},
+): Promise<string> {
   const path = join(root, "codex.js");
   await writeFile(path, [
     "import { createInterface } from 'node:readline';",
+    "import { appendFileSync } from 'node:fs';",
     "if (process.argv.includes('--version')) {",
     "  process.stdout.write('codex-cli 0.149.1\\n');",
     "  process.exit(0);",
     "}",
     "const rl = createInterface({ input: process.stdin });",
     "const notifications = " + JSON.stringify(notifications) + ";",
+    "const logPath = " + JSON.stringify(options.logPath ?? null) + ";",
+    "const listItems = " + JSON.stringify(options.items ?? []) + ";",
+    "const itemPages = " + JSON.stringify(options.itemsPages ?? []) + ";",
+    "const listedThreads = " + JSON.stringify(options.threads ?? []) + ";",
+    "const loadedThreads = " + JSON.stringify(options.loadedThreads ?? []) + ";",
+    "const resumeConflict = " + JSON.stringify(options.resumeConflict === true) + ";",
     "const send = (m) => process.stdout.write(JSON.stringify(m) + '\\n');",
     "let id = 0;",
     "function emitNotifications(threadId, turnId) {",
@@ -38,6 +74,7 @@ async function writeFakeCodex(root: string, notifications: Array<{ method: strin
     "  if (!line.trim()) return;",
     "  let msg;",
     "  try { msg = JSON.parse(line); } catch { return; }",
+    "  if (logPath) appendFileSync(logPath, msg.method + '\\n');",
     "  if (msg.method === 'initialize') {",
     "    send({ jsonrpc: '2.0', id: msg.id, result: { userAgent: 'fake-codex', codexHome: '/tmp/fake-codex-home' } });",
     "  } else if (msg.method === 'thread/start') {",
@@ -69,7 +106,25 @@ async function writeFakeCodex(root: string, notifications: Array<{ method: strin
     "    } else {",
     "      send({ jsonrpc: '2.0', id: msg.id, result: { turnId: 'steered-' + (++id) } });",
     "    }",
-    "  } else if (msg.method === 'thread/resume' || msg.method === 'thread/archive' || msg.method === 'thread/unarchive' || msg.method === 'thread/unsubscribe' || msg.method === 'turn/interrupt') {",
+    "  } else if (msg.method === 'thread/list') {",
+    "    send({ jsonrpc: '2.0', id: msg.id, result: { data: listedThreads } });",
+    "  } else if (msg.method === 'thread/loaded/list') {",
+    "    send({ jsonrpc: '2.0', id: msg.id, result: { data: loadedThreads } });",
+    "  } else if (msg.method === 'thread/items/list') {",
+    "    if (itemPages.length === 0) {",
+    "      send({ jsonrpc: '2.0', id: msg.id, result: { data: listItems } });",
+    "    } else {",
+    "      const requested = msg.params.cursor ?? null;",
+    "      const page = itemPages.find((p, i) => (i === 0 ? requested === null : requested === itemPages[i - 1].nextCursor));",
+    "      send({ jsonrpc: '2.0', id: msg.id, result: { data: page?.data ?? [], nextCursor: page?.nextCursor ?? null } });",
+    "    }",
+    "  } else if (msg.method === 'thread/resume') {",
+    "    if (resumeConflict) {",
+    "      send({ jsonrpc: '2.0', id: msg.id, error: { code: -32600, message: 'thread ' + msg.params.threadId + ' already has an active writer' } });",
+    "    } else {",
+    "      send({ jsonrpc: '2.0', id: msg.id, result: {} });",
+    "    }",
+    "  } else if (msg.method === 'thread/archive' || msg.method === 'thread/unarchive' || msg.method === 'thread/unsubscribe' || msg.method === 'turn/interrupt') {",
     "    send({ jsonrpc: '2.0', id: msg.id, result: {} });",
     "  } else {",
     "    send({ jsonrpc: '2.0', id: msg.id, result: {} });",
@@ -85,7 +140,7 @@ describe("CodexSessionManager", () => {
   test("creates a codex session id and round-trips it", () => {
     expect(codexSessionId("thread-1")).toBe("codex-thread-1");
     expect(isCodexSessionId("codex-thread-1")).toBe(true);
-    expect(isCodexSessionId("opencode-session-1")).toBe(false);
+    expect(isCodexSessionId("engine-session-1")).toBe(false);
   });
 
   test("createSession + prompt streams deltas and completes the turn", async () => {
@@ -176,6 +231,123 @@ describe("CodexSessionManager", () => {
     expect(isMissingRolloutError(new Error("some other failure"))).toBe(false);
   });
 
+  test("isThreadWriterConflict detects the engine's exclusive-writer rejection", () => {
+    expect(isThreadWriterConflict(new Error("thread 01abc already has an active writer"))).toBe(true);
+    expect(isThreadWriterConflict(new Error("codex rpc error (-32600): thread 01abc already has an active writer"))).toBe(true);
+    expect(isThreadWriterConflict(new Error("no rollout found for thread id 01abc"))).toBe(false);
+  });
+
+  test("getSessionItems reads the store without resuming (no writer lock)", async () => {
+    const root = await createRoot();
+    const logPath = join(root, "calls.log");
+    const bin = await writeFakeCodex(root, [], {
+      logPath,
+      items: [
+        { turnId: "turn-1", item: { type: "userMessage", id: "u1", content: [{ type: "text", text: "hi" }] } },
+        { turnId: "turn-1", item: { type: "agentMessage", id: "a1", text: "hello" } },
+      ],
+    });
+    const manager = new CodexSessionManager({ bin, cwd: root, interpreter: process.execPath });
+    try {
+      const session = await manager.createSession({ title: "T", workspaceId: "ws_1", cwd: root });
+      const items = await manager.getSessionItems(session.id);
+
+      expect(items).toHaveLength(2);
+      expect(items[1].item).toMatchObject({ type: "agentMessage", text: "hello" });
+      // Resuming here would claim the thread's exclusive writer lock for the
+      // lifetime of this process, locking every other Sofia process out.
+      expect(readCallLog(logPath)).not.toContain("thread/resume");
+    } finally {
+      await manager.close();
+    }
+  });
+
+  test("prompt tolerates a competing writer when the thread is already loaded here", async () => {
+    const root = await createRoot();
+    const logPath = join(root, "calls.log");
+    const bin = await writeFakeCodex(root, [], {
+      logPath,
+      threads: [{ id: "thread-x", preview: "restored", cwd: root, createdAt: 1 }],
+      loadedThreads: ["thread-x"],
+      resumeConflict: true,
+    });
+    const manager = new CodexSessionManager({ bin, cwd: root, interpreter: process.execPath });
+    try {
+      await manager.start();
+      expect(manager.listSessions().map((session) => session.id)).toContain("codex-thread-x");
+
+      const session = await manager.prompt("codex-thread-x", "carry on");
+      expect(session.id).toBe("codex-thread-x");
+
+      // The idle turn releases our subscription so the engine can unload the
+      // thread and drop the writer lock for other Sofia processes.
+      const deadline = Date.now() + 2000;
+      while (Date.now() < deadline && !readCallLog(logPath).includes("thread/unsubscribe")) {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      expect(readCallLog(logPath)).toContain("thread/unsubscribe");
+    } finally {
+      await manager.close();
+    }
+  });
+
+  test("getSessionItems follows item cursors so a long transcript is complete", async () => {
+    const root = await createRoot();
+    const logPath = join(root, "calls.log");
+    const entry = (id: string, type: string) => ({ turnId: "turn-1", item: { id, type, text: id } });
+    const bin = await writeFakeCodex(root, [], {
+      logPath,
+      itemsPages: [
+        { data: [entry("u1", "userMessage"), entry("a1", "agentMessage")], nextCursor: "page-2" },
+        { data: [entry("a2", "agentMessage")], nextCursor: "page-3" },
+        { data: [entry("a3", "agentMessage")], nextCursor: null },
+      ],
+    });
+    const manager = new CodexSessionManager({ bin, cwd: root, interpreter: process.execPath });
+    try {
+      const session = await manager.createSession({ title: "T", workspaceId: "ws_1", cwd: root });
+      const items = await manager.getSessionItems(session.id);
+      expect(items.map((item) => item.item.id)).toEqual(["u1", "a1", "a2", "a3"]);
+      expect(readCallLog(logPath).filter((method) => method === "thread/items/list")).toHaveLength(3);
+    } finally {
+      await manager.close();
+    }
+  });
+
+  test("getSessionItems keeps the newest items when a thread exceeds the cap", async () => {
+    const root = await createRoot();
+    const entry = (id: string) => ({ turnId: "turn-1", item: { id, type: "agentMessage", text: id } });
+    const bin = await writeFakeCodex(root, [], {
+      itemsPages: [
+        { data: [entry("a1"), entry("a2")], nextCursor: "page-2" },
+        { data: [entry("a3"), entry("a4")], nextCursor: null },
+      ],
+    });
+    const manager = new CodexSessionManager({ bin, cwd: root, interpreter: process.execPath });
+    try {
+      const session = await manager.createSession({ title: "T", workspaceId: "ws_1", cwd: root });
+      const items = await manager.getSessionItems(session.id, { limit: 3 });
+      expect(items.map((item) => item.item.id)).toEqual(["a2", "a3", "a4"]);
+    } finally {
+      await manager.close();
+    }
+  });
+
+  test("prompt explains a competing writer held by another Sofia process", async () => {
+    const root = await createRoot();
+    const bin = await writeFakeCodex(root, [], {
+      threads: [{ id: "thread-y", preview: "restored", cwd: root, createdAt: 1 }],
+      loadedThreads: [],
+      resumeConflict: true,
+    });
+    const manager = new CodexSessionManager({ bin, cwd: root, interpreter: process.execPath });
+    try {
+      await expect(manager.prompt("codex-thread-y", "carry on")).rejects.toThrow(/open elsewhere/);
+    } finally {
+      await manager.close();
+    }
+  });
+
   test("threadBelongsToWorkspace groups subdirectories, excludes unrelated cwds", () => {
     // Exact workspace root matches.
     expect(threadBelongsToWorkspace("/repo", "/repo")).toBe(true);
@@ -187,6 +359,7 @@ describe("CodexSessionManager", () => {
     expect(threadBelongsToWorkspace("/repo", "/somewhere/else")).toBe(false);
     // Missing cwd is treated as a match (older stores omit it).
     expect(threadBelongsToWorkspace("/repo", undefined)).toBe(true);
+    expect(threadBelongsToWorkspace("/repo", "")).toBe(true);
   });
 
   test("steer maps engine rejections to CodexSteerError codes", async () => {

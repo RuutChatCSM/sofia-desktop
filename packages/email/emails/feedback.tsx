@@ -13,7 +13,7 @@ FeedbackPreview.PreviewProps = {
   deployment: "desktop",
   appVersion: "0.13.5",
   sofiaServerVersion: "0.13.5",
-  opencodeVersion: "1.4.9",
+  engineVersion: "1.4.9",
   osName: "macOS",
   osVersion: "15.4",
   platform: "MacIntel",

@@ -103,7 +103,7 @@ test.skipIf(!e2eTestsEnabled)(title, async ({ evidence }) => {
     const patched = await request("/workspace/" + encodeURIComponent(workspaceId) + "/config", {
       method: "PATCH",
       body: JSON.stringify({
-        opencode: {
+        engine: {
           small_model: ${JSON.stringify(`${providerId}/${inaccessibleTitleModelId}`)},
           provider: {
             [${JSON.stringify(providerId)}]: {

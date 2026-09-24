@@ -11,7 +11,7 @@ import type {
   EngineResult,
   WorkspaceEngineClient,
 } from "./engine/workspace-engine-client.js";
-import { writeRuntimeOpencodeConfig } from "./runtime-opencode-config-store.js";
+import { writeRuntimeWorkspaceEngineConfig } from "./runtime-engine-config-store.js";
 import type { ServerConfig, WorkspaceInfo } from "./types.js";
 
 const previousRuntimeDb = process.env.SOFIA_RUNTIME_DB;
@@ -135,7 +135,7 @@ describe("connect state Cloud health scoping", () => {
       workspace("ws_b", rootB, baseUrl),
     ], runtimeRoot);
 
-    await writeRuntimeOpencodeConfig(config, "ws_b", (current) => ({
+    await writeRuntimeWorkspaceEngineConfig(config, "ws_b", (current) => ({
       ...current,
       mcp: {
         ...current.mcp,
@@ -149,7 +149,7 @@ describe("connect state Cloud health scoping", () => {
       },
     }));
 
-    const options = { createWorkspaceOpencodeClient: () => readyEngineClient() };
+    const options = { createWorkspaceWorkspaceEngineClient: () => readyEngineClient() };
 
     const first = await getConnectSnapshot(config, { directory: rootA, ...options });
     expect(first.cloudMcpPresent).toBe(false);

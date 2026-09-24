@@ -9,7 +9,7 @@
 
 - ローカルファースト、クラウド対応: Sofiaはワンクリックであなたのマシン上で動作します。メッセージを即座に送信できます。
 - コンポーザブル: デスクトップアプリ、WhatsApp/Slack/Telegramコネクタ、またはサーバー。用途に合ったものを使えます。ロックインなし。
-- エジェクタブル: SofiaはOpenCodeで動いているため、OpenCodeでできることはすべてSofiaでも動作します（UIがなくても）。
+- エジェクタブル: SofiaはSofiaで動いているため、SofiaでできることはすべてSofiaでも動作します（UIがなくても）。
 - シェアリング・イズ・ケアリング: localhostでソロ作業を始め、必要に応じてリモート共有を明示的にオプトインできます。
 
 <p align="center">
@@ -33,28 +33,28 @@ Sofiaは、エージェントワークフローを再現可能なプロダクト
 
 ## なぜSofiaか
 
-現在のOpenCode向けCLIやGUIは開発者を中心に設計されています。つまり、ファイルの差分、ツール名、そしてCLIを公開しなければ拡張が難しい機能に焦点が当てられています。
+現在のSofia向けCLIやGUIは開発者を中心に設計されています。つまり、ファイルの差分、ツール名、そしてCLIを公開しなければ拡張が難しい機能に焦点が当てられています。
 
 Sofiaは以下を目指して設計されています:
 
-- **拡張可能**: スキルとOpenCodeプラグインはインストール可能なモジュールです。
+- **拡張可能**: スキルとSofiaプラグインはインストール可能なモジュールです。
 - **監査可能**: 何が、いつ、なぜ起きたかを表示します。
 - **権限管理**: 特権フローへのアクセスを制御します。
 - **ローカル/リモート**: Sofiaはローカルでもリモートサーバーへの接続でも動作します。
 
 ## 含まれる機能
 
-- **ホストモード**: ローカルコンピュータ上でOpenCodeを実行します。
-- **クライアントモード**: URLで既存のOpenCodeサーバーに接続します。
+- **ホストモード**: ローカルコンピュータ上でSofiaを実行します。
+- **クライアントモード**: URLで既存のSofiaサーバーに接続します。
 - **セッション**: セッションの作成/選択とプロンプトの送信。
 - **ライブストリーミング**: SSE `/event` サブスクリプションによるリアルタイム更新。
-- **実行計画**: OpenCodeのTodoをタイムラインとして表示。
+- **実行計画**: SofiaのTodoをタイムラインとして表示。
 - **権限**: 権限リクエストを表示し、応答（一度許可 / 常に許可 / 拒否）。
 - **テンプレート**: 一般的なワークフローを保存して再実行（ローカル保存）。
 - **デバッグエクスポート**: バグ報告時に、設定 -> デバッグからランタイムデバッグレポートと開発者ログストリームをコピーまたはエクスポート。
 - **スキルマネージャー**:
-  - インストール済みの `.opencode/skills` フォルダを一覧表示
-  - ローカルのスキルフォルダを `.opencode/skills/<skill-name>` にインポート
+  - インストール済みの `.sofia/skills` フォルダを一覧表示
+  - ローカルのスキルフォルダを `.sofia/skills/<skill-name>` にインポート
 
 ## スキルマネージャー
 
@@ -71,7 +71,7 @@ Sofiaは以下を目指して設計されています:
 - Node.js + `pnpm`
 - Rustツールチェーン（Tauri用）: `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh` でインストール
 - Tauri CLI: `cargo install tauri-cli`
-- OpenCode CLIがPATH上にインストールされていること: `opencode`
+- Sofia CLIがPATH上にインストールされていること: `engine`
 
 ### ローカル開発の前提条件（デスクトップ）
 
@@ -111,7 +111,7 @@ Sofiaは現在 `apps/app`（UI）と `apps/desktop`（デスクトップシェ�
 pnpm dev
 ```
 
-`pnpm dev` は自動的に `SOFIA_DEV_MODE=1` を有効にするため、デスクトップ開発では個人のグローバル設定/認証/データの代わりに分離されたOpenCode状態を使用します。
+`pnpm dev` は自動的に `SOFIA_DEV_MODE=1` を有効にするため、デスクトップ開発では個人のグローバル設定/認証/データの代わりに分離されたSofia状態を使用します。
 
 ### 実行（Web UIのみ）
 
@@ -119,24 +119,24 @@ pnpm dev
 pnpm dev:ui
 ```
 
-リポジトリのすべての `dev` エントリポイントは同じ開発モード分離にオプトインするため、ローカルテストでは一貫してSofia管理のOpenCode状態を使用します。
+リポジトリのすべての `dev` エントリポイントは同じ開発モード分離にオプトインするため、ローカルテストでは一貫してSofia管理のSofia状態を使用します。
 
 ### Archユーザー向け:
 
 ```bash
 sudo pacman -S --needed webkit2gtk-4.1
-curl -fsSL https://opencode.ai/install | bash -s -- --version "$(node -e "const fs=require('fs'); const parsed=JSON.parse(fs.readFileSync('constants.json','utf8')); process.stdout.write(String(parsed.opencodeVersion||'').trim().replace(/^v/,''));")" --no-modify-path
+curl -fsSL https://github.com/RuutChatCSM/sofia/install | bash -s -- --version "$(node -e "const fs=require('fs'); const parsed=JSON.parse(fs.readFileSync('constants.json','utf8')); process.stdout.write(String(parsed.engineVersion||'').trim().replace(/^v/,''));")" --no-modify-path
 ```
 
 ## アーキテクチャ（概要）
 
 - **ホストモード**では、Sofiaはローカルホストスタックを実行し、UIをそれに接続します。
-  - デフォルトランタイム: `sofia-server`。OpenCodeとSofia APIを同じサーバーで提供します。
+  - デフォルトランタイム: `sofia-server`。SofiaとSofia APIを同じサーバーで提供します。
 
 プロジェクトフォルダを選択すると、Sofiaはそのフォルダを使用してローカルでホストスタックを実行し、デスクトップUIを接続します。
 これにより、リモートサーバーなしで完全にマシン上でエージェントワークフローの実行、プロンプトの送信、進捗の確認が可能です。
 
-- UIは `@opencode-ai/sdk/v2/client` を使用して:
+- UIは `@engine-ai/sdk/v2/client` を使用して:
   - サーバーに接続
   - セッションの一覧表示/作成
   - プロンプトの送信
@@ -150,19 +150,19 @@ curl -fsSL https://opencode.ai/install | bash -s -- --version "$(node -e "const 
 
 - `apps/desktop/src-tauri/capabilities/default.json`
 
-## OpenCodeプラグイン
+## Sofiaプラグイン
 
-プラグインはOpenCodeを拡張する**ネイティブ**な方法です。Sofiaはスキルタブから `opencode.json` を読み書きして管理します。
+プラグインはSofiaを拡張する**ネイティブ**な方法です。Sofiaはスキルタブから `engine.json` を読み書きして管理します。
 
-- **プロジェクトスコープ**: `<workspace>/opencode.json`
-- **グローバルスコープ**: `~/.config/opencode/opencode.json`（または `$XDG_CONFIG_HOME/opencode/opencode.json`）
+- **プロジェクトスコープ**: `<workspace>/engine.json`
+- **グローバルスコープ**: `~/.config/engine/engine.json`（または `$XDG_CONFIG_HOME/engine/engine.json`）
 
-`opencode.json` を手動で編集することもできます。SofiaはOpenCode CLIと同じ形式を使用します:
+`engine.json` を手動で編集することもできます。SofiaはSofia CLIと同じ形式を使用します:
 
 ```json
 {
-  "$schema": "https://opencode.ai/config.json",
-  "plugin": ["opencode-wakatime"]
+  "$schema": "https://github.com/RuutChatCSM/sofia/config.json",
+  "plugin": ["engine-wakatime"]
 }
 ```
 
@@ -201,11 +201,11 @@ WEBKIT_DISABLE_COMPOSITING_MODE=1 sofia
 ## コントリビューション
 
 - 変更を行う前に、`AGENTS.md`、`VISION.md`、`PRINCIPLES.md`、`PRODUCT.md`、`ARCHITECTURE.md` を確認してプロダクトの目標を理解してください。
-- リポジトリ内で作業する前に、Node.js、`pnpm`、Rustツールチェーン、および `opencode` がインストールされていることを確認してください。
+- リポジトリ内で作業する前に、Node.js、`pnpm`、Rustツールチェーン、および `engine` がインストールされていることを確認してください。
 - チェックアウトごとに `pnpm install` を実行し、PRを作成する前に `pnpm typecheck` と `pnpm test:e2e`（または対象のスクリプトサブセット）で変更を検証してください。
 - PRを作成する際は `.github/pull_request_template.md` を使用し、実行したコマンド、結果、手動検証手順、およびエビデンスを含めてください。
 - CIが失敗した場合は、PRの本文でコード関連のリグレッションか外部/環境/認証のブロッカーかを分類してください。
-- 新しいPRDは `AGENTS.md` に記載されている `.opencode/skills/prd-conventions/SKILL.md` の規約に従い、`apps/app/pr/<name>.md` に追加してください。
+- 新しいPRDは `AGENTS.md` に記載されている `.sofia/skills/prd-conventions/SKILL.md` の規約に従い、`apps/app/pr/<name>.md` に追加してください。
 
 コミュニティドキュメント:
 

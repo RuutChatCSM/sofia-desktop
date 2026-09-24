@@ -99,7 +99,7 @@ export type ExtensionItemBuildInput = {
   isBuiltInConnected: (entry: McpDirectoryInfo) => boolean;
 };
 
-const MCP_IMPORT_PATH_PREFIX = "opencode.jsonc#mcp.";
+const MCP_IMPORT_PATH_PREFIX = "engine.jsonc#mcp.";
 const SOFIA_PROVIDED_SKILL_NAMES = new Set([
   "workspace-guide",
   "skill-creator",
@@ -108,7 +108,7 @@ const SOFIA_PROVIDED_SKILL_NAMES = new Set([
 export function isSofiaProvidedSkill(skill: Pick<SkillCard, "name" | "path">) {
   const normalizedName = skill.name.trim().toLowerCase();
   const normalizedPath = skill.path.replace(/\\/g, "/").toLowerCase();
-  return normalizedPath.includes("/.opencode/skills/") &&
+  return normalizedPath.includes("/.sofia/skills/") &&
     SOFIA_PROVIDED_SKILL_NAMES.has(normalizedName);
 }
 
@@ -197,7 +197,7 @@ function childKeysForPlugin(plugin: CloudImportedPlugin) {
     }
     if (file.objectType === "skill") {
       skillPaths.add(file.path);
-      const name = file.path.match(/^\.opencode\/skills\/(?:[^/]+\/)?([^/]+)\/SKILL\.md$/)?.[1];
+      const name = file.path.match(/^\.sofia\/skills\/(?:[^/]+\/)?([^/]+)\/SKILL\.md$/)?.[1];
       if (name) skillNames.add(name);
       skillNames.add(file.title);
     }

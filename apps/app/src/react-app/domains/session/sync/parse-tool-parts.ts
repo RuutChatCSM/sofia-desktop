@@ -75,7 +75,7 @@ function toolCallProviderMetadata(part: ToolPart): ProviderMetadata {
   const mcpResult = persistedMcpResult
     ?? (part.state.status === "error" ? connectionActionMcpResultFromError(part.state.error) : null);
   return {
-    opencode: { partId: part.id },
+    engine: { partId: part.id },
     ...(mcpResult ? { sofia: { mcpResult } } : {}),
   };
 }
@@ -103,7 +103,7 @@ export function parseStructuredOutputUIPart(part: ToolPart): TextUIPart | null {
     type: "text",
     text,
     state: part.state.status === "completed" ? "done" : "streaming",
-    providerMetadata: { opencode: { partId: `structured-output-${part.callID}`, toolPartId: part.id } },
+    providerMetadata: { engine: { partId: `structured-output-${part.callID}`, toolPartId: part.id } },
   };
 }
 
@@ -136,7 +136,7 @@ export function parseDynamicToolUIPart(part: ToolPart): DynamicToolUIPart | null
     };
   }
 
-  // OpenCode emits pending/running tool parts with `{}` input before args
+  // Sofia emits pending/running tool parts with `{}` input before args
   // (e.g. filePath) are filled in. Skip UI until the next part.updated.
   if (shouldDeferInProgressTool(part)) {
     return null;

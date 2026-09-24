@@ -375,7 +375,7 @@ describe("agent diagnostics workspace trust", () => {
   test("blocks explicit and legacy remote Sofia engine while allowing local and remote Sofia App", () => {
     expect(isAgentContextDiagnosticsWorkspaceAllowed({
       workspaceType: "remote",
-      remoteType: "opencode",
+      remoteType: "engine",
     })).toBe(false);
     expect(isAgentContextDiagnosticsWorkspaceAllowed({
       workspaceType: "remote",

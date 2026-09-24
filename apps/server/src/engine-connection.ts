@@ -10,12 +10,12 @@ function trim(value: string | undefined): string {
 }
 
 export function resolveWorkspaceEngineConnection(
-  config: Pick<ServerConfig, "opencodeBaseUrl" | "opencodeUsername" | "opencodePassword">,
+  config: Pick<ServerConfig, "engineBaseUrl" | "engineUsername" | "enginePassword">,
   workspace: WorkspaceInfo,
 ): EngineConnection {
-  const baseUrl = trim(workspace.baseUrl) || trim(config.opencodeBaseUrl) || undefined;
-  const username = trim(workspace.opencodeUsername) || trim(config.opencodeUsername);
-  const password = trim(workspace.opencodePassword) || trim(config.opencodePassword);
+  const baseUrl = trim(workspace.baseUrl) || trim(config.engineBaseUrl) || undefined;
+  const username = trim(workspace.engineUsername) || trim(config.engineUsername);
+  const password = trim(workspace.enginePassword) || trim(config.enginePassword);
 
   return {
     ...(baseUrl ? { baseUrl } : {}),
@@ -28,15 +28,15 @@ export function resolveWorkspaceEngineConnection(
 }
 
 export function inheritWorkspaceEngineConnection(
-  config: Pick<ServerConfig, "opencodeBaseUrl" | "opencodeUsername" | "opencodePassword">,
-): Pick<WorkspaceInfo, "baseUrl" | "opencodeUsername" | "opencodePassword"> {
-  const baseUrl = trim(config.opencodeBaseUrl);
-  const username = trim(config.opencodeUsername);
-  const password = trim(config.opencodePassword);
+  config: Pick<ServerConfig, "engineBaseUrl" | "engineUsername" | "enginePassword">,
+): Pick<WorkspaceInfo, "baseUrl" | "engineUsername" | "enginePassword"> {
+  const baseUrl = trim(config.engineBaseUrl);
+  const username = trim(config.engineUsername);
+  const password = trim(config.enginePassword);
 
   return {
     ...(baseUrl ? { baseUrl } : {}),
-    ...(username ? { opencodeUsername: username } : {}),
-    ...(password ? { opencodePassword: password } : {}),
+    ...(username ? { engineUsername: username } : {}),
+    ...(password ? { enginePassword: password } : {}),
   };
 }

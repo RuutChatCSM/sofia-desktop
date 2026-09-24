@@ -181,7 +181,7 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 2_700_000 }, async
     const workspaceId = ${JSON.stringify(workspaceId)};
     const patched = await request("/workspace/" + encodeURIComponent(workspaceId) + "/config", {
       method: "PATCH",
-      body: JSON.stringify({ opencode: { provider: { anthropic: { options: { apiKey: ${JSON.stringify(anthropicKey)} } } } } }),
+      body: JSON.stringify({ engine: { provider: { anthropic: { options: { apiKey: ${JSON.stringify(anthropicKey)} } } } } }),
     });
     if (patched !== "ok") return patched;
     return request("/workspace/" + encodeURIComponent(workspaceId) + "/engine/reload", { method: "POST" });
@@ -218,7 +218,7 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 2_700_000 }, async
       }
     };
     (async () => {
-      const url = "http://127.0.0.1:" + port + "/workspace/" + encodeURIComponent(${JSON.stringify(workspaceId)}) + "/opencode/event";
+      const url = "http://127.0.0.1:" + port + "/workspace/" + encodeURIComponent(${JSON.stringify(workspaceId)}) + "/engine/event";
       while (window.__owStorm.active) {
         window.__owStorm.reconnects += 1;
         try {
@@ -348,7 +348,7 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 2_700_000 }, async
   const engineHasProvider = `(async () => {
     const port = localStorage.getItem("sofia.server.port");
     const token = localStorage.getItem("sofia.server.token");
-    for (const path of ["/opencode/config/providers", "/opencode/config"]) {
+    for (const path of ["/engine/config/providers", "/engine/config"]) {
       const response = await fetch("http://127.0.0.1:" + port + "/workspace/" + encodeURIComponent(${JSON.stringify(workspaceId)}) + path, {
         headers: { Authorization: "Bearer " + token },
       });
@@ -412,7 +412,7 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 2_700_000 }, async
       const port = localStorage.getItem("sofia.server.port");
       const token = localStorage.getItem("sofia.server.token");
       const out = {};
-      for (const path of ["/opencode/config/providers", "/opencode/config"]) {
+      for (const path of ["/engine/config/providers", "/engine/config"]) {
         const response = await fetch("http://127.0.0.1:" + port + "/workspace/" + encodeURIComponent(${JSON.stringify(workspaceId)}) + path, {
           headers: { Authorization: "Bearer " + token },
         });

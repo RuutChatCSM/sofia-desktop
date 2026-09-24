@@ -65,7 +65,7 @@ None.
 Local migration repair and clearer Soul controls
 
 #### One-line summary
-Adds a desktop recovery path for broken local OpenCode migrations and makes Soul setup plus compact action buttons easier to steer.
+Adds a desktop recovery path for broken local Sofia migrations and makes Soul setup plus compact action buttons easier to steer.
 
 #### Main changes
 Added migration repair from onboarding and Settings so broken local startup can recover without leaving Sofia.
@@ -97,7 +97,7 @@ True
 1
 
 #### Major bug fix details
-- Added a migration recovery flow so broken local OpenCode database state can be repaired from the app experience.
+- Added a migration recovery flow so broken local Sofia database state can be repaired from the app experience.
 
 #### Deprecated features
 False

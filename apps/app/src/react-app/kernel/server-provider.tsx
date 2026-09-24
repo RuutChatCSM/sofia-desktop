@@ -9,7 +9,7 @@ import {
   useRef,
   type ReactNode,
 } from "react";
-import { createOpencodeClient } from "../../app/lib/engine-client";
+import { createWorkspaceEngineClient } from "../../app/lib/engine-client";
 
 import { desktopFetch } from "../../app/lib/desktop";
 import {
@@ -76,13 +76,13 @@ function readSofiaToken(): string {
 
 export function buildSofiaHealthHeaders(url: string): Record<string, string> | undefined {
   const token = readSofiaToken();
-  return token && url.includes("/opencode") ? { Authorization: `Bearer ${token}` } : undefined;
+  return token && url.includes("/engine") ? { Authorization: `Bearer ${token}` } : undefined;
 }
 
 async function checkHealth(url: string): Promise<boolean> {
   if (!url) return false;
   const headers = buildSofiaHealthHeaders(url);
-  const client = createOpencodeClient({
+  const client = createWorkspaceEngineClient({
     baseUrl: url,
     headers,
     signal: AbortSignal.timeout(3000),
@@ -108,9 +108,9 @@ export function ServerProvider({ children, defaultUrl }: ServerProviderProps) {
     if (typeof window === "undefined") return;
 
     const gatewayOrigin = getSofiaGatewayOrigin();
-    const fallback = normalizeServerUrl(gatewayOrigin ? `${gatewayOrigin}/opencode` : defaultUrl) ?? "";
+    const fallback = normalizeServerUrl(gatewayOrigin ? `${gatewayOrigin}/engine` : defaultUrl) ?? "";
 
-    // Hosted web deployments served by Sofia App must reuse the OpenCode proxy
+    // Hosted web deployments served by Sofia App must reuse the Sofia proxy
     // rather than any persisted localhost target.
     const forceProxy =
       Boolean(gatewayOrigin) ||
@@ -149,9 +149,9 @@ export function ServerProvider({ children, defaultUrl }: ServerProviderProps) {
 
   useEffect(() => {
     if (!active) return;
-    if (isDesktopRuntime() && !active.includes("/opencode")) {
+    if (isDesktopRuntime() && !active.includes("/engine")) {
       // Desktop React routes now talk to Sofia App server workspace-mounted
-      // `/opencode` URLs directly. Ignore old persisted raw OpenCode daemon
+      // `/engine` URLs directly. Ignore old persisted raw Sofia daemon
       // URLs here; their ephemeral ports go stale across restarts and otherwise
       // produce noisy `/global/health` connection-refused polling forever.
       dispatchServer({ type: "healthy", healthy: undefined });

@@ -78,7 +78,7 @@ overwriting existing values.
 ### Pass criteria
 
 - Invalid names show a user-readable validation message.
-- Reserved `SOFIA_`/`OPENCODE_` names are blocked.
+- Reserved `SOFIA_`/`SOFIA_ENGINE_` names are blocked.
 - Duplicate names do not overwrite existing values.
 
 ## Flow 3: Apply changes activates the runtime environment

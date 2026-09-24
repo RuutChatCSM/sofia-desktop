@@ -1526,7 +1526,7 @@ export default {
     {
       name: "Frame 5",
       run: async (ctx) => {
-        await ctx.prove("Ready health uses live mcp.status plus direct Cloud tools/list, and reports OpenCode tool API limitations honestly", {
+        await ctx.prove("Ready health uses live mcp.status plus direct Cloud tools/list, and reports Sofia tool API limitations honestly", {
           voiceover: vo[4],
           action: async () => {
             await scrollToText(ctx, EXPECTED_TOOL_IDS[0]);
@@ -1537,7 +1537,7 @@ export default {
               workspaceId: health.workspace.id,
               firstFailure: health.firstFailure,
             });
-            witness(ctx, health.engine.status === "connected", "OpenCode mcp.status reports sofia-cloud connected for the workspace.", { engine: health.engine });
+            witness(ctx, health.engine.status === "connected", "Sofia mcp.status reports sofia-cloud connected for the workspace.", { engine: health.engine });
             const directNames = [...(health.tools.direct?.present ?? [])].sort();
             witness(ctx, directNames.length === 2 && directNames.join(",") === EXPECTED_AGENT_TOOLS.join(","), "Direct Cloud endpoint tools/list exposes exactly the two unprefixed agent tools.", {
               direct: health.tools.direct,
@@ -1638,7 +1638,7 @@ export default {
           },
           screenshot: {
             name: "frame-6-advanced-sanitized-diagnostic",
-            requireText: ["Agent access diagnostics", "ACTIVE WORKSPACE", "DESIRED REVISION", "APPLIED REVISION", "DELIVERY", "DIRECT TOOLS/LIST", "EXPERIMENTAL TOOL IDS", "EXPERIMENTAL PROVIDER TOOLS", "SOFIA VERSIONS", "OPENCODE COMPATIBILITY", "Copied sanitized Cloud diagnostic."],
+            requireText: ["Agent access diagnostics", "ACTIVE WORKSPACE", "DESIRED REVISION", "APPLIED REVISION", "DELIVERY", "DIRECT TOOLS/LIST", "EXPERIMENTAL TOOL IDS", "EXPERIMENTAL PROVIDER TOOLS", "SOFIA VERSIONS", "SOFIA_ENGINE COMPATIBILITY", "Copied sanitized Cloud diagnostic."],
             rejectText: ["Bearer ", "ow_mcp_at_", "No Cloud MCP health"],
             hashIncludes: "/settings/advanced",
           },

@@ -32,8 +32,8 @@ const emptyWorkspaceDisplay: WorkspaceDisplay = {
 };
 
 export type UseSessionProviderAuthInput = {
-  opencodeClient: Client | null;
-  opencodeBaseUrl: string;
+  engineClient: Client | null;
+  engineBaseUrl: string;
   providers: ProviderListItem[];
   providerDefaults: Record<string, string>;
   providerConnectedIds: string[];
@@ -56,8 +56,8 @@ export type UseSessionProviderAuthInput = {
 
 export function useSessionProviderAuth(input: UseSessionProviderAuthInput) {
   const {
-    opencodeClient,
-    opencodeBaseUrl,
+    engineClient,
+    engineBaseUrl,
     providers,
     providerDefaults,
     providerConnectedIds,
@@ -81,8 +81,8 @@ export function useSessionProviderAuth(input: UseSessionProviderAuthInput) {
   const [denSettingsVersion, bumpDenSettingsVersion] = useReducer((value: number) => value + 1, 0);
 
   const stateRef = useRef({
-    opencodeClient,
-    opencodeBaseUrl,
+    engineClient,
+    engineBaseUrl,
     providers,
     providerDefaults,
     providerConnectedIds,
@@ -93,8 +93,8 @@ export function useSessionProviderAuth(input: UseSessionProviderAuthInput) {
     localServerHostToken,
   });
   stateRef.current = {
-    opencodeClient,
-    opencodeBaseUrl,
+    engineClient,
+    engineBaseUrl,
     providers,
     providerDefaults,
     providerConnectedIds,
@@ -112,13 +112,13 @@ export function useSessionProviderAuth(input: UseSessionProviderAuthInput) {
   const store = useMemo(
     () =>
       createProviderAuthStore({
-        client: () => stateRef.current.opencodeClient,
+        client: () => stateRef.current.engineClient,
         providers: () => stateRef.current.providers,
         providerDefaults: () => stateRef.current.providerDefaults,
         providerConnectedIds: () => stateRef.current.providerConnectedIds,
         disabledProviders: () => stateRef.current.disabledProviderIds,
         checkDesktopAppRestriction: checkDesktopRestriction,
-        providerBaseUrl: () => stateRef.current.opencodeBaseUrl,
+        providerBaseUrl: () => stateRef.current.engineBaseUrl,
         selectedWorkspaceDisplay: () =>
           stateRef.current.selectedWorkspace
             ? ({
@@ -140,10 +140,10 @@ export function useSessionProviderAuth(input: UseSessionProviderAuthInput) {
         setProviderDefaults,
         setProviderConnectedIds,
         setDisabledProviders: setDisabledProviderIds,
-        markOpencodeConfigReloadRequired: () => {
+        markWorkspaceEngineConfigReloadRequired: () => {
           markReloadRequired("config", {
             type: "config",
-            name: "opencode.json",
+            name: "engine.json",
             action: "updated",
           });
         },
@@ -163,14 +163,14 @@ export function useSessionProviderAuth(input: UseSessionProviderAuthInput) {
   const cloudProviderSyncContext = useMemo(() => {
     const settings = readDenSettings();
     return {
-      client: opencodeClient,
+      client: engineClient,
       workspaceId: selectedWorkspaceEndpoint?.workspaceId ?? null,
       workspaceRoot: selectedWorkspaceRoot,
       denBaseUrl: settings.baseUrl,
       activeOrgId: settings.activeOrgId?.trim() ?? "",
       signedIn: denAuth.isSignedIn && Boolean(settings.authToken?.trim()),
     };
-  }, [denAuth.isSignedIn, denSettingsVersion, opencodeClient, selectedWorkspaceEndpoint?.workspaceId, selectedWorkspaceRoot]);
+  }, [denAuth.isSignedIn, denSettingsVersion, engineClient, selectedWorkspaceEndpoint?.workspaceId, selectedWorkspaceRoot]);
   const [completedCloudProviderSync, setCompletedCloudProviderSync] = useState<{
     context: typeof cloudProviderSyncContext;
     providerList: ProviderListResponse | null;
@@ -200,7 +200,7 @@ export function useSessionProviderAuth(input: UseSessionProviderAuthInput) {
   }, [store]);
 
   useEffect(() => {
-    if (!opencodeClient || !selectedWorkspaceId) return;
+    if (!engineClient || !selectedWorkspaceId) return;
     if (shouldWaitForCloudProviderSyncBeforePolicyReconcile({
       signedIn: cloudProviderSyncContext.signedIn,
       clientConnected: Boolean(cloudProviderSyncContext.client),
@@ -212,7 +212,7 @@ export function useSessionProviderAuth(input: UseSessionProviderAuthInput) {
 
     policyProviderReconcileInFlightRef.current = true;
     void reconcilePolicyDisabledProviders({
-      opencodeClient,
+      engineClient,
       sofiaClient: selectedWorkspaceEndpoint?.client ?? null,
       workspaceId: selectedWorkspaceEndpoint?.workspaceId ?? null,
       workspaceType: selectedWorkspace?.workspaceType ?? null,
@@ -224,7 +224,7 @@ export function useSessionProviderAuth(input: UseSessionProviderAuthInput) {
       markReloadRequired: () => {
         markReloadRequired("config", {
           type: "config",
-          name: "opencode.json",
+          name: "engine.json",
           action: "updated",
         });
       },
@@ -242,7 +242,7 @@ export function useSessionProviderAuth(input: UseSessionProviderAuthInput) {
     cloudProviderSyncReady,
     disabledProviderIds,
     markReloadRequired,
-    opencodeClient,
+    engineClient,
     providerConnectedIds,
     providers,
     selectedWorkspace?.workspaceType,
@@ -255,7 +255,7 @@ export function useSessionProviderAuth(input: UseSessionProviderAuthInput) {
   useEffect(() => {
     store.syncFromOptions();
   }, [
-    opencodeClient,
+    engineClient,
     selectedWorkspace?.id,
     selectedWorkspace?.workspaceType,
     selectedWorkspaceEndpoint?.workspaceId,
@@ -301,7 +301,7 @@ export function useSessionProviderAuth(input: UseSessionProviderAuthInput) {
   }, [selectedWorkspaceEndpoint, store]);
 
   // Session is where forced sign-in lands. Keep org-managed cloud providers in
-  // sync here so sign-in applies opencode.json changes before Settings opens.
+  // sync here so sign-in applies engine.json changes before Settings opens.
   // Route every lifecycle trigger through the snapshot-publishing wrapper:
   // refreshing only the engine leaves selected-model availability stale until
   // this route is recreated by a restart or sign-out.

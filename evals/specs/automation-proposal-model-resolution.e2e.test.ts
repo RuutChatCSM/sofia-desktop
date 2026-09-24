@@ -289,14 +289,14 @@ test("chat Automation proposals map Den providers and disclose a safe fallback",
   expect(fallbackPageText).not.toMatch(/no longer available/i);
   expect(fallbackPageText).toContain("Automation created and active");
   const fallbackModel = await storedAutomationModel(den.admin, orgId, fallbackName);
-  expect(fallbackModel).toEqual({ providerId: "opencode", modelId: "big-pickle" });
+  expect(fallbackModel).toEqual({ providerId: "engine", modelId: "big-pickle" });
   evidence.recordAssertionEvidence(
     "The fallback was disclosed and created with the free starter model",
     `${fallbackName} showed the fallback notice and was created as ${fallbackModel.providerId}/${fallbackModel.modelId}.`,
     fallbackCard.text.includes("free starter model")
       && fallbackCard.text.includes("Runs with Sofia Zen")
       && fallbackCreatedCard.createdId.length > 0
-      && fallbackModel.providerId === "opencode"
+      && fallbackModel.providerId === "engine"
       && fallbackModel.modelId === "big-pickle",
   );
   await recordProposalScreenshot(desktop, [

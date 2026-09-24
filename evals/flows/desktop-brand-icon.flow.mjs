@@ -389,7 +389,7 @@ async function assertSignedIntoDen(ctx) {
  * admin-to-member-marketplace does, then land on a real
  * `/workspace/<id>/session/<id>` route.
  *
- * Real workspace bootstrap (creating the workspace + booting its opencode
+ * Real workspace bootstrap (creating the workspace + booting its engine
  * sidecar) takes ~20s on a fresh profile — the wait below is sized for that,
  * and deliberately does NOT accept `/welcome` as success (a bare hash match
  * would pass instantly, before the workspace actually exists).
@@ -628,7 +628,7 @@ cwd=$(readlink /proc/$pid/cwd)
 tr '\\0' '\\n' < /proc/$pid/environ | grep -E '^(DISPLAY|ELECTRON_|SOFIA_)' > /tmp/electron-relaunch.env
 kill "$pid" 2>/dev/null || true
 sleep 3
-pkill -f opencode-x86_64 2>/dev/null || true
+pkill -f engine-x86_64 2>/dev/null || true
 sleep 2
 cd "$cwd"
 set -a

@@ -17,11 +17,11 @@ import type {
 } from "../../../../app/lib/sofia-server";
 import type { NukeManifestPreview } from "../../../../app/lib/desktop";
 import type {
-  OpencodeConnectStatus,
+  WorkspaceEngineConnectStatus,
   ReleaseChannel,
   StartupPreference,
 } from "../../../../app/types";
-import type { OpencodeExecutionSnapshot } from "../../../../app/lib/desktop-types";
+import type { WorkspaceEngineExecutionSnapshot } from "../../../../app/lib/desktop-types";
 import { formatRelativeTime, isDesktopRuntime } from "../../../../app/utils";
 import { t } from "../../../../i18n";
 import {
@@ -63,7 +63,7 @@ const compactDangerActionClass =
 type RuntimeSummary = {
   appVersionLabel: string;
   appCommitLabel: string;
-  opencodeVersionLabel: string;
+  engineVersionLabel: string;
   sofiaServerVersionLabel: string;
 };
 
@@ -76,12 +76,12 @@ type RuntimeServiceCard = StatusPill & {
   lines: string[];
   stdout?: string | null;
   stderr?: string | null;
-  execution?: OpencodeExecutionSnapshot | null;
+  execution?: WorkspaceEngineExecutionSnapshot | null;
   error?: string | null;
   installable?: boolean;
 };
 
-type OpenCodeConnectDebugCard = StatusPill & {
+type SofiaConnectDebugCard = StatusPill & {
   lines: string[];
   metricsLines: string[];
   error?: string | null;
@@ -141,34 +141,21 @@ export type DebugViewProps = {
   onCheckElectronAlphaUpdates: () => void | Promise<void>;
   onStopHost: () => void | Promise<void>;
   onResetStartupPreference: () => void | Promise<void>;
-  engineSource: "path" | "sidecar" | "custom";
-  onSetEngineSource: (value: "path" | "sidecar" | "custom") => void;
-  engineCustomBinPath: string;
-  engineCustomBinPathLabel: string;
-  onPickEngineBinary: () => void | Promise<void>;
-  onClearEngineCustomBinPath: () => void;
   onOpenResetModal: (mode: "onboarding" | "all") => void;
   resetModalBusy: boolean;
   resetStatus: string | null;
-  opencodeRestarting: boolean;
   sofiaServerRestarting: boolean;
-  opencodeServiceStatus: ServiceStatus;
   sofiaServiceStatus: ServiceStatus;
-  opencodeLogStatus: string | null;
   sofiaLogStatus: string | null;
-  onCopyOpencodeLogs: () => void | Promise<void>;
-  onExportOpencodeLogs: () => void | Promise<void>;
   onCopySofiaLogs: () => void | Promise<void>;
   onExportSofiaLogs: () => void | Promise<void>;
   serviceRestartError: string | null;
-  onRestartOpencode: () => void | Promise<void>;
   onRestartSofiaServer: () => void | Promise<void>;
   onInstallCodexEngine: () => void | Promise<void>;
   codexInstallBusy: boolean;
   codexInstallStatus: { tone: "success" | "error"; message: string } | null;
-  engineCard: RuntimeServiceCard;
   codexEngineCard: RuntimeServiceCard;
-  opencodeConnectCard: OpenCodeConnectDebugCard;
+  engineConnectCard: SofiaConnectDebugCard;
   sofiaCard: RuntimeServiceCard;
   sofiaServerDiagnostics: SofiaServerDiagnostics | null;
   runtimeWorkspaceId: string | null;
@@ -182,8 +169,8 @@ export type DebugViewProps = {
   sofiaAuditEntries: SofiaAuditEntry[];
   sofiaAuditStatus: StatusPill;
   sofiaAuditError: string | null;
-  opencodeConnectStatus: OpencodeConnectStatus | null;
-  opencodeDevModeEnabled: boolean;
+  engineConnectStatus: WorkspaceEngineConnectStatus | null;
+  engineDevModeEnabled: boolean;
   nukeConfigBusy: boolean;
   nukeConfigStatus: string | null;
   nukePreviewBusy: boolean;
@@ -195,7 +182,7 @@ export type DebugViewProps = {
   onCloseNukeDialog: () => void;
   onSetNukeConfirmationText: (value: string) => void;
   onSetNukeDeleteBootstrap: (value: boolean) => void | Promise<void>;
-  onConfirmNukeSofiaAndOpencodeConfig: () => void | Promise<void>;
+  onConfirmNukeSofiaAndWorkspaceEngineConfig: () => void | Promise<void>;
 };
 
 function formatActor(entry: SofiaAuditEntry) {
@@ -255,11 +242,11 @@ function shellQuote(value: string) {
   return `'${value.replace(/'/g, `'"'"'`)}'`;
 }
 
-function formatExecutionCommand(execution: OpencodeExecutionSnapshot) {
+function formatExecutionCommand(execution: WorkspaceEngineExecutionSnapshot) {
   return [execution.command, ...execution.args].map(shellQuote).join(" ");
 }
 
-function ExecutionDetails(props: { execution: OpencodeExecutionSnapshot }) {
+function ExecutionDetails(props: { execution: WorkspaceEngineExecutionSnapshot }) {
   return (
     <div className="rounded-xl border border-blue-6/30 bg-blue-3/20 p-3">
       <div className="mb-2 flex items-center justify-between gap-3">
@@ -380,7 +367,7 @@ type ServiceCardProps = {
   lines: string[];
   stdout?: string | null;
   stderr?: string | null;
-  execution?: OpencodeExecutionSnapshot | null;
+  execution?: WorkspaceEngineExecutionSnapshot | null;
   error?: string | null;
   restarting: boolean;
   restartLabel: string;
@@ -518,7 +505,7 @@ export function DebugView(props: DebugViewProps) {
           <div>{t("settings.debug_desktop_app", { version: props.runtimeSummary.appVersionLabel })}</div>
           <div>{t("settings.debug_commit", { commit: props.runtimeSummary.appCommitLabel })}</div>
           <div>
-            {t("settings.debug_opencode_version", { version: props.runtimeSummary.opencodeVersionLabel })}
+            {t("settings.debug_engine_version", { version: props.runtimeSummary.engineVersionLabel })}
           </div>
           <div>
             {t("settings.debug_sofia_server_version", {
@@ -575,25 +562,6 @@ export function DebugView(props: DebugViewProps) {
           />
 
           <ServiceCard
-            title={t("settings.opencode_engine_sidecar")}
-            description={t("settings.opencode_engine_sidecar_desc")}
-            pill={props.engineCard}
-            lines={props.engineCard.lines}
-            stdout={props.engineCard.stdout ?? null}
-            stderr={props.engineCard.stderr ?? null}
-            execution={props.engineCard.execution ?? null}
-            error={props.engineCard.error ?? null}
-            restarting={props.opencodeRestarting}
-            restartLabel={t("settings.restart_opencode")}
-            onRestart={props.onRestartOpencode}
-            serviceStatus={props.opencodeServiceStatus}
-            logStatus={props.opencodeLogStatus}
-            onCopyLogs={props.onCopyOpencodeLogs}
-            onExportLogs={props.onExportOpencodeLogs}
-            isDesktop={isDesktop}
-          />
-
-          <ServiceCard
             title={t("settings.codex_engine_sidecar")}
             description={t("settings.codex_engine_sidecar_desc")}
             pill={props.codexEngineCard}
@@ -640,26 +608,26 @@ export function DebugView(props: DebugViewProps) {
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="text-sm font-semibold tracking-[-0.1px] text-dls-text">
-                {t("settings.opencode_sdk_title")}
+                {t("settings.sofia_sdk_title")}
               </div>
-              <div className="text-[12px] text-dls-secondary">{t("settings.opencode_sdk_desc")}</div>
+              <div className="text-[12px] text-dls-secondary">{t("settings.sofia_sdk_desc")}</div>
             </div>
-            <div className={`rounded-full border px-2 py-1 text-[11px] font-medium ${props.opencodeConnectCard.className}`}>
-              {props.opencodeConnectCard.label}
+            <div className={`rounded-full border px-2 py-1 text-[11px] font-medium ${props.engineConnectCard.className}`}>
+              {props.engineConnectCard.label}
             </div>
           </div>
-          <div className="space-y-1"><DebugLines lines={props.opencodeConnectCard.lines} /></div>
-          {props.opencodeConnectCard.metricsLines.length > 0 ? (
+          <div className="space-y-1"><DebugLines lines={props.engineConnectCard.lines} /></div>
+          {props.engineConnectCard.metricsLines.length > 0 ? (
             <div className="space-y-1 border-t border-dls-border/60 pt-1">
-              <DebugLines lines={props.opencodeConnectCard.metricsLines} />
+              <DebugLines lines={props.engineConnectCard.metricsLines} />
             </div>
           ) : null}
-          {props.opencodeConnectCard.error ? (
+          {props.engineConnectCard.error ? (
             <div>
               <div className="mb-1 text-[10px] font-medium uppercase tracking-wider text-dls-secondary">
                 {t("settings.last_error")}
               </div>
-              <pre className={miniPreClass}>{props.opencodeConnectCard.error}</pre>
+              <pre className={miniPreClass}>{props.engineConnectCard.error}</pre>
             </div>
           ) : null}
         </div>
@@ -912,81 +880,6 @@ export function DebugView(props: DebugViewProps) {
           <div className={sectionTitleClass}>{t("settings.tools_section_title")}</div>
           <div className={sectionDescClass}>{t("settings.tools_section_desc")}</div>
         </div>
-
-        {isDesktop && (isLocalPreference || props.developerMode) ? (
-          <div className={subCardClass}>
-            <div>
-              <div className="text-sm font-semibold tracking-[-0.1px] text-dls-text">{t("settings.engine_title")}</div>
-              <div className="text-[12px] text-dls-secondary">{t("settings.engine_desc")}</div>
-            </div>
-
-            {!isLocalPreference ? (
-              <StatusBanner tone="info" message={t("settings.startup_remote_warning")} />
-            ) : null}
-
-            <div className="space-y-3">
-              <div className="text-[12px] text-dls-secondary">{t("settings.engine_source_debug")}</div>
-              <div className={props.developerMode ? "grid grid-cols-3 gap-2" : "grid grid-cols-2 gap-2"}>
-                <Button
-                  variant={props.engineSource === "sidecar" ? "secondary" : "outline"}
-                  onClick={() => props.onSetEngineSource("sidecar")}
-                  disabled={props.busy}
-                >
-                  {t("settings.engine_bundled")}
-                </Button>
-                <Button
-                  variant={props.engineSource === "path" ? "secondary" : "outline"}
-                  onClick={() => props.onSetEngineSource("path")}
-                  disabled={props.busy}
-                >
-                  {t("settings.engine_system_path")}
-                </Button>
-                {props.developerMode ? (
-                  <Button
-                    variant={props.engineSource === "custom" ? "secondary" : "outline"}
-                    onClick={() => props.onSetEngineSource("custom")}
-                    disabled={props.busy}
-                  >
-                    {t("settings.engine_custom_binary")}
-                  </Button>
-                ) : null}
-              </div>
-              <div className="text-[11px] text-dls-secondary">{t("settings.engine_bundled_hint")}</div>
-            </div>
-
-            {props.developerMode && props.engineSource === "custom" ? (
-              <div className="space-y-2">
-                <div className="text-[12px] text-dls-secondary">{t("settings.custom_binary_label")}</div>
-                <div className="flex items-center gap-2">
-                  <div
-                    className="min-w-0 flex-1 truncate rounded-xl border border-dls-border bg-dls-surface p-3 font-mono text-[11px] text-dls-secondary"
-                    title={props.engineCustomBinPathLabel}
-                  >
-                    {props.engineCustomBinPathLabel}
-                  </div>
-                  <Button
-                    variant="outline"
-                    className="shrink-0"
-                    onClick={() => void props.onPickEngineBinary()}
-                    disabled={props.busy}
-                  >
-                    {t("settings.choose")}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="shrink-0"
-                    onClick={props.onClearEngineCustomBinPath}
-                    disabled={props.busy || !props.engineCustomBinPath.trim()}
-                    title={!props.engineCustomBinPath.trim() ? t("settings.no_custom_path_set") : t("settings.clear")}
-                  >
-                    {t("settings.clear")}
-                  </Button>
-                </div>
-                <div className="text-[11px] text-dls-secondary">{t("settings.custom_binary_hint")}</div>
-              </div>
-            ) : null}
-          </div>
-        ) : null}
 
         <div className={subCardClass}>
           <div className="text-sm font-semibold tracking-[-0.1px] text-dls-text">
@@ -1258,19 +1151,19 @@ export function DebugView(props: DebugViewProps) {
                 {t("settings.reset_sofia_title")}
               </div>
               <div className="text-[12px] text-dls-secondary">
-                {props.opencodeDevModeEnabled
+                {props.engineDevModeEnabled
                   ? t("settings.reset_sofia_desc_dev")
                   : t("settings.reset_sofia_desc_prod")}
               </div>
             </div>
             <div
               className={`shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-medium ${
-                props.opencodeDevModeEnabled
+                props.engineDevModeEnabled
                   ? "border-blue-7/35 bg-blue-3/25 text-blue-11"
                   : "border-dls-border bg-dls-sidebar/50 text-dls-secondary"
               }`}
             >
-              {props.opencodeDevModeEnabled
+              {props.engineDevModeEnabled
                 ? t("settings.dev_mode_badge")
                 : t("settings.production_mode_badge")}
             </div>
@@ -1393,7 +1286,7 @@ export function DebugView(props: DebugViewProps) {
           <AlertDialogCancel disabled={props.nukeConfigBusy}>{t("settings.nuke_cancel")}</AlertDialogCancel>
           <AlertDialogAction
             variant="destructive"
-            onClick={() => void props.onConfirmNukeSofiaAndOpencodeConfig()}
+            onClick={() => void props.onConfirmNukeSofiaAndWorkspaceEngineConfig()}
             disabled={!canConfirmNuke}
           >
             {props.nukeConfigBusy ? t("settings.removing_local_state") : t("settings.nuke_confirm_button")}

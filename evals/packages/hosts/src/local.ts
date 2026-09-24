@@ -26,7 +26,7 @@ export interface ElectronProfilePaths {
   envStorePath: string;
   homeDir: string;
   localAppDataDir: string;
-  opencodeConfigDir: string;
+  engineConfigDir: string;
   root: string;
   stateHome: string;
   userDataDir: string;
@@ -358,7 +358,7 @@ async function ensureElectronProfile(paths: ElectronProfilePaths): Promise<void>
     mkdir(paths.userDataDir, { recursive: true }),
     mkdir(paths.appDataDir, { recursive: true }),
     mkdir(paths.localAppDataDir, { recursive: true }),
-    mkdir(paths.opencodeConfigDir, { recursive: true }),
+    mkdir(paths.engineConfigDir, { recursive: true }),
     mkdir(paths.dataDir, { recursive: true }),
     mkdir(paths.homeDir, { recursive: true }),
     mkdir(paths.configHome, { recursive: true }),
@@ -405,7 +405,7 @@ export function electronProfilePaths(root: string): ElectronProfilePaths {
     envStorePath: join(root, "sofia-env.json"),
     homeDir: join(root, "home"),
     localAppDataDir: join(root, "local-appdata"),
-    opencodeConfigDir: join(root, "opencode-config"),
+    engineConfigDir: join(root, "engine-config"),
     root,
     stateHome: join(root, "xdg-state"),
     userDataDir: join(root, "electron-userdata"),
@@ -450,7 +450,7 @@ export function electronSurfaceEnv(paths: ElectronProfilePaths, options: Electro
     SOFIA_DESKTOP_DISABLE_WORKSPACE_RECOVERY: "1",
     SOFIA_DEV_MODE: "1",
     SOFIA_ENV_STORE: paths.envStorePath,
-    OPENCODE_CONFIG_DIR: paths.opencodeConfigDir,
+    SOFIA_ENGINE_CONFIG_DIR: paths.engineConfigDir,
     VITE_DISABLE_SOFIA_MODELS: "1",
     SOFIA_ELECTRON_APP_IDENTIFIER: options.appIdentifier,
     SOFIA_ELECTRON_APP_NAME: options.appName,

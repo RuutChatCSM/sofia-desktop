@@ -81,11 +81,11 @@ describe("extension item projection", () => {
   test("attributes only current Sofia-provided local skills", () => {
     expect(isSofiaProvidedSkill({
       name: "skill-creator",
-      path: "/workspace/.opencode/skills/skill-creator/SKILL.md",
+      path: "/workspace/.sofia/skills/skill-creator/SKILL.md",
     })).toBe(true);
     expect(isSofiaProvidedSkill({
       name: "workspace-guide",
-      path: String.raw`C:\workspace\.opencode\skills\workspace-guide\SKILL.md`,
+      path: String.raw`C:\workspace\.sofia\skills\workspace-guide\SKILL.md`,
     })).toBe(true);
 
     for (const name of [
@@ -97,7 +97,7 @@ describe("extension item projection", () => {
     ]) {
       expect(isSofiaProvidedSkill({
         name,
-        path: `/workspace/.opencode/skills/${name}/SKILL.md`,
+        path: `/workspace/.sofia/skills/${name}/SKILL.md`,
       })).toBe(false);
     }
   });

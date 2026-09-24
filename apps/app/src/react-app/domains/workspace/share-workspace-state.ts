@@ -238,7 +238,7 @@ export function useShareWorkspaceState(options: UseShareWorkspaceStateOptions) {
     const directory = workspace.directory?.trim() || "";
     return [
       {
-        label: t("session.share_opencode_base_url"),
+        label: t("session.share_engine_base_url"),
         value: baseUrl,
       },
       {

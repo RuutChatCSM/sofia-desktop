@@ -9,7 +9,7 @@ type FeedbackUrlOptions = {
   deployment?: string | null;
   appVersion?: string | null;
   sofiaServerVersion?: string | null;
-  opencodeVersion?: string | null;
+  engineVersion?: string | null;
 };
 
 type ClientOsContext = {
@@ -91,7 +91,7 @@ export function buildFeedbackUrl(options: FeedbackUrlOptions): string {
     deployment: options.deployment?.trim() ?? "",
     appVersion: options.appVersion?.trim() || ENV_APP_VERSION,
     sofiaServerVersion: options.sofiaServerVersion?.trim() ?? "",
-    opencodeVersion: options.opencodeVersion?.trim() ?? "",
+    engineVersion: options.engineVersion?.trim() ?? "",
     osName: osContext.osName?.trim() ?? "",
     osVersion: osContext.osVersion?.trim() ?? "",
     platform: osContext.platform?.trim() ?? "",

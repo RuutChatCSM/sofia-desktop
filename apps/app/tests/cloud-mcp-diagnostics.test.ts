@@ -62,7 +62,7 @@ function baseHealth(overrides?: Partial<SofiaCloudMcpHealth>): SofiaCloudMcpHeal
     pluginCanaries: { expected: [], present: [], missing: [] },
     compatibility: {
       sofia: { serverVersion: "0.17.36", app: { version: "0.17.36" } },
-      opencode: { expectedVersion: "1.17.11", actualVersion: "1.17.11", probe: "ok" },
+      engine: { expectedVersion: "1.17.11", actualVersion: "1.17.11", probe: "ok" },
       pluginFileHashes: [],
       supportedFeatures: { dynamicMcp: true, directoryScoping: true, toolIds: true, providerToolProjection: false, pluginCanaries: false },
       experimentalToolIds: { checked: false, expected: [], present: [], missing: [], includesMcpTools: null },
@@ -70,7 +70,7 @@ function baseHealth(overrides?: Partial<SofiaCloudMcpHealth>): SofiaCloudMcpHeal
     },
     toolDenies: [],
     firstFailure: {
-      code: "opencode_mcp_sync_failed",
+      code: "engine_mcp_sync_failed",
       stage: "engine_delivery",
       retryable: true,
       recommendedAction: "Retry reconcile or reconnect Sofia Cloud",
@@ -92,7 +92,7 @@ describe("cloud MCP advanced diagnostics", () => {
     const rows = cloudMcpAdvancedRows(baseHealth());
     const byLabel = new Map(rows.map((row) => [row.label, row]));
 
-    expect(byLabel.get("Failure")?.value).toBe("opencode_mcp_sync_failed · stage engine_delivery · retryable");
+    expect(byLabel.get("Failure")?.value).toBe("engine_mcp_sync_failed · stage engine_delivery · retryable");
     expect(byLabel.get("Engine MCP status")?.value).toBe("failed — fetch failed");
     expect(byLabel.get("Engine MCP status")?.tone).toBe("error");
     expect(byLabel.get("Engine MCP servers")?.value).toContain("sofia-cloud failed — fetch failed");
@@ -184,11 +184,11 @@ describe("cloud MCP advanced diagnostics", () => {
       finishedAt: CHECKED_AT,
       steps: [
         { step: "engine_disconnect", ok: true, latencyMs: 10 },
-        { step: "reapply", ok: false, latencyMs: 900, detail: { code: "opencode_mcp_sync_failed" } },
+        { step: "reapply", ok: false, latencyMs: 900, detail: { code: "engine_mcp_sync_failed" } },
       ],
     })).toEqual([
       "engine disconnect · ok · 10 ms",
-      're-register and verify · failed · 900 ms — {"code":"opencode_mcp_sync_failed"}',
+      're-register and verify · failed · 900 ms — {"code":"engine_mcp_sync_failed"}',
     ]);
   });
 

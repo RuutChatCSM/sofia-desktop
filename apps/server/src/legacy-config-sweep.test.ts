@@ -7,7 +7,7 @@ import { parse } from "jsonc-parser";
 import {
   legacySweepStatePath,
   readLegacyConfigSweepState,
-  sweepLegacyOpenCodeConfig,
+  sweepLegacySofiaConfig,
 } from "./legacy-config-sweep.js";
 import type { ServerConfig } from "./types.js";
 
@@ -45,7 +45,7 @@ function configFor(root: string): ServerConfig {
 }
 
 function legacyDir(root: string): string {
-  return join(root, ".config", "opencode");
+  return join(root, ".config", "engine");
 }
 
 async function writeLegacyFile(root: string, name: string, content: string): Promise<string> {
@@ -89,15 +89,15 @@ describe("legacy Sofia engine config sweep", () => {
   "default_agent": "sofia",
   "plugin": [
     "user-plugin",
-    "/tmp/opencode-plugins/sofia-office-attachments.js",
+    "/tmp/engine-plugins/sofia-office-attachments.js",
     "sofia-capabilities-knowledge"
   ],
   "userSetting": true
 }
 `;
-    const path = await writeLegacyFile(root, "opencode.jsonc", original);
+    const path = await writeLegacyFile(root, "engine.jsonc", original);
 
-    const state = await sweepLegacyOpenCodeConfig(config, { homeDir: root, now: NOW });
+    const state = await sweepLegacySofiaConfig(config, { homeDir: root, now: NOW });
     const after = await readFile(path, "utf8");
     const parsed = parseRecord(after);
     const mcp = isRecord(parsed.mcp) ? parsed.mcp : {};
@@ -129,12 +129,12 @@ describe("legacy Sofia engine config sweep", () => {
     const config = configFor(root);
     const path = await writeLegacyFile(root, "config.json", `{ "default_agent": "sofia" }\n`);
 
-    await sweepLegacyOpenCodeConfig(config, { homeDir: root, now: NOW });
+    await sweepLegacySofiaConfig(config, { homeDir: root, now: NOW });
     const contentAfterFirstRun = await readFile(path, "utf8");
     const backupsAfterFirstRun = await countBackups(root, "config.json");
     const stateAfterFirstRun = await readFile(legacySweepStatePath(config), "utf8");
 
-    await sweepLegacyOpenCodeConfig(config, { homeDir: root, now: new Date("2026-07-15T13:00:00Z") });
+    await sweepLegacySofiaConfig(config, { homeDir: root, now: new Date("2026-07-15T13:00:00Z") });
 
     expect(await readFile(path, "utf8")).toBe(contentAfterFirstRun);
     expect(await countBackups(root, "config.json")).toBe(backupsAfterFirstRun);
@@ -150,12 +150,12 @@ describe("legacy Sofia engine config sweep", () => {
   "plugin": ["user-plugin"]
 }
 `;
-    const path = await writeLegacyFile(root, "opencode.json", original);
+    const path = await writeLegacyFile(root, "engine.json", original);
 
-    const state = await sweepLegacyOpenCodeConfig(config, { homeDir: root, now: NOW });
+    const state = await sweepLegacySofiaConfig(config, { homeDir: root, now: NOW });
 
     expect(await readFile(path, "utf8")).toBe(original);
-    expect(await countBackups(root, "opencode.json")).toBe(0);
+    expect(await countBackups(root, "engine.json")).toBe(0);
     expect(state.files.find((entry) => entry.path === path)?.removedKeys).toEqual([]);
   });
 
@@ -163,11 +163,11 @@ describe("legacy Sofia engine config sweep", () => {
     const root = await createRoot();
     const config = configFor(root);
     const safePath = await writeLegacyFile(root, "config.json", `{ "plugin": ["user-plugin"] }\n`);
-    const unwritablePath = await writeLegacyFile(root, "opencode.json", `{ "default_agent": "sofia" }\n`);
-    const remainingPath = await writeLegacyFile(root, "opencode.jsonc", `{ "default_agent": "sofia" }\n`);
+    const unwritablePath = await writeLegacyFile(root, "engine.json", `{ "default_agent": "sofia" }\n`);
+    const remainingPath = await writeLegacyFile(root, "engine.jsonc", `{ "default_agent": "sofia" }\n`);
     await chmod(unwritablePath, 0o444);
 
-    const state = await sweepLegacyOpenCodeConfig(config, { homeDir: root, now: NOW });
+    const state = await sweepLegacySofiaConfig(config, { homeDir: root, now: NOW });
 
     expect(state.error).toBeTruthy();
     expect(await readFile(safePath, "utf8")).toBe(`{ "plugin": ["user-plugin"] }\n`);

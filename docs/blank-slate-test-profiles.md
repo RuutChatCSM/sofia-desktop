@@ -38,7 +38,7 @@ and redirects every persisted path into it before any other module loads:
 - desktop bootstrap (`SOFIA_DESKTOP_BOOTSTRAP_PATH`) — an enterprise build
   therefore starts at the activation gate, not an inherited control plane
 - Sofia server config, env store, token store, runtime DB, data dir
-- OpenCode config dir and database
+- Sofia config dir and database
 
 It also:
 

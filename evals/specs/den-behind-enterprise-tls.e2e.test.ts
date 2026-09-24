@@ -212,7 +212,7 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 1_200_000 }, async
         const patch = await fetch(base + "/config", {
           method: "PATCH",
           headers,
-          body: JSON.stringify({ opencode: { provider: { anthropic: { options: { apiKey: ${JSON.stringify(anthropicKey)} } } } } }),
+          body: JSON.stringify({ engine: { provider: { anthropic: { options: { apiKey: ${JSON.stringify(anthropicKey)} } } } } }),
         });
         if (!patch.ok) return "patch:" + patch.status + ":" + (await patch.text()).slice(0, 300);
         const reload = await fetch(base + "/engine/reload", { method: "POST", headers });

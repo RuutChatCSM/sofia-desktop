@@ -6,7 +6,7 @@ export type SofiaExtensionSourceFormat =
   | "sofia-builtin"
   | "sofia-extension-manifest"
   | "claude-plugin"
-  | "opencode-plugin"
+  | "engine-plugin"
   | "mcp-directory"
   | "manual";
 
@@ -23,7 +23,7 @@ export type SofiaExtensionResourceType =
   | "command"
   | "tool"
   | "mcp"
-  | "opencode-plugin"
+  | "engine-plugin"
   | "provider"
   | "hook"
   | "context"

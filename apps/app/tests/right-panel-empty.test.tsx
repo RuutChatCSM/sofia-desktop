@@ -19,7 +19,7 @@ describe("right panel empty state", () => {
     expect(getSidePanelSessionKey("ses_existing")).toBe("ses_existing");
   });
 
-  test("renders spacious keyboard-accessible destination actions", () => {
+  test("renders keyboard-accessible destination actions", () => {
     const html = renderToStaticMarkup(
       <PanelEmpty
         onOpenBrowser={() => undefined}
@@ -28,14 +28,14 @@ describe("right panel empty state", () => {
       />,
     );
 
-    expect(html).toContain("Choose a destination");
+    expect(html).toContain("Open in this panel");
     expect(html).toContain("Browser");
     expect(html).toContain("Files &amp; artifacts");
     expect(html).toContain("Library");
     expect(html).toContain("Voice Mode");
     expect(html).toContain('aria-label="Panel destinations"');
     expect(html.match(/<button/g)).toHaveLength(4);
-    expect(html).toContain("min-h-16");
+    expect(html).toContain("min-h-10");
     expect(html).toContain("w-full");
     expect(html).toContain("overflow-y-auto");
   });

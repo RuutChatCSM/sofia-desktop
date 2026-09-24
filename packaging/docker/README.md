@@ -303,7 +303,7 @@ pnpm dev:den:mysql:down
 
 ## Pre-baked Micro-Sandbox Image
 
-For micro-sandbox work, use the pre-baked image that compiles `sofia-server` from source and downloads the pinned `opencode` binary during `docker build`.
+For micro-sandbox work, use the pre-baked image that compiles `sofia-server` from source and downloads the pinned `engine` binary during `docker build`.
 
 Build it from the repo root:
 
@@ -344,7 +344,7 @@ This is a minimal packaging template to run the Sofia Host contract in a single 
 It runs:
 
 - `sofia-server` published on `0.0.0.0:8787` (the only published surface)
-- Managed `opencode` launched internally by `sofia-server`
+- Managed `engine` launched internally by `sofia-server`
 
 ### Local run (compose)
 
@@ -373,9 +373,9 @@ Optional:
 Persistence:
 
 - Workspace is mounted at `/workspace`
-- Host data dir is mounted at `/data` (OpenCode caches + Sofia server config/tokens)
+- Host data dir is mounted at `/data` (Sofia caches + Sofia server config/tokens)
 
 ### Notes
 
-- OpenCode is not exposed directly; access it via the Sofia proxy (`/opencode/*`).
+- Sofia is not exposed directly; access it via the Sofia proxy (`/engine/*`).
 - For PaaS, replace `./workspace:/workspace` with a volume or a checkout strategy (git clone on boot).

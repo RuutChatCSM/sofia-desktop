@@ -7,7 +7,7 @@ const execFile = promisify(execFileCallback);
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 const PROBE_SCRIPT = `
-  const { SofiaExtensionsPreview } = await import("./apps/server/src/opencode-plugins/sofia-extensions-preview.ts");
+  const { SofiaExtensionsPreview } = await import("./apps/server/src/engine-plugins/sofia-extensions-preview.ts");
   const plugin = await SofiaExtensionsPreview();
   const output = { system: [] };
   await plugin["experimental.chat.system.transform"](undefined, output);

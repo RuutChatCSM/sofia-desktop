@@ -3,7 +3,7 @@ import { ApiError } from "../errors.js";
 import type { ServerConfig, TokenScope, WorkspaceInfo } from "../types.js";
 import { shortId } from "../utils.js";
 import { addRoute, type RequestContext, type Route } from "./registry.js";
-import { writeCodexAccessMode } from "../codex-access.js";
+import { readCodexAccessMode, writeCodexAccessMode } from "../codex-access.js";
 import { hasRunningCodexSessions } from "../codex-registry.js";
 
 type JsonResponse = (data: unknown, status?: number) => Response;
@@ -16,7 +16,7 @@ interface RegisterOperationRoutesOptions {
   readJsonBody: ReadJsonBody;
   requireClientScope: (ctx: RequestContext, required: TokenScope) => void;
   resolveWorkspace: (config: ServerConfig, id: string) => Promise<WorkspaceInfo>;
-  reloadOpencodeEngine: (config: ServerConfig, workspace: WorkspaceInfo) => Promise<void>;
+  reloadWorkspaceEngineEngine: (config: ServerConfig, workspace: WorkspaceInfo) => Promise<void>;
 }
 
 export function registerOperationRoutes(options: RegisterOperationRoutesOptions): void {
@@ -27,7 +27,7 @@ export function registerOperationRoutes(options: RegisterOperationRoutesOptions)
     readJsonBody,
     requireClientScope,
     resolveWorkspace,
-    reloadOpencodeEngine,
+    reloadWorkspaceEngineEngine,
   } = options;
 
   addRoute(routes, "GET", "/workspace/:id/events", "client", async (ctx) => {
@@ -42,14 +42,14 @@ export function registerOperationRoutes(options: RegisterOperationRoutesOptions)
     const workspace = await resolveWorkspace(config, ctx.params.id);
     requireClientScope(ctx, "collaborator");
 
-    await reloadOpencodeEngine(config, workspace);
+    await reloadWorkspaceEngineEngine(config, workspace);
 
     await recordAudit(workspace.path, {
       id: shortId(),
       workspaceId: workspace.id,
       actor: ctx.actor ?? { type: "remote" },
       action: "engine.reload",
-      target: workspace.baseUrl ?? "opencode",
+      target: workspace.baseUrl ?? "engine",
       summary: "Reloaded workspace engine",
       timestamp: Date.now(),
     });
@@ -75,7 +75,7 @@ export function registerOperationRoutes(options: RegisterOperationRoutesOptions)
   // unsafe actions, "full" (Full access) never prompts. Mirrors the desktop
   // "How should actions be approved?" selector.
   addRoute(routes, "GET", "/approvals/mode", "host", async (ctx) => {
-    return jsonResponse({ mode: ctx.approvals.getMode() });
+    return jsonResponse({ mode: readCodexAccessMode() });
   });
 
   addRoute(routes, "PUT", "/approvals/mode", "host", async (ctx) => {

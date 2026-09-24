@@ -3,10 +3,10 @@ import type { UIMessage } from "ai";
 import { safeStringify } from "../../../../app/utils";
 import { normalizeErrorText } from "../../../../lib/error-text";
 
-export type OpencodeSessionErrorKind = "aborted" | "provider-timeout" | "generic";
+export type WorkspaceEngineSessionErrorKind = "aborted" | "provider-timeout" | "generic";
 
-export type OpencodeSessionErrorPresentation = {
-  kind: OpencodeSessionErrorKind;
+export type WorkspaceEngineSessionErrorPresentation = {
+  kind: WorkspaceEngineSessionErrorKind;
   title: string;
   description: string | null;
   technicalDetails: string;
@@ -53,7 +53,7 @@ function defaultErrorMessage(name: string | null, fallback: string) {
   return fallback;
 }
 
-function sessionErrorKind(name: string | null, message: string | null, code: string | null): OpencodeSessionErrorKind {
+function sessionErrorKind(name: string | null, message: string | null, code: string | null): WorkspaceEngineSessionErrorKind {
   const searchable = [name, message, code].filter(Boolean).join(" ");
   if (
     name === "MessageAbortedError" ||
@@ -72,13 +72,13 @@ function sessionErrorKind(name: string | null, message: string | null, code: str
   return "generic";
 }
 
-function errorTitle(kind: OpencodeSessionErrorKind, fallback: string) {
+function errorTitle(kind: WorkspaceEngineSessionErrorKind, fallback: string) {
   if (kind === "aborted") return "Task interrupted";
   if (kind === "provider-timeout") return "Provider did not respond in time";
   return fallback;
 }
 
-function errorDescription(kind: OpencodeSessionErrorKind) {
+function errorDescription(kind: WorkspaceEngineSessionErrorKind) {
   if (kind === "aborted") {
     return "The engine stopped before the task finished. Output and files already produced are kept.";
   }
@@ -88,7 +88,7 @@ function errorDescription(kind: OpencodeSessionErrorKind) {
   return null;
 }
 
-function errorRecoveryPrompt(kind: OpencodeSessionErrorKind) {
+function errorRecoveryPrompt(kind: WorkspaceEngineSessionErrorKind) {
   return kind === "aborted" || kind === "provider-timeout"
     ? interruptedTaskRecoveryPrompt
     : null;
@@ -177,7 +177,7 @@ function technicalErrorDetails(error: unknown, fallback: string, fields: ReturnT
   return normalizeErrorText(serialized && serialized !== "{}" ? serialized : fallback, { cap: 1_500 }).display;
 }
 
-export function presentOpencodeSessionError(error: unknown, fallback = "Session failed"): OpencodeSessionErrorPresentation {
+export function presentWorkspaceEngineSessionError(error: unknown, fallback = "Session failed"): WorkspaceEngineSessionErrorPresentation {
   const fields = sessionErrorFields(error, fallback);
   const kind = sessionErrorKind(fields.name, fields.message, fields.code);
   const fallbackTitle = normalizeSessionError(fields.message ?? defaultErrorMessage(fields.name, fallback));
@@ -190,23 +190,23 @@ export function presentOpencodeSessionError(error: unknown, fallback = "Session 
   };
 }
 
-export function describeOpencodeSessionError(error: unknown, fallback = "Session failed") {
-  const presentation = presentOpencodeSessionError(error, fallback);
+export function describeWorkspaceEngineSessionError(error: unknown, fallback = "Session failed") {
+  const presentation = presentWorkspaceEngineSessionError(error, fallback);
   return presentation.description
     ? `${presentation.title}\n${presentation.description}`
     : presentation.title;
 }
 
-export function sessionErrorPresentationFromUIMessage(message: UIMessage): OpencodeSessionErrorPresentation | null {
+export function sessionErrorPresentationFromUIMessage(message: UIMessage): WorkspaceEngineSessionErrorPresentation | null {
   const part = message.parts.find((candidate) => candidate.type === "text");
   if (!part || part.type !== "text") return null;
-  const metadata = part.providerMetadata?.opencode;
+  const metadata = part.providerMetadata?.engine;
   if (!metadata || typeof metadata !== "object") return null;
   const sessionError = "sessionError" in metadata
     ? (metadata as { sessionError?: unknown }).sessionError
     : null;
   if (!sessionError || typeof sessionError !== "object") return null;
-  const candidate = sessionError as Partial<OpencodeSessionErrorPresentation>;
+  const candidate = sessionError as Partial<WorkspaceEngineSessionErrorPresentation>;
   if (
     typeof candidate.kind !== "string" ||
     typeof candidate.title !== "string" ||
@@ -216,5 +216,5 @@ export function sessionErrorPresentationFromUIMessage(message: UIMessage): Openc
   ) {
     return null;
   }
-  return candidate as OpencodeSessionErrorPresentation;
+  return candidate as WorkspaceEngineSessionErrorPresentation;
 }

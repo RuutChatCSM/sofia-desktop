@@ -8,9 +8,8 @@ import type {
 } from "./engine/workspace-engine-client.js";
 import { ApiError } from "./errors.js";
 import { diagnoseMcpToolDenies, type McpToolDeny } from "./mcp.js";
-import { sofiaPluginPath } from "./sofia-extensions-plugin-path.js";
 import { sanitizeDiagnosticString, sanitizeDiagnosticValue } from "./diagnostic-sanitizer.js";
-import { readRuntimeOpencodeConfig, runtimeMcpMap, writeRuntimeOpencodeConfig } from "./runtime-opencode-config-store.js";
+import { readRuntimeWorkspaceEngineConfig, runtimeMcpMap, writeRuntimeWorkspaceEngineConfig } from "./runtime-engine-config-store.js";
 import { externalFetch } from "./server-fetch.js";
 import type { ServerConfig, WorkspaceInfo } from "./types.js";
 import { validateMcpConfig } from "./validators.js";
@@ -34,7 +33,7 @@ function engineProbeTimeoutMs(): number {
   return Number(process.env.SOFIA_CLOUD_MCP_PROBE_TIMEOUT_MS ?? "") || 5_000;
 }
 
-type WorkspaceOpencodeClient = WorkspaceEngineClient;
+type WorkspaceWorkspaceEngineClient = WorkspaceEngineClient;
 
 export type CloudMcpProviderModelContext = {
   provider: string;
@@ -63,14 +62,14 @@ export type CloudMcpFailureCode =
   | "mcp_membership_revoked"
   | "insufficient_mcp_scope"
   | "wrong_mcp_resource"
-  | "opencode_engine_unreachable"
-  | "opencode_mcp_sync_failed"
+  | "engine_unreachable"
+  | "engine_mcp_sync_failed"
   | "provider_tool_projection_missing"
   | "cloud_steering_stale"
   | "cloud_desired_missing"
   | "workspace_directory_ambiguous"
-  | "opencode_unconfigured"
-  | "opencode_unreachable"
+  | "engine_unconfigured"
+  | "engine_unreachable"
   | "cloud_status_missing"
   | "cloud_disabled"
   | "sofia_cloud_auth_required"
@@ -84,8 +83,8 @@ export type CloudMcpFailureCode =
   | "cloud_connection_failed"
   | "cloud_registration_failed"
   | "cloud_tools_denied"
-  | "opencode_tool_ids_unsupported"
-  | "opencode_tool_ids_unavailable"
+  | "engine_tool_ids_unsupported"
+  | "engine_tool_ids_unavailable"
   | "probe_unreachable"
   | "cloud_tools_missing"
   | "provider_projection_unavailable"
@@ -153,7 +152,7 @@ export type CloudMcpLiveStatusObserver = (
 
 export type CloudMcpServerMetadata = {
   serverVersion?: string;
-  expectedOpencodeVersion?: string;
+  expectedWorkspaceEngineVersion?: string;
 };
 
 export type CloudMcpCompatibilitySnapshot = {
@@ -161,7 +160,7 @@ export type CloudMcpCompatibilitySnapshot = {
     serverVersion: string | null;
     app: Record<string, string | number | boolean | null> | null;
   };
-  opencode: {
+  engine: {
     expectedVersion: string | null;
     actualVersion: string | null;
     probe: "ok" | "unavailable" | "not_checked";
@@ -429,7 +428,7 @@ type Inspection = {
   pluginCanaries: ToolSnapshot;
   experimentalToolIds: CloudMcpExperimentalToolIdsSnapshot;
   experimentalProviderTools: CloudMcpExperimentalProviderToolsSnapshot;
-  opencodeVersion: CloudMcpCompatibilitySnapshot["opencode"];
+  engineVersion: CloudMcpCompatibilitySnapshot["engine"];
   failures: CloudMcpFailure[];
 };
 
@@ -855,7 +854,7 @@ async function readDesiredState(input: {
   directory: string | null;
   connectCatalogEnabled?: boolean;
 }): Promise<CloudMcpDesiredState> {
-  const runtimeConfig = await readRuntimeOpencodeConfig(input.config, input.workspace.id);
+  const runtimeConfig = await readRuntimeWorkspaceEngineConfig(input.config, input.workspace.id);
   const entry = runtimeMcpMap(runtimeConfig)[SOFIA_CLOUD_MCP_NAME];
   if (!entry) {
     const metadata = defaultDesiredMetadata(null, input.connectCatalogEnabled ?? false);
@@ -962,25 +961,25 @@ function extractDiagnosticIds(value: unknown): { requestId?: string; referenceId
   return found;
 }
 
-function opencodeRequestFailure(stage: CloudMcpFailureStage, path: string, response: Response | undefined, error: unknown): CloudMcpFailure {
+function engineRequestFailure(stage: CloudMcpFailureStage, path: string, response: Response | undefined, error: unknown): CloudMcpFailure {
   const status = response?.status;
   if (status === undefined) {
-    return thrownOpencodeFailure(stage, path, error);
+    return thrownWorkspaceEngineFailure(stage, path, error);
   }
   if (stage === "engine_delivery") {
     return failure({
-      code: status >= 500 ? "opencode_engine_unreachable" : "opencode_mcp_sync_failed",
+      code: status >= 500 ? "engine_unreachable" : "engine_mcp_sync_failed",
       stage,
       retryable: status >= 500,
       recommendedAction: status >= 500 ? "Restart Sofia engine or retry when the engine is reachable" : "Check Sofia engine MCP status support",
       message: "Sofia engine request failed while checking MCP status.",
-      aliases: status >= 500 ? ["opencode_unreachable"] : ["cloud_connection_failed"],
+      aliases: status >= 500 ? ["engine_unreachable"] : ["cloud_connection_failed"],
       details: { path, status, error },
     });
   }
   if (stage === "tool_registration" && (status === 404 || status === 405)) {
     return failure({
-      code: "opencode_tool_ids_unsupported",
+      code: "engine_tool_ids_unsupported",
       stage,
       retryable: false,
       recommendedAction: "Update Sofia App",
@@ -989,7 +988,7 @@ function opencodeRequestFailure(stage: CloudMcpFailureStage, path: string, respo
     });
   }
   return failure({
-    code: stage === "provider_projection" ? "provider_tool_projection_missing" : "opencode_tool_ids_unavailable",
+    code: stage === "provider_projection" ? "provider_tool_projection_missing" : "engine_tool_ids_unavailable",
     stage,
     retryable: status >= 500,
     recommendedAction: status >= 500 ? "Retry after Sofia engine is healthy" : "Update Sofia App",
@@ -999,14 +998,14 @@ function opencodeRequestFailure(stage: CloudMcpFailureStage, path: string, respo
   });
 }
 
-function thrownOpencodeFailure(stage: CloudMcpFailureStage, path: string, error: unknown): CloudMcpFailure {
+function thrownWorkspaceEngineFailure(stage: CloudMcpFailureStage, path: string, error: unknown): CloudMcpFailure {
   return failure({
-    code: "opencode_engine_unreachable",
+    code: "engine_unreachable",
     stage,
     retryable: true,
     recommendedAction: "Restart Sofia engine or retry when the engine is reachable",
     message: "Sofia engine is not reachable.",
-    aliases: ["opencode_unreachable"],
+    aliases: ["engine_unreachable"],
     details: { path, error: error instanceof Error ? error.message : String(error) },
   });
 }
@@ -1405,33 +1404,33 @@ async function readDirectCloudToolsSingleFlight(input: {
 }
 
 async function readMcpStatus(
-  opencode: WorkspaceOpencodeClient,
+  engine: WorkspaceWorkspaceEngineClient,
   directory: string | null,
 ): Promise<{ data?: Record<string, McpStatus>; failure?: CloudMcpFailure }> {
   try {
-    const result = await withEngineProbeTimeout(() => opencode.mcp.status(locationParams(directory)));
+    const result = await withEngineProbeTimeout(() => engine.mcp.status(locationParams(directory)));
     if (result.data) return { data: result.data };
-    return { failure: opencodeRequestFailure("engine_delivery", "/mcp", result.response, result.error) };
+    return { failure: engineRequestFailure("engine_delivery", "/mcp", result.response, result.error) };
   } catch (error) {
-    return { failure: thrownOpencodeFailure("engine_delivery", "/mcp", error) };
+    return { failure: thrownWorkspaceEngineFailure("engine_delivery", "/mcp", error) };
   }
 }
 
 async function readToolIds(
-  opencode: WorkspaceOpencodeClient,
+  engine: WorkspaceWorkspaceEngineClient,
   directory: string | null,
 ): Promise<{ data?: ToolIds; failure?: CloudMcpFailure }> {
   try {
-    const result = await withEngineProbeTimeout(() => opencode.tool.ids(locationParams(directory)));
+    const result = await withEngineProbeTimeout(() => engine.tool.ids(locationParams(directory)));
     if (result.data) return { data: result.data };
-    return { failure: opencodeRequestFailure("tool_registration", "/experimental/tool/ids", result.response, result.error) };
+    return { failure: engineRequestFailure("tool_registration", "/experimental/tool/ids", result.response, result.error) };
   } catch (error) {
-    return { failure: thrownOpencodeFailure("tool_registration", "/experimental/tool/ids", error) };
+    return { failure: thrownWorkspaceEngineFailure("tool_registration", "/experimental/tool/ids", error) };
   }
 }
 
 async function readProviderProjection(input: {
-  opencode: WorkspaceOpencodeClient;
+  engine: WorkspaceWorkspaceEngineClient;
   directory: string | null;
   providerModel: CloudMcpProviderModelContext;
   /** Kept for call-site compatibility; experimental MCP omissions always fall back. */
@@ -1443,13 +1442,13 @@ async function readProviderProjection(input: {
   let experimentalSplit: ToolSnapshot | null = null;
   let experimentalError: unknown;
   try {
-    const result = await withEngineProbeTimeout(() => input.opencode.tool.list({
+    const result = await withEngineProbeTimeout(() => input.engine.tool.list({
       ...locationParams(input.directory),
       provider: input.providerModel.provider,
       model: input.providerModel.model,
     }));
     if (!result.data) {
-      experimentalError = opencodeRequestFailure("provider_projection", "/experimental/tool", result.response, result.error).details;
+      experimentalError = engineRequestFailure("provider_projection", "/experimental/tool", result.response, result.error).details;
     } else {
       experimentalSplit = splitPresentMissing(toolListIds(result.data), expectedTools());
       if (experimentalSplit.missing.length === 0) {
@@ -1464,7 +1463,7 @@ async function readProviderProjection(input: {
       }
     }
   } catch (error) {
-    experimentalError = thrownOpencodeFailure("provider_projection", "/experimental/tool", error).details;
+    experimentalError = thrownWorkspaceEngineFailure("provider_projection", "/experimental/tool", error).details;
   }
 
   // Sofia engine's /experimental/tool enumerates ToolRegistry tools and often omits
@@ -1472,7 +1471,7 @@ async function readProviderProjection(input: {
   // /provider tool-call capability when the per-model experimental list is
   // incomplete — even if global /experimental/tool/ids includes MCP tools.
   return readProviderCapability({
-    opencode: input.opencode,
+    engine: input.engine,
     directory: input.directory,
     providerModel: input.providerModel,
     experimentalSplit,
@@ -1481,16 +1480,16 @@ async function readProviderProjection(input: {
 }
 
 async function readProviderCapability(input: {
-  opencode: WorkspaceOpencodeClient;
+  engine: WorkspaceWorkspaceEngineClient;
   directory: string | null;
   providerModel: CloudMcpProviderModelContext;
   experimentalSplit: ToolSnapshot | null;
   experimentalError: unknown;
 }): Promise<ProviderProjectionSnapshot> {
   try {
-    const result = await withEngineProbeTimeout(() => input.opencode.provider.list(locationParams(input.directory)));
+    const result = await withEngineProbeTimeout(() => input.engine.provider.list(locationParams(input.directory)));
     if (!result.data) {
-      const projectionFailure = opencodeRequestFailure("provider_projection", "/provider", result.response, result.error);
+      const projectionFailure = engineRequestFailure("provider_projection", "/provider", result.response, result.error);
       return {
         checked: true,
         provider: input.providerModel.provider,
@@ -1540,7 +1539,7 @@ async function readProviderCapability(input: {
       ...(projectionFailure ? { failure: projectionFailure } : {}),
     };
   } catch (error) {
-    const projectionFailure = thrownOpencodeFailure("provider_projection", "/provider", error);
+    const projectionFailure = thrownWorkspaceEngineFailure("provider_projection", "/provider", error);
     return {
       checked: true,
       provider: input.providerModel.provider,
@@ -1592,7 +1591,7 @@ function statusFailure(status: McpStatus | undefined): CloudMcpFailure {
   }
   if (status.status === "needs_client_registration") {
     return failure({
-      code: "opencode_mcp_sync_failed",
+      code: "engine_mcp_sync_failed",
       stage: "engine_delivery",
       retryable: false,
       recommendedAction: "Reconnect Sofia Cloud or update Sofia App",
@@ -1605,7 +1604,7 @@ function statusFailure(status: McpStatus | undefined): CloudMcpFailure {
     return inferFailedStatus(status.error);
   }
   return failure({
-    code: "opencode_mcp_sync_failed",
+    code: "engine_mcp_sync_failed",
     stage: "engine_delivery",
     retryable: true,
     recommendedAction: "Retry reconcile",
@@ -1651,10 +1650,10 @@ function inferFailedStatus(error: string): CloudMcpFailure {
     return failure({ code: "wrong_mcp_resource", stage: "transport_auth", retryable: false, recommendedAction: "Reconnect Sofia Cloud or choose an accessible organization", message: "Sofia Cloud resource was not found.", aliases: ["sofia_cloud_resource_not_found"], details: { error } });
   }
   if (lower.includes("client registration")) {
-    return failure({ code: "opencode_mcp_sync_failed", stage: "engine_delivery", retryable: false, recommendedAction: "Reconnect Sofia Cloud or update Sofia App", message: "sofia-cloud needs client registration.", aliases: ["sofia_cloud_client_registration_required"], details: { error } });
+    return failure({ code: "engine_mcp_sync_failed", stage: "engine_delivery", retryable: false, recommendedAction: "Reconnect Sofia Cloud or update Sofia App", message: "sofia-cloud needs client registration.", aliases: ["sofia_cloud_client_registration_required"], details: { error } });
   }
   return failure({
-    code: "opencode_mcp_sync_failed",
+    code: "engine_mcp_sync_failed",
     stage: "engine_delivery",
     retryable: true,
     recommendedAction: "Retry reconcile or reconnect Sofia Cloud",
@@ -1698,9 +1697,9 @@ function readVersionFromHealthPayload(payload: unknown): string | null {
   return typeof payload.version === "string" ? sanitizeDiagnosticString(payload.version) : null;
 }
 
-async function readOpencodeVersion(opencode: WorkspaceOpencodeClient): Promise<CloudMcpCompatibilitySnapshot["opencode"]> {
+async function readWorkspaceEngineVersion(engine: WorkspaceWorkspaceEngineClient): Promise<CloudMcpCompatibilitySnapshot["engine"]> {
   try {
-    const result = await withEngineProbeTimeout(() => opencode.global.health());
+    const result = await withEngineProbeTimeout(() => engine.global.health());
     if (result.data) {
       return { expectedVersion: null, actualVersion: readVersionFromHealthPayload(result.data), probe: "ok" };
     }
@@ -1721,7 +1720,7 @@ async function readOpencodeVersion(opencode: WorkspaceOpencodeClient): Promise<C
 }
 
 async function inspectSofiaCloud(input: {
-  opencode: WorkspaceOpencodeClient;
+  engine: WorkspaceWorkspaceEngineClient;
   config: ServerConfig;
   workspace: WorkspaceInfo;
   directory: string | null;
@@ -1738,12 +1737,12 @@ async function inspectSofiaCloud(input: {
   const emptyCanaries = splitPresentMissing([], expectedCanaries());
   const uncheckedExperimentalToolIds = experimentalToolIdsNotChecked();
   const uncheckedExperimentalProviderTools = experimentalProviderToolsFromProjection(providerProjectionNotChecked(input.providerModel));
-  const opencodeVersion = await readOpencodeVersion(input.opencode);
-  const statusResult = await readMcpStatus(input.opencode, input.directory);
+  const engineVersion = await readWorkspaceEngineVersion(input.engine);
+  const statusResult = await readMcpStatus(input.engine, input.directory);
   if (statusResult.failure) {
     failures.push(statusResult.failure);
     return {
-      engine: { status: statusResult.failure.code === "opencode_engine_unreachable" ? "unreachable" : "unknown", error: statusResult.failure.details },
+      engine: { status: statusResult.failure.code === "engine_unreachable" ? "unreachable" : "unknown", error: statusResult.failure.details },
       engineInspection: engineInspectionNotChecked(),
       tools: emptyTools,
       directTools: emptyDirectTools,
@@ -1751,7 +1750,7 @@ async function inspectSofiaCloud(input: {
       pluginCanaries: emptyCanaries,
       experimentalToolIds: uncheckedExperimentalToolIds,
       experimentalProviderTools: uncheckedExperimentalProviderTools,
-      opencodeVersion,
+      engineVersion,
       failures,
     };
   }
@@ -1780,12 +1779,12 @@ async function inspectSofiaCloud(input: {
       pluginCanaries: emptyCanaries,
       experimentalToolIds: uncheckedExperimentalToolIds,
       experimentalProviderTools: uncheckedExperimentalProviderTools,
-      opencodeVersion,
+      engineVersion,
       failures,
     };
   }
 
-  const idsResult = await readToolIds(input.opencode, input.directory);
+  const idsResult = await readToolIds(input.engine, input.directory);
   if (idsResult.failure) {
     failures.push(idsResult.failure);
     return {
@@ -1797,7 +1796,7 @@ async function inspectSofiaCloud(input: {
       pluginCanaries: emptyCanaries,
       experimentalToolIds: experimentalToolIdsFromFailure(idsResult.failure),
       experimentalProviderTools: uncheckedExperimentalProviderTools,
-      opencodeVersion,
+      engineVersion,
       failures,
     };
   }
@@ -1829,7 +1828,7 @@ async function inspectSofiaCloud(input: {
 
   const providerProjection = input.providerModel
     ? await readProviderProjection({
-        opencode: input.opencode,
+        engine: input.engine,
         directory: input.directory,
         providerModel: input.providerModel,
         experimentalToolIdsIncludeMcpTools: experimentalToolIds.includesMcpTools,
@@ -1849,7 +1848,7 @@ async function inspectSofiaCloud(input: {
     }));
   }
 
-  return { engine, engineInspection, tools, directTools, providerProjection, pluginCanaries, experimentalToolIds, experimentalProviderTools, opencodeVersion, failures };
+  return { engine, engineInspection, tools, directTools, providerProjection, pluginCanaries, experimentalToolIds, experimentalProviderTools, engineVersion, failures };
 }
 
 function providerProjectionNotChecked(providerModel?: CloudMcpProviderModelContext): ProviderProjectionSnapshot {
@@ -1926,8 +1925,8 @@ function phaseFromFailure(firstFailure: CloudMcpFailure | null): CloudMcpHealthP
   if (firstFailure.code === "cloud_mcp_missing" || firstFailure.code === "cloud_desired_missing") return "missing_desired";
   if (firstFailure.code === "cloud_endpoint_invalid" || firstFailure.code === "cloud_token_org_mismatch") return "missing_desired";
   if (firstFailure.code === "workspace_directory_ambiguous") return "workspace_ambiguous";
-  if (firstFailure.code === "opencode_unconfigured") return "engine_unconfigured";
-  if (firstFailure.code === "opencode_engine_unreachable" || firstFailure.code === "opencode_unreachable") return "engine_unreachable";
+  if (firstFailure.code === "engine_unconfigured") return "engine_unconfigured";
+  if (firstFailure.code === "engine_unreachable") return "engine_unreachable";
   if (firstFailure.code === "cloud_status_missing") return "engine_missing";
   if (firstFailure.code === "cloud_mcp_disabled" || firstFailure.code === "cloud_disabled") return "engine_disabled";
   if (
@@ -1942,9 +1941,9 @@ function phaseFromFailure(firstFailure: CloudMcpFailure | null): CloudMcpHealthP
     firstFailure.code === "sofia_cloud_token_expired"
   ) return "engine_needs_auth";
   if (firstFailure.code === "sofia_cloud_client_registration_required") return "engine_needs_client_registration";
-  if (firstFailure.code === "opencode_mcp_sync_failed" || firstFailure.code === "cloud_registration_failed") return "registration_failed";
+  if (firstFailure.code === "engine_mcp_sync_failed" || firstFailure.code === "cloud_registration_failed") return "registration_failed";
   if (firstFailure.code === "cloud_tools_denied") return "denied_by_tools";
-  if (firstFailure.code === "opencode_tool_ids_unsupported") return "tool_ids_unsupported";
+  if (firstFailure.code === "engine_tool_ids_unsupported") return "tool_ids_unsupported";
   if (firstFailure.code === "cloud_tools_missing") return "cloud_tools_missing";
   if (firstFailure.code === "provider_tool_projection_missing" || firstFailure.code === "provider_projection_missing" || firstFailure.code === "provider_projection_unavailable") return "provider_projection_missing";
   if (firstFailure.code === "extensions_plugin_missing") return "extensions_plugin_missing";
@@ -1975,19 +1974,12 @@ function usableByModel(providerProjection: ProviderProjectionSnapshot, firstFail
 }
 
 function baseUrlConfigured(config: ServerConfig, workspace: WorkspaceInfo): boolean {
-  return Boolean(workspace.baseUrl?.trim() || config.opencodeBaseUrl?.trim());
+  return Boolean(workspace.baseUrl?.trim() || config.engineBaseUrl?.trim());
 }
 
 async function pluginFileHashes(): Promise<CloudMcpCompatibilitySnapshot["pluginFileHashes"]> {
-  const names = ["sofia-extensions-preview", "sofia-capabilities-knowledge"];
-  return Promise.all(names.map(async (name) => {
-    try {
-      return { name, sha256: hashString(await readFile(sofiaPluginPath(name), "utf8")) };
-    } catch (error) {
-      const lastError = error instanceof Error ? error.message : String(error);
-      return { name, sha256: null, error: sanitizeDiagnosticString(lastError) };
-    }
-  }));
+  // Extensions execute in the Sofia engine. There are no injected JS hooks.
+  return [];
 }
 
 async function compatibilitySnapshot(input: {
@@ -1996,21 +1988,21 @@ async function compatibilitySnapshot(input: {
   directory: string | null;
   inspection: Inspection;
 }): Promise<CloudMcpCompatibilitySnapshot> {
-  const opencode = {
-    ...input.inspection.opencodeVersion,
-    expectedVersion: input.serverMetadata?.expectedOpencodeVersion ?? null,
+  const engine = {
+    ...input.inspection.engineVersion,
+    expectedVersion: input.serverMetadata?.expectedWorkspaceEngineVersion ?? null,
   };
   return {
     sofia: {
       serverVersion: input.serverMetadata?.serverVersion ?? null,
       app: input.appMetadata ?? null,
     },
-    opencode,
+    engine,
     pluginFileHashes: await pluginFileHashes(),
     supportedFeatures: {
       dynamicMcp: true,
       directoryScoping: input.directory !== null,
-      toolIds: !input.inspection.failures.some((item) => item.code === "opencode_tool_ids_unsupported" || item.code === "opencode_tool_ids_unavailable"),
+      toolIds: !input.inspection.failures.some((item) => item.code === "engine_tool_ids_unsupported" || item.code === "engine_tool_ids_unavailable"),
       providerToolProjection: input.inspection.providerProjection.checked && !input.inspection.failures.some((item) => item.stage === "provider_projection" && item.code !== "provider_tool_projection_missing"),
       pluginCanaries: input.inspection.pluginCanaries.expected.length > 0,
     },
@@ -2026,7 +2018,7 @@ type ReadSofiaCloudMcpHealthInput = {
   providerModel?: CloudMcpProviderModelContext;
   serverMetadata?: CloudMcpServerMetadata;
   probe?: boolean;
-  createWorkspaceOpencodeClient: (config: ServerConfig, workspace: WorkspaceInfo) => WorkspaceOpencodeClient;
+  createWorkspaceWorkspaceEngineClient: (config: ServerConfig, workspace: WorkspaceInfo) => WorkspaceWorkspaceEngineClient;
   refreshRegistrationFromLiveStatus?: CloudMcpLiveStatusObserver;
 };
 
@@ -2071,7 +2063,7 @@ async function readSofiaCloudMcpHealthInternal(
   }
   if (desired.present && input.directory && !baseUrlConfigured(input.config, input.workspace)) {
     failures.push(failure({
-      code: "opencode_unconfigured",
+      code: "engine_unconfigured",
       stage: "prerequisites",
       retryable: false,
       recommendedAction: "Start or attach an Sofia engine for this workspace",
@@ -2090,12 +2082,12 @@ async function readSofiaCloudMcpHealthInternal(
     pluginCanaries: splitPresentMissing([], expectedCanaries()),
     experimentalToolIds: experimentalToolIdsNotChecked(),
     experimentalProviderTools: experimentalProviderToolsFromProjection(providerProjectionNotChecked(input.providerModel)),
-    opencodeVersion: { expectedVersion: input.serverMetadata?.expectedOpencodeVersion ?? null, actualVersion: null, probe: "not_checked" },
+    engineVersion: { expectedVersion: input.serverMetadata?.expectedWorkspaceEngineVersion ?? null, actualVersion: null, probe: "not_checked" },
     failures: [],
   };
   if (desired.present && desired.config && desired.revision && !desired.validationProblem && input.directory && baseUrlConfigured(input.config, input.workspace)) {
     inspection = await inspectSofiaCloud({
-      opencode: input.createWorkspaceOpencodeClient(input.config, input.workspace),
+      engine: input.createWorkspaceWorkspaceEngineClient(input.config, input.workspace),
       config: input.config,
       workspace: input.workspace,
       directory: input.directory,
@@ -2193,7 +2185,7 @@ export async function readSofiaCloudMcpHealth(input: ReadSofiaCloudMcpHealthInpu
 }
 
 async function persistDesiredConfig(config: ServerConfig, workspaceId: string, desiredConfig: Record<string, unknown>): Promise<void> {
-  await writeRuntimeOpencodeConfig(config, workspaceId, (current) => ({
+  await writeRuntimeWorkspaceEngineConfig(config, workspaceId, (current) => ({
     ...current,
     mcp: {
       ...runtimeMcpMap(current),
@@ -2208,7 +2200,7 @@ async function persistDesiredConfig(config: ServerConfig, workspaceId: string, d
 
 function registrationFailure(failures: CloudMcpRuntimeRegistrationFailure[]): CloudMcpFailure {
   return failure({
-    code: "opencode_mcp_sync_failed",
+    code: "engine_mcp_sync_failed",
     stage: "engine_delivery",
     retryable: failures.some((item) => item.status === undefined || item.status >= 500),
     recommendedAction: "Retry reconcile after Sofia engine is reachable",
@@ -2224,7 +2216,7 @@ async function wait(ms: number): Promise<void> {
 }
 
 async function pollConnected(input: {
-  opencode: WorkspaceOpencodeClient;
+  engine: WorkspaceWorkspaceEngineClient;
   config: ServerConfig;
   workspace: WorkspaceInfo;
   directory: string | null;
@@ -2234,7 +2226,7 @@ async function pollConnected(input: {
   let lastFailure: CloudMcpFailure | null = null;
   for (const delay of POLL_DELAYS_MS) {
     await wait(delay);
-    const statusResult = await readMcpStatus(input.opencode, input.directory);
+    const statusResult = await readMcpStatus(input.engine, input.directory);
     if (statusResult.failure) {
       lastFailure = statusResult.failure;
       continue;
@@ -2281,7 +2273,7 @@ export async function reconcileSofiaCloudMcp(input: {
   body: Record<string, unknown>;
   providerModel?: CloudMcpProviderModelContext;
   serverMetadata?: CloudMcpServerMetadata;
-  createWorkspaceOpencodeClient: (config: ServerConfig, workspace: WorkspaceInfo) => WorkspaceOpencodeClient;
+  createWorkspaceWorkspaceEngineClient: (config: ServerConfig, workspace: WorkspaceInfo) => WorkspaceWorkspaceEngineClient;
   registerRuntimeMcp: CloudMcpRuntimeRegistrar;
   refreshRegistrationFromLiveStatus?: CloudMcpLiveStatusObserver;
 }): Promise<CloudMcpHealth> {
@@ -2291,7 +2283,7 @@ export async function reconcileSofiaCloudMcp(input: {
     directory: input.directory,
     providerModel: input.providerModel,
     serverMetadata: input.serverMetadata,
-    createWorkspaceOpencodeClient: input.createWorkspaceOpencodeClient,
+    createWorkspaceWorkspaceEngineClient: input.createWorkspaceWorkspaceEngineClient,
     probe: true,
     directProbeReuse,
     refreshRegistrationFromLiveStatus: input.refreshRegistrationFromLiveStatus,
@@ -2322,7 +2314,7 @@ export async function reconcileSofiaCloudMcp(input: {
 
   if (!baseUrlConfigured(input.config, input.workspace)) {
     const unconfiguredFailure = failure({
-      code: "opencode_unconfigured",
+      code: "engine_unconfigured",
       stage: "prerequisites",
       retryable: false,
       recommendedAction: "Start or attach an Sofia engine for this workspace",
@@ -2344,9 +2336,9 @@ export async function reconcileSofiaCloudMcp(input: {
     appHostAuthorization: readString(input.body.appHostAuthorization) ?? undefined,
   }).catch(() => ({ status: "unavailable" as const, appHostNames: [], removedNames: [] }));
 
-  const opencode = input.createWorkspaceOpencodeClient(input.config, input.workspace);
+  const engine = input.createWorkspaceWorkspaceEngineClient(input.config, input.workspace);
   for (const name of connectServers.removedNames) {
-    await opencode.mcp.disconnect({ name, ...locationParams(input.directory) }).catch(() => undefined);
+    await engine.mcp.disconnect({ name, ...locationParams(input.directory) }).catch(() => undefined);
   }
 
   cloudMcpDeliveryState.markRegistering(input.workspace, input.directory, desiredRevision);
@@ -2358,7 +2350,7 @@ export async function reconcileSofiaCloudMcp(input: {
   }
 
   const connectedFailure = await pollConnected({
-    opencode,
+    engine,
     config: input.config,
     workspace: input.workspace,
     directory: input.directory,
@@ -2388,12 +2380,12 @@ export async function reconcilePersistedSofiaCloudMcp(input: {
   directory: string | null;
   providerModel?: CloudMcpProviderModelContext;
   serverMetadata?: CloudMcpServerMetadata;
-  createWorkspaceOpencodeClient: (config: ServerConfig, workspace: WorkspaceInfo) => WorkspaceOpencodeClient;
+  createWorkspaceWorkspaceEngineClient: (config: ServerConfig, workspace: WorkspaceInfo) => WorkspaceWorkspaceEngineClient;
   registerRuntimeMcp: CloudMcpRuntimeRegistrar;
   refreshRegistrationFromLiveStatus?: CloudMcpLiveStatusObserver;
   trigger?: string;
 }): Promise<CloudMcpHealth> {
-  const runtimeConfig = await readRuntimeOpencodeConfig(input.config, input.workspace.id);
+  const runtimeConfig = await readRuntimeWorkspaceEngineConfig(input.config, input.workspace.id);
   const desiredConfig = runtimeMcpMap(runtimeConfig)[SOFIA_CLOUD_MCP_NAME];
   if (!desiredConfig) {
     return readSofiaCloudMcpHealth(input);
@@ -2443,7 +2435,7 @@ export async function refreshSofiaCloudMcpEngine(input: {
   directory: string | null;
   providerModel?: CloudMcpProviderModelContext;
   serverMetadata?: CloudMcpServerMetadata;
-  createWorkspaceOpencodeClient: (config: ServerConfig, workspace: WorkspaceInfo) => WorkspaceOpencodeClient;
+  createWorkspaceWorkspaceEngineClient: (config: ServerConfig, workspace: WorkspaceInfo) => WorkspaceWorkspaceEngineClient;
   registerRuntimeMcp: CloudMcpRuntimeRegistrar;
   refreshRegistrationFromLiveStatus?: CloudMcpLiveStatusObserver;
   trigger?: string;
@@ -2463,7 +2455,7 @@ export async function refreshSofiaCloudMcpEngine(input: {
     health,
   });
 
-  const runtimeConfig = await readRuntimeOpencodeConfig(input.config, input.workspace.id);
+  const runtimeConfig = await readRuntimeWorkspaceEngineConfig(input.config, input.workspace.id);
   const desiredConfig = runtimeMcpMap(runtimeConfig)[SOFIA_CLOUD_MCP_NAME];
   if (!desiredConfig) {
     return finish(false, await readSofiaCloudMcpHealth({ ...input, probe: true }), "desired_missing");
@@ -2471,8 +2463,8 @@ export async function refreshSofiaCloudMcpEngine(input: {
 
   const disconnectStarted = Date.now();
   try {
-    const opencode = input.createWorkspaceOpencodeClient(input.config, input.workspace);
-    const result = await withEngineProbeTimeout(() => opencode.mcp.disconnect({
+    const engine = input.createWorkspaceWorkspaceEngineClient(input.config, input.workspace);
+    const result = await withEngineProbeTimeout(() => engine.mcp.disconnect({
       name: SOFIA_CLOUD_MCP_NAME,
       ...locationParams(input.directory),
     }));
@@ -2503,7 +2495,7 @@ export async function refreshSofiaCloudMcpEngine(input: {
     directory: input.directory,
     providerModel: input.providerModel,
     serverMetadata: input.serverMetadata,
-    createWorkspaceOpencodeClient: input.createWorkspaceOpencodeClient,
+    createWorkspaceWorkspaceEngineClient: input.createWorkspaceWorkspaceEngineClient,
     registerRuntimeMcp: input.registerRuntimeMcp,
     refreshRegistrationFromLiveStatus: input.refreshRegistrationFromLiveStatus,
     trigger,

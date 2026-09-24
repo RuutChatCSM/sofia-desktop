@@ -471,6 +471,8 @@ export function createWorkspaceStore({
       error: null,
     };
 
+    if (!result.exists) return result;
+
     try {
       result.raw = await readFile(configPath, "utf8");
       result.parsed = JSON.parse(result.raw);
@@ -621,7 +623,7 @@ export function createWorkspaceStore({
 
       const baseUrl = typeof entry.baseUrl === "string" ? entry.baseUrl.trim() : "";
       const directory = typeof entry.directory === "string" && entry.directory.trim() ? entry.directory.trim() : null;
-      const remoteType = entry.remoteType === "opencode" ? "opencode" : "sofia";
+      const remoteType = entry.remoteType === "engine" ? "engine" : "sofia";
       const sofiaWorkspaceId = typeof entry.sofiaWorkspaceId === "string" ? entry.sofiaWorkspaceId.trim() : "";
       const id = typeof entry.id === "string" && entry.id.trim()
         ? entry.id.trim()
@@ -775,7 +777,7 @@ export function createWorkspaceStore({
   }
 
   async function readWorkspaceSofiaConfig(workspacePath) {
-    const sofiaPath = path.join(workspacePath, ".opencode", "sofia.json");
+    const sofiaPath = path.join(workspacePath, ".sofia", "sofia.json");
     if (!(await pathExists(sofiaPath))) {
       return defaultWorkspaceSofiaConfig(workspacePath);
     }
@@ -784,7 +786,7 @@ export function createWorkspaceStore({
   }
 
   async function writeWorkspaceSofiaConfig(workspacePath, config) {
-    const sofiaPath = path.join(workspacePath, ".opencode", "sofia.json");
+    const sofiaPath = path.join(workspacePath, ".sofia", "sofia.json");
     await mkdir(path.dirname(sofiaPath), { recursive: true });
     await writeFile(sofiaPath, `${JSON.stringify(config, null, 2)}\n`, "utf8");
     return execResult(true, `Wrote ${sofiaPath}`);
@@ -957,7 +959,7 @@ export function createWorkspaceStore({
       preset,
       workspaceType: "local",
     });
-    await mkdir(path.join(folderPath, ".opencode"), { recursive: true });
+    await mkdir(path.join(folderPath, ".sofia"), { recursive: true });
     await writeWorkspaceSofiaConfig(folderPath, defaultWorkspaceSofiaConfig(folderPath, preset));
 
     return mutateWorkspaceState((state) => {
@@ -979,7 +981,7 @@ export function createWorkspaceStore({
     if (!baseUrl.startsWith("http://") && !baseUrl.startsWith("https://")) {
       throw new Error("baseUrl must start with http:// or https://");
     }
-    const remoteType = input.remoteType === "opencode" ? "opencode" : "sofia";
+    const remoteType = input.remoteType === "engine" ? "engine" : "sofia";
     const directory = typeof input.directory === "string" && input.directory.trim() ? input.directory.trim() : null;
     const rawSofiaHostUrl = typeof input.sofiaHostUrl === "string" && input.sofiaHostUrl.trim()
       ? input.sofiaHostUrl.trim()
@@ -1052,7 +1054,7 @@ export function createWorkspaceStore({
       if (!existing) return state;
 
       let nextWorkspace = { ...existing, ...patch };
-      const nextRemoteType = nextWorkspace.remoteType === "opencode" ? "opencode" : "sofia";
+      const nextRemoteType = nextWorkspace.remoteType === "engine" ? "engine" : "sofia";
       if (nextRemoteType === "sofia") {
         const rawHostUrl = typeof nextWorkspace.sofiaHostUrl === "string" && nextWorkspace.sofiaHostUrl.trim()
           ? nextWorkspace.sofiaHostUrl.trim()

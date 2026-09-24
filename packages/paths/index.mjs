@@ -136,50 +136,50 @@ function safeConfigRoot(value, paths) {
     && !FORBIDDEN_CONFIG_ROOT_CHARS.test(value);
 }
 
-export function globalOpencodeConfigDir(opts) {
+export function globalWorkspaceEngineConfigDir(opts) {
   const env = optionEnv(opts);
   const platform = optionPlatform(opts);
   const paths = pathApi(platform);
-  const configuredDirectory = envRawValue(env, "OPENCODE_CONFIG_DIR");
+  const configuredDirectory = envRawValue(env, "SOFIA_ENGINE_CONFIG_DIR");
   if (safeConfigRoot(configuredDirectory, paths)) return configuredDirectory;
 
   const configuredRoot = envRawValue(env, "XDG_CONFIG_HOME");
   const configRoot = safeConfigRoot(configuredRoot, paths)
     ? configuredRoot
     : paths.join(optionHomeDir(opts), ".config");
-  // OpenCode accepts OPENCODE_CONFIG_DIR as the directory containing its
-  // opencode.json(c) files. It is not an XDG parent directory.
-  return paths.join(configRoot, "opencode");
+  // Sofia accepts SOFIA_ENGINE_CONFIG_DIR as the directory containing its
+  // engine.json(c) files. It is not an XDG parent directory.
+  return paths.join(configRoot, "engine");
 }
 
-export function resolveGlobalOpencodeConfigPath(opts) {
+export function resolveGlobalWorkspaceEngineConfigPath(opts) {
   const platform = optionPlatform(opts);
   const paths = pathApi(platform);
-  const base = globalOpencodeConfigDir(opts);
-  const jsonc = paths.join(base, "opencode.jsonc");
-  const json = paths.join(base, "opencode.json");
+  const base = globalWorkspaceEngineConfigDir(opts);
+  const jsonc = paths.join(base, "engine.jsonc");
+  const json = paths.join(base, "engine.json");
   if (existsSync(jsonc)) return jsonc;
   if (existsSync(json)) return json;
   return jsonc;
 }
 
-export function workspaceOpencodeConfigCandidates(workspaceRoot) {
+export function workspaceWorkspaceEngineConfigCandidates(workspaceRoot) {
   return [
-    path.join(workspaceRoot, "opencode.jsonc"),
-    path.join(workspaceRoot, "opencode.json"),
-    path.join(workspaceRoot, ".opencode", "opencode.jsonc"),
-    path.join(workspaceRoot, ".opencode", "opencode.json"),
+    path.join(workspaceRoot, "engine.jsonc"),
+    path.join(workspaceRoot, "engine.json"),
+    path.join(workspaceRoot, ".sofia", "engine.jsonc"),
+    path.join(workspaceRoot, ".sofia", "engine.json"),
   ];
 }
 
-export function resolveWorkspaceOpencodeConfigPath(workspaceRoot) {
-  const candidates = workspaceOpencodeConfigCandidates(workspaceRoot);
+export function resolveWorkspaceWorkspaceEngineConfigPath(workspaceRoot) {
+  const candidates = workspaceWorkspaceEngineConfigCandidates(workspaceRoot);
   return candidates.find((candidate) => existsSync(candidate)) ?? candidates[0];
 }
 
 /**
- * Sofia-owned config locations. Sofia no longer reads or writes OpenCode's
- * `opencode.json(c)` files: the engine surface is the Sofia home (`~/.sofia`)
+ * Sofia-owned config locations. Sofia no longer reads or writes Sofia's
+ * `engine.json(c)` files: the engine surface is the Sofia home (`~/.sofia`)
  * and per-workspace state lives under the workspace-local `.sofia` directory.
  */
 export function sofiaConfigDir(opts) {
@@ -247,30 +247,30 @@ export function sofiaServerDataDir(opts) {
   return paths.join(optionHomeDir(opts), ".sofia", "sofia-server");
 }
 
-export function opencodeDataDirs(opts) {
+export function engineDataDirs(opts) {
   const env = optionEnv(opts);
   const platform = optionPlatform(opts);
   const paths = pathApi(platform);
   const homeDir = optionHomeDir(opts);
   const dirs = [];
   const xdgDataHome = envValue(env, "XDG_DATA_HOME");
-  if (xdgDataHome) dirs.push(paths.join(xdgDataHome, "opencode"));
-  dirs.push(paths.join(homeDir, ".local", "share", "opencode"));
-  if (platform === "darwin") dirs.push(paths.join(homeDir, "Library", "Application Support", "opencode"));
+  if (xdgDataHome) dirs.push(paths.join(xdgDataHome, "engine"));
+  dirs.push(paths.join(homeDir, ".local", "share", "engine"));
+  if (platform === "darwin") dirs.push(paths.join(homeDir, "Library", "Application Support", "engine"));
   if (platform === "win32") {
     const appData = envValue(env, "APPDATA") || paths.join(homeDir, "AppData", "Roaming");
-    dirs.push(paths.join(appData, "opencode"));
+    dirs.push(paths.join(appData, "engine"));
   }
   return Array.from(new Set(dirs));
 }
 
-export function opencodeCacheDirs(opts) {
+export function engineCacheDirs(opts) {
   const env = optionEnv(opts);
   const platform = optionPlatform(opts);
   const paths = pathApi(platform);
   const dirs = [];
   const xdgCacheHome = envValue(env, "XDG_CACHE_HOME");
-  if (xdgCacheHome) dirs.push(paths.join(xdgCacheHome, "opencode"));
-  dirs.push(paths.join(optionHomeDir(opts), ".cache", "opencode"));
+  if (xdgCacheHome) dirs.push(paths.join(xdgCacheHome, "engine"));
+  dirs.push(paths.join(optionHomeDir(opts), ".cache", "engine"));
   return Array.from(new Set(dirs));
 }

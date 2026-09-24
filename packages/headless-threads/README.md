@@ -3,7 +3,7 @@
 Drive a native Sofia thread from code, without rendering the app.
 
 A "thread" here is an ordinary Sofia session. Same workspace, same managed
-OpenCode engine, same session id, same persisted messages, tool activity, and
+Sofia engine, same session id, same persisted messages, tool activity, and
 final state the desktop UI shows. A thread this package creates can be opened
 in the app afterwards, because there is no separate headless thread type.
 

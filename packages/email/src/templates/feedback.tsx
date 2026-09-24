@@ -10,7 +10,7 @@ export type FeedbackEmailProps = {
   deployment: string
   appVersion: string
   sofiaServerVersion: string
-  opencodeVersion: string
+  engineVersion: string
   osName: string
   osVersion: string
   platform: string
@@ -28,7 +28,7 @@ export function FeedbackEmail({
   deployment,
   appVersion,
   sofiaServerVersion,
-  opencodeVersion,
+  engineVersion,
   osName,
   osVersion,
   platform,
@@ -44,7 +44,7 @@ export function FeedbackEmail({
     ["Deployment", deployment],
     ["App version", appVersion],
     ["Sofia server", sofiaServerVersion],
-    ["OpenCode", opencodeVersion],
+    ["Sofia", engineVersion],
     ["OS", osLabel],
     ["Platform", platform],
     ["Submitted", submittedAt],

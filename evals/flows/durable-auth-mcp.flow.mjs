@@ -765,7 +765,7 @@ export default {
             name: "mcp-silent-refresh-ready",
             claim: "The engine-facing Cloud Control MCP is Ready after refresh-only recovery.",
             requireText: ["Sofia Cloud Control", "Ready"],
-            rejectText: ["Sign in needed", SECURITY_MESSAGE, "Applying changes before sign-in", "Reloading OpenCode config"],
+            rejectText: ["Sign in needed", SECURITY_MESSAGE, "Applying changes before sign-in", "Reloading Sofia config"],
             hashIncludes: "/settings/extensions/mcp",
           },
         });

@@ -171,9 +171,9 @@ function engineSyncFailed(mcpBody) {
 function initialReconcileFailed(reconcile) {
   const firstFailure = own(reconcile, "firstFailure");
   const delivery = own(reconcile, "delivery");
-  return own(firstFailure, "code") === "opencode_mcp_sync_failed"
+  return own(firstFailure, "code") === "engine_mcp_sync_failed"
     || own(delivery, "state") === "failed"
-    || own(own(delivery, "failure"), "code") === "opencode_mcp_sync_failed";
+    || own(own(delivery, "failure"), "code") === "engine_mcp_sync_failed";
 }
 
 function sofiaCloudConnectedStatus(diagnostics) {
@@ -209,7 +209,7 @@ export default {
             witness(ctx, isRecord(seed), "The repro evidence includes phases.seed", seed);
             witness(ctx, holds.length > 0, "The delay proxy recorded at least one held engine-to-Den request", holds);
             witness(ctx, holds.some((hold) => Number(own(hold, "heldMs")) >= 15_000), "At least one proxy hold outlasted the 15 second registration window", holds);
-            witness(ctx, initialReconcileFailed(seedReconcile), "The seed reconcile response recorded the initial opencode_mcp_sync_failed failure", {
+            witness(ctx, initialReconcileFailed(seedReconcile), "The seed reconcile response recorded the initial engine_mcp_sync_failed failure", {
               firstFailure: own(seedReconcile, "firstFailure"),
               delivery: own(seedReconcile, "delivery"),
             });

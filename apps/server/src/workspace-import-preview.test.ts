@@ -135,7 +135,7 @@ async function waitForPendingApproval(baseUrl: string): Promise<string> {
 describe("workspace import preview", () => {
   test("summarizes workspace import changes without writing files", async () => {
     const workspace = await makeWorkspace();
-    await writeFile(join(workspace, "opencode.jsonc"), '{ "plugin": ["old-plugin"] }\n', "utf8");
+    await writeFile(join(workspace, "engine.jsonc"), '{ "plugin": ["old-plugin"] }\n', "utf8");
     await mkdir(join(workspace, ".sofia", "skills", "demo"), { recursive: true });
     await writeFile(join(workspace, ".sofia", "skills", "demo", "SKILL.md"), "old skill\n", "utf8");
     await mkdir(join(workspace, ".sofia", "commands"), { recursive: true });
@@ -225,7 +225,7 @@ describe("workspace import preview", () => {
 
   test("uses replace action for config replacement", async () => {
     const workspace = await makeWorkspace();
-    await writeFile(join(workspace, "opencode.jsonc"), '{ "plugin": ["old"] }\n', "utf8");
+    await writeFile(join(workspace, "engine.jsonc"), '{ "plugin": ["old"] }\n', "utf8");
 
     const preview = await buildWorkspaceImportPreview(workspace, {
       mode: { sofia: "replace" },
@@ -282,7 +282,7 @@ describe("workspace import preview", () => {
     const workspace = await makeWorkspace();
     const dataDir = await mkdtemp(join(tmpdir(), "sofia-import-preview-data-"));
     tempDirs.push(dataDir);
-    await writeFile(join(workspace, "opencode.jsonc"), '{ "plugin": ["demo"] }\n', "utf8");
+    await writeFile(join(workspace, "engine.jsonc"), '{ "plugin": ["demo"] }\n', "utf8");
 
     const originalDataDir = process.env.SOFIA_DATA_DIR;
     process.env.SOFIA_DATA_DIR = dataDir;
@@ -330,7 +330,7 @@ describe("workspace import preview", () => {
     const workspace = await makeWorkspace();
     const dataDir = await mkdtemp(join(tmpdir(), "sofia-import-preview-data-"));
     tempDirs.push(dataDir);
-    await writeFile(join(workspace, "opencode.jsonc"), '{ "plugin": ["demo"] }\n', "utf8");
+    await writeFile(join(workspace, "engine.jsonc"), '{ "plugin": ["demo"] }\n', "utf8");
 
     const originalDataDir = process.env.SOFIA_DATA_DIR;
     process.env.SOFIA_DATA_DIR = dataDir;
@@ -396,7 +396,7 @@ describe("workspace import preview", () => {
       expect(body.code).toBe("workspace_import_preview_required");
       expect(typeof body.preview.fingerprint).toBe("string");
       expect(body.preview.summary.update).toBe(1);
-      expect(await pathExists(join(workspace, "opencode.jsonc"))).toBe(false);
+      expect(await pathExists(join(workspace, "engine.jsonc"))).toBe(false);
       expect(await pathExists(auditLogPath("workspace"))).toBe(false);
     } finally {
       server.stop(true);
@@ -577,7 +577,7 @@ describe("workspace import preview", () => {
     const workspace = await makeWorkspace();
     const dataDir = await mkdtemp(join(tmpdir(), "sofia-import-preview-data-"));
     tempDirs.push(dataDir);
-    await writeFile(join(workspace, "opencode.jsonc"), '{ "plugin": ["old"] }\n', "utf8");
+    await writeFile(join(workspace, "engine.jsonc"), '{ "plugin": ["old"] }\n', "utf8");
 
     const originalDataDir = process.env.SOFIA_DATA_DIR;
     process.env.SOFIA_DATA_DIR = dataDir;
@@ -635,7 +635,7 @@ describe("workspace import preview", () => {
     const workspace = await makeWorkspace();
     const dataDir = await mkdtemp(join(tmpdir(), "sofia-import-preview-data-"));
     tempDirs.push(dataDir);
-    await writeFile(join(workspace, "opencode.jsonc"), '{ "plugin": ["old"] }\n', "utf8");
+    await writeFile(join(workspace, "engine.jsonc"), '{ "plugin": ["old"] }\n', "utf8");
 
     const originalDataDir = process.env.SOFIA_DATA_DIR;
     process.env.SOFIA_DATA_DIR = dataDir;

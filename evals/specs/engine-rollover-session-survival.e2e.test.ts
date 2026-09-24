@@ -77,7 +77,7 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 900_000 }, async (
     const workspaceId = ${JSON.stringify(workspaceId)};
     const patched = await request("/workspace/" + encodeURIComponent(workspaceId) + "/config", {
       method: "PATCH",
-      body: JSON.stringify({ opencode: { provider: { anthropic: { options: { apiKey: ${JSON.stringify(anthropicKey)} } } } } }),
+      body: JSON.stringify({ engine: { provider: { anthropic: { options: { apiKey: ${JSON.stringify(anthropicKey)} } } } } }),
     });
     if (!patched.startsWith("200:")) return patched;
     return request("/workspace/" + encodeURIComponent(workspaceId) + "/engine/reload", { method: "POST" });
@@ -131,7 +131,7 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 900_000 }, async (
     const patch = await fetch("http://127.0.0.1:" + port + "/workspace/" + encodeURIComponent(workspaceId) + "/config", {
       method: "PATCH",
       headers,
-      body: JSON.stringify({ opencode: { permission: { "rollover_probe_*": "allow" } } }),
+      body: JSON.stringify({ engine: { permission: { "rollover_probe_*": "allow" } } }),
     });
     if (!patch.ok) return "patch:" + patch.status + ":" + (await patch.text()).slice(0, 200);
     const reload = await fetch("http://127.0.0.1:" + port + "/workspace/" + encodeURIComponent(workspaceId) + "/engine/reload", {
@@ -165,7 +165,7 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 900_000 }, async (
   const newSession = await evalIn(desktopApp, `(async () => {
     const port = localStorage.getItem("sofia.server.port");
     const token = localStorage.getItem("sofia.server.token");
-    const response = await fetch("http://127.0.0.1:" + port + "/workspace/" + encodeURIComponent(${JSON.stringify(workspaceId)}) + "/opencode/session", {
+    const response = await fetch("http://127.0.0.1:" + port + "/workspace/" + encodeURIComponent(${JSON.stringify(workspaceId)}) + "/engine/session", {
       method: "POST",
       headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
       body: "{}",

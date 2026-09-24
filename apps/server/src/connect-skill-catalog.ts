@@ -10,7 +10,7 @@ import {
   type McpFetch,
 } from "./connect-mcp-transport.js";
 import { readConnectCloudMcp, writeConnectCloudMcp } from "./connect-state.js";
-import { readRuntimeMcpConfig } from "./runtime-opencode-config-store.js";
+import { readRuntimeMcpConfig } from "./runtime-engine-config-store.js";
 import { externalFetch } from "./server-fetch.js";
 import type { ServerConfig } from "./types.js";
 

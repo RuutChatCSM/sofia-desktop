@@ -7,7 +7,7 @@ import type {
 } from "../../app/types";
 import { relaunchDesktopApp, resetSofiaState } from "../../app/lib/desktop";
 import {
-  addOpencodeCacheHint,
+  addWorkspaceEngineCacheHint,
   isDesktopRuntime,
   safeStringify,
 } from "../../app/utils";
@@ -214,7 +214,7 @@ export function useSystemState(
     } catch (error) {
       const message =
         error instanceof Error ? error.message : safeStringify(error);
-      options.setError(addOpencodeCacheHint(message));
+      options.setError(addWorkspaceEngineCacheHint(message));
       setResetModalBusy(false);
     }
   }, [options, resetModalBusy, resetModalMode, resetModalText]);

@@ -133,10 +133,10 @@ describe("resolveRemoteWorkspaceConnectionTarget", () => {
   test("does not run Sofia App probes against non-Sofia App remote workspaces", () => {
     const target = resolveRemoteWorkspaceConnectionTarget(
       workspace({
-        remoteType: "opencode",
+        remoteType: "engine",
         sofiaHostUrl: "",
         sofiaToken: "",
-        baseUrl: "https://opencode.example.com",
+        baseUrl: "https://engine.example.com",
       }),
     );
 
@@ -149,10 +149,10 @@ describe("resolveRemoteWorkspaceConnectionTarget", () => {
   test("does not run Sofia App probes against stale Sofia App fields on non-Sofia App remotes", () => {
     const target = resolveRemoteWorkspaceConnectionTarget(
       workspace({
-        remoteType: "opencode",
+        remoteType: "engine",
         sofiaHostUrl: "https://worker.example.com/w/ws_remote",
         sofiaToken: "owt_secret",
-        baseUrl: "https://opencode.example.com",
+        baseUrl: "https://engine.example.com",
       }),
     );
 

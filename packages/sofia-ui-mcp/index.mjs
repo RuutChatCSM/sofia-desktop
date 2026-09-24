@@ -12,7 +12,7 @@
  * Usage:
  *   npx sofia-ui-mcp
  *
- * MCP config (OpenCode / Claude Desktop / Cursor / etc.):
+ * MCP config (Sofia / Claude Desktop / Cursor / etc.):
  *   {
  *     "mcpServers": {
  *       "sofia-ui": {

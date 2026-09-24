@@ -28,7 +28,7 @@ Your client opens a browser, you sign in to Sofia, choose the organization to au
 Step-by-step guides for every client:
 
 <CardGroup cols={3}>
-  <Card title="OpenCode" href="/model-context-protocol/opencode" />
+  <Card title="Sofia" href="/model-context-protocol/engine" />
   <Card title="Claude Code" href="/model-context-protocol/claude-code" />
   <Card title="Codex" href="/model-context-protocol/codex" />
   <Card title="Claude Desktop" href="/model-context-protocol/claude-desktop" />
@@ -51,7 +51,7 @@ active organization and refreshes that first-party access automatically. Use
 
 | Client | Status | Notes | Guide |
 | --- | --- | --- | --- |
-| OpenCode | Verified | Native remote MCP OAuth passed end-to-end implementation testing. | [Sofia MCP for OpenCode](/model-context-protocol/opencode) |
+| Sofia | Verified | Native remote MCP OAuth passed end-to-end implementation testing. | [Sofia MCP for Sofia](/model-context-protocol/engine) |
 | Codex | Setup only | Add/login/reconnect steps are below; native remote MCP OAuth must be rerun on this exact branch before Codex is marked verified. | [Sofia MCP for Codex](/model-context-protocol/codex) |
 | Cursor | Setup only | Cursor Web/Agents use an HTTPS OAuth callback. Cursor Desktop OAuth uses `cursor://anysphere.cursor-mcp/oauth/callback`, which Sofia accepts through an exact private-use allowlist with PKCE S256 enforced. Native proof is not complete. | [Sofia MCP for Cursor](/model-context-protocol/cursor) |
 | ChatGPT Desktop | Setup only | Setup guide only; use ChatGPT `Settings > MCP servers`. Native proof is not complete. | [Sofia MCP for ChatGPT](/model-context-protocol/chatgpt) |
@@ -63,9 +63,9 @@ active organization and refreshes that first-party access automatically. Use
 | Gemini CLI | Setup only | Setup guide only; native proof is not complete. | [Sofia MCP for Gemini CLI](/model-context-protocol/gemini-cli) |
 | Any client | Setup only | Use only with clients that support remote Streamable HTTP MCP servers and OAuth. | — |
 
-## OpenCode setup
+## Sofia setup
 
-Add this MCP entry to your OpenCode config:
+Add this MCP entry to your Sofia config:
 
 ```json
 {
@@ -83,20 +83,20 @@ Add this MCP entry to your OpenCode config:
 Then authenticate:
 
 ```sh
-opencode mcp auth sofia
+engine mcp auth sofia
 ```
 
-If OpenCode runs on a remote machine but the browser opens locally, follow
+If Sofia runs on a remote machine but the browser opens locally, follow
 [Connect Sofia MCP from a remote machine](/cloud/run-in-the-cloud/connect-sofia-mcp-remote-machine).
 
 To reconnect or switch organizations, remove the old token and authenticate again:
 
 ```sh
-opencode mcp logout sofia
-opencode mcp auth sofia
+engine mcp logout sofia
+engine mcp auth sofia
 ```
 
-Full guide: [Sofia MCP for OpenCode](/model-context-protocol/opencode).
+Full guide: [Sofia MCP for Sofia](/model-context-protocol/engine).
 
 ## Codex setup
 

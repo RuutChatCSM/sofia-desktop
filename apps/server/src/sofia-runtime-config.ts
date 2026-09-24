@@ -1,39 +1,39 @@
 /**
  * Runtime Sofia engine configuration injected via a server-managed config file
- * passed to the engine as OPENCODE_CONFIG.
+ * passed to the engine as SOFIA_ENGINE_CONFIG.
  *
  * This is the single source of truth for the sofia agent definition,
  * plugins, and any other config that should be injected at runtime rather
  * than written to the user's own config files. Both cli.ts and embedded.ts
  * use this.
  *
- * The engine re-reads the OPENCODE_CONFIG file from disk on every instance
+ * The engine re-reads the SOFIA_ENGINE_CONFIG file from disk on every instance
  * rebuild (e.g. /instance/dispose), so the file is synchronized on every
- * runtime-DB write — unlike the previous OPENCODE_CONFIG_CONTENT env var,
+ * runtime-DB write — unlike the previous SOFIA_ENGINE_CONFIG_CONTENT env var,
  * which was frozen at spawn and reverted MCP state on each dispose.
  */
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import {
-  sofiaExtensionsPreviewPluginPath,
-  sofiaCapabilitiesKnowledgePluginPath,
-  sofiaAnthropicAdaptiveThinkingPluginPath,
-  sofiaAnthropicToolSchemaPluginPath,
-  sofiaOfficeAttachmentsPluginPath,
-} from "./sofia-extensions-plugin-path.js";
 import type { ServerConfig } from "./types.js";
 import { runtimeStorageDir } from "./runtime-db.js";
 import {
-  onRuntimeOpencodeConfigWrite,
+  onRuntimeWorkspaceEngineConfigWrite,
   isEngineGlobalRuntimeConfigId,
-  readEffectiveRuntimeOpencodeConfig,
+  readEffectiveRuntimeWorkspaceEngineConfig,
   runtimeDisabledProviderList,
   runtimeMcpMap,
-  runtimeProviderMap,
   runtimePluginList,
-  type RuntimeOpencodeConfig,
-} from "./runtime-opencode-config-store.js";
+  runtimeProviderMap,
+  type RuntimeWorkspaceEngineConfig,
+} from "./runtime-engine-config-store.js";
+import {
+  sofiaAnthropicAdaptiveThinkingPluginPath,
+  sofiaAnthropicToolSchemaPluginPath,
+  sofiaCapabilitiesKnowledgePluginPath,
+  sofiaExtensionsPreviewPluginPath,
+  sofiaOfficeAttachmentsPluginPath,
+} from "./sofia-extensions-plugin-path.js";
 import { CONNECT_MCP_SERVER_NAME_PREFIX } from "./connect-mcp-server-catalog.js";
 
 const SOFIA_AGENT_PROMPT = `You are Sofia App.
@@ -91,12 +91,12 @@ export async function buildSofiaRuntimeConfigObject(
   config?: ServerConfig,
   workspaceId?: string,
 ): Promise<Record<string, unknown>> {
-  const runtimeConfig = config && workspaceId ? await readEffectiveRuntimeOpencodeConfig(config, workspaceId) : {};
+  const runtimeConfig = config && workspaceId ? await readEffectiveRuntimeWorkspaceEngineConfig(config, workspaceId) : {};
   return buildSofiaRuntimeConfigObjectFromSnapshot(runtimeConfig);
 }
 
 export function buildSofiaRuntimeConfigObjectFromSnapshot(
-  runtimeConfig: RuntimeOpencodeConfig,
+  runtimeConfig: RuntimeWorkspaceEngineConfig,
 ): Record<string, unknown> {
   const disabledProviders = runtimeDisabledProviderList(runtimeConfig);
   const provider = runtimeProviderMap(runtimeConfig);
@@ -104,7 +104,7 @@ export function buildSofiaRuntimeConfigObjectFromSnapshot(
   // The in-app browser surface. chrome-devtools-mcp keeps a persistent CDP
   // connection (vs the old plugin's reconnect-per-call), exposes a11y-tree
   // snapshots, console/network/screenshot tools, and registers as a plain MCP
-  // server so the exact same browser surface works for the opencode runtime
+  // server so the exact same browser surface works for the engine runtime
   // today and a codex runtime later. It connects to the local CDP broker so
   // agent-driven Input events get the human-like cursor replay.
   const agentCdpBaseUrl = process.env.SOFIA_ELECTRON_AGENT_CDP_BASE_URL?.trim();
@@ -141,7 +141,7 @@ export function buildSofiaRuntimeConfigObjectFromSnapshot(
           skill: {
             // Sofia App supplies its own current skill routing and no longer
             // supports these engine or legacy workspace skills.
-            "customize-opencode": "deny",
+            "customize-engine": "deny",
             "get-started": "deny",
             "command-creator": "deny",
             "agent-creator": "deny",

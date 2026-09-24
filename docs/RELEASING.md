@@ -12,7 +12,7 @@ pnpm release:cut            # dispatch Release App with bump=patch
 pnpm release:cut minor      # or major
 pnpm release:cut --version 0.19.0
 pnpm release:cut:watch      # dispatch, then tail the run
-pnpm release:review         # sanity: placeholders intact, opencode pin present
+pnpm release:review         # sanity: placeholders intact, engine pin present
 ```
 
 ## How a release works
@@ -199,5 +199,5 @@ fallback snapshot only; refresh it occasionally with
 - **2026-08-05** (v0.18.15/v0.18.16): three releases red since the Electron
   35→43 upgrade left `apps/server` on better-sqlite3 v12 while desktop moved
   to v13 — electron-builder rebuilds every copy of a native module it finds.
-  Fixed by converging the workspace on v13 (N-API) and teaching `opencode-db`
+  Fixed by converging the workspace on v13 (N-API) and teaching `engine-db`
   to use `bun:sqlite` under Bun. Full context: #3561, #3563, #3564.

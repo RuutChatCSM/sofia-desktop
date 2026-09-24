@@ -1,7 +1,7 @@
 # Browser extension flows
 
 End-to-end scenarios that verify the browser extension system: the
-`opencode-chrome-devtools` plugin integration, composer extension chips,
+`engine-chrome-devtools` plugin integration, composer extension chips,
 Extensions panel, and the stale MCP migration path.
 
 Run these before shipping changes that touch:
@@ -35,21 +35,21 @@ Run these before shipping changes that touch:
 
 ## Flow 1 — Plugin is loaded and browser tools exist
 
-**Why**: Without the `opencode-chrome-devtools` plugin in the workspace
-`opencode.jsonc`, browser tools don't exist and the agent falls back to
+**Why**: Without the `engine-chrome-devtools` plugin in the workspace
+`engine.jsonc`, browser tools don't exist and the agent falls back to
 `curl`/`webfetch`.
 
 Steps:
-1. Read the workspace `opencode.jsonc`:
+1. Read the workspace `engine.jsonc`:
    ```
    browser_eval({ browser_url: CDP_URL, target_id: APP_TARGET,
-     expression: "fetch('/workspace/' + location.hash.split('/')[2] + '/opencode-config').then(r => r.text())" })
+     expression: "fetch('/workspace/' + location.hash.split('/')[2] + '/engine-config').then(r => r.text())" })
    ```
    Or check the file directly on disk.
-2. Confirm `"plugin"` array contains `"opencode-chrome-devtools"`.
+2. Confirm `"plugin"` array contains `"engine-chrome-devtools"`.
 
 Pass criteria:
-- `opencode.jsonc` has `"plugin": ["opencode-chrome-devtools"]`.
+- `engine.jsonc` has `"plugin": ["engine-chrome-devtools"]`.
 - No stale MCP keys (`sofia-browser`, `chrome`, `chrome-devtools`,
   `control-chrome`) exist in the `mcp` section.
 
@@ -103,7 +103,7 @@ read results.
 Steps:
 1. Create a new session.
 2. Send: "Use the Sofia Browser extension to go to https://www.google.com,
-   search for 'opencode ai', and tell me the first result title"
+   search for 'engine ai', and tell me the first result title"
 3. Wait 60s for the multi-step task.
 4. Check the transcript for tool calls.
 
@@ -217,10 +217,10 @@ Known regressions this catches:
 (`sofia-browser`, `chrome`) that must be cleaned up on activation.
 
 Steps:
-1. Write a stale config to the workspace `opencode.jsonc`:
+1. Write a stale config to the workspace `engine.jsonc`:
    ```json
    {
-     "$schema": "https://opencode.ai/config.json",
+     "$schema": "https://github.com/RuutChatCSM/sofia/config.json",
      "default_agent": "sofia",
      "mcp": {
        "sofia-browser": { "type": "remote", "url": "http://127.0.0.1:59674/mcp" },
@@ -230,14 +230,14 @@ Steps:
    }
    ```
 2. Restart the dev instance.
-3. Read the migrated `opencode.jsonc`.
+3. Read the migrated `engine.jsonc`.
 
 Pass criteria:
 - `sofia-browser` MCP entry removed.
 - `chrome` MCP entry removed.
 - `sofia-ui` MCP entry preserved (not a legacy browser MCP).
 - `default_agent: "sofia"` preserved.
-- `plugin: ["opencode-chrome-devtools"]` added.
+- `plugin: ["engine-chrome-devtools"]` added.
 
 Known regressions this catches:
 - Stale MCPs causing connection errors on startup.

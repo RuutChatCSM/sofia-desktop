@@ -139,8 +139,8 @@ test("Sofia generic session reads restore tasks on cold start and reject missing
       parseOptionalBoolean: () => undefined, parseOptionalPositiveInteger: () => undefined, parseOptionalNonNegativeInteger: () => undefined,
       readJsonBody: (request) => request.json(), ensureWritable: () => {}, requireClientScope: () => {},
       resolveWorkspace: async () => workspace, resolveWorkspaceWithoutBootstrap: async () => workspace,
-      resolveOpencodeDirectory: () => f.root, createWorkspaceOpencodeClient: createWorkspaceEngineClient,
-      unwrapOpencodeResult: (result) => { if (result.data === undefined) throw new Error("Session not found"); return result.data; },
+      resolveWorkspaceEngineDirectory: () => f.root, createWorkspaceWorkspaceEngineClient: createWorkspaceEngineClient,
+      unwrapWorkspaceEngineResult: (result) => { if (result.data === undefined) throw new Error("Session not found"); return result.data; },
     });
     async function request(suffix: string) {
       const url = new URL(`http://localhost/workspace/ws/sessions/${suffix}`);

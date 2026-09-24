@@ -113,7 +113,7 @@ fast checkpoints to decide whether behavior is correct before reporting success.
 
 ## AI Skills
 
-The Daytona toolbox is exposed to opencode through focused skills:
+The Daytona toolbox is exposed to engine through focused skills:
 
 - `daytona-dev`: overview of the Daytona setup and when to use each piece.
 - `daytona-cloud-server`: Den Web/API, worker proxy, marketplace, cloud auth, and org policy flows.

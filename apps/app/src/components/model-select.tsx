@@ -58,15 +58,15 @@ function useModelOptions(
   fallbackOptions: readonly ModelOption[],
   cloudProvidersEnabled: boolean,
 ) {
-  const { client, opencodeBaseUrl, selectedWorkspaceRoot } = useWorkspace();
+  const { client, engineBaseUrl, selectedWorkspaceRoot } = useWorkspace();
   const checkDesktopRestriction = useCheckDesktopRestriction();
   // Engine-aware: the native codex/sofia engine cannot route the built-in
-  // opencode (Zen) provider, so hide it while codex is the active engine.
+  // engine (Zen) provider, so hide it while codex is the active engine.
   const isCodexEngine = useSelectedEngine() === "codex";
 
   const { data, refetch } = useProviderListQuery({
     client,
-    baseUrl: opencodeBaseUrl,
+    baseUrl: engineBaseUrl,
     directory: selectedWorkspaceRoot,
     enabled: Boolean(client),
   });
@@ -87,7 +87,7 @@ function useModelOptions(
 
   // Apply org-level restrictions (dev #1505) on top of the raw model list
   // so the picker never surfaces blocked options:
-  //   - `allowZenModel` hides the built-in OpenCode provider entries when false
+  //   - `allowZenModel` hides the built-in Sofia provider entries when false
   //   - `allowCustomProviders` keeps org-managed providers, plus Zen when allowed.
   return React.useMemo(() => {
     const restrictToCloud = checkDesktopRestriction({
@@ -95,7 +95,7 @@ function useModelOptions(
     });
 
     const options = getConnectedProviderItems(data)
-      .filter((provider) => !(isCodexEngine && provider.id.trim().toLowerCase() === "opencode"))
+      .filter((provider) => !(isCodexEngine && provider.id.trim().toLowerCase() === "engine"))
       .flatMap((provider) =>
         Object.entries(provider.models).map(([id, model]) => {
           const summary = getModelBehaviorSummary(provider.id, model, null, provider.name);
@@ -209,7 +209,7 @@ interface ModelSelectProps {
   sofiaModelsEntitled?: boolean;
   /** The server is waiting to reload this workspace with Hosted models. */
   sofiaModelsSyncing?: boolean;
-  /** Member-scoped models available before a workspace OpenCode client exists. */
+  /** Member-scoped models available before a workspace Sofia client exists. */
   fallbackOptions?: readonly ModelOption[];
   behaviorValue?: string | null;
   behaviorLabel?: string;

@@ -46,7 +46,7 @@ describe("workspace archive limits", () => {
     const targetDir = path.join(root, "target");
     try {
       await writeFile(archivePath, singleEntryArchive({
-        name: ".opencode/sofia.json",
+        name: ".sofia/sofia.json",
         data: Buffer.from("{}"),
         uncompressedSize: 17 * 1024 * 1024,
       }));

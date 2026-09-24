@@ -68,7 +68,7 @@ describe("saved Script Automations", () => {
     const common = {
       instructions: "Execute the pinned saved Code Mode script.",
       schedule,
-      model: { providerId: "opencode", modelId: "big-pickle" },
+      model: { providerId: "engine", modelId: "big-pickle" },
       maximumRuntimeMs: 60_000,
       executionTarget: "cloud" as const,
     }

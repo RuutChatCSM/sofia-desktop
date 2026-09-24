@@ -95,7 +95,7 @@ function startMockGithub(options?: { branch?: string }) {
   return server;
 }
 
-function startMockOpencode() {
+function startMockWorkspaceEngine() {
   const requests: Array<{ method: string; pathname: string }> = [];
   const server = Bun.serve({
     hostname: "127.0.0.1",
@@ -124,7 +124,7 @@ async function startSofia(options?: { branch?: string }) {
   setEnv("SOFIA_GITHUB_API_BASE", `http://127.0.0.1:${github.port}`);
   setEnv("SOFIA_GITHUB_RAW_BASE", `http://127.0.0.1:${github.port}`);
 
-  const engine = startMockOpencode();
+  const engine = startMockWorkspaceEngine();
   const config: ServerConfig = {
     host: "127.0.0.1",
     port: 0,

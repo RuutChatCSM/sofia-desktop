@@ -40,7 +40,7 @@ sandboxes when validating owner and member UI simultaneously.
 - If Electron was already started with stale Den preview URLs, restart Electron
   with the current Den URLs before member sign-in checks:
   ```bash
-  daytona exec <electron-sandbox> -- 'bash -lc "kill <electron/opencode-pids> 2>/dev/null || true"'
+  daytona exec <electron-sandbox> -- 'bash -lc "kill <electron/engine-pids> 2>/dev/null || true"'
   daytona exec <electron-sandbox> -- \
     "bash -lc 'cd /workspace && \
       SOFIA_DEN_BASE_URL=DEN_WEB_URL \
@@ -100,7 +100,7 @@ sandboxes when validating owner and member UI simultaneously.
   ```
 - After admin deleted the provider, Settings -> AI Providers showed:
   - `1 provider connected`.
-  - only `OpenCode Zen` connected.
+  - only `Sofia Zen` connected.
   - `No cloud providers are available for this org yet.`
 
 ## Flow 1: Admin assigns LLM provider, member uses it
@@ -143,7 +143,7 @@ assigned member without manual workspace-file editing.
 
 ### Expected outcome
 
-- Member does not need to edit `opencode.jsonc` manually.
+- Member does not need to edit `engine.jsonc` manually.
 - Member sees a clear cloud-managed provider state and can select the model.
 - Real task execution succeeds with the assigned provider.
 - Permission boundaries remain clear: member can consume the provider but cannot

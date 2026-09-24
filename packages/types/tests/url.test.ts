@@ -26,7 +26,7 @@ describe("url primitives", () => {
   });
 
   test("joins paths without producing a double slash", () => {
-    expect(joinBaseUrl("http://host//", "/opencode")).toBe("http://host/opencode");
+    expect(joinBaseUrl("http://host//", "/engine")).toBe("http://host/engine");
   });
 
   test("formats host labels with fallback normalization", () => {

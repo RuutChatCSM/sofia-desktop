@@ -1,6 +1,6 @@
 import type { SkillCard, SlashCommandOption } from "@/app/types";
 
-const SLASH_COMMAND_QUERY_RE = /^\/([A-Za-z0-9_-]*)$/;
+const SLASH_COMMAND_QUERY_RE = /^\s*\/([A-Za-z0-9_-]*)\s*$/;
 const SLASH_COMMAND_INVOCATION_RE = /^\/([A-Za-z0-9_-]+)(?:[ \t]+([\s\S]*))?$/;
 
 export type ComposerSlashCommandOption = SlashCommandOption & {

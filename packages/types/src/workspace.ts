@@ -3,7 +3,7 @@
  *
  * Producers:
  * - sofia-server (apps/server): `GET /workspaces` and friends — emits plain
- *   optionals (never null) plus the `opencode*` engine credential fields.
+ *   optionals (never null) plus the `engine*` engine credential fields.
  * - desktop Electron IPC bridge (apps/desktop main.mjs): emits explicit nulls
  *   and the desktop-managed `sofiaClientToken`/`sofiaHostToken`.
  *
@@ -14,7 +14,7 @@
  */
 export type WorkspaceKind = "local" | "remote";
 
-export type WorkspaceRemoteKind = "opencode" | "sofia";
+export type WorkspaceRemoteKind = "engine" | "sofia";
 
 export type WorkspaceWire = {
   id: string;
@@ -41,10 +41,10 @@ export type WorkspaceWire = {
   sandboxBackend?: string | null;
   sandboxRunId?: string | null;
   sandboxContainerName?: string | null;
-  /** sofia-server only: credentials for the proxied opencode engine. */
-  opencodeUsername?: string | null;
-  opencodePassword?: string | null;
-  opencode?: {
+  /** sofia-server only: credentials for the proxied engine engine. */
+  engineUsername?: string | null;
+  enginePassword?: string | null;
+  engine?: {
     baseUrl?: string;
     directory?: string;
     username?: string;

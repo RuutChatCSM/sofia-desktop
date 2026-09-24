@@ -2,7 +2,7 @@
 
 `apps/app` is a React 19 + Vite app. It is the UI for every Sofia
 deployment: the Electron desktop shell loads it, plain web serves it, and it
-talks to sofia-server / opencode / Den over HTTP. (The Solid runtime it
+talks to sofia-server / engine / Den over HTTP. (The Solid runtime it
 replaced is fully removed; `src/index.react.tsx` is the only entry.)
 
 ## Layers
@@ -10,7 +10,7 @@ replaced is fully removed; `src/index.react.tsx` is the only entry.)
 ```text
 src/
 ├── app/                       Framework-agnostic layer (no React imports — enforced invariant)
-│   ├── lib/                   Clients + bridges: opencode, sofia-server, den, desktop (IPC),
+│   ├── lib/                   Clients + bridges: engine, sofia-server, den, desktop (IPC),
 │   │   │                      analytics, app-inspector
 │   │   ├── runtime-env.ts     Leaf: isElectronRuntime/isDesktopRuntime
 │   │   ├── desktop-types.ts   Leaf: desktop IPC wire types (WorkspaceInfo = shared WorkspaceWire)
@@ -44,7 +44,7 @@ src/
    invert it (callback registration) or move the primitive down.
 2. Leaf modules (`runtime-env`, `desktop-types`, `den-types`, `extensions`)
    import nothing (or types-only from other leaves). Low-level clients
-   (`opencode`, `sofia-server`, `den`) import leaves — never the `utils/`
+   (`engine`, `sofia-server`, `den`) import leaves — never the `utils/`
    barrel (it drags in i18n).
 3. `kernel/` and `infra/` sit below `domains/`: they must not import domain
    code. Shared query/state infrastructure lives in `infra/`.

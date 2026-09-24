@@ -35,9 +35,9 @@ export const desktopPolicyDefinitions = [
   },
   {
     id: "allowZenModel",
-    name: "Enable OpenCode Zen Models",
-    description: "Allow users to use the built in models provided by OpenCode.",
-    userNotice: "Your administrator has disabled access to OpenCode Models.",
+    name: "Enable Sofia Zen Models",
+    description: "Allow users to use the built in models provided by Sofia.",
+    userNotice: "Your administrator has disabled access to Sofia Models.",
     defaultValue: true,
   },
   {

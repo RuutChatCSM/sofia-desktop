@@ -64,7 +64,7 @@ describe("Automation normalized model authority", () => {
 
     const result = await resolveAutomationModelAccessWithStore({
       ...base,
-      providerId: "opencode",
+      providerId: "engine",
       modelId: "big-pickle",
     }, store)
 
@@ -73,7 +73,7 @@ describe("Automation normalized model authority", () => {
       value: {
         accessKind: "free",
         providerRecordId: null,
-        providerId: "opencode",
+        providerId: "engine",
         modelId: "big-pickle",
       },
     })
@@ -81,15 +81,15 @@ describe("Automation normalized model authority", () => {
 
     expect(await resolveAutomationModelAccessWithStore({
       ...base,
-      providerId: "opencode",
+      providerId: "engine",
       modelId: "not-a-free-model",
     }, store)).toMatchObject({ ok: false, code: "model_access_lost" })
   })
 
-  test("rejects the legacy free starter model when desktop policy disables OpenCode Zen", async () => {
+  test("rejects the legacy free starter model when desktop policy disables Sofia Zen", async () => {
     const result = await resolveAutomationModelAccessWithStore({
       ...base,
-      providerId: "opencode",
+      providerId: "engine",
       modelId: "big-pickle",
     }, authorityStore({ async allowsZenModel() { return false } }))
 
@@ -163,7 +163,7 @@ describe("Automation normalized model authority", () => {
   test("never lets a removed membership inherit model access", async () => {
     const result = await resolveAutomationModelAccessWithStore({
       ...base,
-      providerId: "opencode",
+      providerId: "engine",
       modelId: "big-pickle",
     }, authorityStore({ async findActiveMember() { return null } }))
 

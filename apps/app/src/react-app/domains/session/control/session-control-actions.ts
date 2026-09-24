@@ -1,9 +1,9 @@
 /** @jsxImportSource react */
 import { useCallback, useMemo } from "react";
 
-import type { createClient } from "../../../../app/lib/opencode";
+import type { createClient } from "../../../../app/lib/engine";
 import type { SofiaServerClient, SofiaWorkspaceInfo } from "../../../../app/lib/sofia-server";
-import { setSessionArchived } from "../../../../app/lib/opencode-session";
+import { setSessionArchived } from "../../../../app/lib/engine-session";
 import { getDisplaySessionTitle } from "../../../../app/lib/session-title";
 import { useControlAction, type SofiaControlAction } from "../../../shell/control/control-provider";
 import { useSessionManagementStore } from "../sidebar/session-management-store";
@@ -30,7 +30,7 @@ type UseSessionControlActionsInput = {
   selectedSessionId: string | null;
   canCreateTask: boolean;
   sofiaClient: SofiaServerClient | null;
-  opencodeClient: ReturnType<typeof createClient> | null;
+  engineClient: ReturnType<typeof createClient> | null;
   navigateToSession: (sessionId: string) => void;
   navigateToSessionRoot: () => void;
   createTaskInWorkspace: (workspaceId: string) => Promise<string | null> | string | null;
@@ -73,7 +73,7 @@ export function useSessionControlActions(input: UseSessionControlActionsInput) {
     navigateToSessionRoot,
     openModelPicker,
     sofiaClient,
-    opencodeClient,
+    engineClient,
     refreshRouteState,
     selectedSessionId,
     selectedWorkspaceId,
@@ -165,16 +165,16 @@ export function useSessionControlActions(input: UseSessionControlActionsInput) {
       { name: "sessionId", type: "string", required: true, description: "Session ID from session.list_sessions." },
       { name: "title", type: "string", required: true, description: "New session title." },
     ],
-    disabled: !opencodeClient,
+    disabled: !engineClient,
     execute: async (args) => {
       const sessionId = stringArg(args, "sessionId");
       const title = stringArg(args, "title");
       if (!sessionId) return { ok: false, error: "sessionId is required" };
       if (!title) return { ok: false, error: "title is required" };
-      if (!opencodeClient) return { ok: false, error: "Sofia engine is not connected" };
+      if (!engineClient) return { ok: false, error: "Sofia engine is not connected" };
 
       const targetWorkspace = findSessionWorkspace(workspaces, sessionsByWorkspaceId, sessionId);
-      await opencodeClient.session.update({
+      await engineClient.session.update({
         sessionID: sessionId,
         title,
         directory: targetWorkspace?.path || selectedWorkspaceRoot || undefined,
@@ -182,7 +182,7 @@ export function useSessionControlActions(input: UseSessionControlActionsInput) {
       await refreshRouteState();
       return { ok: true, sessionId, title };
     },
-  }), [opencodeClient, refreshRouteState, selectedWorkspaceRoot, sessionsByWorkspaceId, workspaces]);
+  }), [engineClient, refreshRouteState, selectedWorkspaceRoot, sessionsByWorkspaceId, workspaces]);
   useControlAction(renameSessionControlAction);
 
   const deleteSessionControlAction = useMemo<SofiaControlAction>(() => ({
@@ -277,18 +277,18 @@ export function useSessionControlActions(input: UseSessionControlActionsInput) {
       { name: "sessionId", type: "string", required: true, description: "Session ID." },
       { name: "archived", type: "boolean", required: true, description: "true to archive, false to unarchive." },
     ],
-    disabled: !opencodeClient,
+    disabled: !engineClient,
     execute: async (args) => {
       const sessionId = stringArg(args, "sessionId");
       const archived = booleanArg(args, "archived");
       if (!sessionId) return { ok: false, error: "sessionId is required" };
-      if (!opencodeClient) return { ok: false, error: "Sofia engine is not connected" };
+      if (!engineClient) return { ok: false, error: "Sofia engine is not connected" };
       const targetWorkspace = findSessionWorkspace(workspaces, sessionsByWorkspaceId, sessionId);
-      await setSessionArchived(opencodeClient, sessionId, archived, targetWorkspace?.path || selectedWorkspaceRoot || undefined);
+      await setSessionArchived(engineClient, sessionId, archived, targetWorkspace?.path || selectedWorkspaceRoot || undefined);
       await refreshRouteState();
       return { ok: true, sessionId, archived };
     },
-  }), [opencodeClient, refreshRouteState, selectedWorkspaceRoot, sessionsByWorkspaceId, workspaces]);
+  }), [engineClient, refreshRouteState, selectedWorkspaceRoot, sessionsByWorkspaceId, workspaces]);
   useControlAction(archiveControlAction);
 
   const groupCreateControlAction = useMemo<SofiaControlAction>(() => ({

@@ -26,7 +26,7 @@ teaches.
 1. **The no-cloud escape hatch survives untouched.** No existing MCP path may
    depend on Den being reachable or the user being signed in. Signed out /
    no org / Den down ⇒ org-sourced items hidden, zero errors, everything
-   else identical to a build without this feature. Local `opencode.jsonc`
+   else identical to a build without this feature. Local `engine.jsonc`
    stays hand-editable (ejectability).
 2. **Never remove or migrate an existing direct connection.** A user's
    locally-configured Notion/Linear (engine as MCP client, personal token on

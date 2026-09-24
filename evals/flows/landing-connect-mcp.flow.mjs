@@ -2,7 +2,7 @@ import { loadVoiceoverParagraphs } from "../runner/voiceover.mjs";
 
 const FLOW_ID = "landing-connect-mcp";
 const MCP_SERVER_URL = "https://sofia-api.ruut.chat/mcp/agent";
-const DOCS_URL = "https://sofia.ruut.chat/docs/cloud/run-in-the-cloud/cloud-mcp#connect-mcp-install-opencode";
+const DOCS_URL = "https://sofia.ruut.chat/docs/cloud/run-in-the-cloud/cloud-mcp#connect-mcp-install-engine";
 const SECTION_SELECTOR = "#connect-mcp";
 const BRING_SELECTOR = '[data-testid="connect-mcp-bring"]';
 const EXAMPLE_SELECTOR = '[data-testid="connect-mcp-example"]';
@@ -13,16 +13,16 @@ const CODEX_RECONNECT_COMMAND = `codex mcp logout sofia
 codex mcp login sofia`;
 const CODEX_CONNECTIONS_DEEPLINK = "codex://settings/connections";
 const CHATGPT_SETTINGS_URL = "https://chatgpt.com/#settings/Connectors";
-const OPENCODE_AUTH_COMMAND = "opencode mcp auth sofia";
-const OPENCODE_RECONNECT_COMMAND = `opencode mcp logout sofia
-opencode mcp auth sofia`;
+const SOFIA_ENGINE_AUTH_COMMAND = "engine mcp auth sofia";
+const SOFIA_ENGINE_RECONNECT_COMMAND = `engine mcp logout sofia
+engine mcp auth sofia`;
 const INSTALL_COPY_BUTTON_SELECTOR = `${SECTION_SELECTOR} [role="tabpanel"]:not([hidden]) button[aria-label="Copy the Sofia MCP install command"]`;
 const CLIENT_STATUS_EXPECTATIONS = [
   { label: "Cursor", status: "Setup only", explanationNeedles: ["cursor://anysphere.cursor-mcp/oauth/callback", "PKCE S256"] },
   { label: "Codex", status: "Setup only", explanationNeedles: ["Native proof must be rerun on this exact branch"] },
   { label: "ChatGPT Desktop", status: "Setup only", explanationNeedles: ["Settings > MCP servers", "Native proof is not complete"] },
   { label: "Claude Code", status: "Setup only", explanationNeedles: ["use /mcp in Claude Code"] },
-  { label: "OpenCode", status: "Verified", explanationNeedles: ["OpenCode native remote MCP OAuth"] },
+  { label: "Sofia", status: "Verified", explanationNeedles: ["Sofia native remote MCP OAuth"] },
   { label: "VS Code", status: "Setup only", explanationNeedles: ["VS Code's MCP server prompt"] },
   { label: "Any client", status: "Setup only", explanationNeedles: ["remote Streamable HTTP MCP servers and OAuth"] },
 ];
@@ -373,7 +373,7 @@ export default {
       run: async (ctx) => {
         let codexClipboardRead = { text: "", error: "not read" };
         const visibleStatusEvidence = {};
-        let opencodePanelText = "";
+        let enginePanelText = "";
         let codexPanelText = "";
 
         await ctx.prove("The client matrix shows evidence labels and exact verified auth commands without running native client auth.", {
@@ -406,7 +406,7 @@ export default {
               };
             }
 
-            await realMouseClick(ctx, tabByLabelExpression("OpenCode"), "OpenCode tab");
+            await realMouseClick(ctx, tabByLabelExpression("Sofia"), "Sofia tab");
             await ctx.waitFor(
               `(() => {
                 const panel = document.querySelector(${JSON.stringify(`${SECTION_SELECTOR} [role="tabpanel"]:not([hidden])`)});
@@ -415,12 +415,12 @@ export default {
                   && text.includes("Verified")
                   && text.includes(${JSON.stringify(MCP_SERVER_URL)})
                   && text.includes('"oauth": {}')
-                  && text.includes(${JSON.stringify(OPENCODE_AUTH_COMMAND)})
-                  && text.includes(${JSON.stringify(OPENCODE_RECONNECT_COMMAND)});
+                  && text.includes(${JSON.stringify(SOFIA_ENGINE_AUTH_COMMAND)})
+                  && text.includes(${JSON.stringify(SOFIA_ENGINE_RECONNECT_COMMAND)});
               })()`,
-              { timeoutMs: 10_000, label: "OpenCode verified config, auth, and reconnect commands visible" },
+              { timeoutMs: 10_000, label: "Sofia verified config, auth, and reconnect commands visible" },
             );
-            opencodePanelText = await ctx.eval(`(() => {
+            enginePanelText = await ctx.eval(`(() => {
               const panel = document.querySelector(${JSON.stringify(`${SECTION_SELECTOR} [role="tabpanel"]:not([hidden])`)});
               return panel ? panel.innerText : "";
             })()`);
@@ -544,13 +544,13 @@ export default {
             );
             recordAssertion(
               ctx,
-              "OpenCode shows the JSON config, opencode auth command, and logout-then-auth reconnect sequence",
-              opencodePanelText.includes(MCP_SERVER_URL)
-                && opencodePanelText.includes('"oauth": {}')
-                && opencodePanelText.includes(OPENCODE_AUTH_COMMAND)
-                && opencodePanelText.indexOf("opencode mcp logout sofia") >= 0
-                && opencodePanelText.indexOf(OPENCODE_AUTH_COMMAND, opencodePanelText.indexOf("opencode mcp logout sofia")) > opencodePanelText.indexOf("opencode mcp logout sofia"),
-              opencodePanelText,
+              "Sofia shows the JSON config, engine auth command, and logout-then-auth reconnect sequence",
+              enginePanelText.includes(MCP_SERVER_URL)
+                && enginePanelText.includes('"oauth": {}')
+                && enginePanelText.includes(SOFIA_ENGINE_AUTH_COMMAND)
+                && enginePanelText.indexOf("engine mcp logout sofia") >= 0
+                && enginePanelText.indexOf(SOFIA_ENGINE_AUTH_COMMAND, enginePanelText.indexOf("engine mcp logout sofia")) > enginePanelText.indexOf("engine mcp logout sofia"),
+              enginePanelText,
             );
             recordAssertion(
               ctx,

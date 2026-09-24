@@ -84,20 +84,20 @@ function buildWindowsPaths(profile) {
   const configHome = winJoin(localAppData, "sofia");
   const appDataSofia = winJoin(appData, "sofia");
   const userData = winJoin(appData, "com.differentai.sofia");
-  const opencode = winJoin(appData, "opencode");
+  const engine = winJoin(appData, "engine");
   const orchestrator = winJoin(profile, ".sofia", LEGACY_ORCHESTRATOR_DIR_NAME);
-  const localShareOpencode = winJoin(profile, ".local", "share", "opencode");
-  const cacheOpencode = winJoin(profile, ".cache", "opencode");
+  const localShareWorkspaceEngine = winJoin(profile, ".local", "share", "engine");
+  const cacheWorkspaceEngine = winJoin(profile, ".cache", "engine");
   return {
     appData,
     localAppData,
     configHome,
     appDataSofia,
     userData,
-    opencode,
+    engine,
     orchestrator,
-    localShareOpencode,
-    cacheOpencode,
+    localShareWorkspaceEngine,
+    cacheWorkspaceEngine,
     bootstrap: winJoin(configHome, "desktop-bootstrap.json"),
     pending: winJoin(configHome, ".nuke-pending.json"),
     localRuntimeSqlite: winJoin(configHome, "runtime.sqlite"),
@@ -584,21 +584,21 @@ Write-Output ($result | ConvertTo-Json -Depth 4 -Compress)
 `;
 }
 
-function seedOpencodeAndOrchestratorScript() {
+function seedWorkspaceEngineAndOrchestratorScript() {
   return `
-$opencode=${psQuote(paths.opencode)}
+$engine=${psQuote(paths.engine)}
 $orchestrator=${psQuote(paths.orchestrator)}
-$localShareOpencode=${psQuote(paths.localShareOpencode)}
-$cacheOpencode=${psQuote(paths.cacheOpencode)}
-$dirs=@($opencode,$orchestrator,$localShareOpencode,$cacheOpencode)
+$localShareWorkspaceEngine=${psQuote(paths.localShareWorkspaceEngine)}
+$cacheWorkspaceEngine=${psQuote(paths.cacheWorkspaceEngine)}
+$dirs=@($engine,$orchestrator,$localShareWorkspaceEngine,$cacheWorkspaceEngine)
 foreach($dir in $dirs){ New-Item -ItemType Directory -Force -Path $dir | Out-Null }
-Set-Content -Path (Join-Path $opencode 'auth.json') -Value ${seededJson({ token: "dummy-opencode-auth" })} -Encoding UTF8
-Set-Content -Path (Join-Path $opencode 'mcp-auth.json') -Value ${seededJson({ mcp: "dummy-opencode-mcp-auth" })} -Encoding UTF8
-[IO.File]::WriteAllBytes((Join-Path $opencode 'opencode.db'), [Text.Encoding]::UTF8.GetBytes('dummy opencode db ${SEED_MARKER} ${RUN_TAG}'))
+Set-Content -Path (Join-Path $engine 'auth.json') -Value ${seededJson({ token: "dummy-engine-auth" })} -Encoding UTF8
+Set-Content -Path (Join-Path $engine 'mcp-auth.json') -Value ${seededJson({ mcp: "dummy-engine-mcp-auth" })} -Encoding UTF8
+[IO.File]::WriteAllBytes((Join-Path $engine 'engine.db'), [Text.Encoding]::UTF8.GetBytes('dummy engine db ${SEED_MARKER} ${RUN_TAG}'))
 Set-Content -Path (Join-Path $orchestrator ${psQuote(LEGACY_ORCHESTRATOR_AUTH_FILE)}) -Value ${seededJson({ orchestrator: "dummy" })} -Encoding UTF8
-Set-Content -Path (Join-Path $localShareOpencode 'data-marker.txt') -Value ${psQuote(`dummy local share opencode ${SEED_MARKER} ${RUN_TAG}`)} -Encoding UTF8
-Set-Content -Path (Join-Path $cacheOpencode 'cache-marker.txt') -Value ${psQuote(`dummy cache opencode ${SEED_MARKER} ${RUN_TAG}`)} -Encoding UTF8
-$result=[ordered]@{ opencode=$opencode; orchestrator=$orchestrator; localShareOpencode=$localShareOpencode; cacheOpencode=$cacheOpencode }
+Set-Content -Path (Join-Path $localShareWorkspaceEngine 'data-marker.txt') -Value ${psQuote(`dummy local share engine ${SEED_MARKER} ${RUN_TAG}`)} -Encoding UTF8
+Set-Content -Path (Join-Path $cacheWorkspaceEngine 'cache-marker.txt') -Value ${psQuote(`dummy cache engine ${SEED_MARKER} ${RUN_TAG}`)} -Encoding UTF8
+$result=[ordered]@{ engine=$engine; orchestrator=$orchestrator; localShareWorkspaceEngine=$localShareWorkspaceEngine; cacheWorkspaceEngine=$cacheWorkspaceEngine }
 Write-Output ($result | ConvertTo-Json -Depth 6 -Compress)
 `;
 }
@@ -607,7 +607,7 @@ function seededDirectoriesListingScript() {
   return `
 function ChildNames($p){ if(Test-Path -LiteralPath $p){ @(Get-ChildItem -LiteralPath $p -Force | ForEach-Object { $_.Name }) } else { @() } }
 $targets=@(
-  [ordered]@{ name='opencode'; path=${psQuote(paths.opencode)} },
+  [ordered]@{ name='engine'; path=${psQuote(paths.engine)} },
   [ordered]@{ name='configHome'; path=${psQuote(paths.configHome)} },
   [ordered]@{ name='orchestrator'; path=${psQuote(paths.orchestrator)} },
   [ordered]@{ name='userData'; path=${psQuote(paths.userData)} }
@@ -623,13 +623,13 @@ Write-Output ($result | ConvertTo-Json -Depth 6 -Compress)
 function fixtureProbeScript() {
   return `
 $paths=@{
-  userData=${psQuote(paths.userData)}; opencode=${psQuote(paths.opencode)}; appSofia=${psQuote(paths.appDataSofia)}; configHome=${psQuote(paths.configHome)}; orchestrator=${psQuote(paths.orchestrator)}; localShareOpencode=${psQuote(paths.localShareOpencode)}; cacheOpencode=${psQuote(paths.cacheOpencode)}; bootstrap=${psQuote(paths.bootstrap)}
+  userData=${psQuote(paths.userData)}; engine=${psQuote(paths.engine)}; appSofia=${psQuote(paths.appDataSofia)}; configHome=${psQuote(paths.configHome)}; orchestrator=${psQuote(paths.orchestrator)}; localShareWorkspaceEngine=${psQuote(paths.localShareWorkspaceEngine)}; cacheWorkspaceEngine=${psQuote(paths.cacheWorkspaceEngine)}; bootstrap=${psQuote(paths.bootstrap)}
 }
 $checks=[ordered]@{}
 foreach($name in $paths.Keys){ $checks[$name]=[ordered]@{ path=$paths[$name]; exists=(Test-Path -LiteralPath $paths[$name]) } }
-$checks['opencode']['auth']=Test-Path -LiteralPath (Join-Path $paths.opencode 'auth.json')
-$checks['opencode']['mcpAuth']=Test-Path -LiteralPath (Join-Path $paths.opencode 'mcp-auth.json')
-$checks['opencode']['db']=Test-Path -LiteralPath (Join-Path $paths.opencode 'opencode.db')
+$checks['engine']['auth']=Test-Path -LiteralPath (Join-Path $paths.engine 'auth.json')
+$checks['engine']['mcpAuth']=Test-Path -LiteralPath (Join-Path $paths.engine 'mcp-auth.json')
+$checks['engine']['db']=Test-Path -LiteralPath (Join-Path $paths.engine 'engine.db')
 $checks['userData']['marker']=Test-Path -LiteralPath (Join-Path $paths.userData 'eval-userdata-marker.txt')
 $checks['appSofia']['server']=Test-Path -LiteralPath (Join-Path $paths.appSofia 'server.json')
 $checks['appSofia']['env']=Test-Path -LiteralPath (Join-Path $paths.appSofia 'env.json')
@@ -639,8 +639,8 @@ $checks['configHome']['env']=Test-Path -LiteralPath (Join-Path $paths.configHome
 $checks['configHome']['tokens']=Test-Path -LiteralPath (Join-Path $paths.configHome 'tokens.json')
 $checks['configHome']['bootstrap']=Test-Path -LiteralPath $paths.bootstrap
 $checks['orchestrator']['auth']=Test-Path -LiteralPath (Join-Path $paths.orchestrator ${psQuote(LEGACY_ORCHESTRATOR_AUTH_FILE)})
-$checks['localShareOpencode']['dataMarker']=Test-Path -LiteralPath (Join-Path $paths.localShareOpencode 'data-marker.txt')
-$checks['cacheOpencode']['cacheMarker']=Test-Path -LiteralPath (Join-Path $paths.cacheOpencode 'cache-marker.txt')
+$checks['localShareWorkspaceEngine']['dataMarker']=Test-Path -LiteralPath (Join-Path $paths.localShareWorkspaceEngine 'data-marker.txt')
+$checks['cacheWorkspaceEngine']['cacheMarker']=Test-Path -LiteralPath (Join-Path $paths.cacheWorkspaceEngine 'cache-marker.txt')
 Write-Output ($checks | ConvertTo-Json -Depth 6 -Compress)
 `;
 }
@@ -651,17 +651,17 @@ function N($p){if(Test-Path -LiteralPath $p){@(Get-ChildItem -LiteralPath $p -Fo
 function S($r,$n){$p=Join-Path $r $n;$e=Test-Path -LiteralPath $p;$m=$false;$t=$false;if($e){try{$x=[IO.File]::ReadAllText($p);$m=$x.Contains($sm);$t=$x.Contains($rt)}catch{}}[ordered]@{name=$n;exists=$e;containsSeedMarker=$m;rawContainsRunTag=$t}}
 function SS($r,$ns){@($ns|%{S $r $_})}
 $sm=${psQuote(SEED_MARKER)};$rt=${psQuote(RUN_TAG)}
-$u=${psQuote(paths.userData)};$o=${psQuote(paths.opencode)};$a=${psQuote(paths.appDataSofia)};$c=${psQuote(paths.configHome)}
-$r=${psQuote(paths.orchestrator)};$s=${psQuote(paths.localShareOpencode)};$k=${psQuote(paths.cacheOpencode)};$p=${psQuote(paths.pending)}
+$u=${psQuote(paths.userData)};$o=${psQuote(paths.engine)};$a=${psQuote(paths.appDataSofia)};$c=${psQuote(paths.configHome)}
+$r=${psQuote(paths.orchestrator)};$s=${psQuote(paths.localShareWorkspaceEngine)};$k=${psQuote(paths.cacheWorkspaceEngine)};$p=${psQuote(paths.pending)}
 $appSofiaSeeded=SS $a @('server.json','env.json','tokens.json','runtime.sqlite')
 $result=[ordered]@{
   userData=[ordered]@{path=$u;exists=(Test-Path -LiteralPath $u);markerExists=(Test-Path -LiteralPath (Join-Path $u 'eval-userdata-marker.txt'));seededFiles=(SS $u @('eval-userdata-marker.txt'));entries=(N $u)}
-  opencode=[ordered]@{path=$o;exists=(Test-Path -LiteralPath $o);seededFiles=(SS $o @('auth.json','mcp-auth.json','opencode.db'));entries=(N $o)}
+  engine=[ordered]@{path=$o;exists=(Test-Path -LiteralPath $o);seededFiles=(SS $o @('auth.json','mcp-auth.json','engine.db'));entries=(N $o)}
   appSofia=[ordered]@{path=$a;exists=(Test-Path -LiteralPath $a);seededFiles=$appSofiaSeeded;entries=(N $a)}
   localSofia=[ordered]@{path=$c;exists=(Test-Path -LiteralPath $c);entries=(N $c);seededFiles=(SS $c @('env.json','tokens.json'));pendingExists=(Test-Path -LiteralPath $p);envExists=(Test-Path -LiteralPath (Join-Path $c 'env.json'));tokensExists=(Test-Path -LiteralPath (Join-Path $c 'tokens.json'))}
   orchestrator=[ordered]@{path=$r;exists=(Test-Path -LiteralPath $r);seededFiles=(SS $r @(${psQuote(LEGACY_ORCHESTRATOR_AUTH_FILE)}));entries=(N $r)}
-  localShareOpencode=[ordered]@{path=$s;exists=(Test-Path -LiteralPath $s);seededFiles=(SS $s @('data-marker.txt'));entries=(N $s)}
-  cacheOpencode=[ordered]@{path=$k;exists=(Test-Path -LiteralPath $k);seededFiles=(SS $k @('cache-marker.txt'));entries=(N $k)}
+  localShareWorkspaceEngine=[ordered]@{path=$s;exists=(Test-Path -LiteralPath $s);seededFiles=(SS $s @('data-marker.txt'));entries=(N $s)}
+  cacheWorkspaceEngine=[ordered]@{path=$k;exists=(Test-Path -LiteralPath $k);seededFiles=(SS $k @('cache-marker.txt'));entries=(N $k)}
 }
 Write-Output ($result | ConvertTo-Json -Depth 7 -Compress)
 `;
@@ -951,7 +951,7 @@ function fileContainsSeed(entry) {
 }
 
 function seededMarkerSurvivors(data) {
-  const rootNames = ["userData", "opencode", "appSofia", "localSofia", "orchestrator", "localShareOpencode", "cacheOpencode"];
+  const rootNames = ["userData", "engine", "appSofia", "localSofia", "orchestrator", "localShareWorkspaceEngine", "cacheWorkspaceEngine"];
   return rootNames.flatMap((rootName) =>
     arrayValue(data[rootName]?.seededFiles)
       .filter(fileContainsSeed)
@@ -967,17 +967,17 @@ function seededMarkerSurvivors(data) {
 }
 
 function assertSeededDirectoryListing(ctx, listing) {
-  witness(ctx, listing.opencode?.exists === true, "Seeded %APPDATA%\\opencode root exists", listing.opencode);
-  witness(ctx, hasChild(listing.opencode, "auth.json"), "Seeded opencode directory lists auth.json", listing.opencode);
-  witness(ctx, hasChild(listing.opencode, "mcp-auth.json"), "Seeded opencode directory lists mcp-auth.json", listing.opencode);
-  witness(ctx, hasChild(listing.opencode, "opencode.db"), "Seeded opencode directory lists opencode.db", listing.opencode);
+  witness(ctx, listing.engine?.exists === true, "Seeded %APPDATA%\\engine root exists", listing.engine);
+  witness(ctx, hasChild(listing.engine, "auth.json"), "Seeded engine directory lists auth.json", listing.engine);
+  witness(ctx, hasChild(listing.engine, "mcp-auth.json"), "Seeded engine directory lists mcp-auth.json", listing.engine);
+  witness(ctx, hasChild(listing.engine, "engine.db"), "Seeded engine directory lists engine.db", listing.engine);
   witness(ctx, listing.configHome?.exists === true, "Seeded %LOCALAPPDATA%\\sofia root exists", listing.configHome);
   witness(ctx, hasChild(listing.configHome, "env.json"), "Seeded LOCALAPPDATA sofia directory lists env.json", listing.configHome);
   witness(ctx, hasChild(listing.configHome, "tokens.json"), "Seeded LOCALAPPDATA sofia directory lists tokens.json", listing.configHome);
   witness(ctx, hasChild(listing.configHome, "desktop-bootstrap.json"), "Seeded LOCALAPPDATA sofia directory lists desktop-bootstrap.json", listing.configHome);
   witness(ctx, listing.orchestrator?.exists === true, "Seeded profile legacy runtime root exists", listing.orchestrator);
   witness(ctx, hasChild(listing.orchestrator, LEGACY_ORCHESTRATOR_AUTH_FILE), "Seeded legacy runtime directory lists its auth file", listing.orchestrator);
-  witness(ctx, listing.userData?.exists === true, "Seeded %APPDATA%\\com.differentai.sofia userData root exists", listing.userData);
+  witness(ctx, listing.userData?.exists === true, "Seeded %APPDATA%\\com.differentai.engine userData root exists", listing.userData);
   witness(ctx, hasChild(listing.userData, "eval-userdata-marker.txt"), "Seeded userData directory lists eval-userdata-marker.txt", listing.userData);
 }
 
@@ -995,8 +995,8 @@ function assertPostFirstNuke(ctx, data) {
   const bootstrap = data.bootstrap ?? {};
   const receipt = data.receipt ?? {};
 
-  witness(ctx, data.userData?.markerExists === false, "%APPDATA%\\com.differentai.sofia lost the seeded userData marker after relaunch", data.userData);
-  witness(ctx, data.opencode?.exists === false, "%APPDATA%\\opencode is gone after the nuke", data.opencode);
+  witness(ctx, data.userData?.markerExists === false, "%APPDATA%\\com.differentai.engine lost the seeded userData marker after relaunch", data.userData);
+  witness(ctx, data.engine?.exists === false, "%APPDATA%\\engine is gone after the nuke", data.engine);
   witness(ctx, appSofiaHardDeleteSurvivors.length === 0, "%APPDATA%\\sofia no longer contains seeded server/env/runtime files", data.appSofia);
   witness(ctx, appSofiaMarkerSurvivors.length === 0, "%APPDATA%\\sofia contains no seeded marker/runTag even if clean tokens.json is recreated", data.appSofia);
   witness(ctx, markerSurvivors.length === 0, "No seeded marker or runTag survived in post-nuke seeded file probes", markerSurvivors);
@@ -1047,14 +1047,14 @@ export default {
     {
       name: "Frame 1 — A tester's machine is full of real state",
       run: async (ctx) => {
-        await ctx.prove("The Windows tester profile has seeded Sofia, OpenCode, bootstrap, orchestrator, Chromium, and renderer state", {
+        await ctx.prove("The Windows tester profile has seeded Sofia, Sofia, bootstrap, orchestrator, Chromium, and renderer state", {
           voiceover: vo[0],
           action: async () => {
             await attachApp(ctx);
             const sofiaSeed = daytonaPowerShellJson(ctx, "seed-sofia-config-and-userdata-state", seedSofiaConfigAndUserDataScript());
             const bootstrapSeed = daytonaPowerShellJson(ctx, "seed-secret-desktop-bootstrap", seedDesktopBootstrapScript());
-            const opencodeSeed = daytonaPowerShellJson(ctx, "seed-opencode-and-orchestrator-state", seedOpencodeAndOrchestratorScript());
-            ctx.output("seeded path summary", JSON.stringify({ sofiaSeed, bootstrapSeed, opencodeSeed }, null, 2));
+            const engineSeed = daytonaPowerShellJson(ctx, "seed-engine-and-orchestrator-state", seedWorkspaceEngineAndOrchestratorScript());
+            ctx.output("seeded path summary", JSON.stringify({ sofiaSeed, bootstrapSeed, engineSeed }, null, 2));
             const seededListing = daytonaPowerShellJson(ctx, "seeded-directories-listing", seededDirectoriesListingScript(), { attempts: 2 });
             ctx.output("seeded-directories-listing-json", JSON.stringify(seededListing, null, 2));
             assertSeededDirectoryListing(ctx, seededListing);
@@ -1064,17 +1064,17 @@ export default {
           },
           assert: async () => {
             const probe = daytonaPowerShellJson(ctx, "seeded-files-probe", fixtureProbeScript(), { attempts: 2 });
-            witness(ctx, probe.opencode?.auth === true, "%APPDATA%\\opencode\\auth.json exists", probe.opencode);
-            witness(ctx, probe.opencode?.mcpAuth === true, "%APPDATA%\\opencode\\mcp-auth.json exists", probe.opencode);
-            witness(ctx, probe.opencode?.db === true, "%APPDATA%\\opencode\\opencode.db exists", probe.opencode);
-            witness(ctx, probe.userData?.marker === true, "%APPDATA%\\com.differentai.sofia seeded marker exists", probe.userData);
+            witness(ctx, probe.engine?.auth === true, "%APPDATA%\\engine\\auth.json exists", probe.engine);
+            witness(ctx, probe.engine?.mcpAuth === true, "%APPDATA%\\engine\\mcp-auth.json exists", probe.engine);
+            witness(ctx, probe.engine?.db === true, "%APPDATA%\\engine\\engine.db exists", probe.engine);
+            witness(ctx, probe.userData?.marker === true, "%APPDATA%\\com.differentai.engine seeded marker exists", probe.userData);
             witness(ctx, probe.appSofia?.server === true && probe.appSofia?.env === true && probe.appSofia?.tokens === true && probe.appSofia?.runtime === true, "%APPDATA%\\sofia seeded server/env/tokens/runtime files exist", probe.appSofia);
             witness(ctx, probe.configHome?.env === true && probe.configHome?.tokens === true, "%LOCALAPPDATA%\\sofia env.json and tokens.json exist", probe.configHome);
             witness(ctx, probe.bootstrap?.exists === true, "%LOCALAPPDATA%\\sofia\\desktop-bootstrap.json exists", probe.bootstrap);
             witness(ctx, probe.configHome?.bootstrap === true, "%LOCALAPPDATA%\\sofia\\desktop-bootstrap.json exists in configHome probe", probe.configHome);
             witness(ctx, probe.orchestrator?.auth === true, "profile legacy runtime auth exists", probe.orchestrator);
-            witness(ctx, probe.localShareOpencode?.dataMarker === true, "profile .local\\share\\opencode data marker exists", probe.localShareOpencode);
-            witness(ctx, probe.cacheOpencode?.cacheMarker === true, "profile .cache\\opencode cache marker exists", probe.cacheOpencode);
+            witness(ctx, probe.localShareWorkspaceEngine?.dataMarker === true, "profile .local\\share\\engine data marker exists", probe.localShareWorkspaceEngine);
+            witness(ctx, probe.cacheWorkspaceEngine?.cacheMarker === true, "profile .cache\\engine cache marker exists", probe.cacheWorkspaceEngine);
             const storage = await ctx.eval(`(() => {
               const pick = ['sofia.preferences', 'sofia.developerMode', 'sofia.den.authToken'];
               const result = {};
@@ -1105,7 +1105,7 @@ export default {
             await ctx.expectText("Danger zone");
             await ctx.expectText("Nuke & fresh start");
             await ctx.expectText("Nuke local state and start fresh?");
-            await ctx.expectText("This removes local Sofia, OpenCode, browser, token, runtime, cache, and legacy runtime state on this device.");
+            await ctx.expectText("This removes local Sofia, Sofia, browser, token, runtime, cache, and legacy runtime state on this device.");
             await ctx.expectText("WILL DELETE");
             await ctx.expectText("WILL SURVIVE");
             await ctx.expectText("Also delete bootstrap / organization server");
@@ -1117,7 +1117,7 @@ export default {
             name: "debug-danger-zone-nuke-dialog",
             requireText: [
               "Nuke local state and start fresh?",
-              "This removes local Sofia, OpenCode, browser, token, runtime, cache, and legacy runtime state on this device.",
+              "This removes local Sofia, Sofia, browser, token, runtime, cache, and legacy runtime state on this device.",
               "WILL DELETE",
               "WILL SURVIVE",
               "Also delete bootstrap / organization server",
@@ -1184,7 +1184,7 @@ export default {
             const bootstrap = daytonaPowerShellJson(ctx, "post-first-nuke-bootstrap-probe", postNukeBootstrapProbeScript(), { attempts: 2 });
             const receipt = daytonaPowerShellJson(ctx, "post-first-nuke-receipt-probe", latestReceiptProbeScript(), { attempts: 2 });
             const data = { ...roots, bootstrap, receipt };
-            ctx.output("post-first-nuke-directory-listing-json", JSON.stringify({ localSofia: roots.localSofia, opencode: roots.opencode }, null, 2));
+            ctx.output("post-first-nuke-directory-listing-json", JSON.stringify({ localSofia: roots.localSofia, engine: roots.engine }, null, 2));
             ctx.output("post-first-nuke-witness-json", JSON.stringify(data, null, 2));
             assertPostFirstNuke(ctx, data);
           },

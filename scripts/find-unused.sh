@@ -65,9 +65,9 @@ INFRA_GLOBS=(
   "apps/*/scripts/*.sh"
   "ee/apps/*/scripts/*.mjs"
   "ee/apps/*/scripts/*.sh"
-  # .opencode skills/commands that may invoke source
-  ".opencode/skills/*/scripts/*.sh"
-  ".opencode/skills/*/*.sh"
+  # .engine skills/commands that may invoke source
+  ".sofia/skills/*/scripts/*.sh"
+  ".sofia/skills/*/*.sh"
 )
 
 # Files used by convention (framework/tool magic), not imports

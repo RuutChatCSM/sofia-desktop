@@ -43,7 +43,7 @@ GRANT SELECT ON sofia_den.* TO 'den_readonly'@'%';
 
 ## Register in Sofia
 
-Add to `opencode.json` (workspace) or `~/.config/opencode/opencode.jsonc`
+Add to `engine.json` (workspace) or `~/.config/engine/engine.jsonc`
 (global), or via Settings -> Connections -> MCP in the app:
 
 ```jsonc

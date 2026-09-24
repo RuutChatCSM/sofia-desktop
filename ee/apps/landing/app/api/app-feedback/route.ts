@@ -7,7 +7,7 @@ type FeedbackContext = {
   deployment?: string;
   appVersion?: string;
   sofiaServerVersion?: string;
-  opencodeVersion?: string;
+  engineVersion?: string;
   osName?: string;
   osVersion?: string;
   platform?: string;
@@ -36,7 +36,7 @@ function sanitizeContext(input: FeedbackContext | undefined) {
     deployment: sanitizeValue(input?.deployment),
     appVersion: sanitizeValue(input?.appVersion),
     sofiaServerVersion: sanitizeValue(input?.sofiaServerVersion),
-    opencodeVersion: sanitizeValue(input?.opencodeVersion),
+    engineVersion: sanitizeValue(input?.engineVersion),
     osName: sanitizeValue(input?.osName),
     osVersion: sanitizeValue(input?.osVersion),
     platform: sanitizeValue(input?.platform),
@@ -51,7 +51,7 @@ function formatDiagnosticsSummary(context: ReturnType<typeof sanitizeContext>) {
     ["Deployment", context.deployment],
     ["App version", context.appVersion],
     ["Sofia server", context.sofiaServerVersion],
-    ["OpenCode", context.opencodeVersion],
+    ["Sofia", context.engineVersion],
     ["OS", osLabel],
     ["Platform", context.platform],
   ].filter(([, value]) => value);
@@ -145,7 +145,7 @@ export async function POST(request: Request) {
     deployment: context.deployment || "desktop",
     appVersion: context.appVersion || "unknown",
     sofiaServerVersion: context.sofiaServerVersion || "unknown",
-    opencodeVersion: context.opencodeVersion || "unknown",
+    engineVersion: context.engineVersion || "unknown",
     osName: context.osName || "unknown",
     osVersion: context.osVersion || "",
     platform: context.platform || "unknown",

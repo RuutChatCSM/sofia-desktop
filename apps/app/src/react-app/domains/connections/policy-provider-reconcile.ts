@@ -27,7 +27,7 @@ export type PolicyProviderReconcilePlan = {
 type PolicyDisabledProvidersStorage = Pick<Storage, "getItem" | "setItem">;
 
 export type ReconcilePolicyDisabledProvidersInput = {
-  opencodeClient: Client | null;
+  engineClient: Client | null;
   sofiaClient?: SofiaServerClient | null;
   workspaceId?: string | null;
   workspaceType?: string | null;
@@ -165,7 +165,7 @@ export async function reconcilePolicyDisabledProviders(
   for (const providerId of initialPlan.toDisable) {
     if (disabledProviderIds.includes(providerId)) continue;
     const result = await updateManagedDisabledProviders({
-      opencodeClient: input.opencodeClient,
+      engineClient: input.engineClient,
       sofiaClient: input.sofiaClient,
       workspaceId: input.workspaceId,
       workspaceType: input.workspaceType,
@@ -187,7 +187,7 @@ export async function reconcilePolicyDisabledProviders(
       continue;
     }
     const result = await updateManagedDisabledProviders({
-      opencodeClient: input.opencodeClient,
+      engineClient: input.engineClient,
       sofiaClient: input.sofiaClient,
       workspaceId: input.workspaceId,
       workspaceType: input.workspaceType,

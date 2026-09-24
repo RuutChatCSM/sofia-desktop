@@ -402,6 +402,7 @@ export class ManagedCodexEngine {
     model?: string;
     approvalPolicy?: string;
     sandboxPolicy?: { type: string; networkAccess?: boolean };
+    approvalsReviewer?: "user" | "auto_review";
   }): Promise<string | null> {
     // The fork's UserInput is a serde-tagged enum: every entry needs a `type`.
     const input = params.input.map((entry) =>
@@ -489,17 +490,38 @@ export class ManagedCodexEngine {
     return payload.data ?? [];
   }
 
-  /** List a thread's items (with turn ids) to restore a full transcript. */
-  async listThreadItems(threadId: string, params?: { limit?: number }): Promise<Array<{ turnId: string; item: Record<string, unknown> }>> {
+  /** Thread ids currently loaded in the app-server process (writer-lock holders). */
+  async listLoadedThreads(): Promise<string[]> {
+    const result = await this.request("thread/loaded/list", {});
+    const payload = result as { data?: unknown };
+    return Array.isArray(payload.data) ? payload.data.filter((id): id is string => typeof id === "string") : [];
+  }
+
+  /**
+   * List one page of a thread's items (with turn ids). The engine serves pages
+   * from the oldest item and returns a `nextCursor`; callers that want the whole
+   * transcript must follow it (see CodexSessionManager.getSessionItems).
+   */
+  async listThreadItems(
+    threadId: string,
+    params?: { limit?: number; cursor?: string },
+  ): Promise<{ items: Array<{ turnId: string; item: Record<string, unknown> }>; nextCursor: string | null }> {
     const result = await this.request("thread/items/list", {
       threadId,
       ...(params?.limit ? { limit: params.limit } : {}),
+      ...(params?.cursor ? { cursor: params.cursor } : {}),
     });
-    const payload = result as { data?: Array<{ turnId?: string; item?: Record<string, unknown> }> };
-    return (payload.data ?? []).map((entry) => ({
-      turnId: typeof entry.turnId === "string" ? entry.turnId : "",
-      item: entry.item ?? {},
-    }));
+    const payload = result as {
+      data?: Array<{ turnId?: string; item?: Record<string, unknown> }>;
+      nextCursor?: unknown;
+    };
+    return {
+      items: (payload.data ?? []).map((entry) => ({
+        turnId: typeof entry.turnId === "string" ? entry.turnId : "",
+        item: entry.item ?? {},
+      })),
+      nextCursor: typeof payload.nextCursor === "string" ? payload.nextCursor : null,
+    };
   }
 
   async close(): Promise<void> {

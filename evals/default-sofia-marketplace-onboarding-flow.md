@@ -13,7 +13,7 @@ Marketplace containing built-in Sofia extension capabilities.
 - Built-in Sofia entries are rendered as cloud Marketplace entries with a `Built-in` status, not as locally injected desktop Marketplace rows.
 - Signed-out desktop users can still use Sofia, but Marketplace nudges sign-in for built-in extensions and organization marketplaces.
 - A non-built-in assigned Marketplace plugin can be imported into an active desktop workspace.
-- Imported plugin resources appear in `My Extensions` and materialize into `.opencode` workspace files.
+- Imported plugin resources appear in `My Extensions` and materialize into `.sofia` workspace files.
 - The chat composer can run a prompt that uses the imported plugin/skill once the workspace runtime is ready.
 
 ## Preflight
@@ -114,7 +114,7 @@ Expected outcome:
 - The API returns `Sofia Marketplace`.
 - Resolved plugins include the built-in Sofia entries.
 - Each built-in plugin has `extension.sourceFormat = sofia-builtin`.
-- `Sofia Browser` has an extension manifest with the `opencode-chrome-devtools` resource.
+- `Sofia Browser` has an extension manifest with the `engine-chrome-devtools` resource.
 
 ## Flow 5: assigned Marketplace plugin import
 
@@ -141,7 +141,7 @@ Expected outcome:
 
 - The test plugin changes from `Add` to `Installed` in Marketplace.
 - The test plugin appears in My Extensions as `Connected`.
-- The expected file exists under `.opencode/skills/.../SKILL.md`.
+- The expected file exists under `.sofia/skills/.../SKILL.md`.
 - The imported file contains the source text from Den.
 - The detail modal does not keep showing a stale `Add` action after install.
 
@@ -159,15 +159,15 @@ Steps:
 
 Expected outcome:
 
-- `Run task` / composer send becomes available when opencode runtime is connected.
+- `Run task` / composer send becomes available when engine runtime is connected.
 - The task is submitted without losing the imported plugin state.
 - The response contains the deterministic output from the imported skill/plugin.
 
 Latest Daytona proof:
 
 - Created live plugin `Marketplace Runtime Probe` in the assigned `Anthropic-Compatible Plugins` marketplace.
-- Imported it into workspace `Marketplace Use Test` and confirmed `.opencode/skills/marketplace-runtime-probe-plugin/marketplace-runtime-probe-skill/SKILL.md` materialized.
-- Direct OpenCode runtime proof returned `MARKETPLACE_RUNTIME_PROBE_OK`.
+- Imported it into workspace `Marketplace Use Test` and confirmed `.sofia/skills/marketplace-runtime-probe-plugin/marketplace-runtime-probe-skill/SKILL.md` materialized.
+- Direct Sofia runtime proof returned `MARKETPLACE_RUNTIME_PROBE_OK`.
 - Desktop chat in workspace `Marketplace Runtime Chat` also returned `MARKETPLACE_RUNTIME_PROBE_OK`.
 
 ## Artifact evidence rules
@@ -214,7 +214,7 @@ To move the entire extension concept server-side in the future, we would need:
 - A migration path for existing desktop built-ins so first-party code can be represented as Den-managed packages without breaking offline/local-first use.
 - A desktop extension host that can render server-defined contribution points while preserving native/local affordances.
 - Policy controls for admins: allow/deny extensions, pin versions, stage rollouts, require approval, and revoke compromised versions.
-- Update and rollback semantics: how a workspace moves from extension version N to N+1, and how materialized `.opencode` files are reconciled.
+- Update and rollback semantics: how a workspace moves from extension version N to N+1, and how materialized `.sofia` files are reconciled.
 - Observability: install status, resource materialization status, runtime health, and failure reasons visible in both Den and desktop.
 - Offline behavior: built-ins and already-installed org extensions should keep working when Den is unreachable, while clearly showing sync state.
 - Security review for remote code, secrets, OAuth providers, MCP endpoints, file writes, and cross-workspace data access.

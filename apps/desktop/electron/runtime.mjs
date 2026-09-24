@@ -14,7 +14,7 @@ import {
   normalizeWorkspaceRootPath,
   sofiaEnvStorePath,
   sofiaServerConfigPath,
-  resolveWorkspaceOpencodeConfigPath,
+  resolveWorkspaceWorkspaceEngineConfigPath,
 } from "@sofia/paths";
 import {
   dedupeCertificates,
@@ -309,7 +309,7 @@ export function commandMatchesPackagedSidecar(command, sidecarDirs = []) {
   if (!sidecarDirs.some((dir) => String(dir ?? "").trim() && value.includes(dir))) {
     return false;
   }
-  return /(?:^|[/\\])opencode[^/\\\s]*\s+serve\b/.test(value);
+  return /(?:^|[/\\])engine[^/\\\s]*\s+serve\b/.test(value);
 }
 
 export function embeddedServerImportUrl(embeddedPath) {
@@ -337,10 +337,10 @@ function createEngineState() {
     hostname: null,
     port: null,
     baseUrl: null,
-    opencodeUsername: null,
-    opencodePassword: null,
-    opencodeBinPath: null,
-    opencodeBinSource: null,
+    engineUsername: null,
+    enginePassword: null,
+    engineBinPath: null,
+    engineBinSource: null,
     managedByServer: false,
     managedPid: null,
     managedIsAlive: null,
@@ -369,10 +369,10 @@ export function snapshotEngineState(state) {
     projectDir: state.projectDir,
     hostname: state.hostname,
     port: state.port,
-    opencodeUsername: state.opencodeUsername,
-    opencodePassword: state.opencodePassword,
-    opencodeBinPath: state.opencodeBinPath,
-    opencodeBinSource: state.opencodeBinSource,
+    engineUsername: state.engineUsername,
+    enginePassword: state.enginePassword,
+    engineBinPath: state.engineBinPath,
+    engineBinSource: state.engineBinSource,
     pid: state.managedByServer ? state.managedPid ?? null : child?.pid ?? null,
     lastStdout: state.lastStdout,
     lastStderr: state.lastStderr,
@@ -396,11 +396,11 @@ function createSofiaServerState() {
     clientToken: null,
     ownerToken: null,
     hostToken: null,
-    managedOpencodeBinPath: null,
-    managedOpencodeBinSource: null,
+    managedWorkspaceEngineBinPath: null,
+    managedWorkspaceEngineBinSource: null,
     lastStdout: null,
     lastStderr: null,
-    managedOpencodeExecution: null,
+    managedWorkspaceEngineExecution: null,
   };
 }
 
@@ -420,12 +420,12 @@ export function snapshotSofiaServerState(state) {
     clientToken: state.clientToken,
     ownerToken: state.ownerToken,
     hostToken: state.hostToken,
-    managedOpencodeBinPath: state.managedOpencodeBinPath,
-    managedOpencodeBinSource: state.managedOpencodeBinSource,
+    managedWorkspaceEngineBinPath: state.managedWorkspaceEngineBinPath,
+    managedWorkspaceEngineBinSource: state.managedWorkspaceEngineBinSource,
     pid: child?.pid ?? null,
     lastStdout: state.lastStdout,
     lastStderr: state.lastStderr,
-    managedOpencodeExecution: state.managedOpencodeExecution,
+    managedWorkspaceEngineExecution: state.managedWorkspaceEngineExecution,
   };
 }
 
@@ -439,7 +439,7 @@ export function resolveEngineRolloverPreference(optionValue, persistedValue) {
  * running:true with a dead baseUrl and assertSofiaServerReady would pass
  * against it. Keeps accumulated output for diagnostics and the project dir so
  * a retry via engineRestart still knows its workspace. The engine state only
- * resets when this start owned the engine (manageOpencode) — an external
+ * resets when this start owned the engine (manageWorkspaceEngine) — an external
  * engine keeps running regardless of the server's fate.
  */
 export function resetRuntimeStatesAfterFailedServerStart(sofiaServerStateRef, engineStateRef, options = {}) {
@@ -448,7 +448,7 @@ export function resetRuntimeStatesAfterFailedServerStart(sofiaServerStateRef, en
   Object.assign(sofiaServerStateRef, createSofiaServerState());
   sofiaServerStateRef.lastStdout = serverStdout;
   sofiaServerStateRef.lastStderr = serverStderr;
-  if (options.manageOpencode === true) {
+  if (options.manageWorkspaceEngine === true) {
     const engineStdout = engineStateRef.lastStdout;
     const engineStderr = engineStateRef.lastStderr;
     const projectDir = engineStateRef.projectDir;
@@ -687,10 +687,10 @@ export function resolveUserEnvFilePath(env = process.env) {
 }
 
 const USER_ENV_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
-const USER_ENV_RESERVED_PREFIXES = ["SOFIA_", "OPENCODE_"];
+const USER_ENV_RESERVED_PREFIXES = ["SOFIA_", "SOFIA_ENGINE_"];
 
 // Synchronous, best-effort; absent or malformed returns {}. Reserved prefixes
-// are stripped so a tampered file can never shadow SOFIA_* / OPENCODE_*.
+// are stripped so a tampered file can never shadow SOFIA_* / SOFIA_ENGINE_*.
 function loadUserEnvFile(env = process.env) {
   try {
     const raw = readFileSync(resolveUserEnvFilePath(env), "utf8");
@@ -1338,7 +1338,7 @@ export function createRuntimeManager({
   localManagedMcpVaultKey,
   workspaceMkdir = mkdir,
   workspacePlatform = process.platform,
-  readEngineSelection = () => "opencode",
+  readEngineSelection = () => "engine",
 }) {
   const inheritedProcessEnv = { ...process.env };
   let injectedUserEnvKeys = new Set();
@@ -1391,8 +1391,8 @@ export function createRuntimeManager({
     return path.join(userDataDir, "sofia-server-state.json");
   }
 
-  function managedOpencodeWorkdir() {
-    return path.join(userDataDir, "managed-opencode-workdir");
+  function managedWorkspaceEngineWorkdir() {
+    return path.join(userDataDir, "managed-engine-workdir");
   }
 
   async function loadTokenStore() {
@@ -1500,13 +1500,13 @@ export function createRuntimeManager({
       xdgDataHome: path.join(root, "xdg", "data"),
       xdgCacheHome: path.join(root, "xdg", "cache"),
       xdgStateHome: path.join(root, "xdg", "state"),
-      opencodeConfigDir: path.join(root, "config", "opencode"),
+      engineConfigDir: path.join(root, "config", "engine"),
     };
 
     for (const dir of Object.values(paths)) {
       await mkdir(dir, { recursive: true });
     }
-    await mkdir(path.join(paths.xdgDataHome, "opencode"), { recursive: true });
+    await mkdir(path.join(paths.xdgDataHome, "engine"), { recursive: true });
     return paths;
   }
 
@@ -1559,8 +1559,8 @@ export function createRuntimeManager({
       env.XDG_DATA_HOME = devPaths.xdgDataHome;
       env.XDG_CACHE_HOME = devPaths.xdgCacheHome;
       env.XDG_STATE_HOME = devPaths.xdgStateHome;
-      env.OPENCODE_CONFIG_DIR = devPaths.opencodeConfigDir;
-      env.OPENCODE_TEST_HOME = devPaths.homeDir;
+      env.SOFIA_ENGINE_CONFIG_DIR = devPaths.engineConfigDir;
+      env.SOFIA_ENGINE_TEST_HOME = devPaths.homeDir;
     }
     return env;
   }
@@ -1587,12 +1587,12 @@ export function createRuntimeManager({
       }
     }
 
-    if (baseName === "opencode") {
+    if (baseName === "engine") {
       for (const candidate of [
-        path.join(app.getPath("home"), ".opencode", "bin", process.platform === "win32" ? "opencode.exe" : "opencode"),
-        path.join("/opt/homebrew/bin", process.platform === "win32" ? "opencode.exe" : "opencode"),
-        path.join("/usr/local/bin", process.platform === "win32" ? "opencode.exe" : "opencode"),
-        path.join("/usr/bin", process.platform === "win32" ? "opencode.exe" : "opencode"),
+        path.join(app.getPath("home"), ".sofia", "bin", process.platform === "win32" ? "engine.exe" : "engine"),
+        path.join("/opt/homebrew/bin", process.platform === "win32" ? "engine.exe" : "engine"),
+        path.join("/usr/local/bin", process.platform === "win32" ? "engine.exe" : "engine"),
+        path.join("/usr/bin", process.platform === "win32" ? "engine.exe" : "engine"),
       ]) {
         if (existsSync(candidate)) {
           return { path: candidate, source: "known-location" };
@@ -1607,9 +1607,9 @@ export function createRuntimeManager({
     return resolveBinaryInfo(baseName, extraPaths)?.path ?? null;
   }
 
-  function resolveOpencodeBinary(opencodeBinPath) {
-    const explicitPath = typeof opencodeBinPath === "string" ? opencodeBinPath.trim() : "";
-    return explicitPath ? { path: explicitPath, source: "custom" } : resolveBinaryInfo("opencode");
+  function resolveWorkspaceEngineBinary(engineBinPath) {
+    const explicitPath = typeof engineBinPath === "string" ? engineBinPath.trim() : "";
+    return explicitPath ? { path: explicitPath, source: "custom" } : resolveBinaryInfo("engine");
   }
 
   function resolveSofiaBinary() {
@@ -1721,7 +1721,7 @@ export function createRuntimeManager({
   }
 
   function engineDoctor(options = {}) {
-    const resolved = resolveOpencodeBinary(options?.opencodeBinPath);
+    const resolved = resolveWorkspaceEngineBinary(options?.engineBinPath);
     if (!resolved?.path) {
       return {
         found: false,
@@ -1761,14 +1761,14 @@ export function createRuntimeManager({
     };
   }
 
-  async function pinnedOpencodeInstallCommand() {
+  async function pinnedWorkspaceEngineInstallCommand() {
     const constantsPath = path.resolve(desktopRoot, "../../constants.json");
     const payload = JSON.parse(await readFile(constantsPath, "utf8"));
-    const version = String(payload?.opencodeVersion ?? "").trim().replace(/^v/, "");
+    const version = String(payload?.engineVersion ?? "").trim().replace(/^v/, "");
     if (!version) {
-      throw new Error("constants.json is missing opencodeVersion");
+      throw new Error("constants.json is missing engineVersion");
     }
-    return `curl -fsSL https://opencode.ai/install | bash -s -- --version ${version} --no-modify-path`;
+    return `curl -fsSL https://github.com/RuutChatCSM/sofia/install | bash -s -- --version ${version} --no-modify-path`;
   }
 
   async function pinnedCodexInstallCommand() {
@@ -1844,13 +1844,13 @@ export function createRuntimeManager({
     }
   }
 
-  async function ensureOpencodeConfig(projectDir) {
-    const configPath = resolveWorkspaceOpencodeConfigPath(projectDir);
+  async function ensureWorkspaceEngineConfig(projectDir) {
+    const configPath = resolveWorkspaceWorkspaceEngineConfigPath(projectDir);
     if (await fileExists(configPath)) return;
     await mkdir(path.dirname(configPath), { recursive: true });
     await writeFile(
       configPath,
-      `${JSON.stringify({ $schema: "https://opencode.ai/config.json" }, null, 2)}\n`,
+      `${JSON.stringify({ $schema: "https://github.com/RuutChatCSM/sofia/config.json" }, null, 2)}\n`,
       "utf8",
     );
   }
@@ -1889,10 +1889,10 @@ export function createRuntimeManager({
       return await startSofiaServerInner({
         ...options,
         engineRollover,
-        manageOpencode: options.manageOpencode === true,
-        opencodeBaseUrl: options.opencodeBaseUrl,
-        opencodeUsername: options.opencodeUsername,
-        opencodePassword: options.opencodePassword,
+        manageWorkspaceEngine: options.manageWorkspaceEngine === true,
+        engineBaseUrl: options.engineBaseUrl,
+        engineUsername: options.engineUsername,
+        enginePassword: options.enginePassword,
       });
     } catch (error) {
       resetRuntimeStatesAfterFailedServerStart(sofiaServerState, engineState, options);
@@ -1915,12 +1915,12 @@ export function createRuntimeManager({
 
     const host = options.remoteAccessEnabled ? "0.0.0.0" : "127.0.0.1";
 
-    const managedOpencode = options.manageOpencode ? resolveOpencodeBinary(options.opencodeBinPath) : null;
-    sofiaServerState.managedOpencodeBinPath = managedOpencode?.path ?? null;
-    sofiaServerState.managedOpencodeBinSource = managedOpencode?.source ?? null;
-    if (options.manageOpencode) {
-      engineState.opencodeBinPath = managedOpencode?.path ?? null;
-      engineState.opencodeBinSource = managedOpencode?.source ?? null;
+    const managedWorkspaceEngine = options.manageWorkspaceEngine ? resolveWorkspaceEngineBinary(options.engineBinPath) : null;
+    sofiaServerState.managedWorkspaceEngineBinPath = managedWorkspaceEngine?.path ?? null;
+    sofiaServerState.managedWorkspaceEngineBinSource = managedWorkspaceEngine?.source ?? null;
+    if (options.manageWorkspaceEngine) {
+      engineState.engineBinPath = managedWorkspaceEngine?.path ?? null;
+      engineState.engineBinSource = managedWorkspaceEngine?.source ?? null;
     }
 
     // Inject user env vars so the server and managed Sofia engine inherit them.
@@ -1972,19 +1972,19 @@ export function createRuntimeManager({
       workspaces: workspacePaths,
       token: tokens.clientToken,
       hostToken: tokens.hostToken,
-      opencodeBaseUrl: options.opencodeBaseUrl ?? undefined,
-      opencodeDirectory: activeWorkspace || undefined,
-      manageOpencode: options.manageOpencode === true,
-      opencodeBin: managedOpencode?.path ?? undefined,
-      opencodeCwd: managedOpencodeWorkdir(),
+      engineBaseUrl: options.engineBaseUrl ?? undefined,
+      engineDirectory: activeWorkspace || undefined,
+      manageWorkspaceEngine: options.manageWorkspaceEngine === true,
+      engineBin: managedWorkspaceEngine?.path ?? undefined,
+      engineCwd: managedWorkspaceEngineWorkdir(),
       localManagedMcpVaultKey,
       engineRollover: options.engineRollover === true,
     });
     inProcessServer = handle;
-    sofiaServerState.managedOpencodeExecution = handle.managedOpencodeExecution ?? null;
-    engineState.managedByServer = Boolean(handle.managedOpencode);
-    engineState.managedPid = handle.managedOpencode?.pid ?? null;
-    engineState.managedIsAlive = handle.managedOpencode?.isAlive ?? null;
+    sofiaServerState.managedWorkspaceEngineExecution = handle.managedWorkspaceEngineExecution ?? null;
+    engineState.managedByServer = Boolean(handle.managedWorkspaceEngine);
+    engineState.managedPid = handle.managedWorkspaceEngine?.pid ?? null;
+    engineState.managedIsAlive = handle.managedWorkspaceEngine?.isAlive ?? null;
 
     const boundPort = handle.port;
     const baseUrl = handle.url;
@@ -2026,16 +2026,16 @@ export function createRuntimeManager({
           headers: { Authorization: `Bearer ${ownerToken}` },
         }, 5000);
         const first = Array.isArray(list?.items) ? list.items[0] : undefined;
-        const opencode = first?.opencode;
-        if (opencode?.baseUrl) {
+        const engine = first?.engine;
+        if (engine?.baseUrl) {
           engineState.runtime = DIRECT_RUNTIME;
-          engineState.projectDir = opencode.directory ?? activeWorkspace ?? null;
-          engineState.hostname = new URL(opencode.baseUrl).hostname;
-          engineState.port = Number(new URL(opencode.baseUrl).port) || null;
-          engineState.baseUrl = opencode.baseUrl;
-          engineState.opencodeUsername = opencode.username ?? null;
-          engineState.opencodePassword = opencode.password ?? null;
-          engineState.execution = handle.managedOpencodeExecution ?? null;
+          engineState.projectDir = engine.directory ?? activeWorkspace ?? null;
+          engineState.hostname = new URL(engine.baseUrl).hostname;
+          engineState.port = Number(new URL(engine.baseUrl).port) || null;
+          engineState.baseUrl = engine.baseUrl;
+          engineState.engineUsername = engine.username ?? null;
+          engineState.enginePassword = engine.password ?? null;
+          engineState.execution = handle.managedWorkspaceEngineExecution ?? null;
           engineState.child = null;
           engineState.childExited = false;
         }
@@ -2084,12 +2084,12 @@ export function createRuntimeManager({
     try {
       sofiaServer = await startSofiaServer({
         workspacePaths: options.workspacePaths,
-        opencodeBaseUrl: engineState.baseUrl,
-        opencodeUsername: engineState.opencodeUsername,
-        opencodePassword: engineState.opencodePassword,
+        engineBaseUrl: engineState.baseUrl,
+        engineUsername: engineState.engineUsername,
+        enginePassword: engineState.enginePassword,
         remoteAccessEnabled: options.remoteAccessEnabled,
-        manageOpencode: options.manageOpencode === true,
-        opencodeBinPath: options.opencodeBinPath,
+        manageWorkspaceEngine: options.manageWorkspaceEngine === true,
+        engineBinPath: options.engineBinPath,
         engineRollover: options.engineRollover,
       });
     } catch (error) {
@@ -2144,7 +2144,7 @@ export function createRuntimeManager({
       safeProjectDir = await prepareRuntimeWorkspaceRoot(safeProjectDir, {
         platform: workspacePlatform,
         mkdirImpl: workspaceMkdir,
-        ensureConfig: ensureOpencodeConfig,
+        ensureConfig: ensureWorkspaceEngineConfig,
       });
     } catch (error) {
       settleAfterWorkspacePreparationFailure();
@@ -2168,8 +2168,8 @@ export function createRuntimeManager({
         projectDir: safeProjectDir,
         workspacePaths,
         remoteAccessEnabled: options.sofiaRemoteAccess === true,
-        manageOpencode: true,
-        opencodeBinPath: options.opencodeBinPath,
+        manageWorkspaceEngine: true,
+        engineBinPath: options.engineBinPath,
         engineRollover: requestedEngineRollover,
       });
 
@@ -2199,7 +2199,7 @@ export function createRuntimeManager({
     return engineStart(projectDir, {
       runtime: engineState.runtime,
       workspacePaths: [projectDir],
-      opencodeEnableExa: options.opencodeEnableExa,
+      engineEnableExa: options.engineEnableExa,
       sofiaRemoteAccess,
       ...(typeof options.engineRollover === "boolean"
         ? { engineRollover: options.engineRollover }
@@ -2209,8 +2209,8 @@ export function createRuntimeManager({
   }
 
   async function engineInfo() {
-    if (inProcessServer?.managedOpencode) {
-      engineState.managedPid = inProcessServer.managedOpencode.pid ?? null;
+    if (inProcessServer?.managedWorkspaceEngine) {
+      engineState.managedPid = inProcessServer.managedWorkspaceEngine.pid ?? null;
     }
     return { ...snapshotEngineState(engineState), lifecycleState };
   }
@@ -2219,7 +2219,7 @@ export function createRuntimeManager({
     return {
       lifecycleState,
       engine: await engineInfo(),
-      enginePool: inProcessServer?.managedOpencodePool?.() ?? null,
+      enginePool: inProcessServer?.managedWorkspaceEnginePool?.() ?? null,
       sofiaServer: snapshotSofiaServerState(sofiaServerState),
     };
   }
@@ -2232,17 +2232,17 @@ export function createRuntimeManager({
     const workspacePaths = prioritizeWorkspacePaths(engineState.projectDir, await listLocalWorkspacePaths(), {
       platform: workspacePlatform,
     });
-    const shouldManageOpencode = Boolean(
-      sofiaServerState.managedOpencodeBinPath || engineState.opencodeBinPath || !engineState.baseUrl,
+    const shouldManageWorkspaceEngine = Boolean(
+      sofiaServerState.managedWorkspaceEngineBinPath || engineState.engineBinPath || !engineState.baseUrl,
     );
     return startSofiaServer({
       workspacePaths,
-      opencodeBaseUrl: shouldManageOpencode ? null : engineState.baseUrl,
-      opencodeUsername: shouldManageOpencode ? null : engineState.opencodeUsername,
-      opencodePassword: shouldManageOpencode ? null : engineState.opencodePassword,
+      engineBaseUrl: shouldManageWorkspaceEngine ? null : engineState.baseUrl,
+      engineUsername: shouldManageWorkspaceEngine ? null : engineState.engineUsername,
+      enginePassword: shouldManageWorkspaceEngine ? null : engineState.enginePassword,
       remoteAccessEnabled: options.remoteAccessEnabled === true,
-      manageOpencode: shouldManageOpencode,
-      opencodeBinPath: engineState.opencodeBinPath ?? sofiaServerState.managedOpencodeBinPath,
+      manageWorkspaceEngine: shouldManageWorkspaceEngine,
+      engineBinPath: engineState.engineBinPath ?? sofiaServerState.managedWorkspaceEngineBinPath,
     });
   }
 
@@ -2257,10 +2257,10 @@ export function createRuntimeManager({
       };
     }
 
-    const installDir = path.join(app.getPath("home"), ".opencode", "bin");
-    const command = await pinnedOpencodeInstallCommand();
+    const installDir = path.join(app.getPath("home"), ".sofia", "bin");
+    const command = await pinnedWorkspaceEngineInstallCommand();
     const result = await runShellCommand("bash", ["-lc", command], {
-      env: { ...(await buildChildEnv()), OPENCODE_INSTALL_DIR: installDir },
+      env: { ...(await buildChildEnv()), SOFIA_ENGINE_INSTALL_DIR: installDir },
       timeoutMs: 180_000,
     });
     return {
@@ -2295,7 +2295,7 @@ export function createRuntimeManager({
     };
   }
 
-  async function opencodeMcpAuth(projectDir, serverName) {
+  async function engineMcpAuth(projectDir, serverName) {
     const safeProjectDir = String(projectDir ?? "").trim();
     const safeServerName = String(serverName ?? "").trim();
     if (!safeProjectDir) {
@@ -2305,9 +2305,9 @@ export function createRuntimeManager({
       throw new Error("server_name is required");
     }
 
-    const program = resolveBinary("opencode");
+    const program = resolveBinary("engine");
     if (!program) {
-      throw new Error("Failed to locate opencode.");
+      throw new Error("Failed to locate engine.");
     }
 
     const result = await runShellCommand(program, ["mcp", "auth", safeServerName], {
@@ -2369,7 +2369,7 @@ export function createRuntimeManager({
     },
     sofiaServerInfo,
     sofiaServerRestart: (options) => withRuntimeLifecycle(() => sofiaServerRestart(options)),
-    opencodeMcpAuth,
+    engineMcpAuth,
     sandboxCleanupSofiaContainers,
   };
 }

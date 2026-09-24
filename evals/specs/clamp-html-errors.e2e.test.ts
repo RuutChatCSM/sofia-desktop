@@ -288,7 +288,7 @@ test.skipIf(!e2eTestsEnabled)(title, async ({ evidence }) => {
     const patched = await request("/workspace/" + encodeURIComponent(workspaceId) + "/config", {
       method: "PATCH",
       body: JSON.stringify({
-        opencode: {
+        engine: {
           provider: {
             [${JSON.stringify(providerId)}]: {
               npm: "@ai-sdk/openai-compatible",
@@ -307,9 +307,9 @@ test.skipIf(!e2eTestsEnabled)(title, async ({ evidence }) => {
     });
     if (patched !== "ok") return patched;
     const reloaded = await request("/workspace/" + encodeURIComponent(workspaceId) + "/engine/reload", { method: "POST" });
-    // A slow dispose reports 504 opencode_reload_timeout while the reload
+    // A slow dispose reports 504 engine_reload_timeout while the reload
     // keeps going; readiness is owned by the polling below.
-    if (reloaded !== "ok" && !reloaded.includes("opencode_reload_timeout")) return reloaded;
+    if (reloaded !== "ok" && !reloaded.includes("engine_reload_timeout")) return reloaded;
     const raw = localStorage.getItem("sofia.preferences");
     let preferences = {};
     try { preferences = raw ? JSON.parse(raw) : {}; } catch { preferences = {}; }
@@ -344,7 +344,7 @@ test.skipIf(!e2eTestsEnabled)(title, async ({ evidence }) => {
     let last = "";
     while (Date.now() < deadline) {
       try {
-        const response = await fetch("http://127.0.0.1:" + port + "/workspace/" + encodeURIComponent(${JSON.stringify(workspace.workspaceId)}) + "/opencode/session", {
+        const response = await fetch("http://127.0.0.1:" + port + "/workspace/" + encodeURIComponent(${JSON.stringify(workspace.workspaceId)}) + "/engine/session", {
           headers: { Authorization: "Bearer " + token },
         });
         if (response.ok) return "ready";

@@ -132,11 +132,11 @@ describe("splitTurnAtAnswer", () => {
 });
 
 describe("message timestamps", () => {
-  test("reads created and completed from opencode metadata", () => {
+  test("reads created and completed from engine metadata", () => {
     const message: UIMessage = {
       id: "msg-4",
       role: "assistant",
-      metadata: { opencode: { created: 1000, completed: 61000 } },
+      metadata: { engine: { created: 1000, completed: 61000 } },
       parts: [textPart("hi")],
     };
     expect(getMessageCreated(message)).toBe(1000);
@@ -147,7 +147,7 @@ describe("message timestamps", () => {
     const message: UIMessage = {
       id: "msg-5",
       role: "assistant",
-      metadata: { opencode: { created: 1000 } },
+      metadata: { engine: { created: 1000 } },
       parts: [textPart("hi")],
     };
     expect(getMessageCompleted(message)).toBeNull();

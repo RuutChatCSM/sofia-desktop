@@ -51,18 +51,18 @@ packaging/docker/workspace/
 # OS
 .DS_Store
 
-# OpenCode mirror
-vendor/opencode/
+# Sofia mirror
+vendor/engine/
 
-# OpenCode local deps
-.opencode/node_modules/
-.opencode/bun.lock
+# Sofia local deps
+.sofia/node_modules/
+.sofia/bun.lock
 
 # Sofia workspace-local artifacts
-.opencode/sofia/
-.opencode/agents/sofia.md
-.opencode/sofia.json
-opencode.jsonc
+.sofia/sofia/
+.sofia/agents/sofia.md
+.sofia/sofia.json
+engine.jsonc
 .vercel
 .env*.local
 .claude/*

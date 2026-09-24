@@ -109,7 +109,7 @@ marketplace-attached"; everything downstream keeps working.
    creator immediately; report that instead of "private until published".
    Keep "Do not send `marketplaceId` or `orgWide`."
 7. Sweep steering copy that asserts the old behavior
-   (`mcp/agent.ts:117`, `apps/server/src/opencode-plugins/
+   (`mcp/agent.ts:117`, `apps/server/src/engine-plugins/
    sofia-extensions-preview-steering.ts:141`,
    `sofia-capabilities-knowledge.ts:95`) — update only if they state
    "unusable until published".

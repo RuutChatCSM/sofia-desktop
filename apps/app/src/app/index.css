@@ -657,3 +657,38 @@ select:disabled {
     min-height: 100dvh;
   }
 }
+
+/* Sofia workspace accents. The surface/sidebar palette stays the app theme so the
+   macOS vibrancy (transparent, ChatGPT-style shell) shows through. */
+:root {
+  --sofia-blue: #315fd3;
+  --sofia-blue-soft: #edf2ff;
+  --sofia-outline: #dce2eb;
+}
+[data-theme="dark"] {
+  --sofia-blue: #a6bbff;
+  --sofia-blue-soft: #202b43;
+  --sofia-outline: #303946;
+}
+.sofia-task-header { min-height: 44px; }
+.sofia-working-dot, .sofia-ready-dot {
+  display: inline-block; width: 7px; height: 7px; flex-shrink: 0; border-radius: 50%; background: var(--sofia-blue);
+}
+.sofia-ready-dot { background: #598873; }
+.sofia-followup-button {
+  min-height: 36px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--sofia-outline);
+  font-size: 12px; font-weight: 600; transition: background-color .15s;
+}
+.sofia-followup-button:hover { background: var(--dls-hover); }
+.sofia-followup-button:focus-visible { outline: 2px solid var(--dls-accent); outline-offset: 2px; }
+.sofia-followup-button:disabled { opacity: .5; }
+.sofia-steer-button { background: var(--sofia-blue-soft); color: var(--sofia-blue); }
+@media (prefers-reduced-motion: no-preference) {
+  .sofia-working-dot { animation: sofia-work-pulse 1.8s ease-in-out infinite; }
+  @keyframes sofia-work-pulse { 50% { box-shadow: 0 0 0 4px rgb(var(--dls-accent-rgb) / .12); } }
+}
+@media (max-width: 640px) {
+  .sofia-composer-panel > div:last-child { padding-inline: 12px; }
+  .sofia-composer-panel button { min-height: 44px; }
+  .sofia-followup-button { padding-inline: 10px; }
+}

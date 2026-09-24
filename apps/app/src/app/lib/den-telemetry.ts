@@ -126,7 +126,7 @@ export function trackTelemetryEvent(type: string, fields: TelemetryEventFields =
 }
 
 /**
- * Track that the user started an OpenCode session.
+ * Track that the user started an Sofia session.
  * This is the primary "are people actually using the app" signal.
  */
 export function trackSessionActive(sessionId?: string, dimensions?: TelemetryDimensionInput[]): void {

@@ -7,7 +7,7 @@ import { MessageListProvider } from "../src/components/chat/message-list-provide
 import { getReactQueryClient } from "../src/react-app/infra/query-client"
 import { createSessionErrorUIMessage } from "../src/react-app/domains/session/sync/usechat-adapter"
 import {
-  presentOpencodeSessionError,
+  presentWorkspaceEngineSessionError,
   sessionErrorPresentationFromUIMessage,
 } from "../src/react-app/domains/session/sync/session-error"
 import {
@@ -23,7 +23,7 @@ afterEach(() => {
 
 describe("session error resilience", () => {
   test("classifies an Sofia engine abort and retains its diagnostic payload", () => {
-    const presentation = presentOpencodeSessionError({
+    const presentation = presentWorkspaceEngineSessionError({
       name: "MessageAbortedError",
       data: {
         message: "Aborted",
@@ -42,7 +42,7 @@ describe("session error resilience", () => {
   })
 
   test("distinguishes a provider header timeout from an engine abort", () => {
-    const presentation = presentOpencodeSessionError({
+    const presentation = presentWorkspaceEngineSessionError({
       name: "ProviderHeaderTimeoutError",
       data: {
         message: "Provider response headers timed out after 10000ms",
@@ -58,7 +58,7 @@ describe("session error resilience", () => {
   })
 
   test("stores structured error data on the synthetic message for reload-safe rendering", () => {
-    const presentation = presentOpencodeSessionError({
+    const presentation = presentWorkspaceEngineSessionError({
       name: "MessageAbortedError",
       data: { message: "Aborted" },
     })
@@ -114,7 +114,7 @@ describe("session error resilience", () => {
   test("renders interrupted sessions without the intrusive recovery panel", () => {
     const message = createSessionErrorUIMessage(
       "assistant-turn",
-      presentOpencodeSessionError({
+      presentWorkspaceEngineSessionError({
         name: "MessageAbortedError",
         data: { message: "Aborted" },
       }),

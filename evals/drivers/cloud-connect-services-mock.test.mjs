@@ -60,13 +60,13 @@ test("worker mock rejects partial credentials and completes a prompt after a bus
   const workspaces = await json(await fetch(`${origin}/worker/workspaces`, { headers }));
   assert.equal(workspaces.activeId, "ws_mock_cloud");
 
-  const session = await json(await fetch(`${origin}/worker/workspace/ws_mock_cloud/opencode/session`, {
+  const session = await json(await fetch(`${origin}/worker/workspace/ws_mock_cloud/engine/session`, {
     method: "POST",
     headers: { ...headers, "content-type": "application/json" },
     body: JSON.stringify({ title: "Cloud connect session" }),
   }));
 
-  const prompt = await fetch(`${origin}/worker/workspace/ws_mock_cloud/opencode/session/${session.id}/prompt_async`, {
+  const prompt = await fetch(`${origin}/worker/workspace/ws_mock_cloud/engine/session/${session.id}/prompt_async`, {
     method: "POST",
     headers: { ...headers, "content-type": "application/json" },
     body: JSON.stringify({ parts: [{ type: "text", text: "Summarize the launch notes" }] }),

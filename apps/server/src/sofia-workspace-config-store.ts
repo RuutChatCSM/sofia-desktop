@@ -44,7 +44,7 @@ export async function hasSofiaWorkspaceConfig(
 /**
  * Seed the DB-backed sofia config for a workspace if no row exists yet.
  * Used at workspace creation and as the migrate-on-read landing spot for
- * legacy `.opencode/sofia.json` files. No-op when a row is already present,
+ * legacy `.sofia/sofia.json` files. No-op when a row is already present,
  * so it never clobbers live provisioning state.
  */
 export async function seedSofiaWorkspaceConfigIfEmpty(

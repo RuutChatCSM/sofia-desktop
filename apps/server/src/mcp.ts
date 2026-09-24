@@ -3,11 +3,11 @@ import type { McpItem, ServerConfig } from "./types.js";
 import { sanitizeDiagnosticString } from "./diagnostic-sanitizer.js";
 import { validateMcpConfig, validateMcpName, validateUserMcpName } from "./validators.js";
 import {
-  readRuntimeOpencodeConfig,
+  readRuntimeWorkspaceEngineConfig,
   runtimeMcpMap,
-  writeRuntimeOpencodeConfig,
-  type RuntimeOpencodeConfig,
-} from "./runtime-opencode-config-store.js";
+  writeRuntimeWorkspaceEngineConfig,
+  type RuntimeWorkspaceEngineConfig,
+} from "./runtime-engine-config-store.js";
 
 export type McpToolDenySource = "config.project" | "config.global";
 
@@ -395,7 +395,7 @@ function mergeConfiguredPolicies(
   );
 }
 
-function openCodeWildcardMatch(input: string, pattern: string): boolean {
+function workspaceEngineWildcardMatch(input: string, pattern: string): boolean {
   const normalized = input.replaceAll("\\", "/");
   let escaped = pattern
     .replaceAll("\\", "/")
@@ -439,7 +439,7 @@ function deniedToolIds(
   const rules = [...toolPolicyRules(topLevel), ...toolPolicyRules(agent)];
   return toolIds.filter((toolId) => {
     const decision = rules.slice().reverse().find((rule) => (
-      openCodeWildcardMatch(toolId, rule.permission)
+      workspaceEngineWildcardMatch(toolId, rule.permission)
       // Sofia engine only removes a tool when the winning rule applies to the
       // entire tool resource. Resource-specific rules are enforced at call
       // time and do not hide the tool from the catalog.
@@ -455,7 +455,7 @@ function isMcpDisabledByTools(config: Record<string, unknown>, name: string): bo
 }
 
 export async function listMcp(serverConfig: ServerConfig, workspaceId: string, workspaceRoot: string): Promise<McpItem[]> {
-  return listMcpFromRuntimeSnapshot(workspaceRoot, await readRuntimeOpencodeConfig(serverConfig, workspaceId));
+  return listMcpFromRuntimeSnapshot(workspaceRoot, await readRuntimeWorkspaceEngineConfig(serverConfig, workspaceId));
 }
 
 export type McpConfigCollision = {
@@ -480,7 +480,7 @@ export type McpInventoryInspection = {
 
 export async function listMcpFromRuntimeSnapshot(
   _workspaceRoot: string,
-  runtimeConfig: RuntimeOpencodeConfig,
+  runtimeConfig: RuntimeWorkspaceEngineConfig,
 ): Promise<McpItem[]> {
   // Sofia generates the engine config from the runtime config store, so the
   // runtime entries are the only MCP layer the app can observe.
@@ -497,7 +497,7 @@ export async function listMcpFromRuntimeSnapshot(
  */
 export async function inspectMcpLayersFromRuntimeSnapshot(
   _workspaceRoot: string,
-  runtimeConfig: RuntimeOpencodeConfig,
+  runtimeConfig: RuntimeWorkspaceEngineConfig,
   options?: {
     globalConfigPath?: string;
     maxConfigBytes?: number;
@@ -531,20 +531,20 @@ export async function addMcp(
 ): Promise<{ action: "added" | "updated" }> {
   validateUserMcpName(name);
   validateMcpConfig(config);
-  const runtimeConfig = await readRuntimeOpencodeConfig(serverConfig, workspaceId);
+  const runtimeConfig = await readRuntimeWorkspaceEngineConfig(serverConfig, workspaceId);
   const mcpMap = { ...runtimeMcpMap(runtimeConfig) };
   const existed = Object.prototype.hasOwnProperty.call(mcpMap, name);
   mcpMap[name] = config;
-  await writeRuntimeOpencodeConfig(serverConfig, workspaceId, (current) => ({ ...current, mcp: mcpMap }));
+  await writeRuntimeWorkspaceEngineConfig(serverConfig, workspaceId, (current) => ({ ...current, mcp: mcpMap }));
   return { action: existed ? "updated" : "added" };
 }
 
 export async function removeMcp(serverConfig: ServerConfig, workspaceId: string, name: string): Promise<boolean> {
-  const runtimeConfig = await readRuntimeOpencodeConfig(serverConfig, workspaceId);
+  const runtimeConfig = await readRuntimeWorkspaceEngineConfig(serverConfig, workspaceId);
   const mcpMap = { ...runtimeMcpMap(runtimeConfig) };
   if (!Object.prototype.hasOwnProperty.call(mcpMap, name)) return false;
   delete mcpMap[name];
-  await writeRuntimeOpencodeConfig(serverConfig, workspaceId, (current) => ({ ...current, mcp: mcpMap }));
+  await writeRuntimeWorkspaceEngineConfig(serverConfig, workspaceId, (current) => ({ ...current, mcp: mcpMap }));
   return true;
 }
 
@@ -562,7 +562,7 @@ export async function setMcpEnabled(
   enabled: boolean,
 ): Promise<boolean> {
   validateMcpName(name);
-  const runtimeConfig = await readRuntimeOpencodeConfig(serverConfig, workspaceId);
+  const runtimeConfig = await readRuntimeWorkspaceEngineConfig(serverConfig, workspaceId);
   const mcpMap = { ...runtimeMcpMap(runtimeConfig) };
   if (!Object.prototype.hasOwnProperty.call(mcpMap, name)) return false;
   const current = mcpMap[name];
@@ -573,6 +573,6 @@ export async function setMcpEnabled(
     return false;
   }
   mcpMap[name] = { ...(current as Record<string, unknown>), enabled };
-  await writeRuntimeOpencodeConfig(serverConfig, workspaceId, (currentConfig) => ({ ...currentConfig, mcp: mcpMap }));
+  await writeRuntimeWorkspaceEngineConfig(serverConfig, workspaceId, (currentConfig) => ({ ...currentConfig, mcp: mcpMap }));
   return true;
 }

@@ -202,7 +202,7 @@ export function cloudMcpAdvancedRows(health: SofiaCloudMcpHealth | null): CloudM
   const compatibility = health.compatibility;
   rows.push({
     label: "Versions",
-    value: `app ${describeCloudMcpErrorDetail(compatibility.sofia.app?.version) ?? "unknown"} · server ${compatibility.sofia.serverVersion ?? "unknown"} · engine ${compatibility.opencode.actualVersion ?? "unknown"}${compatibility.opencode.expectedVersion ? ` (expected ${compatibility.opencode.expectedVersion})` : ""}`,
+    value: `app ${describeCloudMcpErrorDetail(compatibility.sofia.app?.version) ?? "unknown"} · server ${compatibility.sofia.serverVersion ?? "unknown"} · engine ${compatibility.engine.actualVersion ?? "unknown"}${compatibility.engine.expectedVersion ? ` (expected ${compatibility.engine.expectedVersion})` : ""}`,
     tone: "muted",
   });
   rows.push({

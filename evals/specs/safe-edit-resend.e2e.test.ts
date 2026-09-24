@@ -116,7 +116,7 @@ async function waitForEngineReady(
   while (Date.now() < deadline) {
     try {
       const response = await fetch(
-        `http://127.0.0.1:${credentials.port}/workspace/${encodeURIComponent(workspaceId)}/opencode/session`,
+        `http://127.0.0.1:${credentials.port}/workspace/${encodeURIComponent(workspaceId)}/engine/session`,
         { headers: { Authorization: `Bearer ${credentials.token}` }, signal: AbortSignal.timeout(15_000) },
       );
       if (response.ok) return;
@@ -174,7 +174,7 @@ async function applyEngineRevert(
   messageId: string,
 ): Promise<void> {
   const response = await fetch(
-    `http://127.0.0.1:${credentials.port}/workspace/${encodeURIComponent(workspaceId)}/opencode/session/${encodeURIComponent(sessionId)}/revert`,
+    `http://127.0.0.1:${credentials.port}/workspace/${encodeURIComponent(workspaceId)}/engine/session/${encodeURIComponent(sessionId)}/revert`,
     {
       method: "POST",
       headers: {
@@ -298,7 +298,7 @@ test.skipIf(!e2eTestsEnabled)(title, async ({ evidence }) => {
     const patched = await request("/workspace/" + encodeURIComponent(workspaceId) + "/config", {
       method: "PATCH",
       body: JSON.stringify({
-        opencode: {
+        engine: {
           provider: {
             [${JSON.stringify(providerId)}]: {
               npm: "@ai-sdk/openai-compatible",
@@ -312,9 +312,9 @@ test.skipIf(!e2eTestsEnabled)(title, async ({ evidence }) => {
     });
     if (patched !== "ok") return patched;
     const reloaded = await request("/workspace/" + encodeURIComponent(workspaceId) + "/engine/reload", { method: "POST" });
-    // A slow dispose reports 504 opencode_reload_timeout while the reload
+    // A slow dispose reports 504 engine_reload_timeout while the reload
     // keeps going; the engine-ready poll below owns convergence.
-    if (reloaded !== "ok" && !reloaded.includes("opencode_reload_timeout")) return reloaded;
+    if (reloaded !== "ok" && !reloaded.includes("engine_reload_timeout")) return reloaded;
     const raw = localStorage.getItem("sofia.preferences");
     let preferences = {};
     try { preferences = raw ? JSON.parse(raw) : {}; } catch { preferences = {}; }
@@ -425,7 +425,7 @@ test.skipIf(!e2eTestsEnabled)(title, async ({ evidence }) => {
     globalThis.fetch = (input, init) => {
       const url = typeof input === "string" ? input : input instanceof Request ? input.url : String(input);
       const method = input instanceof Request ? input.method : init?.method ?? "GET";
-      if (method.toUpperCase() === "POST" && url.includes(${JSON.stringify(`/opencode/session/${firstSessionId}/prompt_async`)})) {
+      if (method.toUpperCase() === "POST" && url.includes(${JSON.stringify(`/engine/session/${firstSessionId}/prompt_async`)})) {
         globalThis[countKey] += 1;
         return Promise.resolve(new Response("<html>injected prompt failure</html>", {
           status: 502,

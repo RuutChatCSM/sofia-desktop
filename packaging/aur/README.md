@@ -36,7 +36,7 @@ That will:
 2. build an Arch package such as `sofia-<version>-1-x86_64.pkg.tar.zst`
 3. install it locally with `pacman`
 
-After install, `sofia` is available as the desktop launcher. The bundled sidecars remain inside `/opt/sofia`; the package does not claim the standalone `opencode` command.
+After install, `sofia` is available as the desktop launcher. The bundled sidecars remain inside `/opt/sofia`; the package does not claim the standalone `engine` command.
 
 ## Update the package to a newer release
 

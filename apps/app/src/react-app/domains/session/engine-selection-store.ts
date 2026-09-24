@@ -1,6 +1,6 @@
 // Codex (Sofia) is the only agent engine. This module previously persisted a
 // user-selectable engine and mirrored it to the desktop main process so it
-// could choose whether to boot OpenCode; OpenCode has been removed, so the
+// could choose whether to boot Sofia; Sofia has been removed, so the
 // selection is now fixed.
 export type AgentEngine = "codex";
 

@@ -24,26 +24,10 @@ type HeroSuggestion = {
 };
 
 const DEFAULT_SUGGESTIONS: HeroSuggestion[] = [
-  {
-    title: "Summarize my week",
-    description: "Pull highlights from email and calendar.",
-    prompt: "Summarize my week: pull the highlights from my connected email and calendar and give me a short digest of what happened and what needs my attention.",
-  },
-  {
-    title: "Clean up a spreadsheet",
-    description: "Drop in a CSV and describe the result you want.",
-    prompt: "Create a sample CSV file with 20 rows of fake customer data (name, email, company, revenue). Then show me a summary of the data.",
-  },
-  {
-    title: "Draft a document",
-    description: "Reports, emails, or briefs from a few bullet points.",
-    prompt: "Draft a one-page project brief. Ask me for the bullet points you need, then turn them into a clear, well-structured document.",
-  },
-  {
-    title: "Automate a web task",
-    description: "Use the built-in browser for repetitive steps.",
-    prompt: "Open craigslist.org in the browser and search for couches for sale. Show me the top 5 results with prices.",
-  },
+  { title: "Understand this project", description: "An architecture map, grounded in your files.", prompt: "Explore this project and explain its architecture, main entry points, and how the pieces work together. Do not make changes." },
+  { title: "Build something", description: "Turn an idea into a working first version.", prompt: "Help me build a new feature in this project. Start by asking what I want to create, then inspect the relevant files." },
+  { title: "Find what needs attention", description: "Review changes and investigate problems.", prompt: "/review" },
+  { title: "Work with a document", description: "Make a clear draft from your source material.", prompt: "Help me turn source material into a clear document. Ask what I want to create and which files to use." },
 ];
 
 export type SessionEmptyHeroProps = {
@@ -81,7 +65,7 @@ export function SessionEmptyHero(props: SessionEmptyHeroProps) {
 
   // Quiet inline lead to Hosted models: replaces the old startup dialog
   // interrupt. Shown only while the session runs on the free starter model
-  // (the built-in `opencode` provider) and the hosted offering applies.
+  // (the built-in `engine` provider) and the hosted offering applies.
   const onFreeStarterModel = props.composer?.selectedModel.providerID === DEFAULT_MODEL.providerID;
   const showModelsHint =
     sofiaModelsPromoEligible &&
@@ -113,13 +97,11 @@ export function SessionEmptyHero(props: SessionEmptyHeroProps) {
   };
 
   return (
-    <div className="mx-auto w-full max-w-[640px] space-y-6 px-4 max-lg:px-4 sm:px-6">
-      <div className="space-y-1.5 text-center">
-        <h2 className="text-[24px] font-semibold leading-[30px] tracking-[-0.02em] text-foreground">
-          What do you need done?
-        </h2>
-        <p className="text-[13px] text-muted-foreground">Describe it in plain language</p>
-      </div>
+    <div className="mx-auto w-full max-w-[800px] space-y-5 px-4 sm:px-6">
+      <h1 className="flex items-center gap-2.5 text-[15px] font-medium tracking-tight text-foreground">
+        <img src="/sofia-mark.svg" alt="" className="sofia-brand-mark size-5" />
+        What are we working on?
+      </h1>
 
       <NewTaskComposer
         draft={prompt}
@@ -170,18 +152,16 @@ export function SessionEmptyHero(props: SessionEmptyHeroProps) {
         </button>
       ) : null}
 
-      <div className="grid gap-2 sm:grid-cols-2">
+      <div className="flex flex-wrap gap-2">
         {suggestions.map((suggestion) => (
           <button
             key={suggestion.title}
             type="button"
-            className="rounded-xl border border-border bg-background p-3.5 text-left transition-colors hover:bg-accent"
+            title={suggestion.description}
+            className="rounded-full border border-border px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-dls-accent"
             onClick={() => fillPrompt(suggestion.prompt)}
           >
-            <div className="truncate text-[13px] font-medium text-foreground">{suggestion.title}</div>
-            <div className="mt-0.5 line-clamp-2 text-[12px] leading-[17px] text-muted-foreground">
-              {suggestion.description}
-            </div>
+            {suggestion.title}
           </button>
         ))}
       </div>

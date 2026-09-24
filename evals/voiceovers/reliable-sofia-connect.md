@@ -2,7 +2,7 @@
 
 1. I open Sofia Connect and see the permanent server address `https://sofia-api.ruut.chat/mcp/agent`. Clients are labeled according to evidence: verified clients have passed a native end-to-end OAuth test, while setup-only clients are not presented as proven.
 
-2. I choose my client and get its exact configuration and authentication sequence. OpenCode shows `opencode mcp auth sofia`, Codex shows `codex mcp login sofia`, and every other guide clearly explains how that client starts OAuth.
+2. I choose my client and get its exact configuration and authentication sequence. Sofia shows `engine mcp auth sofia`, Codex shows `codex mcp login sofia`, and every other guide clearly explains how that client starts OAuth.
 
 3. My client opens Sofia in the browser, where I sign in, choose an organization, review the access request, and approve it. The browser returns me to the client without exposing tokens.
 

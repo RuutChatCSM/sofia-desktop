@@ -78,7 +78,7 @@ async function createWorkspace(ctx) {
     window.dispatchEvent(new CustomEvent("sofia-server-settings-changed"));
     const originResponse = await fetch(
       serverInfo.baseUrl.replace(/\\\/+$/, "")
-        + "/workspace/" + encodeURIComponent(created.activeId) + "/opencode/session",
+        + "/workspace/" + encodeURIComponent(created.activeId) + "/engine/session",
       {
         method: "POST",
         headers: {

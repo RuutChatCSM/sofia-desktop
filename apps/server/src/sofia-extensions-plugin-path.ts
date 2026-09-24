@@ -24,11 +24,11 @@ export function sofiaPluginPath(name: string, here?: string): string {
   const resourcesPath = resourcesPathFromAppAsarPath(here);
   if (resourcesPath) {
     const electronResourcesPath = process.resourcesPath?.includes("app.asar") ? resourcesPath : process.resourcesPath?.trim();
-    return join(electronResourcesPath || resourcesPath, "opencode-plugins", `${name}.js`);
+    return join(electronResourcesPath || resourcesPath, "engine-plugins", `${name}.js`);
   }
 
   const extension = basename(here) === "dist" ? "js" : "ts";
-  return join(here, "opencode-plugins", `${name}.${extension}`);
+  return join(here, "engine-plugins", `${name}.${extension}`);
 }
 
 export const sofiaExtensionsPreviewPluginPath = () => sofiaPluginPath("sofia-extensions-preview");

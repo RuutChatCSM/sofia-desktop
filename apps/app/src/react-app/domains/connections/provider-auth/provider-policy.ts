@@ -1,5 +1,5 @@
 import {
-  DESKTOP_RESTRICTION_OPENCODE_PROVIDER_ID,
+  DESKTOP_RESTRICTION_SOFIA_ENGINE_PROVIDER_ID,
   isDesktopProviderBlocked,
   type DesktopAppRestrictionChecker,
 } from "@/app/cloud/desktop-app-restrictions";
@@ -41,7 +41,7 @@ export function isProviderAllowedByDesktopPolicy(input: ProviderDesktopPolicyInp
 
   if (!input.restrictToCloud) return true;
   if (isCloudManagedProviderKey(providerId)) return true;
-  return providerId.toLowerCase() === DESKTOP_RESTRICTION_OPENCODE_PROVIDER_ID;
+  return providerId.toLowerCase() === DESKTOP_RESTRICTION_SOFIA_ENGINE_PROVIDER_ID;
 }
 
 export function isProviderAddRestrictedByDesktopPolicy(input: ProviderAddRestrictionInput) {

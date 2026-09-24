@@ -181,7 +181,7 @@ export function useDenSession({
       setSigninFallbackUrl(null);
       setStatusMessage(message ?? null);
       // Remove ONLY the cloud (lpr_*) provider IDs from the acknowledged
-      // list. Local providers (openai, opencode) stay acknowledged so they
+      // list. Local providers (openai, engine) stay acknowledged so they
       // don't re-trigger the onboarding modal. When the user signs in
       // again, fresh cloud providers will be detected as new and surface
       // the toast (which is the intended behavior).

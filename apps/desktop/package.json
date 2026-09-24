@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0-dev",
   "desktopName": "app.sofia.desktop",
-  "description": "Sofia App — your local multi-model agent workspace",
+  "description": "Sofia App \u2014 your local multi-model agent workspace",
   "author": {
     "name": "Sofia contributors"
   },
@@ -29,7 +29,6 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@opencode-ai/sdk": "^1.18.15",
     "@sofia/enterprise-mcp-client": "workspace:*",
     "@sofia/paths": "workspace:*",
     "@sentry/electron": "^7.16.0",

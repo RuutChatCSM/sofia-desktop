@@ -15,7 +15,7 @@ import {
   type DenOrgLlmProviderConnection,
 } from "../../../../app/lib/den";
 import { getSofiaGatewayOrigin } from "../../../../app/lib/gateway-runtime";
-import { unwrap, waitForHealthy } from "../../../../app/lib/opencode";
+import { unwrap, waitForHealthy } from "../../../../app/lib/engine";
 import {
   engineRestart,
   workspaceSofiaRead,
@@ -81,7 +81,7 @@ import {
 import { dispatchNewProviders } from "../../../../app/lib/provider-events";
 import { updateManagedDisabledProviders } from "../managed-engine-config";
 import {
-  DESKTOP_RESTRICTION_OPENCODE_PROVIDER_ID,
+  DESKTOP_RESTRICTION_SOFIA_ENGINE_PROVIDER_ID,
   isDesktopProviderBlocked,
   type DesktopAppRestrictionChecker,
 } from "../../../../app/cloud/desktop-app-restrictions";
@@ -282,7 +282,7 @@ type CreateProviderAuthStoreOptions = {
   setProviderDefaults: (value: Record<string, string>) => void;
   setProviderConnectedIds: (value: string[]) => void;
   setDisabledProviders: (value: string[]) => void;
-  markOpencodeConfigReloadRequired: () => void;
+  markWorkspaceEngineConfigReloadRequired: () => void;
   focusPromptSoon?: () => void;
 };
 
@@ -527,7 +527,7 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
 
     if (canUseSofiaServer && sofiaClient && sofiaWorkspaceId) {
       const config = await sofiaClient.getConfig(sofiaWorkspaceId);
-      return config.sofia ?? {};
+      return config.engine ?? {};
     }
 
     if (hasSofiaTarget) {
@@ -569,7 +569,7 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
       const typed = result as { ok: boolean; stderr?: string; stdout?: string };
       if (!typed.ok) {
         throw new Error(
-          typed.stderr || typed.stdout || "Failed to write .opencode/sofia.json",
+          typed.stderr || typed.stdout || "Failed to write .sofia/sofia.json",
         );
       }
       return true;
@@ -651,7 +651,7 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
       throw new Error("Sofia App server unavailable. Connect to manage cloud providers.");
     }
     await sofiaClient.patchConfig(sofiaWorkspaceId, {
-      opencode: { provider: update },
+      engine: { provider: update },
     });
   };
 
@@ -671,7 +671,7 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
       providers: nextProviders,
     });
     await sofiaClient.patchConfig(sofiaWorkspaceId, {
-      opencode: { provider: providerUpdate },
+      engine: { provider: providerUpdate },
       sofia: nextConfig,
     });
     setStateField("importedCloudProviders", nextProviders);
@@ -696,7 +696,7 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
     const config = c ? unwrap(await c.config.get()) : {};
     const next = fallbackUpdate(config);
     await updateManagedDisabledProviders({
-      opencodeClient: c,
+      engineClient: c,
       sofiaClient: sofiaSnapshot.sofiaServerClient,
       workspaceId,
       workspaceType,
@@ -727,7 +727,7 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
     const resolvedProviderId = providerId.trim();
     let updated = raw.trim()
       ? raw
-      : '{\n  "$schema": "https://opencode.ai/config.json"\n}\n';
+      : '{\n  "$schema": "https://github.com/RuutChatCSM/sofia/config.json"\n}\n';
     const parsed = parse(updated) as Record<string, unknown> | undefined;
     const currentDisabled = normalizeDisabledProviders(parsed?.disabled_providers);
     const nextDisabled = disabled
@@ -765,9 +765,9 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
       return false;
     }
 
-    // Prefer runtime OPENCODE_CONFIG injection (server SQLite) so OpenCode Zen
+    // Prefer runtime SOFIA_ENGINE_CONFIG injection (server SQLite) so Sofia Zen
     // and other built-in/env-backed providers can be disabled without editing
-    // the user's opencode.jsonc. Fall back to project config only when the
+    // the user's engine.jsonc. Fall back to project config only when the
     // managed runtime endpoint is unavailable.
     const c = options.client();
     const sofiaSnapshot = options.sofiaServer.getSnapshot();
@@ -779,16 +779,16 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
 
     if (canUseManagedRuntime || c) {
       const result = await updateManagedDisabledProviders({
-        opencodeClient: c,
+        engineClient: c,
         sofiaClient: sofiaSnapshot.sofiaServerClient,
         workspaceId,
         workspaceType,
         disabledProviders: nextDisabled,
         removeFallbackKeyWhenEmpty: true,
-        markReloadRequired: () => options.markOpencodeConfigReloadRequired(),
+        markReloadRequired: () => options.markWorkspaceEngineConfigReloadRequired(),
       });
       options.setDisabledProviders(result.disabledProviders);
-      options.markOpencodeConfigReloadRequired();
+      options.markWorkspaceEngineConfigReloadRequired();
       refreshSnapshot();
       emitChange();
       return true;
@@ -812,7 +812,7 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
     }
 
     options.setDisabledProviders(nextDisabled);
-    options.markOpencodeConfigReloadRequired();
+    options.markWorkspaceEngineConfigReloadRequired();
     refreshSnapshot();
     emitChange();
     return true;
@@ -840,7 +840,7 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
   };
 
   // Sweep all cloud-managed provider entries (keys matching /^lpr_/) from
-  // both the runtime config and opencode.jsonc, regardless of
+  // both the runtime config and engine.jsonc, regardless of
   // importedCloudProviders state. Returns the list of provider IDs that were
   // removed so callers can also clear their auth credentials.
   const sweepOrphanCloudProvidersFromConfig = async (): Promise<string[]> => {
@@ -852,7 +852,7 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
         await resolveSofiaConfigTarget("write");
       if (canUseSofiaServer && sofiaClient && sofiaWorkspaceId) {
         const merged = await sofiaClient.getConfig(sofiaWorkspaceId);
-        const runtimeProvider = isRecord(merged.opencode) ? merged.opencode.provider : null;
+        const runtimeProvider = isRecord(merged.engine) ? merged.sofia.provider : null;
         const runtimeOrphans = isRecord(runtimeProvider)
           ? Object.keys(runtimeProvider).filter((key) => /^lpr_/i.test(key))
           : [];
@@ -1322,7 +1322,7 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
                   await sofiaClient.reloadEngine(workspaceId);
                 } catch (error) {
                   const unreachable =
-                    error instanceof SofiaServerError && error.code === "opencode_engine_unreachable";
+                    error instanceof SofiaServerError && error.code === "engine_engine_unreachable";
                   if (!unreachable || !isDesktopRuntime()) {
                     throw error;
                   }
@@ -1427,7 +1427,7 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
     };
 
     try {
-      if (resolved.toLowerCase() === DESKTOP_RESTRICTION_OPENCODE_PROVIDER_ID) {
+      if (resolved.toLowerCase() === DESKTOP_RESTRICTION_SOFIA_ENGINE_PROVIDER_ID) {
         await ensureProjectProviderDisabledState(resolved, false);
       }
       const trimmedCode = code?.trim();
@@ -1480,13 +1480,13 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
 
     setStateField("providerAuthBusy", true);
     try {
-      if (providerId.trim().toLowerCase() === DESKTOP_RESTRICTION_OPENCODE_PROVIDER_ID) {
+      if (providerId.trim().toLowerCase() === DESKTOP_RESTRICTION_SOFIA_ENGINE_PROVIDER_ID) {
         await ensureProjectProviderDisabledState(providerId, false);
       }
       await c.auth.set({ providerID: providerId, auth: { type: "api", key: trimmed } });
       // Mirror the key into the codex auth store so the bundled codex engine
       // can read it at spawn via its provider `env_key` (codexengine.json).
-      // This mirrors how opencode receives UI-entered keys (its auth API).
+      // This mirrors how engine receives UI-entered keys (its auth API).
       await mirrorCodexAuthKey(providerId, trimmed);
       await refreshProviders({ dispose: true });
       return `${t("status.connected")} ${providerId}`;
@@ -1593,7 +1593,7 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
       };
       // Cloud providers are runtime-managed: upsert (and delete a renamed
       // predecessor) via one server config write, together with the import
-      // baseline, instead of editing the user's opencode.jsonc.
+      // baseline, instead of editing the user's engine.jsonc.
       await patchRuntimeProviderAndImportedCloudProviders(
         buildRuntimeProviderPatch(provider, localProviderId, existingImported?.providerId ?? null),
         nextImportedProviders,
@@ -1604,7 +1604,7 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
         .filter((id) => id !== localProviderId && id !== existingImported?.providerId);
       options.setDisabledProviders(nextDisabledProviders);
       if (!optionsArg?.silent) {
-        options.markOpencodeConfigReloadRequired();
+        options.markWorkspaceEngineConfigReloadRequired();
         await refreshProviders({ dispose: true });
       }
       refreshSnapshot();
@@ -1679,7 +1679,7 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
         }
       }
       // Runtime-managed: delete the provider entry via the server's per-key
-      // merge (`null` deletes), then strip any legacy opencode.jsonc block
+      // merge (`null` deletes), then strip any legacy engine.jsonc block
       // left by pre-runtime builds. Both are idempotent.
       await patchRuntimeProviders({ [imported.providerId]: null });
 
@@ -1690,7 +1690,7 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
       options.setDisabledProviders(
         options.disabledProviders().filter((id) => id !== imported.providerId),
       );
-      options.markOpencodeConfigReloadRequired();
+      options.markWorkspaceEngineConfigReloadRequired();
       refreshSnapshot();
       emitChange();
       return `${t("providers.disconnected_prefix")} ${imported.name}`;
@@ -2022,9 +2022,9 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
     }
 
     try {
-      // OpenCode Zen is built-in / env-backed. Credential removal alone leaves
-      // it connected — disable it via runtime OPENCODE_CONFIG injection.
-      if (resolved.toLowerCase() === DESKTOP_RESTRICTION_OPENCODE_PROVIDER_ID) {
+      // Sofia Zen is built-in / env-backed. Credential removal alone leaves
+      // it connected — disable it via runtime SOFIA_ENGINE_CONFIG injection.
+      if (resolved.toLowerCase() === DESKTOP_RESTRICTION_SOFIA_ENGINE_PROVIDER_ID) {
         try {
           await removeProviderAuthCredentials(resolved);
         } catch {
@@ -2189,7 +2189,7 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
         } else {
           const logoutProviderIds = detail?.status === "signed_out"
             ? [...new Set(options.providerConnectedIds())].filter(
-              (providerId) => providerId.trim().toLowerCase() !== DESKTOP_RESTRICTION_OPENCODE_PROVIDER_ID,
+              (providerId) => providerId.trim().toLowerCase() !== DESKTOP_RESTRICTION_SOFIA_ENGINE_PROVIDER_ID,
             )
             : [];
           // Account-scoped catalog state must disappear synchronously. Config
@@ -2219,7 +2219,7 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
             void (async () => {
               await options.sofiaServer.getSnapshot().sofiaServerClient?.deleteDenSession().catch(() => undefined);
               // The server removes cloud-owned environment entries from disk,
-              // but a running OpenCode child retains its spawn environment.
+              // but a running Sofia child retains its spawn environment.
               // Explicit desktop sign-out must replace that process so an
               // account-scoped provider cannot remain connected in the UI.
               if (detail?.status === "signed_out" && isDesktopRuntime()) {
@@ -2232,7 +2232,7 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
           const importedProviders = { ...state.importedCloudProviders };
           const importedIds = Object.keys(importedProviders);
 
-          // Best-effort cleanup: remove each cloud provider from opencode.jsonc
+          // Best-effort cleanup: remove each cloud provider from engine.jsonc
           // BEFORE clearing state so removeCloudProviderInternal can find the records
           void (async () => {
             for (const providerId of logoutProviderIds) {
@@ -2252,7 +2252,7 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
               }
             }
             // Final sweep: remove any orphan `lpr_*` provider keys that remain
-            // in opencode.jsonc but weren't tracked in importedCloudProviders
+            // in engine.jsonc but weren't tracked in importedCloudProviders
             // (e.g. from a previous failed cleanup or external edit).
             try {
               const orphans = await sweepOrphanCloudProvidersFromConfig();
@@ -2264,7 +2264,7 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
                 }
               }
               if (orphans.length > 0) {
-                options.markOpencodeConfigReloadRequired();
+                options.markWorkspaceEngineConfigReloadRequired();
               }
             } catch {
               // Ignore sweep failures during sign-out cleanup
@@ -2325,7 +2325,7 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
               } catch {}
             }
           }
-          // Then: sweep any `lpr_*` keys that remain in opencode.jsonc
+          // Then: sweep any `lpr_*` keys that remain in engine.jsonc
           try {
             const orphans = await sweepOrphanCloudProvidersFromConfig();
             for (const providerId of orphans) {
@@ -2334,7 +2334,7 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
               } catch {}
             }
             if (orphans.length > 0) {
-              options.markOpencodeConfigReloadRequired();
+              options.markWorkspaceEngineConfigReloadRequired();
             }
           } catch {}
           mutateState((current) => ({

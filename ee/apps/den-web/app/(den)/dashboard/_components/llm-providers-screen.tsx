@@ -367,7 +367,7 @@ export function LlmProvidersScreen() {
             <DenOptionCard
               type="checkbox"
               testId="models-access-zen"
-              title="Allow OpenCode Zen models"
+              title="Allow Sofia Zen models"
               checked={zenAllowed}
               disabled={accessFormDisabled}
               onChange={(checked) => {

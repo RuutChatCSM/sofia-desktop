@@ -8,7 +8,7 @@ export type DesktopAppRestrictionChecker = (input: {
   restriction: DesktopAppRestrictionKey;
 }) => boolean;
 
-export const DESKTOP_RESTRICTION_OPENCODE_PROVIDER_ID = "opencode";
+export const DESKTOP_RESTRICTION_SOFIA_ENGINE_PROVIDER_ID = "engine";
 
 export function checkDesktopAppRestriction(input: {
   config: DenDesktopConfig | null | undefined;
@@ -24,7 +24,7 @@ export function isDesktopProviderBlocked(input: {
   const providerId = input.providerId.trim().toLowerCase();
   if (!providerId) return false;
 
-  if (providerId === DESKTOP_RESTRICTION_OPENCODE_PROVIDER_ID) {
+  if (providerId === DESKTOP_RESTRICTION_SOFIA_ENGINE_PROVIDER_ID) {
     return input.checkRestriction({ restriction: "allowZenModel" });
   }
 

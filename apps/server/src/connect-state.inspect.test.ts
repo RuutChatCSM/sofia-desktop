@@ -127,8 +127,8 @@ describe("Connect state inspection", () => {
         updatedAt: 123,
       }), "utf8");
       const sqlite = new Database(dbPath, { create: true });
-      sqlite.run("CREATE TABLE runtime_opencode_configs (workspace_id TEXT PRIMARY KEY NOT NULL, config_json TEXT NOT NULL, updated_at INTEGER NOT NULL)");
-      sqlite.query("INSERT INTO runtime_opencode_configs (workspace_id, config_json, updated_at) VALUES (?, ?, ?)")
+      sqlite.run("CREATE TABLE runtime_engine_configs (workspace_id TEXT PRIMARY KEY NOT NULL, config_json TEXT NOT NULL, updated_at INTEGER NOT NULL)");
+      sqlite.query("INSERT INTO runtime_engine_configs (workspace_id, config_json, updated_at) VALUES (?, ?, ?)")
         .run("oversized", JSON.stringify({ mcp: {}, padding: "x".repeat(128) }), 1234);
       sqlite.close();
 
@@ -162,10 +162,10 @@ describe("Connect state inspection", () => {
         updatedAt: 123,
       }), "utf8");
       const sqlite = new Database(dbPath, { create: true });
-      sqlite.run("CREATE TABLE runtime_opencode_configs (workspace_id TEXT PRIMARY KEY NOT NULL, config_json TEXT NOT NULL, updated_at INTEGER NOT NULL)");
-      sqlite.query("INSERT INTO runtime_opencode_configs (workspace_id, config_json, updated_at) VALUES (?, ?, ?)")
+      sqlite.run("CREATE TABLE runtime_engine_configs (workspace_id TEXT PRIMARY KEY NOT NULL, config_json TEXT NOT NULL, updated_at INTEGER NOT NULL)");
+      sqlite.query("INSERT INTO runtime_engine_configs (workspace_id, config_json, updated_at) VALUES (?, ?, ?)")
         .run("first", JSON.stringify({ mcp: {} }), 1234);
-      sqlite.query("INSERT INTO runtime_opencode_configs (workspace_id, config_json, updated_at) VALUES (?, ?, ?)")
+      sqlite.query("INSERT INTO runtime_engine_configs (workspace_id, config_json, updated_at) VALUES (?, ?, ?)")
         .run("second", JSON.stringify({ mcp: { "sofia-cloud": { type: "remote" } } }), 1234);
       sqlite.close();
 

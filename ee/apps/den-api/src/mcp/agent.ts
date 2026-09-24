@@ -358,7 +358,7 @@ export function registerAgentSkillResources(input: {
  *
  * `/mcp/agent` is a *different* endpoint for a *different* consumer: the
  * desktop app's "Sofia Cloud Control" connection, which is what an
- * OpenCode/Claude Code/Codex-style harness actually sees. It always registers
+ * Sofia/Claude Code/Codex-style harness actually sees. It always registers
  * `search_capabilities`, `execute_capability`, and `create_skill`, and
  * conditionally registers Code Mode and Artifact presentation tools. Workflows
  * remain discoverable and executable through the same capability-routing

@@ -12,7 +12,7 @@ function workspaceDirectoryCandidates(workspace) {
   return [
     workspace.directory,
     workspace.path,
-    workspace.opencode?.directory,
+    workspace.engine?.directory,
   ]
     .map(normalizeRemoteDirectory)
     .filter(Boolean);

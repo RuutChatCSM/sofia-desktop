@@ -15,7 +15,7 @@ const MAX_ORGANIZATION_CONNECTION_OBSERVATIONS = 200;
 
 export function isAgentContextDiagnosticsWorkspaceAllowed(workspace: {
   workspaceType: "local" | "remote";
-  remoteType?: "sofia" | "opencode" | null;
+  remoteType?: "sofia" | "engine" | null;
 } | null): boolean {
   if (!workspace) return false;
   return workspace.workspaceType === "local" || workspace.remoteType === "sofia";

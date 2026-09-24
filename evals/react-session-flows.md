@@ -7,7 +7,7 @@ during the React port cutover. Run them before shipping any change that touches:
 - `apps/app/src/react-app/shell/settings-route.tsx`
 - `apps/app/src/react-app/domains/session/**`
 - `apps/app/src/react-app/domains/settings/**`
-- Sofia server proxy endpoints for `/w/:workspaceId/opencode/session/**`
+- Sofia server proxy endpoints for `/w/:workspaceId/engine/session/**`
 
 ## Preflight
 
@@ -62,7 +62,7 @@ osascript \
 
 ## Flow 1 — Send a message and observe streaming
 
-**Why**: Streaming uses `ReactSessionRuntime` to subscribe to the OpenCode
+**Why**: Streaming uses `ReactSessionRuntime` to subscribe to the Sofia
 event stream and populate the transcript cache. If the subscription isn't
 mounted, prompts still submit but the UI shows empty responses until reload.
 
@@ -203,16 +203,16 @@ Pass criteria:
 - Composer is focused so typing starts in **"Describe your task..."** without
   an extra click.
 - Composer model label is whatever is saved as default (e.g.
-  `opencode/minimax-m2.5-free`).
+  `engine/minimax-m2.5-free`).
 - No **"Reload required"** toast appears when the new session is created or
   while the session route polls workspace events.
 
 Known regressions this catches:
 - `onCreateTaskInWorkspace` silently failing because the route has no
-  OpenCode client.
+  Sofia client.
 - Created session not landing in the sidebar list (sidebar not refreshed
   after create).
-- Routine workspace resolution rewrites `opencode.jsonc`, causing a stale
+- Routine workspace resolution rewrites `engine.jsonc`, causing a stale
   **"Reload required"** toast after every new session.
 
 Tool recipe add-on for the reload toast regression:
@@ -223,7 +223,7 @@ chrome-devtools_evaluate_script { function: "() => new Promise((resolve) => setT
 ```
 
 Expected result: the returned body text does not contain `Reload required` or
-`Config 'opencode.jsonc' was updated`.
+`Config 'engine.jsonc' was updated`.
 
 ---
 
@@ -263,7 +263,7 @@ Pass criteria:
 
 Known regressions this catches:
 - `onRenameSession` not wired → menu has no Rename entry.
-- Missing call to `opencodeClient.session.update({ sessionID, title })`.
+- Missing call to `engineClient.session.update({ sessionID, title })`.
 - Local state not refreshed, so only the server knows the new title until
   reload.
 
@@ -292,7 +292,7 @@ Known regressions this catches:
 Steps:
 1. On the General tab click **Change** (under "Model").
 2. In the picker, search or scroll to a model in an already-connected
-   provider (e.g. `opencode/minimax-m2.5-free`).
+   provider (e.g. `engine/minimax-m2.5-free`).
 3. Click the model card.
 
 Pass criteria:
@@ -304,7 +304,7 @@ Pass criteria:
 
 Known regressions this catches:
 - Missing wiring of `ModelPickerModal`.
-- Model list empty because `opencodeClient.config.providers` call was not
+- Model list empty because `engineClient.config.providers` call was not
   made or was filtered too aggressively.
 - Infinite loop caused by `refreshProviders()` inside a `useEffect` whose
   deps include `providerConnectedIds` (see changelog in
@@ -601,7 +601,7 @@ Steps:
 3. Expect: navigates to a new session.
 4. Type `/skill-creator create a skill about weather alerts`.
 5. Select the command and run it.
-6. Expect: the assistant creates `.opencode/skills/weather-alerts/SKILL.md`
+6. Expect: the assistant creates `.sofia/skills/weather-alerts/SKILL.md`
    (requires a model with tool-use capability).
 7. Verify the file exists on disk.
 8. Reload the app (or trigger config reload).
@@ -611,7 +611,7 @@ Steps:
 
 Pass criteria:
 - "Create skill in chat" navigates away from settings to a session.
-- The skill command actually writes files to `.opencode/skills/`.
+- The skill command actually writes files to `.sofia/skills/`.
 - After reload, the new skill appears in the slash menu.
 - Running the new skill uses its template as the user message.
 
@@ -684,7 +684,7 @@ Known regressions this catches:
 ## Flow 21 — Streaming survives session and route interruptions
 
 **Why**: Long-running assistant streams must continue when users click away.
-The session runtime filters OpenCode events by tracked session id, and route
+The session runtime filters Sofia events by tracked session id, and route
 changes can unmount the session surface. This flow catches regressions where
 streaming stops, aborts, or only resumes after a full reload.
 
@@ -734,13 +734,13 @@ Pass criteria:
 - Session C does not show `MessageAbortedError` or an aborted assistant turn.
 - Session C eventually contains `SETTINGS_ROUTE_500_DONE` in assistant text.
 - The highest numbered line in Session C is `500.`.
-- Returning from Settings must not reload the OpenCode engine for the same
+- Returning from Settings must not reload the Sofia engine for the same
   already-active workspace.
 
 Known regressions this catches:
 - Disposing the workspace SSE subscription when `SessionRoute` unmounts.
 - Re-activating the already-active workspace when returning from Settings,
-  which reloads the OpenCode engine and aborts the run.
+  which reloads the Sofia engine and aborts the run.
 
 ### Browser tool recipe
 

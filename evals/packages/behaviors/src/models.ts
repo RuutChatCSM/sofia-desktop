@@ -225,7 +225,7 @@ export async function recoverInvalidModelSelection(
     await waitFor(app, `(() => {
       const text = document.body.innerText;
       return !text.includes("Model no longer available")
-        && !text.includes("The selected provider/model was not found in OpenCode provider catalog");
+        && !text.includes("The selected provider/model was not found in Sofia provider catalog");
     })()`, { timeoutMs: 30_000, label: "invalid selected model cleared" });
     return selected;
   }
@@ -246,7 +246,7 @@ export async function recoverInvalidModelSelection(
   await waitFor(app, `(() => {
     const text = document.body.innerText;
     return !text.includes("Model no longer available")
-      && !text.includes("The selected provider/model was not found in OpenCode provider catalog");
+      && !text.includes("The selected provider/model was not found in Sofia provider catalog");
   })()`, { timeoutMs: 30_000, label: "invalid selected model absent after reset" });
   return null;
 }

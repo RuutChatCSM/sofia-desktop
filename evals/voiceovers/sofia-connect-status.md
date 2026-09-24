@@ -1,6 +1,6 @@
 # sofia-connect-status — Show non-blocking Connect lifecycle health
 
-1. When signed in, the status bar shows Sofia Connect: Checking during startup, authentication restoration, or an OpenCode restart.
+1. When signed in, the status bar shows Sofia Connect: Checking during startup, authentication restoration, or an Sofia restart.
 
 2. One shared lifecycle flow reconciles and checks Sofia Connect in the background. Messages remain unblocked.
 

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { resetManagedProviderAuthCache, syncManagedProviderAuth } from "./managed-provider-auth.js";
-import { ENGINE_GLOBAL_RUNTIME_CONFIG_ID, writeRuntimeOpencodeConfig } from "./runtime-opencode-config-store.js";
+import { ENGINE_GLOBAL_RUNTIME_CONFIG_ID, writeRuntimeWorkspaceEngineConfig } from "./runtime-engine-config-store.js";
 import type { ServerConfig } from "./types.js";
 
 type Call = { method: string; url: string; body: unknown; authorization: string | null };
@@ -32,9 +32,9 @@ async function makeConfig(dir: string): Promise<ServerConfig> {
     approval: "manual",
     readOnly: false,
     storageDir: dir,
-    opencodeBaseUrl: "http://127.0.0.1:39999",
-    opencodeUsername: "engine-user",
-    opencodePassword: "engine-pass",
+    engineBaseUrl: "http://127.0.0.1:39999",
+    engineUsername: "engine-user",
+    enginePassword: "engine-pass",
     workspaces: [
       {
         id: "ws_test",
@@ -47,7 +47,7 @@ async function makeConfig(dir: string): Promise<ServerConfig> {
 }
 
 async function seedProvider(config: ServerConfig, entry: Record<string, unknown>): Promise<void> {
-  await writeRuntimeOpencodeConfig(config, ENGINE_GLOBAL_RUNTIME_CONFIG_ID, (current) => ({
+  await writeRuntimeWorkspaceEngineConfig(config, ENGINE_GLOBAL_RUNTIME_CONFIG_ID, (current) => ({
     ...current,
     provider: { [PROVIDER]: entry },
   }));
@@ -141,7 +141,7 @@ describe("managed provider auth delivery", () => {
     const env = { list: async () => [{ key: "ANTHROPIC_API_KEY", value: "sk-ant-secret" }] };
     await syncManagedProviderAuth({ config, env, fetchImpl: fetchStub.impl });
 
-    await writeRuntimeOpencodeConfig(config, ENGINE_GLOBAL_RUNTIME_CONFIG_ID, (current) => ({
+    await writeRuntimeWorkspaceEngineConfig(config, ENGINE_GLOBAL_RUNTIME_CONFIG_ID, (current) => ({
       ...current,
       provider: {},
     }));
@@ -156,7 +156,7 @@ describe("managed provider auth delivery", () => {
     const config = await makeConfig(dir);
     // No managed providers at all: a desktop user's own engine credentials must
     // not be deleted just because the managed map is empty.
-    await writeRuntimeOpencodeConfig(config, ENGINE_GLOBAL_RUNTIME_CONFIG_ID, (current) => ({
+    await writeRuntimeWorkspaceEngineConfig(config, ENGINE_GLOBAL_RUNTIME_CONFIG_ID, (current) => ({
       ...current,
       provider: {},
     }));

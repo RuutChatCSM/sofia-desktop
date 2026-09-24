@@ -23,29 +23,29 @@ function restrictionChecker(blocked: readonly string[]): DesktopAppRestrictionCh
 
 describe("filterEntitledModelOptions", () => {
   test("keeps every provider when custom providers and Zen are allowed", () => {
-    const options = [modelOption("openai"), modelOption("lpr_team"), modelOption("opencode")];
+    const options = [modelOption("openai"), modelOption("lpr_team"), modelOption("engine")];
 
     expect(
       filterEntitledModelOptions(options, {
         restrictToCloud: false,
         checkRestriction: restrictionChecker([]),
       }).map((option) => option.providerID),
-    ).toEqual(["openai", "lpr_team", "opencode"]);
+    ).toEqual(["openai", "lpr_team", "engine"]);
   });
 
   test("keeps only org-managed providers plus Zen when custom providers are restricted", () => {
-    const options = [modelOption("openai"), modelOption("lpr_team"), modelOption("sofia"), modelOption("opencode")];
+    const options = [modelOption("openai"), modelOption("lpr_team"), modelOption("sofia"), modelOption("engine")];
 
     expect(
       filterEntitledModelOptions(options, {
         restrictToCloud: true,
         checkRestriction: restrictionChecker(["allowCustomProviders"]),
       }).map((option) => option.providerID),
-    ).toEqual(["lpr_team", "sofia", "opencode"]);
+    ).toEqual(["lpr_team", "sofia", "engine"]);
   });
 
   test("drops Zen when the Zen desktop policy blocks it", () => {
-    const options = [modelOption("openai"), modelOption("lpr_team"), modelOption("opencode")];
+    const options = [modelOption("openai"), modelOption("lpr_team"), modelOption("engine")];
 
     expect(
       filterEntitledModelOptions(options, {
@@ -56,7 +56,7 @@ describe("filterEntitledModelOptions", () => {
   });
 
   test("with custom providers allowed, the Zen restriction only drops Zen", () => {
-    const options = [modelOption("openai"), modelOption("lpr_team"), modelOption("opencode")];
+    const options = [modelOption("openai"), modelOption("lpr_team"), modelOption("engine")];
 
     expect(
       filterEntitledModelOptions(options, {

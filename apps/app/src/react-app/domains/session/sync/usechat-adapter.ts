@@ -10,8 +10,8 @@ import {
   STRUCTURED_OUTPUT_TOOL,
 } from "./parse-tool-parts";
 import {
-  presentOpencodeSessionError,
-  type OpencodeSessionErrorPresentation,
+  presentWorkspaceEngineSessionError,
+  type WorkspaceEngineSessionErrorPresentation,
 } from "./session-error";
 
 function sessionErrorMessageId(turnKey: string) {
@@ -29,7 +29,7 @@ function sessionErrorMessageId(turnKey: string) {
  */
 export function createSessionErrorUIMessage(
   turnKey: string,
-  presentation: OpencodeSessionErrorPresentation,
+  presentation: WorkspaceEngineSessionErrorPresentation,
   options?: { created?: number },
 ): UIMessage {
   const id = sessionErrorMessageId(turnKey);
@@ -37,21 +37,21 @@ export function createSessionErrorUIMessage(
   return {
     id,
     role: "assistant",
-    ...(typeof created === "number" ? { metadata: { opencode: { created } } } : {}),
+    ...(typeof created === "number" ? { metadata: { engine: { created } } } : {}),
     parts: [{
       type: "text",
       text: presentation.title,
       state: "done",
-      providerMetadata: { opencode: { partId: `${id}:text`, sessionError: presentation } },
+      providerMetadata: { engine: { partId: `${id}:text`, sessionError: presentation } },
     }],
   };
 }
 
 function fileProviderMetadata(part: FilePart) {
   if (part.source) {
-    return { opencode: { partId: part.id, source: part.source } };
+    return { engine: { partId: part.id, source: part.source } };
   }
-  return { opencode: { partId: part.id } };
+  return { engine: { partId: part.id } };
 }
 
 function getTextPartValue(part: Part) {
@@ -79,7 +79,7 @@ function mapFileSourcePart(part: FilePart): UIMessage["parts"][number] | null {
   if (!source) return null;
 
   const sourceId = `${part.id}:source`;
-  const providerMetadata = { opencode: { partId: sourceId, sourcePartId: part.id, source } };
+  const providerMetadata = { engine: { partId: sourceId, sourcePartId: part.id, source } };
 
   if (source.type === "resource") {
     if (source.uri.startsWith("http://")) {
@@ -129,7 +129,7 @@ export function snapshotToUIMessages(snapshot: SofiaSessionSnapshot): UIMessage[
       id: message.info.id,
       role: message.info.role,
       ...(typeof created === "number"
-        ? { metadata: { opencode: { created, ...(typeof completed === "number" ? { completed } : {}) } } }
+        ? { metadata: { engine: { created, ...(typeof completed === "number" ? { completed } : {}) } } }
         : {}),
       parts: message.parts.flatMap<UIMessage["parts"][number]>((part) => {
         if (part.type === "text") {
@@ -138,7 +138,7 @@ export function snapshotToUIMessages(snapshot: SofiaSessionSnapshot): UIMessage[
             type: "text",
             text: getTextPartValue(part),
             state: "done" as const,
-            providerMetadata: { opencode: { partId: part.id } },
+            providerMetadata: { engine: { partId: part.id } },
           }];
         }
         if (part.type === "reasoning") {
@@ -146,7 +146,7 @@ export function snapshotToUIMessages(snapshot: SofiaSessionSnapshot): UIMessage[
             type: "reasoning",
             text: getTextPartValue(part),
             state: "done" as const,
-            providerMetadata: { opencode: { partId: part.id } },
+            providerMetadata: { engine: { partId: part.id } },
           }];
         }
         if (part.type === "file") {
@@ -160,11 +160,11 @@ export function snapshotToUIMessages(snapshot: SofiaSessionSnapshot): UIMessage[
             type: "text",
             text: part.name ? `@${part.name}` : "@agent",
             state: "done",
-            providerMetadata: { opencode: { partId: part.id } },
+            providerMetadata: { engine: { partId: part.id } },
           }];
         }
         if (part.type === "step-start") {
-          return [{ type: "step-start", providerMetadata: { opencode: { partId: part.id } } }];
+          return [{ type: "step-start", providerMetadata: { engine: { partId: part.id } } }];
         }
         return [];
       }),
@@ -179,7 +179,7 @@ export function snapshotToUIMessages(snapshot: SofiaSessionSnapshot): UIMessage[
     const error = message.info.role === "assistant" && "error" in message.info ? message.info.error : undefined;
     if (!error) return [uiMessage];
 
-    const errorMessage = createSessionErrorUIMessage(message.info.id, presentOpencodeSessionError(error), { created });
+    const errorMessage = createSessionErrorUIMessage(message.info.id, presentWorkspaceEngineSessionError(error), { created });
     return uiMessage.parts.length > 0 ? [uiMessage, errorMessage] : [errorMessage];
   });
 }

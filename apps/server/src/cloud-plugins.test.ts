@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { installCloudPlugin, readInstalledCloudPlugins, removeCloudPlugin } from "./cloud-plugins.js";
-import { readRuntimeOpencodeConfig } from "./runtime-opencode-config-store.js";
+import { readRuntimeWorkspaceEngineConfig } from "./runtime-engine-config-store.js";
 import type { ServerConfig } from "./types.js";
 
 const WORKSPACE_ID = "ws_cloud_plugin_test";
@@ -111,14 +111,14 @@ describe("cloud plugin installs", () => {
 
       const skillPath = join(root, ".sofia", "skills", "creative-brief-plugin", "brief-builder", "SKILL.md");
       expect(await readFile(skillPath, "utf8")).toContain("OWP_BRIEF_TEST_TOKEN");
-      expect((await readRuntimeOpencodeConfig(config, WORKSPACE_ID)).mcp?.brief).toMatchObject({
+      expect((await readRuntimeWorkspaceEngineConfig(config, WORKSPACE_ID)).mcp?.brief).toMatchObject({
         type: "remote",
         url: "https://example.com/mcp",
       });
 
       await removeCloudPlugin({ serverConfig: config, workspaceId: WORKSPACE_ID, workspaceRoot: root, pluginId: "plugin_1" });
       expect((await readInstalledCloudPlugins(config, WORKSPACE_ID)).plugins.plugin_1).toBeUndefined();
-      expect((await readRuntimeOpencodeConfig(config, WORKSPACE_ID)).mcp?.brief).toBeUndefined();
+      expect((await readRuntimeWorkspaceEngineConfig(config, WORKSPACE_ID)).mcp?.brief).toBeUndefined();
       await expectMissing(skillPath);
     });
   });
@@ -242,7 +242,7 @@ describe("cloud plugin installs", () => {
       const agentSource = [
         "---",
         "description: Triage agent",
-        "model: opencode/claude-haiku-4-5",
+        "model: engine/claude-haiku-4-5",
         "tools:",
         "  - Read",
         "  - WebFetch",
@@ -279,7 +279,7 @@ describe("cloud plugin installs", () => {
 
       const agentPath = join(root, ".sofia", "agents", "triage-plugin", "triage.md");
       const agentContent = await readFile(agentPath, "utf8");
-      expect(agentContent).toContain("model: opencode/claude-haiku-4-5");
+      expect(agentContent).toContain("model: engine/claude-haiku-4-5");
       expect(agentContent).toContain("read: true");
       expect(agentContent).toContain("webfetch: true");
     });

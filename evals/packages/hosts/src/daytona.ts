@@ -508,7 +508,7 @@ function portSet(values: number[] | undefined): Set<number> {
  *
  * The local host finds a free port by binding one; this host cannot, because the
  * port has to be free on a different machine. Allocating from a local counter
- * alone silently collides: the OpenCode sidecar picks its own port at boot and
+ * alone silently collides: the Sofia sidecar picks its own port at boot and
  * was observed holding 9825 — the CDP primary — so Electron's debugger never
  * bound and the preview URL timed out after 180s with no hint of the cause.
  */

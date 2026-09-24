@@ -30,7 +30,7 @@ type ManifestArtifact = {
 // and CLI release assets must NOT be treated as the desktop app, so we
 // positively require the desktop app's OS-tagged naming (sofia-mac /
 // sofia-linux / sofia-win + an installer extension).
-const SIDECAR_HINTS = ["orchestrator", "server", "bun-", "sidecar", "opencode"];
+const SIDECAR_HINTS = ["orchestrator", "server", "bun-", "sidecar", "engine"];
 
 function isDesktopAppAsset(name: string): boolean {
   const lower = name.toLowerCase();

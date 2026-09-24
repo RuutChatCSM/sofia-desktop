@@ -52,14 +52,14 @@ for (const client of clients) {
   assert.ok(docsInstaller.includes(`supportExplanation: "${explanation}"`), `Docs installer is missing ${client} support explanation`);
 }
 
-assert.deepEqual(verifiedClients.sort(), ["opencode"], "Only OpenCode should be verified");
+assert.deepEqual(verifiedClients.sort(), ["engine"], "Only Sofia should be verified");
 
 for (const client of clients) {
   assert.match(docsInstaller, new RegExp(`id: ["']${client}["']`), `Docs installer is missing ${client}`);
 }
 
 const expectedSupportRows = new Map([
-  ["OpenCode", "Verified"],
+  ["Sofia", "Verified"],
   ["Codex", "Setup only"],
   ["Cursor", "Setup only"],
   ["ChatGPT Desktop", "Setup only"],
@@ -78,9 +78,9 @@ const sharedValueNames = [
   "CODEX_COMMAND",
   "CODEX_LOGIN_COMMAND",
   "CODEX_RECONNECT_COMMAND",
-  "OPENCODE_SNIPPET",
-  "OPENCODE_AUTH_COMMAND",
-  "OPENCODE_RECONNECT_COMMAND",
+  "SOFIA_ENGINE_SNIPPET",
+  "SOFIA_ENGINE_AUTH_COMMAND",
+  "SOFIA_ENGINE_RECONNECT_COMMAND",
   "VS_CODE_COMMAND",
   "ANY_CLIENT_COMMAND",
 ];
@@ -107,8 +107,8 @@ for (const name of sharedValueNames) {
 }
 
 const exactCommands = [
-  { docsInstallerNeedle: "opencode mcp auth sofia", cloudDocsNeedle: "opencode mcp auth sofia" },
-  { docsInstallerNeedle: "opencode mcp logout sofia\nopencode mcp auth sofia", cloudDocsNeedle: "opencode mcp logout sofia\nopencode mcp auth sofia" },
+  { docsInstallerNeedle: "engine mcp auth sofia", cloudDocsNeedle: "engine mcp auth sofia" },
+  { docsInstallerNeedle: "engine mcp logout sofia\nengine mcp auth sofia", cloudDocsNeedle: "engine mcp logout sofia\nengine mcp auth sofia" },
   { docsInstallerNeedle: "codex mcp add sofia --url ${MCP_SERVER_URL}", cloudDocsNeedle: `codex mcp add sofia --url ${serverUrl}` },
   { docsInstallerNeedle: "codex mcp login sofia", cloudDocsNeedle: "codex mcp login sofia" },
   { docsInstallerNeedle: "codex mcp logout sofia\ncodex mcp login sofia", cloudDocsNeedle: "codex mcp logout sofia\ncodex mcp login sofia" },
@@ -144,7 +144,7 @@ assert.ok(
   onboardingScreen.includes("https://sofia.ruut.chat/docs/cloud/run-in-the-cloud/cloud-mcp"),
   "Cloud onboarding must link to the Cloud MCP docs",
 );
-assert.ok(onboardingScreen.includes("OpenCode is verified"), "Cloud onboarding must state verified clients");
+assert.ok(onboardingScreen.includes("Sofia is verified"), "Cloud onboarding must state verified clients");
 assert.ok(onboardingScreen.includes("setup guides"), "Cloud onboarding must state setup-only client coverage");
 assert.ok(onboardingScreen.includes("break-all") && onboardingScreen.includes("whitespace-normal"), "Cloud onboarding endpoint text must wrap on narrow screens");
 assert.ok(onboardingScreen.includes("aria-live=\"polite\"") && onboardingScreen.includes("Copy Sofia MCP endpoint"), "Cloud onboarding must expose accessible copy feedback");

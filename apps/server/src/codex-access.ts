@@ -10,7 +10,7 @@ export type CodexAccessMode = "ask" | "approve" | "full";
 export const CODEX_ACCESS_MODES: CodexAccessMode[] = ["ask", "approve", "full"];
 
 function accessFile(codexHome?: string): string {
-  return join(codexHome || process.env.SOFIA_CODEX_HOME?.trim() || process.env.CODEX_HOME?.trim() || join(homedir(), ".sofia"), ".access-mode");
+  return join(codexHome || process.env.SOFIA_HOME?.trim() || process.env.SOFIA_CODEX_HOME?.trim() || process.env.CODEX_HOME?.trim() || join(homedir(), ".sofia"), ".access-mode");
 }
 
 /** Read the persisted access mode. Defaults to "ask" (safe). */
@@ -41,6 +41,7 @@ export function sandboxModeFor(mode: CodexAccessMode): "workspace-write" | "dang
 export function codexTurnPermissions(mode: CodexAccessMode) {
   return {
     approvalPolicy: mode === "full" ? "never" : "on-request",
+    approvalsReviewer: mode === "approve" ? "auto_review" as const : "user" as const,
     sandboxPolicy: mode === "full"
       ? { type: "dangerFullAccess" }
       : { type: "workspaceWrite", networkAccess: true },

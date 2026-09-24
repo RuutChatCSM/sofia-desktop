@@ -81,7 +81,7 @@ const proxyPathNamespaces = [
   "/files",
 ]
 const alwaysProxyPathPrefixes = [
-  "/opencode/",
+  "/engine/",
   "/w/",
   "/runtime/",
   "/experimental/",

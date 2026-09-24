@@ -19,8 +19,8 @@ export type InspectorSliceGetter = () => unknown;
 
 type InspectorAPI = {
   version: number;
-  /** Active workspace's authenticated OpenCode SDK client when developer mode is enabled. */
-  readonly opencode: Client | null;
+  /** Active workspace's authenticated Sofia SDK client when developer mode is enabled. */
+  readonly engine: Client | null;
   snapshot(): Record<string, unknown>;
   slice(name: string): unknown;
   listSlices(): string[];
@@ -43,14 +43,14 @@ const EVENT_BUFFER_MAX = 200;
 type Registry = {
   slices: Map<string, InspectorSliceGetter>;
   events: Array<{ at: number; name: string; data: unknown }>;
-  opencodeClient: Client | null;
+  engineClient: Client | null;
   installed: boolean;
 };
 
 const registry: Registry = {
   slices: new Map(),
   events: [],
-  opencodeClient: null,
+  engineClient: null,
   installed: false,
 };
 
@@ -80,8 +80,8 @@ function installIfNeeded() {
 
   const api: InspectorAPI = {
     version: INSPECTOR_VERSION,
-    get opencode() {
-      return registry.opencodeClient;
+    get engine() {
+      return registry.engineClient;
     },
     snapshot: buildSnapshot,
     slice(name) {
@@ -127,11 +127,11 @@ export function publishInspectorSlice(
   };
 }
 
-export function publishInspectorOpencodeClient(client: Client): () => void {
+export function publishInspectorWorkspaceEngineClient(client: Client): () => void {
   installIfNeeded();
-  registry.opencodeClient = client;
+  registry.engineClient = client;
   return () => {
-    if (registry.opencodeClient === client) registry.opencodeClient = null;
+    if (registry.engineClient === client) registry.engineClient = null;
   };
 }
 

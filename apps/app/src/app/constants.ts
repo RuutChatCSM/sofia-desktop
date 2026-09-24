@@ -18,8 +18,8 @@ export { LANGUAGE_PREF_KEY } from "../i18n";
 export const HIDE_TITLEBAR_PREF_KEY = "sofia.hideTitlebar";
 
 export const DEFAULT_MODEL: ModelRef = {
-  providerID: "opencode",
-  modelID: "big-pickle",
+  providerID: "",
+  modelID: "",
 };
 
 export const SUGGESTED_PLUGINS: SuggestedPlugin[] = [];
@@ -30,14 +30,14 @@ export type McpDirectoryInfo = {
   id?: string;
   /** Display name shown in the UI. */
   name: string;
-  /** Safe server name for opencode.jsonc (alphanumeric, - and _ only). Auto-derived from name if omitted. */
+  /** Safe server name for engine.jsonc (alphanumeric, - and _ only). Auto-derived from name if omitted. */
   serverName?: string;
   description: string;
   url?: string;
   type?: "remote" | "local";
   command?: string[];
   oauth: boolean;
-  /** Route OAuth through the local Sofia App gateway instead of delegating it to OpenCode. */
+  /** Route OAuth through the local Sofia App gateway instead of delegating it to Sofia. */
   managedOAuth?: boolean;
   /** Identifies MCP entries owned by Connections instead of workspace configuration. */
   managedBy?: "sofia-connect";

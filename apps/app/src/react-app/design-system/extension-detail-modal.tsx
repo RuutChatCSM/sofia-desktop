@@ -134,7 +134,7 @@ const uiControlClientConfig = `{
   }
 }`;
 
-function uiControlOpencodeConfig(command: string[], environment?: Record<string, string>) {
+function uiControlWorkspaceEngineConfig(command: string[], environment?: Record<string, string>) {
   return JSON.stringify({
     mcp: {
       "sofia-ui": {
@@ -149,7 +149,7 @@ function uiControlOpencodeConfig(command: string[], environment?: Record<string,
 
 const fallbackUiControlCommand = ["npx", "-y", "sofia-ui-mcp"];
 
-const fallbackUiControlOpencodeConfig = `{
+const fallbackUiControlWorkspaceEngineConfig = `{
   "mcp": {
     "sofia-ui": {
       "type": "local",
@@ -773,7 +773,7 @@ interface UiControlConnectionDetailsProps {
 function UiControlConnectionDetails(props: UiControlConnectionDetailsProps) {
   "use memo";
 
-  const opencodeConfig = props.launchCommand ? uiControlOpencodeConfig(props.launchCommand, props.environment) : fallbackUiControlOpencodeConfig;
+  const engineConfig = props.launchCommand ? uiControlWorkspaceEngineConfig(props.launchCommand, props.environment) : fallbackUiControlWorkspaceEngineConfig;
 
   return (
     <div className="space-y-4">
@@ -807,7 +807,7 @@ function UiControlConnectionDetails(props: UiControlConnectionDetailsProps) {
         </CardHeader>
         <CardContent>
           <pre className="max-h-[180px] overflow-x-auto rounded-xl border border-border p-3 text-xs leading-relaxed text-card-foreground">
-            <code>{opencodeConfig}</code>
+            <code>{engineConfig}</code>
           </pre>
         </CardContent>
       </Card>

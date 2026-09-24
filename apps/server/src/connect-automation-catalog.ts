@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { escapeXml, readMcpResourceText, type McpFetch } from "./connect-mcp-transport.js";
 import { readConnectCloudMcp } from "./connect-state.js";
-import { readRuntimeMcpConfig } from "./runtime-opencode-config-store.js";
+import { readRuntimeMcpConfig } from "./runtime-engine-config-store.js";
 import { externalFetch } from "./server-fetch.js";
 import type { ServerConfig } from "./types.js";
 

@@ -94,7 +94,7 @@ const getDefaultVariantKey = (keys: string[]) => {
 
 const providerFamily = (providerID: string, providerName?: string | null) => {
   const normalizedId = providerID.trim().toLowerCase();
-  if (["anthropic", "openai", "google", "opencode"].includes(normalizedId)) {
+  if (["anthropic", "openai", "google", "engine"].includes(normalizedId)) {
     return normalizedId;
   }
 
@@ -102,7 +102,7 @@ const providerFamily = (providerID: string, providerName?: string | null) => {
   if (normalizedName.includes("anthropic")) return "anthropic";
   if (normalizedName.includes("openai")) return "openai";
   if (normalizedName.includes("google")) return "google";
-  if (normalizedName.includes("opencode")) return "opencode";
+  if (normalizedName.includes("engine")) return "engine";
   return normalizedId;
 };
 
@@ -118,7 +118,7 @@ const getBehaviorTitle = (
     if (family === "google") return t("model_behavior.title_reasoning_budget");
     if (
       family === "openai" ||
-      family === "opencode" ||
+      family === "engine" ||
       variantKeys.some((key) => ["none", "minimal", "low", "medium", "high", "xhigh"].includes(key))
     ) {
       return t("model_behavior.title_reasoning_effort");

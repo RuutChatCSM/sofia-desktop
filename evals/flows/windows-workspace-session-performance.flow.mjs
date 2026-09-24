@@ -585,7 +585,7 @@ function setupWorker(params, emit) {
       workspacePaths: workspaces.map((workspace) => workspace.path),
     });
     const engineStartMs = round(performance.now() - engineStartedAt);
-    if (!engine?.baseUrl) throw new Error(`Managed OpenCode engine did not report a base URL: ${JSON.stringify(engine)}`);
+    if (!engine?.baseUrl) throw new Error(`Managed Sofia engine did not report a base URL: ${JSON.stringify(engine)}`);
     const serverAfterEngineStart = await refreshConnection("engineStart");
     const registered = await requestJson("workspaces.list", "/workspaces", {}, "client");
     const registeredItems = Array.isArray(registered.body?.items)
@@ -612,7 +612,7 @@ function setupWorker(params, emit) {
       const toCreate = missing.slice(0, Math.max(0, params.sessionsPerWorkspace - existing.length));
       emit({ stage: "sessions.create", workspace: workspace.ordinal, existing: existing.length, creating: toCreate.length });
       const created = await runPool(toCreate, params.concurrency, async (plan) => {
-        const response = await requestJson("session.create", `/workspace/${encodeURIComponent(workspace.id)}/opencode/session`, {
+        const response = await requestJson("session.create", `/workspace/${encodeURIComponent(workspace.id)}/engine/session`, {
           method: "POST",
           body: { title: plan.title },
         }, "client");
@@ -833,11 +833,11 @@ function conversationWorker(params, emit) {
         const models = modelIds(provider);
         if (models.length > 0) return { provider: provider.id, model: models[0], providerName: provider.name ?? provider.id, source: "first-connected" };
       }
-      throw new Error(`No connected model is available from /opencode/config/providers: ${JSON.stringify({ connected: body?.connected ?? null, providerCount: all.length })}`);
+      throw new Error(`No connected model is available from /engine/config/providers: ${JSON.stringify({ connected: body?.connected ?? null, providerCount: all.length })}`);
     };
 
     emit({ stage: "providers.detect" });
-    const providers = await requestJson("providers.list", `/workspace/${encodeURIComponent(params.workspaceId)}/opencode/config/providers`);
+    const providers = await requestJson("providers.list", `/workspace/${encodeURIComponent(params.workspaceId)}/engine/config/providers`);
     const model = chooseModel(providers.body);
     const conversationTitlePrefix = `ow-perf:${params.safeRunId}:conversation-`;
     emit({ stage: "conversations.cleanup.scan", prefix: conversationTitlePrefix });
@@ -889,7 +889,7 @@ function conversationWorker(params, emit) {
 
     emit({ stage: "conversations.create", total: items.length });
     const createResults = await runPool(items, params.concurrency, async (item) => {
-      const response = await requestJson("conversation.session.create", `/workspace/${encodeURIComponent(params.workspaceId)}/opencode/session`, {
+      const response = await requestJson("conversation.session.create", `/workspace/${encodeURIComponent(params.workspaceId)}/engine/session`, {
         method: "POST",
         body: { title: item.title },
       });
@@ -905,7 +905,7 @@ function conversationWorker(params, emit) {
     emit({ stage: "conversations.prompt", total: items.length, concurrency: params.concurrency });
     const promptResults = await runPool(items, params.concurrency, async (item) => {
       const started = performance.now();
-      const response = await requestJson("conversation.prompt_async", `/workspace/${encodeURIComponent(params.workspaceId)}/opencode/session/${encodeURIComponent(item.sessionId)}/prompt_async`, {
+      const response = await requestJson("conversation.prompt_async", `/workspace/${encodeURIComponent(params.workspaceId)}/engine/session/${encodeURIComponent(item.sessionId)}/prompt_async`, {
         method: "POST",
         body: {
           parts: [{ type: "text", text: item.prompt }],
@@ -927,7 +927,7 @@ function conversationWorker(params, emit) {
     const markers = items.map((item) => item.marker);
     const pending = new Set(items.map((item) => item.sessionId));
     while (pending.size > 0 && Date.now() < deadlineAt) {
-      const statusesResponse = await requestJson("conversation.status", `/workspace/${encodeURIComponent(params.workspaceId)}/opencode/session/status`);
+      const statusesResponse = await requestJson("conversation.status", `/workspace/${encodeURIComponent(params.workspaceId)}/engine/session/status`);
       const statuses = statusesResponse.body && typeof statusesResponse.body === "object" ? statusesResponse.body : {};
       const activeItems = items.filter((item) => pending.has(item.sessionId));
       await runPool(activeItems, params.concurrency, async (item) => {
@@ -1086,8 +1086,8 @@ export default {
         state.setup = await pollRendererJob(ctx, "setup", params.timeoutMs + 30_000);
         recordAssertion(ctx, state.setup.workspaceCount === params.workspaces, "The renderer created or reused the requested benchmark workspaces through /workspaces/local.", { expected: params.workspaces, actual: state.setup.workspaceCount });
         recordAssertion(ctx, Number.isInteger(state.setup.registeredWorkspaceTotal) && state.setup.registeredWorkspaceTotal >= state.setup.workspaceCount, "The server reported total registered workspaces separately from this run's benchmark workspaces.", { registeredWorkspaceTotal: state.setup.registeredWorkspaceTotal, benchmarkWorkspaceCount: state.setup.workspaceCount });
-        recordAssertion(ctx, state.setup.benchmarkSessionTotal >= state.setup.targetSessionTotal, "The renderer created or reused enough real benchmark sessions through OpenCode.", { expected: state.setup.targetSessionTotal, actual: state.setup.benchmarkSessionTotal });
-        recordAssertion(ctx, state.setup.requestSummary.errors === 0, "Dataset setup completed with zero Sofia/OpenCode API failures.", state.setup.requestSummary);
+        recordAssertion(ctx, state.setup.benchmarkSessionTotal >= state.setup.targetSessionTotal, "The renderer created or reused enough real benchmark sessions through Sofia.", { expected: state.setup.targetSessionTotal, actual: state.setup.benchmarkSessionTotal });
+        recordAssertion(ctx, state.setup.requestSummary.errors === 0, "Dataset setup completed with zero Sofia/Sofia API failures.", state.setup.requestSummary);
         ctx.output("windows setup metrics", JSON.stringify(state.setup, null, 2));
         state.activationRouteReadyMs = await activateVisibleWorkspace(ctx, state.setup);
       },

@@ -21,7 +21,7 @@ The script auto-detects whether it's running inside a factory layout (`../../.._
    - Deployment configs (Vercel, Tauri)
    - Build tool configs (vite, tailwind, postcss, next, drizzle, tsup, playwright)
    - Build scripts (`.mjs`, `.ts`, `.sh` across all workspaces)
-   - `.opencode` skill scripts
+   - `.sofia` skill scripts
    - All `package.json` files (for script references)
    - All `tsconfig*.json` files (for path aliases and includes)
 3. **Cross-references** each file against:

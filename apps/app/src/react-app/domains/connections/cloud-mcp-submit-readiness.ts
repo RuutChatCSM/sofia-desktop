@@ -211,7 +211,7 @@ export async function resolveCloudMcpSubmissionAuth(
 
 /**
  * Direct tools/list proves the Cloud tools are registered and reachable. The
- * selected model must then either expose those exact tools through OpenCode's
+ * selected model must then either expose those exact tools through Sofia's
  * experimental listing or be verified as tool-capable by its provider.
  */
 export function assessCloudMcpSubmissionReadiness(input: {

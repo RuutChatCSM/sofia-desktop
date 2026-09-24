@@ -281,7 +281,7 @@ async function waitForServerListening(child, logStream) {
   });
 }
 
-async function startSofiaServer(paths, serverPort, opencodeBin) {
+async function startSofiaServer(paths, serverPort, engineBin) {
   await mkdir(paths.workspaceRoot, { recursive: true });
   await mkdir(paths.xdgSofia, { recursive: true });
   await mkdir(paths.home, { recursive: true });
@@ -295,8 +295,8 @@ async function startSofiaServer(paths, serverPort, opencodeBin) {
     cwd: REPO_ROOT,
     env: {
       ...process.env,
-      SOFIA_MANAGE_OPENCODE: "1",
-      SOFIA_OPENCODE_BIN: opencodeBin,
+      SOFIA_MANAGE_SOFIA_ENGINE: "1",
+      SOFIA_SOFIA_ENGINE_BIN: engineBin,
       SOFIA_SERVER_CONFIG: join(paths.xdgSofia, "server.json"),
       XDG_CONFIG_HOME: paths.xdg,
       HOME: paths.home,
@@ -420,9 +420,9 @@ async function writeFinalJson(value) {
 }
 
 async function main() {
-  for (const name of ["DEN_API_LOCAL", "SOFIA_OPENCODE_BIN", "REPRO_DIR"]) envString(name);
+  for (const name of ["DEN_API_LOCAL", "SOFIA_SOFIA_ENGINE_BIN", "REPRO_DIR"]) envString(name);
   const denApiUrl = stripTrailingSlashes(envString("DEN_API_LOCAL"));
-  const opencodeBin = envString("SOFIA_OPENCODE_BIN");
+  const engineBin = envString("SOFIA_SOFIA_ENGINE_BIN");
   const reproDir = envString("REPRO_DIR");
   const delayMs = envDelayMs();
   const activeWindowMs = windowMs();
@@ -432,7 +432,7 @@ async function main() {
 
   const den = await bootstrapDen(denApiUrl);
   const proxy = await startDelayProxy(denApiUrl, proxyPort);
-  const sofia = await startSofiaServer(paths, serverPort, opencodeBin);
+  const sofia = await startSofiaServer(paths, serverPort, engineBin);
   const workspaces = await serverJson(sofia.baseUrl, "/workspaces");
   const workspaceId = firstWorkspaceId(workspaces);
   log(`Using workspace ${workspaceId}`);

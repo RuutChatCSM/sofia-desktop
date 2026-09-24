@@ -507,7 +507,7 @@ export async function executeCloudAgent(input: CloudAgentExecutorInput): Promise
       code: cancelled ? "cancelled" : timedOut ? "execution_timed_out" : "execution_failed",
       message: cancelled ? "The Automation run was cancelled."
         : timedOut ? "The Automation run exceeded its maximum runtime." : error instanceof Error ? error.message : "Cloud agent execution failed.",
-      // A thrown transport or executor error may happen after OpenCode accepted
+      // A thrown transport or executor error may happen after Sofia accepted
       // the stable user-message id. Never replay agent work automatically when
       // we cannot prove that no side effects started.
       retryable: false,

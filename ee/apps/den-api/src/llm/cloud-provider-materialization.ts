@@ -498,7 +498,7 @@ async function readRuntimeManagedProviders(input: {
   const payload = await requestJson({
     fetchImpl: input.fetchImpl,
     label: "engine_config_read",
-    url: `${input.instanceUrl}/opencode/config`,
+    url: `${input.instanceUrl}/engine/config`,
     init: {
       method: "GET",
       headers: bearerHeaders(input.clientToken),
@@ -781,7 +781,7 @@ async function verifyRuntimeProviders(input: {
   const payload = await requestJson({
     fetchImpl: input.fetchImpl,
     label: "provider_readback",
-    url: `${input.instanceUrl}/opencode/config`,
+    url: `${input.instanceUrl}/engine/config`,
     init: {
       method: "GET",
       headers: bearerHeaders(input.clientToken),

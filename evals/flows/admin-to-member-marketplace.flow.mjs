@@ -121,7 +121,7 @@ export default {
     {
       name: "Wait for engine ready",
       run: async (ctx) => {
-        // Wait for the opencode sidecar to boot
+        // Wait for the engine sidecar to boot
         await ctx.waitFor(
           "document.body.innerText.includes('Ready for new tasks') || document.body.innerText.includes('Run task')",
           { timeoutMs: 30_000, label: "engine ready" },

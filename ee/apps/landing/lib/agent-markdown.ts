@@ -30,13 +30,13 @@ const home = `# Sofia
 ## FAQ
 
 ### What is Sofia?
-A free, open-source desktop app (macOS, Windows, Linux) for doing work with AI agents on your own files. Built on OpenCode; an open-source alternative to Claude Cowork and Codex.
+A free, open-source desktop app (macOS, Windows, Linux) for doing work with AI agents on your own files. Built on Sofia; an open-source alternative to Claude Cowork and Codex.
 
 ### Is Sofia free?
 Yes — the desktop app is free and open source with bring-your-own keys. Team Starter includes your first 5 seats free, then \\$10 per seat/mo; Enterprise is custom.
 
 ### Which models does it support?
-Any model OpenCode supports: OpenAI, Anthropic, Google, local models — 50+ providers.
+Any model Sofia supports: OpenAI, Anthropic, Google, local models — 50+ providers.
 
 ### Does it send files to the cloud?
 No. Desktop mode keeps files local; prompts go directly to your chosen LLM provider. Cloud workers are optional.

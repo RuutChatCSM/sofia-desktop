@@ -43,7 +43,7 @@ export default async function FeedbackPage({ searchParams }: PageProps) {
     deployment: readSearchParam(resolvedSearchParams, "deployment") || "desktop",
     appVersion: readSearchParam(resolvedSearchParams, "appVersion"),
     sofiaServerVersion: readSearchParam(resolvedSearchParams, "sofiaServerVersion"),
-    opencodeVersion: readSearchParam(resolvedSearchParams, "opencodeVersion"),
+    engineVersion: readSearchParam(resolvedSearchParams, "engineVersion"),
     osName: readSearchParam(resolvedSearchParams, "osName"),
     osVersion: readSearchParam(resolvedSearchParams, "osVersion"),
     platform: readSearchParam(resolvedSearchParams, "platform"),

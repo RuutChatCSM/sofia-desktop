@@ -45,7 +45,7 @@ SOFIA_AGENT_DIAGNOSTICS_TRUSTED_ORIGINS=https://sofia.example.com
 
 The value is a comma-separated list of bare origins: scheme, host, and optional port only. Entries must use `https:` except loopback origins, which may use `http:`.
 
-If the Den origin is not trusted, the diagnostic is skipped and sends no credentialed request to that untrusted origin. Cloud MCP itself is unaffected; this variable only controls the diagnostic probe. Set it in the launcher, MDM profile, service wrapper, or shell environment before launch because the in-app environment store strips `SOFIA_*` and `OPENCODE_*` keys.
+If the Den origin is not trusted, the diagnostic is skipped and sends no credentialed request to that untrusted origin. Cloud MCP itself is unaffected; this variable only controls the diagnostic probe. Set it in the launcher, MDM profile, service wrapper, or shell environment before launch because the in-app environment store strips `SOFIA_*` and `SOFIA_ENGINE_*` keys.
 
 ## Den outbound diagnostic
 

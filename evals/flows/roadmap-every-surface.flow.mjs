@@ -176,7 +176,7 @@ export default {
               actual.exists === true
                 && actual.text.includes("your setup follows you")
                 && actual.text.includes("Sofia Connect MCP")
-                && actual.text.includes("Codex, Claude Code, Cursor, and OpenCode")
+                && actual.text.includes("Codex, Claude Code, Cursor, and Sofia")
                 && actual.text.includes("Organization marketplaces and access controls")
                 && actual.text.includes("Shared and per-user authentication")
                 && actual.text.includes("Git-based publishing and automatic sync")

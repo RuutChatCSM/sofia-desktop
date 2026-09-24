@@ -143,10 +143,10 @@ export async function expectRuntimeTrust(ctx: FlowContext, options: { caPath: st
     ctx.output(`${runtime.name} CA visibility`, JSON.stringify({ status: result.status, error: result.error?.message ?? null, payload, stderr: result.stderr }, null, 2));
     evidence(ctx, ok, `${runtime.name} did not see the lab CA through NODE_EXTRA_CA_CERTS.`, payload ?? result.stderr);
   }
-  const opencode = spawnSync("opencode", ["--version"], { env, encoding: "utf8", timeout: 10_000 });
-  if (opencode.error) {
-    ctx.output("opencode CA visibility", `opencode sidecar not reachable: ${opencode.error.message}`);
+  const engine = spawnSync("engine", ["--version"], { env, encoding: "utf8", timeout: 10_000 });
+  if (engine.error) {
+    ctx.output("engine CA visibility", `engine sidecar not reachable: ${engine.error.message}`);
     return;
   }
-  evidence(ctx, opencode.status === 0, "opencode sidecar was reachable but did not start with the CA environment.", opencode.stdout || opencode.stderr);
+  evidence(ctx, engine.status === 0, "engine sidecar was reachable but did not start with the CA environment.", engine.stdout || engine.stderr);
 }

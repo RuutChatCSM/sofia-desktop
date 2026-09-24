@@ -7,8 +7,8 @@
 
 我们为 AI 智能体配备您团队已经在使用的工具，并让它们从您的行为中学习。您使用 Sofia 越多，工具之间的连接就越紧密，积累的知识就越多，能够自动化的工作块就越大。
 
-Sofia 是 opencode 的最简单界面。双击，选择一个文件夹，即可立即获得三大核心优势：
-1. 零摩擦设置 — 您现有的 opencode 配置开箱即用，无需迁移
+Sofia 是 engine 的最简单界面。双击，选择一个文件夹，即可立即获得三大核心优势：
+1. 零摩擦设置 — 您现有的 engine 配置开箱即用，无需迁移
 2. 聊天集成 — WhatsApp 和 Telegram 即时可用（一个令牌，全部搞定）
 3. 云端就绪 — 每个应用都可以作为客户端；部署到云端，随时随地访问
 > **创建安全智能体工作流程并与团队共享的最简单方式**
@@ -24,7 +24,7 @@ Sofia 是 opencode 的最简单界面。双击，选择一个文件夹，即可�
 
 Sofia 围绕一个核心理念设计：让您可以轻松地将智能体工作流程作为可重复的、产品化的流程进行交付。
 
-它是一个原生桌面应用程序，底层运行 **OpenCode**，但将其呈现为简洁的引导式工作流程：
+它是一个原生桌面应用程序，底层运行 **Sofia**，但将其呈现为简洁的引导式工作流程：
 - 选择工作区
 - 开始运行
 - 观察进度 + 计划更新
@@ -35,7 +35,7 @@ Sofia 围绕一个核心理念设计：让您可以轻松地将智能体工作�
 
 ## 其他界面
 
-- **Owpenbot (WhatsApp 机器人)**：为运行中的 OpenCode 服务器提供的轻量级 WhatsApp 桥接器。安装方法：
+- **Owpenbot (WhatsApp 机器人)**：为运行中的 Sofia 服务器提供的轻量级 WhatsApp 桥接器。安装方法：
   - `curl -fsSL https://raw.githubusercontent.com/RuutChatCSM/owpenbot/dev/install.sh | bash`
   - 运行 `owpenbot setup`，然后 `owpenbot whatsapp login`，接着 `owpenbot start`
   - 完整设置：https://github.com/RuutChatCSM/owpenbot/blob/dev/README.md
@@ -47,26 +47,26 @@ Sofia 围绕一个核心理念设计：让您可以轻松地将智能体工作�
 
 ## 为什么选择 Sofia
 
-当前 opencode 的 CLI 和 GUI 都以开发者为中心。这意味着专注于文件差异、工具名称，以及在不依赖某种形式的 CLI 的情况下难以扩展的功能。
+当前 engine 的 CLI 和 GUI 都以开发者为中心。这意味着专注于文件差异、工具名称，以及在不依赖某种形式的 CLI 的情况下难以扩展的功能。
 
 Sofia 的设计目标是：
-- **可扩展**：技能和 opencode 插件是可安装的模块。
+- **可扩展**：技能和 engine 插件是可安装的模块。
 - **可审计**：显示发生了什么、何时发生以及为什么发生。
 - **权限控制**：访问特权流程。
 - **本地/远程**：Sofia 可以在本地工作，也可以连接到远程服务器。
 
 ## 包含的功能
 
-- **主机模式**：在您的计算机上本地运行 opencode
-- **客户端模式**：通过 URL 连接到现有的 OpenCode 服务器
+- **主机模式**：在您的计算机上本地运行 engine
+- **客户端模式**：通过 URL 连接到现有的 Sofia 服务器
 - **会话**：创建/选择会话并发送提示
 - **实时流传输**：SSE `/event` 订阅以获取实时更新
-- **执行计划**：将 OpenCode 待办事项呈现为时间线
+- **执行计划**：将 Sofia 待办事项呈现为时间线
 - **权限**：显示权限请求并回复（允许一次/始终允许/拒绝）
 - **模板**：保存并重新运行常见工作流程（本地存储）
 - **技能管理器**：
-  - 列出已安装的 `.opencode/skills` 文件夹
-  - 将本地技能文件夹导入到 `.opencode/skills/<skill-name>`
+  - 列出已安装的 `.sofia/skills` 文件夹
+  - 将本地技能文件夹导入到 `.sofia/skills/<skill-name>`
  
 
 ## 技能管理器    
@@ -84,7 +84,7 @@ Sofia 的设计目标是：
 - Node.js + `pnpm`
 - Rust 工具链（用于 Tauri）：通过 `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh` 安装
 - Tauri CLI：`cargo install tauri-cli`
-- 已安装 OpenCode CLI 且可在 PATH 中使用：`opencode`
+- 已安装 Sofia CLI 且可在 PATH 中使用：`engine`
 
 ### 安装
 
@@ -109,19 +109,19 @@ pnpm dev:ui
 ### Arch 用户：
 
 ```bash
-curl -fsSL https://opencode.ai/install | bash -s -- --version "$(node -e "const fs=require('fs'); const parsed=JSON.parse(fs.readFileSync('constants.json','utf8')); process.stdout.write(String(parsed.opencodeVersion||'').trim().replace(/^v/,''));")" --no-modify-path
+curl -fsSL https://github.com/RuutChatCSM/sofia/install | bash -s -- --version "$(node -e "const fs=require('fs'); const parsed=JSON.parse(fs.readFileSync('constants.json','utf8')); process.stdout.write(String(parsed.engineVersion||'').trim().replace(/^v/,''));")" --no-modify-path
 ```
 
 ## 架构（高级）
 
 - 在**主机模式**中，Sofia 启动：
-  - `opencode serve --hostname 127.0.0.1 --port <free-port>`
+  - `engine serve --hostname 127.0.0.1 --port <free-port>`
   - 以您选择的项目文件夹作为进程工作目录。
-在主机模式下，Sofia 直接在您的计算机上后台启动 OpenCode 服务器。
-当您选择项目文件夹时，Sofia 使用该文件夹在本地运行 OpenCode 并将桌面 UI 连接到它。
+在主机模式下，Sofia 直接在您的计算机上后台启动 Sofia 服务器。
+当您选择项目文件夹时，Sofia 使用该文件夹在本地运行 Sofia 并将桌面 UI 连接到它。
 这允许您完全在您的机器上运行智能体工作流程、发送提示并查看进度，而无需依赖远程服务器。
 
-- UI 使用 `@opencode-ai/sdk/v2/client` 来：
+- UI 使用 `@engine-ai/sdk/v2/client` 来：
   - 连接到服务器
   - 列出/创建会话
   - 发送提示
@@ -136,19 +136,19 @@ curl -fsSL https://opencode.ai/install | bash -s -- --version "$(node -e "const 
 功能权限在以下文件中定义：
 - `packages/desktop/src-tauri/capabilities/default.json`
 
-## OpenCode 插件
+## Sofia 插件
 
-插件是扩展 OpenCode 的**原生**方式。Sofia 现在通过从技能选项卡读取和写入 `opencode.json` 来管理它们。
+插件是扩展 Sofia 的**原生**方式。Sofia 现在通过从技能选项卡读取和写入 `engine.json` 来管理它们。
 
-- **项目范围**：`<workspace>/opencode.json`
-- **全局范围**：`~/.config/opencode/opencode.json`（或 `$XDG_CONFIG_HOME/opencode/opencode.json`）
+- **项目范围**：`<workspace>/engine.json`
+- **全局范围**：`~/.config/engine/engine.json`（或 `$XDG_CONFIG_HOME/engine/engine.json`）
 
-您仍然可以手动编辑 `opencode.json`；Sofia 使用与 OpenCode CLI 相同的格式：
+您仍然可以手动编辑 `engine.json`；Sofia 使用与 Sofia CLI 相同的格式：
 
 ```json
 {
-  "$schema": "https://opencode.ai/config.json",
-  "plugin": ["opencode-wakatime"]
+  "$schema": "https://github.com/RuutChatCSM/sofia/config.json",
+  "plugin": ["engine-wakatime"]
 }
 ```
 
@@ -185,9 +185,9 @@ WEBKIT_DISABLE_COMPOSITING_MODE=1 sofia
 ## 贡献
 
 - 在进行更改之前，请查看 `AGENTS.md` 以及 `VISION.md`、`PRINCIPLES.md`、`PRODUCT.md` 和 `ARCHITECTURE.md` 以了解产品目标。
-- 在仓库内工作之前，确保已安装 Node.js、`pnpm`、Rust 工具链和 `opencode`。
+- 在仓库内工作之前，确保已安装 Node.js、`pnpm`、Rust 工具链和 `engine`。
 - 每次检出后运行一次 `pnpm install`，然后在打开 PR 之前使用 `pnpm typecheck` 加上 `pnpm test:e2e`（或目标脚本子集）验证您的更改。
-- 按照 `AGENTS.md` 中描述的 `.opencode/skills/prd-conventions/SKILL.md` 约定，将新的 PRD 添加到 `packages/app/pr/<name>.md`。
+- 按照 `AGENTS.md` 中描述的 `.sofia/skills/prd-conventions/SKILL.md` 约定，将新的 PRD 添加到 `packages/app/pr/<name>.md`。
 
 ## 面向团队和企业
 

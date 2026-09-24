@@ -27,7 +27,7 @@ export type RecoveryViewProps = {
   configActionStatus: string | null;
   cacheRepairBusy: boolean;
   cacheRepairResult: string | null;
-  onRepairOpencodeCache: () => void | Promise<void>;
+  onRepairWorkspaceEngineCache: () => void | Promise<void>;
   dockerCleanupBusy: boolean;
   dockerCleanupResult: string | null;
   onCleanupSofiaDockerContainers: () => void | Promise<void>;
@@ -105,13 +105,13 @@ export function RecoveryView(props: RecoveryViewProps) {
 
       <LayoutSectionItem>
         <LayoutSectionItemHeader>
-          <LayoutSectionItemTitle>{t("settings.opencode_cache")}</LayoutSectionItemTitle>
-          <LayoutSectionItemDescription>{t("settings.opencode_cache_description")}</LayoutSectionItemDescription>
+          <LayoutSectionItemTitle>{t("settings.sofia_cache")}</LayoutSectionItemTitle>
+          <LayoutSectionItemDescription>{t("settings.sofia_cache_description")}</LayoutSectionItemDescription>
           <LayoutSectionItemHeaderActions>
             <Button
               variant="secondary"
               size="sm"
-              onClick={() => void props.onRepairOpencodeCache()}
+              onClick={() => void props.onRepairWorkspaceEngineCache()}
               // TODO: Restore the conditional disabled state once this action is wired into the React settings route.
               // disabled={props.cacheRepairBusy || !isDesktopRuntime()}
               disabled

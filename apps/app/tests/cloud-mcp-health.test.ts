@@ -108,7 +108,7 @@ function health(input: { usable: boolean; failure?: SofiaCloudMcpFailure | null;
     pluginCanaries: { expected: ["sofia_docs_search"], present: usable ? ["sofia_docs_search"] : [], missing: usable ? [] : ["sofia_docs_search"] },
     compatibility: {
       sofia: { serverVersion: "test", app: null },
-      opencode: { expectedVersion: "1.17.11", actualVersion: "1.17.11", probe: "ok" },
+      engine: { expectedVersion: "1.17.11", actualVersion: "1.17.11", probe: "ok" },
       pluginFileHashes: [],
       supportedFeatures: { dynamicMcp: true, directoryScoping: true, toolIds: true, providerToolProjection: projectionChecked, pluginCanaries: true },
       experimentalToolIds: {

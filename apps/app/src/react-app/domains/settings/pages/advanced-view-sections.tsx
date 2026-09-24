@@ -314,8 +314,8 @@ export function AdvancedRuntimeSection(props: AdvancedRuntimeSectionProps) {
       <div className="grid gap-3 sm:grid-cols-2">
         <RuntimeStatusCard
           icon={<Cpu size={18} />}
-          title={t("settings.opencode_engine_label")}
-          description={t("settings.opencode_engine_desc")}
+          title={t("settings.sofia_engine_label")}
+          description={t("settings.sofia_engine_desc")}
           statusLabel={props.clientStatusLabel}
           tone={props.clientTone}
           detailLines={props.clientDetailLines}
@@ -467,7 +467,7 @@ export function AdvancedCloudMcpDiagnosticsSection(props: AdvancedCloudMcpDiagno
               {compatibility ? (
                 <>
                   <DiagnosticRow label="Sofia App versions" value={`server ${formatMaybe(compatibility.sofia.serverVersion)}; app ${formatMetadataRecord(compatibility.sofia.app)}`} />
-                  <DiagnosticRow label="Engine compatibility" value={`expected ${formatMaybe(compatibility.opencode.expectedVersion)}; actual ${formatMaybe(compatibility.opencode.actualVersion)}; probe ${compatibility.opencode.probe}`} />
+                  <DiagnosticRow label="Engine compatibility" value={`expected ${formatMaybe(compatibility.engine.expectedVersion)}; actual ${formatMaybe(compatibility.engine.actualVersion)}; probe ${compatibility.engine.probe}`} />
                   <DiagnosticRow label="Feature probes" value={formatSupportedFeatures(compatibility.supportedFeatures)} />
                   <DiagnosticRow label="Experimental tool IDs" value={formatMcpToolExposure(compatibility.experimentalToolIds)} />
                   <DiagnosticRow label="Experimental provider tools" value={formatMcpToolExposure(compatibility.experimentalProviderTools)} />
@@ -617,7 +617,7 @@ export function AdvancedRuntimeMigrationSection(props: AdvancedRuntimeMigrationS
         <LayoutSectionItemHeader>
           <LayoutSectionItemTitle>Move Sofia App-managed config</LayoutSectionItemTitle>
           <LayoutSectionItemDescription>
-            Moves older Sofia App-owned runtime keys from `.opencode/sofia.json` and safe Sofia App-managed keys from `opencode.jsonc` into the runtime database.
+            Moves older Sofia App-owned runtime keys from `.sofia/sofia.json` and safe Sofia App-managed keys from `engine.jsonc` into the runtime database.
           </LayoutSectionItemDescription>
           <LayoutSectionItemHeaderActions>
             <Button
@@ -664,25 +664,9 @@ export function AdvancedRuntimeMigrationSection(props: AdvancedRuntimeMigrationS
                 <div>
                   <div className="font-medium text-gray-12">Engine source breakdown</div>
                   <div className="text-[11px] text-gray-9">
-                    The engine also reads its own project and global config files. Sofia App injects the runtime config separately; for Sofia App-managed keys, the injected config is the source to inspect.
+                    Sofia App injects the runtime config separately; for Sofia App-managed keys, the injected config is the source to inspect.
                   </div>
                 </div>
-                <RuntimeConfigSourceBlock
-                  title="Project opencode config"
-                  description="Workspace-level engine config owned by the user/project."
-                  path={props.configStatus.sources.projectOpencode.path}
-                  exists={props.configStatus.sources.projectOpencode.exists}
-                  keys={props.configStatus.sources.projectOpencode.keys}
-                  config={props.configStatus.sources.projectOpencode.config}
-                />
-                <RuntimeConfigSourceBlock
-                  title="Global opencode config"
-                  description="User-level engine config under the engine home directory."
-                  path={props.configStatus.sources.globalOpencode.path}
-                  exists={props.configStatus.sources.globalOpencode.exists}
-                  keys={props.configStatus.sources.globalOpencode.keys}
-                  config={props.configStatus.sources.globalOpencode.config}
-                />
                 <RuntimeConfigSourceBlock
                   title="Sofia App runtime DB"
                   description="Sofia App-managed runtime values stored outside workspace files."
@@ -710,13 +694,6 @@ export function AdvancedRuntimeMigrationSection(props: AdvancedRuntimeMigrationS
               <div>Migratable keys: {formatKeys(props.configStatus.legacySofia.keys)}</div>
             </div>
             <div>
-              <div className="font-medium text-gray-12">User opencode.jsonc</div>
-              <div className="break-all">{props.configStatus.userOpencode.path}</div>
-              <div>{props.configStatus.userOpencode.exists ? "Found" : "Not found"}</div>
-              <div>User-owned keys: {formatKeys(props.configStatus.userOpencode.keys)}</div>
-              <div>Migratable keys: {formatKeys(props.configStatus.userOpencode.migratableKeys)}</div>
-            </div>
-            <div>
               <div className="font-medium text-gray-12">Runtime DB JSON</div>
               <pre className="mt-1 max-h-48 overflow-auto rounded-lg bg-gray-3 p-2 font-mono text-[11px] text-gray-11">
                 {JSON.stringify(runtimeConfig, null, 2)}
@@ -729,20 +706,20 @@ export function AdvancedRuntimeMigrationSection(props: AdvancedRuntimeMigrationS
   );
 }
 
-interface AdvancedOpencodeSectionProps {
+interface AdvancedWorkspaceEngineSectionProps {
   busy: boolean;
   enabled: boolean;
   onToggle: () => void;
 }
 
-export function AdvancedOpencodeSection(props: AdvancedOpencodeSectionProps) {
+export function AdvancedWorkspaceEngineSection(props: AdvancedWorkspaceEngineSectionProps) {
   return (
     <LayoutSection>
       <LayoutSectionHeader>
         <LayoutSectionTitle>
-          {t("settings.opencode_section_label")}
+          {t("settings.sofia_section_label")}
         </LayoutSectionTitle>
-        <LayoutSectionDescription>{t("settings.opencode_engine_desc")}</LayoutSectionDescription>
+        <LayoutSectionDescription>{t("settings.sofia_engine_desc")}</LayoutSectionDescription>
       </LayoutSectionHeader>
 
       <LayoutSectionItem>
@@ -805,7 +782,7 @@ export function AdvancedFeatureFlagsSection(props: AdvancedFeatureFlagsSectionPr
 interface AdvancedDeveloperSectionProps {
   busy: boolean;
   developerMode: boolean;
-  opencodeDevModeEnabled: boolean;
+  engineDevModeEnabled: boolean;
   deepLinkOpen: boolean;
   deepLinkInput: string;
   deepLinkBusy: boolean;
@@ -837,7 +814,7 @@ export function AdvancedDeveloperSection(props: AdvancedDeveloperSectionProps) {
         </LayoutSectionItemHeader>
       </LayoutSectionItem>
 
-      {isDesktopRuntime() && props.opencodeDevModeEnabled && props.developerMode ? (
+      {isDesktopRuntime() && props.engineDevModeEnabled && props.developerMode ? (
         <LayoutSectionItem>
           <LayoutSectionItemHeader>
             <LayoutSectionItemTitle>{t("settings.open_deeplink_title")}</LayoutSectionItemTitle>

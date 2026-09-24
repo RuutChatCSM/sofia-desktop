@@ -39,7 +39,7 @@ describe("portable files", () => {
     await writeFile(join(workspaceRoot, ".sofia", "skills", "demo", "SKILL.md"), "# skill\n", "utf8");
     await writeFile(join(workspaceRoot, ".sofia", "commands", "demo.md"), "# command\n", "utf8");
     await writeFile(join(workspaceRoot, ".sofia", "sofia.json"), '{"version":1}\n', "utf8");
-    await writeFile(join(workspaceRoot, ".sofia", "opencode.db"), "sqlite-bytes", "utf8");
+    await writeFile(join(workspaceRoot, ".sofia", "engine.db"), "sqlite-bytes", "utf8");
     await writeFile(join(workspaceRoot, ".sofia", ".env"), "SECRET=value\n", "utf8");
 
     const files = await listPortableFiles(workspaceRoot);

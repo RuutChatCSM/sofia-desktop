@@ -22,7 +22,7 @@ function provider(input: Partial<DenOrgLlmProvider> & Pick<DenOrgLlmProvider, "i
 describe("Automation model options", () => {
   test("always offers the normalized free starter model", () => {
     expect(automationModelOptions([])).toEqual([{
-      providerId: "opencode",
+      providerId: "engine",
       modelId: "big-pickle",
       providerName: "Sofia Zen",
       modelName: "Big Pickle",
@@ -129,7 +129,7 @@ describe("Automation proposal model resolution", () => {
 
   test("defaults an omitted model to the free starter model", () => {
     expect(resolveProposalModel(undefined, [])).toEqual({
-      model: { providerId: "opencode", modelId: "big-pickle", variant: null },
+      model: { providerId: "engine", modelId: "big-pickle", variant: null },
       resolution: "default",
     })
   })
@@ -138,7 +138,7 @@ describe("Automation proposal model resolution", () => {
     const custom = { providerId: "lpr_abc", modelId: "deepseek-v4-flash", variant: "high" }
     expect(resolveProposalModel(custom, [customProvider])).toEqual({ model: custom, resolution: "exact" })
 
-    const free = { providerId: "opencode", modelId: "big-pickle", variant: "low" }
+    const free = { providerId: "engine", modelId: "big-pickle", variant: "low" }
     expect(resolveProposalModel(free, [])).toEqual({ model: free, resolution: "exact" })
 
     const managedProvider = provider({ id: "lpr_managed", source: "sofia", name: "Sofia App Models" })
@@ -171,14 +171,14 @@ describe("Automation proposal model resolution", () => {
       { providerId: "deepseek", modelId: "deepseek-v4-flash" },
       [managed],
     )).toEqual({
-      model: { providerId: "opencode", modelId: "big-pickle", variant: null },
+      model: { providerId: "engine", modelId: "big-pickle", variant: null },
       resolution: "fallback",
     })
   })
 
   test("falls back when the provider or model is unavailable", () => {
     const fallback = {
-      model: { providerId: "opencode", modelId: "big-pickle", variant: null },
+      model: { providerId: "engine", modelId: "big-pickle", variant: null },
       resolution: "fallback",
     }
     expect(resolveProposalModel({ providerId: "unknown", modelId: "missing", variant: "high" }, [customProvider]))

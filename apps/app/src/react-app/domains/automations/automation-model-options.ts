@@ -51,7 +51,7 @@ function authorizedProviderModels(provider: DenOrgLlmProvider): AutomationModelO
 /**
  * Den's usable-provider response is already scoped to the active member. Keep
  * the submitted value normalized to the same IDs the server revalidates:
- * `opencode`, `sofia`, or the concrete `lpr_*` provider record.
+ * `engine`, `sofia`, or the concrete `lpr_*` provider record.
  */
 export function automationModelOptions(
   providers: readonly DenOrgLlmProvider[],

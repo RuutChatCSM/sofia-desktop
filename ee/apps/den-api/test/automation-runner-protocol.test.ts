@@ -63,7 +63,7 @@ test("runner registration and assignment reject unsupported targets", () => {
     automationId: "automation-1",
     automationName: "Test",
     instructions: "Return ready",
-    model: { providerId: "opencode", modelId: "big-pickle" },
+    model: { providerId: "engine", modelId: "big-pickle" },
     timeoutMs: 60_000,
     leaseExpiresAt: Date.now() + 60_000,
     attempt: 1,

@@ -78,8 +78,8 @@ describe("computePolicyProviderReconcilePlan", () => {
   test("respects the Zen policy while custom providers are restricted", () => {
     expect(
       computePolicyProviderReconcilePlan({
-        allProviders: [provider("opencode")],
-        connectedProviderIds: ["opencode"],
+        allProviders: [provider("engine")],
+        connectedProviderIds: ["engine"],
         disabledProviderIds: [],
         markedDisabledProviderIds: [],
         checkRestriction: restrictionChecker(["allowCustomProviders"]),
@@ -88,12 +88,12 @@ describe("computePolicyProviderReconcilePlan", () => {
 
     expect(
       computePolicyProviderReconcilePlan({
-        allProviders: [provider("opencode")],
-        connectedProviderIds: ["opencode"],
+        allProviders: [provider("engine")],
+        connectedProviderIds: ["engine"],
         disabledProviderIds: [],
         markedDisabledProviderIds: [],
         checkRestriction: restrictionChecker(["allowCustomProviders", "allowZenModel"]),
       }).toDisable,
-    ).toEqual(["opencode"]);
+    ).toEqual(["engine"]);
   });
 });

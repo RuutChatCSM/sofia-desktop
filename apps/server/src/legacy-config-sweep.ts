@@ -55,16 +55,16 @@ export function backupTimestamp(date: Date): string {
 }
 
 function legacyConfigTargets(homeDir: string): string[] {
-  const base = join(homeDir, ".config", "opencode");
+  const base = join(homeDir, ".config", "engine");
   return [
     join(base, "config.json"),
-    join(base, "opencode.json"),
-    join(base, "opencode.jsonc"),
+    join(base, "engine.json"),
+    join(base, "engine.jsonc"),
   ];
 }
 
 function matchesSofiaPlugin(value: string): boolean {
-  return value.includes("opencode-plugins/sofia-") || SOFIA_PLUGIN_MARKERS.some((marker) => value.includes(marker));
+  return value.includes("engine-plugins/sofia-") || SOFIA_PLUGIN_MARKERS.some((marker) => value.includes(marker));
 }
 
 function parseJsoncObject(content: string): Record<string, unknown> {
@@ -160,7 +160,7 @@ async function writeLegacyConfigSweepState(config: ServerConfig, state: LegacyCo
   await writeFile(path, `${JSON.stringify(state, null, 2)}\n`, "utf8");
 }
 
-export async function sweepLegacyOpenCodeConfig(
+export async function sweepLegacySofiaConfig(
   config: ServerConfig,
   options?: LegacyConfigSweepOptions,
 ): Promise<LegacyConfigSweepState> {

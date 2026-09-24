@@ -87,13 +87,13 @@ async function daytonaBash(ctx, script, timeout = 90_000) {
 async function requireSeededMockProvider(ctx) {
   const script = `set -euo pipefail
 curl -sf http://127.0.0.1:${MOCK_PORT}/v1/models >/dev/null && echo mock-ready
-grep -q ${JSON.stringify(PROVIDER_ID)} ${JSON.stringify(`${CHAT_WORKSPACE_PATH}/opencode.jsonc`)} && echo provider-seeded
+grep -q ${JSON.stringify(PROVIDER_ID)} ${JSON.stringify(`${CHAT_WORKSPACE_PATH}/engine.jsonc`)} && echo provider-seeded
 `;
   const result = await daytonaBash(ctx, script, 30_000);
   ctx.assert(result.stdout.includes("mock-ready"), `Mock provider is not listening on ${MOCK_PORT}: ${result.stdout} ${result.stderr}`);
   ctx.assert(
     result.stdout.includes("provider-seeded"),
-    `Harness setup missing: ${CHAT_WORKSPACE_PATH}/opencode.jsonc must pre-declare the mock provider (the workspace does not exist until Run task, so its engine cannot be configured later). Wipe ${DEV_PROFILE_DIR}, seed that file, and restart Electron.`,
+    `Harness setup missing: ${CHAT_WORKSPACE_PATH}/engine.jsonc must pre-declare the mock provider (the workspace does not exist until Run task, so its engine cannot be configured later). Wipe ${DEV_PROFILE_DIR}, seed that file, and restart Electron.`,
   );
 }
 
@@ -293,7 +293,7 @@ export default {
             assertEvidence(ctx, (sent?.cards ?? []).length >= 1, "The sent user turn shows the attachment card", JSON.stringify(sent));
             const transcript = await ctx.control("session.read_transcript", { count: 8 });
             const text = transcriptText(transcript);
-            assertEvidence(ctx, text.includes(".opencode/sofia/inbox/chat-attachments/"), "The first turn exposes the new workspace's inbox path", text.slice(0, 600));
+            assertEvidence(ctx, text.includes(".sofia/sofia/inbox/chat-attachments/"), "The first turn exposes the new workspace's inbox path", text.slice(0, 600));
             assertEvidence(ctx, !text.includes("[attachment "), "No raw attachment token leaked into the message text", text.slice(0, 600));
             ctx.output("created workspace", workspacePath);
           },

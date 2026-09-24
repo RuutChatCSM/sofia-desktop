@@ -2,7 +2,7 @@
  * Silent re-auth for remote OAuth MCP connectors (issue: "Sign in needed"
  * every ~1h / on app reopen even though the stored refresh token works).
  *
- * The OpenCode engine only refreshes MCP access tokens reactively — once per
+ * The Sofia engine only refreshes MCP access tokens reactively — once per
  * transport — so an expired token or a transient outage at engine boot
  * strands the connector in "Sign in needed"/"Issue" until the user clicks
  * Sign in manually. Sofia now heals this quietly: every MCP status

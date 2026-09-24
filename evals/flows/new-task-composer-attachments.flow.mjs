@@ -177,7 +177,7 @@ async function configureMockProvider(ctx) {
   await serverJson(ctx, `/workspace/${encodeURIComponent(ctx.workspaceId)}/config`, {
     method: "PATCH",
     body: {
-      opencode: {
+      engine: {
         provider: {
           [PROVIDER_ID]: {
             npm: "@ai-sdk/openai-compatible",
@@ -390,7 +390,7 @@ export default {
             assertEvidence(ctx, sentCard === true, "The sent user turn shows the attachment card", String(sentCard));
             const transcript = await ctx.control("session.read_transcript", { count: 8 });
             const text = transcriptText(transcript);
-            assertEvidence(ctx, text.includes(".opencode/sofia/inbox/chat-attachments/"), "The submitted turn exposes the worker inbox path", text.slice(0, 600));
+            assertEvidence(ctx, text.includes(".sofia/sofia/inbox/chat-attachments/"), "The submitted turn exposes the worker inbox path", text.slice(0, 600));
             assertEvidence(ctx, text.includes(ASSISTANT_SENTINEL), "The mock model answered, proving the auto-send completed", text.slice(-400));
             assertEvidence(ctx, !text.includes("[attachment "), "The raw composer attachment token is not leaked into the message text", text.slice(0, 600));
           },
@@ -425,7 +425,7 @@ export default {
             const fileUrl = extractAttachmentFileUrl(text);
             assertEvidence(ctx, Boolean(fileUrl), "Submitted turn includes a file:// URL for the uploaded CSV", text.slice(0, 600));
             const filePath = fileURLToPath(fileUrl);
-            assertEvidence(ctx, filePath.includes(".opencode/sofia/inbox/chat-attachments/"), "File path is inside the worker chat-attachments inbox", filePath);
+            assertEvidence(ctx, filePath.includes(".sofia/sofia/inbox/chat-attachments/"), "File path is inside the worker chat-attachments inbox", filePath);
             const digest = await readSandboxFileDigest(ctx, filePath);
             assertEvidence(ctx, digest.bytes === EXPECTED_BYTES.length, "Uploaded CSV byte count matches the fixture", `${digest.bytes} bytes`);
             assertEvidence(ctx, digest.sha256 === EXPECTED_SHA256, "Uploaded CSV sha256 matches the fixture exactly", digest.sha256);

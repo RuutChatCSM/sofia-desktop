@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { shouldApplyAutomationModelAccessFailure } from "../src/automations/model-attention-rollout.js"
 
-const legacyFreeModel = { providerId: "opencode", modelId: "big-pickle" }
+const legacyFreeModel = { providerId: "engine", modelId: "big-pickle" }
 
 describe("Automation model-attention rollout", () => {
   test("keeps the legacy free model runnable for published clients", () => {

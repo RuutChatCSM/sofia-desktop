@@ -256,10 +256,10 @@ if [ "$RECORD_VIDEO" -eq 1 ]; then
 fi
 
 echo ""
-if daytona exec "$SANDBOX" -- "bash -lc 'ps aux | grep opencode | grep -v grep'" 2>/dev/null | grep -q opencode; then
-  echo "==> opencode sidecar: running"
+if daytona exec "$SANDBOX" -- "bash -lc 'ps aux | grep engine | grep -v grep'" 2>/dev/null | grep -q engine; then
+  echo "==> engine sidecar: running"
 else
-  echo "==> opencode sidecar: not running (workspace may need creation first)"
+  echo "==> engine sidecar: not running (workspace may need creation first)"
 fi
 
 echo "==> Secrets env: ${DAYTONA_SECRETS_ENV} (file or directory, sourced if present)"

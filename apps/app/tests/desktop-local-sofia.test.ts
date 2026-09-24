@@ -39,12 +39,12 @@ function serverInfo(overrides: Partial<SofiaServerInfo> = {}): SofiaServerInfo {
     clientToken: null,
     ownerToken: null,
     hostToken: null,
-    managedOpencodeBinPath: null,
-    managedOpencodeBinSource: null,
+    managedWorkspaceEngineBinPath: null,
+    managedWorkspaceEngineBinSource: null,
     pid: null,
     lastStdout: null,
     lastStderr: null,
-    managedOpencodeExecution: null,
+    managedWorkspaceEngineExecution: null,
     ...overrides,
   };
 }

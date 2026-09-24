@@ -139,11 +139,11 @@ data:
   {{ with .Values.config.daytona.sidecarDir }}
   DAYTONA_SIDECAR_DIR: {{ . | quote }}
   {{ end }}
-  {{ with .Values.config.daytona.sofiaPort }}
+  {{ with .Values.config.daytona.enginePort }}
   DAYTONA_SOFIA_PORT: {{ . | quote }}
   {{ end }}
-  {{ with .Values.config.daytona.opencodePort }}
-  DAYTONA_OPENCODE_PORT: {{ . | quote }}
+  {{ with .Values.config.daytona.enginePort }}
+  DAYTONA_SOFIA_ENGINE_PORT: {{ . | quote }}
   {{ end }}
   {{ with .Values.config.daytona.createTimeoutSeconds }}
   DAYTONA_CREATE_TIMEOUT_SECONDS: {{ . | quote }}

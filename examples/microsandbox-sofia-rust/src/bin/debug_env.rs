@@ -17,7 +17,7 @@ async fn main() -> Result<()> {
             "/bin/sh",
             [
                 "-lc",
-                "id; pwd; echo HOME=$HOME; echo USER=$USER; echo SHELL=$SHELL; env | sort | grep -E '^(HOME|USER|SHELL|XDG|PATH)=' || true; ls -ld /root /tmp /workspace /data 2>/dev/null || true; /usr/local/bin/opencode --version; rm -f /tmp/opencode.log; (/usr/local/bin/opencode serve --hostname 127.0.0.1 --port 4096 >/tmp/opencode.log 2>&1 &) ; sleep 5; echo '--- HEALTH ---'; curl -iS http://127.0.0.1:4096/health || true; echo; echo '--- SESSION CREATE ---'; curl -iS -X POST -H 'content-type: application/json' -d '{\"title\":\"debug\"}' http://127.0.0.1:4096/session || true; echo; echo '--- PROVIDER ---'; curl -iS http://127.0.0.1:4096/provider || true; echo; echo '--- OPENCODE LOG ---'; cat /tmp/opencode.log || true",
+                "id; pwd; echo HOME=$HOME; echo USER=$USER; echo SHELL=$SHELL; env | sort | grep -E '^(HOME|USER|SHELL|XDG|PATH)=' || true; ls -ld /root /tmp /workspace /data 2>/dev/null || true; /usr/local/bin/engine --version; rm -f /tmp/engine.log; (/usr/local/bin/engine serve --hostname 127.0.0.1 --port 4096 >/tmp/engine.log 2>&1 &) ; sleep 5; echo '--- HEALTH ---'; curl -iS http://127.0.0.1:4096/health || true; echo; echo '--- SESSION CREATE ---'; curl -iS -X POST -H 'content-type: application/json' -d '{\"title\":\"debug\"}' http://127.0.0.1:4096/session || true; echo; echo '--- PROVIDER ---'; curl -iS http://127.0.0.1:4096/provider || true; echo; echo '--- SOFIA_ENGINE LOG ---'; cat /tmp/engine.log || true",
             ],
         )
         .await?;

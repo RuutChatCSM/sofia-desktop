@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { buildSofiaRuntimeConfigObject } from "./sofia-runtime-config.js";
-import { writeRuntimeOpencodeConfig } from "./runtime-opencode-config-store.js";
+import { writeRuntimeWorkspaceEngineConfig } from "./runtime-engine-config-store.js";
 import type { ServerConfig } from "./types.js";
 
 const roots: string[] = [];
@@ -45,7 +45,7 @@ async function setup() {
 describe("sofia runtime config", () => {
   test("builds runtime-DB MCPs and sofia defaults", async () => {
     const { config } = await setup();
-    await writeRuntimeOpencodeConfig(config, "ws_1", (current) => ({
+    await writeRuntimeWorkspaceEngineConfig(config, "ws_1", (current) => ({
       ...current,
       mcp: {
         posthog: { type: "remote", url: "https://mcp.posthog.com/mcp", enabled: true },
@@ -63,7 +63,7 @@ describe("sofia runtime config", () => {
       sofia: {
         permission: {
           skill: {
-            "customize-opencode": "deny",
+            "customize-engine": "deny",
             "get-started": "deny",
             "command-creator": "deny",
             "agent-creator": "deny",
@@ -88,7 +88,7 @@ describe("sofia runtime config", () => {
       const command = browser?.command as string[];
       expect(command.join(" ")).toContain("chrome-devtools-mcp@latest");
       expect(command.join(" ")).toContain("--browser-url=http://127.0.0.1:9401");
-      expect(parsed.plugin).not.toContain("opencode-chrome-devtools");
+      expect(parsed.plugin).not.toContain("engine-chrome-devtools");
     } finally {
       if (previous === undefined) delete process.env.SOFIA_ELECTRON_AGENT_CDP_BASE_URL;
       else process.env.SOFIA_ELECTRON_AGENT_CDP_BASE_URL = previous;
@@ -129,7 +129,7 @@ describe("sofia runtime config", () => {
 
   test("builds stable config for repeated snapshots", async () => {
     const { config } = await setup();
-    await writeRuntimeOpencodeConfig(config, "ws_1", (current) => ({
+    await writeRuntimeWorkspaceEngineConfig(config, "ws_1", (current) => ({
       ...current,
       mcp: { posthog: { type: "remote", url: "https://mcp.posthog.com/mcp" } },
     }));
@@ -142,7 +142,7 @@ describe("sofia runtime config", () => {
 
   test("builds stable config for equivalent snapshots with different key order", async () => {
     const { config } = await setup();
-    await writeRuntimeOpencodeConfig(config, "ws_1", () => ({
+    await writeRuntimeWorkspaceEngineConfig(config, "ws_1", () => ({
       mcp: {
         zeta: { url: "https://z.example/mcp", type: "remote" },
         alpha: { type: "remote", url: "https://a.example/mcp" },
@@ -154,7 +154,7 @@ describe("sofia runtime config", () => {
     }));
     const first = await buildSofiaRuntimeConfigObject(config, "ws_1");
 
-    await writeRuntimeOpencodeConfig(config, "ws_1", () => ({
+    await writeRuntimeWorkspaceEngineConfig(config, "ws_1", () => ({
       provider: {
         alpha: { npm: "@ai-sdk/openai-compatible", name: "Alpha" },
         zeta: { name: "Zeta", npm: "@ai-sdk/openai-compatible" },

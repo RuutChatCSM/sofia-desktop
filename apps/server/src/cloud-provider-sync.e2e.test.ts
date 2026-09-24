@@ -7,11 +7,11 @@ import { EnvService } from "./env-file.js";
 import { CloudProviderSync } from "./cloud-provider-sync.js";
 import { readSofiaWorkspaceConfig, writeSofiaWorkspaceConfig } from "./sofia-workspace-config-store.js";
 import {
-  readGlobalRuntimeOpencodeConfig,
-  readRuntimeOpencodeConfig,
+  readGlobalRuntimeWorkspaceEngineConfig,
+  readRuntimeWorkspaceEngineConfig,
   runtimeProviderMap,
-  writeRuntimeOpencodeConfig,
-} from "./runtime-opencode-config-store.js";
+  writeRuntimeWorkspaceEngineConfig,
+} from "./runtime-engine-config-store.js";
 import { startServer } from "./server.js";
 import type { ServerConfig } from "./types.js";
 
@@ -299,7 +299,7 @@ describe("cloud provider sync gateway", () => {
     });
     expect((await sync.run("before-workspace")).status).toBe("applied");
     expect(sync.status().lastRun?.status).toBe("applied");
-    expect(runtimeProviderMap(await readGlobalRuntimeOpencodeConfig(config)).lpr_test).toBeDefined();
+    expect(runtimeProviderMap(await readGlobalRuntimeWorkspaceEngineConfig(config)).lpr_test).toBeDefined();
     expect(reloads).toBe(0);
     expect(engineRequests).toEqual([]);
 
@@ -365,7 +365,7 @@ describe("cloud provider sync gateway", () => {
     stops.push(() => den.stop(true));
 
     const config = serverConfig(root, `http://127.0.0.1:${engine.port}`);
-    await writeRuntimeOpencodeConfig(config, "ws_1", () => ({
+    await writeRuntimeWorkspaceEngineConfig(config, "ws_1", () => ({
       provider: {
         lpr_stale: { id: "stale", name: "Stale", env: ["STALE_KEY"] },
         local_provider: { id: "local", name: "Local" },
@@ -435,7 +435,7 @@ describe("cloud provider sync gateway", () => {
     expect(denRequests.every((request) => request.orgId === "org_test")).toBe(true);
     expect(denRequests.map((request) => request.path)).toContain("/v1/llm-providers/lpr_test/connect");
 
-    const globalProviders = runtimeProviderMap(await readGlobalRuntimeOpencodeConfig(config));
+    const globalProviders = runtimeProviderMap(await readGlobalRuntimeWorkspaceEngineConfig(config));
     const globalProvider = expectRecord(globalProviders.lpr_test, "global runtime provider");
     const globalModels = expectRecord(globalProvider.models, "global runtime provider models");
     expect(Object.keys(globalModels).sort()).toEqual(["model-a", "model-z"]);
@@ -444,7 +444,7 @@ describe("cloud provider sync gateway", () => {
       (entry) => entry.key === "TEST_PROVIDER_API_KEY",
     )?.value).toBe("sk-test-provider");
 
-    const workspaceProviders = runtimeProviderMap(await readRuntimeOpencodeConfig(config, "ws_1"));
+    const workspaceProviders = runtimeProviderMap(await readRuntimeWorkspaceEngineConfig(config, "ws_1"));
     expect(workspaceProviders.lpr_stale).toBeUndefined();
     expect(workspaceProviders.local_provider).toBeDefined();
     const sofia = await readSofiaWorkspaceConfig(config, "ws_1");
@@ -456,7 +456,7 @@ describe("cloud provider sync gateway", () => {
 
     denProviders = [buildProvider([{ id: "model-b", name: "Model B", config: { tool_call: true } }])];
     expect(await runSync(base, "models-changed")).toEqual({ status: "applied" });
-    const updatedGlobal = runtimeProviderMap(await readGlobalRuntimeOpencodeConfig(config));
+    const updatedGlobal = runtimeProviderMap(await readGlobalRuntimeWorkspaceEngineConfig(config));
     expect(Object.keys(expectRecord(updatedGlobal.lpr_test, "updated global provider").models ?? {})).toEqual(["model-b"]);
     const updatedStatusResponse = await fetch(`${base}/cloud-provider-sync/status`, { headers: clientHeaders() });
     const updatedStatus = await responseRecord(updatedStatusResponse, "updated status");
@@ -467,7 +467,7 @@ describe("cloud provider sync gateway", () => {
 
     denProviders = [];
     expect(await runSync(base, "provider-removed")).toEqual({ status: "applied" });
-    expect(runtimeProviderMap(await readGlobalRuntimeOpencodeConfig(config)).lpr_test).toBeUndefined();
+    expect(runtimeProviderMap(await readGlobalRuntimeWorkspaceEngineConfig(config)).lpr_test).toBeUndefined();
     const removedStatusResponse = await fetch(`${base}/cloud-provider-sync/status`, { headers: clientHeaders() });
     expect((await responseRecord(removedStatusResponse, "removed status")).providers).toEqual([]);
 
@@ -475,7 +475,7 @@ describe("cloud provider sync gateway", () => {
     expect(await runSync(base, "provider-restored")).toEqual({ status: "applied" });
     const deleteResponse = await fetch(`${base}/den-session`, { method: "DELETE", headers: hostHeaders() });
     expect(deleteResponse.status).toBe(204);
-    expect(runtimeProviderMap(await readGlobalRuntimeOpencodeConfig(config)).lpr_test).toBeUndefined();
+    expect(runtimeProviderMap(await readGlobalRuntimeWorkspaceEngineConfig(config)).lpr_test).toBeUndefined();
     expect((await new EnvService({ path: process.env.SOFIA_ENV_STORE }).list()).find(
       (entry) => entry.key === "TEST_PROVIDER_API_KEY",
     )).toBeUndefined();

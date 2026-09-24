@@ -4,11 +4,11 @@ import { SofiaServerError } from "../src/app/lib/sofia-server";
 import { reloadEngineWithDesktopFallback } from "../src/react-app/shell/engine-reload-escalation";
 
 function unreachableError() {
-  return new SofiaServerError(503, "opencode_engine_unreachable", "engine unreachable");
+  return new SofiaServerError(503, "engine_engine_unreachable", "engine unreachable");
 }
 
 function unconfiguredError() {
-  return new SofiaServerError(400, "opencode_unconfigured", "engine unconfigured");
+  return new SofiaServerError(400, "engine_unconfigured", "engine unconfigured");
 }
 
 type Harness = {
@@ -91,7 +91,7 @@ describe("reloadEngineWithDesktopFallback", () => {
   });
 
   test("a non-restartable retry failure surfaces to the caller", async () => {
-    const retryFailure = new SofiaServerError(502, "opencode_reload_failed", "dispose failed");
+    const retryFailure = new SofiaServerError(502, "engine_reload_failed", "dispose failed");
     const harness = makeHarness([unreachableError(), retryFailure]);
     await expect(reloadEngineWithDesktopFallback(harness.client, "ws", harness.options)).rejects.toBe(retryFailure);
     expect(harness.restartCalls).toBe(0);
@@ -106,7 +106,7 @@ describe("reloadEngineWithDesktopFallback", () => {
   });
 
   test("reload timeouts surface instead of restarting mid-teardown", async () => {
-    const timeout = new SofiaServerError(504, "opencode_reload_timeout", "dispose still tearing down");
+    const timeout = new SofiaServerError(504, "engine_reload_timeout", "dispose still tearing down");
     const harness = makeHarness([timeout]);
     await expect(reloadEngineWithDesktopFallback(harness.client, "ws", harness.options)).rejects.toBe(timeout);
     expect(harness.restartCalls).toBe(0);

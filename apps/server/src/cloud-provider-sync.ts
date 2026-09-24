@@ -9,12 +9,12 @@ import {
 } from "./sofia-workspace-config-store.js";
 import {
   mergeRuntimeProviderUpdate,
-  readGlobalRuntimeOpencodeConfig,
-  readRuntimeOpencodeConfig,
+  readGlobalRuntimeWorkspaceEngineConfig,
+  readRuntimeWorkspaceEngineConfig,
   runtimeProviderMap,
-  writeGlobalRuntimeOpencodeConfig,
-  writeRuntimeOpencodeConfig,
-} from "./runtime-opencode-config-store.js";
+  writeGlobalRuntimeWorkspaceEngineConfig,
+  writeRuntimeWorkspaceEngineConfig,
+} from "./runtime-engine-config-store.js";
 import type { ServerConfig } from "./types.js";
 import { findManagedEngineWorkspace } from "./workspaces.js";
 
@@ -813,7 +813,7 @@ export class CloudProviderSync {
     prepared: PreparedMaterialization,
   ): Promise<{ changed: boolean; detail: CloudProviderSyncRunDetail; reloadError?: unknown }> {
     const desiredProviders = desiredProviderMap(prepared);
-    const globalRuntime = await readGlobalRuntimeOpencodeConfig(this.config);
+    const globalRuntime = await readGlobalRuntimeWorkspaceEngineConfig(this.config);
     const currentManagedProviders = managedProviderMap(runtimeProviderMap(globalRuntime));
     const providerStateChanged = stableJson(currentManagedProviders) !== stableJson(desiredProviders);
 
@@ -823,7 +823,7 @@ export class CloudProviderSync {
         if (!(providerId in desiredProviders)) patch[providerId] = null;
       }
       for (const [providerId, providerConfig] of Object.entries(desiredProviders)) patch[providerId] = providerConfig;
-      await writeGlobalRuntimeOpencodeConfig(this.config, (current) => ({
+      await writeGlobalRuntimeWorkspaceEngineConfig(this.config, (current) => ({
         ...current,
         provider: mergeRuntimeProviderUpdate(current.provider, patch),
       }));
@@ -913,13 +913,13 @@ export class CloudProviderSync {
     let changed = false;
     let runtimeChanged = false;
     for (const workspace of this.config.workspaces) {
-      const runtime = await readRuntimeOpencodeConfig(this.config, workspace.id);
+      const runtime = await readRuntimeWorkspaceEngineConfig(this.config, workspace.id);
       const providerPatch: JsonRecord = {};
       for (const providerId of Object.keys(runtimeProviderMap(runtime))) {
         if (isCloudManagedProviderKey(providerId)) providerPatch[providerId] = null;
       }
       if (Object.keys(providerPatch).length > 0) {
-        const result = await writeRuntimeOpencodeConfig(this.config, workspace.id, (current) => ({
+        const result = await writeRuntimeWorkspaceEngineConfig(this.config, workspace.id, (current) => ({
           ...current,
           provider: mergeRuntimeProviderUpdate(current.provider, providerPatch),
         }));
@@ -966,7 +966,7 @@ export class CloudProviderSync {
     const providerPatch = Object.fromEntries([...this.managedProviderIds].map((providerId) => [providerId, null]));
     let providerChanged = false;
     if (Object.keys(providerPatch).length > 0) {
-      const result = await writeGlobalRuntimeOpencodeConfig(this.config, (current) => ({
+      const result = await writeGlobalRuntimeWorkspaceEngineConfig(this.config, (current) => ({
         ...current,
         provider: mergeRuntimeProviderUpdate(current.provider, providerPatch),
       }));

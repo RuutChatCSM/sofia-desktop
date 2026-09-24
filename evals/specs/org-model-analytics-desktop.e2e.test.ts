@@ -327,7 +327,7 @@ async function configureProvider(appSurface: Surface, workspaceId: string, baseU
     const patched = await request("/workspace/" + encodeURIComponent(${JSON.stringify(workspaceId)}) + "/config", {
       method: "PATCH",
       body: JSON.stringify({
-        opencode: {
+        engine: {
           provider: {
             [${JSON.stringify(providerId)}]: {
               npm: "@ai-sdk/openai-compatible",

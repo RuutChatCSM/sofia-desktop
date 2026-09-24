@@ -9,7 +9,7 @@ export type AppFeedbackPrefill = {
   deployment: string;
   appVersion: string;
   sofiaServerVersion: string;
-  opencodeVersion: string;
+  engineVersion: string;
   osName: string;
   osVersion: string;
   platform: string;
@@ -40,7 +40,7 @@ export function AppFeedbackForm(props: Props) {
     () => [
       { label: "App version", value: props.prefill.appVersion },
       { label: "Sofia server", value: props.prefill.sofiaServerVersion },
-      { label: "OpenCode", value: props.prefill.opencodeVersion },
+      { label: "Sofia", value: props.prefill.engineVersion },
       {
         label: "OS",
         value: [props.prefill.osName, props.prefill.osVersion].filter(Boolean).join(" "),

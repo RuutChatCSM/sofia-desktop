@@ -75,7 +75,7 @@ describe("reload event API", () => {
 
     const configResponse = await fetch(`${base}/workspace/ws_1/config`, { headers: auth(token) });
     expect(configResponse.status).toBe(200);
-    await expect(readFile(join(root, "opencode.jsonc"), "utf8")).rejects.toThrow();
+    await expect(readFile(join(root, "engine.jsonc"), "utf8")).rejects.toThrow();
 
     await sleep(1200);
     expect(await readEvents(base, token)).toEqual([]);
@@ -83,7 +83,7 @@ describe("reload event API", () => {
 
   test("does not expose same-content rewrites as reload events", async () => {
     const root = await createWorkspaceRoot();
-    const configPath = join(root, "opencode.jsonc");
+    const configPath = join(root, "engine.jsonc");
     const content = '{ "plugin": ["demo"] }\n';
     await writeFile(configPath, content, "utf8");
     const { base, token } = await startSofiaServer(root);

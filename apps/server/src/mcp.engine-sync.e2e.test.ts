@@ -11,7 +11,7 @@ import {
   startServer,
   syncAllWorkspacesRuntimeMcpToEngine,
 } from "./server.js";
-import { readRuntimeOpencodeConfig, writeRuntimeOpencodeConfig } from "./runtime-opencode-config-store.js";
+import { readRuntimeWorkspaceEngineConfig, writeRuntimeWorkspaceEngineConfig } from "./runtime-engine-config-store.js";
 import type { ServerConfig } from "./types.js";
 
 type Served = { port: number; stop: (closeActiveConnections?: boolean) => void | Promise<void> };
@@ -41,7 +41,7 @@ async function createWorkspaceRoot() {
   return root;
 }
 
-function startMockOpencode(options?: {
+function startMockWorkspaceEngine(options?: {
   failMcpNames?: string[];
   mcpStatusByName?: Record<string, unknown>;
   liveMcpStatusByName?: () => Record<string, unknown>;
@@ -86,7 +86,7 @@ function startMockOpencode(options?: {
 
 async function startSofiaServer(
   workspaceRoot: string,
-  opencodeBaseUrl: string,
+  engineBaseUrl: string,
   options?: { trustedProcessIdentity?: string | null; isAlive?: () => boolean },
 ) {
   const config: ServerConfig = {
@@ -103,7 +103,7 @@ async function startSofiaServer(
         path: workspaceRoot,
         preset: "starter",
         workspaceType: "local",
-        baseUrl: opencodeBaseUrl,
+        baseUrl: engineBaseUrl,
       },
     ],
     authorizedRoots: [workspaceRoot],
@@ -119,7 +119,7 @@ async function startSofiaServer(
     : options.trustedProcessIdentity;
   if (trustedProcessIdentity) {
     registerTrustedEngineProcess(config, {
-      baseUrl: opencodeBaseUrl,
+      baseUrl: engineBaseUrl,
       identity: trustedProcessIdentity,
       isAlive: options?.isAlive ?? (() => true),
     });
@@ -168,7 +168,7 @@ describe("runtime MCP engine sync", () => {
     const previousDb = process.env.SOFIA_RUNTIME_DB;
     process.env.SOFIA_RUNTIME_DB = join(workspaceRoot, "runtime.sqlite");
     try {
-      const mock = startMockOpencode();
+      const mock = startMockWorkspaceEngine();
       const sofia = await startSofiaServer(workspaceRoot, `http://127.0.0.1:${mock.server.port}`);
 
       const response = await fetch(`${sofia.base}/workspace/ws_1/mcp`, {
@@ -193,7 +193,7 @@ describe("runtime MCP engine sync", () => {
     const previousDb = process.env.SOFIA_RUNTIME_DB;
     process.env.SOFIA_RUNTIME_DB = join(workspaceRoot, "runtime.sqlite");
     try {
-      const mock = startMockOpencode();
+      const mock = startMockWorkspaceEngine();
       const sofia = await startSofiaServer(
         workspaceRoot,
         `http://127.0.0.1:${mock.server.port}`,
@@ -226,7 +226,7 @@ describe("runtime MCP engine sync", () => {
     const rawErrorCanary = "MCP_PROVIDER_RAW_ERROR_CANARY";
     const oversizedCanary = "MCP_OVERSIZED_RESPONSE_CANARY";
     try {
-      const mock = startMockOpencode({
+      const mock = startMockWorkspaceEngine({
         mcpStatusByName: {
           connected: "connected",
           disabled: "disabled",
@@ -346,7 +346,7 @@ describe("runtime MCP engine sync", () => {
     process.env.SOFIA_MCP_SYNC_DEFERRED_DELAY_MS = "50";
     let posthogPosts = 0;
     try {
-      const mock = startMockOpencode({
+      const mock = startMockWorkspaceEngine({
         mcpResponseForName: (name) => {
           if (name !== "posthog") return null;
           posthogPosts += 1;
@@ -399,7 +399,7 @@ describe("runtime MCP engine sync", () => {
     let registrationsInFlight = 0;
     let maxRegistrationsInFlight = 0;
     try {
-      const mock = startMockOpencode({
+      const mock = startMockWorkspaceEngine({
         mcpResponseForName: (name) => {
           if (name !== "posthog") return null;
           registrations += 1;
@@ -416,7 +416,7 @@ describe("runtime MCP engine sync", () => {
         },
       });
       const sofia = await startSofiaServer(workspaceRoot, `http://127.0.0.1:${mock.server.port}`);
-      const writePosthogUrl = (url: string) => writeRuntimeOpencodeConfig(sofia.config, "ws_1", (current) => ({
+      const writePosthogUrl = (url: string) => writeRuntimeWorkspaceEngineConfig(sofia.config, "ws_1", (current) => ({
         ...current,
         mcp: { posthog: { ...POSTHOG_CONFIG, url } },
       }));
@@ -459,8 +459,8 @@ describe("runtime MCP engine sync", () => {
     const previousDb = process.env.SOFIA_RUNTIME_DB;
     process.env.SOFIA_RUNTIME_DB = join(workspaceRoot, "runtime.sqlite");
     try {
-      const engineA = startMockOpencode();
-      const engineB = startMockOpencode();
+      const engineA = startMockWorkspaceEngine();
+      const engineB = startMockWorkspaceEngine();
       const serverA = await startSofiaServer(workspaceRoot, `http://127.0.0.1:${engineA.server.port}`);
       const serverB = await startSofiaServer(workspaceRoot, `http://127.0.0.1:${engineB.server.port}`);
 
@@ -495,8 +495,8 @@ describe("runtime MCP engine sync", () => {
     const previousDb = process.env.SOFIA_RUNTIME_DB;
     process.env.SOFIA_RUNTIME_DB = join(workspaceRoot, "runtime.sqlite");
     try {
-      const engineA = startMockOpencode();
-      const engineB = startMockOpencode();
+      const engineA = startMockWorkspaceEngine();
+      const engineB = startMockWorkspaceEngine();
       const sofia = await startSofiaServer(workspaceRoot, `http://127.0.0.1:${engineA.server.port}`);
       const workspace = sofia.config.workspaces[0]!;
 
@@ -528,7 +528,7 @@ describe("runtime MCP engine sync", () => {
     const previousDb = process.env.SOFIA_RUNTIME_DB;
     process.env.SOFIA_RUNTIME_DB = join(workspaceRoot, "runtime.sqlite");
     try {
-      const engine = startMockOpencode();
+      const engine = startMockWorkspaceEngine();
       const baseUrl = `http://127.0.0.1:${engine.server.port}`;
       const sofia = await startSofiaServer(workspaceRoot, baseUrl, {
         trustedProcessIdentity: "managed-process-a",
@@ -575,7 +575,7 @@ describe("runtime MCP engine sync", () => {
     process.env.SOFIA_RUNTIME_DB = join(workspaceRoot, "runtime.sqlite");
     let isAlive = true;
     try {
-      const engine = startMockOpencode();
+      const engine = startMockWorkspaceEngine();
       const sofia = await startSofiaServer(
         workspaceRoot,
         `http://127.0.0.1:${engine.server.port}`,
@@ -605,7 +605,7 @@ describe("runtime MCP engine sync", () => {
     const previousDb = process.env.SOFIA_RUNTIME_DB;
     process.env.SOFIA_RUNTIME_DB = join(workspaceRoot, "runtime.sqlite");
     try {
-      const engine = startMockOpencode();
+      const engine = startMockWorkspaceEngine();
       const sofia = await startSofiaServer(workspaceRoot, `http://127.0.0.1:${engine.server.port}`);
       const workspace = sofia.config.workspaces[0]!;
 
@@ -641,7 +641,7 @@ describe("runtime MCP engine sync", () => {
     process.env.SOFIA_RUNTIME_DB = join(workspaceRoot, "runtime.sqlite");
     process.env.SOFIA_MCP_REGISTRATION_MAX_AGE_MS = "100";
     try {
-      const engine = startMockOpencode({
+      const engine = startMockWorkspaceEngine({
         mcpResponseForName: (name) => name === "posthog"
           ? Response.json({ posthog: { status: "failed", error: "unable to verify the first certificate" } })
           : null,
@@ -678,7 +678,7 @@ describe("runtime MCP engine sync", () => {
     process.env.SOFIA_RUNTIME_DB = join(workspaceRoot, "runtime.sqlite");
     let rejectDispose = false;
     try {
-      const engine = startMockOpencode({
+      const engine = startMockWorkspaceEngine({
         disposeResponse: () => rejectDispose
           ? Response.json({ code: "reload_failed" }, { status: 500 })
           : null,
@@ -712,7 +712,7 @@ describe("runtime MCP engine sync", () => {
     const previousDb = process.env.SOFIA_RUNTIME_DB;
     process.env.SOFIA_RUNTIME_DB = join(workspaceRoot, "runtime.sqlite");
     try {
-      const mock = startMockOpencode();
+      const mock = startMockWorkspaceEngine();
       const sofia = await startSofiaServer(workspaceRoot, `http://127.0.0.1:${mock.server.port}`);
 
       const response = await fetch(`${sofia.base}/workspace/ws_1/cloud-plugins`, {
@@ -756,7 +756,7 @@ describe("runtime MCP engine sync", () => {
       expect(item.pluginId).toBe("plugin_cloud_mcp");
       expect(body.warnings).toEqual([]);
 
-      expect((await readRuntimeOpencodeConfig(sofia.config, "ws_1")).mcp?.brief).toMatchObject({
+      expect((await readRuntimeWorkspaceEngineConfig(sofia.config, "ws_1")).mcp?.brief).toMatchObject({
         type: "remote",
         url: "https://example.com/mcp",
       });
@@ -777,7 +777,7 @@ describe("runtime MCP engine sync", () => {
     const previousDb = process.env.SOFIA_RUNTIME_DB;
     process.env.SOFIA_RUNTIME_DB = join(workspaceRoot, "runtime.sqlite");
     try {
-      const mock = startMockOpencode();
+      const mock = startMockWorkspaceEngine();
       const sofia = await startSofiaServer(workspaceRoot, `http://127.0.0.1:${mock.server.port}`);
 
       const response = await fetch(`${sofia.base}/workspace/ws_1/cloud-plugins`, {
@@ -846,7 +846,7 @@ describe("runtime MCP engine sync", () => {
 
       const skillPath = join(workspaceRoot, ".sofia", "skills", "broken-plugin", "helpful-skill", "SKILL.md");
       expect(await readFile(skillPath, "utf8")).toContain("Installed skill body.");
-      expect((await readRuntimeOpencodeConfig(sofia.config, "ws_1")).mcp?.broken).toBeUndefined();
+      expect((await readRuntimeWorkspaceEngineConfig(sofia.config, "ws_1")).mcp?.broken).toBeUndefined();
       expect(mock.requests.some((entry) => entry.method === "POST" && entry.pathname === "/mcp")).toBe(false);
     } finally {
       if (previousDb === undefined) delete process.env.SOFIA_RUNTIME_DB;
@@ -859,7 +859,7 @@ describe("runtime MCP engine sync", () => {
     const previousDb = process.env.SOFIA_RUNTIME_DB;
     process.env.SOFIA_RUNTIME_DB = join(workspaceRoot, "runtime.sqlite");
     try {
-      const mock = startMockOpencode();
+      const mock = startMockWorkspaceEngine();
       const sofia = await startSofiaServer(workspaceRoot, `http://127.0.0.1:${mock.server.port}`);
 
       const addResponse = await fetch(`${sofia.base}/workspace/ws_1/mcp`, {
@@ -892,7 +892,7 @@ describe("runtime MCP engine sync", () => {
     const previousDb = process.env.SOFIA_RUNTIME_DB;
     process.env.SOFIA_RUNTIME_DB = join(workspaceRoot, "runtime.sqlite");
     try {
-      const mock = startMockOpencode();
+      const mock = startMockWorkspaceEngine();
       const sofia = await startSofiaServer(workspaceRoot, `http://127.0.0.1:${mock.server.port}`);
 
       const addResponse = await fetch(`${sofia.base}/workspace/ws_1/mcp`, {
@@ -924,7 +924,7 @@ describe("runtime MCP engine sync", () => {
     const previousDb = process.env.SOFIA_RUNTIME_DB;
     process.env.SOFIA_RUNTIME_DB = join(workspaceRoot, "runtime.sqlite");
     try {
-      const mock = startMockOpencode();
+      const mock = startMockWorkspaceEngine();
       const sofia = await startSofiaServer(workspaceRoot, `http://127.0.0.1:${mock.server.port}`);
 
       const addResponse = await fetch(`${sofia.base}/workspace/ws_1/mcp`, {
@@ -957,7 +957,7 @@ describe("runtime MCP engine sync", () => {
     const previousDb = process.env.SOFIA_RUNTIME_DB;
     process.env.SOFIA_RUNTIME_DB = join(workspaceRoot, "runtime.sqlite");
     try {
-      const mock = startMockOpencode({ failMcpNames: ["bad"] });
+      const mock = startMockWorkspaceEngine({ failMcpNames: ["bad"] });
       const sofia = await startSofiaServer(workspaceRoot, `http://127.0.0.1:${mock.server.port}`);
 
       for (const [name, config] of [["bad", POSTHOG_CONFIG], ["posthog", POSTHOG_CONFIG]] as const) {
@@ -1011,7 +1011,7 @@ describe("runtime MCP engine sync", () => {
     const previousDb = process.env.SOFIA_RUNTIME_DB;
     process.env.SOFIA_RUNTIME_DB = join(rootA, "runtime.sqlite");
     try {
-      const mock = startMockOpencode();
+      const mock = startMockWorkspaceEngine();
       const baseUrl = `http://127.0.0.1:${mock.server.port}`;
       const config: ServerConfig = {
         host: "127.0.0.1",
@@ -1033,8 +1033,8 @@ describe("runtime MCP engine sync", () => {
         logRequests: false,
       };
 
-      await writeRuntimeOpencodeConfig(config, "ws_1", (current) => ({ ...current, mcp: { posthog: POSTHOG_CONFIG } }));
-      await writeRuntimeOpencodeConfig(config, "ws_2", (current) => ({ ...current, mcp: { stripe: POSTHOG_CONFIG } }));
+      await writeRuntimeWorkspaceEngineConfig(config, "ws_1", (current) => ({ ...current, mcp: { posthog: POSTHOG_CONFIG } }));
+      await writeRuntimeWorkspaceEngineConfig(config, "ws_2", (current) => ({ ...current, mcp: { stripe: POSTHOG_CONFIG } }));
 
       await syncAllWorkspacesRuntimeMcpToEngine(config);
 
@@ -1072,7 +1072,7 @@ describe("runtime MCP engine sync", () => {
   // When the Sofia engine endpoint on record is unreachable (process down or
   // moved to a new port), a lightweight /instance/dispose cannot revive it.
   // The reload endpoint must report a distinct, actionable error
-  // (opencode_engine_unreachable) instead of either a generic 502 or a fake
+  // (engine_engine_unreachable) instead of either a generic 502 or a fake
   // 200 — the latter would tell the user "reloaded" while chat stays broken.
   // The desktop client uses this code to escalate to a full engine restart.
   test("engine reload reports engine-unreachable when the engine is down", async () => {
@@ -1088,7 +1088,7 @@ describe("runtime MCP engine sync", () => {
       });
       expect(response.status).toBe(503);
       const body = await response.json() as { code?: string };
-      expect(body.code).toBe("opencode_engine_unreachable");
+      expect(body.code).toBe("engine_engine_unreachable");
     } finally {
       if (previousDb === undefined) delete process.env.SOFIA_RUNTIME_DB;
       else process.env.SOFIA_RUNTIME_DB = previousDb;

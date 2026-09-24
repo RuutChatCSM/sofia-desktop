@@ -1,7 +1,7 @@
+import { listSofiaCommands } from "./sofia-commands.js";
 import { readFile, writeFile, rm, stat } from "node:fs/promises";
 import { homedir, hostname } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
-import { resolveGlobalOpencodeConfigPath } from "@sofia/paths";
 import type { ApprovalRequest, Capabilities, ServerConfig, WorkspaceInfo, Actor, ReloadReason, ReloadTrigger, TokenScope } from "./types.js";
 import { agentContextDiagnosticsRequestSchema } from "./agent-context-diagnostics-schema.js";
 import { ApprovalService } from "./approvals.js";
@@ -109,17 +109,17 @@ import {
 import { runAgentContextDiagnostics } from "./agent-context-diagnostics.js";
 import { sanitizeDiagnosticString } from "./diagnostic-sanitizer.js";
 import {
-  mergeOpencodeConfigs,
+  mergeWorkspaceEngineConfigs,
   mergeRuntimeProviderUpdate,
-  readGlobalRuntimeOpencodeConfig,
-  readRuntimeOpencodeConfig,
+  readGlobalRuntimeWorkspaceEngineConfig,
+  readRuntimeWorkspaceEngineConfig,
   runtimeDisabledProviderList,
   runtimeMcpMap,
   runtimeProviderMap,
-  type RuntimeOpencodeConfig,
-  writeGlobalRuntimeOpencodeConfig,
-  writeRuntimeOpencodeConfig,
-} from "./runtime-opencode-config-store.js";
+  type RuntimeWorkspaceEngineConfig,
+  writeGlobalRuntimeWorkspaceEngineConfig,
+  writeRuntimeWorkspaceEngineConfig,
+} from "./runtime-engine-config-store.js";
 import {
   hasSofiaWorkspaceConfig,
   mergeSofiaWorkspaceConfigs,
@@ -142,7 +142,7 @@ export {
 } from "./routes/files.js";
 
 const SERVER_VERSION = pkg.version;
-const OPENCODE_VERSION = constants.opencodeVersion.trim().replace(/^v/, "");
+const SOFIA_ENGINE_VERSION = constants.engineVersion.trim().replace(/^v/, "");
 
 const SOFIA_VOICE_REALTIME_MODEL = "gpt-realtime-2";
 const SOFIA_VOICE_TRANSCRIPTION_MODEL = "gpt-4o-transcribe";
@@ -262,13 +262,13 @@ function readStringField(value: unknown, key: string): string {
 }
 
 const LEGACY_RUNTIME_CONFIG_KEYS = ["plugin", "mcp", "permission", "provider"] as const;
-const USER_OPENCODE_RUNTIME_CONFIG_KEYS = ["default_agent", "plugin", "mcp", "disabled_providers", "provider"] as const;
+const USER_SOFIA_ENGINE_RUNTIME_CONFIG_KEYS = ["default_agent", "plugin", "mcp", "disabled_providers", "provider"] as const;
 
 type LegacyRuntimeConfigKey = typeof LEGACY_RUNTIME_CONFIG_KEYS[number];
-type UserOpencodeRuntimeConfigKey = typeof USER_OPENCODE_RUNTIME_CONFIG_KEYS[number];
+type UserWorkspaceEngineRuntimeConfigKey = typeof USER_SOFIA_ENGINE_RUNTIME_CONFIG_KEYS[number];
 
 function legacyRuntimeConfigFromSofiaConfig(sofia: Record<string, unknown>): {
-  config: RuntimeOpencodeConfig;
+  config: RuntimeWorkspaceEngineConfig;
   keys: LegacyRuntimeConfigKey[];
 } {
   const keys: LegacyRuntimeConfigKey[] = [];
@@ -307,7 +307,7 @@ function removeLegacyRuntimeConfig(sofia: Record<string, unknown>): Record<strin
   return next;
 }
 
-function runtimeConfigKeys(config: RuntimeOpencodeConfig): string[] {
+function runtimeConfigKeys(config: RuntimeWorkspaceEngineConfig): string[] {
   const keys: string[] = [];
   if (config.default_agent) keys.push("default_agent");
   if (Array.isArray(config.plugin) && config.plugin.length) keys.push("plugin");
@@ -410,9 +410,9 @@ async function readManagedRuntimeConfigDebug(_config: ServerConfig): Promise<{
 }
 
 function mergeLegacyRuntimeConfig(
-  current: RuntimeOpencodeConfig,
-  legacy: RuntimeOpencodeConfig,
-): RuntimeOpencodeConfig {
+  current: RuntimeWorkspaceEngineConfig,
+  legacy: RuntimeWorkspaceEngineConfig,
+): RuntimeWorkspaceEngineConfig {
   const currentPermission = isRecord(current.permission) ? current.permission : {};
   const legacyPermission = isRecord(legacy.permission) ? legacy.permission : {};
   const currentExternalDirectory = isRecord(currentPermission.external_directory) ? currentPermission.external_directory : {};
@@ -880,7 +880,7 @@ export async function startServer(config: ServerConfig): Promise<ServeResult> {
   const cloudProviderSync = new CloudProviderSync({
     config,
     env,
-    reloadEngine: () => reloadOpencodeEngine(
+    reloadEngine: () => reloadWorkspaceEngineEngine(
       config,
       resolveEngineRuntimeWorkspace(config),
       engineMcpServerState,
@@ -1079,7 +1079,7 @@ function agentDiagnosticsTimeoutMs(): number {
   return Number.isFinite(configured) && configured > 0 ? configured : 24_000;
 }
 
-export function createWorkspaceOpencodeClient(
+export function createWorkspaceWorkspaceEngineClient(
   config: ServerConfig,
   workspace: WorkspaceInfo,
   options?: { boundedDiagnosticsReads?: boolean; sessionId?: string },
@@ -1087,20 +1087,20 @@ export function createWorkspaceOpencodeClient(
   return createWorkspaceEngineClient(config, workspace, options);
 }
 
-export function unwrapOpencodeResult<T>(result: EngineResult<T>, path: string): NonNullable<T> {
+export function unwrapWorkspaceEngineResult<T>(result: EngineResult<T>, path: string): NonNullable<T> {
   if (result.data != null) {
     return result.data;
   }
   if (result.error === undefined) {
-    throw new ApiError(502, "opencode_empty_response", "Sofia engine returned an empty response", { path });
+    throw new ApiError(502, "engine_empty_response", "Sofia engine returned an empty response", { path });
   }
   if (!result.response) {
-    throw new ApiError(502, "opencode_unreachable", "Sofia engine request failed before a response was received", {
+    throw new ApiError(502, "engine_unreachable", "Sofia engine request failed before a response was received", {
       body: result.error,
       path,
     });
   }
-  throw new ApiError(502, "opencode_request_failed", "Sofia engine request failed", {
+  throw new ApiError(502, "engine_request_failed", "Sofia engine request failed", {
     status: result.response.status,
     body: result.error,
     path,
@@ -1191,7 +1191,7 @@ function buildCapabilities(config: ServerConfig): Capabilities {
   return {
     schemaVersion,
     serverVersion: SERVER_VERSION,
-    opencodeVersion: OPENCODE_VERSION,
+    engineVersion: SOFIA_ENGINE_VERSION,
     providerSync: true,
     skills: { read: true, write: writeEnabled, source: "sofia" },
     plugins: { read: true, write: writeEnabled },
@@ -1345,12 +1345,12 @@ function hasOwnKey(object: Record<string, unknown>, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(object, key);
 }
 
-function readAuthorizedFoldersFromOpencodeConfig(
-  opencodeConfig: Record<string, unknown>,
+function readAuthorizedFoldersFromWorkspaceEngineConfig(
+  engineConfig: Record<string, unknown>,
   workspaceRoot: string,
 ): AuthorizedFoldersConfig {
   const workspaceRootFolder = normalizeAuthorizedFolderPath(workspaceRoot);
-  const permission = ensurePlainObject(opencodeConfig.permission);
+  const permission = ensurePlainObject(engineConfig.permission);
   const externalDirectory = ensurePlainObject(permission.external_directory);
   const folders: string[] = [];
   const hiddenEntries: Record<string, unknown> = {};
@@ -1412,20 +1412,20 @@ function buildAuthorizedFoldersResponse(workspace: WorkspaceInfo, config: Author
 }
 
 function serializeWorkspace(workspace: ServerConfig["workspaces"][number]) {
-  const { opencodeUsername, opencodePassword, ...rest } = workspace;
-  const opencodeDirectory = resolveOpencodeDirectory(workspace);
-  const opencode =
-    workspace.baseUrl || opencodeDirectory || opencodeUsername || opencodePassword
+  const { engineUsername, enginePassword, ...rest } = workspace;
+  const engineDirectory = resolveWorkspaceEngineDirectory(workspace);
+  const engine =
+    workspace.baseUrl || engineDirectory || engineUsername || enginePassword
       ? {
           baseUrl: workspace.baseUrl,
-          directory: opencodeDirectory ?? undefined,
-          username: opencodeUsername,
-          password: opencodePassword,
+          directory: engineDirectory ?? undefined,
+          username: engineUsername,
+          password: enginePassword,
         }
       : undefined;
   return {
     ...rest,
-    opencode,
+    engine,
   };
 }
 
@@ -1447,7 +1447,7 @@ function createRoutes(
     env,
     managedProviderAuthLogger: toManagedProviderAuthLogger(logger),
     serverVersion: SERVER_VERSION,
-    opencodeVersion: OPENCODE_VERSION,
+    engineVersion: SOFIA_ENGINE_VERSION,
     jsonResponse,
     readJsonBody,
     readOptionalJsonBody,
@@ -1456,8 +1456,8 @@ function createRoutes(
     buildCapabilities,
     fetchRuntimeControl,
     resolveWorkspace,
-    resolveOpencodeDirectory,
-    createWorkspaceOpencodeClient,
+    resolveWorkspaceEngineDirectory,
+    createWorkspaceWorkspaceEngineClient,
     refreshRegistrationFromLiveStatus: refreshEngineMcpRegistrationFromLiveStatus,
     serializeWorkspace,
     resolveDevLogPath,
@@ -1475,8 +1475,8 @@ function createRoutes(
     ensureWritable,
     resolveWorkspace,
     serializeWorkspace,
-    reloadOpencodeEngine: async (routeConfig, workspace, options) => {
-      await reloadOpencodeEngine(routeConfig, workspace, engineMcpServerState, options);
+    reloadWorkspaceEngineEngine: async (routeConfig, workspace, options) => {
+      await reloadWorkspaceEngineEngine(routeConfig, workspace, engineMcpServerState, options);
     },
   });
 
@@ -1492,12 +1492,12 @@ function createRoutes(
     requireClientScope,
     resolveWorkspace,
     resolveWorkspaceWithoutBootstrap,
-    resolveOpencodeDirectory,
-    createWorkspaceOpencodeClient,
-    unwrapOpencodeResult,
+    resolveWorkspaceEngineDirectory,
+    createWorkspaceWorkspaceEngineClient,
+    unwrapWorkspaceEngineResult,
   });
 
-  // Codex runtime (additive engine surface; opencode routes are untouched).
+  // Codex runtime (additive engine surface; engine routes are untouched).
   const bridgedCodexWorkspaces = new Set<string>();
   registerCodexRoutes({
     routes,
@@ -1525,18 +1525,18 @@ function createRoutes(
     ensureWritable,
     requireClientScope,
     resolveWorkspace,
-    resolveOpencodeDirectory,
-    createWorkspaceOpencodeClient,
+    resolveWorkspaceEngineDirectory,
+    createWorkspaceWorkspaceEngineClient,
     refreshRegistrationFromLiveStatus: refreshEngineMcpRegistrationFromLiveStatus,
     registerRuntimeMcp: (routeConfig, workspace, onlyNames, options) =>
-      syncRuntimeMcpToOpencodeEngine(
+      syncRuntimeMcpToWorkspaceEngineEngine(
         routeConfig,
         workspace,
         onlyNames,
         options,
         engineMcpServerState,
       ),
-    serverMetadata: { serverVersion: SERVER_VERSION, expectedOpencodeVersion: OPENCODE_VERSION },
+    serverMetadata: { serverVersion: SERVER_VERSION, expectedWorkspaceEngineVersion: SOFIA_ENGINE_VERSION },
   });
 
   addRoute(routes, "POST", "/workspace/:id/diagnostics/agent-context", "client", async (ctx) => {
@@ -1558,7 +1558,7 @@ function createRoutes(
       if (!parsed.success) {
         throw new ApiError(400, "invalid_agent_diagnostics_request", "Agent diagnostics request is invalid");
       }
-      const opencode = createWorkspaceOpencodeClient(config, workspace, { boundedDiagnosticsReads: true });
+      const engine = createWorkspaceWorkspaceEngineClient(config, workspace, { boundedDiagnosticsReads: true });
       const timeoutSignal = AbortSignal.timeout(agentDiagnosticsTimeoutMs());
       const diagnosticsSignal = AbortSignal.any([ctx.request.signal, timeoutSignal]);
       let response: Response;
@@ -1579,12 +1579,12 @@ function createRoutes(
             signal: diagnosticsSignal,
             inspectEffectiveEngine: async (signal) => {
               const [configResult, agentResult] = await Promise.all([
-                opencode.config.get({}, { signal }),
-                opencode.app.agents({}, { signal }),
+                engine.config.get({}, { signal }),
+                engine.app.agents({}, { signal }),
               ]);
               return {
-                config: unwrapOpencodeResult(configResult, "/config"),
-                agents: unwrapOpencodeResult(agentResult, "/agent"),
+                config: unwrapWorkspaceEngineResult(configResult, "/config"),
+                agents: unwrapWorkspaceEngineResult(agentResult, "/agent"),
               };
             },
           },
@@ -1605,9 +1605,9 @@ function createRoutes(
   addRoute(routes, "GET", "/workspace/:id/config", "client", async (ctx) => {
     const workspace = await resolveWorkspace(config, ctx.params.id);
     const sofia = await readSofiaConfigForWorkspace(config, workspace);
-    const opencode = await readRuntimeOpencodeConfig(config, workspace.id);
+    const engine = await readRuntimeWorkspaceEngineConfig(config, workspace.id);
     const lastAudit = await readLastAudit(workspace.path, workspace.id);
-    return jsonResponse({ opencode, sofia, updatedAt: lastAudit?.timestamp ?? null });
+    return jsonResponse({ engine, sofia, updatedAt: lastAudit?.timestamp ?? null });
   });
 
   addRoute(routes, "GET", "/workspace/:id/desktop-cloud-sync", "client", async (ctx) => {
@@ -1716,7 +1716,7 @@ function createRoutes(
     }
 
     // Hot-register any bundled MCP servers with the running engine.
-    await syncRuntimeMcpToOpencodeEngine(
+    await syncRuntimeMcpToWorkspaceEngineEngine(
       config,
       workspace,
       undefined,
@@ -1781,7 +1781,7 @@ function createRoutes(
     }
 
     // Hot-register any bundled MCP servers with the running engine.
-    await syncRuntimeMcpToOpencodeEngine(
+    await syncRuntimeMcpToWorkspaceEngineEngine(
       config,
       workspace,
       undefined,
@@ -1835,8 +1835,8 @@ function createRoutes(
 
   addRoute(routes, "GET", "/workspace/:id/authorized-folders", "client", async (ctx) => {
     const workspace = await resolveWorkspace(config, ctx.params.id);
-    const opencode = await readRuntimeOpencodeConfig(config, workspace.id);
-    const foldersConfig = readAuthorizedFoldersFromOpencodeConfig(opencode, workspace.path);
+    const engine = await readRuntimeWorkspaceEngineConfig(config, workspace.id);
+    const foldersConfig = readAuthorizedFoldersFromWorkspaceEngineConfig(engine, workspace.path);
     return jsonResponse(buildAuthorizedFoldersResponse(workspace, foldersConfig));
   });
 
@@ -1855,14 +1855,14 @@ function createRoutes(
       paths: [configPath],
     });
 
-    const existingOpencode = await readRuntimeOpencodeConfig(config, workspace.id);
-    const existingFoldersConfig = readAuthorizedFoldersFromOpencodeConfig(existingOpencode, workspace.path);
+    const existingWorkspaceEngine = await readRuntimeWorkspaceEngineConfig(config, workspace.id);
+    const existingFoldersConfig = readAuthorizedFoldersFromWorkspaceEngineConfig(existingWorkspaceEngine, workspace.path);
     const nextExternalDirectory = mergeAuthorizedFoldersIntoExternalDirectory(
       folders,
       existingFoldersConfig.hiddenEntries,
     );
 
-    await writeRuntimeOpencodeConfig(config, workspace.id, (current) => ({
+    await writeRuntimeWorkspaceEngineConfig(config, workspace.id, (current) => ({
       ...current,
       permission: {
         ...(ensurePlainObject(current.permission)),
@@ -1883,7 +1883,7 @@ function createRoutes(
 
     emitReloadEvent(ctx.reloadEvents, workspace, "config", buildConfigTrigger(configPath));
 
-    const updatedFoldersConfig = readAuthorizedFoldersFromOpencodeConfig({
+    const updatedFoldersConfig = readAuthorizedFoldersFromWorkspaceEngineConfig({
       permission: { external_directory: nextExternalDirectory ?? {} },
     }, workspace.path);
 
@@ -1924,10 +1924,10 @@ function createRoutes(
     }
     const legacy = legacyRuntimeConfigFromSofiaConfig(sofiaData);
     if (!legacy.keys.length) {
-      return jsonResponse({ migrated: false, keys: [], legacyKeys: [], userOpencodeKeys: [], updatedAt: null, legacyError: sofiaError });
+      return jsonResponse({ migrated: false, keys: [], legacyKeys: [], userWorkspaceEngineKeys: [], updatedAt: null, legacyError: sofiaError });
     }
 
-    await writeRuntimeOpencodeConfig(config, workspace.id, (current) => (
+    await writeRuntimeWorkspaceEngineConfig(config, workspace.id, (current) => (
       mergeLegacyRuntimeConfig(current, legacy.config)
     ));
     if (!sofiaError) {
@@ -1947,7 +1947,7 @@ function createRoutes(
     });
     emitReloadEvent(ctx.reloadEvents, workspace, "config", buildConfigTrigger(configPath));
 
-    return jsonResponse({ migrated: true, keys, legacyKeys: legacy.keys, userOpencodeKeys: [], updatedAt, legacyError: sofiaError });
+    return jsonResponse({ migrated: true, keys, legacyKeys: legacy.keys, userWorkspaceEngineKeys: [], updatedAt, legacyError: sofiaError });
   });
 
   addRoute(routes, "POST", "/workspace/:id/runtime-config/disabled-providers", "client", async (ctx) => {
@@ -1956,7 +1956,7 @@ function createRoutes(
     const workspace = await resolveWorkspace(config, ctx.params.id);
     const body = await readJsonBody(ctx.request);
     const providers = parseDisabledProvidersPayload(body.providers);
-    const result = await writeRuntimeOpencodeConfig(config, workspace.id, (current) => ({
+    const result = await writeRuntimeWorkspaceEngineConfig(config, workspace.id, (current) => ({
       ...current,
       disabled_providers: providers,
     }));
@@ -1972,7 +1972,7 @@ function createRoutes(
   });
 
   addRoute(routes, "GET", "/runtime-config/providers", "host-token", async () => {
-    const runtime = await readGlobalRuntimeOpencodeConfig(config);
+    const runtime = await readGlobalRuntimeWorkspaceEngineConfig(config);
     return jsonResponse({ provider: runtimeProviderMap(runtime) });
   });
 
@@ -2008,14 +2008,14 @@ function createRoutes(
     const workspace = resolveEngineRuntimeWorkspace(config);
     const body = await readJsonBody(ctx.request);
     const providerPatch = parseRuntimeProviderPatchPayload(body);
-    const result = await writeGlobalRuntimeOpencodeConfig(config, (current) => ({
+    const result = await writeGlobalRuntimeWorkspaceEngineConfig(config, (current) => ({
       ...current,
       provider: mergeRuntimeProviderUpdate(current.provider, providerPatch),
     }));
 
     const shouldReload = result.changed;
     if (shouldReload) {
-      await reloadOpencodeEngine(config, workspace, engineMcpServerState);
+      await reloadWorkspaceEngineEngine(config, workspace, engineMcpServerState);
     }
     // The provider entry only names its credential env vars; the engine needs
     // the value itself via its auth API.
@@ -2035,7 +2035,7 @@ function createRoutes(
 
   addRoute(routes, "GET", "/workspace/:id/runtime-config", "client", async (ctx) => {
     const workspace = await resolveWorkspace(config, ctx.params.id);
-    const runtime = await readRuntimeOpencodeConfig(config, workspace.id);
+    const runtime = await readRuntimeWorkspaceEngineConfig(config, workspace.id);
     const effectiveSofia = await readSofiaConfigForWorkspace(config, workspace);
     const legacy = legacyRuntimeConfigFromSofiaConfig(effectiveSofia);
     const effectiveRuntime = await buildSofiaRuntimeConfigObject(config, workspace.id);
@@ -2059,6 +2059,7 @@ function createRoutes(
         },
       },
       legacySofia: {
+        path: join(workspace.path, ".sofia", "sofia.json"),
         keys: legacy.keys,
         error: null,
       },
@@ -2079,12 +2080,12 @@ function createRoutes(
     requireClientScope(ctx, "collaborator");
     const workspace = await resolveWorkspace(config, ctx.params.id);
     const body = await readJsonBody(ctx.request);
-    const opencode = body.opencode as Record<string, unknown> | undefined;
+    const engine = body.engine as Record<string, unknown> | undefined;
     const sofia = body.sofia as Record<string, unknown> | undefined;
     let runtimeChanged = false;
 
-    if (!opencode && !sofia) {
-      throw new ApiError(400, "invalid_payload", "opencode or sofia updates required");
+    if (!engine && !sofia) {
+      throw new ApiError(400, "invalid_payload", "engine or sofia updates required");
     }
 
     await requireApproval(ctx, {
@@ -2094,10 +2095,10 @@ function createRoutes(
       paths: [join(workspace.path, ".sofia")],
     });
 
-    if (opencode) {
+    if (engine) {
       const configPath = join(workspace.path, ".sofia");
-      const nextOpencode = ensurePlainObject(opencode);
-      const { permission, provider, ...topLevelUpdates } = nextOpencode;
+      const nextWorkspaceEngine = ensurePlainObject(engine);
+      const { permission, provider, ...topLevelUpdates } = nextWorkspaceEngine;
       const logicalUpdates: Record<string, unknown> = { ...topLevelUpdates };
 
       // Per-provider merge: record values upsert, explicit `null` deletes
@@ -2105,13 +2106,13 @@ function createRoutes(
       // providers (e.g. cloud imports) without read-modify-write races.
       const providerUpdate = isRecord(provider) ? provider : {};
       if (Object.keys(providerUpdate).length) {
-        const currentRuntime = await readRuntimeOpencodeConfig(config, workspace.id);
+        const currentRuntime = await readRuntimeWorkspaceEngineConfig(config, workspace.id);
         logicalUpdates.provider = mergeRuntimeProviderUpdate(currentRuntime.provider, providerUpdate);
       }
 
       const permissionUpdate = ensurePlainObject(permission);
       if (Object.prototype.hasOwnProperty.call(permissionUpdate, "external_directory")) {
-        const existingRuntime = await readRuntimeOpencodeConfig(config, workspace.id);
+        const existingRuntime = await readRuntimeWorkspaceEngineConfig(config, workspace.id);
         const existingPermission = ensurePlainObject(existingRuntime.permission);
         const nextExternalDirectory = permissionUpdate.external_directory;
         const existingPermissionKeys = Object.keys(existingPermission);
@@ -2131,7 +2132,7 @@ function createRoutes(
       }
 
       if (Object.keys(logicalUpdates).length || Object.prototype.hasOwnProperty.call(logicalUpdates, "permission")) {
-        const result = await writeRuntimeOpencodeConfig(config, workspace.id, (current) => ({
+        const result = await writeRuntimeWorkspaceEngineConfig(config, workspace.id, (current) => ({
           ...current,
           ...logicalUpdates,
         }));
@@ -2157,7 +2158,7 @@ function createRoutes(
 
     // A no-op provider patch (for example cloud sync reconciling an identical
     // block) must not force an engine reload; that caused a dispose/create loop.
-    if (opencode && runtimeChanged) {
+    if (engine && runtimeChanged) {
       emitReloadEvent(ctx.reloadEvents, workspace, "config", buildConfigTrigger(join(workspace.path, ".sofia")));
     }
 
@@ -2171,8 +2172,8 @@ function createRoutes(
     readJsonBody,
     requireClientScope,
     resolveWorkspace,
-    reloadOpencodeEngine: (routeConfig, workspace) =>
-      reloadOpencodeEngine(routeConfig, workspace, engineMcpServerState),
+    reloadWorkspaceEngineEngine: (routeConfig, workspace) =>
+      reloadWorkspaceEngineEngine(routeConfig, workspace, engineMcpServerState),
   });
 
   registerFileRoutes({
@@ -2510,7 +2511,7 @@ function createRoutes(
         );
       }
     })();
-    await syncRuntimeMcpToOpencodeEngine(config, workspace, [name], undefined, engineMcpServerState).catch(() => undefined);
+    await syncRuntimeMcpToWorkspaceEngineEngine(config, workspace, [name], undefined, engineMcpServerState).catch(() => undefined);
     await recordAudit(workspace.path, {
       id: shortId(),
       workspaceId: workspace.id,
@@ -2536,7 +2537,7 @@ function createRoutes(
     const name = String(ctx.params.name ?? "").trim();
     validateMcpName(name);
     const result = await startLocalManagedMcpAuthorization(config, workspace.id, name);
-    await syncRuntimeMcpToOpencodeEngine(config, workspace, [name], undefined, engineMcpServerState).catch(() => undefined);
+    await syncRuntimeMcpToWorkspaceEngineEngine(config, workspace, [name], undefined, engineMcpServerState).catch(() => undefined);
     return jsonResponse(result);
   });
 
@@ -2547,7 +2548,7 @@ function createRoutes(
     const { connection, workspaceId } = await completeLocalManagedMcpAuthorization(config, state, code);
     const workspace = config.workspaces.find((item) => item.id === workspaceId);
     if (workspace) {
-      await syncRuntimeMcpToOpencodeEngine(config, workspace, [connection.name], undefined, engineMcpServerState).catch(() => undefined);
+      await syncRuntimeMcpToWorkspaceEngineEngine(config, workspace, [connection.name], undefined, engineMcpServerState).catch(() => undefined);
     }
     return new Response(
       `<!doctype html><meta charset="utf-8"><title>Connected</title><main style="font:16px system-ui;padding:40px;max-width:560px"><h1>Connected</h1><p>${connection.name} is ready in Sofia App. You can close this window.</p><script>setTimeout(()=>window.close(),1200)</script></main>`,
@@ -2611,7 +2612,7 @@ function createRoutes(
     const result = await addMcp(config, workspace.id, name, configPayload);
     // Hot-add into the running engine so connect/auth works immediately,
     // without waiting for an engine instance rebuild.
-    await syncRuntimeMcpToOpencodeEngine(
+    await syncRuntimeMcpToWorkspaceEngineEngine(
       config,
       workspace,
       [name],
@@ -2660,7 +2661,7 @@ function createRoutes(
     });
     if (removed) {
       deleteEngineMcpRegistration(config, engineMcpServerState, workspace, name);
-      await disconnectMcpFromOpencodeEngine(config, workspace, name).catch(() => undefined);
+      await disconnectMcpFromWorkspaceEngineEngine(config, workspace, name).catch(() => undefined);
       emitReloadEvent(ctx.reloadEvents, workspace, "mcp", {
         type: "mcp",
         name,
@@ -2696,7 +2697,7 @@ function createRoutes(
     if (!updated) {
       throw new ApiError(404, "mcp_not_found", `MCP ${name} not found in workspace config`);
     }
-    await syncRuntimeMcpToOpencodeEngine(
+    await syncRuntimeMcpToWorkspaceEngineEngine(
       config,
       workspace,
       [name],
@@ -2730,8 +2731,8 @@ function createRoutes(
     validateMcpName(name);
 
     if (await disconnectLocalManagedMcp(config, workspace.id, name)) {
-      await disconnectMcpFromOpencodeEngine(config, workspace, name).catch(() => undefined);
-      await syncRuntimeMcpToOpencodeEngine(config, workspace, [name], undefined, engineMcpServerState).catch(() => undefined);
+      await disconnectMcpFromWorkspaceEngineEngine(config, workspace, name).catch(() => undefined);
+      await syncRuntimeMcpToWorkspaceEngineEngine(config, workspace, [name], undefined, engineMcpServerState).catch(() => undefined);
       await recordAudit(workspace.path, {
         id: shortId(),
         workspaceId: workspace.id,
@@ -2744,7 +2745,7 @@ function createRoutes(
       return jsonResponse({ ok: true });
     }
 
-    const authStorePath = join(homedir(), ".config", "opencode", "mcp-auth.json");
+    const authStorePath = join(homedir(), ".config", "engine", "mcp-auth.json");
     await requireApproval(ctx, {
       workspaceId: workspace.id,
       action: "mcp.auth.remove",
@@ -2754,20 +2755,20 @@ function createRoutes(
 
     // Best-effort disconnect so any active connection is torn down.
     try {
-      const opencode = createWorkspaceOpencodeClient(config, workspace);
-      unwrapOpencodeResult(await opencode.mcp.disconnect({ name }), `/mcp/${encodeURIComponent(name)}/disconnect`);
+      const engine = createWorkspaceWorkspaceEngineClient(config, workspace);
+      unwrapWorkspaceEngineResult(await engine.mcp.disconnect({ name }), `/mcp/${encodeURIComponent(name)}/disconnect`);
     } catch {
       // ignore
     }
 
     try {
-      const opencode = createWorkspaceOpencodeClient(config, workspace);
-      unwrapOpencodeResult(await opencode.mcp.auth.remove({ name }), `/mcp/${encodeURIComponent(name)}/auth`);
+      const engine = createWorkspaceWorkspaceEngineClient(config, workspace);
+      unwrapWorkspaceEngineResult(await engine.mcp.auth.remove({ name }), `/mcp/${encodeURIComponent(name)}/auth`);
     } catch (error) {
       // Treat missing credentials as a successful logout (idempotent).
       if (
         error instanceof ApiError &&
-        error.code === "opencode_request_failed" &&
+        error.code === "engine_request_failed" &&
         error.details &&
         typeof error.details === "object" &&
         "status" in (error.details as Record<string, unknown>) &&
@@ -2798,7 +2799,7 @@ function createRoutes(
       await requireHost(ctx.request, config, tokens);
     }
     const workspace = await resolveWorkspace(config, ctx.params.id);
-    const items = await listCommands(workspace.path, scope);
+    const items = scope === "global" ? await listCommands(workspace.path, scope) : await listSofiaCommands(workspace.path);
     return jsonResponse({ items });
   });
 
@@ -3028,16 +3029,16 @@ async function resolveWorkspace(config: ServerConfig, id: string): Promise<Works
     }
     if (bootstrapReloadReasons.size > 0) {
       await reloadBaselineRefreshers.get(config)?.(workspace.id, Array.from(bootstrapReloadReasons));
-      reloadOpencodeEngineAfterInternalBootstrap(config, { ...workspace, path: resolvedWorkspace });
+      reloadWorkspaceEngineEngineAfterInternalBootstrap(config, { ...workspace, path: resolvedWorkspace });
     }
   }
   return workspace;
 }
 
-function reloadOpencodeEngineAfterInternalBootstrap(config: ServerConfig, workspace: WorkspaceInfo): void {
+function reloadWorkspaceEngineEngineAfterInternalBootstrap(config: ServerConfig, workspace: WorkspaceInfo): void {
   const connection = resolveWorkspaceEngineConnection(config, workspace);
   if (!connection.baseUrl?.trim()) return;
-  void reloadOpencodeEngine(config, workspace).catch((error) => {
+  void reloadWorkspaceEngineEngine(config, workspace).catch((error) => {
     createServerLogger(config).log("error", `Bootstrap engine reload failed for workspace ${workspace.id}.`, {
       "workspace.id": workspace.id,
       "engine.reload.failure": error instanceof Error ? error.message : String(error),
@@ -3261,7 +3262,7 @@ async function fetchRuntimeControl(path: string, init?: { method?: string; body?
 
 /**
  * Resolve the effective per-workspace sofia config from the runtime DB,
- * migrating a legacy `.opencode/sofia.json` file into the DB on first read.
+ * migrating a legacy `.sofia/sofia.json` file into the DB on first read.
  *
  * The DB is the source of truth. The file is only consulted to seed the DB
  * once (back-compat for workspaces created before the file->DB migration), and
@@ -3301,14 +3302,14 @@ async function writeSofiaConfigForWorkspace(
   );
 }
 
-function resolveOpencodeDirectory(workspace: WorkspaceInfo): string | null {
+function resolveWorkspaceEngineDirectory(workspace: WorkspaceInfo): string | null {
   const explicit = workspace.directory?.trim() ?? "";
-  if (explicit) return normalizeOpencodeDirectory(explicit);
-  if (workspace.workspaceType === "local") return normalizeOpencodeDirectory(workspace.path);
+  if (explicit) return normalizeWorkspaceEngineDirectory(explicit);
+  if (workspace.workspaceType === "local") return normalizeWorkspaceEngineDirectory(workspace.path);
   return null;
 }
 
-function normalizeOpencodeDirectory(directory: string): string {
+function normalizeWorkspaceEngineDirectory(directory: string): string {
   // Sofia engine stores/list-filters Windows sessions by regular drive paths
   // (`C:\Users\...`). Electron can persist local workspaces as extended-length
   // paths (`\\?\C:\Users\...`); passing those through as the directory query
@@ -3319,7 +3320,7 @@ function normalizeOpencodeDirectory(directory: string): string {
   return directory;
 }
 
-function buildOpencodeReloadUrl(baseUrl: string, directory?: string | null): string {
+function buildWorkspaceEngineReloadUrl(baseUrl: string, directory?: string | null): string {
   try {
     const url = new URL(baseUrl);
     url.pathname = "/instance/dispose";
@@ -3329,11 +3330,11 @@ function buildOpencodeReloadUrl(baseUrl: string, directory?: string | null): str
     }
     return url.toString();
   } catch {
-    throw new ApiError(400, "opencode_url_invalid", "Sofia engine base URL is invalid");
+    throw new ApiError(400, "engine_url_invalid", "Sofia engine base URL is invalid");
   }
 }
 
-function parseOpencodeErrorBody(input: string): unknown {
+function parseWorkspaceEngineErrorBody(input: string): unknown {
   const trimmed = input.trim();
   if (!trimmed) return null;
   try {
@@ -3347,7 +3348,7 @@ function parseOpencodeErrorBody(input: string): unknown {
 // caller (CloudProviderSync serializes passes on one queue; an unbounded
 // dispose froze every later pass and the status it reports). Overridable for
 // tests.
-function opencodeDisposeTimeoutMs(): number {
+function engineDisposeTimeoutMs(): number {
   const configured = Number(process.env.SOFIA_ENGINE_DISPOSE_TIMEOUT_MS ?? "");
   return Number.isFinite(configured) && configured > 0 ? configured : 30_000;
 }
@@ -3360,8 +3361,8 @@ function opencodeDisposeTimeoutMs(): number {
  */
 async function engineHasActiveSessions(config: ServerConfig, workspace: WorkspaceInfo): Promise<boolean> {
   try {
-    const opencode = createWorkspaceOpencodeClient(config, workspace);
-    const statuses = unwrapOpencodeResult(await opencode.session.status(), "/session/status");
+    const engine = createWorkspaceWorkspaceEngineClient(config, workspace);
+    const statuses = unwrapWorkspaceEngineResult(await engine.session.status(), "/session/status");
     return Object.values(statuses).some((status) => status.type !== "idle");
   } catch {
     return false;
@@ -3375,7 +3376,7 @@ async function engineHasActiveSessions(config: ServerConfig, workspace: Workspac
  * process to dispose: re-attach runtime MCP state and converge. External
  * (remote or self-hosted) engines still get the in-place dispose call.
  */
-async function reloadOpencodeEngine(
+async function reloadWorkspaceEngineEngine(
   config: ServerConfig,
   workspace: WorkspaceInfo,
   serverState?: EngineMcpServerState,
@@ -3388,10 +3389,10 @@ async function reloadOpencodeEngine(
     await postEngineRefreshSync(config, workspace, activeState);
     return;
   }
-  await reloadOpencodeEngineInPlace(config, workspace, serverState, options);
+  await reloadWorkspaceEngineEngineInPlace(config, workspace, serverState, options);
 }
 
-async function reloadOpencodeEngineInPlace(
+async function reloadWorkspaceEngineEngineInPlace(
   config: ServerConfig,
   workspace: WorkspaceInfo,
   serverState?: EngineMcpServerState,
@@ -3406,8 +3407,8 @@ async function reloadOpencodeEngineInPlace(
     return;
   }
 
-  const directory = resolveOpencodeDirectory(workspace);
-  const targetUrl = buildOpencodeReloadUrl(baseUrl, directory);
+  const directory = resolveWorkspaceEngineDirectory(workspace);
+  const targetUrl = buildWorkspaceEngineReloadUrl(baseUrl, directory);
   const headers: Record<string, string> = {};
   const auth = connection.authHeader ?? null;
   if (auth) headers.Authorization = auth;
@@ -3420,30 +3421,30 @@ async function reloadOpencodeEngineInPlace(
     response = await loopbackFetch(targetUrl, {
       method: "POST",
       headers,
-      signal: AbortSignal.timeout(opencodeDisposeTimeoutMs()),
+      signal: AbortSignal.timeout(engineDisposeTimeoutMs()),
     });
   } catch (error) {
     if (error instanceof Error && error.name === "TimeoutError") {
-      // Deliberately NOT opencode_engine_unreachable: the app escalates that
+      // Deliberately NOT engine_engine_unreachable: the app escalates that
       // code to a full desktop engine restart, which would kill the very
       // sessions the wedged dispose is still tearing down.
       throw new ApiError(
         504,
-        "opencode_reload_timeout",
+        "engine_reload_timeout",
         "Sofia engine dispose did not complete in time; the reload stays pending",
         { baseUrl },
       );
     }
     throw new ApiError(
       503,
-      "opencode_engine_unreachable",
+      "engine_engine_unreachable",
       "Sofia engine is not reachable; a full engine restart is required",
       { baseUrl, cause: error instanceof Error ? error.message : String(error) },
     );
   }
   if (!response.ok) {
-    const body = parseOpencodeErrorBody(await response.text());
-    throw new ApiError(502, "opencode_reload_failed", "Sofia engine reload failed", {
+    const body = parseWorkspaceEngineErrorBody(await response.text());
+    throw new ApiError(502, "engine_reload_failed", "Sofia engine reload failed", {
       status: response.status,
       body,
     });
@@ -3471,7 +3472,7 @@ async function postEngineRefreshSync(
   workspace: WorkspaceInfo,
   activeState: EngineMcpServerState | undefined,
 ): Promise<void> {
-  const directory = resolveOpencodeDirectory(workspace);
+  const directory = resolveWorkspaceEngineDirectory(workspace);
   markSofiaCloudMcpStale(workspace, directory);
   return enqueueWorkspaceMcpRefreshSync({
     config,
@@ -3498,13 +3499,13 @@ function enqueueWorkspaceMcpRefreshSync(request: WorkspaceMcpRefreshRequest): Pr
 
 async function runWorkspaceMcpRefreshSync(input: WorkspaceMcpRefreshRequest): Promise<void> {
   const { config, workspace, trigger } = input;
-  const directory = resolveOpencodeDirectory(workspace);
+  const directory = resolveWorkspaceEngineDirectory(workspace);
   // Re-register runtime-DB MCPs: a rebuilt instance reads disk configs
   // (including the server-managed runtime config file for the primary
   // workspace), but other workspaces' runtime MCPs only reach the engine
   // through this dynamic push.
   try {
-    await syncRuntimeMcpToOpencodeEngine(
+    await syncRuntimeMcpToWorkspaceEngineEngine(
       config,
       workspace,
       undefined,
@@ -3519,11 +3520,11 @@ async function runWorkspaceMcpRefreshSync(input: WorkspaceMcpRefreshRequest): Pr
       config,
       workspace,
       directory,
-      serverMetadata: { serverVersion: SERVER_VERSION, expectedOpencodeVersion: OPENCODE_VERSION },
-      createWorkspaceOpencodeClient,
+      serverMetadata: { serverVersion: SERVER_VERSION, expectedWorkspaceEngineVersion: SOFIA_ENGINE_VERSION },
+      createWorkspaceWorkspaceEngineClient,
       refreshRegistrationFromLiveStatus: refreshEngineMcpRegistrationFromLiveStatus,
       registerRuntimeMcp: (routeConfig, routeWorkspace, onlyNames, options) =>
-        syncRuntimeMcpToOpencodeEngine(
+        syncRuntimeMcpToWorkspaceEngineEngine(
           routeConfig,
           routeWorkspace,
           onlyNames,
@@ -3543,7 +3544,7 @@ async function runWorkspaceMcpRefreshSync(input: WorkspaceMcpRefreshRequest): Pr
 // instance rebuild. Best-effort: callers treat engine sync as advisory and
 // swallow failures; outcomes are recorded per workspace (engineMcpSyncState)
 // and logged so failures aren't silent.
-async function syncRuntimeMcpToOpencodeEngine(
+async function syncRuntimeMcpToWorkspaceEngineEngine(
   config: ServerConfig,
   workspace: WorkspaceInfo,
   onlyNames?: string[],
@@ -3553,7 +3554,7 @@ async function syncRuntimeMcpToOpencodeEngine(
   const activeState = activeEngineMcpServerState(config, serverState);
   const coordinationState = activeEngineMcpServerState(config);
   if (!coordinationState) {
-    return runRuntimeMcpSyncToOpencodeEngine(config, workspace, onlyNames, options, serverState);
+    return runRuntimeMcpSyncToWorkspaceEngineEngine(config, workspace, onlyNames, options, serverState);
   }
   if (activeState) {
     reconcileEngineMcpWorkspaceIdentity(
@@ -3564,11 +3565,11 @@ async function syncRuntimeMcpToOpencodeEngine(
     if (!options?.deferred) cancelDeferredEngineMcpSync(activeState, workspace.id);
   }
   return withEngineMcpRegistrationLock(coordinationState, workspace.id, () =>
-    runRuntimeMcpSyncToOpencodeEngine(config, workspace, onlyNames, options, serverState)
+    runRuntimeMcpSyncToWorkspaceEngineEngine(config, workspace, onlyNames, options, serverState)
   );
 }
 
-async function runRuntimeMcpSyncToOpencodeEngine(
+async function runRuntimeMcpSyncToWorkspaceEngineEngine(
   config: ServerConfig,
   workspace: WorkspaceInfo,
   onlyNames?: string[],
@@ -3586,7 +3587,7 @@ async function runRuntimeMcpSyncToOpencodeEngine(
     return { status: "skipped", syncedNames: [], failures: [] };
   }
 
-  const runtimeConfig = await readRuntimeOpencodeConfig(config, workspace.id);
+  const runtimeConfig = await readRuntimeWorkspaceEngineConfig(config, workspace.id);
   const entries = Object.entries(runtimeMcpMap(runtimeConfig)).filter(
     ([name]) => !name.startsWith(CONNECT_MCP_SERVER_NAME_PREFIX)
       && (!onlyNames || onlyNames.includes(name)),
@@ -3612,7 +3613,7 @@ async function runRuntimeMcpSyncToOpencodeEngine(
   const url = new URL(baseUrl);
   url.pathname = "/mcp";
   url.search = "";
-  const directory = resolveOpencodeDirectory(workspace);
+  const directory = resolveWorkspaceEngineDirectory(workspace);
   if (directory) url.searchParams.set("directory", directory);
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (connection.authHeader) headers.Authorization = connection.authHeader;
@@ -3660,7 +3661,7 @@ async function runRuntimeMcpSyncToOpencodeEngine(
       "mcp.failed": names,
     });
     if (options?.throwOnFailure !== false) {
-      throw new ApiError(502, "opencode_mcp_sync_failed", `Failed to register MCPs with the engine: ${names}`, {
+      throw new ApiError(502, "engine_mcp_sync_failed", `Failed to register MCPs with the engine: ${names}`, {
         failures,
       });
     }
@@ -3929,7 +3930,7 @@ function scheduleDeferredEngineMcpSync(input: {
       `Running deferred engine MCP sync for workspace ${input.workspace.id}.`,
       { "workspace.id": input.workspace.id },
     );
-    void syncRuntimeMcpToOpencodeEngine(
+    void syncRuntimeMcpToWorkspaceEngineEngine(
       input.config,
       input.workspace,
       current.onlyNames,
@@ -4208,7 +4209,7 @@ function engineMcpConnectionIdentity(config: ServerConfig, workspace: WorkspaceI
     url.pathname = "/mcp";
     url.search = "";
     url.hash = "";
-    const directory = resolveOpencodeDirectory(workspace);
+    const directory = resolveWorkspaceEngineDirectory(workspace);
     if (directory) url.searchParams.set("directory", directory);
     const stableIdentity = stableMcpRegistrationValue({
       endpoint: url.toString(),
@@ -4532,7 +4533,7 @@ function logPersistedCloudMcpReconcileError(input: {
 }
 
 // Re-push every workspace's runtime-DB MCPs into the engine. Used at startup:
-// the runtime config file injected via OPENCODE_CONFIG covers workspaces[0]
+// the runtime config file injected via SOFIA_ENGINE_CONFIG covers workspaces[0]
 // only, so other workspaces' runtime MCPs are invisible to the engine until
 // something re-syncs them. Best-effort.
 export async function syncAllWorkspacesRuntimeMcpToEngine(config: ServerConfig): Promise<void> {
@@ -4542,10 +4543,10 @@ export async function syncAllWorkspacesRuntimeMcpToEngine(config: ServerConfig):
   }
 }
 
-// Counterpart of syncRuntimeMcpToOpencodeEngine for removals: tell the engine
+// Counterpart of syncRuntimeMcpToWorkspaceEngineEngine for removals: tell the engine
 // to drop the MCP's client so deleted MCPs stop serving tools immediately
 // instead of lingering until the next engine restart. Best-effort.
-async function disconnectMcpFromOpencodeEngine(
+async function disconnectMcpFromWorkspaceEngineEngine(
   config: ServerConfig,
   workspace: WorkspaceInfo,
   name: string,
@@ -4557,7 +4558,7 @@ async function disconnectMcpFromOpencodeEngine(
   const url = new URL(baseUrl);
   url.pathname = `/mcp/${encodeURIComponent(name)}/disconnect`;
   url.search = "";
-  const directory = resolveOpencodeDirectory(workspace);
+  const directory = resolveWorkspaceEngineDirectory(workspace);
   if (directory) url.searchParams.set("directory", directory);
   const headers: Record<string, string> = {};
   if (connection.authHeader) headers.Authorization = connection.authHeader;
@@ -4565,8 +4566,8 @@ async function disconnectMcpFromOpencodeEngine(
   // MCP disconnect targets the managed loopback engine.
   const response = await loopbackFetch(url, { method: "POST", headers, signal: AbortSignal.timeout(15_000) });
   if (!response.ok) {
-    const body = parseOpencodeErrorBody(await response.text());
-    throw new ApiError(502, "opencode_mcp_disconnect_failed", `Failed to disconnect MCP ${name} from the engine`, {
+    const body = parseWorkspaceEngineErrorBody(await response.text());
+    throw new ApiError(502, "engine_mcp_disconnect_failed", `Failed to disconnect MCP ${name} from the engine`, {
       status: response.status,
       body,
     });
@@ -4750,9 +4751,9 @@ async function materializeBlueprintSessions(config: ServerConfig, workspace: Wor
   }
 
   const created: Array<{ templateId: string; sessionId: string; title: string }> = [];
-  const opencode = createWorkspaceOpencodeClient(config, workspace);
+  const engine = createWorkspaceWorkspaceEngineClient(config, workspace);
   for (const template of templates) {
-    const result = unwrapOpencodeResult(await opencode.session.create({ title: template.title }), "/session");
+    const result = unwrapWorkspaceEngineResult(await engine.session.create({ title: template.title }), "/session");
     const sessionId =
       result && typeof result === "object" && "id" in result && typeof result.id === "string" ? result.id.trim() : "";
     if (!sessionId) {

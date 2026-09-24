@@ -153,7 +153,7 @@ manual sandbox notes.
 
 ## CDP manual-debugging tools
 
-The `opencode-chrome-devtools` plugin exposes these browser tools. Every call
+The `engine-chrome-devtools` plugin exposes these browser tools. Every call
 takes `browser_url`; target-specific calls also use the selected target ID.
 
 | Tool | Purpose |

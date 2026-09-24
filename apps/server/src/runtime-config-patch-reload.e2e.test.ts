@@ -88,7 +88,7 @@ describe("workspace config patch reload events", () => {
     const root = await createWorkspaceRoot();
     const { base, token } = await startSofiaServer(root);
     const payload = {
-      opencode: {
+      engine: {
         provider: {
           p1: {
             id: "openrouter",

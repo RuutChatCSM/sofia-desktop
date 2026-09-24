@@ -692,7 +692,7 @@ jobs:
       - name: Build Electron app
         shell: bash
         env:
-          # TARGET tells prepare-sidecar.mjs which architecture's opencode binary
+          # TARGET tells prepare-sidecar.mjs which architecture's engine binary
           # to download (critical for cross-arch builds like x64 on arm64 mac).
           TARGET: ${{ matrix.target_triple }}
         run: pnpm --filter @sofia/desktop build:electron

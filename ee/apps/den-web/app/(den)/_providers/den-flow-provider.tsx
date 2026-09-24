@@ -860,7 +860,7 @@ export function DenFlowProvider({ children }: { children: ReactNode }) {
         {
           method: "POST",
           headers: authToken ? { Authorization: `Bearer ${authToken}` } : undefined,
-          body: JSON.stringify({ services: ["sofia-server", "opencode"] })
+          body: JSON.stringify({ services: ["sofia-server", "engine"] })
         },
         12000
       );

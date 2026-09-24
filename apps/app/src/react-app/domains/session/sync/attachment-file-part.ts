@@ -43,7 +43,7 @@ type UploadedChatAttachment = {
   file: AttachmentFile;
 };
 
-const WORKSPACE_INBOX_ROOT = ".opencode/sofia/inbox";
+const WORKSPACE_INBOX_ROOT = ".sofia/sofia/inbox";
 const MAX_PATH_COMPONENT_BYTES = 255;
 const UTF8_ENCODER = new TextEncoder();
 
@@ -159,12 +159,12 @@ function isTextLikeAttachmentMime(mime: string) {
  * `text/plain` file parts; anything else throws UnsupportedFunctionalityError
  * server-side and poisons the session history. So model-facing file parts are
  * routed by one rule:
- * - text-like mimes are re-mimed to `text/plain` so opencode inlines their
+ * - text-like mimes are re-mimed to `text/plain` so engine inlines their
  *   content via the Read tool (the proven `@file` mention mechanism);
  * - images, PDFs, and Office mimes pass through (Office parts are rewritten
  *   to text by the SofiaOfficeAttachments plugin before the provider);
  * - everything else returns `null`: workspace (`file://`) attachments fall
- *   back to a `text/plain` part that opencode mediates through the Read tool,
+ *   back to a `text/plain` part that engine mediates through the Read tool,
  *   while data-URL attachments are dropped (inlining binary bytes as text is
  *   garbage); the synthetic workspace-path note gives tools the bytes.
  */
@@ -300,7 +300,7 @@ function attachmentPathNotePart(uploaded: UploadedChatAttachment[]): TextPartInp
 }
 
 async function uploadedAttachmentFilePart(item: UploadedChatAttachment): Promise<FilePartInput> {
-  // Binary/unknown mimes also get a `text/plain` file part: opencode expands
+  // Binary/unknown mimes also get a `text/plain` file part: engine expands
   // text/plain `file://` parts through the Read tool (which fails gracefully
   // with "Cannot read binary file") and never forwards them to the provider,
   // so the transcript keeps an attachment badge without any provider risk.

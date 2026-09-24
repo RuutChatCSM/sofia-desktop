@@ -170,7 +170,7 @@ const EnvSchema = z.object({
   DAYTONA_RUNTIME_DATA_PATH: z.string().optional(),
   DAYTONA_SIDECAR_DIR: z.string().optional(),
   DAYTONA_SOFIA_PORT: z.string().optional(),
-  DAYTONA_OPENCODE_PORT: z.string().optional(),
+  DAYTONA_SOFIA_ENGINE_PORT: z.string().optional(),
   DAYTONA_CREATE_TIMEOUT_SECONDS: z.string().optional(),
   DAYTONA_DELETE_TIMEOUT_SECONDS: z.string().optional(),
   DAYTONA_STOP_TIMEOUT_SECONDS: z.string().optional(),
@@ -783,7 +783,7 @@ export const env = {
     sidecarDir:
       optionalString(parsed.DAYTONA_SIDECAR_DIR) ?? "/tmp/sofia-sidecars",
     sofiaPort: Number(parsed.DAYTONA_SOFIA_PORT ?? "8787"),
-    opencodePort: Number(parsed.DAYTONA_OPENCODE_PORT ?? "4096"),
+    enginePort: Number(parsed.DAYTONA_SOFIA_ENGINE_PORT ?? "4096"),
     createTimeoutSeconds: Number(parsed.DAYTONA_CREATE_TIMEOUT_SECONDS ?? "300"),
     deleteTimeoutSeconds: Number(parsed.DAYTONA_DELETE_TIMEOUT_SECONDS ?? "120"),
     stopTimeoutSeconds: parsed.DAYTONA_STOP_TIMEOUT_SECONDS === undefined

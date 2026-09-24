@@ -57,7 +57,7 @@ function isSofiaServerReady(info?: BootSofiaServerInfo) {
  * On desktop (Tauri) startup:
  *   1) bootstrap the workspace list
  *   2) if a local workspace is selected, restart the embedded Sofia App server
- *   3) start the OpenCode engine pointed at the workspace
+ *   3) start the Sofia engine pointed at the workspace
  *   4) activate the workspace on the running Sofia App server
  *   5) notify React routes that fresh desktop runtime info is available. Electron
  *      routes read live runtime info directly instead of persisting ephemeral
@@ -231,7 +231,7 @@ export function useDesktopRuntimeBoot() {
 
         // SLOW PATH ─────────────────────────────────────────────────────
         // No running engine. Tauri now mirrors Electron: engine_start boots
-        // sofia-server and lets that server manage OpenCode.
+        // sofia-server and lets that server manage Sofia.
         const localPaths = list.workspaces.flatMap((entry: WorkspaceInfo) => {
           const path = entry.workspaceType !== "remote" ? entry.path?.trim() ?? "" : "";
           return path ? [path] : [];

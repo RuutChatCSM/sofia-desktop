@@ -28,7 +28,7 @@
  * - Mock OAuth+MCP server at MOCK_OAUTH_MCP_URL (reachable from den-api).
  * - Member account per mcp-connections-member-scoped.flow.mjs (bootstrapped
  *   automatically with SOFIA_EVAL_MARK_VERIFIED_CMD if missing).
- * - A working default model in the app (OpenCode Zen "Big Pickle" works
+ * - A working default model in the app (Sofia Zen "Big Pickle" works
  *   with zero keys) — this flow drives a REAL agent turn.
  */
 

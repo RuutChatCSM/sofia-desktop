@@ -8,7 +8,7 @@ export type {
   WorkspaceInfo,
   WorkspaceList,
   WorkspaceExportSummary,
-  OpencodeCommandDraft,
+  WorkspaceEngineCommandDraft,
   WorkspaceSofiaConfig,
   AppBuildInfo,
   DesktopDistributionInfo,
@@ -288,7 +288,7 @@ export const desktopBridge = new Proxy(electronBridge, {
 
 // ---------------------------------------------------------------------------
 // desktopFetch — proxies non-loopback requests through the Electron main
-// process. Loopback hosts (the local opencode/sofia server) use the
+// process. Loopback hosts (the local engine/sofia server) use the
 // renderer's own fetch, which works against same-machine services. Cross-origin
 // requests that need CORS headers the target does not send (e.g. the Den API on
 // a different control plane) should instead use `desktopFetchViaMain` directly.
@@ -315,7 +315,7 @@ async function desktopFetchThroughMain(
   options: DesktopFetchMainOptions = {},
 ): Promise<Response> {
   // Extract method/headers/body from either a Request object or the (input, init)
-  // pair. The OpenCode SDK calls fetch(request) (no init), so reading these only
+  // pair. The Sofia SDK calls fetch(request) (no init), so reading these only
   // from `init` would silently drop the Authorization header and the POST body
   // — the remote would then reject every request with "Invalid bearer token".
   let url: string;
@@ -553,9 +553,9 @@ const {
   workspaceImportConfig,
   workspaceSofiaRead,
   workspaceSofiaWrite,
-  opencodeCommandList,
-  opencodeCommandWrite,
-  opencodeCommandDelete,
+  engineCommandList,
+  engineCommandWrite,
+  engineCommandDelete,
   engineStop,
   engineRestart,
   appBuildInfo,
@@ -565,8 +565,8 @@ const {
   setDesktopBootstrapConfig,
   connectLinkVerify,
   connectLinkAccept,
-  nukeSofiaAndOpencodeConfigPreview,
-  nukeSofiaAndOpencodeConfigAndExit,
+  nukeSofiaAndWorkspaceEngineConfigPreview,
+  nukeSofiaAndWorkspaceEngineConfigAndExit,
   sandboxCleanupSofiaContainers,
   sofiaServerInfo,
   sofiaServerRestart,
@@ -590,8 +590,8 @@ const {
   uninstallSkill,
   updaterEnvironment,
   resetSofiaState,
-  resetOpencodeCache,
-  opencodeMcpAuth,
+  resetWorkspaceEngineCache,
+  engineMcpAuth,
   setWindowDecorations,
 } = desktopBridge;
 
@@ -610,9 +610,9 @@ export {
   workspaceImportConfig,
   workspaceSofiaRead,
   workspaceSofiaWrite,
-  opencodeCommandList,
-  opencodeCommandWrite,
-  opencodeCommandDelete,
+  engineCommandList,
+  engineCommandWrite,
+  engineCommandDelete,
   engineStop,
   engineRestart,
   appBuildInfo,
@@ -622,8 +622,8 @@ export {
   setDesktopBootstrapConfig,
   connectLinkVerify,
   connectLinkAccept,
-  nukeSofiaAndOpencodeConfigPreview,
-  nukeSofiaAndOpencodeConfigAndExit,
+  nukeSofiaAndWorkspaceEngineConfigPreview,
+  nukeSofiaAndWorkspaceEngineConfigAndExit,
   sandboxCleanupSofiaContainers,
   sofiaServerInfo,
   sofiaServerRestart,
@@ -647,7 +647,7 @@ export {
   uninstallSkill,
   updaterEnvironment,
   resetSofiaState,
-  resetOpencodeCache,
-  opencodeMcpAuth,
+  resetWorkspaceEngineCache,
+  engineMcpAuth,
   setWindowDecorations,
 };

@@ -6,7 +6,7 @@ This demo proves the public roadmap tells one coherent product story on both the
 
 2. The desktop section makes the current product clear. Files, skills, artifacts, and built-in browser control are live in the main Sofia experience, isolated sandboxes are partially supported, and better organization for long-running work is being built.
 
-3. Sofia Connect is how that setup travels. The roadmap shows one MCP connection bringing the same capabilities into Codex, Claude Code, Cursor, and OpenCode while keeping marketplace access and authentication under organization control.
+3. Sofia Connect is how that setup travels. The roadmap shows one MCP connection bringing the same capabilities into Codex, Claude Code, Cursor, and Sofia while keeping marketplace access and authentication under organization control.
 
 4. Sofia Cloud provides central management for the organization. Admins can apply desktop policies, assign marketplace skills and Anthropic-compatible plugins, manage identity with SSO, and understand adoption through telemetry.
 

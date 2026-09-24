@@ -263,7 +263,7 @@ export default {
             const prohibitedMutations = log.entries.filter((entry) => {
               if (entry.diagnostics) return false;
               const mutating = ["POST", "PUT", "PATCH", "DELETE"].includes(entry.method);
-              return mutating && /(refresh|reload|reconnect|\/opencode-config(?:\/|$)|\/config(?:\/|$)|\/mcp(?:\/|$)|\/connect\/state(?:\/|$))/i.test(entry.pathname);
+              return mutating && /(refresh|reload|reconnect|\/engine-config(?:\/|$)|\/config(?:\/|$)|\/mcp(?:\/|$)|\/connect\/state(?:\/|$))/i.test(entry.pathname);
             });
             ctx.assert(exchange.forwarded === true, "The diagnostics request was not forwarded to the real Sofia server.");
             ctx.assert(exchange.responseStatus === 200, `The real diagnostics route returned ${exchange.responseStatus}.`);

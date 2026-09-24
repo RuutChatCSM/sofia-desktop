@@ -13,7 +13,7 @@ const ENV_KEYS = [
   "APPDATA",
   "HOME",
   "LOCALAPPDATA",
-  "OPENCODE_CONFIG_DIR",
+  "SOFIA_ENGINE_CONFIG_DIR",
   "SOFIA_DATA_DIR",
   "SOFIA_DESKTOP_BOOTSTRAP_PATH",
   "SOFIA_DESKTOP_DISABLE_WORKSPACE_RECOVERY",
@@ -48,7 +48,7 @@ test("electronProfilePaths returns all expected paths under the profile root", (
     "envStorePath",
     "homeDir",
     "localAppDataDir",
-    "opencodeConfigDir",
+    "engineConfigDir",
     "root",
     "stateHome",
     "userDataDir",
@@ -83,7 +83,7 @@ test("electronSurfaceEnv matches the isolated Electron demo contract", () => {
   assert.equal(env.SOFIA_DATA_DIR, paths.dataDir);
   assert.equal(env.SOFIA_DESKTOP_BOOTSTRAP_PATH, paths.bootstrapPath);
   assert.equal(env.SOFIA_ENV_STORE, paths.envStorePath);
-  assert.equal(env.OPENCODE_CONFIG_DIR, paths.opencodeConfigDir);
+  assert.equal(env.SOFIA_ENGINE_CONFIG_DIR, paths.engineConfigDir);
   assert.equal(env.SOFIA_ELECTRON_USERDATA, paths.userDataDir);
   assert.equal(env.PORT, "5123");
   assert.equal(env.SOFIA_ELECTRON_REMOTE_DEBUG_PORT, "9123");

@@ -71,7 +71,7 @@ organization using the proper Sofia Cloud way: create a plugin containing
 the skill and publish it to our marketplace."
 
 **Expected:**
-- `.opencode/skills/weekly-report/SKILL.md` written in the workspace (the
+- `.sofia/skills/weekly-report/SKILL.md` written in the workspace (the
   "Skills changed. Reload to apply." toast appears).
 - Cloud side: plugin created, skill config object attached
   (`sourceMode: cloud`), plugin attached to the marketplace, org-wide viewer

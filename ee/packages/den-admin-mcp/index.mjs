@@ -10,7 +10,7 @@
 // a user is "active" on a day if they have a sign-in session day or a
 // `session.active` telemetry event that day.
 //
-// Register in Sofia (opencode.json):
+// Register in Sofia (engine.json):
 //   { "mcp": { "den-admin": { "type": "local",
 //       "command": ["node", "/path/to/ee/packages/den-admin-mcp/index.mjs"],
 //       "environment": { "DATABASE_URL": "mysql://..." }, "enabled": true } } }

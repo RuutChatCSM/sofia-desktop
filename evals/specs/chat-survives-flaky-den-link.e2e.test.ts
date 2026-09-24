@@ -233,7 +233,7 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 900_000 }, async (
     const patch = await fetch("http://127.0.0.1:" + port + "/workspace/" + encodeURIComponent(${JSON.stringify(workspaceId)}) + "/config", {
       method: "PATCH",
       headers,
-      body: JSON.stringify({ opencode: { provider: { anthropic: { options: { apiKey: ${JSON.stringify(anthropicKey)} } } } } }),
+      body: JSON.stringify({ engine: { provider: { anthropic: { options: { apiKey: ${JSON.stringify(anthropicKey)} } } } } }),
     });
     if (!patch.ok) return "patch:" + patch.status + ":" + (await patch.text()).slice(0, 300);
     const reload = await fetch("http://127.0.0.1:" + port + "/workspace/" + encodeURIComponent(${JSON.stringify(workspaceId)}) + "/engine/reload", {
@@ -305,7 +305,7 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 900_000 }, async (
       }
     };
     (async () => {
-      const url = "http://127.0.0.1:" + port + "/workspace/" + encodeURIComponent(${JSON.stringify(workspaceId)}) + "/opencode/event";
+      const url = "http://127.0.0.1:" + port + "/workspace/" + encodeURIComponent(${JSON.stringify(workspaceId)}) + "/engine/event";
       while (window.__owDenLink.active) {
         try {
           const response = await fetch(url, { headers: { Authorization: "Bearer " + token } });

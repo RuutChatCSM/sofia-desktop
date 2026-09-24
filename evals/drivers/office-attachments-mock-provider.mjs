@@ -11,7 +11,7 @@ import {
 
 const OFFICE_TOOL_CALL_ID = "call_write_office_artifacts";
 const OFFICE_TOOL_NAME = "bash";
-const MATERIALIZED_PREFIX = ".opencode/sofia/inbox/chat-attachments/";
+const MATERIALIZED_PREFIX = ".sofia/sofia/inbox/chat-attachments/";
 
 function parseArgs(argv) {
   const args = new Map();

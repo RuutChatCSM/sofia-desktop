@@ -44,16 +44,16 @@ Tests: `apps/app/tests/composer-connections.test.ts`, `apps/app/tests/library-de
 
 Unrelated leftovers; do not treat as Library work:
 
-- `.opencode/skills/test/`
+- `.sofia/skills/test/`
 - `scripts/release/alpha-downloads.html`
 
 ## Honest gaps (why it still feels split)
 
 These are **not** fully unified. Do not claim they are.
 
-1. **Agents and commands:** Add is Den (`POST /v1/plugins` with agent/command files). The Library **Agents / Commands tabs and the + panes** are still the **local OpenCode** lists (`app.agents()`, slash `source: command` on this device). Creating on Den does not write `.opencode/agents` / commands on disk.
+1. **Agents and commands:** Add is Den (`POST /v1/plugins` with agent/command files). The Library **Agents / Commands tabs and the + panes** are still the **local Sofia** lists (`app.agents()`, slash `source: command` on this device). Creating on Den does not write `.sofia/agents` / commands on disk.
 2. **MCPs: three surfaces remain in the product, even if + is one list:**
-   - local workspace MCP (`listMcp` / OpenCode config)
+   - local workspace MCP (`listMcp` / Sofia config)
    - Den plugin remote MCP (Connect inventory)
    - org connection records (`listMcpConnections`, native Gmail / M365 / remote MCP)
    Library still has separate **MCPs** vs **Connections** filters. + Configure goes to **connections** only.

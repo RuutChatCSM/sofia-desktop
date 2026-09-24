@@ -123,7 +123,7 @@ DEN_WORKER_PROXY_URL="$(daytona preview-url "$SANDBOX" -p "$DEN_WORKER_PROXY_POR
 # These exact URLs become the Den's public identity (OAuth issuer + MCP
 # resource). Every `daytona preview-url` call signs a fresh hostname, so a
 # caller that re-derives them later gets a *different* host and RFC 9728
-# validating MCP clients (opencode) refuse the mismatched resource. Hand the
+# validating MCP clients (engine) refuse the mismatched resource. Hand the
 # baked URLs to the caller through a trusted runner-side file instead; this
 # write happens on the runner from daytona CLI output only, so sandbox (ref
 # controlled) output can never influence it.

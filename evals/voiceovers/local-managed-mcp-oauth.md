@@ -6,13 +6,13 @@
 
 2. “For a provider such as BigQuery, I enter the registered OAuth client and
    requested scopes once. The provider secret is not written into my workspace
-   or OpenCode configuration.”
+   or Sofia configuration.”
 
 3. “I select Connect. Sofia opens the provider authorization page, receives
    the loopback callback, and reports Connected only after an authenticated
    tool catalog can be read.”
 
-4. “I start a task in the same workspace. The bundled OpenCode engine sees the
+4. “I start a task in the same workspace. The bundled Sofia engine sees the
    provider's tools through Sofia's local MCP endpoint and invokes one
    successfully without receiving the provider access or refresh token.”
 

@@ -136,7 +136,7 @@ function defaultDesktopBootstrapPath() {
 }
 
 function defaultSkillsDir() {
-  return process.env.SOFIA_SKILLS_DIR || join(configHomeDir(), "opencode", "skills")
+  return process.env.SOFIA_SKILLS_DIR || join(configHomeDir(), "engine", "skills")
 }
 
 function defaultDeviceKeyPath() {

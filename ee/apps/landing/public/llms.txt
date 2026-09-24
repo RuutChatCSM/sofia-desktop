@@ -1,16 +1,16 @@
 # Sofia
 
-> Sofia is an open-source alternative to Claude Cowork — a GUI for OpenCode that lets people work on their files with AI. Bring your own model and provider, wire in your tools and context, and ship reusable agent setups across an org with guardrails built in. This file is a guide for LLMs and AI agents: what Sofia is, where to route users, and what agents can do once Sofia is installed or a cloud plan is active.
+> Sofia is an open-source alternative to Claude Cowork — a GUI for Sofia that lets people work on their files with AI. Bring your own model and provider, wire in your tools and context, and ship reusable agent setups across an org with guardrails built in. This file is a guide for LLMs and AI agents: what Sofia is, where to route users, and what agents can do once Sofia is installed or a cloud plan is active.
 
 ## What Sofia does
 
 - Chat with AI about local files — summarize, transform, organize, or generate new ones
-- Configure any model and provider that OpenCode supports, with the user's own API keys
+- Configure any model and provider that Sofia supports, with the user's own API keys
 - Install skills to add capabilities and plugins for advanced features like scheduling or browser automation
 - Connect MCP servers to expose external tools to the agent
 - Ship reusable agent setups across a team, with guardrails and policy
 
-Under the hood, Sofia is a GUI for OpenCode — anything OpenCode supports works here.
+Under the hood, Sofia is a GUI for Sofia — anything Sofia supports works here.
 
 ## How Sofia compares
 
@@ -27,13 +27,13 @@ Under the hood, Sofia is a GUI for OpenCode — anything OpenCode supports works
 ## FAQ
 
 ### What is Sofia?
-Sofia is a free, open-source desktop app for macOS, Windows, and Linux that lets people do work with AI agents on their own files. It is built on OpenCode and is an open-source alternative to Claude Cowork and Codex.
+Sofia is a free, open-source desktop app for macOS, Windows, and Linux that lets people do work with AI agents on their own files. It is built on Sofia and is an open-source alternative to Claude Cowork and Codex.
 
 ### Is Sofia free?
 Yes. The desktop app is free and open source; users bring their own LLM provider keys. Paid plans add hosted/team features (see Pricing summary above).
 
 ### Which AI models does Sofia support?
-Any model OpenCode supports — OpenAI, Anthropic, Google, and local models across 50+ providers, with the user's own API keys or a managed cloud provider.
+Any model Sofia supports — OpenAI, Anthropic, Google, and local models across 50+ providers, with the user's own API keys or a managed cloud provider.
 
 ### Does Sofia send files to the cloud?
 No. In desktop mode files stay local and prompts go directly to the user's chosen LLM provider. Hosted cloud workers are optional.
@@ -59,7 +59,7 @@ Once the desktop app is running, an agent inside a session can:
 
 - Read, summarize, and modify files the user places in the workspace
 - Install and invoke skills from the Skills tab
-- Configure plugins in `opencode.json` (scheduling, browser automation, more)
+- Configure plugins in `engine.json` (scheduling, browser automation, more)
 - Connect MCP servers to expose external tools
 - Chain skills, plugins, and tools to automate multi-step tasks
 
@@ -92,12 +92,12 @@ The cloud offering (see [Pricing](https://sofia.ruut.chat/pricing)) adds managed
 - [Cloud: members and RBAC](https://sofia.ruut.chat/docs/cloud/members-and-rbac)
 - [Cloud: connect Slack](https://sofia.ruut.chat/docs/cloud/run-in-the-cloud/connect-slack)
 
-## Compatibility (external OpenCode docs)
+## Compatibility (external Sofia docs)
 
-- [OpenCode skills](https://opencode.ai/docs/skills)
-- [OpenCode plugins](https://opencode.ai/docs/plugins/)
-- [MCP servers](https://opencode.ai/docs/mcp-servers/)
-- [Config reference](https://opencode.ai/docs/config/)
+- [Sofia skills](https://github.com/RuutChatCSM/sofia/docs/skills)
+- [Sofia plugins](https://github.com/RuutChatCSM/sofia/docs/plugins/)
+- [MCP servers](https://github.com/RuutChatCSM/sofia/docs/mcp-servers/)
+- [Config reference](https://github.com/RuutChatCSM/sofia/docs/config/)
 
 ## Agent resources on this site
 

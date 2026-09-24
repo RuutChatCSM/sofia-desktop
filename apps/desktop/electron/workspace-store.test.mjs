@@ -195,7 +195,7 @@ test("does not create a default workspace when desktop state is absent", async (
 
     const state = await store.readWorkspaceState();
     assert.equal(state.workspaces.length, 0);
-    await assert.rejects(readFile(path.join(userData, "sofia-dev-data", "home", "Sofia App", ".opencode", "sofia.json"), "utf8"));
+    await assert.rejects(readFile(path.join(userData, "sofia-dev-data", "home", "Sofia App", ".sofia", "sofia.json"), "utf8"));
   } finally {
     restoreEnv("SOFIA_DEV_MODE", previousDevMode);
     restoreEnv("SOFIA_SERVER_CONFIG", previousServerConfig);

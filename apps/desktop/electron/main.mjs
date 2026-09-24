@@ -88,7 +88,7 @@ const require = createRequire(import.meta.url);
 const desktopPackageMetadata = require("../package.json");
 
 /** Engine-selection file the renderer mirrors so the main process can gate
- * whether the opencode engine boots at startup. */
+ * whether the engine engine boots at startup. */
 function engineSelectionFilePath() {
   return path.join(app.getPath("userData"), "codex-engine-selection.json");
 }
@@ -97,7 +97,7 @@ function readEngineSelectionFile() {
   try {
     const raw = readFileSync(engineSelectionFilePath(), "utf8");
     const parsed = JSON.parse(raw);
-    return parsed?.engine === "opencode" ? "opencode" : "codex";
+    return parsed?.engine === "engine" ? "engine" : "codex";
   } catch {
     // Codex (Sofia) is the default engine; missing file means codex-only.
     return "codex";
@@ -956,7 +956,7 @@ if (process.platform === "darwin" && INITIAL_APP_ICON_IMAGE && !INITIAL_APP_ICON
   app.dock.setIcon(INITIAL_APP_ICON_IMAGE);
 }
 
-// Expose Chrome DevTools Protocol so the opencode-chrome-devtools plugin can
+// Expose Chrome DevTools Protocol so the engine-chrome-devtools plugin can
 // drive the built-in browser panel.  Use SOFIA_ELECTRON_REMOTE_DEBUG_PORT to
 // pin a specific port; otherwise probe for a free one starting at 9223.
 // Must resolve before app.commandLine.appendSwitch (before `ready`).
@@ -1025,7 +1025,7 @@ if (isDevMode && !app.isPackaged) {
 
 // Agent-facing CDP broker: rewrites agent Input events with human-like cursor
 // motion before they reach the built-in browser panel's Chromium. Engine
-// agnostic — any CDP client (opencode-chrome-devtools today, a Codex runtime
+// agnostic — any CDP client (engine-chrome-devtools today, a Codex runtime
 // later) connects here. Falls back to the raw CDP port if unavailable.
 let cdpBrokerBaseUrl = null;
 let closeCdpBroker = null;
@@ -1051,7 +1051,7 @@ if (remoteDebugPort > 0) {
     closeCdpBroker = broker.close;
     // Expose the broker endpoint to the embedded server so it can register the
     // chrome-devtools MCP server pointing at it (the browser surface for both
-    // the opencode and future codex runtimes).
+    // the engine and future codex runtimes).
     process.env.SOFIA_ELECTRON_AGENT_CDP_BASE_URL = broker.baseUrl;
     if (isDevMode && !app.isPackaged) {
       console.log(`[sofia] dev cdp-broker=${broker.baseUrl} (upstream http://127.0.0.1:${remoteDebugPort})`);
@@ -1096,10 +1096,10 @@ const IDLE_ENGINE_INFO = Object.freeze({
   projectDir: null,
   hostname: null,
   port: null,
-  opencodeUsername: null,
-  opencodePassword: null,
-  opencodeBinPath: null,
-  opencodeBinSource: null,
+  engineUsername: null,
+  enginePassword: null,
+  engineBinPath: null,
+  engineBinSource: null,
   pid: null,
   lastStdout: null,
   lastStderr: null,
@@ -1117,8 +1117,8 @@ const IDLE_SOFIA_SERVER_INFO = Object.freeze({
   clientToken: null,
   ownerToken: null,
   hostToken: null,
-  managedOpencodeBinPath: null,
-  managedOpencodeBinSource: null,
+  managedWorkspaceEngineBinPath: null,
+  managedWorkspaceEngineBinSource: null,
   pid: null,
   lastStdout: null,
   lastStderr: null,
@@ -1128,7 +1128,7 @@ const IDLE_ROUTER_INFO = Object.freeze({
   running: false,
   version: null,
   workspacePath: null,
-  opencodeUrl: null,
+  engineUrl: null,
   healthPort: null,
   pid: null,
   lastStdout: null,
@@ -1790,17 +1790,17 @@ const desktopCommandHandlers = {
   "workspaceImportConfig": async (event, ...args) => {
       return workspaceStore.importConfig(args[0] ?? {});
   },
-  "opencodeCommandList": async (event, ...args) => {
+  "engineCommandList": async (event, ...args) => {
       return listCommandNames(String(args[0]?.scope ?? "").trim(), String(args[0]?.projectDir ?? "").trim());
   },
-  "opencodeCommandWrite": async (event, ...args) => {
+  "engineCommandWrite": async (event, ...args) => {
       return writeCommandFile(
         String(args[0]?.scope ?? "").trim(),
         String(args[0]?.projectDir ?? "").trim(),
         args[0]?.command ?? {},
       );
   },
-  "opencodeCommandDelete": async (event, ...args) => {
+  "engineCommandDelete": async (event, ...args) => {
       return deleteCommandFile(
         String(args[0]?.scope ?? "").trim(),
         String(args[0]?.projectDir ?? "").trim(),
@@ -1838,7 +1838,7 @@ const desktopCommandHandlers = {
   },
   "codexEngineSelectionWrite": async (event, ...args) => {
       const engine = String(args[0]?.engine ?? "").trim();
-      if (engine !== "codex" && engine !== "opencode") return { ok: false };
+      if (engine !== "codex" && engine !== "engine") return { ok: false };
       await writeFile(engineSelectionFilePath(), JSON.stringify({ engine }, null, 2), "utf8");
       return { ok: true };
   },
@@ -1989,7 +1989,7 @@ const desktopCommandHandlers = {
       const config = await persistConnectLinkClaims(verified.claims);
       return { ok: true, config };
   },
-  "nukeSofiaAndOpencodeConfigPreview": async (event, ...args) => {
+  "nukeSofiaAndWorkspaceEngineConfigPreview": async (event, ...args) => {
       return buildNukeManifest({
         env: process.env,
         homedir: os.homedir(),
@@ -1999,7 +1999,7 @@ const desktopCommandHandlers = {
         workspacePaths: await workspaceStore.listLocalWorkspacePaths(),
       });
   },
-  "nukeSofiaAndOpencodeConfigAndExit": async (event, ...args) => {
+  "nukeSofiaAndWorkspaceEngineConfigAndExit": async (event, ...args) => {
       return executeNukeFreshStart({
         app,
         session,
@@ -2147,11 +2147,11 @@ const desktopCommandHandlers = {
   "resetSofiaState": async (event, ...args) => {
       return workspaceStore.resetSofiaState();
   },
-  "resetOpencodeCache": async (event, ...args) => {
+  "resetWorkspaceEngineCache": async (event, ...args) => {
       return { removed: [], missing: [], errors: [] };
   },
-  "opencodeMcpAuth": async (event, ...args) => {
-      return runtimeManager.opencodeMcpAuth(String(args[0] ?? "").trim(), String(args[1] ?? "").trim());
+  "engineMcpAuth": async (event, ...args) => {
+      return runtimeManager.engineMcpAuth(String(args[0] ?? "").trim(), String(args[1] ?? "").trim());
   },
   "setWindowDecorations": async (event, ...args) => {
       return undefined;

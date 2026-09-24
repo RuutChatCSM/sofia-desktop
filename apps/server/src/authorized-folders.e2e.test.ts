@@ -5,7 +5,7 @@ import { join, resolve } from "node:path";
 
 import { startServer } from "./server.js";
 import type { ServerConfig } from "./types.js";
-import { readRuntimeOpencodeConfig, writeRuntimeOpencodeConfig } from "./runtime-opencode-config-store.js";
+import { readRuntimeWorkspaceEngineConfig, writeRuntimeWorkspaceEngineConfig } from "./runtime-engine-config-store.js";
 
 type Served = {
   port: number;
@@ -107,7 +107,7 @@ describe("authorized folders routes", () => {
   test("lists visible folders and counts preserved hidden entries", async () => {
     const root = resolve(await createWorkspaceRoot());
     const { base, config } = await startSofiaServer(root);
-    await writeRuntimeOpencodeConfig(config, "ws_1", () => ({
+    await writeRuntimeWorkspaceEngineConfig(config, "ws_1", () => ({
       permission: {
         external_directory: {
           [`${root}/*`]: "allow",
@@ -132,7 +132,7 @@ describe("authorized folders routes", () => {
   test("dedupes, filters workspace root, and preserves hidden entries on write", async () => {
     const root = resolve(await createWorkspaceRoot());
     const { base, config } = await startSofiaServer(root);
-    await writeRuntimeOpencodeConfig(config, "ws_1", () => ({
+    await writeRuntimeWorkspaceEngineConfig(config, "ws_1", () => ({
       permission: {
         external_directory: {
           [`${root}/*`]: "allow",
@@ -154,7 +154,7 @@ describe("authorized folders routes", () => {
     expect(body.hiddenCount).toBe(2);
     expect(typeof body.updatedAt).toBe("number");
 
-    const runtimeConfig = await readRuntimeOpencodeConfig(config, "ws_1");
+    const runtimeConfig = await readRuntimeWorkspaceEngineConfig(config, "ws_1");
     const externalDirectory = runtimeConfig.permission?.external_directory ?? {};
     expect(externalDirectory["/hidden"]).toBe("allow");
     expect(externalDirectory["/denied/*"]).toBe("deny");

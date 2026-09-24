@@ -7,12 +7,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   desktopBootstrapPath as resolveDesktopBootstrapPath,
-  globalOpencodeConfigDir,
+  globalWorkspaceEngineConfigDir,
   legacyDesktopBootstrapPath as resolveLegacyDesktopBootstrapPath,
   sofiaEnvStorePath,
   sofiaServerConfigPath as resolveSofiaServerConfigPath,
-  opencodeCacheDirs as resolveOpencodeCacheDirs,
-  opencodeDataDirs as resolveOpencodeDataDirs,
+  engineCacheDirs as resolveWorkspaceEngineCacheDirs,
+  engineDataDirs as resolveWorkspaceEngineDataDirs,
 } from "@sofia/paths";
 
 const BROWSER_SESSION_PARTITION = "persist:sofia-browser";
@@ -24,7 +24,7 @@ const SOFIA_CONFIG_FILENAMES = [
   "runtime.sqlite",
   "runtime.sqlite-wal",
   "runtime.sqlite-shm",
-  "runtime-opencode-config.json",
+  "runtime-engine-config.json",
   "engine-instances.json",
   "tokens.json",
   "env.json",
@@ -45,8 +45,8 @@ const NUKE_WORKER_PARENT_WAIT_MS = 30_000;
 // Env overrides that move a profile's storage off the default locations.
 // Stripping them yields the paths the default (production) profile owns.
 const PROFILE_SCOPED_ENV_KEYS = [
-  "OPENCODE_CONFIG_DIR",
-  "OPENCODE_DB",
+  "SOFIA_ENGINE_CONFIG_DIR",
+  "SOFIA_ENGINE_DB",
   "SOFIA_DATA_DIR",
   "SOFIA_DESKTOP_BOOTSTRAP_PATH",
   "SOFIA_DEV_MODE",
@@ -72,8 +72,8 @@ const NUKE_WORKER_ENV_KEYS = [
   "SOFIA_RUNTIME_DB",
   "SOFIA_SERVER_CONFIG",
   "SOFIA_TOKEN_STORE",
-  "OPENCODE_CONFIG_DIR",
-  "OPENCODE_DB",
+  "SOFIA_ENGINE_CONFIG_DIR",
+  "SOFIA_ENGINE_DB",
   "XDG_CACHE_HOME",
   "XDG_CONFIG_HOME",
   "XDG_DATA_HOME",
@@ -127,8 +127,8 @@ function resolveNukeEnvironment({ env = {}, homedir, platform, userDataPath }) {
     resolvedEnv.XDG_DATA_HOME = paths.join(root, "xdg", "data");
     resolvedEnv.XDG_CACHE_HOME = paths.join(root, "xdg", "cache");
     resolvedEnv.XDG_STATE_HOME = paths.join(root, "xdg", "state");
-    resolvedEnv.OPENCODE_CONFIG_DIR = paths.join(root, "config", "opencode");
-    resolvedEnv.OPENCODE_TEST_HOME = resolvedHome;
+    resolvedEnv.SOFIA_ENGINE_CONFIG_DIR = paths.join(root, "config", "engine");
+    resolvedEnv.SOFIA_ENGINE_TEST_HOME = resolvedHome;
   }
 
   return {
@@ -181,26 +181,26 @@ function legacyDesktopBootstrapPath(homedir, platform) {
   return resolveLegacyDesktopBootstrapPath({ env: {}, homeDir: homedir, platform });
 }
 
-function opencodeDataDirs(env, homedir, platform, paths) {
-  return resolveOpencodeDataDirs({ env, homeDir: homedir, platform });
+function engineDataDirs(env, homedir, platform, paths) {
+  return resolveWorkspaceEngineDataDirs({ env, homeDir: homedir, platform });
 }
 
-function opencodeConfigDirs(env, homedir, platform, paths) {
-  return [globalOpencodeConfigDir({ env, homeDir: homedir, platform })];
+function engineConfigDirs(env, homedir, platform, paths) {
+  return [globalWorkspaceEngineConfigDir({ env, homeDir: homedir, platform })];
 }
 
-function opencodeCacheDirs(env, homedir, platform) {
-  return resolveOpencodeCacheDirs({ env, homeDir: homedir, platform });
+function engineCacheDirs(env, homedir, platform) {
+  return resolveWorkspaceEngineCacheDirs({ env, homeDir: homedir, platform });
 }
 
-function opencodeStateDirs(env, homedir, platform, paths) {
+function engineStateDirs(env, homedir, platform, paths) {
   const dirs = [];
   const xdgStateHome = envValue(env, "XDG_STATE_HOME");
-  if (xdgStateHome) dirs.push(paths.join(xdgStateHome, "opencode"));
-  dirs.push(paths.join(homedir, ".local", "state", "opencode"));
+  if (xdgStateHome) dirs.push(paths.join(xdgStateHome, "engine"));
+  dirs.push(paths.join(homedir, ".local", "state", "engine"));
   if (platform === "win32") {
     const localAppData = envValue(env, "LOCALAPPDATA");
-    dirs.push(paths.join(localAppData || paths.join(homedir, "AppData", "Local"), "opencode"));
+    dirs.push(paths.join(localAppData || paths.join(homedir, "AppData", "Local"), "engine"));
   }
   return dirs;
 }
@@ -223,14 +223,14 @@ function workspaceSofiaStatePaths(workspacePaths, paths) {
   for (const workspacePath of workspacePaths) {
     const value = String(workspacePath ?? "").trim();
     if (!value) continue;
-    const opencodeDir = paths.join(paths.resolve(value), ".opencode");
-    output.push(paths.join(opencodeDir, "sofia"), paths.join(opencodeDir, "sofia.json"));
+    const engineDir = paths.join(paths.resolve(value), ".sofia");
+    output.push(paths.join(engineDir, "sofia"), paths.join(engineDir, "sofia.json"));
   }
   return output;
 }
 
-function opencodeDbOverridePaths(env, dataDirs, paths) {
-  const override = envValue(env, "OPENCODE_DB");
+function engineDbOverridePaths(env, dataDirs, paths) {
+  const override = envValue(env, "SOFIA_ENGINE_DB");
   if (!override) return [];
   if (paths.isAbsolute(override)) return [override];
   return dataDirs.map((dir) => paths.join(dir, override));
@@ -249,8 +249,8 @@ function sameOrInside(candidate, parent, paths, platform) {
 function shouldSkipDeletePath(targetPath, preserveBootstrapPath, homedir, paths, platform) {
   if (!targetPath) return true;
   if (preserveBootstrapPath && paths.resolve(targetPath) === paths.resolve(preserveBootstrapPath)) return true;
-  const opencodeBin = paths.join(homedir, ".opencode", "bin");
-  return sameOrInside(targetPath, opencodeBin, paths, platform) || paths.resolve(targetPath) === paths.dirname(paths.resolve(opencodeBin));
+  const engineBin = paths.join(homedir, ".sofia", "bin");
+  return sameOrInside(targetPath, engineBin, paths, platform) || paths.resolve(targetPath) === paths.dirname(paths.resolve(engineBin));
 }
 
 function uniquePaths(rawPaths, paths, platform) {
@@ -307,8 +307,8 @@ function resolveNukePlan(input) {
   const runtimeDb = runtimeDbPath(env, serverConfig, homedir, paths);
   const envStore = envStorePath(env, homedir, platform, paths);
   const tokens = tokenStorePath(env, serverConfig, homedir, paths);
-  const runtimeConfig = paths.join(paths.dirname(runtimeDb), "runtime-opencode-config.json");
-  const dataDirs = opencodeDataDirs(env, homedir, platform, paths);
+  const runtimeConfig = paths.join(paths.dirname(runtimeDb), "runtime-engine-config.json");
+  const dataDirs = engineDataDirs(env, homedir, platform, paths);
   const deletePaths = [
     userDataPath,
     serverConfig,
@@ -321,10 +321,10 @@ function resolveNukePlan(input) {
     bootstrapPath,
     legacyBootstrapPath,
     ...dataDirs,
-    ...opencodeDbOverridePaths(env, dataDirs, paths),
-    ...opencodeConfigDirs(env, homedir, platform, paths),
-    ...opencodeCacheDirs(env, homedir, platform),
-    ...opencodeStateDirs(env, homedir, platform, paths),
+    ...engineDbOverridePaths(env, dataDirs, paths),
+    ...engineConfigDirs(env, homedir, platform, paths),
+    ...engineCacheDirs(env, homedir, platform),
+    ...engineStateDirs(env, homedir, platform, paths),
     orchestratorDataDir(env, homedir, paths),
     serverDataDir(env, homedir, paths),
     ...USERDATA_WORKSPACE_FILENAMES.map((filename) => paths.join(userDataPath, filename)),
@@ -374,7 +374,7 @@ function resolveNukePlan(input) {
     pendingPath,
     scopeToProfile,
     scopeDeletePaths,
-    preservePaths: uniquePaths([preserveBootstrapPath, paths.join(homedir, ".opencode", "bin")], paths, platform),
+    preservePaths: uniquePaths([preserveBootstrapPath, paths.join(homedir, ".sofia", "bin")], paths, platform),
     legacyBootstrapPath: paths.resolve(legacyBootstrapPath) === paths.resolve(bootstrapPath) ? null : legacyBootstrapPath,
     platform,
   };

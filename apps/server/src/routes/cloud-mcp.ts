@@ -15,7 +15,7 @@ import { addRoute, type RequestContext, type Route } from "./registry.js";
 
 type JsonResponse = (data: unknown, status?: number) => Response;
 type ReadJsonBody = (request: Request) => Promise<Record<string, unknown>>;
-type WorkspaceOpencodeClient = WorkspaceEngineClient;
+type WorkspaceWorkspaceEngineClient = WorkspaceEngineClient;
 
 export type RegisterCloudMcpRoutesOptions = {
   routes: Route[];
@@ -25,8 +25,8 @@ export type RegisterCloudMcpRoutesOptions = {
   ensureWritable: (config: ServerConfig) => void;
   requireClientScope: (ctx: RequestContext, required: TokenScope) => void;
   resolveWorkspace: (config: ServerConfig, id: string) => Promise<WorkspaceInfo>;
-  resolveOpencodeDirectory: (workspace: WorkspaceInfo) => string | null;
-  createWorkspaceOpencodeClient: (config: ServerConfig, workspace: WorkspaceInfo) => WorkspaceOpencodeClient;
+  resolveWorkspaceEngineDirectory: (workspace: WorkspaceInfo) => string | null;
+  createWorkspaceWorkspaceEngineClient: (config: ServerConfig, workspace: WorkspaceInfo) => WorkspaceWorkspaceEngineClient;
   registerRuntimeMcp: CloudMcpRuntimeRegistrar;
   refreshRegistrationFromLiveStatus?: CloudMcpLiveStatusObserver;
   serverMetadata?: CloudMcpServerMetadata;
@@ -86,8 +86,8 @@ export function registerCloudMcpRoutes(options: RegisterCloudMcpRoutesOptions): 
     ensureWritable,
     requireClientScope,
     resolveWorkspace,
-    resolveOpencodeDirectory,
-    createWorkspaceOpencodeClient,
+    resolveWorkspaceEngineDirectory,
+    createWorkspaceWorkspaceEngineClient,
     registerRuntimeMcp,
     refreshRegistrationFromLiveStatus,
     serverMetadata,
@@ -99,11 +99,11 @@ export function registerCloudMcpRoutes(options: RegisterCloudMcpRoutesOptions): 
     const health = await readSofiaCloudMcpHealth({
       config,
       workspace,
-      directory: resolveOpencodeDirectory(workspace),
+      directory: resolveWorkspaceEngineDirectory(workspace),
       providerModel: providerModelFromQuery(ctx.url),
       serverMetadata,
       probe: probeFromQuery(ctx.url),
-      createWorkspaceOpencodeClient,
+      createWorkspaceWorkspaceEngineClient,
       refreshRegistrationFromLiveStatus,
     });
     return jsonResponse(health);
@@ -135,10 +135,10 @@ export function registerCloudMcpRoutes(options: RegisterCloudMcpRoutesOptions): 
     const result = await refreshSofiaCloudMcpEngine({
       config,
       workspace,
-      directory: resolveOpencodeDirectory(workspace),
+      directory: resolveWorkspaceEngineDirectory(workspace),
       providerModel: providerModelFromBody(body),
       serverMetadata,
-      createWorkspaceOpencodeClient,
+      createWorkspaceWorkspaceEngineClient,
       registerRuntimeMcp,
       refreshRegistrationFromLiveStatus,
       trigger: typeof body.trigger === "string" ? body.trigger : undefined,
@@ -159,11 +159,11 @@ export function registerCloudMcpRoutes(options: RegisterCloudMcpRoutesOptions): 
     const health = await reconcileSofiaCloudMcp({
       config,
       workspace,
-      directory: resolveOpencodeDirectory(workspace),
+      directory: resolveWorkspaceEngineDirectory(workspace),
       body,
       providerModel: providerModelFromBody(body),
       serverMetadata,
-      createWorkspaceOpencodeClient,
+      createWorkspaceWorkspaceEngineClient,
       registerRuntimeMcp,
       refreshRegistrationFromLiveStatus,
     });

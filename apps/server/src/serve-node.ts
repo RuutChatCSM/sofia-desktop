@@ -216,10 +216,14 @@ export function serve(options: ServeOptions): Promise<ServeResult> {
       }
       console.error("[serve-node] Unhandled error:", error);
       if (!isResponseWritable(nodeRes)) return;
+      const errorBody = JSON.stringify({ error: "internal_error" });
       if (!nodeRes.headersSent) {
-        nodeRes.writeHead(500, { "Content-Type": "application/json" });
+        nodeRes.writeHead(500, {
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(errorBody),
+        });
       }
-      endResponse(nodeRes, JSON.stringify({ error: "internal_error" }));
+      endResponse(nodeRes, errorBody);
     } finally {
       detachCancellation?.();
     }

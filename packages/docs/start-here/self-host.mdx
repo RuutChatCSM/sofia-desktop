@@ -55,7 +55,7 @@ In production, hosted Sofia runs the Cloud app and Den controller as scaled Rend
 The production shape is straightforward:
 
 - Put HTTPS in front of every public service.
-- Expose the Sofia server/worker URL, not raw opencode.
+- Expose the Sofia server/worker URL, not raw engine.
 - Keep workspace and data paths on durable storage.
 - Configure public URLs, auth origins, CORS origins, tokens, and provider credentials with env vars.
 - Run Den database migrations before the Den controller receives traffic.
@@ -64,7 +64,7 @@ For containerized services, start from the [Docker packaging](https://github.com
 
 ## Databases and storage
 
-- Worker runtimes use filesystem state and opencode SQLite data inside the mounted workspace/data paths.
+- Worker runtimes use filesystem state and engine SQLite data inside the mounted workspace/data paths.
 - The Den control plane uses a MySQL-compatible database. Local Docker uses MySQL 8.4; production can use standard MySQL or PlanetScale-compatible credentials.
 - Hosted Sofia uses PlanetScale for Den control-plane state. PlanetScale production clusters provide one primary and at least two replicas across three availability zones, managed failover, and automated backups.
 - Postgres is not required by the current Den deployment path.

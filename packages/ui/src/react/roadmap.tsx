@@ -130,7 +130,7 @@ export const roadmapSections: RoadmapSection[] = [
         status: "live",
       },
       {
-        title: "Codex, Claude Code, Cursor, and OpenCode",
+        title: "Codex, Claude Code, Cursor, and Sofia",
         description: "Use Sofia from compatible agents without rewriting skills or changing MCP servers.",
         status: "live",
       },
@@ -162,7 +162,7 @@ export const roadmapSections: RoadmapSection[] = [
     items: [
       {
         title: "Desktop policies",
-        description: "Control custom providers, OpenCode Zen, workspaces, settings, extensions, built-in tools, and onboarding by organization, team, or member.",
+        description: "Control custom providers, Sofia Zen, workspaces, settings, extensions, built-in tools, and onboarding by organization, team, or member.",
         status: "live",
       },
       {

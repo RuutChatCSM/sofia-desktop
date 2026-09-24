@@ -1,7 +1,7 @@
 // Codex session registry: owns one CodexSessionManager per workspace and
 // resolves the codex binary. The desktop runtime injects the resolved binary
 // via setCodexBinaryForConfig (or falls back to `codex` on PATH). Additive to
-// the opencode engine lifecycle.
+// the engine engine lifecycle.
 import { writeFile, mkdir, readFile, rename, rm } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { homedir } from "node:os";
@@ -17,7 +17,7 @@ import {
 } from "./codex-runtime-mcp.js";
 import { readCodexAccessMode, sandboxModeFor } from "./codex-access.js";
 import { createCodexSessionManager, type CodexEngineHandle, type CodexSessionManager } from "./codex-sessions.js";
-import { ENGINE_GLOBAL_RUNTIME_CONFIG_ID, readRuntimeOpencodeConfig } from "./runtime-opencode-config-store.js";
+import { ENGINE_GLOBAL_RUNTIME_CONFIG_ID, readRuntimeWorkspaceEngineConfig } from "./runtime-engine-config-store.js";
 import type { ServerConfig } from "./types.js";
 import { ApiError } from "./errors.js";
 
@@ -141,8 +141,8 @@ export async function prepareCodexConfigToml(
     if (engineConfig.providers.length > 0) {
       toml = codexConfigTomlFromEngineConfig(engineConfig);
     } else {
-      const globalConfig = await readRuntimeOpencodeConfig(config, ENGINE_GLOBAL_RUNTIME_CONFIG_ID);
-      const workspaceConfig = await readRuntimeOpencodeConfig(config, workspaceId);
+      const globalConfig = await readRuntimeWorkspaceEngineConfig(config, ENGINE_GLOBAL_RUNTIME_CONFIG_ID);
+      const workspaceConfig = await readRuntimeWorkspaceEngineConfig(config, workspaceId);
       const merged = {
         provider: { ...(globalConfig.provider ?? {}), ...(workspaceConfig.provider ?? {}) },
       };

@@ -1,11 +1,11 @@
-import { unwrap } from "@/app/lib/opencode";
+import { unwrap } from "@/app/lib/engine";
 import type { SofiaServerClient } from "@/app/lib/sofia-server";
 import type { Client } from "@/app/types";
 
 type WorkspaceType = "local" | "remote" | string;
 
 export type UpdateManagedDisabledProvidersOptions = {
-  opencodeClient: Client | null;
+  engineClient: Client | null;
   sofiaClient?: SofiaServerClient | null;
   workspaceId?: string | null;
   workspaceType?: WorkspaceType | null;
@@ -64,7 +64,7 @@ export async function updateManagedDisabledProviders(
     return { managedRuntime: true, disabledProviders: result.disabledProviders };
   }
 
-  const client = options.opencodeClient;
+  const client = options.engineClient;
   if (!client) throw new Error("Sofia engine is not connected.");
   const currentConfig = options.currentConfig ?? unwrap(await client.config.get());
   await client.config.update({

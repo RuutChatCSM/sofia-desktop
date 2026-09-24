@@ -183,7 +183,7 @@ async function configureMockProvider(ctx) {
   await serverJson(ctx, `/workspace/${encodeURIComponent(ctx.workspaceId)}/config`, {
     method: "PATCH",
     body: {
-      opencode: {
+      engine: {
         provider: {
           [PROVIDER_ID]: {
             npm: "@ai-sdk/openai-compatible",
@@ -417,9 +417,9 @@ function assertPersistedOriginalXlsx(ctx, messages) {
 }
 
 function assertWorkspaceAttachmentPathNote(ctx, messages) {
-  const text = collectStrings(messages).filter((item) => item.includes(".opencode/sofia/inbox/chat-attachments/") || item.includes("Attached files were copied into this worker workspace")).join("\n");
+  const text = collectStrings(messages).filter((item) => item.includes(".sofia/sofia/inbox/chat-attachments/") || item.includes("Attached files were copied into this worker workspace")).join("\n");
   const line = text.split(/\r?\n/).find((item) => item.includes(XLSX_FILENAME)) || "";
-  const path = /\.opencode\/sofia\/inbox\/chat-attachments\/[^\s)]*RevenueWorkbook\.xlsx/.exec(line)?.[0] ?? "";
+  const path = /\.sofia\/sofia\/inbox\/chat-attachments\/[^\s)]*RevenueWorkbook\.xlsx/.exec(line)?.[0] ?? "";
   const url = /file:\/\/[^\s)]+/i.exec(line)?.[0] ?? "";
   record(ctx, Boolean(path), "Submitted XLSX path note includes a workspace-local inbox path", line || text.slice(0, 1000));
   record(ctx, Boolean(url), "Submitted XLSX path note includes a file: URL", line || text.slice(0, 1000));
@@ -464,7 +464,7 @@ export default {
   kind: "user-facing",
   precondition: async (ctx) => {
     await ctx.waitFor("Boolean(window.__sofiaControl)", { timeoutMs: 60_000, label: "control API" });
-    const serverExited = await ctx.eval(`document.body.innerText.includes("OpenCode server exited")`);
+    const serverExited = await ctx.eval(`document.body.innerText.includes("Sofia server exited")`);
     if (serverExited) {
       await ctx.eval("location.reload()");
       await ctx.waitFor("Boolean(window.__sofiaControl)", { timeoutMs: 60_000, label: "control API after server-error reload" });
@@ -473,12 +473,12 @@ export default {
       const control = window.__sofiaControl;
       const route = control.snapshot().route;
       if (route.startsWith("/welcome") || route.startsWith("/signin")) return "blocked";
-      if (document.body.innerText.includes("OpenCode server exited")) return "server-exited";
+      if (document.body.innerText.includes("Sofia server exited")) return "server-exited";
       const action = control.listActions().find((item) => item.id === "session.create_task");
       if (action && !action.disabled) return "ready";
       return null;
     })()`, { timeoutMs: 30_000, label: "session.create_task enabled (or welcome/signin)" });
-    if (state === "server-exited") return "OpenCode server exited before the flow could create a task.";
+    if (state === "server-exited") return "Sofia server exited before the flow could create a task.";
     return state === "blocked" ? "Profile is not onboarded (welcome/signin); XLSX attachment flow requires a workspace." : null;
   },
   steps: [

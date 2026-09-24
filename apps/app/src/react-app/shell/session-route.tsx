@@ -20,8 +20,8 @@ import { trackSessionActive, trackTaskStarted } from "@/app/lib/den-telemetry";
 import { buildDiagnosticsBundleJson } from "@/app/lib/diagnostics-bundle";
 import { downloadTextAsFile } from "@/app/lib/download";
 import { canCreateWorkspaces } from "@/app/lib/workspace-creation-policy";
-import { createClient, unwrap } from "@/app/lib/opencode";
-import { abortSessionSafe, forkSession, listCommands, revertSession, setSessionArchived, shellInSession, unrevertSession } from "@/app/lib/opencode-session";
+import { createClient, unwrap } from "@/app/lib/engine";
+import { abortSessionSafe, forkSession, listCommands, revertSession, setSessionArchived, shellInSession, unrevertSession } from "@/app/lib/engine-session";
 import { useSessionManagementStore as sessionManagementStore } from "@/react-app/domains/session/sidebar/session-management-store";
 import {
   buildSofiaWorkspaceBaseUrl,
@@ -93,14 +93,13 @@ import { useLocal } from "@/react-app/kernel/local-provider";
 import { usePlatform } from "@/react-app/kernel/platform";
 import { SessionPage, type OpenSessionTab } from "@/react-app/domains/session/chat/session-page";
 import { useCodexEngine } from "@/react-app/domains/session/use-codex-engine";
-import { useSelectedEngine } from "@/react-app/domains/session/engine-selection-store";
 import { useCodexSessionStore } from "@/react-app/domains/session/codex-session-store";
 import { useCodexApprovals } from "@/react-app/domains/session/codex/use-codex-approvals";
 import { CodexApprovalModal } from "@/react-app/domains/session/codex/codex-approval-modal";
 import { ApprovalModeSelector } from "@/react-app/domains/session/codex/approval-mode-selector";
 import { createCodexSessionClient, type CodexSession } from "@/app/lib/codex-session";
 
-/** Map a codex session into the opencode Session shape the sidebar renders. */
+/** Map a codex session into the engine Session shape the sidebar renders. */
 function toRouteSessionFromCodex(session: CodexSession): RouteSession {
   const createdMs = Date.parse(session.created) || Date.now();
   return {
@@ -288,7 +287,7 @@ function describeTaskCreateError(error: unknown) {
     ? Reflect.get(error, "code")
     : null;
   const code = typeof directCode === "string" ? directCode : serializedCode;
-  if (code === "opencode_unconfigured") {
+  if (code === "engine_unconfigured") {
     return "Choose a model for this workspace, then try again.";
   }
   const lower = message.toLowerCase();
@@ -318,7 +317,7 @@ function providerListModelEntitlementOptions(
 }
 
 function taskCreateUnavailableToastId(workspaceId: string) {
-  return `opencode-unavailable:${workspaceId}`;
+  return `engine-unavailable:${workspaceId}`;
 }
 
 type CodexProviderWire = {
@@ -331,7 +330,7 @@ type CodexProviderWire = {
 };
 
 /**
- * Map the app's connected opencode providers (models.dev-backed) into the
+ * Map the app's connected engine providers (models.dev-backed) into the
  * codex-native provider catalog so the bundled Sofia engine's picker shows every
  * model the app can use — including providers connected only via the app auth
  * store. Mirrors codex's `/connect` persistence (providers.json).
@@ -340,7 +339,7 @@ function codexProvidersFromProviderList(
   providerList: ProviderListResponse | null | undefined,
 ): CodexProviderWire[] {
   return getConnectedProviderItems(providerList)
-    .filter((provider) => provider.id.trim().toLowerCase() !== "opencode")
+    .filter((provider) => provider.id.trim().toLowerCase() !== "engine")
     .map((provider) => ({
       providerId: provider.id,
       providerName: provider.name?.trim() || provider.id,
@@ -361,7 +360,7 @@ function readProviderBaseUrl(provider: ProviderListResponse["all"][number]): str
     const value = provider.options?.[key];
     if (typeof value === "string" && value.trim()) return value.trim();
   }
-  // Built-in providers don't put the base URL in `options`; opencode resolves
+  // Built-in providers don't put the base URL in `options`; engine resolves
   // it per model from the catalog (`model.api.url`).
   for (const model of Object.values(provider.models ?? {})) {
     const url = model.api?.url;
@@ -657,8 +656,8 @@ export function SessionRoute() {
     selectedWorkspaceRoot,
     selectedWorkspaceEndpoint,
     selectedWorkspaceServerToken,
-    opencodeBaseUrl,
-    opencodeClient,
+    engineBaseUrl,
+    engineClient,
     selectedWorkspaceIsLoading,
     selectedWorkspaceError,
     routeNotFoundMessage,
@@ -717,7 +716,7 @@ export function SessionRoute() {
     cloudSignedIn: denAuth.isSignedIn,
     client: selectedWorkspaceEndpoint?.client ?? null,
     workspaceId: selectedWorkspaceEndpoint?.workspaceId ?? null,
-    opencodeClient,
+    engineClient,
     directory: selectedWorkspaceRoot,
     engineReloadBusy: reloadCoordinator.reloadBusy,
     providerModel: cloudMcpProviderModel,
@@ -871,7 +870,7 @@ export function SessionRoute() {
     () => toSessionGroups(workspaces, sessionsByWorkspaceId, errorsByWorkspaceId, new Set(retryingWorkspaceIds)),
     [errorsByWorkspaceId, retryingWorkspaceIds, sessionsByWorkspaceId, workspaces],
   );
-  // When the selected engine is codex, codex sessions replace opencode sessions
+  // When the selected engine is codex, codex sessions replace engine sessions
   // in the sidebar. Build RouteSession-shaped entries from the codex store.
   const codexWorkspaceSessionGroups = useMemo<WorkspaceSessionGroup[] | null>(() => {
     if (!codexEngine.enabled) return null;
@@ -946,14 +945,14 @@ export function SessionRoute() {
     return next;
   }, [errorsByWorkspaceId, workspaceConnectionOverrides, workspaces]);
 
-  const mcpConnectedCount = useMcpConnectedCount(opencodeClient, selectedWorkspaceRoot);
+  const mcpConnectedCount = useMcpConnectedCount(engineClient, selectedWorkspaceRoot);
   const providerListQuery = useProviderListQuery({
-    client: opencodeClient,
-    baseUrl: opencodeBaseUrl,
+    client: engineClient,
+    baseUrl: engineBaseUrl,
     directory: selectedWorkspaceRoot || undefined,
   });
   // Sofia's native provider store owns its catalog. Never overwrite it with
-  // OpenCode's independently discovered models during a render/refetch.
+  // Sofia's independently discovered models during a render/refetch.
   const { providerCatalog, modelVariantLabel, modelBehaviorOptions, modelVariantValue } =
     useModelBehavior({
       providerList: providerListQuery.data,
@@ -967,8 +966,8 @@ export function SessionRoute() {
     cloudProviderList,
     refreshCloudProviderSync,
   } = useSessionProviderAuth({
-    opencodeClient,
-    opencodeBaseUrl,
+    engineClient,
+    engineBaseUrl,
     providers,
     providerDefaults,
     providerConnectedIds,
@@ -1082,26 +1081,26 @@ export function SessionRoute() {
   const sofiaModelsSyncing = shouldShowSofiaModelsSyncing({
     entitled: sofiaModelsEntitled,
     available: sofiaModelsAvailable,
-    workspaceReady: Boolean(selectedWorkspaceId && opencodeClient),
+    workspaceReady: Boolean(selectedWorkspaceId && engineClient),
     reloadPending: sessionProviderAuthSnapshot.cloudProviderServerSync?.reloadPending === true,
   });
   const organizationModelsEmpty = isOrganizationModelsEmpty({
-    workspaceReady: Boolean(selectedWorkspaceId && opencodeClient),
+    workspaceReady: Boolean(selectedWorkspaceId && engineClient),
     loading,
     restrictToCloud: restrictToCloudProviders,
     cloudProviderSyncReady,
     entitledModelCount: entitledModelOptions.length,
   });
   const modelPicker = useModelPicker({
-    client: opencodeClient,
-    baseUrl: opencodeBaseUrl,
+    client: engineClient,
+    baseUrl: engineBaseUrl,
     workspaceRoot: selectedWorkspaceRoot,
     onOpen: handleModelPickerOpen,
     fallbackOptions: organizationAssignedModelOptions,
     cloudProvidersEnabled: denAuth.isSignedIn,
     // Engine-aware: the codex engine offers only the providers its runtime is
-    // configured with; the opencode engine offers all connected providers.
-    engine: codexEngine.enabled ? "codex" : "opencode",
+    // configured with; the engine engine offers all connected providers.
+    engine: codexEngine.enabled ? "codex" : "engine",
     codexProviders: codexEngine.config?.providers ?? [],
     codexProviderIds: codexEngine.config?.providers.map((provider) => provider.providerId) ?? [],
   });
@@ -1147,6 +1146,12 @@ export function SessionRoute() {
   useEffect(() => {
     if (entitledOrgDefaultModel) writeStoredDefaultModel(entitledOrgDefaultModel);
   }, [entitledOrgDefaultModel]);
+  useEffect(() => {
+    const config = codexEngine.config;
+    if (!codexEngine.enabled || !config?.defaultProviderId || !config.model) return;
+    if (local.prefs.defaultModel?.providerID && local.prefs.defaultModel.modelID) return;
+    local.setPrefs((previous) => ({ ...previous, defaultModel: { providerID: config.defaultProviderId!, modelID: config.model! } }));
+  }, [codexEngine.enabled, codexEngine.config, local.prefs.defaultModel, local.setPrefs]);
   const selectedModelAvailabilityPending = codexEngine.enabled ? !codexEngine.config : isManagedModelAvailabilityPending({
     signedIn: denAuth.isSignedIn,
     selectedModelUsesCloudProvider,
@@ -1159,7 +1164,7 @@ export function SessionRoute() {
           isDesktopProviderBlocked({ providerId: local.prefs.defaultModel.providerID, checkRestriction: checkDesktopRestriction })))
     : Boolean(
     selectedWorkspaceId &&
-      opencodeClient &&
+      engineClient &&
       !loading &&
       !selectedModelAvailabilityPending &&
       local.prefs.defaultModel &&
@@ -1246,7 +1251,7 @@ export function SessionRoute() {
           !selectedWorkspaceError,
       )
     : Boolean(
-        opencodeClient &&
+        engineClient &&
           selectedWorkspaceId &&
           !loading &&
           !selectedWorkspaceError &&
@@ -1263,7 +1268,7 @@ export function SessionRoute() {
     respondQuestion,
     todos,
   } = useSessionInteractions({
-    client: opencodeClient,
+    client: engineClient,
     workspaceId: selectedWorkspaceId,
     sessionId: selectedSessionId,
     workspaceRoot: selectedWorkspaceRoot,
@@ -1280,7 +1285,7 @@ export function SessionRoute() {
       (!canCreateTask && !routeError && !selectedWorkspaceError));
 
   useEffect(() => {
-    if (!opencodeClient) {
+    if (!engineClient) {
       setProviders([]);
       setProviderDefaults({});
       setProviderConnectedIds([]);
@@ -1312,7 +1317,7 @@ export function SessionRoute() {
       let disabledProviders: string[] = [];
       try {
         const config = unwrap(
-          await opencodeClient.config.get({
+          await engineClient.config.get({
             directory: selectedWorkspaceRoot || undefined,
           }),
         );
@@ -1326,8 +1331,8 @@ export function SessionRoute() {
         applyProviderState(
           filterProviderList(
             await ensureProviderListQuery(getReactQueryClient(), {
-              client: opencodeClient,
-              baseUrl: opencodeBaseUrl,
+              client: engineClient,
+              baseUrl: engineBaseUrl,
               directory: selectedWorkspaceRoot || undefined,
             }),
             disabledProviders,
@@ -1344,7 +1349,7 @@ export function SessionRoute() {
     return () => {
       cancelled = true;
     };
-  }, [opencodeBaseUrl, opencodeClient, selectedWorkspaceRoot, denSessionVersion]);
+  }, [engineBaseUrl, engineClient, selectedWorkspaceRoot, denSessionVersion]);
 
   const modelLabel = local.prefs.defaultModel
     ? resolveModelDisplayName(local.prefs.defaultModel.modelID)
@@ -1355,9 +1360,9 @@ export function SessionRoute() {
     // an engine reload, which invalidates the composer's command list cache
     // and causes it to re-fetch (picking up newly created skills).
     void engineReloadVersion;
-    if (!opencodeClient) return [];
-    return listCommands(opencodeClient, selectedWorkspaceRoot || undefined);
-  }, [engineReloadVersion, opencodeClient, selectedWorkspaceRoot]);
+    if (!engineClient) return [];
+    return listCommands(engineClient, selectedWorkspaceRoot || undefined);
+  }, [engineReloadVersion, engineClient, selectedWorkspaceRoot]);
 
   // Shared by the composer (plug menu, @ mentions) and the command palette.
   // Hidden and subagent-only entries are excluded — those are task-tool
@@ -1366,10 +1371,10 @@ export function SessionRoute() {
     // Include engineReloadVersion so the composer refetches after newly added
     // agent files become available, even when the inline picker is hidden.
     void engineReloadVersion;
-    if (!opencodeClient) return [];
-    const list = unwrap(await opencodeClient.app.agents());
+    if (!engineClient) return [];
+    const list = unwrap(await engineClient.app.agents());
     return list.filter(isLibraryAgent);
-  }, [engineReloadVersion, opencodeClient]);
+  }, [engineReloadVersion, engineClient]);
 
   const handleOpenSettings = useCallback((route = "/settings/general", workspaceId = sidebarActiveWorkspaceId) => {
     const sessionId = workspaceId === sidebarActiveWorkspaceId ? selectedSessionId : null;
@@ -1396,7 +1401,7 @@ export function SessionRoute() {
   const extensionsMainOpen = /^\/(?:workspace\/[^/]+\/)?extensions(?:\/|$)/.test(location.pathname);
 
   const surfaceProps = useMemo(() => {
-    if (!client || !selectedWorkspaceId || !selectedSessionId || !opencodeBaseUrl || !token || !opencodeClient) {
+    if (!client || !selectedWorkspaceId || !selectedSessionId || !engineBaseUrl || !token || !engineClient) {
       return null;
     }
 
@@ -1419,7 +1424,7 @@ export function SessionRoute() {
     }
 
     // Note: do NOT include `client`, `workspaceId`, `sessionId`,
-    // `opencodeBaseUrl`, or `sofiaToken` here. SessionPage forwards those
+    // `engineBaseUrl`, or `sofiaToken` here. SessionPage forwards those
     // explicitly to SessionSurface from the per-workspace endpoint resolved
     // by `resolveWorkspaceEndpoint`. If we leak them in here, the spread of
     // `surfaceProps` in SessionPage overrides those correct values with the
@@ -1478,47 +1483,41 @@ export function SessionRoute() {
         const sessionModelSelection = getSessionModelSelection(targetSessionId);
         const sendModel = sessionModelSelection?.model ?? local.prefs.defaultModel;
         const sendVariant = sessionModelSelection ? sessionModelSelection.variant : modelVariantValue;
-        // Sofia sessions bypass the opencode send pipeline entirely while
+        // Sofia sessions bypass the engine send pipeline entirely while
         // preserving the same per-session model selection as the composer.
         if (codexEngine.enabled && codexEngine.prompt && targetSessionId.startsWith("codex-")) {
           const selection = {
             model: sendModel?.modelID,
             providerId: sendModel?.providerID,
           };
+          const parts = await draftToParts(draft, selectedWorkspaceRoot, targetSessionId, selectedWorkspaceEndpoint);
+          const promptText = parts.map((part) => {
+            if (part.type === "text") return part.text;
+            if (part.type === "file") return `\nReferenced file: ${part.filename ?? "file"} (${part.url})\n`;
+            return `Use the ${part.name} agent. `;
+          }).join("") || text;
           // Render the user's message immediately; it is dropped once the
           // engine echoes it back as a `userMessage` item.
           useCodexSessionStore.getState().addPendingUserMessage(targetSessionId, text);
-          const startTurn = () => {
-            void codexEngine.prompt!(targetSessionId, text, selection);
-          };
-          const turnRunning = Boolean(codexEngine.steer) && codexEngine.sessions.some(
-            (session) => session.id === targetSessionId && session.status === "running",
-          );
-          if (turnRunning && codexEngine.steer) {
-            // Send-while-running steers the active turn (codex `turn/steer`)
-            // instead of being rejected. Fall back to starting a turn when the
-            // turn already finished, and queue when it cannot be steered.
-            void codexEngine
-              .steer(targetSessionId, text)
-              .then((result) => {
-                if (result.outcome === "not_steerable") {
-                  // Review/compact turns cannot be steered. Queue for end of
-                  // turn (codex's "Messages to be submitted at end of turn")
-                  // and drop the optimistic message so it is not duplicated
-                  // when the queued draft is drained and echoed back.
-                  useCodexSessionStore.getState().confirmPendingUserMessage(targetSessionId, text);
-                  useComposerStateStore.getState().appendQueuedDraft(targetSessionId, draft);
-                  return;
-                }
-                if (result.outcome === "no_active_turn" || result.outcome === "turn_mismatch") {
-                  startTurn();
-                }
-              })
-              .catch(() => undefined);
-          } else {
-            startTurn();
+          try {
+            const turnRunning = useCodexSessionStore.getState().sessions[targetSessionId]?.session.status === "running";
+            if (turnRunning && codexEngine.steer) {
+              const result = await codexEngine.steer(targetSessionId, promptText);
+              if (result.outcome === "not_steerable" || result.outcome === "turn_mismatch") {
+                useCodexSessionStore.getState().confirmPendingUserMessage(targetSessionId, text);
+                useComposerStateStore.getState().appendQueuedDraft(targetSessionId, draft);
+              } else if (result.outcome === "no_active_turn") {
+                await codexEngine.prompt(targetSessionId, promptText, selection);
+              }
+            } else {
+              await codexEngine.prompt(targetSessionId, promptText, selection);
+            }
+          } catch (error) {
+            useCodexSessionStore.getState().confirmPendingUserMessage(targetSessionId, text);
+            // Let the composer retain the draft. A rejected follow-up does not
+            // stop the active turn and must never disappear silently.
+            throw error;
           }
-          useSessionActivityStore.getState().setRunStatus(selectedWorkspaceId, targetSessionId, { type: "busy" });
           return { outcome: "accepted" };
         }
         // Per-conversation model memory: a session that picked its own model
@@ -1532,13 +1531,13 @@ export function SessionRoute() {
           send: async () => {
             await sendWithRevertRollback({
               revertMessageId: draft.revertMessageId,
-              abort: () => abortSessionSafe(opencodeClient, targetSessionId, selectedWorkspaceRoot || undefined, {
+              abort: () => abortSessionSafe(engineClient, targetSessionId, selectedWorkspaceRoot || undefined, {
                 source: "session.edit_resend.before_revert",
                 initiator: "user",
                 reason: "abort active run before replacing a reverted message",
               }),
               revert: async (messageId) => {
-                const reverted = await revertSession(opencodeClient, targetSessionId, messageId);
+                const reverted = await revertSession(engineClient, targetSessionId, messageId);
                 applySessionRevert(selectedWorkspaceId, reverted);
               },
               prompt: async () => {
@@ -1577,12 +1576,12 @@ export function SessionRoute() {
                 trackTaskStarted(targetSessionId, telemetryDimensions);
 
                 if (draft.mode === "shell") {
-                  await shellInSession(opencodeClient, targetSessionId, text);
+                  await shellInSession(engineClient, targetSessionId, text);
                   return;
                 }
 
                 if (draft.command) {
-                  const result = await opencodeClient.session.command({
+                  const result = await engineClient.session.command({
                     sessionID: targetSessionId,
                     command: draft.command.name,
                     arguments: draft.command.arguments,
@@ -1598,7 +1597,7 @@ export function SessionRoute() {
                   cacheKey: targetSessionId,
                   runtimeKey: environmentRuntimeKey,
                 });
-                const result = await opencodeClient.session.promptAsync({
+                const result = await engineClient.session.promptAsync({
                   sessionID: targetSessionId,
                   parts,
                   model: sendModel ?? undefined,
@@ -1617,7 +1616,7 @@ export function SessionRoute() {
               },
               unrevert: async () => {
                 try {
-                  await unrevertSession(opencodeClient, targetSessionId);
+                  await unrevertSession(engineClient, targetSessionId);
                 } finally {
                   applySessionUnrevert(selectedWorkspaceId, targetSessionId);
                 }
@@ -1648,9 +1647,8 @@ export function SessionRoute() {
       recentFiles: [],
       searchFiles: async (query: string) => {
         const trimmed = query.trim();
-        if (!trimmed) return [];
         const result = unwrap(
-          await opencodeClient.find.files({
+          await engineClient.find.files({
             query: trimmed,
             dirs: "true",
             limit: 50,
@@ -1665,13 +1663,13 @@ export function SessionRoute() {
         const targetSessionId = sessionId.trim() || selectedSessionId;
         if (!targetSessionId) return false;
         try {
-          // Abort any running generation first; OpenCode rejects revert on busy sessions.
-          await abortSessionSafe(opencodeClient, targetSessionId, selectedWorkspaceRoot || undefined, {
+          // Abort any running generation first; Sofia rejects revert on busy sessions.
+          await abortSessionSafe(engineClient, targetSessionId, selectedWorkspaceRoot || undefined, {
             source: "session.revert_to_message.before_revert",
             initiator: "user",
             reason: "abort active run before reverting transcript",
           });
-          const reverted = await revertSession(opencodeClient, targetSessionId, messageId);
+          const reverted = await revertSession(engineClient, targetSessionId, messageId);
           // Stamp the revert cursor into the local caches so the transcript
           // rewinds immediately instead of waiting for a full reload.
           applySessionRevert(selectedWorkspaceId, reverted);
@@ -1686,7 +1684,7 @@ export function SessionRoute() {
         const targetSessionId = sessionId.trim() || selectedSessionId;
         if (!targetSessionId) return false;
         try {
-          await unrevertSession(opencodeClient, targetSessionId);
+          await unrevertSession(engineClient, targetSessionId);
           applySessionUnrevert(selectedWorkspaceId, targetSessionId);
           return true;
         } catch (error) {
@@ -1700,7 +1698,7 @@ export function SessionRoute() {
           const targetSessionId = sessionId.trim() || selectedSessionId;
           if (!targetSessionId) return;
           try {
-            const forked = await forkSession(opencodeClient, targetSessionId, messageId ?? undefined);
+            const forked = await forkSession(engineClient, targetSessionId, messageId ?? undefined);
             writeLastSessionFor(selectedWorkspaceId, forked.id);
             rememberPendingCreatedSession(selectedWorkspaceId, forked.id);
             setSessionsByWorkspaceId((current) => ({
@@ -1729,7 +1727,7 @@ export function SessionRoute() {
         ? handleApplyEnvironmentChanges
         : undefined,
       approvalAccessory:
-        codexEngine.enabled && codexEngine.client
+        codexEngine.client
           ? <ApprovalModeSelector client={codexEngine.client} />
           : undefined,
     };
@@ -1757,8 +1755,8 @@ export function SessionRoute() {
     sofiaModelsSyncing,
     refreshCloudProviderSync,
     refreshOrganizationModelAccess,
-    opencodeBaseUrl,
-    opencodeClient,
+    engineBaseUrl,
+    engineClient,
     providerConnectedIds,
     selectedAgent,
     selectedSessionId,
@@ -1834,9 +1832,9 @@ export function SessionRoute() {
       listCommands: listSlashCommands,
       searchFiles: async (query: string) => {
         const trimmed = query.trim();
-        if (!trimmed || !opencodeClient) return [];
+        if (!engineClient) return [];
         const result = unwrap(
-          await opencodeClient.find.files({
+          await engineClient.find.files({
             query: trimmed,
             dirs: "true",
             limit: 50,
@@ -1866,7 +1864,7 @@ export function SessionRoute() {
     modelPicker,
     modelVariantLabel,
     modelVariantValue,
-    opencodeClient,
+    engineClient,
     sofiaModelsEntitled,
     sofiaModelsSyncing,
     organizationAssignedModelOptions,
@@ -2071,7 +2069,7 @@ export function SessionRoute() {
       return null;
     }
     const workspaceClient = createClient(
-      endpoint.opencodeBaseUrl,
+      endpoint.engineBaseUrl,
       workspace.path?.trim() || undefined,
       { token: endpoint.token, mode: "sofia" },
     );
@@ -2210,7 +2208,7 @@ export function SessionRoute() {
     selectedSessionId,
     canCreateTask,
     sofiaClient: client,
-    opencodeClient,
+    engineClient,
     navigateToSession: navigateToSessionForControl,
     navigateToSessionRoot: navigateToSessionRootForControl,
     createTaskInWorkspace: handleCreateTaskInWorkspace,
@@ -2225,13 +2223,13 @@ export function SessionRoute() {
       label: "Seed an unavailable selected model",
       description: "Dev-only eval hook that selects a missing model and returns an available model to recover with.",
       sideEffect: "mutation",
-      disabled: !opencodeClient,
+      disabled: !engineClient,
       execute: async () => {
-        if (!opencodeClient) return { ok: false, error: "Sofia engine is not connected." };
+        if (!engineClient) return { ok: false, error: "Sofia engine is not connected." };
 
         const providerList = await ensureProviderListQuery(getReactQueryClient(), {
-          client: opencodeClient,
-          baseUrl: opencodeBaseUrl,
+          client: engineClient,
+          baseUrl: engineBaseUrl,
           directory: selectedWorkspaceRoot || undefined,
           force: true,
         });
@@ -2273,7 +2271,7 @@ export function SessionRoute() {
         };
       },
     };
-  }, [checkDesktopRestriction, disabledProviderIds, local, modelPicker.setQuery, modelPicker.setRecentProviderIds, opencodeBaseUrl, opencodeClient, selectedSessionId, selectedWorkspaceId, selectedWorkspaceRoot]);
+  }, [checkDesktopRestriction, disabledProviderIds, local, modelPicker.setQuery, modelPicker.setRecentProviderIds, engineBaseUrl, engineClient, selectedSessionId, selectedWorkspaceId, selectedWorkspaceRoot]);
   useControlAction(seedUnavailableModelControlAction);
 
   const seedActiveSessionSidebarControlAction = useMemo<SofiaControlAction | null>(() => {
@@ -2339,7 +2337,7 @@ export function SessionRoute() {
       return;
     }
 
-    // Pre-workspace (chat-first) there is no opencode client yet, so the
+    // Pre-workspace (chat-first) there is no engine client yet, so the
     // modal cannot load auth methods — fall back to the AI Providers page.
     void sessionProviderAuthStore.openProviderAuthModal({ returnFocusTarget: "composer" }).catch(() => {
       handleOpenSettings("/settings/ai");
@@ -2535,13 +2533,13 @@ export function SessionRoute() {
   }), [goToPrevSessionTab]);
 
   const reloadConfigPaletteItem = useMemo<PaletteItem>(() => ({
-    id: "reload-opencode-config",
+    id: "reload-engine-config",
     title: t("session.cmd_reload_config_title"),
     detail: t("session.cmd_reload_config_detail"),
     meta: reloadCoordinator.canReloadWorkspaceEngine
       ? t("config.reload_engine")
       : t("system.reload_unavailable"),
-    searchText: "reload opencode config providers models mcp jsonc refresh re-read engine restart",
+    searchText: "reload engine config providers models mcp jsonc refresh re-read engine restart",
     action: () => {
       setCommandPaletteOpen(false);
       if (!reloadCoordinator.canReloadWorkspaceEngine) return;
@@ -2584,10 +2582,10 @@ export function SessionRoute() {
         }
         return;
       }
-      if (!opencodeClient) return;
+      if (!engineClient) return;
       try {
         await setSessionArchived(
-          opencodeClient,
+          engineClient,
           sessionId,
           archived,
           selectedWorkspaceRoot || undefined,
@@ -2603,7 +2601,7 @@ export function SessionRoute() {
         );
       }
     },
-    [codexEngine.enabled, navigateToWorkspaceSession, opencodeClient, refreshRouteState, selectedSessionId, selectedWorkspaceId, selectedWorkspaceRoot],
+    [codexEngine.enabled, navigateToWorkspaceSession, engineClient, refreshRouteState, selectedSessionId, selectedWorkspaceId, selectedWorkspaceRoot],
   );
 
   const handleCreateWorkspace = useCallback(async (
@@ -2639,7 +2637,7 @@ export function SessionRoute() {
         await workspaceSetRuntimeActive(createdId).catch(() => undefined);
       }
       // First workspace on a fresh install: the Sofia App server was started
-      // engine-less (it only spawns OpenCode at boot when a workspace already
+      // engine-less (it only spawns Sofia at boot when a workspace already
       // exists), so sessions would hang forever. This boots the engine when
       // it isn't running, same as the old /welcome flow did.
       let sessionBaseUrl = baseUrl;
@@ -2667,11 +2665,11 @@ export function SessionRoute() {
         const firstTaskPrompt = options?.firstTaskPrompt?.trim() ?? "";
         const firstTaskAttachments = options?.firstTaskAttachments ?? [];
         // A workspace registry mutation must not eagerly instantiate an
-        // OpenCode directory. Chat-first creation still needs a session for
+        // Sofia directory. Chat-first creation still needs a session for
         // its supplied prompt; ordinary creation lands on the New task state.
         const session = createdOnServer && sessionBaseUrl && sessionToken && (firstTaskPrompt || firstTaskAttachments.length > 0)
           ? await createClient(
-              `${(buildSofiaWorkspaceBaseUrl(sessionBaseUrl, targetWorkspaceId) ?? sessionBaseUrl).replace(/\/+$/, "")}/opencode`,
+              `${(buildSofiaWorkspaceBaseUrl(sessionBaseUrl, targetWorkspaceId) ?? sessionBaseUrl).replace(/\/+$/, "")}/engine`,
               workspacePath || undefined,
               { token: sessionToken, mode: "sofia" },
             ).session.create({ directory: workspacePath || undefined })
@@ -2820,14 +2818,14 @@ export function SessionRoute() {
 
   return (
     <WorkspaceProvider
-      client={opencodeClient}
-      opencodeBaseUrl={opencodeBaseUrl}
+      client={engineClient}
+      engineBaseUrl={engineBaseUrl}
       sofiaServerClient={selectedWorkspaceEndpoint?.client ?? null}
       workspaceId={selectedWorkspaceEndpoint?.workspaceId ?? ""}
       selectedWorkspaceRoot={selectedWorkspaceRoot}
     >
     <CodexApprovalModal active={codexApproval} />
-    {opencodeClient && selectedWorkspaceEndpoint && opencodeBaseUrl && selectedWorkspaceServerToken ? (
+    {engineClient && selectedWorkspaceEndpoint && engineBaseUrl && selectedWorkspaceServerToken ? (
       <ReactSessionRuntime
         // Use the server-side workspace id (the one without the `rem_`
         // prefix) so the React Query cache keys session-sync writes match
@@ -2836,7 +2834,7 @@ export function SessionRoute() {
         workspaceId={selectedWorkspaceEndpoint.workspaceId}
         sessionId={selectedSessionId}
         activeSessionIds={activeSelectedWorkspaceSessionIds}
-        opencodeBaseUrl={opencodeBaseUrl}
+        engineBaseUrl={engineBaseUrl}
         sofiaToken={selectedWorkspaceServerToken}
         enabled
         onSessionCreated={handleRuntimeSessionCreated}
@@ -2857,7 +2855,7 @@ export function SessionRoute() {
       selectedWorkspaceRoot={selectedWorkspaceRoot}
       selectedWorkspaceError={selectedWorkspaceError}
       runtimeWorkspaceId={selectedWorkspaceEndpoint?.workspaceId || null}
-      opencodeBaseUrl={opencodeBaseUrl}
+      engineBaseUrl={engineBaseUrl}
       workspaces={workspaces}
       clientConnected={canCreateTask}
       sofiaServerStatus={client ? "connected" : "disconnected"}
@@ -3003,78 +3001,17 @@ export function SessionRoute() {
         },
         onCreateTaskWithPrompt: (workspaceId, prompt, attachments) => {
           void (async () => {
-            // Sofia engine: create a codex session and run the prompt directly.
-            if (codexEngine.enabled && codexEngine.createSession) {
-              try {
-                const firstTaskPrompt = prompt.trim();
-                const targetWorkspace = workspaces.find((item) => item.id === workspaceId);
-                const session = await codexEngine.createSession({
-                  title: firstTaskPrompt.slice(0, 60) || "New Sofia task",
-                  prompt: firstTaskPrompt || undefined,
-                  cwd: targetWorkspace?.path?.trim() || undefined,
-                });
-                if (workspaceId === selectedWorkspaceId) {
-                  void refreshCloudProviderSync("new_chat");
-                }
-                if (firstTaskPrompt) {
-                  saveSessionDraft(workspaceId, session.id, { text: firstTaskPrompt, mode: "prompt" });
-                  useComposerStateStore.getState().setDraft(session.id, firstTaskPrompt);
-                }
-                writeActiveWorkspaceId(workspaceId || null);
-                writeLastSessionFor(workspaceId, session.id);
-                rememberPendingCreatedSession(workspaceId, session.id);
-                navigateToWorkspaceSession(workspaceId, session.id);
-                focusPromptSoon();
-                return;
-              } catch {
-                // fall through to opencode creation below
-              }
-            }
-            const workspace = workspaces.find((item) => item.id === workspaceId);
-            if (!workspace) return;
-            const endpoint = endpointForWorkspace(workspace);
-            if (!endpoint?.token) return;
-            const workspaceClient = createClient(
-              endpoint.opencodeBaseUrl,
-              workspace.path?.trim() || undefined,
-              { token: endpoint.token, mode: "sofia" },
-            );
-            try {
-              const session = unwrap(
-                await workspaceClient.session.create({ directory: workspace.path?.trim() || undefined }),
-              );
-              if (workspaceId === selectedWorkspaceId) {
-                void refreshCloudProviderSync("new_chat");
-              }
-              const firstTaskPrompt = prompt.trim();
-              if (firstTaskPrompt) {
-                const firstTaskAttachments = attachments ?? [];
-                // Attachment chips only survive in-memory (File objects), so the
-                // persisted fallback draft drops their tokens.
-                saveSessionDraft(workspaceId, session.id, { text: firstTaskPrompt.replace(/\[attachment [^\]]+\]/g, "").trim(), mode: "prompt" });
-                // The composer reads its draft from the composer state store,
-                // not the persisted draft store — seed both.
-                useComposerStateStore.getState().setDraft(session.id, firstTaskPrompt);
-                if (firstTaskAttachments.length) {
-                  useComposerStateStore.getState().setAttachments(session.id, firstTaskAttachments);
-                }
-                // One-step run: the session surface sends the seeded draft itself.
-                markComposerAutoSend(session.id);
-              }
-              writeActiveWorkspaceId(workspaceId || null);
-              writeLastSessionFor(workspaceId, session.id);
-              rememberPendingCreatedSession(workspaceId, session.id);
-              applyLastUsedModelToSession(session.id);
-              setSessionsByWorkspaceId((current) => ({
-                ...current,
-                [workspaceId]: [session, ...(current[workspaceId] ?? [])],
-              }));
-              navigateToWorkspaceSession(workspaceId, session.id);
-              focusPromptSoon();
-            } catch {
-              // Fall back to normal task creation without prompt
-              void handleCreateTaskInWorkspace(workspaceId);
-            }
+            const sessionId = await handleCreateTaskInWorkspace(workspaceId);
+            if (!sessionId) return;
+            const text = prompt.trim();
+            const store = useComposerStateStore.getState();
+            saveSessionDraft(workspaceId, sessionId, { text: text.replace(/\[attachment [^\]]+\]/g, "").trim(), mode: "prompt" });
+            store.setDraft(sessionId, text);
+            if (attachments?.length) store.setAttachments(sessionId, attachments);
+            // One submission path preserves attachments, model, and workspace.
+            // Creation never sends a hidden first turn or falls into another engine.
+            if (text || attachments?.length) markComposerAutoSend(sessionId);
+            focusPromptSoon();
           })();
         },
         onOpenRenameWorkspace: handleOpenRenameWorkspace,
@@ -3139,11 +3076,11 @@ export function SessionRoute() {
       onRenameSession={
         codexEngine.enabled && codexEngine.renameSession
           ? codexEngine.renameSession
-          : opencodeClient
+          : engineClient
           ? async (sessionId, nextTitle) => {
               const trimmed = nextTitle.trim();
               if (!trimmed) return;
-              await opencodeClient.session.update({
+              await engineClient.session.update({
                 sessionID: sessionId,
                 title: trimmed,
                 directory: selectedWorkspaceRoot || undefined,
@@ -3169,7 +3106,7 @@ export function SessionRoute() {
             }
           : undefined
       }
-      onArchiveSession={opencodeClient || codexEngine.enabled ? handleArchiveSession : undefined}
+      onArchiveSession={engineClient || codexEngine.enabled ? handleArchiveSession : undefined}
       statusBar={{
         loading: showPreparingStatus,
         reloadBusy: reloadCoordinator.reloadBusy,
@@ -3325,15 +3262,15 @@ export function SessionRoute() {
       disabledProviders={disabledProviderIds}
       onBehaviorChange={() => {}}
       onToggleProvider={async (providerId, enable) => {
-        if (!opencodeClient) return;
+        if (!engineClient) return;
         try {
-          const config = unwrap(await opencodeClient.config.get());
+          const config = unwrap(await engineClient.config.get());
           const current = disabledProvidersFromConfig(config);
           const next = enable
             ? current.filter((id: string) => id !== providerId)
             : [...current, providerId];
           const result = await updateManagedDisabledProviders({
-            opencodeClient,
+            engineClient,
             sofiaClient: selectedWorkspaceEndpoint?.client ?? null,
             workspaceId: selectedWorkspaceEndpoint?.workspaceId ?? null,
             workspaceType: selectedWorkspace?.workspaceType ?? "local",
@@ -3342,7 +3279,7 @@ export function SessionRoute() {
             markReloadRequired: () => {
               reloadCoordinator.markReloadRequired("config", {
                 type: "config",
-                name: "runtime-opencode-config.json",
+                name: "runtime-engine-config.json",
                 action: "updated",
               });
             },

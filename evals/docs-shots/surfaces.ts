@@ -61,7 +61,7 @@ async function configureWorkspaceModel(app: App, model: WorkspaceModel): Promise
     const patched = await request("/workspace/" + encodeURIComponent(args.workspaceId) + "/config", {
       method: "PATCH",
       body: JSON.stringify({
-        opencode: {
+        engine: {
           provider: {
             [args.providerId]: {
               npm: "@ai-sdk/openai-compatible",
@@ -75,7 +75,7 @@ async function configureWorkspaceModel(app: App, model: WorkspaceModel): Promise
     });
     if (patched !== "ok") return patched;
     const reloaded = await request("/workspace/" + encodeURIComponent(args.workspaceId) + "/engine/reload", { method: "POST" });
-    if (reloaded !== "ok" && !reloaded.includes("opencode_reload_timeout")) return reloaded;
+    if (reloaded !== "ok" && !reloaded.includes("engine_reload_timeout")) return reloaded;
     const raw = localStorage.getItem("sofia.preferences");
     let preferences = {};
     try { preferences = raw ? JSON.parse(raw) : {}; } catch { preferences = {}; }

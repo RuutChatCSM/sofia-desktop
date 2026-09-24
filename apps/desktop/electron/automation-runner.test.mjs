@@ -134,7 +134,7 @@ function testAssignment() {
     automationId: "automation-1",
     automationName: "Daily brief",
     instructions: "Prepare the brief",
-    model: { providerId: "opencode", modelId: "big-pickle" },
+    model: { providerId: "engine", modelId: "big-pickle" },
     timeoutMs: 30_000,
     leaseExpiresAt: Date.now() + 60_000,
     attempt: 1,
@@ -232,10 +232,10 @@ function requestBudget(delays, windowMs) {
 test("model-not-found failures become a repairable Automation error", () => {
   assert.deepEqual(classifyAutomationExecutionError({
     name: "ProviderModelNotFoundError",
-    message: "Model not found: opencode/big-pickle",
+    message: "Model not found: engine/big-pickle",
   }), {
     code: "model_access_lost",
-    message: "The selected model opencode/big-pickle is no longer available. Choose a supported model to resume this Automation.",
+    message: "The selected model engine/big-pickle is no longer available. Choose a supported model to resume this Automation.",
   })
 })
 
@@ -843,7 +843,7 @@ test("desktop Automation execution creates a normal visible local Sofia App thre
     automationId: "automation-1",
     automationName: "Daily brief",
     instructions: "Prepare the brief",
-    model: { providerId: "opencode", modelId: "big-pickle" },
+    model: { providerId: "engine", modelId: "big-pickle" },
     timeoutMs: 30_000,
     leaseExpiresAt: Date.now() + 60_000,
     attempt: 1,
@@ -861,7 +861,7 @@ test("desktop Automation execution creates a normal visible local Sofia App thre
   assert.deepEqual(create?.body, {
     title: "Automation: Daily brief",
     prompt: "Prepare the brief",
-    providerId: "opencode",
+    providerId: "engine",
     modelId: "big-pickle",
   })
 })
@@ -925,7 +925,7 @@ test("failed desktop assignments retain their created local thread in the Den co
                 role: "assistant",
                 error: {
                   name: "ProviderModelNotFoundError",
-                  message: "Model not found: opencode/removed-model",
+                  message: "Model not found: engine/removed-model",
                 },
               },
               parts: [],
@@ -1101,7 +1101,7 @@ test("desktop Automation execution surfaces a missing pinned model", async () =>
             role: "assistant",
             error: {
               name: "ProviderModelNotFoundError",
-              message: "Model not found: opencode/big-pickle",
+              message: "Model not found: engine/big-pickle",
             },
           },
           parts: [],
@@ -1118,7 +1118,7 @@ test("desktop Automation execution surfaces a missing pinned model", async () =>
       automationId: "automation-1",
       automationName: "Daily brief",
       instructions: "Prepare the brief",
-      model: { providerId: "opencode", modelId: "big-pickle" },
+      model: { providerId: "engine", modelId: "big-pickle" },
       timeoutMs: 30_000,
       leaseExpiresAt: Date.now() + 60_000,
       attempt: 1,

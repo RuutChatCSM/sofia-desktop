@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
 
-import { writeRuntimeOpencodeConfig } from "./runtime-opencode-config-store.js";
+import { writeRuntimeWorkspaceEngineConfig } from "./runtime-engine-config-store.js";
 import { startServer } from "./server.js";
 import type { ServerConfig } from "./types.js";
 
@@ -287,7 +287,7 @@ describe("Connect-aware legacy extension gating", () => {
     const statusAction = await readSchema(await callGoogleWorkspaceStatus(base), googleWorkspaceStatusActionSchema);
     expect(statusAction.result.connect).toEqual(status.connect);
 
-    await writeRuntimeOpencodeConfig(config, "ws_1", (current) => ({
+    await writeRuntimeWorkspaceEngineConfig(config, "ws_1", (current) => ({
       ...current,
       mcp: {
         ...current.mcp,

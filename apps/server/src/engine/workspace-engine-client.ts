@@ -7,7 +7,7 @@
 // modules therefore keep their existing call shapes while Sofia engine is removed.
 //
 // Return values mirror the Sofia engine SDK's `{ data, error, response }` result so
-// callers can keep using `unwrapOpencodeResult`.
+// callers can keep using `unwrapWorkspaceEngineResult`.
 import { readCodexEngineConfig, type CodexEngineConfig } from "../codex-providers.js";
 import { getOrCreateCodexSessionManager } from "../codex-registry.js";
 import { defaultCodexRuntimeMcpServers } from "../codex-runtime-mcp.js";

@@ -209,7 +209,7 @@ describe("POST /workspace/:id/extensions/export", () => {
 
 describe("bundled agent tool surface", () => {
   test("keeps portable export out of every chat", async () => {
-    const { SofiaExtensionsPreview } = await import("./opencode-plugins/sofia-extensions-preview.js");
+    const { SofiaExtensionsPreview } = await import("./engine-plugins/sofia-extensions-preview.js");
     const plugin = await SofiaExtensionsPreview();
 
     expect(Object.keys(plugin.tool)).not.toContain("sofia_extensions_export");

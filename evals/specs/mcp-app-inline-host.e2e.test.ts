@@ -100,7 +100,7 @@ async function createWorkspaceForRenderer(
     while (Date.now() < deadline) {
       try {
         const response = await fetch(
-          "http://127.0.0.1:" + port + "/workspace/" + encodeURIComponent(${JSON.stringify(created.workspaceId)}) + "/opencode/session",
+          "http://127.0.0.1:" + port + "/workspace/" + encodeURIComponent(${JSON.stringify(created.workspaceId)}) + "/engine/session",
           { headers: { Authorization: "Bearer " + token }, signal: AbortSignal.timeout(2_000) },
         );
         if (response.ok) return "ready";
@@ -485,7 +485,7 @@ test.skipIf(!e2eTestsEnabled || !localPlacement)(title, { timeout: 240_000 }, as
     const patched = await request("/workspace/" + encodeURIComponent(workspaceId) + "/config", {
       method: "PATCH",
       body: JSON.stringify({
-        opencode: {
+        engine: {
           provider: {
             [${JSON.stringify(providerId)}]: {
               npm: "@ai-sdk/openai-compatible",
@@ -507,7 +507,7 @@ test.skipIf(!e2eTestsEnabled || !localPlacement)(title, { timeout: 240_000 }, as
     });
     if (patched !== "ok") return patched;
     const reloaded = await request("/workspace/" + encodeURIComponent(workspaceId) + "/engine/reload", { method: "POST" });
-    if (reloaded !== "ok" && !reloaded.includes("opencode_reload_timeout")) return reloaded;
+    if (reloaded !== "ok" && !reloaded.includes("engine_reload_timeout")) return reloaded;
     const raw = localStorage.getItem("sofia.preferences");
     let preferences = {};
     try { preferences = raw ? JSON.parse(raw) : {}; } catch { preferences = {}; }
@@ -534,7 +534,7 @@ test.skipIf(!e2eTestsEnabled || !localPlacement)(title, { timeout: 240_000 }, as
     let last = "";
     while (Date.now() < deadline) {
       try {
-        const response = await fetch("http://127.0.0.1:" + port + "/workspace/" + encodeURIComponent(${JSON.stringify(workspace.workspaceId)}) + "/opencode/session", {
+        const response = await fetch("http://127.0.0.1:" + port + "/workspace/" + encodeURIComponent(${JSON.stringify(workspace.workspaceId)}) + "/engine/session", {
           headers: { Authorization: "Bearer " + token },
         });
         if (response.ok) return "ready";

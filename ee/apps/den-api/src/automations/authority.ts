@@ -167,7 +167,7 @@ export async function resolveAutomationModelAccessWithStore(
       return {
         ok: false,
         code: "model_access_lost",
-        message: "The selected OpenCode Zen model is no longer available. Choose a supported model to resume this Automation.",
+        message: "The selected Sofia Zen model is no longer available. Choose a supported model to resume this Automation.",
       }
     }
     return {

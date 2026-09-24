@@ -4,7 +4,7 @@
 
 Den remains the durable scheduler and source of truth for Automation schedules,
 occurrences, leases, notification cursors, ordered events, usage, and terminal
-results. Den no longer launches OpenCode or stores an Automation execution
+results. Den no longer launches Sofia or stores an Automation execution
 runtime in its container.
 
 An authenticated desktop installation registers as a `desktop` runner and
@@ -21,7 +21,7 @@ idle runner's steady-state notification queries from 60 to four per minute.
 
 The claimed Automation runs as a normal visible local Sofia thread in the
 desktop's active workspace. It uses the selected model and the same local
-OpenCode tool and integration experience as a thread started by the user.
+Sofia tool and integration experience as a thread started by the user.
 
 ## Offline behavior
 

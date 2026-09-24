@@ -31,8 +31,8 @@ My expected cloud web URL: https://sofia-app.ruut.chat (replace with your self-h
 ## Phase 1 — Evidence: what am I actually connected to?
 
 1. Print the `sofia-cloud` MCP entry's `url` (redact headers) from every config you can find:
-   - `~/.config/opencode/opencode.json`
-   - any `.opencode/opencode.json` or `opencode.jsonc` in the current project
+   - `~/.config/engine/engine.json`
+   - any `.sofia/engine.json` or `engine.jsonc` in the current project
    - your own runtime config if you have an export tool
 2. Inspect these files if they exist (they can silently override server URLs beneath the Settings UI), but report only `baseUrl`, `apiBaseUrl`, `requireSignin`, and `writtenAt`. Never print `handoff`, `claimLinks`, grants, tokens, or other credential-bearing fields:
    - `~/.config/sofia/desktop-bootstrap.json`
@@ -66,7 +66,7 @@ State which world you are in:
     - Restart the Sofia app.
     - In the affected workspace, open Settings → Library and click Refresh (re-mints the token and rewrites the Cloud MCP config).
     - Click Show hidden, then verify Sofia Cloud Control under Your apps.
-    - Run Reload OpenCode config from the command palette.
+    - Run Reload Sofia config from the command palette.
     - Start a NEW task so it receives the current tool set.
 
 ## Phase 6 — Verify (run in the NEW session)
@@ -94,7 +94,7 @@ If the agent completes all phases and verification still fails, [open an issue](
 
 **What this diagnostic checks**
 
-The prompt below runs Sofia's bundled OpenCode executable against its generated runtime config and checks whether a fresh OpenCode process can connect to `sofia-cloud`. It does not attach to the OpenCode server already running inside Sofia, so it combines that result with the live status shown in Sofia and a forced tool call from a new task.
+The prompt below runs Sofia's bundled Sofia executable against its generated runtime config and checks whether a fresh Sofia process can connect to `sofia-cloud`. It does not attach to the Sofia server already running inside Sofia, so it combines that result with the live status shown in Sofia and a forced tool call from a new task.
 
 **Paste this to your agent**
 
@@ -106,30 +106,30 @@ Diagnose whether Sofia Cloud MCP tools are available in this workspace. Gather e
 1. Attempt to call `sofia-cloud_search_capabilities` with `{"query":"ServiceNow incident","type":"mcp","limit":10}`. Do not use documentation or explain alternatives. Record whether the runtime accepts the tool call and its exact non-secret result or rejection.
 2. Attempt to call `sofia_extension_list_actions`. Record whether the runtime accepts the call. Do not infer tool availability from an answer to "list your tools"; models can omit or invent tools.
 
-## Phase 2 — Find Sofia's exact OpenCode runtime
+## Phase 2 — Find Sofia's exact Sofia runtime
 
 3. Detect whether this machine is Windows, macOS, or Linux.
-4. Find the exact OpenCode executable used by the Sofia desktop app. Prefer the bundled executable in Sofia's `resources/sidecars` directory; do not assume an unrelated `opencode` on `PATH` is the same binary. If multiple Sofia builds are running, use the process associated with this task when that can be established safely; otherwise report the ambiguity.
-5. Find Sofia's generated `runtime-opencode-config.json` beside the active `server.json`. Respect discovered `SOFIA_SERVER_CONFIG`, `SOFIA_RUNTIME_DB`, or XDG overrides. Typical locations are:
-   - Windows: `%APPDATA%\sofia\runtime-opencode-config.json`
-   - macOS/Linux: `${XDG_CONFIG_HOME:-$HOME/.config}/sofia/runtime-opencode-config.json`
+4. Find the exact Sofia executable used by the Sofia desktop app. Prefer the bundled executable in Sofia's `resources/sidecars` directory; do not assume an unrelated `engine` on `PATH` is the same binary. If multiple Sofia builds are running, use the process associated with this task when that can be established safely; otherwise report the ambiguity.
+5. Find Sofia's generated `runtime-engine-config.json` beside the active `server.json`. Respect discovered `SOFIA_SERVER_CONFIG`, `SOFIA_RUNTIME_DB`, or XDG overrides. Typical locations are:
+   - Windows: `%APPDATA%\sofia\runtime-engine-config.json`
+   - macOS/Linux: `${XDG_CONFIG_HOME:-$HOME/.config}/sofia/runtime-engine-config.json`
 6. Report whether the runtime config exists and its last-modified time. Never display, copy, parse, or summarize its contents: it can contain Authorization headers and other credentials.
 
 ## Phase 3 — Run a safe fresh-process probe
 
-7. From this task's workspace root, set `OPENCODE_CONFIG` to the discovered runtime config for the subprocess only, then run:
-   - `<exact-opencode-executable> --version`
-   - `<exact-opencode-executable> mcp list`
+7. From this task's workspace root, set `SOFIA_ENGINE_CONFIG` to the discovered runtime config for the subprocess only, then run:
+   - `<exact-engine-executable> --version`
+   - `<exact-engine-executable> mcp list`
 8. Do not run `mcp add`, `mcp auth`, `mcp logout`, `debug config`, or any command that changes or prints configuration. Do not use `--print-logs` if it could expose headers or tokens.
 9. Report:
    - operating system
-   - exact OpenCode executable path and version
+   - exact Sofia executable path and version
    - runtime config path, existence, and last-modified time
    - whether `sofia-cloud` is listed
    - its exact status and non-secret error
    - whether the failing workspace is the primary managed workspace or may be a secondary workspace configured dynamically
 
-Important: `opencode mcp list` starts a fresh process. Do not claim that it attaches to or tests the OpenCode server already running inside Sofia. Describe it only as a fresh-process probe using the same binary and generated config.
+Important: `engine mcp list` starts a fresh process. Do not claim that it attaches to or tests the Sofia server already running inside Sofia. Describe it only as a fresh-process probe using the same binary and generated config.
 
 ## Phase 4 — Classify the result
 
@@ -145,14 +145,14 @@ Finish with a concise redacted report. Never reveal bearer tokens, Authorization
 **Verify inside Sofia**
 
 1. In the affected workspace, open **Settings → Library** and click **Refresh**.
-2. Click **Show hidden**, then find **Sofia Cloud Control** under **Your apps**. This row shows live OpenCode MCP status; the catalog card only proves that the entry is configured.
+2. Click **Show hidden**, then find **Sofia Cloud Control** under **Your apps**. This row shows live Sofia MCP status; the catalog card only proves that the entry is configured.
 3. Expand the row and retain its status and non-secret error: **Ready**, **Issue**, **Sign in needed**, **Offline**, or **Paused**.
-4. Return to the task, open the command palette, run **Reload OpenCode config**, and create a new task in the same workspace.
+4. Return to the task, open the command palette, run **Reload Sofia config**, and create a new task in the same workspace.
 5. Repeat the forced Cloud tool call from Phase 1.
 
 **How to interpret both results**
 
-| Fresh `opencode mcp list` | Sofia status / forced call | Likely boundary |
+| Fresh `engine mcp list` | Sofia status / forced call | Likely boundary |
 | --- | --- | --- |
 | Missing or failed | Missing or failed | Generated config, endpoint, token, TLS, or authentication |
 | Connected | In-app status failed | Live engine registration or workspace routing |

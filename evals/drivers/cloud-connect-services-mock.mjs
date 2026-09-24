@@ -447,7 +447,7 @@ function handleWorker(state, request, response, url, rawBody) {
     return true;
   }
 
-  if (url.pathname === "/worker/workspace/ws_mock_cloud/opencode/session" && request.method === "POST") {
+  if (url.pathname === "/worker/workspace/ws_mock_cloud/engine/session" && request.method === "POST") {
     let body;
     try {
       body = parseJson(rawBody);
@@ -463,7 +463,7 @@ function handleWorker(state, request, response, url, rawBody) {
   }
 
   const promptMatch = url.pathname.match(
-    /^\/worker\/workspace\/ws_mock_cloud\/opencode\/session\/([^/]+)\/prompt_async$/,
+    /^\/worker\/workspace\/ws_mock_cloud\/engine\/session\/([^/]+)\/prompt_async$/,
   );
   if (promptMatch && request.method === "POST") {
     const session = state.worker.sessions.get(decodeURIComponent(promptMatch[1]));

@@ -2,12 +2,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 
-import { createCodexSessionClient, type CodexEngineConfigWire } from "@/app/lib/codex-session";
-import { setCodexAbortHandler } from "@/app/lib/opencode-session";
-import { useSelectedEngine } from "./engine-selection-store";
-import { shouldActivateCodexEngine } from "./engine-awareness";
+import { createCodexSessionClient, isThreadWriterConflictError, type CodexEngineConfigWire } from "@/app/lib/codex-session";
+import { setCodexAbortHandler } from "@/app/lib/engine-session";
 import { runCodexStream, useCodexSessionStore } from "./codex-session-store";
-import { syncCodexTranscriptToCache, restoreCodexSessionItems } from "./sync/codex-transcript-adapter";
+import { syncCodexTranscriptToCache, restoreCodexSessionItems, ensureCodexTranscriptCached } from "./sync/codex-transcript-adapter";
 
 export type CodexEngineEndpoint = {
   baseUrl: string;
@@ -18,17 +16,12 @@ export type CodexEngineEndpoint = {
 };
 
 /**
- * Wires the codex session store to a workspace's codex engine when the selected
- * engine is codex: loads existing sessions and opens the SSE stream. When the
- * engine is opencode, the codex store is cleared so the opencode session
- * surface takes over.
+ * Wires the Sofia session store to a workspace's engine: loads existing
+ * sessions and opens the SSE stream. Sofia is the only engine, so this
+ * activates whenever a workspace endpoint is available.
  */
 export function useCodexEngine(endpoint: CodexEngineEndpoint | null, activeSessionId?: string | null) {
-  const engine = useSelectedEngine();
-  // Activate when the selected engine is codex OR the open session is a codex
-  // session (e.g. the workspace defaults to opencode but the user opened a
-  // Sofia session). Without this the transcript is never mirrored.
-  const enabled = shouldActivateCodexEngine(engine, activeSessionId) && Boolean(endpoint);
+  const enabled = Boolean(endpoint);
   const displayWorkspaceId = endpoint?.displayWorkspaceId ?? endpoint?.workspaceId;
   const endpointRef = useRef<CodexEngineEndpoint | null>(endpoint);
   endpointRef.current = endpoint;
@@ -89,7 +82,7 @@ export function useCodexEngine(endpoint: CodexEngineEndpoint | null, activeSessi
     // codex sessions with no surface-specific code. Coalesce to one cache
     // write per animation frame — long streams otherwise rebuild the whole
     // transcript per delta and starve the main thread (the same freeze the
-    // opencode sync guards against).
+    // engine sync guards against).
     let mirrorFrame: number | null = null;
     const mirror = () => {
       if (mirrorFrame !== null) return;
@@ -123,6 +116,19 @@ export function useCodexEngine(endpoint: CodexEngineEndpoint | null, activeSessi
     };
   }, [enabled, client, displayWorkspaceId]);
 
+  // The mount-time restore above is not enough on its own: its cache entries
+  // have no observer, so TanStack GC drops them after the transcript/status
+  // gcTime and opening a task later rendered a blank pane with no way back.
+  // Re-seed the active task's transcript on open instead of trusting a
+  // one-shot write that may already be gone.
+  useEffect(() => {
+    if (!client || !activeSessionId?.startsWith("codex-")) return;
+    const entry = useCodexSessionStore.getState().sessions[activeSessionId];
+    const workspaceId = displayWorkspaceId ?? entry?.session.workspaceId;
+    if (!workspaceId) return;
+    void ensureCodexTranscriptCached(client, workspaceId, activeSessionId);
+  }, [activeSessionId, client, displayWorkspaceId]);
+
   // All store hooks must run at the top with stable selectors; a selector that
   // builds a new array each call makes useSyncExternalStore loop forever.
   const workspaceId = displayWorkspaceId;
@@ -154,6 +160,10 @@ export function useCodexEngine(endpoint: CodexEngineEndpoint | null, activeSessi
       : null,
     prompt: client
       ? async (sessionId: string, text: string, selection?: { model?: string; providerId?: string }) => {
+          useCodexSessionStore.setState((state) => {
+            const entry = state.sessions[sessionId];
+            return entry ? { sessions: { ...state.sessions, [sessionId]: { ...entry, warning: undefined } } } : state;
+          });
           useCodexSessionStore.getState().startTurn(sessionId);
           try {
             const result = await client.prompt(sessionId, text, selection);
@@ -161,7 +171,11 @@ export function useCodexEngine(endpoint: CodexEngineEndpoint | null, activeSessi
             // completed before this HTTP response arrives.
             return result.session;
           } catch (error) {
-            useCodexSessionStore.getState().failSession(sessionId, error instanceof Error ? error.message : "Sofia request failed");
+            const message = error instanceof Error ? error.message : "Sofia request failed";
+            useCodexSessionStore.getState().failSession(sessionId, message);
+            // The transcript error card explains the failure once; the notice
+            // keeps the reason visible when the pane would otherwise look idle.
+            if (isThreadWriterConflictError(error)) useCodexSessionStore.getState().setWarning(sessionId, message);
             throw error;
           }
         }
@@ -174,17 +188,7 @@ export function useCodexEngine(endpoint: CodexEngineEndpoint | null, activeSessi
     // Steer the in-flight turn (codex `turn/steer`). Returns a discriminated
     // result so the caller can start a turn or queue when steering is refused.
     steer: client
-      ? async (sessionId: string, text: string) => {
-          try {
-            return await client.steer(sessionId, text);
-          } catch (error) {
-            useCodexSessionStore.getState().failSession(
-              sessionId,
-              error instanceof Error ? error.message : "Sofia request failed",
-            );
-            throw error;
-          }
-        }
+      ? (sessionId: string, text: string) => client.steer(sessionId, text)
       : null,
     archiveSession: client
       ? async (sessionId: string, archived: boolean) => {

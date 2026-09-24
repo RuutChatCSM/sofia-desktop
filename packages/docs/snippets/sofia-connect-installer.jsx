@@ -5,9 +5,9 @@ export const SofiaConnectInstaller = () => {
   const CODEX_LOGIN_COMMAND = "codex mcp login sofia";
   const CODEX_RECONNECT_COMMAND = `codex mcp logout sofia
 codex mcp login sofia`;
-  const OPENCODE_AUTH_COMMAND = "opencode mcp auth sofia";
-  const OPENCODE_RECONNECT_COMMAND = `opencode mcp logout sofia
-opencode mcp auth sofia`;
+  const SOFIA_ENGINE_AUTH_COMMAND = "engine mcp auth sofia";
+  const SOFIA_ENGINE_RECONNECT_COMMAND = `engine mcp logout sofia
+engine mcp auth sofia`;
   const installs = [
     {
       id: "cursor",
@@ -48,12 +48,12 @@ opencode mcp auth sofia`;
       copyText: `claude mcp add --transport http sofia ${MCP_SERVER_URL}`,
     },
     {
-      id: "opencode",
-      label: "OpenCode",
-      eyebrow: "opencode.json MCP config",
-      helper: "Add this remote MCP server entry to your OpenCode config, then authenticate.",
+      id: "engine",
+      label: "Sofia",
+      eyebrow: "engine.json MCP config",
+      helper: "Add this remote MCP server entry to your Sofia config, then authenticate.",
       supportStatus: "Verified",
-      supportExplanation: "Verified with OpenCode native remote MCP OAuth flow.",
+      supportExplanation: "Verified with Sofia native remote MCP OAuth flow.",
       copyText: `{
   "mcp": {
     "sofia": {
@@ -64,8 +64,8 @@ opencode mcp auth sofia`;
     }
   }
 }`,
-      authText: OPENCODE_AUTH_COMMAND,
-      reconnectText: OPENCODE_RECONNECT_COMMAND,
+      authText: SOFIA_ENGINE_AUTH_COMMAND,
+      reconnectText: SOFIA_ENGINE_RECONNECT_COMMAND,
     },
     {
       id: "vs-code",
@@ -131,7 +131,7 @@ opencode mcp auth sofia`;
           Developers: point your own agent at your org — verified clients and setup guides.
         </div>
         <div className="mt-1 text-xs text-gray-400">
-          Verified for OpenCode only; setup guides for Codex, Cursor, ChatGPT, Claude Code, VS Code, and more
+          Verified for Sofia only; setup guides for Codex, Cursor, ChatGPT, Claude Code, VS Code, and more
         </div>
       </div>
 

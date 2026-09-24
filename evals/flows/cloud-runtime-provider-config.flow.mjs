@@ -1,19 +1,19 @@
 /**
  * Cloud providers are runtime-managed: importing an org LLM provider from
  * Settings -> Cloud writes it into the Sofia server's runtime config
- * (per-key provider merge), NOT into the user's opencode.jsonc — and a
+ * (per-key provider merge), NOT into the user's engine.jsonc — and a
  * legacy jsonc block left by pre-runtime builds is migrated (stripped).
  *
  * Flow (real app + real Den):
  *   1. Sign in via desktop handoff.
  *   2. Create a custom LLM provider on Den via API; pre-seed a legacy-style
- *      opencode.jsonc block for its id (migration proof).
+ *      engine.jsonc block for its id (migration proof).
  *   3. Settings -> Cloud providers: click "Import". The engine serves the
- *      provider while opencode.jsonc contains NO block for it — including
+ *      provider while engine.jsonc contains NO block for it — including
  *      the seeded legacy block, which the import stripped.
  *   4. PATCH the provider on Den to add a second model; the row shows
  *      "Out of sync"; click "Sync" — the engine reports the new model and
- *      opencode.jsonc stays clean (reimport upserts the runtime entry).
+ *      engine.jsonc stays clean (reimport upserts the runtime entry).
  *   5. Cleanup: delete the provider on Den; per-key runtime null-delete
  *      removes it from the engine.
  *
@@ -55,7 +55,7 @@ const engineProviderModelsExpr = (workspaceId, cloudProviderId) => `(async () =>
   const workspaceList = Array.isArray(wsPayload) ? wsPayload : wsPayload.items ?? [];
   const workspace = workspaceList.find((entry) => entry.id === workspaceId);
   const directory = workspace?.path ?? "";
-  const url = base + "/workspace/" + workspaceId + "/opencode/provider" +
+  const url = base + "/workspace/" + workspaceId + "/engine/provider" +
     (directory ? "?directory=" + encodeURIComponent(directory) : "");
   const response = await fetch(url, { headers });
   if (!response.ok) return null;
@@ -93,7 +93,7 @@ async function pollEngineModels(ctx, predicate, timeoutMs, label) {
   throw new Error(`Timed out after ${timeoutMs}ms waiting for: ${label}`);
 }
 
-// Read/write the workspace project opencode.jsonc via the Sofia server
+// Read/write the workspace project engine.jsonc via the Sofia server
 // config-file API, from inside the page (uses the app's own token/port).
 const configFileExpr = (workspaceId, method, contentJson) => `(async () => {
   const port = localStorage.getItem("sofia.server.port");
@@ -103,10 +103,10 @@ const configFileExpr = (workspaceId, method, contentJson) => `(async () => {
   const base = "http://127.0.0.1:" + port;
   const headers = { Authorization: "Bearer " + token, "Content-Type": "application/json" };
   if (${JSON.stringify(method)} === "GET") {
-    const file = await (await fetch(base + "/workspace/" + workspaceId + "/opencode-config?scope=project", { headers })).json();
+    const file = await (await fetch(base + "/workspace/" + workspaceId + "/engine-config?scope=project", { headers })).json();
     return file.content ?? "";
   }
-  const response = await fetch(base + "/workspace/" + workspaceId + "/opencode-config", {
+  const response = await fetch(base + "/workspace/" + workspaceId + "/engine-config", {
     method: "POST", headers,
     body: JSON.stringify({ scope: "project", content: ${contentJson} }),
   });
@@ -121,7 +121,7 @@ async function assertNoJsoncFootprint(ctx, context) {
   const raw = await readProjectConfig(ctx);
   ctx.assert(
     typeof raw === "string" && !raw.includes(ctx.providerId),
-    `opencode.jsonc contains a block for the imported provider ${context}`,
+    `engine.jsonc contains a block for the imported provider ${context}`,
   );
 }
 
@@ -163,7 +163,7 @@ async function clickProviderRowButton(ctx, label) {
 
 export default {
   id: "cloud-runtime-provider-config",
-  title: "Cloud provider import/sync lives in runtime config, not opencode.jsonc",
+  title: "Cloud provider import/sync lives in runtime config, not engine.jsonc",
   spec: "evals/cloud-provider-sync-flows.md",
   requiredEnv: ["SOFIA_EVAL_DEN_API_URL", "SOFIA_EVAL_DEN_TOKEN"],
   steps: [
@@ -261,10 +261,10 @@ export default {
         // canonical file (regex insertion into arbitrary JSONC is how you
         // manufacture trailing commas).
         const raw = await readProjectConfig(ctx);
-        ctx.assert(raw !== null, "Could not reach the project opencode.jsonc API.");
+        ctx.assert(raw !== null, "Could not reach the project engine.jsonc API.");
         const nextContent = `${JSON.stringify(
           {
-            $schema: "https://opencode.ai/config.json",
+            $schema: "https://github.com/RuutChatCSM/sofia/config.json",
             provider: {
               [ctx.providerId]: {
                 npm: "@ai-sdk/openai-compatible",
@@ -286,7 +286,7 @@ export default {
       name: "Settings -> Cloud 'Import' injects the provider via runtime config",
       run: async (ctx) => {
         await openCloudProvidersView(ctx);
-        await ctx.prove("Importing a cloud provider leaves opencode.jsonc untouched (and migrates the legacy block)", {
+        await ctx.prove("Importing a cloud provider leaves engine.jsonc untouched (and migrates the legacy block)", {
           action: async () => {
             await clickProviderRowButton(ctx, "Import");
             // The store returns "Connected <name>"; the view toasts it verbatim.
@@ -300,13 +300,13 @@ export default {
               "engine reports the imported provider with its model",
             );
             // Runtime injection proof: the provider is served by the engine
-            // while the workspace opencode.jsonc contains no block for it —
+            // while the workspace engine.jsonc contains no block for it —
             // including the legacy block we seeded, which must be migrated.
             await assertNoJsoncFootprint(ctx, "(runtime injection failed or migration did not strip the legacy block)");
             ctx.recordEvidence({
               type: "assertion",
               status: "passed",
-              assertion: "Imported provider is engine-visible with zero opencode.jsonc footprint (runtime config injection; legacy block migrated)",
+              assertion: "Imported provider is engine-visible with zero engine.jsonc footprint (runtime config injection; legacy block migrated)",
             });
           },
           screenshot: {
@@ -352,7 +352,7 @@ export default {
           },
           screenshot: {
             name: "sync-upserts-runtime",
-            claim: "Sync pulled the Den model change into the engine; opencode.jsonc still has no provider block.",
+            claim: "Sync pulled the Den model change into the engine; engine.jsonc still has no provider block.",
             requireText: ["Synced", PROVIDER_NAME],
             rejectText: ["Something went wrong"],
             hashIncludes: "/settings/cloud-providers",
@@ -376,7 +376,7 @@ export default {
           const headers = { Authorization: "Bearer " + token, "Content-Type": "application/json" };
           const response = await fetch(base + "/workspace/" + workspaceId + "/config", {
             method: "PATCH", headers,
-            body: JSON.stringify({ opencode: { provider: { [${JSON.stringify(ctx.providerId)}]: null } } }),
+            body: JSON.stringify({ engine: { provider: { [${JSON.stringify(ctx.providerId)}]: null } } }),
           });
           return response.status;
         })()`, { awaitPromise: true });

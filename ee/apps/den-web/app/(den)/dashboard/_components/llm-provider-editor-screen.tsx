@@ -1244,7 +1244,7 @@ export function LlmProviderEditorScreen({
                             Paste a models.dev provider, a single provider block,
                             or a full{" "}
                             <code className="rounded bg-gray-100 px-1 py-0.5">
-                                opencode.jsonc
+                                engine.jsonc
                             </code>
                             . Model maps are imported automatically.
                         </p>

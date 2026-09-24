@@ -18,7 +18,7 @@ import {
   writeSofiaConnectMcpAppHostAuthorization,
   writeSofiaConnectMcpAppHostCatalog,
 } from "./connect-mcp-server-catalog.js";
-import { readRuntimeOpencodeConfig, runtimeMcpMap, writeRuntimeOpencodeConfig } from "./runtime-opencode-config-store.js";
+import { readRuntimeWorkspaceEngineConfig, runtimeMcpMap, writeRuntimeWorkspaceEngineConfig } from "./runtime-engine-config-store.js";
 import {
   callMcpAppTool,
   projectedMcpToolName,
@@ -259,7 +259,7 @@ async function configuredFixture(
   };
   if (connectionId) {
     if (connectMcpAppHostName(connectionId) !== mcpName) throw new Error("invalid private App-host fixture");
-    await writeRuntimeOpencodeConfig(config, WORKSPACE_ID, (current) => ({
+    await writeRuntimeWorkspaceEngineConfig(config, WORKSPACE_ID, (current) => ({
       ...current,
       mcp: {
         ...runtimeMcpMap(current),
@@ -344,7 +344,7 @@ describe("MCP Apps host transport", () => {
       resourceUri: RESOURCE_URI,
       html: RESOURCE_HTML,
     });
-    expect(Object.keys(runtimeMcpMap(await readRuntimeOpencodeConfig(config, WORKSPACE_ID)))).toEqual(["sofia-cloud"]);
+    expect(Object.keys(runtimeMcpMap(await readRuntimeWorkspaceEngineConfig(config, WORKSPACE_ID)))).toEqual(["sofia-cloud"]);
     expect(catalogReads()).toBe(0);
   });
 

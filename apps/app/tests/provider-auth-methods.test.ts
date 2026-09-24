@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { createClient } from "../src/app/lib/opencode";
+import { createClient } from "../src/app/lib/engine";
 import type { ProviderListItem, WorkspaceDisplay } from "../src/app/types";
 import { createProviderAuthStore } from "../src/react-app/domains/connections/provider-auth/store";
 
 const originalWindow = globalThis.window;
 const originalFetch = globalThis.fetch;
-const opencodeClient = createClient("https://engine.example", "/tmp/workspace_test", undefined, (input, init) =>
+const engineClient = createClient("https://engine.example", "/tmp/workspace_test", undefined, (input, init) =>
   globalThis.fetch(input, init),
 );
 
@@ -72,7 +72,7 @@ function createTestStore(workerType: "local" | "remote") {
   } satisfies WorkspaceDisplay;
 
   return createProviderAuthStore({
-    client: () => opencodeClient,
+    client: () => engineClient,
     providers: () => providers,
     providerDefaults: () => ({}),
     providerConnectedIds: () => [],
@@ -93,7 +93,7 @@ function createTestStore(workerType: "local" | "remote") {
     setProviderDefaults: () => undefined,
     setProviderConnectedIds: () => undefined,
     setDisabledProviders: () => undefined,
-    markOpencodeConfigReloadRequired: () => undefined,
+    markWorkspaceEngineConfigReloadRequired: () => undefined,
   });
 }
 

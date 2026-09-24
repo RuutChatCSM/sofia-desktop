@@ -183,7 +183,7 @@ export default {
             await ctx.waitForText(FILENAME, { timeoutMs: 30_000 });
             const transcript = await ctx.control("session.read_transcript", { count: 5 });
             const text = transcriptText(transcript);
-            assertEvidence(ctx, text.includes(".opencode/sofia/inbox/chat-attachments/"), "Transcript contains the workspace inbox path", text);
+            assertEvidence(ctx, text.includes(".sofia/sofia/inbox/chat-attachments/"), "Transcript contains the workspace inbox path", text);
             assertEvidence(ctx, !text.includes("data:application/pdf"), "Transcript does not expose the PDF as a data URL fallback", text);
             ctx.output("submitted user turn", text);
           },
@@ -202,7 +202,7 @@ export default {
             const fileUrl = extractAttachmentFileUrl(text);
             assertEvidence(ctx, Boolean(fileUrl), "Submitted turn includes a file:// URL for the uploaded PDF", text);
             const filePath = fileURLToPath(fileUrl);
-            assertEvidence(ctx, filePath.includes(".opencode/sofia/inbox/chat-attachments/"), "File path is inside the worker chat-attachments inbox", filePath);
+            assertEvidence(ctx, filePath.includes(".sofia/sofia/inbox/chat-attachments/"), "File path is inside the worker chat-attachments inbox", filePath);
             const digest = await readSandboxFileDigest(ctx, filePath);
             assertEvidence(ctx, digest.bytes === EXPECTED_BYTES.length, "Uploaded PDF byte count matches the image-only PDF fixture", `${digest.bytes} bytes`);
             assertEvidence(ctx, digest.sha256 === EXPECTED_SHA256, "Uploaded PDF sha256 matches the image-only PDF fixture exactly", digest.sha256);

@@ -14,7 +14,7 @@ import {
 } from "../../app/lib/desktop";
 import { isDesktopRuntime } from "../../app/utils";
 import { canCreateWorkspaces } from "../../app/lib/workspace-creation-policy";
-import { createClient, unwrap } from "../../app/lib/opencode";
+import { createClient, unwrap } from "../../app/lib/engine";
 import { useLocal } from "../kernel/local-provider";
 import { usePlatform } from "../kernel/platform";
 import { WelcomePage } from "../domains/onboarding/welcome-page";
@@ -234,7 +234,7 @@ export function WelcomeRoute() {
           try {
             const workspacePath = targetWorkspace?.path?.trim() || folder;
             const session = unwrap(await createClient(
-              `${(buildSofiaWorkspaceBaseUrl(sessionBaseUrl, targetWorkspaceId) ?? sessionBaseUrl).replace(/\/+$/, "")}/opencode`,
+              `${(buildSofiaWorkspaceBaseUrl(sessionBaseUrl, targetWorkspaceId) ?? sessionBaseUrl).replace(/\/+$/, "")}/engine`,
               workspacePath || undefined,
               { token: sessionToken, mode: "sofia" },
             ).session.create({ directory: workspacePath || undefined }));

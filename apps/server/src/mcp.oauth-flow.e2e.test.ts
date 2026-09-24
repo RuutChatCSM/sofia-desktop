@@ -7,7 +7,7 @@ import { join, resolve } from "node:path";
 /**
  * Full MCP OAuth flow e2e:
  *
- *   real opencode engine (sidecar binary)
+ *   real engine engine (sidecar binary)
  *     -> mock OAuth MCP server (scripts/mock-oauth-mcp-server.mjs)
  *     -> discovery + dynamic client registration + PKCE (S256)
  *     -> authorization redirect ("the browser")
@@ -19,7 +19,7 @@ import { join, resolve } from "node:path";
  * callback. This is the same flow the Sofia App desktop app drives through
  * the OAuth modal (apps/app .../connections/mcp-auth-modal.tsx).
  *
- * Skipped automatically when the opencode sidecar binary is not present
+ * Skipped automatically when the engine sidecar binary is not present
  * (e.g. CI runners that never ran prepare:sidecar).
  */
 
@@ -30,9 +30,9 @@ function findSidecar(): string | null {
   const arch = process.arch === "arm64" ? "aarch64" : "x86_64";
   const names =
     process.platform === "darwin"
-      ? [`opencode-${arch}-apple-darwin`]
+      ? [`engine-${arch}-apple-darwin`]
       : process.platform === "linux"
-        ? [`opencode-${arch}-unknown-linux-gnu`, `opencode-${arch}-unknown-linux-musl`]
+        ? [`engine-${arch}-unknown-linux-gnu`, `engine-${arch}-unknown-linux-musl`]
         : [];
   for (const name of names) {
     const candidate = join(sidecarDir, name);
@@ -93,9 +93,9 @@ describeMaybe("mcp oauth flow against mock provider", () => {
     workDir = mkdtempSync(join(tmpdir(), "mcp-oauth-ws-"));
     dataDir = mkdtempSync(join(tmpdir(), "mcp-oauth-data-"));
     writeFileSync(
-      join(workDir, "opencode.jsonc"),
+      join(workDir, "engine.jsonc"),
       JSON.stringify({
-        $schema: "https://opencode.ai/config.json",
+        $schema: "https://github.com/RuutChatCSM/sofia/config.json",
         mcp: {
           [MCP_NAME]: { type: "remote", url: `${mockUrl()}/mcp`, enabled: true, oauth: {} },
         },
@@ -122,7 +122,7 @@ describeMaybe("mcp oauth flow against mock provider", () => {
         XDG_CONFIG_HOME: join(dataDir, "xdg-config"),
         XDG_STATE_HOME: join(dataDir, "xdg-state"),
         XDG_CACHE_HOME: join(dataDir, "xdg-cache"),
-        OPENCODE_DISABLE_AUTOUPDATE: "1",
+        SOFIA_ENGINE_DISABLE_AUTOUPDATE: "1",
       },
       stdio: "ignore",
     });
@@ -132,7 +132,7 @@ describeMaybe("mcp oauth flow against mock provider", () => {
         return res.ok ? true : null;
       },
       30_000,
-      "opencode engine",
+      "engine engine",
     );
   }, 60_000);
 
@@ -207,7 +207,7 @@ describeMaybe("mcp oauth flow against mock provider", () => {
       expect(connected[MCP_NAME].status).toBe("connected");
 
       // Tokens are persisted for reuse across restarts.
-      const authFile = join(dataDir, "xdg-data", "opencode", "mcp-auth.json");
+      const authFile = join(dataDir, "xdg-data", "engine", "mcp-auth.json");
       expect(existsSync(authFile)).toBe(true);
       const saved = JSON.parse(readFileSync(authFile, "utf8")) as Record<string, { tokens?: { accessToken?: string } }>;
       expect(saved[MCP_NAME]?.tokens?.accessToken).toStartWith("mock-access-");
@@ -228,7 +228,7 @@ describeMaybe("mcp oauth flow against mock provider", () => {
   test(
     "engine silently refreshes an expired access token without re-authorization",
     async () => {
-      const authFile = join(dataDir, "xdg-data", "opencode", "mcp-auth.json");
+      const authFile = join(dataDir, "xdg-data", "engine", "mcp-auth.json");
       const before = JSON.parse(readFileSync(authFile, "utf8")) as Record<
         string,
         { tokens?: { accessToken?: string; refreshToken?: string } }
@@ -299,7 +299,7 @@ describeMaybe("mcp oauth flow against mock provider", () => {
     const remove = await engineFetch(`/mcp/${MCP_NAME}/auth`, { method: "DELETE" });
     expect(remove.ok).toBe(true);
 
-    const authFile = join(dataDir, "xdg-data", "opencode", "mcp-auth.json");
+    const authFile = join(dataDir, "xdg-data", "engine", "mcp-auth.json");
     const saved = JSON.parse(readFileSync(authFile, "utf8")) as Record<string, unknown>;
     expect(saved[MCP_NAME]).toBeUndefined();
   }, 30_000);

@@ -87,7 +87,7 @@ describe("bundled Sofia engine runtime", () => {
 
     // Sofia engine #40990 stops old assistant messages with lexicographically
     // later IDs from short-circuiting a newly appended user turn.
-    assert.equal(constants.opencodeVersion, "v1.18.18");
+    assert.equal(constants.engineVersion, "v1.18.18");
   });
 });
 
@@ -170,20 +170,20 @@ describe("resolveEvalLocalServerDelayMs", () => {
 });
 
 describe("commandMatchesPackagedSidecar", () => {
-  it("matches packaged opencode sidecars with platform suffixes", () => {
+  it("matches packaged engine sidecars with platform suffixes", () => {
     assert.equal(
       commandMatchesPackagedSidecar(
-        "/Applications/Sofia App.app/Contents/Resources/sidecars/opencode-aarch64-apple-darwin serve --hostname 127.0.0.1 --port 49174 --cors *",
+        "/Applications/Sofia App.app/Contents/Resources/sidecars/engine-aarch64-apple-darwin serve --hostname 127.0.0.1 --port 49174 --cors *",
         ["/Applications/Sofia App.app/Contents/Resources/sidecars"],
       ),
       true,
     );
   });
 
-  it("does not match unrelated opencode processes outside sidecar directories", () => {
+  it("does not match unrelated engine processes outside sidecar directories", () => {
     assert.equal(
       commandMatchesPackagedSidecar(
-        "/usr/local/bin/opencode serve --hostname 127.0.0.1 --port 49174",
+        "/usr/local/bin/engine serve --hostname 127.0.0.1 --port 49174",
         ["/Applications/Sofia App.app/Contents/Resources/sidecars"],
       ),
       false,
@@ -300,10 +300,10 @@ describe("snapshotEngineState", () => {
       hostname: "127.0.0.1",
       port: 4097,
       baseUrl: "http://127.0.0.1:4097",
-      opencodeUsername: null,
-      opencodePassword: null,
-      opencodeBinPath: null,
-      opencodeBinSource: null,
+      engineUsername: null,
+      enginePassword: null,
+      engineBinPath: null,
+      engineBinSource: null,
       managedByServer: true,
       managedPid: 12345,
       managedIsAlive: () => true,
@@ -333,11 +333,11 @@ describe("resetRuntimeStatesAfterFailedServerStart", () => {
       clientToken: "client-token",
       ownerToken: "owner-token",
       hostToken: "host-token",
-      managedOpencodeBinPath: "/usr/local/bin/opencode",
-      managedOpencodeBinSource: "known-location",
+      managedWorkspaceEngineBinPath: "/usr/local/bin/engine",
+      managedWorkspaceEngineBinSource: "known-location",
       lastStdout: "server stdout",
       lastStderr: "server stderr",
-      managedOpencodeExecution: { command: "opencode" },
+      managedWorkspaceEngineExecution: { command: "engine" },
     };
   }
 
@@ -350,16 +350,16 @@ describe("resetRuntimeStatesAfterFailedServerStart", () => {
       hostname: "127.0.0.1",
       port: 4097,
       baseUrl: "http://127.0.0.1:4097",
-      opencodeUsername: "user",
-      opencodePassword: "pass",
-      opencodeBinPath: "/usr/local/bin/opencode",
-      opencodeBinSource: "known-location",
+      engineUsername: "user",
+      enginePassword: "pass",
+      engineBinPath: "/usr/local/bin/engine",
+      engineBinSource: "known-location",
       managedByServer: true,
       managedPid: 12345,
       managedIsAlive: () => true,
       lastStdout: "engine stdout",
       lastStderr: "engine stderr",
-      execution: { command: "opencode" },
+      execution: { command: "engine" },
     };
   }
 
@@ -367,7 +367,7 @@ describe("resetRuntimeStatesAfterFailedServerStart", () => {
     const serverState = staleServerState();
     const engineState = staleEngineState();
 
-    resetRuntimeStatesAfterFailedServerStart(serverState, engineState, { manageOpencode: true });
+    resetRuntimeStatesAfterFailedServerStart(serverState, engineState, { manageWorkspaceEngine: true });
 
     assert.equal(serverState.inProcess, false);
     assert.equal(serverState.port, null);
@@ -391,7 +391,7 @@ describe("resetRuntimeStatesAfterFailedServerStart", () => {
     const engineState = staleEngineState();
     engineState.managedByServer = false;
 
-    resetRuntimeStatesAfterFailedServerStart(serverState, engineState, { manageOpencode: false });
+    resetRuntimeStatesAfterFailedServerStart(serverState, engineState, { manageWorkspaceEngine: false });
 
     assert.equal(serverState.inProcess, false);
     assert.equal(engineState.baseUrl, "http://127.0.0.1:4097");

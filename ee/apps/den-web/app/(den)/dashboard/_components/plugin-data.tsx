@@ -9,7 +9,7 @@ import {
 } from "./integration-data";
 
 /**
- * Plugin primitives — mirror OpenCode / Claude Code's plugin surface:
+ * Plugin primitives — mirror Sofia / Claude Code's plugin surface:
  *
  *  A plugin is a *bundle* of reusable pieces that extend an agent runtime:
  *   - skills      natural-language playbooks/instructions agents can load on demand

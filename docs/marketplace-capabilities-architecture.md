@@ -14,7 +14,7 @@ Status: design note for a Den-only, additive Phase 1.
 
 Every plugin published to an org marketplace is automatically discoverable via `search_capabilities` and reachable via `execute_capability` on the existing `sofia-cloud` connection — the same rail as External MCP Connections.
 
-Installation, meaning copying files into `.opencode/`, becomes an optimization for offline use and pinning, not a requirement for using org-published content.
+Installation, meaning copying files into `.sofia/`, becomes an optimization for offline use and pinning, not a requirement for using org-published content.
 
 The marketplace is the FOURTH capability source on the rail, after Den's REST catalog, External MCP Connections, and native provider capabilities. Native provider capabilities already ride the REST catalog as routes tagged `Capability Sources`.
 
@@ -175,7 +175,7 @@ Marketplace matches are interleaved with the other sources by score in `ee/apps/
 
 Search is DB-only, bounded by `limit`, and makes no live network calls. This contrasts with External MCP Connections, where search may call `tools/list` through `ee/apps/den-api/src/capability-sources/external-mcp-client.ts`.
 
-Dedupe against locally installed copies is NOT server-side possible in Phase 1. Den does not know what a desktop copied into `.opencode/`. Defer dedupe; make duplicates distinguishable with marketplace/plugin provenance in summaries and execute payloads.
+Dedupe against locally installed copies is NOT server-side possible in Phase 1. Den does not know what a desktop copied into `.sofia/`. Defer dedupe; make duplicates distinguishable with marketplace/plugin provenance in summaries and execute payloads.
 
 ---
 
@@ -302,7 +302,7 @@ Desktop-install records (`tool`, `hook`, built-in extension manifests, unsupport
 
 The sandbox arm is reserved, not chosen. Two candidates remain open:
 
-1. Den Worker running `opencode-server` with a constrained workspace and mounted bundle.
+1. Den Worker running `engine-server` with a constrained workspace and mounted bundle.
 2. Claude Agent SDK runner with a plugin bundle adapter.
 
 Both require a stronger isolation and billing story than Part 1 needs. Until that decision is made, `tool` records stay `desktop_install` or `reserved_sandbox` with no execution path.

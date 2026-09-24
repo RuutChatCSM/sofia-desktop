@@ -98,7 +98,7 @@ type CloudMcpReconcilerInput = {
   probe?: boolean;
 };
 
-type OpenCodeDisconnectClient = {
+type SofiaDisconnectClient = {
   mcp: {
     disconnect: (input: { directory: string; name: string }) => Promise<unknown>;
   };
@@ -379,7 +379,7 @@ const engineRefreshInFlight = new Map<string, Promise<CloudMcpEngineRefreshRunRe
 
 /**
  * Force the engine to drop its sofia-cloud MCP client and reconnect.
- * OpenCode keeps a failed MCP failed forever (no automatic retry), so this is
+ * Sofia keeps a failed MCP failed forever (no automatic retry), so this is
  * the explicit "try again from scratch" lever: engine disconnect, then
  * re-registration from the persisted desired config, then a direct probe.
  */
@@ -528,7 +528,7 @@ export function cloudMcpDisplaySummary(input: {
 export async function cleanupSofiaCloudMcpAfterSignOut(input: {
   context: CloudMcpScope;
   sofiaClient: CleanupClient | null;
-  opencodeClient: OpenCodeDisconnectClient | null;
+  engineClient: SofiaDisconnectClient | null;
   directory: string;
 }): Promise<void> {
   const scope = normalizeCloudMcpScope(input.context);
@@ -538,8 +538,8 @@ export async function cleanupSofiaCloudMcpAfterSignOut(input: {
     input.sofiaClient && scope
       ? input.sofiaClient.removeMcp(scope.workspaceId, CLOUD_MCP_SERVER_NAME).catch(() => null)
       : Promise.resolve(null),
-    input.opencodeClient && input.directory.trim()
-      ? input.opencodeClient.mcp.disconnect({ directory: input.directory.trim(), name: CLOUD_MCP_SERVER_NAME }).catch(() => null)
+    input.engineClient && input.directory.trim()
+      ? input.engineClient.mcp.disconnect({ directory: input.directory.trim(), name: CLOUD_MCP_SERVER_NAME }).catch(() => null)
       : Promise.resolve(null),
   ]);
 }

@@ -1,11 +1,11 @@
-// Tests for the codex config.toml mapper (opencode provider map -> codex).
+// Tests for the codex config.toml mapper (engine provider map -> codex).
 import { describe, expect, it } from "bun:test";
 
 import {
   addCodexDefaultProviderLines,
   buildCodexConfigToml,
   codexConfigTomlFromRuntime,
-  mapOpencodeProviderToCodex,
+  mapWorkspaceEngineProviderToCodex,
   pickDefaultCodexProvider,
 } from "./codex-config.js";
 
@@ -20,9 +20,9 @@ const deepseek = {
   },
 };
 
-describe("mapOpencodeProviderToCodex", () => {
+describe("mapWorkspaceEngineProviderToCodex", () => {
   it("maps baseURL + env + name", () => {
-    const mapped = mapOpencodeProviderToCodex("deepseek", deepseek);
+    const mapped = mapWorkspaceEngineProviderToCodex("deepseek", deepseek);
     expect(mapped).toEqual({
       name: "DeepSeek",
       baseUrl: "https://api.deepseek.com",
@@ -32,18 +32,18 @@ describe("mapOpencodeProviderToCodex", () => {
   });
 
   it("strips a trailing /api/v1 suffix", () => {
-    const mapped = mapOpencodeProviderToCodex("x", {
+    const mapped = mapWorkspaceEngineProviderToCodex("x", {
       options: { baseURL: "https://example.com/api/v1" },
     });
     expect(mapped?.baseUrl).toBe("https://example.com");
   });
 
   it("returns null when no base_url/api is present", () => {
-    expect(mapOpencodeProviderToCodex("x", { name: "No URL" })).toBeNull();
+    expect(mapWorkspaceEngineProviderToCodex("x", { name: "No URL" })).toBeNull();
   });
 
   it("falls back to the provider api field", () => {
-    const mapped = mapOpencodeProviderToCodex("x", { api: "https://api.example.com/api/v1" });
+    const mapped = mapWorkspaceEngineProviderToCodex("x", { api: "https://api.example.com/api/v1" });
     expect(mapped?.baseUrl).toBe("https://api.example.com");
   });
 });

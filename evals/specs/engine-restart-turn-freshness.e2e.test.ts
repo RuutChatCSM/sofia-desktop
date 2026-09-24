@@ -242,12 +242,12 @@ test.skipIf(!e2eTestsEnabled)(title, { timeout: 600_000 }, async ({ evidence }) 
       });
       if (!response.ok) return "status failed: " + response.status + " " + (await response.text()).slice(0, 500);
       const body = await response.json();
-      return typeof body.opencodeVersion === "string" ? body.opencodeVersion : "missing opencodeVersion: " + JSON.stringify(body);
+      return typeof body.engineVersion === "string" ? body.engineVersion : "missing engineVersion: " + JSON.stringify(body);
     })()`, { awaitPromise: true, timeoutMs: 30_000 });
     const engineVersion = String(versionRaw).replace(/^v/, "");
     evidence.recordAssertionEvidence(
       "The local Sofia App server reports the fixed bundled Sofia engine",
-      `GET /status observed ${JSON.stringify({ opencodeVersion: versionRaw })}.`,
+      `GET /status observed ${JSON.stringify({ engineVersion: versionRaw })}.`,
       engineVersion === "1.18.18" && !engineVersion.startsWith("1.17."),
     );
     expect(engineVersion, `stale 1.17.x engine reported by /status: ${engineVersion}`).not.toMatch(/^1\.17\./);
@@ -269,7 +269,7 @@ test.skipIf(!e2eTestsEnabled)(title, { timeout: 600_000 }, async ({ evidence }) 
       const patched = await request("/workspace/" + encodeURIComponent(workspaceId) + "/config", {
         method: "PATCH",
         body: JSON.stringify({
-          opencode: {
+          engine: {
             provider: {
               [${JSON.stringify(providerId)}]: {
                 npm: "@ai-sdk/openai-compatible",

@@ -5,7 +5,7 @@ import type { Client } from "@/app/types";
 
 type WorkspaceContextValue = {
   client: Client | null;
-  opencodeBaseUrl: string;
+  engineBaseUrl: string;
   sofiaServerClient: SofiaServerClient | null;
   workspaceId: string;
   selectedWorkspaceRoot: string;
@@ -15,7 +15,7 @@ const WorkspaceContext = React.createContext<WorkspaceContextValue | null>(null)
 
 type WorkspaceProviderProps = {
   client: Client | null;
-  opencodeBaseUrl?: string;
+  engineBaseUrl?: string;
   sofiaServerClient?: SofiaServerClient | null;
   workspaceId?: string;
   selectedWorkspaceRoot: string;
@@ -24,15 +24,15 @@ type WorkspaceProviderProps = {
 
 export function WorkspaceProvider({
   client,
-  opencodeBaseUrl = "",
+  engineBaseUrl = "",
   sofiaServerClient = null,
   workspaceId = "",
   selectedWorkspaceRoot,
   children,
 }: WorkspaceProviderProps) {
   const value = React.useMemo(
-    () => ({ client, opencodeBaseUrl, sofiaServerClient, workspaceId, selectedWorkspaceRoot }),
-    [client, opencodeBaseUrl, sofiaServerClient, workspaceId, selectedWorkspaceRoot],
+    () => ({ client, engineBaseUrl, sofiaServerClient, workspaceId, selectedWorkspaceRoot }),
+    [client, engineBaseUrl, sofiaServerClient, workspaceId, selectedWorkspaceRoot],
   );
 
   return React.createElement(WorkspaceContext.Provider, { value }, children);

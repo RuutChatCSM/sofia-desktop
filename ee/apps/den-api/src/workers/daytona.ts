@@ -329,11 +329,11 @@ function checkpointLastFlushMarkerPath() {
 
 function checkpointEnvironmentScript() {
   // The engine keeps its sessions in a SQLite database under its own data dir
-  // (opencode.db), which lives on the container overlay rather than a volume.
+  // (engine.db), which lives on the container overlay rather than a volume.
   // It was missing from the checkpoint, so every recycle onto a new snapshot
   // started the user from scratch. Resolved from $HOME in-shell so it tracks
   // the image instead of a hardcoded /root.
-  return `ENGINE_STATE_PATH=\${SOFIA_ENGINE_STATE_PATH:-\$HOME/.local/share/opencode}
+  return `ENGINE_STATE_PATH=\${SOFIA_ENGINE_STATE_PATH:-\$HOME/.local/share/engine}
 SOFIA_STATE_MANIFEST="${checkpointStateManifest()} \$ENGINE_STATE_PATH"
 CHECKPOINT_DIR=${shellQuote(checkpointDir())}
 RESTORE_MARKER=${shellQuote(checkpointRestoreMarkerPath())}
@@ -384,8 +384,8 @@ flush_checkpoint() {
   done
   # Collapse the WAL so the copied database is self-consistent and small. Best
   # effort: a locked or absent database must never fail the flush.
-  if [ -f "$ENGINE_STATE_PATH/opencode.db" ]; then
-    node -e 'const{DatabaseSync}=require("node:sqlite");const db=new DatabaseSync(process.argv[1]);db.exec("PRAGMA wal_checkpoint(TRUNCATE)");db.close()' "$ENGINE_STATE_PATH/opencode.db" >/dev/null 2>&1 || true
+  if [ -f "$ENGINE_STATE_PATH/engine.db" ]; then
+    node -e 'const{DatabaseSync}=require("node:sqlite");const db=new DatabaseSync(process.argv[1]);db.exec("PRAGMA wal_checkpoint(TRUNCATE)");db.close()' "$ENGINE_STATE_PATH/engine.db" >/dev/null 2>&1 || true
   fi
   # Credentials are re-materialized and re-delivered on every start, so they are
   # deliberately not persisted to the shared volume. Logs are noise.
@@ -415,7 +415,7 @@ flush_checkpoint`
 export function buildSofiaStartCommand(input: ProvisionInput) {
   const verifyRuntimeStep = [
     "if ! command -v sofia-server >/dev/null 2>&1; then echo 'sofia-server binary missing from Daytona runtime image; rebuild and republish the Daytona snapshot' >&2; exit 1; fi",
-    "if ! command -v opencode >/dev/null 2>&1; then echo 'opencode binary missing from Daytona runtime image; rebuild and republish the Daytona snapshot' >&2; exit 1; fi",
+    "if ! command -v engine >/dev/null 2>&1; then echo 'engine binary missing from Daytona runtime image; rebuild and republish the Daytona snapshot' >&2; exit 1; fi",
   ].join("; ")
   const sofiaServe = [
     "SOFIA_DATA_DIR=",
@@ -426,10 +426,10 @@ export function buildSofiaStartCommand(input: ProvisionInput) {
     shellQuote(input.clientToken),
     " SOFIA_HOST_TOKEN=",
     shellQuote(input.hostToken),
-    " SOFIA_MANAGE_OPENCODE=",
+    " SOFIA_MANAGE_SOFIA_ENGINE=",
     shellQuote("1"),
-    " SOFIA_OPENCODE_BIN=",
-    shellQuote("/usr/local/bin/opencode"),
+    " SOFIA_SOFIA_ENGINE_BIN=",
+    shellQuote("/usr/local/bin/engine"),
     " SOFIA_WEB_ROOT=",
     shellQuote("/opt/sofia/web"),
     // The instance still serves its own SPA copy for direct/debug access, but
@@ -438,7 +438,7 @@ export function buildSofiaStartCommand(input: ProvisionInput) {
     " SOFIA_WEB_BOOTSTRAP_TOKEN=",
     shellQuote("0"),
     " SOFIA_EXTENSIONS_PLUGIN_DIR=",
-    shellQuote("/opt/sofia/opencode-plugins"),
+    shellQuote("/opt/sofia/engine-plugins"),
     " DEN_RUNTIME_PROVIDER=",
     shellQuote("daytona"),
     " DEN_WORKER_ID=",

@@ -1,5 +1,6 @@
 "use memo";
 
+import { turnAnswerIndex } from "./turn-structure"
 import * as React from "react"
 import {
   AlertTriangle,
@@ -436,7 +437,7 @@ const AssistantMessage = React.memo(
 
     return (
       <Message
-        className="mx-auto flex w-full max-w-3xl flex-col items-start gap-2 px-2 md:px-10"
+        className="mx-auto flex w-full max-w-[800px] flex-col items-start gap-2 px-2 md:px-6"
         data-message-id={message.id}
         data-message-role={message.role}
       >
@@ -622,7 +623,7 @@ const UserMessage = React.memo(
 
     return (
       <Message
-        className="mx-auto flex w-full max-w-3xl flex-col items-end gap-2 px-2 md:px-10"
+        className="mx-auto flex w-full max-w-[800px] flex-col items-end gap-2 px-2 md:px-6"
         data-message-id={message.id}
         data-message-role={message.role}
       >
@@ -779,22 +780,11 @@ const MessageComponent = React.memo(
 MessageComponent.displayName = "MessageComponent"
 
 const LoadingMessage = React.memo(({ label }: { label?: string }) => (
-  <Message className="mx-auto flex w-full max-w-3xl flex-col items-start gap-2 px-2 md:px-10">
+  <Message className="mx-auto flex w-full max-w-[800px] flex-col items-start gap-2 px-2 md:px-6">
     <div className="group flex w-full flex-col gap-0">
       <div className="flex items-center gap-1.5 px-1 py-1 text-sm text-muted-foreground">
-        <div style={{ width: 20, height: 20, borderRadius: "50%", overflow: "hidden" }}>
-          <PaperGrainGradient
-            speed={12}
-            softness={0.1}
-            intensity={1}
-            noise={0.05}
-            shape="sphere"
-            colors={["#818cf8", "#fb7185", "#fbbf24", "#34d399"]}
-            colorBack="#ffffff00"
-            style={{ backgroundColor: "#818cf8", width: "100%", height: "100%", borderRadius: "50%" }}
-          />
-        </div>
-        <span>{label ?? "Thinking…"}</span>
+        <span className="sofia-working-dot" aria-hidden="true" />
+        <span>{label ?? "Sofia is working…"}</span>
       </div>
     </div>
   </Message>
@@ -808,7 +798,7 @@ interface ErrorMessageProps {
 
 function ErrorMessage({ error }: ErrorMessageProps) {
   return (
-    <Message className="not-prose mx-auto flex w-full max-w-3xl flex-col items-start gap-2 px-0 md:px-10">
+    <Message className="not-prose mx-auto flex w-full max-w-[800px] flex-col items-start gap-2 px-2 md:px-6">
       <div className="group flex w-full flex-col items-start gap-0">
         <div className="text-foreground flex min-w-0 flex-1 flex-row items-start gap-2 rounded-lg border-2 border-red-300 bg-red-300/20 px-2 py-1">
           <AlertTriangle size={16} className="mt-0.5 shrink-0 text-destructive" />
@@ -852,7 +842,7 @@ const RetryMessage = React.memo(({ status }: RetryMessageProps) => {
   const action = status.action
 
   return (
-    <Message className="not-prose mx-auto flex w-full max-w-3xl flex-col items-start gap-2 px-0 md:px-10">
+    <Message className="not-prose mx-auto flex w-full max-w-[800px] flex-col items-start gap-2 px-2 md:px-6">
       <div className="group flex w-full flex-col items-start gap-0">
         <div className="text-foreground flex min-w-0 flex-1 flex-col gap-2 rounded-lg border-2 border-amber-300 bg-amber-300/20 px-3 py-2">
           <div className="flex items-start gap-2">
@@ -906,7 +896,7 @@ function CompletedStepRun({ label, children }: { label: string; children: React.
 
   return (
     <Collapsible open={open} onOpenChange={setOpen} className="flex w-full flex-col gap-2">
-      <div className="mx-auto flex w-full max-w-3xl px-2 md:px-10">
+      <div className="mx-auto flex w-full max-w-[800px] px-2 md:px-6">
         <CollapsibleTrigger
           className="group flex cursor-pointer items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
           aria-label={open ? `${label}. Hide steps` : `${label}. Show steps`}
@@ -1010,18 +1000,15 @@ function MessageGroup({
   const lastTextMessage = getLastTextPart(lastItem.message)
   const mcpAppParts = collectMcpAppParts(items)
 
-  // Leading messages without prose (tool/reasoning steps) render inside a
-  // height-capped scroll area so long runs stay compact; messages with text
-  // or files render inline below it.
-  let stepCount = 0
-  while (stepCount < items.length && !getRenderableMessage(items[stepCount].message)) {
-    stepCount += 1
-  }
-  let stepItems = items.slice(0, stepCount)
-  let proseItems = items.slice(stepCount)
-  // OpenCode delivers a whole turn as one assistant message with steps and
-  // the answer interleaved in its parts. Split the first prose message so
-  // its leading steps fold with the rest instead of pinning the run open.
+  // Sofia emits narration, reasoning, and tool calls as separate items.
+  // Fold all activity before the final answer, including progress prose.
+  const answerIndex = turnAnswerIndex(items.map((item) => item.message))
+  let stepItems = answerIndex >= 0 ? items.slice(0, answerIndex) : items
+  let proseItems = answerIndex >= 0 ? items.slice(answerIndex) : []
+  // The engine can also deliver a whole turn as one assistant message with the
+  // steps and the answer interleaved in its parts. Split that first prose
+  // message so its leading steps fold with the rest instead of pinning the run
+  // open and hiding the "Worked for …" summary.
   const firstProse = proseItems[0]
   if (firstProse && firstProse.message.role === "assistant" && !isSessionErrorMessage(firstProse.message)) {
     const split = splitTurnAtAnswer(firstProse.message)
@@ -1074,7 +1061,7 @@ function MessageGroup({
     ? proseReasoning.map((reasoning) => (
       <Message
         key={`folded-reasoning-${reasoning.key}`}
-        className="mx-auto flex w-full max-w-3xl flex-col items-start gap-2 px-2 md:px-10"
+        className="mx-auto flex w-full max-w-[800px] flex-col items-start gap-2 px-2 md:px-6"
       >
         <ReasoningBlock text={reasoning.text} isStreaming={reasoning.isStreaming} />
       </Message>
@@ -1107,7 +1094,7 @@ function MessageGroup({
       if (!run) return
       nodes.push(
         <div key={`aggregate-${run.key}`}>
-          <Message className="mx-auto flex w-full max-w-3xl flex-col items-start gap-2 px-2 md:px-10">
+          <Message className="mx-auto flex w-full max-w-[800px] flex-col items-start gap-2 px-2 md:px-6">
             <ToolAggregateGroup parts={run.parts} className="w-full" />
           </Message>
         </div>
@@ -1139,7 +1126,7 @@ function MessageGroup({
       {stepItems.length > 0 ? (
         collapseSteps ? (
           <CompletedStepRun label={stepRunLabel}>
-            <div data-scrollable="" className="flex max-h-[520px] flex-col gap-2 overflow-y-auto overscroll-y-contain">
+            <div data-scrollable="" className="flex flex-col gap-2">
               {renderItems(stepItems, 0)}
               {foldedReasoning}
             </div>
@@ -1151,7 +1138,7 @@ function MessageGroup({
             data-live-steps=""
             onScroll={handleStepsScroll}
             onWheel={handleStepsWheel}
-            className="flex max-h-[520px] flex-col gap-2 overflow-y-auto overscroll-y-contain"
+            className="flex max-h-[280px] flex-col gap-2 overflow-y-auto overscroll-y-contain"
           >
             {renderItems(stepItems, 0)}
           </div>
@@ -1160,7 +1147,7 @@ function MessageGroup({
       {mcpAppParts.map((part) => (
         <Message
           key={`mcp-app-${part.toolCallId}`}
-          className="mx-auto flex w-full max-w-3xl flex-col px-2 empty:hidden md:px-10"
+          className="mx-auto flex w-full max-w-[800px] flex-col px-2 empty:hidden md:px-6"
         >
           <McpAppFrame part={part} />
         </Message>
@@ -1172,7 +1159,7 @@ function MessageGroup({
         includeTargetFallbacks={false}
       />
       {lastTextMessage && !isStreaming && (
-        <div className="mx-auto flex w-full max-w-3xl flex-wrap items-center gap-2 px-2 opacity-0 transition-opacity duration-150 group-hover/message-group:opacity-100 max-lg:opacity-100 pointer-coarse:opacity-100 md:px-8">
+        <div className="mx-auto flex w-full max-w-[800px] flex-wrap items-center gap-2 px-2 opacity-0 transition-opacity duration-150 group-hover/message-group:opacity-100 max-lg:opacity-100 pointer-coarse:opacity-100 md:px-8">
           <MessageActions className="flex gap-0">
             <CopyMessageButton messages={renderableItems.map((item) => item.message)} />
             {lastRealItem ? (
@@ -1230,7 +1217,7 @@ export function MessageList({ messages, status, retryStatus }: MessageListProps)
 
   return (
     <div className={cn("flex flex-col gap-2 @container/message-list")}>
-      {messages.length === 0 && <TaskSuggestions className="mx-auto w-full max-w-3xl shrink-0 px-3 pb-3 md:px-5 md:pb-5 grow" />}
+      {messages.length === 0 && <TaskSuggestions className="mx-auto w-full max-w-[800px] shrink-0 px-3 pb-3 md:px-5 md:pb-5 grow" />}
 
       {items.map((item) => {
         if (isMessageGroup(item)) {

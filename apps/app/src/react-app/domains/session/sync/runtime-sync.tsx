@@ -8,9 +8,9 @@ type ReactSessionRuntimeProps = {
   workspaceId: string;
   sessionId: string | null;
   activeSessionIds?: string[];
-  opencodeBaseUrl: string;
+  engineBaseUrl: string;
   sofiaToken: string;
-  /** When false (codex-only), the opencode session sync is never started. */
+  /** When false (codex-only), the engine session sync is never started. */
   enabled?: boolean;
   onSessionCreated?: (session: Session) => void;
   onSessionUpdated?: (update: { sessionId: string; info: Record<string, unknown> }) => void;
@@ -43,7 +43,7 @@ export function ReactSessionRuntime(props: ReactSessionRuntimeProps) {
     if (props.enabled === false) return;
     const input = {
       workspaceId: props.workspaceId,
-      baseUrl: props.opencodeBaseUrl,
+      baseUrl: props.engineBaseUrl,
       sofiaToken: props.sofiaToken,
       ...stableCallbacks,
     };
@@ -53,7 +53,7 @@ export function ReactSessionRuntime(props: ReactSessionRuntimeProps) {
       releaseSessions();
       releaseWorkspace();
     };
-  }, [props.workspaceId, props.sessionId, activeSessionIdsKey, props.opencodeBaseUrl, props.sofiaToken, stableCallbacks, props.enabled]);
+  }, [props.workspaceId, props.sessionId, activeSessionIdsKey, props.engineBaseUrl, props.sofiaToken, stableCallbacks, props.enabled]);
 
   return null;
 }

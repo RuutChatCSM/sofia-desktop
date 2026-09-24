@@ -36,7 +36,7 @@ describe("diagnostics bundle", () => {
     const clientSecret = "client-secret-1234";
     const ownerSecret = "owner-secret-1234";
     const hostSecret = "host-secret-1234";
-    const opencodeSecret = "opencode-password-1234";
+    const engineSecret = "engine-password-1234";
     const input = baseInputs();
     input.desktopRuntime = true;
     input.sofiaServerSettings = {
@@ -56,12 +56,12 @@ describe("diagnostics bundle", () => {
       clientToken: clientSecret,
       ownerToken: ownerSecret,
       hostToken: hostSecret,
-      managedOpencodeBinPath: null,
-      managedOpencodeBinSource: null,
+      managedWorkspaceEngineBinPath: null,
+      managedWorkspaceEngineBinSource: null,
       pid: 111,
       lastStdout: null,
       lastStderr: `server leaked ${settingsSecret} ${settingsHostSecret} ${clientSecret} ${ownerSecret} ${hostSecret}`,
-      managedOpencodeExecution: null,
+      managedWorkspaceEngineExecution: null,
     };
     input.engineInfo = {
       running: true,
@@ -71,13 +71,13 @@ describe("diagnostics bundle", () => {
       projectDir: "/tmp/sofia",
       hostname: "127.0.0.1",
       port: 4097,
-      opencodeUsername: "do-not-include-user",
-      opencodePassword: opencodeSecret,
-      opencodeBinPath: "/usr/local/bin/opencode",
-      opencodeBinSource: "path",
+      engineUsername: "do-not-include-user",
+      enginePassword: engineSecret,
+      engineBinPath: "/usr/local/bin/engine",
+      engineBinSource: "path",
       pid: 222,
       lastStdout: null,
-      lastStderr: `engine leaked ${opencodeSecret}`,
+      lastStderr: `engine leaked ${engineSecret}`,
       execution: null,
     };
 
@@ -87,19 +87,19 @@ describe("diagnostics bundle", () => {
     expect(json).toContain('"tokenPresent": true');
     expect(parsed.sofiaServer.settings.tokenPresent).toBe(true);
     expect(parsed.sofiaServer.host.lastStderr).toContain("[redacted]");
-    expect(parsed.opencodeEngine.lastStderr).toContain("[redacted]");
+    expect(parsed.engine.lastStderr).toContain("[redacted]");
     expect(json).not.toContain(settingsSecret);
     expect(json).not.toContain(settingsHostSecret);
     expect(json).not.toContain(clientSecret);
     expect(json).not.toContain(ownerSecret);
     expect(json).not.toContain(hostSecret);
-    expect(json).not.toContain(opencodeSecret);
+    expect(json).not.toContain(engineSecret);
     expect(json).not.toContain("clientToken");
     expect(json).not.toContain("ownerToken");
     expect(json).not.toContain("hostToken");
-    expect(json).not.toContain("opencodePassword");
+    expect(json).not.toContain("enginePassword");
     expect(json).not.toContain("do-not-include-user");
-    expect(json).not.toContain("opencodeUsername");
+    expect(json).not.toContain("engineUsername");
   });
 
   test("produces valid JSON without desktop info", () => {
@@ -107,7 +107,7 @@ describe("diagnostics bundle", () => {
     const parsed = JSON.parse(json);
 
     expect(parsed.app).toBeNull();
-    expect(parsed.opencodeEngine).toBeNull();
+    expect(parsed.engine).toBeNull();
     expect(parsed.sofiaServer.host).toBeNull();
     expect(parsed.sofiaServer.settings.tokenPresent).toBe(false);
   });

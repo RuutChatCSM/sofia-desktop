@@ -12,13 +12,13 @@
 #   SOFIA_PORT         — host port to map to container :8787 (default: 8787)
 #   WEB_PORT              — host port to map to container :5173 (default: 5173)
 #   SOFIA_DEV_ID       — unique ID for this stack (default: default)
-#   SOFIA_DEV_MODE     — enables isolated OpenCode dev state
+#   SOFIA_DEV_MODE     — enables isolated Sofia dev state
 #   SOFIA_PUBLIC_HOST  — browser-facing host/IP for LAN-accessible URLs
-#   SOFIA_DOCKER_DEV_MOUNT_HOST_OPENCODE=1 — import host OpenCode config/auth into the isolated dev state
-#   SOFIA_OPENCODE_CONFIG_DIR      — host OpenCode config dir detection override
-#   SOFIA_OPENCODE_DATA_DIR        — host OpenCode data dir detection override
-#   SOFIA_HOST_OPENCODE_CONFIG_DIR — import source for OpenCode config
-#   SOFIA_HOST_OPENCODE_DATA_DIR   — import source for OpenCode auth/data
+#   SOFIA_DOCKER_DEV_MOUNT_HOST_SOFIA_ENGINE=1 — import host Sofia config/auth into the isolated dev state
+#   SOFIA_SOFIA_ENGINE_CONFIG_DIR      — host Sofia config dir detection override
+#   SOFIA_SOFIA_ENGINE_DATA_DIR        — host Sofia data dir detection override
+#   SOFIA_HOST_SOFIA_ENGINE_CONFIG_DIR — import source for Sofia config
+#   SOFIA_HOST_SOFIA_ENGINE_DATA_DIR   — import source for Sofia auth/data
 
 x-shared: &shared
   image: node:22-bookworm-slim
@@ -29,8 +29,8 @@ x-shared: &shared
     - pnpm-store:/root/.local/share/pnpm/store
     - bun-install:/root/.bun
     - ${SOFIA_WORKSPACE:-./workspace}:/workspace
-    - ${SOFIA_HOST_OPENCODE_CONFIG_DIR:-./workspace/.sofia-host-opencode-config}:/persist/.config/opencode:ro
-    - ${SOFIA_HOST_OPENCODE_DATA_DIR:-./workspace/.sofia-host-opencode-data}:/persist/.sofia-host-opencode-data:ro
+    - ${SOFIA_HOST_SOFIA_ENGINE_CONFIG_DIR:-./workspace/.sofia-host-engine-config}:/persist/.config/engine:ro
+    - ${SOFIA_HOST_SOFIA_ENGINE_DATA_DIR:-./workspace/.sofia-host-engine-data}:/persist/.sofia-host-engine-data:ro
 
 services:
   sofia-server:
@@ -62,18 +62,18 @@ services:
         echo "[sofia-server] Installing dependencies..."
         pnpm install --no-frozen-lockfile --network-concurrency 1 --child-concurrency 1
 
-        # --- Build the server plugins and install the pinned OpenCode binary ---
+        # --- Build the server plugins and install the pinned Sofia binary ---
         pnpm --filter sofia-server build
-        OPENCODE_VERSION=$$(node -e 'const fs=require("fs"); const parsed=JSON.parse(fs.readFileSync("/app/constants.json", "utf8")); process.stdout.write(String(parsed.opencodeVersion || "").trim().replace(/^v/, ""));')
-        export OPENCODE_INSTALL_DIR="/root/.opencode/bin"
-        mkdir -p "$$OPENCODE_INSTALL_DIR"
-        if ! command -v opencode >/dev/null 2>&1; then
-          curl -fsSL https://opencode.ai/install | bash -s -- --version "$$OPENCODE_VERSION" --no-modify-path
+        SOFIA_ENGINE_VERSION=$$(node -e 'const fs=require("fs"); const parsed=JSON.parse(fs.readFileSync("/app/constants.json", "utf8")); process.stdout.write(String(parsed.engineVersion || "").trim().replace(/^v/, ""));')
+        export SOFIA_ENGINE_INSTALL_DIR="/root/.sofia/bin"
+        mkdir -p "$$SOFIA_ENGINE_INSTALL_DIR"
+        if ! command -v engine >/dev/null 2>&1; then
+          curl -fsSL https://github.com/RuutChatCSM/sofia/install | bash -s -- --version "$$SOFIA_ENGINE_VERSION" --no-modify-path
         fi
-        export PATH="$$OPENCODE_INSTALL_DIR:$$PATH"
-        export SOFIA_MANAGE_OPENCODE=1
-        export SOFIA_OPENCODE_BIN="$$(command -v opencode)"
-        export SOFIA_EXTENSIONS_PLUGIN_DIR="/app/apps/server/dist/opencode-plugins"
+        export PATH="$$SOFIA_ENGINE_INSTALL_DIR:$$PATH"
+        export SOFIA_MANAGE_SOFIA_ENGINE=1
+        export SOFIA_SOFIA_ENGINE_BIN="$$(command -v engine)"
+        export SOFIA_EXTENSIONS_PLUGIN_DIR="/app/apps/server/dist/engine-plugins"
 
         # --- Resolve tokens ---
         if [ -z "$$SOFIA_TOKEN" ]; then
@@ -123,8 +123,8 @@ services:
       SOFIA_HOST_TOKEN: ${SOFIA_HOST_TOKEN:-}
       SOFIA_DEV_ID: ${SOFIA_DEV_ID:-default}
       SOFIA_DEV_MODE: ${SOFIA_DEV_MODE:-1}
-      SOFIA_DEV_OPENCODE_IMPORT_CONFIG_DIR: /persist/.config/opencode
-      SOFIA_DEV_OPENCODE_IMPORT_DATA_DIR: /persist/.sofia-host-opencode-data
+      SOFIA_DEV_SOFIA_ENGINE_IMPORT_CONFIG_DIR: /persist/.config/engine
+      SOFIA_DEV_SOFIA_ENGINE_IMPORT_DATA_DIR: /persist/.sofia-host-engine-data
 
   web:
     <<: *shared

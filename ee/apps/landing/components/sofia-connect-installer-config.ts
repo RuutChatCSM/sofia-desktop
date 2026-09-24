@@ -6,7 +6,7 @@ export type SofiaConnectClientId =
   | "codex"
   | "chatgpt-desktop"
   | "claude-code"
-  | "opencode"
+  | "engine"
   | "vs-code"
   | "any-client";
 export type SofiaConnectSupportStatus = "Verified" | "Setup only";
@@ -23,7 +23,7 @@ export const CODEX_LOGIN_COMMAND = `codex mcp login sofia`;
 export const CODEX_RECONNECT_COMMAND = `codex mcp logout sofia
 codex mcp login sofia`;
 
-export const OPENCODE_SNIPPET = `{
+export const SOFIA_ENGINE_SNIPPET = `{
   "mcp": {
     "sofia": {
       "type": "remote",
@@ -36,9 +36,9 @@ export const OPENCODE_SNIPPET = `{
 
 export const VS_CODE_COMMAND = `code --add-mcp '{"name":"sofia","type":"http","url":"${MCP_SERVER_URL}"}'`;
 export const ANY_CLIENT_COMMAND = `${MCP_SERVER_URL}`;
-export const OPENCODE_AUTH_COMMAND = `opencode mcp auth sofia`;
-export const OPENCODE_RECONNECT_COMMAND = `opencode mcp logout sofia
-opencode mcp auth sofia`;
+export const SOFIA_ENGINE_AUTH_COMMAND = `engine mcp auth sofia`;
+export const SOFIA_ENGINE_RECONNECT_COMMAND = `engine mcp logout sofia
+engine mcp auth sofia`;
 
 export const CONNECT_CLIENT_SUPPORT: Record<SofiaConnectClientId, SofiaConnectClientSupport> = {
   "cursor": {
@@ -57,9 +57,9 @@ export const CONNECT_CLIENT_SUPPORT: Record<SofiaConnectClientId, SofiaConnectCl
     status: "Setup only",
     explanation: "Setup guide only: add the server, then use /mcp in Claude Code to run the client auth flow. Native proof is not complete."
   },
-  "opencode": {
+  "engine": {
     status: "Verified",
-    explanation: "Verified with OpenCode native remote MCP OAuth flow."
+    explanation: "Verified with Sofia native remote MCP OAuth flow."
   },
   "vs-code": {
     status: "Setup only",
@@ -76,7 +76,7 @@ export const CONNECT_CLIENTS: SofiaConnectClientId[] = [
   "codex",
   "chatgpt-desktop",
   "claude-code",
-  "opencode",
+  "engine",
   "vs-code",
   "any-client"
 ];

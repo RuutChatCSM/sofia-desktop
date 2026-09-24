@@ -20,17 +20,17 @@ import type { WorkspaceWire } from "./workspace.js";
 // re-exports them — keep that file as the app-side import path).
 // ---------------------------------------------------------------------------
 
-export type OpencodeExecutionEnvEntry = {
+export type WorkspaceEngineExecutionEnvEntry = {
   name: string;
   value: string;
   redacted: boolean;
 };
 
-export type OpencodeExecutionSnapshot = {
+export type WorkspaceEngineExecutionSnapshot = {
   command: string;
   args: string[];
   cwd: string;
-  env: OpencodeExecutionEnvEntry[];
+  env: WorkspaceEngineExecutionEnvEntry[];
 };
 
 export type EngineInfo = {
@@ -41,14 +41,14 @@ export type EngineInfo = {
   projectDir: string | null;
   hostname: string | null;
   port: number | null;
-  opencodeUsername: string | null;
-  opencodePassword: string | null;
-  opencodeBinPath: string | null;
-  opencodeBinSource: string | null;
+  engineUsername: string | null;
+  enginePassword: string | null;
+  engineBinPath: string | null;
+  engineBinSource: string | null;
   pid: number | null;
   lastStdout: string | null;
   lastStderr: string | null;
-  execution: OpencodeExecutionSnapshot | null;
+  execution: WorkspaceEngineExecutionSnapshot | null;
 };
 
 export type CodexEngineStatus = {
@@ -105,12 +105,12 @@ export type SofiaServerInfo = {
   clientToken: string | null;
   ownerToken: string | null;
   hostToken: string | null;
-  managedOpencodeBinPath: string | null;
-  managedOpencodeBinSource: string | null;
+  managedWorkspaceEngineBinPath: string | null;
+  managedWorkspaceEngineBinSource: string | null;
   pid: number | null;
   lastStdout: string | null;
   lastStderr: string | null;
-  managedOpencodeExecution: OpencodeExecutionSnapshot | null;
+  managedWorkspaceEngineExecution: WorkspaceEngineExecutionSnapshot | null;
 };
 
 export type EngineDoctorResult = {
@@ -143,7 +143,7 @@ export type BrandIconApplyResult = { ok: boolean; reason?: string };
 export type BrandIconState = { applied: boolean; sourceUrl: string | null; reason: string | null };
 export type EvalRelaunchResult = { ok: true };
 
-export type OpencodeCommandDraft = {
+export type WorkspaceEngineCommandDraft = {
   name: string;
   description?: string;
   template: string;
@@ -315,7 +315,7 @@ export type WorkspaceCreateInput = {
 
 export type WorkspaceCreateRemoteInput = {
   baseUrl: string;
-  remoteType?: "sofia" | "opencode" | null;
+  remoteType?: "sofia" | "engine" | null;
   directory?: string | null;
   displayName?: string | null;
   sofiaHostUrl?: string | null;
@@ -388,16 +388,16 @@ export type DesktopCommandMap = {
     result: unknown;
   };
 
-  // Opencode custom commands
-  opencodeCommandList: {
+  // WorkspaceEngine custom commands
+  engineCommandList: {
     args: [input: { scope: string; projectDir?: string }];
     result: string[];
   };
-  opencodeCommandWrite: {
-    args: [input: { scope: string; projectDir?: string; command: OpencodeCommandDraft }];
+  engineCommandWrite: {
+    args: [input: { scope: string; projectDir?: string; command: WorkspaceEngineCommandDraft }];
     result: unknown;
   };
-  opencodeCommandDelete: {
+  engineCommandDelete: {
     args: [input: { scope: string; projectDir?: string; name: string }];
     result: unknown;
   };
@@ -412,8 +412,8 @@ export type DesktopCommandMap = {
   engineInfo: { args: []; result: EngineInfo };
   engineDoctor: { args: [projectDir?: string]; result: EngineDoctorResult };
   codexEngineStatus: { args: []; result: CodexEngineStatus };
-  codexEngineSelectionRead: { args: []; result: { engine: "codex" | "opencode" } };
-  codexEngineSelectionWrite: { args: [{ engine: "codex" | "opencode" }]; result: { ok: boolean } };
+  codexEngineSelectionRead: { args: []; result: { engine: "codex" | "engine" } };
+  codexEngineSelectionWrite: { args: [{ engine: "codex" | "engine" }]; result: { ok: boolean } };
   engineInstall: { args: []; result: unknown };
   codexEngineInstall: { args: []; result: unknown };
 
@@ -463,8 +463,8 @@ export type DesktopCommandMap = {
     args: [rawUrl: string];
     result: { ok: true; config: DesktopBootstrapConfig } | ConnectLinkVerifyFailure;
   };
-  nukeSofiaAndOpencodeConfigPreview: { args: [options?: NukeOptions]; result: NukeManifestPreview };
-  nukeSofiaAndOpencodeConfigAndExit: { args: [options?: NukeOptions]; result: NukeReceipt };
+  nukeSofiaAndWorkspaceEngineConfigPreview: { args: [options?: NukeOptions]; result: NukeManifestPreview };
+  nukeSofiaAndWorkspaceEngineConfigAndExit: { args: [options?: NukeOptions]; result: NukeReceipt };
 
   // Sandbox
   sandboxCleanupSofiaContainers: { args: []; result: SofiaDockerCleanupResult };
@@ -527,8 +527,8 @@ export type DesktopCommandMap = {
    * whether "onboarding" should preserve desktop workspace state.
    */
   resetSofiaState: { args: [mode?: "onboarding" | "all"]; result: unknown };
-  resetOpencodeCache: { args: []; result: CacheResetResult };
-  opencodeMcpAuth: { args: [action: string, name: string]; result: ExecResult };
+  resetWorkspaceEngineCache: { args: []; result: CacheResetResult };
+  engineMcpAuth: { args: [action: string, name: string]; result: ExecResult };
   setWindowDecorations: { args: [decorated: boolean]; result: unknown };
 
   // Window / OS utilities (dunder commands)

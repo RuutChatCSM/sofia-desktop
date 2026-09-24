@@ -10,7 +10,7 @@ import type {
   ReloadTrigger,
   SkillCard,
 } from "../../../../app/types";
-import { addOpencodeCacheHint, isDesktopRuntime, normalizeDirectoryPath } from "../../../../app/utils";
+import { addWorkspaceEngineCacheHint, isDesktopRuntime, normalizeDirectoryPath } from "../../../../app/utils";
 import skillCreatorTemplate from "../../../../app/data/skill-creator.md?raw";
 import {
   isPluginInstalled,
@@ -68,9 +68,9 @@ import {
   type LibraryAuthorableKind,
 } from "../library";
 
-const OPENCODE_SKILL_NAME_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
-const OPENCODE_MCP_NAME_RE = /^[A-Za-z0-9_][A-Za-z0-9_-]*$/;
-const OPENCODE_MCP_IMPORT_PATH_PREFIX = "opencode.jsonc#mcp.";
+const SOFIA_ENGINE_SKILL_NAME_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+const SOFIA_ENGINE_MCP_NAME_RE = /^[A-Za-z0-9_][A-Za-z0-9_-]*$/;
+const SOFIA_ENGINE_MCP_IMPORT_PATH_PREFIX = "engine.jsonc#mcp.";
 
 type SetStateAction<T> = T | ((current: T) => T);
 
@@ -172,7 +172,7 @@ function parseClaudeFrontmatter(text: string): { data: Record<string, unknown>; 
   return { data, body: trimmed.slice(match[0].length) };
 }
 
-const OPENCODE_MODEL_ID_RE = /^[^\s/]+\/[^\s]+$/;
+const SOFIA_ENGINE_MODEL_ID_RE = /^[^\s/]+\/[^\s]+$/;
 
 function translateClaudeTools(value: unknown): Record<string, boolean> | null {
   const names = typeof value === "string"
@@ -201,7 +201,7 @@ function translateClaudeTools(value: unknown): Record<string, boolean> | null {
 
 function translateClaudeModel(value: unknown): string | null {
   const model = readNonEmptyString(value);
-  return model && OPENCODE_MODEL_ID_RE.test(model) ? model : null;
+  return model && SOFIA_ENGINE_MODEL_ID_RE.test(model) ? model : null;
 }
 
 function buildCloudPluginFrontmatter(data: Record<string, string | boolean | Record<string, boolean>>): string {
@@ -250,7 +250,7 @@ function buildCloudCommandContent(name: string, description: string, rawSourceTe
   return frontmatter + "\n" + body.replace(/^\s*\n?/, "");
 }
 
-function slugifyOpencodeSkillName(title: string): string {
+function slugifyWorkspaceEngineSkillName(title: string): string {
   let base = title
     .trim()
     .toLowerCase()
@@ -258,7 +258,7 @@ function slugifyOpencodeSkillName(title: string): string {
     .replace(/^-+|-+$/g, "");
   if (!base) base = "skill";
   if (base.length > 64) base = base.slice(0, 64).replace(/-+$/g, "");
-  if (!OPENCODE_SKILL_NAME_RE.test(base)) base = "skill";
+  if (!SOFIA_ENGINE_SKILL_NAME_RE.test(base)) base = "skill";
   return base;
 }
 
@@ -300,9 +300,9 @@ function readStringRecord(value: unknown): Record<string, string> | null {
 }
 
 function cloudPluginMcpNameFromPath(path: string): string | null {
-  if (!path.startsWith(OPENCODE_MCP_IMPORT_PATH_PREFIX)) return null;
-  const name = path.slice(OPENCODE_MCP_IMPORT_PATH_PREFIX.length).trim();
-  return OPENCODE_MCP_NAME_RE.test(name) ? name : null;
+  if (!path.startsWith(SOFIA_ENGINE_MCP_IMPORT_PATH_PREFIX)) return null;
+  const name = path.slice(SOFIA_ENGINE_MCP_IMPORT_PATH_PREFIX.length).trim();
+  return SOFIA_ENGINE_MCP_NAME_RE.test(name) ? name : null;
 }
 
 function toConfigPluginListEntries(names: string[]): PluginListEntry[] {
@@ -496,7 +496,7 @@ export function createExtensionsStore(options: {
 
     if (canUseSofiaServer && sofiaClient && sofiaWorkspaceId) {
       const config = await sofiaClient.getConfig(sofiaWorkspaceId);
-      return config.sofia ?? {};
+      return config.engine ?? {};
     }
 
     if (hasSofiaTarget) {
@@ -534,7 +534,7 @@ export function createExtensionsStore(options: {
         config: config as never,
       })) as { ok: boolean; stderr?: string; stdout?: string };
       if (!result.ok) {
-        throw new Error(result.stderr || result.stdout || "Failed to write .opencode/sofia.json");
+        throw new Error(result.stderr || result.stdout || "Failed to write .sofia/sofia.json");
       }
       return true;
     }
@@ -703,8 +703,8 @@ export function createExtensionsStore(options: {
   };
 
   const slugifyConfigObjectName = (title: string, fallback: string) => {
-    const slug = slugifyOpencodeSkillName(title || fallback);
-    return slug === "skill" && fallback ? slugifyOpencodeSkillName(fallback) : slug;
+    const slug = slugifyWorkspaceEngineSkillName(title || fallback);
+    return slug === "skill" && fallback ? slugifyWorkspaceEngineSkillName(fallback) : slug;
   };
 
   const pluginNamespace = (pluginName: string, pluginId: string) => {
@@ -727,13 +727,13 @@ export function createExtensionsStore(options: {
     };
     const folder = folderByType[objectType];
     if (!folder) return "";
-    const opencodeIndex = parts.findIndex((part) => part === ".opencode");
-    const searchParts = opencodeIndex >= 0 ? parts.slice(opencodeIndex + 1) : parts;
+    const engineIndex = parts.findIndex((part) => part === ".sofia");
+    const searchParts = engineIndex >= 0 ? parts.slice(engineIndex + 1) : parts;
     const folderIndex = searchParts.findIndex((part) => part === folder);
     if (folderIndex < 0 || folderIndex === searchParts.length - 1) return "";
     const rest = searchParts.slice(folderIndex + 1);
-    if (rest[0] === namespace) return [".opencode", folder, ...rest].join("/");
-    return [".opencode", folder, namespace, ...rest].join("/");
+    if (rest[0] === namespace) return [".sofia", folder, ...rest].join("/");
+    return [".sofia", folder, namespace, ...rest].join("/");
   };
 
   const getPluginObjectInstallPath = (
@@ -748,39 +748,39 @@ export function createExtensionsStore(options: {
         const skillName = /^SKILL\.md$/i.test(lastPart)
           ? parts.at(-2) ?? slugifyConfigObjectName(object.title, object.id)
           : lastPart || slugifyConfigObjectName(object.title, object.id);
-        return `.opencode/skills/${namespace}/${skillName}/SKILL.md`;
+        return `.sofia/skills/${namespace}/${skillName}/SKILL.md`;
       }
       return existing;
     }
     const name = slugifyConfigObjectName(object.title, object.id);
     switch (object.objectType) {
       case "skill":
-        return `.opencode/skills/${namespace}/${name}/SKILL.md`;
+        return `.sofia/skills/${namespace}/${name}/SKILL.md`;
       case "agent":
-        return `.opencode/agents/${namespace}/${name}.md`;
+        return `.sofia/agents/${namespace}/${name}.md`;
       case "command":
-        return `.opencode/commands/${namespace}/${name}.md`;
+        return `.sofia/commands/${namespace}/${name}.md`;
       case "mcp":
-        return `.opencode/mcps/${namespace}/${name}.json`;
+        return `.sofia/mcps/${namespace}/${name}.json`;
       case "hook":
-        return `.opencode/hooks/${namespace}/${name}.json`;
+        return `.sofia/hooks/${namespace}/${name}.json`;
       case "tool":
-        return `.opencode/tools/${namespace}/${name}.ts`;
+        return `.sofia/tools/${namespace}/${name}.ts`;
       case "context":
-        return `.opencode/context/${namespace}/${name}.md`;
+        return `.sofia/context/${namespace}/${name}.md`;
       default:
-        return `.opencode/plugins/${namespace}/${name}.txt`;
+        return `.sofia/plugins/${namespace}/${name}.txt`;
     }
   };
 
   const pluginMcpName = (rawName: string, namespace: string, fallback: string, namespaceName: boolean) => {
     const trimmed = rawName.trim();
-    const base = OPENCODE_MCP_NAME_RE.test(trimmed)
+    const base = SOFIA_ENGINE_MCP_NAME_RE.test(trimmed)
       ? trimmed
       : slugifyConfigObjectName(trimmed || fallback, fallback);
     if (!namespaceName) return base;
     const namespaced = base.startsWith(`${namespace}-`) ? base : `${namespace}-${base}`;
-    return OPENCODE_MCP_NAME_RE.test(namespaced)
+    return SOFIA_ENGINE_MCP_NAME_RE.test(namespaced)
       ? namespaced
       : slugifyConfigObjectName(namespaced, fallback);
   };
@@ -836,7 +836,7 @@ export function createExtensionsStore(options: {
       configs.set(name, {
         name,
         config,
-        path: `${OPENCODE_MCP_IMPORT_PATH_PREFIX}${name}`,
+        path: `${SOFIA_ENGINE_MCP_IMPORT_PATH_PREFIX}${name}`,
       });
     };
 
@@ -1032,7 +1032,7 @@ export function createExtensionsStore(options: {
       const rawDesc = (object.description?.trim() || object.title).trim();
       const description = rawDesc.slice(0, 1024) || object.title.slice(0, 1024);
       if (object.objectType === "skill") {
-        const installName = path.match(/^\.opencode\/skills\/[^/]+\/([^/]+)\/SKILL\.md$/)?.[1] ?? slugifyConfigObjectName(object.title, object.id);
+        const installName = path.match(/^\.sofia\/skills\/[^/]+\/([^/]+)\/SKILL\.md$/)?.[1] ?? slugifyConfigObjectName(object.title, object.id);
         content = buildCloudSkillContent(installName, description || "Skill", extractSkillBodyMarkdown(content));
       } else if (object.objectType === "agent") {
         content = buildCloudAgentContent(description, content);
@@ -1263,7 +1263,7 @@ export function createExtensionsStore(options: {
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : t("skills.unknown_error");
-      options.setError(addOpencodeCacheHint(message));
+      options.setError(addWorkspaceEngineCacheHint(message));
       return { ok: false, message, warnings: [], files: [] };
     } finally {
       options.setBusy(false);
@@ -1296,7 +1296,7 @@ export function createExtensionsStore(options: {
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : t("skills.unknown_error");
-      options.setError(addOpencodeCacheHint(message));
+      options.setError(addWorkspaceEngineCacheHint(message));
       return { ok: false, message };
     } finally {
       options.setBusy(false);
@@ -1332,8 +1332,8 @@ export function createExtensionsStore(options: {
           removedMcpNames.push(mcpName);
           continue;
         }
-        if (!file.path.startsWith(".opencode/")) continue;
-        const skillDir = file.path.match(/^(\.opencode\/skills\/[^/]+\/[^/]+)\/SKILL\.md$/)?.[1];
+        if (!file.path.startsWith(".sofia/")) continue;
+        const skillDir = file.path.match(/^(\.sofia\/skills\/[^/]+\/[^/]+)\/SKILL\.md$/)?.[1];
         fileDeletes.push(skillDir ? { path: skillDir, recursive: true } : { path: file.path });
       }
       await Promise.all(removedMcpNames.map((name) => deletePluginMcpConfig(name)));
@@ -1357,7 +1357,7 @@ export function createExtensionsStore(options: {
       return { ok: true, message: `Removed ${imported.name}.` };
     } catch (error) {
       const message = error instanceof Error ? error.message : t("skills.unknown_error");
-      options.setError(addOpencodeCacheHint(message));
+      options.setError(addWorkspaceEngineCacheHint(message));
       return { ok: false, message };
     } finally {
       options.setBusy(false);
@@ -1796,7 +1796,7 @@ export function createExtensionsStore(options: {
       await refreshSkills({ force: true });
     } catch (error) {
       const message = error instanceof Error ? error.message : t("skills.unknown_error");
-      options.setError(addOpencodeCacheHint(message));
+      options.setError(addWorkspaceEngineCacheHint(message));
     } finally {
       options.setBusy(false);
     }
@@ -1824,7 +1824,7 @@ export function createExtensionsStore(options: {
         return { ok: true, message };
       } catch (error) {
         const raw = error instanceof Error ? error.message : t("skills.unknown_error");
-        const message = addOpencodeCacheHint(raw);
+        const message = addWorkspaceEngineCacheHint(raw);
         setStateField("skillsStatus", message);
         options.setError(message);
         return { ok: false, message };
@@ -1887,7 +1887,7 @@ export function createExtensionsStore(options: {
       return { ok: true, message };
     } catch (error) {
       const raw = error instanceof Error ? error.message : t("skills.unknown_error");
-      const message = addOpencodeCacheHint(raw);
+      const message = addWorkspaceEngineCacheHint(raw);
       setStateField("skillsStatus", message);
       options.setError(message);
       return { ok: false, message };
@@ -1908,10 +1908,10 @@ export function createExtensionsStore(options: {
     }
 
     try {
-      const [opencodeSkills, claudeSkills, legacySkills] = await Promise.all([
-        joinDesktopPath(root, ".opencode", "skills"),
+      const [engineSkills, claudeSkills, legacySkills] = await Promise.all([
+        joinDesktopPath(root, ".sofia", "skills"),
         joinDesktopPath(root, ".claude", "skills"),
-        joinDesktopPath(root, ".opencode", "skill"),
+        joinDesktopPath(root, ".sofia", "skill"),
       ]);
       const tryOpen = async (target: string) => {
         try {
@@ -1921,10 +1921,10 @@ export function createExtensionsStore(options: {
           return false;
         }
       };
-      if (await tryOpen(opencodeSkills)) return;
+      if (await tryOpen(engineSkills)) return;
       if (await tryOpen(claudeSkills)) return;
       if (await tryOpen(legacySkills)) return;
-      await revealDesktopItemInDir(opencodeSkills);
+      await revealDesktopItemInDir(engineSkills);
     } catch (error) {
       setStateField("skillsStatus", error instanceof Error ? error.message : t("skills.reveal_failed"));
     }
@@ -1945,7 +1945,7 @@ export function createExtensionsStore(options: {
     } catch (error) {
       const message = error instanceof Error ? error.message : t("skills.unknown_error");
       setStateField("skillsStatus", message);
-      options.setError(addOpencodeCacheHint(message));
+      options.setError(addWorkspaceEngineCacheHint(message));
     } finally {
       options.setBusy(false);
     }
@@ -2034,7 +2034,7 @@ export function createExtensionsStore(options: {
         setStateField("skillsStatus", "Saved.");
       } catch (error) {
         const message = error instanceof Error ? error.message : t("skills.unknown_error");
-        options.setError(addOpencodeCacheHint(message));
+        options.setError(addWorkspaceEngineCacheHint(message));
       } finally {
         options.setBusy(false);
       }
@@ -2078,7 +2078,7 @@ export function createExtensionsStore(options: {
       await refreshSkills({ force: true });
     } catch (error) {
       const message = error instanceof Error ? error.message : t("skills.unknown_error");
-      options.setError(addOpencodeCacheHint(message));
+      options.setError(addWorkspaceEngineCacheHint(message));
     } finally {
       options.setBusy(false);
     }

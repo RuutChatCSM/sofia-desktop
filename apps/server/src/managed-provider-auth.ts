@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 
 import { resolveWorkspaceEngineConnection } from "./engine-connection.js";
-import { readGlobalRuntimeOpencodeConfig, runtimeProviderMap } from "./runtime-opencode-config-store.js";
+import { readGlobalRuntimeWorkspaceEngineConfig, runtimeProviderMap } from "./runtime-engine-config-store.js";
 import type { ServerConfig } from "./types.js";
 import { findManagedEngineWorkspace } from "./workspaces.js";
 
@@ -61,7 +61,7 @@ function readEnvNames(entry: Record<string, unknown>): string[] {
 
 /**
  * Forget what we believe the engine holds. Call this when the engine process is
- * replaced: opencode persists auth outside the process, but a fresh engine may
+ * replaced: engine persists auth outside the process, but a fresh engine may
  * have been started against a different store, and re-delivery is cheap.
  */
 export function resetManagedProviderAuthCache(): void {
@@ -84,7 +84,7 @@ export async function syncManagedProviderAuth(input: ManagedProviderAuthInput): 
   const baseUrl = connection.baseUrl?.replace(/\/+$/, "");
   if (!baseUrl) return result;
 
-  const runtimeConfig = await readGlobalRuntimeOpencodeConfig(input.config);
+  const runtimeConfig = await readGlobalRuntimeWorkspaceEngineConfig(input.config);
   const providers = runtimeProviderMap(runtimeConfig);
 
   const storedValues = new Map<string, string>();

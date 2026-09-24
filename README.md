@@ -40,9 +40,9 @@ codex mcp add sofia --url https://sofia-api.ruut.chat/mcp/agent
 claude mcp add --transport http sofia https://sofia-api.ruut.chat/mcp/agent
 ```
 
-### OpenCode
+### Sofia
 
-Add this to `opencode.json`:
+Add this to `engine.json`:
 
 ```json
 {

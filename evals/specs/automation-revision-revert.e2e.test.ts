@@ -49,7 +49,7 @@ test("an Automation can return to an earlier definition as a new revision", asyn
     "x-sofia-org-id": organizationId,
   };
   const schedule = { kind: "daily", timezone: "UTC", hour: 9, minute: 0 };
-  const model = { providerId: "opencode", modelId: "big-pickle", variant: null };
+  const model = { providerId: "engine", modelId: "big-pickle", variant: null };
 
   const createdResponse = await denFetch(den.admin, "/v1/automations", {
     method: "POST",

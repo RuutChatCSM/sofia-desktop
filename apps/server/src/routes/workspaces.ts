@@ -26,7 +26,7 @@ interface RegisterWorkspaceRoutesOptions {
   ensureWritable: (config: ServerConfig) => void;
   resolveWorkspace: (config: ServerConfig, id: string) => Promise<WorkspaceInfo>;
   serializeWorkspace: (workspace: ServerConfig["workspaces"][number]) => unknown;
-  reloadOpencodeEngine: (
+  reloadWorkspaceEngineEngine: (
     config: ServerConfig,
     workspace: WorkspaceInfo,
     options?: { awaitPostRefreshSync?: boolean },
@@ -96,8 +96,8 @@ function sofiaRemoteWorkspaceId(hostUrl: string, workspaceId: string | null | un
 }
 
 function workspaceDirectoryCandidates(workspace: Record<string, unknown>): string[] {
-  const opencode = isRecord(workspace.opencode) ? workspace.opencode : {};
-  return [workspace.directory, workspace.path, opencode.directory]
+  const engine = isRecord(workspace.engine) ? workspace.engine : {};
+  return [workspace.directory, workspace.path, engine.directory]
     .map(normalizeRemoteDirectory)
     .filter(Boolean);
 }
@@ -207,8 +207,8 @@ function serializeWorkspaceConfigEntry(workspace: WorkspaceInfo): Record<string,
     ...(workspace.sandboxBackend ? { sandboxBackend: workspace.sandboxBackend } : {}),
     ...(workspace.sandboxRunId ? { sandboxRunId: workspace.sandboxRunId } : {}),
     ...(workspace.sandboxContainerName ? { sandboxContainerName: workspace.sandboxContainerName } : {}),
-    ...(!isLocalWorkspace && workspace.opencodeUsername ? { opencodeUsername: workspace.opencodeUsername } : {}),
-    ...(!isLocalWorkspace && workspace.opencodePassword ? { opencodePassword: workspace.opencodePassword } : {}),
+    ...(!isLocalWorkspace && workspace.engineUsername ? { engineUsername: workspace.engineUsername } : {}),
+    ...(!isLocalWorkspace && workspace.enginePassword ? { enginePassword: workspace.enginePassword } : {}),
   };
 }
 
@@ -250,7 +250,7 @@ export function registerWorkspaceRoutes(options: RegisterWorkspaceRoutesOptions)
     ensureWritable,
     resolveWorkspace,
     serializeWorkspace,
-    reloadOpencodeEngine,
+    reloadWorkspaceEngineEngine,
   } = options;
 
   const resolveWorkspaceForRegistry = async (id: string): Promise<WorkspaceInfo> => {
@@ -285,7 +285,7 @@ export function registerWorkspaceRoutes(options: RegisterWorkspaceRoutesOptions)
 
     const workspaceId = workspaceIdForPath(workspacePath);
     // Seed the per-workspace sofia config in the runtime DB (replaces the
-    // legacy `.opencode/sofia.json` file). No-op if a row already exists.
+    // legacy `.sofia/sofia.json` file). No-op if a row already exists.
     await seedSofiaWorkspaceConfigIfEmpty(
       config,
       workspaceId,
@@ -336,7 +336,7 @@ export function registerWorkspaceRoutes(options: RegisterWorkspaceRoutesOptions)
       throw new ApiError(400, "invalid_payload", "baseUrl must start with http:// or https://");
     }
 
-    const remoteType = readStringField(body, "remoteType") === "opencode" ? "opencode" : "sofia";
+    const remoteType = readStringField(body, "remoteType") === "engine" ? "engine" : "sofia";
     const directory = readStringField(body, "directory") || null;
     const displayName = readStringField(body, "displayName") || null;
     const rawSofiaHostUrl = readStringField(body, "sofiaHostUrl") || null;
@@ -479,7 +479,7 @@ export function registerWorkspaceRoutes(options: RegisterWorkspaceRoutesOptions)
     });
     // Re-activating the already-active workspace must not dispose its engine instance; switch reloads stay (#870).
     if (!wasActive && workspace.workspaceType === "local" && resolveWorkspaceEngineConnection(config, workspace).baseUrl?.trim()) {
-      await reloadOpencodeEngine(config, workspace, { awaitPostRefreshSync: false });
+      await reloadWorkspaceEngineEngine(config, workspace, { awaitPostRefreshSync: false });
     }
     return jsonResponse({ activeId: workspace.id, workspace: serializeWorkspace(workspace), persisted });
   });

@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { readRuntimeOpencodeConfig, writeRuntimeOpencodeConfig } from "./runtime-opencode-config-store.js";
+import { readRuntimeWorkspaceEngineConfig, writeRuntimeWorkspaceEngineConfig } from "./runtime-engine-config-store.js";
 import { startServer } from "./server.js";
 import type { ServerConfig, WorkspaceInfo } from "./types.js";
 
@@ -158,13 +158,13 @@ describe("sofia-cloud MCP desired config", () => {
     expect(firstFailure(mismatch).code).toBe("cloud_token_org_mismatch");
     expect(firstFailure(mismatch).stage).toBe("desired_config");
 
-    expect((await readRuntimeOpencodeConfig(sofia.config, "ws_1")).mcp?.["sofia-cloud"]).toBeUndefined();
+    expect((await readRuntimeWorkspaceEngineConfig(sofia.config, "ws_1")).mcp?.["sofia-cloud"]).toBeUndefined();
   });
 
   test("GET health reports persisted malformed desired config even when an engine is configured", async () => {
     const root = await createRoot();
     const sofia = await startSofia([workspace("ws_1", root, { baseUrl: "http://127.0.0.1:1" })]);
-    await writeRuntimeOpencodeConfig(sofia.config, "ws_1", (current) => ({
+    await writeRuntimeWorkspaceEngineConfig(sofia.config, "ws_1", (current) => ({
       ...current,
       mcp: { "sofia-cloud": { ...CLOUD_CONFIG, url: "https://sofia-api.ruut.chat/mcp" } },
     }));

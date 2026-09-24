@@ -92,7 +92,7 @@ describe("managed model empty state", () => {
 
     expect(organizationModelsEmpty).toBe(true);
     expect(shouldAutoOpenUnavailableModelPicker({
-      selectedModelUnavailableKey: "opencode:gpt-5",
+      selectedModelUnavailableKey: "engine:gpt-5",
       signedIn: true,
       cloudProviderSyncReady: true,
       entitledOrgDefaultModel: false,

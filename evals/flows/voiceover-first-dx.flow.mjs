@@ -47,12 +47,12 @@ export default {
         await ctx.prove("The /voiceover entry point exists and takes the feature as its argument", {
           voiceover: vo[0],
           assert: async () => {
-            const commandPath = join(ROOT, ".opencode", "commands", "voiceover.md");
-            witness(ctx, await exists(commandPath), ".opencode/commands/voiceover.md exists");
+            const commandPath = join(ROOT, ".sofia", "commands", "voiceover.md");
+            witness(ctx, await exists(commandPath), ".sofia/commands/voiceover.md exists");
             const command = await readFile(commandPath, "utf8");
             witness(ctx, command.includes("$ARGUMENTS"), "The command takes the feature description as $ARGUMENTS");
             witness(ctx, command.toLowerCase().includes("instead of a prd"), "The command frames the voice-over as the PRD replacement");
-            ctx.output(".opencode/commands/voiceover.md", command.split("\n").slice(0, 12).join("\n"));
+            ctx.output(".sofia/commands/voiceover.md", command.split("\n").slice(0, 12).join("\n"));
           },
         });
       },
@@ -63,8 +63,8 @@ export default {
         await ctx.prove("The skill's contract is explicit: no code until the script is approved", {
           voiceover: vo[1],
           assert: async () => {
-            const skillPath = join(ROOT, ".opencode", "skills", "voiceover", "SKILL.md");
-            witness(ctx, await exists(skillPath), ".opencode/skills/voiceover/SKILL.md exists");
+            const skillPath = join(ROOT, ".sofia", "skills", "voiceover", "SKILL.md");
+            witness(ctx, await exists(skillPath), ".sofia/skills/voiceover/SKILL.md exists");
             const skill = (await readFile(skillPath, "utf8")).replace(/\s+/g, " ");
             witness(ctx, skill.toLowerCase().includes("no code until the script is approved"), "Skill states the contract: no code until the script is approved");
             witness(ctx, skill.includes("one numbered paragraph per frame"), "Skill defines the script format (one numbered paragraph per frame)");
@@ -94,11 +94,11 @@ export default {
         await ctx.prove("The paved path is documented end to end: fresh worktree in, PR with fraimz out", {
           voiceover: vo[3],
           assert: async () => {
-            const skillPath = join(ROOT, ".opencode", "skills", "voiceover", "SKILL.md");
+            const skillPath = join(ROOT, ".sofia", "skills", "voiceover", "SKILL.md");
             const skill = await readFile(skillPath, "utf8");
             witness(ctx, skill.includes("git worktree add"), "The voiceover skill starts the build on a fresh worktree (git worktree add)");
             witness(ctx, skill.includes("--pr"), "The voiceover skill ends with the proof posted on the PR (pnpm fraimz --flow <id> --pr)");
-            const command = await readFile(join(ROOT, ".opencode", "commands", "voiceover.md"), "utf8");
+            const command = await readFile(join(ROOT, ".sofia", "commands", "voiceover.md"), "utf8");
             witness(ctx, command.toLowerCase().includes("worktree"), "The /voiceover command routes the build through a fresh worktree");
             ctx.output("The worktree + PR contract (voiceover skill)", skill.split("\n").filter((line) => line.toLowerCase().includes("worktree") || line.includes("--pr")).join("\n"));
           },

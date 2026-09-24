@@ -3,9 +3,9 @@ import { loadVoiceoverParagraphs } from "../runner/voiceover.mjs";
 const vo = await loadVoiceoverParagraphs("docs-sofia-connect");
 
 const MCP_SERVER_URL = "https://sofia-api.ruut.chat/mcp/agent";
-const CLIENTS = ["Cursor", "Codex", "ChatGPT Desktop", "Claude Code", "OpenCode", "VS Code", "Any client"];
+const CLIENTS = ["Cursor", "Codex", "ChatGPT Desktop", "Claude Code", "Sofia", "VS Code", "Any client"];
 const SUPPORT_STATUS = [
-  ["OpenCode", "Verified"],
+  ["Sofia", "Verified"],
   ["Codex", "Setup only"],
   ["Cursor", "Setup only"],
   ["ChatGPT Desktop", "Setup only"],
@@ -13,8 +13,8 @@ const SUPPORT_STATUS = [
   ["VS Code", "Setup only"],
   ["Any client", "Setup only"],
 ];
-const OPENCODE_AUTH_COMMAND = "opencode mcp auth sofia";
-const OPENCODE_RECONNECT_LOGOUT = "opencode mcp logout sofia";
+const SOFIA_ENGINE_AUTH_COMMAND = "engine mcp auth sofia";
+const SOFIA_ENGINE_RECONNECT_LOGOUT = "engine mcp logout sofia";
 const CODEX_ADD_COMMAND = `codex mcp add sofia --url ${MCP_SERVER_URL}`;
 const CODEX_LOGIN_COMMAND = "codex mcp login sofia";
 const CODEX_RECONNECT_LOGOUT = "codex mcp logout sofia";
@@ -96,7 +96,7 @@ export default {
                 hasDeveloperPrompt: text.includes("Developers: point your own agent at your org"),
                 hasNoCursorInstall: !text.includes("Add to Cursor") && !bodyText.includes("~/.cursor/mcp.json"),
                 hasServerUrl: text.includes(${JSON.stringify(MCP_SERVER_URL)}),
-                hasVerifiedCopy: text.includes("Verified for OpenCode only"),
+                hasVerifiedCopy: text.includes("Verified for Sofia only"),
                 hasSetupOnlyCopy: text.includes("setup guides for Codex, Cursor, ChatGPT"),
                 tabs: Array.from(installer?.querySelectorAll("[role='tab']") || []).map((tab) => (tab.textContent || "").trim()),
                 supportRows,
@@ -159,17 +159,17 @@ export default {
               actual,
             );
           },
-          screenshot: { name: "frame-1", requireText: ["Verified for OpenCode only"] },
+          screenshot: { name: "frame-1", requireText: ["Verified for Sofia only"] },
         });
       },
     },
     {
       name: "Frame 2",
       run: async (ctx) => {
-        await ctx.prove("Selecting OpenCode shows the exact remote MCP configuration for the current server.", {
+        await ctx.prove("Selecting Sofia shows the exact remote MCP configuration for the current server.", {
           voiceover: vo[1],
           action: async () => {
-            await clickTab(ctx, "OpenCode");
+            await clickTab(ctx, "Sofia");
           },
           assert: async () => {
             const actual = await ctx.eval(`(() => {
@@ -182,16 +182,16 @@ export default {
                 hasEnabled: text.includes('"enabled": true'),
                 hasOauth: text.includes('"oauth": {}'),
                 hasServerUrl: text.includes(${JSON.stringify(MCP_SERVER_URL)}),
-                hasAuthCommand: text.includes(${JSON.stringify(OPENCODE_AUTH_COMMAND)}),
-                hasReconnectLogout: text.includes(${JSON.stringify(OPENCODE_RECONNECT_LOGOUT)}),
+                hasAuthCommand: text.includes(${JSON.stringify(SOFIA_ENGINE_AUTH_COMMAND)}),
+                hasReconnectLogout: text.includes(${JSON.stringify(SOFIA_ENGINE_RECONNECT_LOGOUT)}),
                 hasReconnectHeading: text.includes("Reconnect or switch org"),
                 hasVerifiedStatus: text.includes("Verified"),
               };
             })()`);
             recordAssertion(
               ctx,
-              "OpenCode is selected and its complete remote MCP configuration, auth command, and reconnect command are visible",
-              actual.selected === "OpenCode"
+              "Sofia is selected and its complete remote MCP configuration, auth command, and reconnect command are visible",
+              actual.selected === "Sofia"
                 && actual.hasType === true
                 && actual.hasEnabled === true
                 && actual.hasOauth === true
@@ -203,14 +203,14 @@ export default {
               actual,
             );
           },
-          screenshot: { name: "frame-2", requireText: ["OpenCode", MCP_SERVER_URL] },
+          screenshot: { name: "frame-2", requireText: ["Sofia", MCP_SERVER_URL] },
         });
       },
     },
     {
       name: "Frame 3",
       run: async (ctx) => {
-        await ctx.prove("Copying the OpenCode configuration gives immediate confirmation.", {
+        await ctx.prove("Copying the Sofia configuration gives immediate confirmation.", {
           voiceover: vo[2],
           action: async () => {
             await grantDocsClipboardPermissions(ctx);
@@ -225,17 +225,17 @@ export default {
             })()`);
             recordAssertion(ctx, "The install button confirms the configuration was copied", actual.copiedFeedbackVisible === true, actual);
           },
-          screenshot: { name: "frame-3", requireText: ["Copied", "OpenCode"] },
+          screenshot: { name: "frame-3", requireText: ["Copied", "Sofia"] },
         });
       },
     },
     {
       name: "Frame 4",
       run: async (ctx) => {
-        await ctx.prove("The direct OpenCode docs link opens the installer with OpenCode selected.", {
+        await ctx.prove("The direct Sofia docs link opens the installer with Sofia selected.", {
           voiceover: vo[3],
           action: async () => {
-            await navigate(ctx, `${baseUrl("SOFIA_EVAL_DOCS_URL")}/cloud/run-in-the-cloud/cloud-mcp#connect-mcp-install-opencode`);
+            await navigate(ctx, `${baseUrl("SOFIA_EVAL_DOCS_URL")}/cloud/run-in-the-cloud/cloud-mcp#connect-mcp-install-engine`);
             await waitForInstaller(ctx);
           },
           assert: async () => {
@@ -250,14 +250,14 @@ export default {
             })()`);
             recordAssertion(
               ctx,
-              "The shareable OpenCode hash selects the OpenCode panel and current server URL",
-              actual.hash === "#connect-mcp-install-opencode"
-                && actual.selected === "OpenCode"
+              "The shareable Sofia hash selects the Sofia panel and current server URL",
+              actual.hash === "#connect-mcp-install-engine"
+                && actual.selected === "Sofia"
                 && actual.panelHasServerUrl === true,
               actual,
             );
           },
-          screenshot: { name: "frame-4", requireText: ["OpenCode", MCP_SERVER_URL], hashIncludes: "connect-mcp-install-opencode" },
+          screenshot: { name: "frame-4", requireText: ["Sofia", MCP_SERVER_URL], hashIncludes: "connect-mcp-install-engine" },
         });
       },
     },
@@ -305,7 +305,7 @@ export default {
               actual,
             );
           },
-          screenshot: { name: "frame-5", requireText: ["Cursor", "Codex", "ChatGPT Desktop", "Claude Code", "OpenCode", "VS Code", "Any client", "Setup only"] },
+          screenshot: { name: "frame-5", requireText: ["Cursor", "Codex", "ChatGPT Desktop", "Claude Code", "Sofia", "VS Code", "Any client", "Setup only"] },
         });
       },
     },

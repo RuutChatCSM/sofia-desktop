@@ -219,7 +219,7 @@ describe("deriveOpenTargets", () => {
       toolMessage("msg_tool", "glob", { pattern: "**/*.md" }, {
         files: [
           "README.md",
-          ".opencode/skills/example/SKILL.md",
+          ".sofia/skills/example/SKILL.md",
           "reports/created-report.md",
         ],
       }),
@@ -228,7 +228,7 @@ describe("deriveOpenTargets", () => {
 
     expect(targets.map((target) => target.value)).toContain("reports/created-report.md");
     expect(targets.map((target) => target.value)).not.toContain("README.md");
-    expect(targets.map((target) => target.value)).not.toContain(".opencode/skills/example/SKILL.md");
+    expect(targets.map((target) => target.value)).not.toContain(".sofia/skills/example/SKILL.md");
   });
 
   it("does not collect server-verified missing file targets", () => {

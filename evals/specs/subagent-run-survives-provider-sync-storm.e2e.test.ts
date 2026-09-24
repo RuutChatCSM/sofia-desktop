@@ -18,7 +18,7 @@ import type { TestNeeds } from "@sofia/testkit";
  *
  * Suspected mechanism (from code reading, to be proven or cleared here):
  *  - apps/server/src/cloud-provider-sync.ts apply()/sweep() call
- *    reloadOpencodeEngine() -> engine POST /instance/dispose with NO
+ *    reloadWorkspaceEngineEngine() -> engine POST /instance/dispose with NO
  *    "sessions are running" guard (#3526).
  *  - apps/app/src/react-app/domains/cloud/use-cloud-provider-auto-sync.ts
  *    triggers that sync on window focus, network online, visibilitychange and
@@ -176,7 +176,7 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 2_700_000 }, async
     const workspaceId = ${JSON.stringify(workspaceId)};
     const patched = await request("/workspace/" + encodeURIComponent(workspaceId) + "/config", {
       method: "PATCH",
-      body: JSON.stringify({ opencode: { provider: { anthropic: { options: { apiKey: ${JSON.stringify(anthropicKey)} } } } } }),
+      body: JSON.stringify({ engine: { provider: { anthropic: { options: { apiKey: ${JSON.stringify(anthropicKey)} } } } } }),
     });
     if (patched !== "ok") return patched;
     return request("/workspace/" + encodeURIComponent(workspaceId) + "/engine/reload", { method: "POST" });
@@ -236,7 +236,7 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 2_700_000 }, async
       }
     };
     (async () => {
-      const url = "http://127.0.0.1:" + port + "/workspace/" + encodeURIComponent(${JSON.stringify(workspaceId)}) + "/opencode/event";
+      const url = "http://127.0.0.1:" + port + "/workspace/" + encodeURIComponent(${JSON.stringify(workspaceId)}) + "/engine/event";
       while (window.__owStorm.active) {
         window.__owStorm.reconnects += 1;
         try {

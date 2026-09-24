@@ -96,7 +96,7 @@ function health(input?: {
     pluginCanaries: { expected: ["sofia_docs_search"], present: usable ? ["sofia_docs_search"] : [], missing: usable ? [] : ["sofia_docs_search"] },
     compatibility: {
       sofia: { serverVersion: "test", app: null },
-      opencode: { expectedVersion: "test", actualVersion: "test", probe: "ok" },
+      engine: { expectedVersion: "test", actualVersion: "test", probe: "ok" },
       pluginFileHashes: [],
       supportedFeatures: { dynamicMcp: true, directoryScoping: true, toolIds: true, providerToolProjection: projectionSource === "experimental_tool", pluginCanaries: true },
       experimentalToolIds: {

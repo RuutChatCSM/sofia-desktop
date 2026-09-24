@@ -279,7 +279,7 @@ mod tests {
                 .context("missing workspace id from /workspaces")?;
 
             let created: Value = client
-                .post(format!("{base_url}/w/{workspace_id}/opencode/session"))
+                .post(format!("{base_url}/w/{workspace_id}/engine/session"))
                 .bearer_auth(client_token)
                 .json(&json!({ "title": "Rust microsandbox smoke test" }))
                 .send()
@@ -294,7 +294,7 @@ mod tests {
 
             client
                 .get(format!(
-                    "{base_url}/w/{workspace_id}/opencode/session/{session_id}"
+                    "{base_url}/w/{workspace_id}/engine/session/{session_id}"
                 ))
                 .bearer_auth(client_token)
                 .send()
@@ -303,7 +303,7 @@ mod tests {
 
             client
                 .get(format!(
-                    "{base_url}/w/{workspace_id}/opencode/session/{session_id}/message?limit=10"
+                    "{base_url}/w/{workspace_id}/engine/session/{session_id}/message?limit=10"
                 ))
                 .bearer_auth(client_token)
                 .send()

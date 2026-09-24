@@ -1,7 +1,8 @@
+import { resolveSofiaPrompt } from "./sofia-commands.js";
 // Codex session manager: owns a ManagedCodexEngine and exposes a small,
 // Sofia-shaped session surface for the codex runtime. This is additive —
-// opencode routes are untouched. Each workspace gets its own engine process
-// (mirroring how opencode is managed per workspace) and threads are mapped to
+// engine routes are untouched. Each workspace gets its own engine process
+// (mirroring how engine is managed per workspace) and threads are mapped to
 // Sofia App session ids via a `codex-<threadId>` scheme.
 import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
@@ -41,6 +42,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/**
+ * Hard cap on the items one transcript read returns. Threads longer than this
+ * keep their most recent items; the engine has no "load older" API yet.
+ */
+export const MAX_TRANSCRIPT_ITEMS = 2000;
+/** Items requested per `thread/items/list` page; the engine caps this near 100. */
+const TRANSCRIPT_PAGE_SIZE = 100;
+/** Page budget so a pathological thread cannot spin the read forever. */
+const TRANSCRIPT_PAGE_BUDGET = 200;
+
 /** Why a steer was rejected, so the caller can fall back (start a turn, queue). */
 export type CodexSteerFailureCode = "no_active_turn" | "turn_mismatch" | "not_steerable" | "empty_input";
 
@@ -62,6 +73,23 @@ export class CodexSteerError extends Error {
 }
 
 /**
+ * The thread is held by a live Sofia process elsewhere. The app-server's
+ * writer lock is exclusive per thread and released only when the holder exits
+ * (or its thread unloads), so no turn can start here until then. The wording
+ * mirrors the TUI's external-writer notice; the thread id rides along in the
+ * route's 409 details so callers can point at the task in the way.
+ */
+export class CodexThreadBusyError extends Error {
+  readonly threadId: string;
+
+  constructor(threadId: string, cause?: unknown) {
+    super("This task is open elsewhere. Close it there and retry before continuing here.", { cause });
+    this.name = "CodexThreadBusyError";
+    this.threadId = threadId;
+  }
+}
+
+/**
  * True when the Sofia app-server reports that a thread has no persisted
  * rollout (e.g. a session created but never run, or already removed). Such
  * threads have nothing to archive/delete, so callers treat it as a no-op
@@ -70,6 +98,17 @@ export class CodexSteerError extends Error {
 export function isMissingRolloutError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   return /no rollout found/i.test(message);
+}
+
+/**
+ * True when the engine refused a resume because the thread already has an
+ * active writer. The writer lock is exclusive per thread across every Sofia
+ * process sharing a home (`$SOFIA_HOME/thread-writer-locks/<threadId>.lock`),
+ * so this means "someone else has it loaded" — not "the thread is broken".
+ */
+export function isThreadWriterConflict(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /already has an active writer/i.test(message);
 }
 
 /** Extract the shell command from a codex custom_tool_call "input" JS string. */
@@ -140,6 +179,7 @@ export type CodexEvent =
   | { type: "approval.requested"; sessionId: string; threadId: string; params: unknown }
   | { type: "thread.status"; sessionId: string; threadId: string; status: unknown }
   | { type: "rateLimit.updated"; sessionId: string; threadId: string; rateLimits: unknown }
+  | { type: "warning"; sessionId: string; threadId: string; message: string }
   | { type: "error"; sessionId: string; threadId: string; turnId?: string; message: string };
 
 export function codexSessionId(threadId: string): string {
@@ -253,6 +293,15 @@ export class CodexSessionManager {
       await engine.resumeThread(session.threadId, overrides);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      // The thread is already loaded here (another connection resumed it, or a
+      // turn left it loaded): resuming again cannot succeed, but turns can.
+      if (isThreadWriterConflict(error)) {
+        if (await this.isThreadLoaded(engine, session.threadId)) {
+          this.loadedThreads.add(session.threadId);
+          return;
+        }
+        throw new CodexThreadBusyError(session.threadId, error);
+      }
       if (!isMissingRolloutError(error) && !/thread not found/i.test(message)) throw error;
       // Imported sessions belong to another engine home. Resume their durable
       // rollout explicitly instead of sending a turn to an unloaded thread.
@@ -266,6 +315,28 @@ export class CodexSessionManager {
     this.loadedThreads.add(session.threadId);
   }
 
+  /** Whether the app-server process currently holds this thread loaded. */
+  private async isThreadLoaded(engine: ManagedCodexEngine, threadId: string): Promise<boolean> {
+    try {
+      return (await engine.listLoadedThreads()).includes(threadId);
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Drop our subscription once a turn ends so the engine can unload the thread
+   * (after its idle delay) and release the exclusive writer lock. Without this
+   * every session ever run here stays locked against other Sofia processes for
+   * the lifetime of this server.
+   */
+  private releaseThread(threadId: string): void {
+    if (!this.loadedThreads.delete(threadId)) return;
+    const engine = this.engine;
+    if (!engine) return;
+    void engine.unsubscribeThread(threadId).catch(() => undefined);
+  }
+
   private setupEngineListeners(engine: ManagedCodexEngine): void {
     // Inbound server->client approval requests must be answered with a response.
     const onReq = (request: unknown) => {
@@ -274,7 +345,9 @@ export class CodexSessionManager {
       if (method === "item/commandExecution/requestApproval" ||
           method === "item/fileChange/requestApproval" ||
           method === "item/permissions/requestApproval") {
-        const active = this.activeSession();
+        const params = r.params;
+        const threadId = params && typeof params === "object" ? Reflect.get(params, "threadId") : undefined;
+        const active = typeof threadId === "string" ? this.sessionFor(threadId) : this.activeSession();
         if (active && r.id !== undefined) {
           this.events.emit("event", {
             type: "approval.requested",
@@ -362,26 +435,49 @@ export class CodexSessionManager {
   async getSessionItems(sessionId: string, options?: { limit?: number }): Promise<Array<{ turnId: string; item: Record<string, unknown> }>> {
     await this.start();
     const session = this.sessions.get(sessionId);
-    if (!session || !this.engine) return [];
-    // A thread listed via `thread/list` carries metadata only; its items are
-    // not in the store until the thread is loaded. Resume (best-effort) so
-    // `thread/items/list` can return the transcript, then fall back to the
-    // rollout JSONL for legacy/CLI sessions the store doesn't know.
-    if (!this.loadedThreads.has(session.threadId)) {
-      try {
-        await this.engine.resumeThread(session.threadId);
-        this.loadedThreads.add(session.threadId);
-      } catch {
-        // Transcript reads can use the rollout without changing the session.
-      }
-    }
+    const engine = this.engine;
+    if (!session || !engine) return [];
+    const limit = options?.limit && options.limit > 0 ? options.limit : MAX_TRANSCRIPT_ITEMS;
+    // Read-only by design: `thread/items/list` serves materialized items
+    // straight from the thread store, and the rollout JSONL covers threads the
+    // store has not seen. Never resume here — resuming takes the thread's
+    // exclusive writer lock and subscribes this connection, which kept every
+    // browsed session locked against other Sofia processes until we exited.
     try {
-      const items = await this.engine.listThreadItems(session.threadId, { limit: options?.limit });
+      const items = await this.readThreadStoreItems(engine, session.threadId, limit);
       if (items.length > 0) return items;
     } catch {
       // Fall through to the rollout reader.
     }
-    return this.readRolloutItems(session, options?.limit);
+    return this.readRolloutItems(session, limit);
+  }
+
+  /**
+   * Read a whole transcript from the thread store, following `nextCursor`.
+   *
+   * The engine serves about 100 items per page starting at the oldest item, so
+   * asking once returned only the beginning of a long thread and silently
+   * dropped the recent history. Walks to the end and keeps the newest `limit`
+   * items when a thread is longer than the cap.
+   */
+  private async readThreadStoreItems(
+    engine: ManagedCodexEngine,
+    threadId: string,
+    limit: number,
+  ): Promise<Array<{ turnId: string; item: Record<string, unknown> }>> {
+    const items: Array<{ turnId: string; item: Record<string, unknown> }> = [];
+    let cursor: string | undefined;
+    for (let page = 0; page < TRANSCRIPT_PAGE_BUDGET; page += 1) {
+      const result = await engine.listThreadItems(threadId, {
+        limit: TRANSCRIPT_PAGE_SIZE,
+        ...(cursor ? { cursor } : {}),
+      });
+      items.push(...result.items);
+      if (items.length > limit) items.splice(0, items.length - limit);
+      if (!result.nextCursor || result.items.length === 0) break;
+      cursor = result.nextCursor;
+    }
+    return items;
   }
 
   /** Parse a legacy rollout JSONL into ThreadItem-shaped entries. */
@@ -538,6 +634,14 @@ export class CodexSessionManager {
       engine.on("item/commandExecution/outputDelta", (params) => this.handleToolOutput(params));
       engine.on("item/fileChange/patchUpdated", (params) => this.handleFilePatch(params));
       engine.on("item/completed", (params) => this.handleItemCompleted(params));
+      engine.on("warning", (params) => {
+        if (!params || typeof params !== "object") return;
+        const threadId = Reflect.get(params, "threadId");
+        const message = Reflect.get(params, "message");
+        const session = typeof threadId === "string" ? this.sessionFor(threadId) : undefined;
+        if (session && typeof message === "string") this.emit({ type: "warning", sessionId: session.id, threadId, message });
+      });
+      engine.on("turn/started", (params) => this.handleTurnStarted(params));
       engine.on("turn/completed", (params) => this.handleTurnCompleted(params));
       engine.on("thread/status/changed", (params) => this.handleThreadStatus(params));
       engine.on("account/rateLimits/updated", (params) => this.handleRateLimits(params));
@@ -777,7 +881,7 @@ export class CodexSessionManager {
       turnId = await engine.startTurn({
         ...codexTurnPermissions(readCodexAccessMode(this.handle.codexHome)),
         threadId: session.threadId,
-        input: [{ text }],
+        input: [{ text: await resolveSofiaPrompt(session.cwd, text) }],
         cwd: session.cwd,
       });
     } catch (error) {
@@ -788,7 +892,8 @@ export class CodexSessionManager {
       this.emit({ type: "session.updated", session: { ...session } });
       throw error;
     }
-    session.turnId = turnId;
+    // A fast turn can complete before its start RPC response arrives.
+    if (session.status === "running" && !session.turnId) session.turnId = turnId;
     this.emit({ type: "session.updated", session: { ...session } });
     return { ...session };
   }
@@ -809,11 +914,12 @@ export class CodexSessionManager {
     if (!session.turnId || session.status !== "running") {
       throw new CodexSteerError("no_active_turn", "There is no active Sofia turn to steer");
     }
-    let turnId: string | null;
+    const expectedTurnId = session.turnId;
+    let steeredTurnId: string | null = null;
     try {
-      turnId = await this.engine.steerTurn({
+      steeredTurnId = await this.engine.steerTurn({
         threadId: session.threadId,
-        expectedTurnId: session.turnId,
+        expectedTurnId,
         input: [{ text }],
       });
     } catch (error) {
@@ -826,9 +932,13 @@ export class CodexSessionManager {
       if (mismatch) throw new CodexSteerError("turn_mismatch", message, mismatch[2] ?? null);
       throw error;
     }
-    session.turnId = turnId;
-    session.status = "running";
-    this.emit({ type: "session.updated", session: { ...session } });
+    // Steering changes input, never lifecycle: adopt the engine's turn id so a
+    // later steer or interrupt targets the live turn, but never resurrect a
+    // turn that completed (or was replaced) while this RPC was pending.
+    if (steeredTurnId && session.status === "running" && session.turnId === expectedTurnId) {
+      session.turnId = steeredTurnId;
+      this.emit({ type: "session.updated", session: { ...session } });
+    }
     return { ...session };
   }
 
@@ -980,6 +1090,15 @@ export class CodexSessionManager {
     this.emit({ type: "item.completed", sessionId: session.id, threadId: threadId ?? "", itemType, item: item ?? null, turnId: typeof turnId === "string" ? turnId : "" });
   }
 
+  private handleTurnStarted(params: unknown): void {
+    if (!isRecord(params) || !isRecord(params.turn) || typeof params.turn.id !== "string") return;
+    const session = this.sessionFor(typeof params.threadId === "string" ? params.threadId : "");
+    if (!session) return;
+    session.turnId = params.turn.id;
+    session.status = "running";
+    this.emit({ type: "session.updated", session: { ...session } });
+  }
+
   private handleTurnCompleted(params: unknown): void {
     const { threadId, thread_id, turn, error } = params as {
       threadId?: string;
@@ -990,10 +1109,14 @@ export class CodexSessionManager {
     const tid = threadId ?? thread_id ?? "";
     const session = this.sessionFor(tid);
     if (!session) return;
+    if (turn?.id && session.turnId && turn.id !== session.turnId) return;
     session.status = turn?.status === "failed" || turn?.error || error ? "error" : "idle";
     session.turnId = null;
     this.emit({ type: "session.updated", session: { ...session } });
     this.emit({ type: "turn.completed", sessionId: session.id, threadId: tid });
+    // Idle now: let the engine unload the thread (and drop its writer lock)
+    // instead of holding the session exclusively until this server exits.
+    this.releaseThread(tid);
     const turnError = turn?.error as { message?: string } | undefined;
     const raw = (turnError?.message ?? (typeof error === "string" ? error : (error as { message?: string } | undefined)?.message))?.trim();
     if (raw || session.status === "error") {

@@ -4,7 +4,7 @@ import { ORG_SCOPE_HEADER, getRequestOrgScope, shouldPinOrgScopePath } from "./o
 export type AuthMode = "sign-in" | "sign-up";
 export type SocialAuthProvider = "github" | "google";
 export type WorkerStatusBucket = "ready" | "starting" | "attention" | "other";
-export type RuntimeServiceName = "sofia-server" | "opencode";
+export type RuntimeServiceName = "sofia-server" | "engine";
 export type EventLevel = "info" | "success" | "warning" | "error";
 export type AuthMethod = "email" | SocialAuthProvider;
 
@@ -669,8 +669,8 @@ export function getRuntimeServiceLabel(name: RuntimeServiceName): string {
   switch (name) {
     case "sofia-server":
       return "Sofia server";
-    case "opencode":
-      return "OpenCode";
+    case "engine":
+      return "Sofia";
   }
 }
 

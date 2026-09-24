@@ -6,7 +6,7 @@ const asar = require("@electron/asar");
 const computerUseHelperAppName = "Sofia App Computer Use.app";
 
 const sidecarBases = [
-  "opencode",
+  "engine",
 ];
 
 function targetTriple(platformName, arch) {

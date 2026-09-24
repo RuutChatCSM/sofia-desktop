@@ -12,7 +12,7 @@
  * Always go through {@link resolveWorkspaceEndpoint} when you need:
  *   - an `SofiaServerClient` for a workspace
  *   - a mounted `/workspace/<id>` URL prefix
- *   - the `/opencode` URL for the OpenCode SDK
+ *   - the `/engine` URL for the Sofia SDK
  *
  * Don't compose `<baseUrl>/workspace/<id>` by hand — that pattern is what
  * caused this whole class of "remote workspace API calls hit the local
@@ -39,8 +39,8 @@ export type ResolvedWorkspaceEndpoint = {
   client: SofiaServerClient;
   /** Mounted base url: `<baseUrl>/workspace/<workspaceId>`. No trailing slash. */
   mountedBaseUrl: string;
-  /** OpenCode SDK base url: `<mountedBaseUrl>/opencode`. */
-  opencodeBaseUrl: string;
+  /** Sofia SDK base url: `<mountedBaseUrl>/engine`. */
+  engineBaseUrl: string;
 };
 
 export type LocalServerHandle = {
@@ -104,7 +104,7 @@ function pickRemoteToken(workspace: WorkspaceEndpointInput): string {
  * Resolve the right server endpoint for a workspace. Returns null when the
  * workspace can't be reached (remote with no baseUrl, or local with no local
  * server connected yet). The returned object's `client`, `mountedBaseUrl`, and
- * `opencodeBaseUrl` are ready to use for any workspace-scoped API call.
+ * `engineBaseUrl` are ready to use for any workspace-scoped API call.
  */
 export function resolveWorkspaceEndpoint(
   workspace: WorkspaceEndpointInput,
@@ -131,7 +131,7 @@ export function resolveWorkspaceEndpoint(
       isRemote: true,
       client,
       mountedBaseUrl,
-      opencodeBaseUrl: `${mountedBaseUrl}/opencode`,
+      engineBaseUrl: `${mountedBaseUrl}/engine`,
     };
   }
 
@@ -153,6 +153,6 @@ export function resolveWorkspaceEndpoint(
     isRemote: false,
     client,
     mountedBaseUrl,
-    opencodeBaseUrl: `${mountedBaseUrl}/opencode`,
+    engineBaseUrl: `${mountedBaseUrl}/engine`,
   };
 }

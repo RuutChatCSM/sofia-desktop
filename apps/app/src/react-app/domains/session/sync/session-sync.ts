@@ -4,17 +4,17 @@ import type { FilePart, Part, PermissionRequest, PermissionV2Request, QuestionRe
 import { getReactQueryClient } from "../../../infra/query-client";
 import { captureAnalyticsEvent, takeTaskRunStart } from "@/app/lib/analytics";
 import { trackTaskCompleted, trackTaskFailed } from "@/app/lib/den-telemetry";
-import { createClient, unwrap } from "@/app/lib/opencode";
+import { createClient, unwrap } from "@/app/lib/engine";
 import { isGeneratedSessionTitle } from "@/app/lib/session-title";
 import { normalizeEvent } from "@/app/utils";
-import { SYNTHETIC_SESSION_ERROR_MESSAGE_PREFIX, type OpencodeEvent, type PendingPermission, type PendingQuestion } from "@/app/types";
+import { SYNTHETIC_SESSION_ERROR_MESSAGE_PREFIX, type WorkspaceEngineEvent, type PendingPermission, type PendingQuestion } from "@/app/types";
 import {
   createSessionErrorUIMessage,
   snapshotToUIMessages,
 } from "./usechat-adapter";
 import {
-  describeOpencodeSessionError,
-  presentOpencodeSessionError,
+  describeWorkspaceEngineSessionError,
+  presentWorkspaceEngineSessionError,
 } from "./session-error";
 import {
   parseDynamicToolUIPart,
@@ -151,7 +151,7 @@ function isTrackedSession(entry: SyncEntry, sessionId: string) {
   return (entry.trackedSessionRefs.get(sessionId) ?? 0) > 0 || entry.retainedSessionTimers.has(sessionId);
 }
 
-function getSessionUpdatedInfo(event: OpencodeEvent) {
+function getSessionUpdatedInfo(event: WorkspaceEngineEvent) {
   if (event.type !== "session.updated") return null;
   const props = event.properties;
   if (!props || typeof props !== "object") return null;
@@ -167,7 +167,7 @@ function getSessionUpdatedInfo(event: OpencodeEvent) {
   return { sessionId, info: info as Record<string, unknown> };
 }
 
-function getSessionCreatedInfo(event: OpencodeEvent): Session | null {
+function getSessionCreatedInfo(event: WorkspaceEngineEvent): Session | null {
   if (event.type !== "session.created") return null;
   const props = event.properties;
   if (!props || typeof props !== "object") return null;
@@ -417,9 +417,9 @@ export function seedQuestionState(
 
 function fileProviderMetadata(part: FilePart) {
   if (part.source) {
-    return { opencode: { partId: part.id, source: part.source } };
+    return { engine: { partId: part.id, source: part.source } };
   }
-  return { opencode: { partId: part.id } };
+  return { engine: { partId: part.id } };
 }
 
 function toFileUIPart(part: FilePart): UIMessage["parts"][number] {
@@ -437,7 +437,7 @@ function toFileSourceUIPart(part: FilePart): UIMessage["parts"][number] | null {
   if (!source) return null;
 
   const sourceId = `${part.id}:source`;
-  const providerMetadata = { opencode: { partId: sourceId, sourcePartId: part.id, source } };
+  const providerMetadata = { engine: { partId: sourceId, sourcePartId: part.id, source } };
 
   if (source.type === "resource") {
     if (source.uri.startsWith("http://")) {
@@ -469,7 +469,7 @@ function toUIPart(part: Part): UIMessage["parts"][number] | null {
       type: "text",
       text: part.text,
       state: "done",
-      providerMetadata: { opencode: { partId: part.id } },
+      providerMetadata: { engine: { partId: part.id } },
     };
   }
   if (part.type === "reasoning") {
@@ -477,7 +477,7 @@ function toUIPart(part: Part): UIMessage["parts"][number] | null {
       type: "reasoning",
       text: part.text,
       state: "done",
-      providerMetadata: { opencode: { partId: part.id } },
+      providerMetadata: { engine: { partId: part.id } },
     };
   }
   if (part.type === "file") {
@@ -494,7 +494,7 @@ function toUIPart(part: Part): UIMessage["parts"][number] | null {
       type: "text",
       text: part.name ? `@${part.name}` : "@agent",
       state: "done",
-      providerMetadata: { opencode: { partId: part.id } },
+      providerMetadata: { engine: { partId: part.id } },
     };
   }
   if (part.type === "step-start") return { type: "step-start" };
@@ -514,12 +514,12 @@ function toUIParts(part: Part): UIMessage["parts"] {
 
 function getPartMetadataId(part: UIMessage["parts"][number]) {
   if (part.type === "dynamic-tool") {
-    const metadata = part.callProviderMetadata?.opencode;
+    const metadata = part.callProviderMetadata?.engine;
     if (!metadata || typeof metadata !== "object") return null;
     return "partId" in metadata ? (metadata as { partId?: string }).partId ?? null : null;
   }
   if (part.type !== "text" && part.type !== "reasoning" && part.type !== "file" && part.type !== "source-url" && part.type !== "source-document") return null;
-  const metadata = part.providerMetadata?.opencode;
+  const metadata = part.providerMetadata?.engine;
   if (!metadata || typeof metadata !== "object") return null;
   return "partId" in metadata ? (metadata as { partId?: string }).partId ?? null : null;
 }
@@ -613,13 +613,13 @@ function appendDelta(messages: UIMessage[], messageId: string, partId: string, d
           type: "reasoning",
           text: delta,
           state: "streaming" as const,
-          providerMetadata: { opencode: { partId } },
+          providerMetadata: { engine: { partId } },
         }
       : {
           type: "text",
           text: delta,
           state: "streaming" as const,
-          providerMetadata: { opencode: { partId } },
+          providerMetadata: { engine: { partId } },
         };
     nextParts = target.parts.slice();
     nextParts.push(newPart);
@@ -667,7 +667,7 @@ export function coalescePendingDeltas(items: PendingDelta[]) {
   return ordered;
 }
 
-function applyEvent(entry: SyncEntry, workspaceId: string, event: OpencodeEvent) {
+function applyEvent(entry: SyncEntry, workspaceId: string, event: WorkspaceEngineEvent) {
   const queryClient = getReactQueryClient();
   const input = entry.input;
 
@@ -715,8 +715,8 @@ function applyEvent(entry: SyncEntry, workspaceId: string, event: OpencodeEvent)
     const sessionId = sessionIdFromProperties(event.properties);
     if (sessionId) {
       const sessionError = sessionErrorFromProperties(event.properties);
-      const errorPresentation = presentOpencodeSessionError(sessionError);
-      const errorText = describeOpencodeSessionError(sessionError);
+      const errorPresentation = presentWorkspaceEngineSessionError(sessionError);
+      const errorText = describeWorkspaceEngineSessionError(sessionError);
       const runStartedAt = takeTaskRunStart(sessionId);
       if (runStartedAt !== null) {
         captureAnalyticsEvent("task_run_errored", {
@@ -887,7 +887,7 @@ function applyEvent(entry: SyncEntry, workspaceId: string, event: OpencodeEvent)
       id: info.id,
       role: info.role,
       ...(typeof created === "number"
-        ? { metadata: { opencode: { created, ...(typeof completed === "number" ? { completed } : {}) } } }
+        ? { metadata: { engine: { created, ...(typeof completed === "number" ? { completed } : {}) } } }
         : {}),
       parts: [],
     } satisfies UIMessage;
@@ -930,7 +930,7 @@ function applyEvent(entry: SyncEntry, workspaceId: string, event: OpencodeEvent)
     const pending = entry.pendingDeltas.get(part.id);
     // Seed the new part with any deltas that arrived before this
     // declaration. We deliberately ignore `pending.reasoning` — it
-    // can't be trusted because opencode emits `field: "text"` for
+    // can't be trusted because engine emits `field: "text"` for
     // both text and reasoning streams. The part's actual kind
     // (`mapped.type`) is the source of truth.
     //
@@ -989,7 +989,7 @@ function applyEvent(entry: SyncEntry, workspaceId: string, event: OpencodeEvent)
     useSessionActivityStore.getState().markAssistantOutput(workspaceId, props.sessionID, props.messageID, { allowUnknownMessageRole: true });
     if (!isTrackedSession(entry, props.sessionID)) return;
     // Note: we do NOT trust `props.field` to disambiguate reasoning vs
-    // text. Opencode emits `field: "text"` for both kinds; the actual
+    // text. WorkspaceEngine emits `field: "text"` for both kinds; the actual
     // distinction lives on the part's `type`, which we only see via
     // `message.part.updated`. The flusher resolves the kind at apply
     // time, falling back to `pendingDeltas` if the part hasn't been
@@ -1095,7 +1095,7 @@ function flushDeltas(entry: SyncEntry, workspaceId: string) {
             ensuredMessageIds.add(item.messageId);
           }
           // Resolve the part kind from the transcript instead of trusting
-          // the inbound delta event (opencode emits `field: "text"` for
+          // the inbound delta event (engine emits `field: "text"` for
           // both text and reasoning parts). If the part hasn't been
           // declared yet via `message.part.updated`, defer the delta into
           // `entry.pendingDeltas` so the part can be created with the
@@ -1391,7 +1391,7 @@ export function applySessionUnrevert(workspaceId: string, sessionId: string) {
 export function trackWorkspaceSessionSync(input: SyncOptions, sessionId: string | null | undefined) {
   const normalizedSessionId = sessionId?.trim() ?? "";
   if (!normalizedSessionId) return () => {};
-  // Sofia sessions are owned by the Sofia engine; opencode sync must never
+  // Sofia sessions are owned by the Sofia engine; engine sync must never
   // attach to them (no SSE, no status/permission polls).
   if (normalizedSessionId.startsWith("codex-")) return () => {};
 
@@ -1473,7 +1473,7 @@ export function __disposeWorkspaceSessionSyncForTest(input: SyncOptions) {
   disposeWorkspaceSync(key, entry);
 }
 
-export function __applySessionSyncEventForTest(input: SyncOptions, event: OpencodeEvent) {
+export function __applySessionSyncEventForTest(input: SyncOptions, event: WorkspaceEngineEvent) {
   const entry = syncs.get(syncKey(input));
   if (!entry) return;
   applyEvent(entry, input.workspaceId, event);

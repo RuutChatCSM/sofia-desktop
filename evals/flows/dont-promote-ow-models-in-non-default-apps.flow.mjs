@@ -468,7 +468,7 @@ async function resetEvalProviderImport(ctx) {
     ? current.sofia.cloudImports
     : {};
   await workspaceConfigRequest(ctx, "PATCH", {
-    opencode: { provider: { [CUSTOM_PROVIDER.id]: null, sofia: null } },
+    engine: { provider: { [CUSTOM_PROVIDER.id]: null, sofia: null } },
     sofia: { cloudImports: { ...cloudImports, providers: {} } },
   });
   ctx.recordEvidence({

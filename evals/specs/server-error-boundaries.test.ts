@@ -5,7 +5,7 @@ import { test } from "@sofia/testkit";
 import { expect } from "vitest";
 
 import { isEngineConnectionFailure } from "../../apps/server/src/engine-pool";
-import { createManagedOpencodeServer } from "../../apps/server/src/managed-opencode";
+import { createManagedWorkspaceEngineServer } from "../../apps/server/src/managed-engine";
 import { captureServerException } from "../../apps/server/src/telemetry";
 
 test("server error boundaries contain expected noise without hiding actionable failures", async ({ evidence }) => {
@@ -67,7 +67,7 @@ test("server error boundaries contain expected noise without hiding actionable f
   try {
     let failure: unknown;
     try {
-      await createManagedOpencodeServer({ bin, cwd: root, env: { ATTEMPTS_PATH: attemptsPath } });
+      await createManagedWorkspaceEngineServer({ bin, cwd: root, env: { ATTEMPTS_PATH: attemptsPath } });
     } catch (error) {
       failure = error;
     }

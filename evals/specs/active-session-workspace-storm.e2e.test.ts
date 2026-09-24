@@ -329,7 +329,7 @@ async function configureWorkspaces(desktopApp: App, plans: WorkspacePlan[], base
         method: "PATCH",
         headers,
         body: JSON.stringify({
-          opencode: {
+          engine: {
             permission: { edit: "allow", write: "allow", read: "allow", bash: "allow" },
             provider: {
               [${JSON.stringify(providerId)}]: {
@@ -522,7 +522,7 @@ async function approvePendingToolPermissions(desktopApp: App, plan: WorkspacePla
     const info = await window.__SOFIA_ELECTRON__?.invokeDesktop?.("sofiaServerInfo");
     if (!info?.running || !info.baseUrl) return { error: "local_server_unavailable" };
     const root = String(info.baseUrl).replace(/\\/+$/, "")
-      + "/workspace/" + encodeURIComponent(${JSON.stringify(plan.workspaceId)}) + "/opencode";
+      + "/workspace/" + encodeURIComponent(${JSON.stringify(plan.workspaceId)}) + "/engine";
     const headers = {
       Authorization: "Bearer " + String(info.ownerToken ?? info.clientToken ?? ""),
       "Content-Type": "application/json",

@@ -22,26 +22,26 @@ Try:
 Skills add new capabilities. Plugins add advanced features like scheduling or browser automation. We can add them later when you're ready.
 
 ## If the person is technical
-Sofia is a GUI for OpenCode. Everything that works in OpenCode works here.
+Sofia is a GUI for Sofia. Everything that works in Sofia works here.
 
 Most reliable setup today:
-1) Install OpenCode from opencode.ai
+1) Install Sofia from engine.ai
 2) Configure providers there (models and API keys)
 3) Come back to Sofia and start a session
 
 Skills:
 - Install from the Skills tab, or add them to this workspace.
-- Docs: https://opencode.ai/docs/skills
+- Docs: https://github.com/RuutChatCSM/sofia/docs/skills
 
 Plugins:
-- Configure in opencode.json or use the Plugins tab.
-- Docs: https://opencode.ai/docs/plugins/
+- Configure in engine.json or use the Plugins tab.
+- Docs: https://github.com/RuutChatCSM/sofia/docs/plugins/
 
 MCP servers:
-- Add external tools via opencode.json.
-- Docs: https://opencode.ai/docs/mcp-servers/
+- Add external tools via engine.json.
+- Docs: https://github.com/RuutChatCSM/sofia/docs/mcp-servers/
 
 Config reference:
-- Docs: https://opencode.ai/docs/config/
+- Docs: https://github.com/RuutChatCSM/sofia/docs/config/
 
 End with two friendly next actions to try in Sofia.

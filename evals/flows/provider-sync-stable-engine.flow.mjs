@@ -5,7 +5,7 @@ import { loadVoiceoverParagraphs } from "../runner/voiceover.mjs";
 const vo = await loadVoiceoverParagraphs("provider-sync-stable-engine");
 
 const PROVIDER_NAME = "Acme Azure Foundry";
-const RELOAD_TEXT = "Reloading OpenCode config";
+const RELOAD_TEXT = "Reloading Sofia config";
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -92,8 +92,8 @@ const workspaceConfigStateExpr = (workspaceId) => `(async () => {
     }
     const config = await response.json();
     return JSON.stringify({
-      providers: Object.keys(config.sofia?.cloudImports?.providers ?? {}),
-      runtimeProviders: Object.keys(config.opencode?.provider ?? {}),
+      providers: Object.keys(config.engine?.cloudImports?.providers ?? {}),
+      runtimeProviders: Object.keys(config.engine?.provider ?? {}),
     });
   } catch (error) {
     return JSON.stringify({
@@ -338,7 +338,7 @@ export default {
     {
       name: "Frame 5",
       run: async (ctx) => {
-        await ctx.prove("Sixty seconds in the session with zero 'Reloading OpenCode config' flashes — the reload loop is gone", {
+        await ctx.prove("Sixty seconds in the session with zero 'Reloading Sofia config' flashes — the reload loop is gone", {
           voiceover: vo[4],
           // "The proof is in the waiting: a full minute in the session and the status bar"
           action: async () => {

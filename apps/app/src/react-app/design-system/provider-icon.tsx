@@ -8,7 +8,7 @@ export type ProviderIconProps = {
   /**
    * Optional provider display name. When the id is an opaque cloud id
    * (e.g. a uuid), the name is what tells us whether it's an Anthropic /
-   * OpenAI / OpenCode provider. Ported from dev 022b68a8 ("key cloud
+   * OpenAI / Sofia provider. Ported from dev 022b68a8 ("key cloud
    * providers by cloud id") so the icon still resolves by family.
    */
   providerName?: string | null;
@@ -27,8 +27,8 @@ export function ProviderIcon(props: ProviderIconProps) {
 
   const isAnthropic = hasProviderFamily("anthropic");
   const isOpenAI = hasProviderFamily("openai");
-  const isOpenCode = hasProviderFamily("opencode");
-  const hasInlineMark = isAnthropic || isOpenAI || isOpenCode;
+  const isSofia = hasProviderFamily("engine");
+  const hasInlineMark = isAnthropic || isOpenAI || isSofia;
 
   // Remote logos are walked in order and each failure advances one step, so a
   // provider only falls back to its monogram once every source is exhausted.
@@ -80,7 +80,7 @@ export function ProviderIcon(props: ProviderIconProps) {
         >
           <path d="M17.304 3.541h-3.672l6.696 16.918H24Zm-10.608 0L0 20.459h3.744l1.369-3.553h7.005l1.369 3.553h3.744L10.536 3.541Zm-.371 10.223 2.291-5.946 2.291 5.946Z" />
         </svg>
-      ) : isOpenCode ? (
+      ) : isSofia ? (
         <svg
           role="img"
           viewBox="0 0 24 24"

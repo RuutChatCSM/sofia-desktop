@@ -7,10 +7,10 @@ Sofia should expose `extension` as the user-facing abstraction. Claude/Anthropic
 An extension is a manifest-backed installed capability:
 
 - `source`: where it came from, such as built-in, Den Claude plugin import, Sofia manifest, MCP directory, or manual local install.
-- `resources`: installable primitives, such as skills, MCP servers, OpenCode plugins, providers, secrets, native binaries, hooks, commands, or context files.
+- `resources`: installable primitives, such as skills, MCP servers, Sofia plugins, providers, secrets, native binaries, hooks, commands, or context files.
 - `setup`: custom instructions, required env vars, primary CTA text, and optional test action refs.
 - `contributions`: allowlisted UI/runtime refs, such as settings panels, composer prompts, session side panels, rail items, server routes, control actions, native capabilities, and tests.
-- `lifecycle`: reload/detection hints for OpenCode config, plugins, skills, MCP, agents, or commands.
+- `lifecycle`: reload/detection hints for Sofia config, plugins, skills, MCP, agents, or commands.
 
 ## PR Stack
 

@@ -80,7 +80,7 @@ function cloudHealth(usable: boolean): SofiaCloudMcpHealth {
     pluginCanaries: { expected: [], present: [], missing: [] },
     compatibility: {
       sofia: { serverVersion: null, app: null },
-      opencode: { expectedVersion: null, actualVersion: null, probe: "not_checked" },
+      engine: { expectedVersion: null, actualVersion: null, probe: "not_checked" },
       pluginFileHashes: [],
       supportedFeatures: {
         dynamicMcp: true,

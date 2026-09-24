@@ -149,7 +149,7 @@ function startUpstream() {
       cookie: request.headers.get("cookie"),
     })
 
-    if (url.pathname.endsWith("/opencode/event")) {
+    if (url.pathname.endsWith("/engine/event")) {
       const stream = new ReadableStream({
         start(controller) {
           controller.enqueue(encoder.encode("data: first\n\n"))
@@ -518,14 +518,14 @@ describe("den-gateway proxy", () => {
     expect(upstream.observed.requests[0].path).toBe("/workspace/ws_1/sessions")
   })
 
-  test("proxies workspace opencode SSE without buffering", async () => {
+  test("proxies workspace engine SSE without buffering", async () => {
     const upstream = startUpstream()
     const denApi = startDenApi(() => readyResolvePayload(serverBase(upstream.server)))
     const gateway = startGateway({ denApiBase: serverBase(denApi.server), gatewayKey: "gateway-secret" })
     const base = serverBase(gateway)
 
     const startedAt = Date.now()
-    const streamResponse = await fetch(`${base}/workspace/ws_1/opencode/event`, {
+    const streamResponse = await fetch(`${base}/workspace/ws_1/engine/event`, {
       headers: { Authorization: "Bearer den-stream", Accept: "text/event-stream" },
     })
     expect(streamResponse.headers.get("content-type")).toContain("text/event-stream")
@@ -534,7 +534,7 @@ describe("den-gateway proxy", () => {
     const elapsed = Date.now() - startedAt
     expect(new TextDecoder().decode(first.value)).toBe("data: first\n\n")
     expect(elapsed).toBeLessThan(300)
-    expect(upstream.observed.requests[0].path).toBe("/workspace/ws_1/opencode/event")
+    expect(upstream.observed.requests[0].path).toBe("/workspace/ws_1/engine/event")
     await reader.read()
   })
 
@@ -584,7 +584,7 @@ describe("den-gateway proxy", () => {
     const base = serverBase(gateway)
 
     const startedAt = Date.now()
-    const streamResponse = await fetch(`${base}/opencode/event`, { headers: { Authorization: "Bearer den-stream" } })
+    const streamResponse = await fetch(`${base}/engine/event`, { headers: { Authorization: "Bearer den-stream" } })
     expect(streamResponse.headers.get("content-type")).toContain("text/event-stream")
     const reader = streamResponse.body.getReader()
     const first = await reader.read()

@@ -44,7 +44,7 @@ const diagnosticEvidenceKindSchema = z.enum([
 const diagnosticOwnerSchema = z.enum([
   "sofia-client",
   "sofia-server",
-  "opencode-engine",
+  "sofia-engine",
   "network-admin",
   "organization-admin",
   "member",
@@ -451,7 +451,7 @@ export const agentContextDiagnosticsReportSchema = z.object({
     id: safeTextSchema.min(1).max(160),
     name: safeTextSchema.min(1).max(240),
     type: z.enum(["local", "remote"]),
-    remoteType: z.enum(["opencode", "sofia"]).nullable(),
+    remoteType: z.enum(["engine", "sofia"]).nullable(),
     engineConfigured: z.boolean(),
   }).strict(),
   checks: z.array(agentContextDiagnosticCheckRuntimeSchema).length(AGENT_CONTEXT_DIAGNOSTIC_CHECK_IDS.length),

@@ -10,11 +10,11 @@ const FLOW_ID = "runtime-config-ownership";
 const vo = await loadVoiceoverParagraphs(FLOW_ID);
 
 const CARD_TITLE = "Runtime config ownership";
-const CARD_RULE = "Sofia writes only the managed runtime config file; user OpenCode config stays user-owned.";
+const CARD_RULE = "Sofia writes only the managed runtime config file; user Sofia config stays user-owned.";
 const REDACTED_CONTENT_LABEL = "Redacted managed file";
 const REDACTED_CONTENT_VISIBLE_LABEL = "REDACTED MANAGED FILE";
 const DISABLED_PROVIDER = "anthropic";
-const LEGACY_HEADER = "// Personal OpenCode config owned by me.\n";
+const LEGACY_HEADER = "// Personal Sofia config owned by me.\n";
 const LEGACY_CONTENT = `${LEGACY_HEADER}{
   "mcp": {
     "sofia-cloud": {
@@ -38,7 +38,7 @@ const LEGACY_CONTENT = `${LEGACY_HEADER}{
   "default_agent": "sofia",
   "plugin": [
     "./plugins/my-plugin.js",
-    "/Users/example/.local/share/opencode-plugins/sofia-extensions-preview/index.js"
+    "/Users/example/.local/share/engine-plugins/sofia-extensions-preview/index.js"
   ]
 }
 `;
@@ -68,7 +68,7 @@ function assertDevDataPath(ctx, path) {
 }
 
 function legacyConfigPath(ctx) {
-  return assertDevDataPath(ctx, join(devDataRoot(), "home", ".config", "opencode", "opencode.jsonc"));
+  return assertDevDataPath(ctx, join(devDataRoot(), "home", ".config", "engine", "engine.jsonc"));
 }
 
 function runtimeStorageCandidates(ctx) {
@@ -249,7 +249,7 @@ async function seedLegacyConfig(ctx) {
   await clearLegacyBackups(ctx);
   await clearLegacySweepState(ctx);
   await writeFile(path, LEGACY_CONTENT, "utf8");
-  ctx.log(`Seeded legacy OpenCode config: ${path}`);
+  ctx.log(`Seeded legacy Sofia config: ${path}`);
   return path;
 }
 
@@ -385,13 +385,13 @@ function assertSweepState(ctx, state) {
 
 export default {
   id: FLOW_ID,
-  title: "Runtime config is owned by Sofia's managed file without mutating personal OpenCode config",
+  title: "Runtime config is owned by Sofia's managed file without mutating personal Sofia config",
   kind: "user-facing",
   steps: [
     {
       name: "Legacy ghosts are seeded only inside the dev-data home",
       run: async (ctx) => {
-        await ctx.prove("A realistic legacy OpenCode config can be isolated in the dev-data home before migration", {
+        await ctx.prove("A realistic legacy Sofia config can be isolated in the dev-data home before migration", {
           voiceover: vo[0],
           action: async () => {
             await ensureWorkspace(ctx);
@@ -471,7 +471,7 @@ export default {
             const personalAfter = await readFile(legacyConfigPath(ctx), "utf8");
             ctx.assert(
               sha256(personalAfter) === ctx.runtimeConfigOwnership.personalHashBeforeProviderToggle,
-              "Personal OpenCode config changed after disabling a provider.",
+              "Personal Sofia config changed after disabling a provider.",
             );
 
             const managedAfterRestart = await waitForNode(ctx, "managed file after restart", async () => {
@@ -513,7 +513,7 @@ export default {
             ctx.assert(bodyText.includes(CARD_TITLE), "Debug card title is not visible.");
             ctx.assert(bodyText.includes(CARD_RULE), "Debug card did not show the one-writer rule.");
             ctx.assert(bodyText.includes("Managed file:"), "Debug card did not show the managed file path label.");
-            ctx.assert(bodyText.includes("runtime-opencode-config.json"), "Debug card did not show the managed file path fragment.");
+            ctx.assert(bodyText.includes("runtime-engine-config.json"), "Debug card did not show the managed file path fragment.");
             ctx.assert(bodyText.includes("Last rebuilt:") && !bodyText.includes("Last rebuilt: missing"), "Debug card did not show a rebuilt timestamp.");
             ctx.assert(bodyText.includes(REDACTED_CONTENT_VISIBLE_LABEL), "Debug card did not show the redacted content disclosure.");
             ctx.assert(bodyText.includes("disabled_providers"), "Expanded redacted content did not show the managed file body.");
@@ -523,7 +523,7 @@ export default {
           },
           screenshot: {
             name: "debug-card-managed-runtime-config-story",
-            requireText: [CARD_TITLE, "Managed file:", "runtime-opencode-config.json", REDACTED_CONTENT_VISIBLE_LABEL],
+            requireText: [CARD_TITLE, "Managed file:", "runtime-engine-config.json", REDACTED_CONTENT_VISIBLE_LABEL],
             hashIncludes: "/settings/debug",
           },
         });

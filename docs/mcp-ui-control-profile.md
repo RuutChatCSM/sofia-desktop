@@ -11,7 +11,7 @@ Sofia takes a different approach: the app itself tells you what actions are avai
 This means:
 
 - **HandsFree** can drive Sofia sessions, composer, navigation, and transcript without guessing pixels.
-- **OpenCode** can automate Sofia as part of a larger coding workflow.
+- **Sofia** can automate Sofia as part of a larger coding workflow.
 - **Claude Desktop, Codex, Cursor**, or any MCP-compatible tool can add Sofia control with a single config line.
 - Your own app can do the same.
 
@@ -65,9 +65,9 @@ npx sofia-ui-mcp
 
 > The package is [`sofia-ui-mcp` on npm](https://www.npmjs.com/package/sofia-ui-mcp).
 
-## Add to OpenCode
+## Add to Sofia
 
-Add the MCP server to your workspace or global `opencode.json`:
+Add the MCP server to your workspace or global `engine.json`:
 
 ```json
 {
@@ -242,7 +242,7 @@ The exact list depends on the current Sofia route and state. Common actions incl
 ┌─────────────┐     MCP stdio      ┌──────────────────┐     HTTP localhost     ┌──────────────┐
 │  MCP client  │ ←────────────────→ │  sofia-ui-mcp │ ←───────────────────→ │  Sofia app │
 │  (HandsFree, │                    │  (Node.js)       │                       │  (Electron)   │
-│   OpenCode,  │                    │                  │                       │               │
+│   Sofia,  │                    │                  │                       │               │
 │   Codex)     │                    └──────────────────┘                       └──────────────┘
 └─────────────┘
 ```

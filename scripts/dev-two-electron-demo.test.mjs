@@ -118,7 +118,7 @@ test("points each Electron instance at its own profile folders", async context =
   assert.equal(adminEnv.XDG_CACHE_HOME, run.admin.cacheHome);
   assert.equal(adminEnv.XDG_STATE_HOME, run.admin.stateHome);
   assert.equal(adminEnv.SOFIA_ENV_STORE, run.admin.envStorePath);
-  assert.equal(adminEnv.OPENCODE_CONFIG_DIR, run.admin.opencodeConfigDir);
+  assert.equal(adminEnv.SOFIA_ENGINE_CONFIG_DIR, run.admin.engineConfigDir);
   assert.equal(adminEnv.APPDATA, run.admin.appDataDir);
   assert.equal(adminEnv.LOCALAPPDATA, run.admin.localAppDataDir);
   assert.equal(adminEnv.SOFIA_DEV_MODE, "1");
@@ -137,5 +137,5 @@ test("points each Electron instance at its own profile folders", async context =
   assert.notEqual(adminEnv.HOME, consumerEnv.HOME);
   assert.notEqual(adminEnv.XDG_CONFIG_HOME, consumerEnv.XDG_CONFIG_HOME);
   assert.notEqual(adminEnv.SOFIA_ENV_STORE, consumerEnv.SOFIA_ENV_STORE);
-  assert.notEqual(adminEnv.OPENCODE_CONFIG_DIR, consumerEnv.OPENCODE_CONFIG_DIR);
+  assert.notEqual(adminEnv.SOFIA_ENGINE_CONFIG_DIR, consumerEnv.SOFIA_ENGINE_CONFIG_DIR);
 });

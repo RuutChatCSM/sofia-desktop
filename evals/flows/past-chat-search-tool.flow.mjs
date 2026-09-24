@@ -108,7 +108,7 @@ function startMockSofiaServer() {
 
 async function runInjectedSessionTools(baseUrl) {
   const script = `
-    const { SofiaExtensionsPreview } = await import("./apps/server/src/opencode-plugins/sofia-extensions-preview.ts");
+    const { SofiaExtensionsPreview } = await import("./apps/server/src/engine-plugins/sofia-extensions-preview.ts");
     const plugin = await SofiaExtensionsPreview();
     const search = JSON.parse(await plugin.tool.sofia_query.execute({ id: "session.search", args: { query: "raven launch", limit: 5, scanLimit: 10 } }));
     const read = JSON.parse(await plugin.tool.sofia_query.execute({ id: "session.read", args: { sessionId: "ses_archive", count: 2 } }));

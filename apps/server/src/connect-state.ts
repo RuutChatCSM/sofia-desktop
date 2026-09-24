@@ -13,9 +13,9 @@ import { googleWorkspaceLegacyConfigured } from "./extensions/google-workspace.j
 import { readBoundedRegularTextFile } from "./jsonc.js";
 import { runtimeStorageDir } from "./runtime-db.js";
 import {
-  inspectRuntimeOpencodeConfigState,
+  inspectRuntimeWorkspaceEngineConfigState,
   runtimeMcpMap,
-} from "./runtime-opencode-config-store.js";
+} from "./runtime-engine-config-store.js";
 import type { ServerConfig, WorkspaceInfo } from "./types.js";
 import { ensureDir } from "./utils.js";
 
@@ -23,7 +23,7 @@ const CONNECT_STATE_FILE = "connect-state.json";
 const CONNECT_STATE_MAX_BYTES = 16 * 1024;
 const CONNECT_SNAPSHOT_MAX_RUNTIME_ROWS = 100;
 const SOFIA_CLOUD_MCP_NAME = "sofia-cloud";
-type WorkspaceOpencodeClient = WorkspaceEngineClient;
+type WorkspaceWorkspaceEngineClient = WorkspaceEngineClient;
 
 type PersistedConnectState = {
   connectEnabled: boolean;
@@ -66,8 +66,8 @@ export type ConnectSnapshotOptions = {
   directory?: string;
   providerModel?: CloudMcpProviderModelContext;
   serverMetadata?: CloudMcpServerMetadata;
-  resolveOpencodeDirectory?: (workspace: WorkspaceInfo) => string | null;
-  createWorkspaceOpencodeClient?: (config: ServerConfig, workspace: WorkspaceInfo) => WorkspaceOpencodeClient;
+  resolveWorkspaceEngineDirectory?: (workspace: WorkspaceInfo) => string | null;
+  createWorkspaceWorkspaceEngineClient?: (config: ServerConfig, workspace: WorkspaceInfo) => WorkspaceWorkspaceEngineClient;
   refreshRegistrationFromLiveStatus?: CloudMcpLiveStatusObserver;
 };
 
@@ -200,8 +200,8 @@ function normalizeDirectory(directory: string): string {
   return directory.trim().replace(/[\/]+$/, "");
 }
 
-function workspaceDirectory(workspace: WorkspaceInfo, resolveOpencodeDirectory?: (workspace: WorkspaceInfo) => string | null): string | null {
-  return resolveOpencodeDirectory?.(workspace) ?? (workspace.workspaceType === "local" ? workspace.path : workspace.directory ?? null);
+function workspaceDirectory(workspace: WorkspaceInfo, resolveWorkspaceEngineDirectory?: (workspace: WorkspaceInfo) => string | null): string | null {
+  return resolveWorkspaceEngineDirectory?.(workspace) ?? (workspace.workspaceType === "local" ? workspace.path : workspace.directory ?? null);
 }
 
 export function resolveConnectWorkspace(config: ServerConfig, options: ConnectSnapshotOptions): { workspace: WorkspaceInfo; directory: string | null } | { resolution: "unknown" | "ambiguous"; directory: string | null; reason: string } {
@@ -212,18 +212,18 @@ export function resolveConnectWorkspace(config: ServerConfig, options: ConnectSn
     if (!workspace) {
       return { resolution: "unknown", directory: requestedDirectory ? normalizeDirectory(requestedDirectory) : null, reason: `Workspace ${workspaceId} was not found` };
     }
-    return { workspace, directory: workspaceDirectory(workspace, options.resolveOpencodeDirectory) };
+    return { workspace, directory: workspaceDirectory(workspace, options.resolveWorkspaceEngineDirectory) };
   }
 
   if (requestedDirectory) {
     const normalizedRequested = normalizeDirectory(requestedDirectory);
     const matches = config.workspaces.filter((workspace) => {
-      const directory = workspaceDirectory(workspace, options.resolveOpencodeDirectory);
+      const directory = workspaceDirectory(workspace, options.resolveWorkspaceEngineDirectory);
       return directory !== null && normalizeDirectory(directory) === normalizedRequested;
     });
     if (matches.length === 1) {
       const workspace = matches[0];
-      if (workspace) return { workspace, directory: workspaceDirectory(workspace, options.resolveOpencodeDirectory) };
+      if (workspace) return { workspace, directory: workspaceDirectory(workspace, options.resolveWorkspaceEngineDirectory) };
     }
     if (matches.length > 1) {
       return { resolution: "ambiguous", directory: normalizedRequested, reason: "Multiple workspaces have this exact Sofia engine directory" };
@@ -233,7 +233,7 @@ export function resolveConnectWorkspace(config: ServerConfig, options: ConnectSn
 
   const only = config.workspaces[0];
   if (config.workspaces.length === 1 && only) {
-    return { workspace: only, directory: workspaceDirectory(only, options.resolveOpencodeDirectory) };
+    return { workspace: only, directory: workspaceDirectory(only, options.resolveWorkspaceEngineDirectory) };
   }
   return { resolution: "unknown", directory: null, reason: "Workspace id or exact directory is required when multiple workspaces are configured" };
 }
@@ -251,7 +251,7 @@ async function resolveCloudHealth(config: ServerConfig, options: ConnectSnapshot
       },
     };
   }
-  if (!options.createWorkspaceOpencodeClient) {
+  if (!options.createWorkspaceWorkspaceEngineClient) {
     return {
       cloudHealth: null,
       workspace: {
@@ -269,7 +269,7 @@ async function resolveCloudHealth(config: ServerConfig, options: ConnectSnapshot
     providerModel: options.providerModel,
     serverMetadata: options.serverMetadata,
     probe: false,
-    createWorkspaceOpencodeClient: options.createWorkspaceOpencodeClient,
+    createWorkspaceWorkspaceEngineClient: options.createWorkspaceWorkspaceEngineClient,
     refreshRegistrationFromLiveStatus: options.refreshRegistrationFromLiveStatus,
   });
   return {
@@ -358,7 +358,7 @@ async function inspectConnectRuntime(
     }
     inspectedRows += 1;
 
-    const inspection = await inspectRuntimeOpencodeConfigState(config, workspace.id, {
+    const inspection = await inspectRuntimeWorkspaceEngineConfigState(config, workspace.id, {
       maxBytes: options?.runtimeConfigMaxBytes,
       signal: options?.signal,
     });

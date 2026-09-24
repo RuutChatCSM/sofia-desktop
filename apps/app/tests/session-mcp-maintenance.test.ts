@@ -406,7 +406,7 @@ describe("session MCP maintenance", () => {
           events.push(`remove:${workspaceId}:${name}`);
         },
       },
-      opencodeClient: {
+      engineClient: {
         mcp: {
           disconnect: async (input) => {
             events.push(`disconnect:${input.directory}:${input.name}`);

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { createSofiaServerClient } from "../src/app/lib/sofia-server";
-import { createClient } from "../src/app/lib/opencode";
+import { createClient } from "../src/app/lib/engine";
 import type { ProviderListItem, WorkspaceDisplay } from "../src/app/types";
 import { createProviderAuthStore } from "../src/react-app/domains/connections/provider-auth/store";
 
@@ -110,7 +110,7 @@ function installCloudSession(storage: Storage) {
 function createProviderAuthTestStore(
   configCapabilities: { read: boolean; write: boolean; providerSync?: boolean } = { read: true, write: true },
 ) {
-  const opencodeClient = createClient("https://engine.example", "/tmp/workspace_test", {
+  const engineClient = createClient("https://engine.example", "/tmp/workspace_test", {
     token: "engine-token",
     mode: "sofia",
   }, (input, init) => globalThis.fetch(input, init));
@@ -133,7 +133,7 @@ function createProviderAuthTestStore(
   let reloadCount = 0;
 
   const store = createProviderAuthStore({
-    client: () => opencodeClient,
+    client: () => engineClient,
     providers: () => providers,
     providerDefaults: () => providerDefaults,
     providerConnectedIds: () => providerConnectedIds,
@@ -166,7 +166,7 @@ function createProviderAuthTestStore(
     setDisabledProviders: (value) => {
       disabledProviders = value;
     },
-    markOpencodeConfigReloadRequired: () => {
+    markWorkspaceEngineConfigReloadRequired: () => {
       reloadCount += 1;
     },
   });
@@ -206,7 +206,7 @@ function installProviderSyncFetch(
         return jsonResponse({ llmProvider: cloudProviderPayload(options) });
       }
       if (url.origin === "https://server.example" && url.pathname === "/workspace/ws_1/config" && method === "GET") {
-        return jsonResponse({ opencode: {}, sofia: {} });
+        return jsonResponse({ engine: {}, sofia: {} });
       }
       if (url.origin === "https://server.example" && url.pathname === "/den-session" && method === "PUT") {
         return new Response(null, { status: 204 });
@@ -268,7 +268,7 @@ function installProviderSyncFetch(
           return jsonResponse({ openai: [] });
         }
         if (url.pathname.endsWith("/config")) {
-          return method === "GET" ? jsonResponse({ opencode: {} }) : jsonResponse({ updatedAt: 1 });
+          return method === "GET" ? jsonResponse({ engine: {} }) : jsonResponse({ updatedAt: 1 });
         }
         return jsonResponse({});
       }
@@ -330,7 +330,7 @@ describe("cloud provider sync in gateway mode", () => {
     expect(requests.some((request) => request.url === "https://den.example/api/den/v1/llm-providers")).toBe(true);
     expect(requests.some((request) => request.url === "https://den.example/api/den/v1/llm-providers/lpr_test/connect")).toBe(true);
     expect(patchRequests).toHaveLength(1);
-    expect(patchRequests[0]?.body).toContain("\"opencode\"");
+    expect(patchRequests[0]?.body).toContain("\"engine\"");
     expect(store.getSnapshot().importedCloudProviders.lpr_test?.providerId).toBe("lpr_test");
     expect(store.getSnapshot().providerAuthError).toBeNull();
     expect(reloadCount()).toBe(0);

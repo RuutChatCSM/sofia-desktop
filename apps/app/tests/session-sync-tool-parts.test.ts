@@ -125,7 +125,7 @@ describe("tool part mapper", () => {
     };
 
     expect(parseDynamicToolUIPart(part)?.callProviderMetadata).toEqual({
-      opencode: { partId: "part-write" },
+      engine: { partId: "part-write" },
       sofia: {
         mcpResult: {
           content: [{ type: "text", text: "Fallback" }],

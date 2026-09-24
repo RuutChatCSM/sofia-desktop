@@ -29,7 +29,7 @@ describe("ensureWorkspaceFiles", () => {
       await expect(
         readFile(join(root, ".sofia", "sofia.json"), "utf8"),
       ).rejects.toThrow();
-      await expect(readFile(join(root, "opencode.jsonc"), "utf8")).rejects.toThrow();
+      await expect(readFile(join(root, "engine.jsonc"), "utf8")).rejects.toThrow();
       expect(result.reloadReasons).toEqual([]);
 
       const secondResult = await ensureWorkspaceFiles(root, "starter");
@@ -75,7 +75,7 @@ describe("ensureWorkspaceFiles", () => {
   test("uses shipped extension preview plugin", async () => {
     const pluginPath = sofiaExtensionsPreviewPluginPath();
     const plugin = await readFile(pluginPath, "utf8");
-    expect(pluginPath).toContain(join("opencode-plugins", "sofia-extensions-preview.ts"));
+    expect(pluginPath).toContain(join("engine-plugins", "sofia-extensions-preview.ts"));
     expect(plugin).toContain("sofia_execute");
   });
 
@@ -89,7 +89,7 @@ describe("ensureWorkspaceFiles", () => {
         join(resourcesPath, "app.asar", "server", "dist"),
       );
 
-      expect(pluginPath).toBe(join(resourcesPath, "opencode-plugins", "sofia-extensions-preview.js"));
+      expect(pluginPath).toBe(join(resourcesPath, "engine-plugins", "sofia-extensions-preview.js"));
       expect(pluginPath).not.toContain("app.asar");
     } finally {
       if (previousResourcesPath) {
@@ -119,12 +119,12 @@ describe("ensureWorkspaceFiles", () => {
     });
   });
 
-  test("does not rewrite an existing valid opencode config", async () => {
+  test("does not rewrite an existing valid engine config", async () => {
     await withWorkspace(async (root) => {
-      const configPath = join(root, "opencode.jsonc");
+      const configPath = join(root, "engine.jsonc");
       const config = `{
   // User formatting should survive routine workspace resolution.
-  "$schema": "https://opencode.ai/config.json",
+  "$schema": "https://github.com/RuutChatCSM/sofia/config.json",
   "default_agent": "custom"
 }
 `;
@@ -137,12 +137,12 @@ describe("ensureWorkspaceFiles", () => {
     });
   });
 
-  test("does not add a default agent to an existing valid opencode config", async () => {
+  test("does not add a default agent to an existing valid engine config", async () => {
     await withWorkspace(async (root) => {
-      const configPath = join(root, "opencode.jsonc");
+      const configPath = join(root, "engine.jsonc");
       const config = `{
   // Existing project configs must not trigger reload events on route reads.
-  "$schema": "https://opencode.ai/config.json"
+  "$schema": "https://github.com/RuutChatCSM/sofia/config.json"
 }
 `;
       await writeFile(configPath, config, "utf8");
@@ -154,13 +154,13 @@ describe("ensureWorkspaceFiles", () => {
     });
   });
 
-  test("does not repair or inject into desktop-created schema-only opencode config", async () => {
+  test("does not repair or inject into desktop-created schema-only engine config", async () => {
     await withWorkspace(async (root) => {
       await mkdir(join(root, ".sofia"), { recursive: true });
       await writeFile(join(root, ".sofia", "sofia.json"), "{}\n", "utf8");
-      const configPath = join(root, "opencode.jsonc");
+      const configPath = join(root, "engine.jsonc");
       await writeFile(configPath, `{
-  "$schema": "https://opencode.ai/config.json"
+  "$schema": "https://github.com/RuutChatCSM/sofia/config.json"
 }
 `, "utf8");
 
@@ -168,7 +168,7 @@ describe("ensureWorkspaceFiles", () => {
       const config = await readFile(configPath, "utf8");
 
       expect(config).toBe(`{
-  "$schema": "https://opencode.ai/config.json"
+  "$schema": "https://github.com/RuutChatCSM/sofia/config.json"
 }
 `);
       expect(result.reloadReasons).not.toContain("config");

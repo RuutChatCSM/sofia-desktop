@@ -2,7 +2,7 @@
  * The Headless Threads contract.
  *
  * A "thread" is a native Sofia session: the same workspace, the same
- * managed OpenCode engine, the same session id, the same persisted messages
+ * managed Sofia engine, the same session id, the same persisted messages
  * and tool activity the desktop UI shows. Nothing here introduces a second
  * chat engine, a second session store, or a second model gateway — the types
  * below only describe the session surface Sofia already serves.
@@ -74,7 +74,7 @@ export interface CreateThreadInput {
 
 export interface HeadlessThread {
   /**
-   * The native OpenCode session id. It is the same id the Sofia UI uses,
+   * The native Sofia session id. It is the same id the Sofia UI uses,
    * so a headless thread can be opened in the app afterwards.
    */
   id: string;

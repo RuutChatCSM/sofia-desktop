@@ -101,7 +101,7 @@ class HarnessOAuthProvider implements OAuthClientProvider {
   readonly redirectUrl = REDIRECT_URI
   readonly clientMetadata = {
     redirect_uris: [REDIRECT_URI],
-    client_name: "OpenCode MCP refresh lifecycle harness",
+    client_name: "Sofia MCP refresh lifecycle harness",
     grant_types: ["authorization_code", "refresh_token"],
     response_types: ["code"],
     token_endpoint_auth_method: "none",
@@ -410,7 +410,7 @@ async function connectMcpClient(provider: HarnessOAuthProvider, fetchImpl: typeo
     authProvider: provider,
     fetch: fetchImpl,
   })
-  const client = new Client({ name: "opencode-refresh-harness", version: "0.0.0" }, { capabilities: {} })
+  const client = new Client({ name: "engine-refresh-harness", version: "0.0.0" }, { capabilities: {} })
   await client.connect(transport)
   return { client, transport }
 }

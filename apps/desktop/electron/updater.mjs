@@ -472,7 +472,11 @@ export function registerUpdaterIpc({
   }
 
   ipcMain.handle("sofia:recovery:recordHealthy", async () => {
-    return recordHealthyVersion(app, distribution, resolveAppVersion(app));
+    const version = resolveAppVersion(app);
+    // Dev and prerelease builds have no stable release to mark healthy;
+    // recording one would poison the rollback markers.
+    if (!stableVersion(version)) return null;
+    return recordHealthyVersion(app, distribution, version);
   });
 
   ipcMain.handle("sofia:recovery:list", async (_event, policy = {}) => {

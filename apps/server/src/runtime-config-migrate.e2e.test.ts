@@ -5,7 +5,7 @@ import { join } from "node:path";
 
 import { startServer } from "./server.js";
 import type { ServerConfig } from "./types.js";
-import { readRuntimeOpencodeConfig } from "./runtime-opencode-config-store.js";
+import { readRuntimeWorkspaceEngineConfig } from "./runtime-engine-config-store.js";
 
 type Served = {
   port: number;
@@ -83,12 +83,12 @@ afterEach(async () => {
 });
 
 describe("runtime-config migrate route", () => {
-  test("ignores a legacy project opencode.jsonc on the migrate route", async () => {
+  test("ignores a legacy project engine.jsonc on the migrate route", async () => {
     const workspaceRoot = await createTempRoot("sofia-runtime-migrate-");
     await writeFile(
-      join(workspaceRoot, "opencode.jsonc"),
+      join(workspaceRoot, "engine.jsonc"),
       JSON.stringify({
-        $schema: "https://opencode.ai/config.json",
+        $schema: "https://github.com/RuutChatCSM/sofia/config.json",
         mcp: {
           "nova-mail": { type: "remote", url: "https://example.com/mcp/mail", enabled: true },
         },
@@ -105,15 +105,15 @@ describe("runtime-config migrate route", () => {
     expect(response.status).toBe(200);
 
     const body = asRecord(await response.json());
-    // Sofia no longer reads OpenCode config files, so there is nothing to lift.
+    // Sofia no longer reads Sofia config files, so there is nothing to lift.
     expect(body.migrated).toBe(false);
-    expect(body.userOpencodeKeys).toEqual([]);
+    expect(body.userWorkspaceEngineKeys).toEqual([]);
 
-    const runtime = await readRuntimeOpencodeConfig(config, "ws_1");
+    const runtime = await readRuntimeWorkspaceEngineConfig(config, "ws_1");
     expect(runtime.mcp).toBeUndefined();
 
     // The legacy file is left exactly as the user wrote it.
-    const parsed = asRecord(JSON.parse(await readFile(join(workspaceRoot, "opencode.jsonc"), "utf8")));
+    const parsed = asRecord(JSON.parse(await readFile(join(workspaceRoot, "engine.jsonc"), "utf8")));
     expect(asRecord(parsed.mcp)?.["nova-mail"]).toBeDefined();
   });
 });

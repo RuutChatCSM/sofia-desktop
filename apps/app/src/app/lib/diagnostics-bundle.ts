@@ -5,7 +5,7 @@ import {
   sofiaServerInfo,
   type AppBuildInfo,
   type EngineInfo,
-  type OpencodeExecutionSnapshot,
+  type WorkspaceEngineExecutionSnapshot,
   type SofiaServerInfo,
 } from "./desktop";
 import { readPerfLogs, type PerfLogRecord } from "./perf-log";
@@ -65,7 +65,7 @@ function pickAppInfo(info: AppBuildInfo | null) {
   };
 }
 
-function pickExecution(execution: OpencodeExecutionSnapshot | null): DiagnosticsExecution | null {
+function pickExecution(execution: WorkspaceEngineExecutionSnapshot | null): DiagnosticsExecution | null {
   if (!execution) return null;
   return {
     command: execution.command,
@@ -90,8 +90,8 @@ function pickEngineInfo(info: EngineInfo | null) {
     hostname: info.hostname,
     port: info.port,
     pid: info.pid,
-    opencodeBinPath: info.opencodeBinPath,
-    opencodeBinSource: info.opencodeBinSource,
+    engineBinPath: info.engineBinPath,
+    engineBinSource: info.engineBinSource,
     lastStdout: info.lastStdout,
     lastStderr: info.lastStderr,
     execution: pickExecution(info.execution),
@@ -129,7 +129,7 @@ function collectSecretValues(input: DiagnosticsBundleInputs) {
   addSecretValue(secrets, input.hostInfo?.clientToken);
   addSecretValue(secrets, input.hostInfo?.ownerToken);
   addSecretValue(secrets, input.hostInfo?.hostToken);
-  addSecretValue(secrets, input.engineInfo?.opencodePassword);
+  addSecretValue(secrets, input.engineInfo?.enginePassword);
   return secrets;
 }
 
@@ -151,7 +151,7 @@ export function composeDiagnosticsBundleJson(input: DiagnosticsBundleInputs): st
   const bundle = {
     capturedAt: input.capturedAt,
     app: pickAppInfo(input.appInfo),
-    opencodeEngine: pickEngineInfo(input.engineInfo),
+    engine: pickEngineInfo(input.engineInfo),
     runtime: {
       tauri: input.desktopRuntime,
       developerMode: context?.developerMode === true,

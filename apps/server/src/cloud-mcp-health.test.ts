@@ -20,7 +20,7 @@ import type {
 } from "./engine/workspace-engine-client.js";
 import { sanitizeDiagnosticValue } from "./diagnostic-sanitizer.js";
 import { diagnoseMcpToolDeniesFromConfigs } from "./mcp.js";
-import { writeRuntimeOpencodeConfig } from "./runtime-opencode-config-store.js";
+import { writeRuntimeWorkspaceEngineConfig } from "./runtime-engine-config-store.js";
 import type { ServerConfig, WorkspaceInfo } from "./types.js";
 
 const workspace: WorkspaceInfo = {
@@ -50,7 +50,7 @@ afterEach(async () => {
   while (stops.length) stops.pop()?.();
   while (roots.length) await rm(roots.pop() ?? "", { recursive: true, force: true });
   if (process.platform === "win32") {
-    // Bun keeps runtime-opencode-config-store SQLite handles open for the process lifetime on Windows.
+    // Bun keeps runtime-engine-config-store SQLite handles open for the process lifetime on Windows.
     // Skip only those DB temp dirs; workspace roots and mock servers are still cleaned every test.
     runtimeDbRoots.length = 0;
   } else {
@@ -105,7 +105,7 @@ function requestBarrier() {
   };
 }
 
-function startMockOpencode(initialMode: DirectProbeMode) {
+function startMockWorkspaceEngine(initialMode: DirectProbeMode) {
   let mode = initialMode;
   let toolIdsBarrier: ReturnType<typeof requestBarrier> | null = null;
   let initializeBarrier: ReturnType<typeof requestBarrier> | null = null;
@@ -309,7 +309,7 @@ function serverConfig(root: string, testWorkspace: WorkspaceInfo): ServerConfig 
 }
 
 async function setupDirectProbeHarness(mode: DirectProbeMode, workspaceIds = ["ws_probe"]) {
-  const engine = startMockOpencode(mode);
+  const engine = startMockWorkspaceEngine(mode);
   const baseUrl = `http://127.0.0.1:${engine.server.port}`;
   const workspaces: WorkspaceInfo[] = [];
   for (const id of workspaceIds) {
@@ -338,7 +338,7 @@ async function setupDirectProbeHarness(mode: DirectProbeMode, workspaceIds = ["w
     oauth: false,
   };
   for (const testWorkspace of workspaces) {
-    await writeRuntimeOpencodeConfig(config, testWorkspace.id, (current) => ({
+    await writeRuntimeWorkspaceEngineConfig(config, testWorkspace.id, (current) => ({
       ...current,
       mcp: {
         ...current.mcp,
@@ -355,7 +355,7 @@ async function setupDirectProbeHarness(mode: DirectProbeMode, workspaceIds = ["w
       directory: testWorkspace.path,
       providerModel,
       probe: true,
-      createWorkspaceOpencodeClient: () => createMockEngineClient(baseUrl),
+      createWorkspaceWorkspaceEngineClient: () => createMockEngineClient(baseUrl),
     });
   };
   return { ...engine, config, desiredConfig, directUrl, primary, read, workspaces };
@@ -368,7 +368,7 @@ async function readHealthForDirectProbe(mode: DirectProbeMode, options: ReadHeal
     config: harness.config,
     workspace: harness.primary,
     directory: harness.primary.path,
-    createWorkspaceOpencodeClient: () => createMockEngineClient(`http://127.0.0.1:${harness.server.port}`),
+    createWorkspaceWorkspaceEngineClient: () => createMockEngineClient(`http://127.0.0.1:${harness.server.port}`),
   });
   return { health, directUrl: harness.directUrl };
 }
@@ -620,7 +620,7 @@ describe("cloud MCP health foundation", () => {
       ...harness.desiredConfig,
       headers: { Authorization: "Bearer owt_health_cloud_token_changed" },
     };
-    await writeRuntimeOpencodeConfig(harness.config, workspaceA.id, (current) => ({
+    await writeRuntimeWorkspaceEngineConfig(harness.config, workspaceA.id, (current) => ({
       ...current,
       mcp: { ...current.mcp, "sofia-cloud": changedConfig },
     }));
@@ -715,8 +715,8 @@ describe("cloud MCP health foundation", () => {
     expect(health.engineInspection.cloudPresent).toBe(true);
     expect(health.engineInspection.serverCount).toBe(2);
     expect(health.engineInspection.servers).toEqual([
-      { name: "sofia-cloud", status: "connected" },
       { name: "sibling-remote", status: "failed", error: "fetch failed" },
+      { name: "sofia-cloud", status: "connected" },
     ]);
   });
 

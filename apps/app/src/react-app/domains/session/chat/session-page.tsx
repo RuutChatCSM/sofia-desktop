@@ -170,12 +170,12 @@ export type SessionPageSidebarProps = {
 
 export type SessionPageSurfaceProps = Omit<
   SessionSurfaceProps,
-  "client" | "workspaceId" | "sessionId" | "opencodeBaseUrl" | "sofiaToken" | "isControlTarget"
+  "client" | "workspaceId" | "sessionId" | "engineBaseUrl" | "sofiaToken" | "isControlTarget"
 >;
 
 /**
  * Sofia engine surface handed down from the session route when the selected
- * engine is codex. When present, codex sessions replace opencode sessions in
+ * engine is codex. When present, codex sessions replace engine sessions in
  * the sidebar and surface.
  */
 export type SessionPageCodexEngine = {
@@ -204,11 +204,11 @@ export type SessionPageProps = {
   selectedWorkspaceError?: string | null;
   runtimeWorkspaceId: string | null;
   /**
-   * Pre-built OpenCode SDK base URL for the selected workspace's owning
+   * Pre-built Sofia SDK base URL for the selected workspace's owning
    * server. The parent route resolves this through `resolveWorkspaceEndpoint`
-   * so we never compose `<baseUrl>/workspace/<id>/opencode` here.
+   * so we never compose `<baseUrl>/workspace/<id>/engine` here.
    */
-  opencodeBaseUrl?: string | null;
+  engineBaseUrl?: string | null;
   workspaces: WorkspaceInfo[];
   clientConnected: boolean;
   sofiaServerStatus: SofiaServerStatus;
@@ -216,7 +216,7 @@ export type SessionPageProps = {
   environmentClient?: SofiaServerClient | null;
   sofiaServerToken?: string | null;
   developerMode: boolean;
-  /** When the selected engine is codex, codex sessions replace opencode sessions. */
+  /** When the selected engine is codex, codex sessions replace engine sessions. */
   codexEngine?: SessionPageCodexEngine | null;
   headerStatus: string;
   busyHint: string | null;
@@ -858,7 +858,7 @@ export function SessionPage(props: SessionPageProps) {
       ? "Remote workspace unavailable"
       : "Engine unavailable";
 
-  const reactSessionBaseUrl = props.opencodeBaseUrl?.trim() ?? "";
+  const reactSessionBaseUrl = props.engineBaseUrl?.trim() ?? "";
   const reactSessionToken =
     props.sofiaServerToken?.trim() ||
     props.sofiaServerClient?.token?.trim() ||
@@ -1032,7 +1032,9 @@ export function SessionPage(props: SessionPageProps) {
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-[radial-gradient(circle_at_top,rgba(74,111,255,0.12),transparent_42%),var(--app-bg,#0b1020)] text-dls-text max-lg:pt-[env(safe-area-inset-top)] mac:bg-transparent">
+    <div 
+    className="flex h-full min-h-0 flex-col bg-[radial-gradient(circle_at_top,rgba(74,111,255,0.12),transparent_42%),var(--app-bg,#0b1020)] text-dls-text max-lg:pt-[env(safe-area-inset-top)] mac:bg-transparent "
+    >
       <SidebarProvider
         open={sidebarOpen}
         onOpenChange={setSidebarOpen}
@@ -1109,7 +1111,8 @@ export function SessionPage(props: SessionPageProps) {
             onSendFeedback: props.onSendFeedback,
           }}
         />
-        <SidebarInset className="min-h-0 overflow-hidden bg-sidebar mac:bg-transparent mac:[&_header]:transition-[padding-left] mac:[&_header]:duration-200 mac:[&_header]:ease-linear mac:peer-data-[state=collapsed]:[&_header]:pl-34 mac:max-md:[&_header]:pl-34">
+        <SidebarInset className="min-h-0 overflow-hidden bg-sidebar mac:bg-transparent mac:[&_header]:transition-[padding-left] mac:[&_header]:duration-200 mac:[&_header]:ease-linear mac:peer-data-[state=collapsed]:[&_header]:pl-34 mac:max-md:[&_header]:pl-34"
+        >
           <div className="flex min-h-0 flex-1 max-lg:p-0 lg:py-2 lg:pl-2">
           <ResizablePanelGroup
             orientation="horizontal"
@@ -1118,10 +1121,10 @@ export function SessionPage(props: SessionPageProps) {
           >
             <ResizablePanel minSize={isMobile ? "0px" : "360px"} className="min-w-0">
               <main className="flex h-full min-w-0 flex-col overflow-hidden bg-dls-surface max-lg:rounded-none max-lg:border-0 max-lg:shadow-none lg:rounded-[14px] lg:border lg:border-border lg:shadow-[0_8px_24px_rgba(15,23,42,0.06)] dark:lg:shadow-[0_10px_30px_rgba(0,0,0,0.45)] mac:bg-dls-surface/85 mac:backdrop-blur-2xl mac:backdrop-saturate-150">
-          <header className="z-10 flex h-9 shrink-0 items-center justify-between border-b border-border px-3 max-lg:h-12 lg:px-6 mac:titlebar-drag  mac:backdrop-blur-2xl mac:backdrop-saturate-150 @container/titlebar">
+          <header className="sofia-task-header z-10 flex h-11 shrink-0 items-center justify-between border-b border-border px-3 max-lg:h-12 lg:px-6 mac:titlebar-drag  mac:backdrop-blur-2xl mac:backdrop-saturate-150 @container/titlebar">
             <div className="flex min-w-0 items-center gap-3">
               {shellConfig.sidebar ? <SidebarTrigger className="mac:hidden" /> : null}
-              <h1 className="truncate text-[13px] font-medium text-dls-text">
+              <h1 className="truncate text-sm font-semibold text-dls-text">
                 {props.primaryTitle
                   ? props.primaryTitle
                   : props.mainContentTitle
@@ -1341,7 +1344,7 @@ export function SessionPage(props: SessionPageProps) {
                         // Spread `surface` first so the explicit per-workspace
                         // routing props below CAN'T be silently overridden by
                         // anything that leaks into `surface`. SessionSurface's
-                        // server target (client/workspaceId/sessionId/opencodeBaseUrl/sofiaToken)
+                        // server target (client/workspaceId/sessionId/engineBaseUrl/sofiaToken)
                         // must come from the resolved workspace endpoint passed by
                         // SessionRoute, not from anything in `surface`.
                         {...props.surface!}
@@ -1350,7 +1353,7 @@ export function SessionPage(props: SessionPageProps) {
                         workspaceId={props.runtimeWorkspaceId!}
                         sessionId={props.selectedSessionId!}
                         isControlTarget={activeWorkbenchPane === "primary"}
-                        opencodeBaseUrl={reactSessionBaseUrl}
+                        engineBaseUrl={reactSessionBaseUrl}
                         sofiaToken={reactSessionToken}
                         todos={props.todos}
                         activePermission={props.activePermission}
@@ -1381,7 +1384,7 @@ export function SessionPage(props: SessionPageProps) {
                             workspaceId={props.runtimeWorkspaceId!}
                             sessionId={splitSessionId!}
                             isControlTarget={activeWorkbenchPane === "secondary"}
-                            opencodeBaseUrl={reactSessionBaseUrl}
+                            engineBaseUrl={reactSessionBaseUrl}
                             sofiaToken={reactSessionToken}
                             todos={[]}
                             onOpenTarget={openTarget}

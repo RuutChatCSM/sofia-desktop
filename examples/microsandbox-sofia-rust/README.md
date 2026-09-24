@@ -40,7 +40,7 @@ The crate includes an ignored end-to-end smoke test that:
 - waits for `/health`
 - verifies unauthenticated `/workspaces` returns `401`
 - verifies authenticated `/workspaces` returns `200`
-- creates an OpenCode session through `/w/:workspaceId/opencode/session`
+- creates an Sofia session through `/w/:workspaceId/engine/session`
 - fetches the created session and its messages
 
 Run it explicitly:
@@ -57,7 +57,7 @@ By default, the example creates and reuses two host directories under `examples/
 - `/workspace`
 - `/data`
 
-That keeps Sofia and OpenCode state around across sandbox restarts, while using normal host filesystem semantics instead of managed microsandbox named volumes.
+That keeps Sofia and Sofia state around across sandbox restarts, while using normal host filesystem semantics instead of managed microsandbox named volumes.
 
 If you want a clean reset, either:
 

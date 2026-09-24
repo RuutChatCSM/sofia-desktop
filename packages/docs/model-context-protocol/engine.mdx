@@ -1,0 +1,84 @@
+---
+title: "Sofia MCP for Sofia"
+sidebarTitle: "Sofia"
+description: "Sofia MCP setup for Sofia Connect, Sofia's hosted MCP server for Gmail, Calendar, Drive, shared connections, skills, and Cloud resources."
+---
+
+The Sofia MCP server ([Sofia Connect](/cloud/run-in-the-cloud/cloud-mcp))
+enables Sofia to use the Sofia capabilities your organization has made
+available to you: Gmail read/search, Calendar list/create, Drive search/read,
+Gmail draft creation, shared MCP connections such as Notion, Linear, Slack,
+Stripe, Exa, and Context7, shared skills, and Sofia Cloud resources like
+skills, plugins, Collections, workers, members, roles, teams, and LLM
+providers. The server exposes only `search_capabilities` and
+`execute_capability`, so Sofia searches what you can access and runs exact
+capability names instead of loading hundreds of tool definitions into context.
+
+## Server URL
+
+```text
+https://sofia-api.ruut.chat/mcp/agent
+```
+
+OAuth sign-in uses your Sofia account, and the organization you pick is
+pinned into the token. If you do not have an account, create a
+[free Sofia account](https://sofia-app.ruut.chat?mode=sign-up).
+
+## Setup
+
+1. Add this MCP entry to your `engine.json` file:
+
+   ```json
+   {
+     "mcp": {
+       "sofia": {
+         "type": "remote",
+         "enabled": true,
+         "url": "https://sofia-api.ruut.chat/mcp/agent",
+         "oauth": {}
+       }
+     }
+   }
+   ```
+
+2. Authenticate the server:
+
+   ```sh
+   engine mcp auth sofia
+   ```
+
+3. Finish the browser sign-in, then choose the organization Sofia should use.
+
+If Sofia runs on a remote machine or SSH host, follow
+[Connect Sofia MCP from a remote machine](/cloud/run-in-the-cloud/connect-sofia-mcp-remote-machine).
+
+## Switch organizations
+
+Log out, then authenticate again and pick the organization you want in the
+browser:
+
+```sh
+engine mcp logout sofia
+engine mcp auth sofia
+```
+
+<Note>
+Sofia is the verified Sofia Connect client. Native remote MCP OAuth passed
+end-to-end implementation testing.
+</Note>
+
+## What you can ask
+
+- "Which Sofia organization am I connected to?"
+- "Add omar@example.com to my organization."
+- "Create a skill that writes weekly status reports and share it with my whole organization."
+- "Find the Q3 launch page in Notion and summarize it."
+
+## What's next
+
+- Read the [hub overview](/cloud/run-in-the-cloud/cloud-mcp) for OAuth, token,
+  server exposure, and troubleshooting details.
+- Publish Notion, Linear, Slack, and other shared tools with
+  [shared MCP connections](/cloud/share-with-your-team/shared-mcp-connections).
+- Connect from an SSH host with
+  [Sofia MCP on a remote machine](/cloud/run-in-the-cloud/connect-sofia-mcp-remote-machine).

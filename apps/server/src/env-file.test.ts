@@ -34,9 +34,9 @@ describe("env-file", () => {
     expect(isValidEnvKey("")).toBe(false);
   });
 
-  test("isReservedEnvKey blocks SOFIA_ / OPENCODE_ prefixes", () => {
+  test("isReservedEnvKey blocks SOFIA_ / SOFIA_ENGINE_ prefixes", () => {
     expect(isReservedEnvKey("SOFIA_TOKEN")).toBe(true);
-    expect(isReservedEnvKey("OPENCODE_SERVER_PASSWORD")).toBe(true);
+    expect(isReservedEnvKey("SOFIA_ENGINE_SERVER_PASSWORD")).toBe(true);
     expect(isReservedEnvKey("ANTHROPIC_API_KEY")).toBe(false);
     expect(isReservedEnvKey("GCLOUD_PROJECT")).toBe(false);
   });

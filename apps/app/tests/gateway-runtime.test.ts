@@ -309,7 +309,7 @@ describe("gateway runtime mode", () => {
     storage.setItem("sofia.den.authToken", "den-session-token");
     storage.setItem("sofia.server.token", "stale-instance-token");
 
-    expect(buildSofiaHealthHeaders("https://gw.example/opencode")).toEqual({
+    expect(buildSofiaHealthHeaders("https://gw.example/engine")).toEqual({
       Authorization: "Bearer den-session-token",
     });
   });
@@ -442,7 +442,7 @@ describe("non-gateway connection modes", () => {
     const storage = installWindow({ origin: "https://instance.example.com" });
     storage.setItem("sofia.server.token", "instance-token");
 
-    expect(buildSofiaHealthHeaders("https://instance.example.com/opencode")).toEqual({
+    expect(buildSofiaHealthHeaders("https://instance.example.com/engine")).toEqual({
       Authorization: "Bearer instance-token",
     });
   });

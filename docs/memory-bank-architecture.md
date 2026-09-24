@@ -221,7 +221,7 @@ Append a static, distinct `## Memory Bank` section to `SOFIA_AGENT_PROMPT`
 - **[DECISION, plaintext risk]** Instruct the agent to **not persist secrets,
   credentials, tokens, or sensitive PII** — this prompt guidance is the *only* v0
   mitigation for plaintext-at-rest (§8).
-- The copy-prompt button primes non-server harnesses (Claude Code, local opencode); on
+- The copy-prompt button primes non-server harnesses (Claude Code, local engine); on
   desktop server workspaces the prompt is already injected, so the button is a secondary
   cross-tool utility, not the first-run path.
 

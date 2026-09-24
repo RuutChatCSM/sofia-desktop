@@ -187,6 +187,28 @@ describe("recovery metadata and candidates", () => {
     }
   });
 
+  it("skips recording a healthy version for an unpackaged dev build", async () => {
+    const userData = await mkdtemp(path.join(os.tmpdir(), "sofia-recovery-dev-"));
+    const handlers = new Map();
+    isolatedUpdaterImportId += 1;
+    const isolated = await import(`./updater.mjs?dev-recovery=${isolatedUpdaterImportId}`);
+    try {
+      isolated.registerUpdaterIpc({
+        app: { isPackaged: false, getVersion: () => "0.0.0-dev", getPath: () => userData },
+        ipcMain: { handle: (name, handler) => handlers.set(name, handler) },
+        getMainWindow: () => null,
+      });
+
+      assert.equal(await handlers.get("sofia:recovery:recordHealthy")(), null);
+      await assert.rejects(
+        readFile(path.join(userData, "app-recovery.v1.json"), "utf8"),
+        { code: "ENOENT" },
+      );
+    } finally {
+      await rm(userData, { recursive: true, force: true });
+    }
+  });
+
   it("filters strict stable versions by minimum and fresh organization policy", async () => {
     const releases = await compatibleRecoveryReleases({
       versions: ["2.4.0", "2.3.1", "2.3.0-beta.1", "2.2.9", "https://invalid"],

@@ -1,6 +1,6 @@
 # Upstream provenance
 
-- Repository: https://github.com/anomalyco/opencode
+- Repository: https://github.com/RuutChatCSM/sofia
 - Branch: `dev`
 - Commit: `38e10eb`
 - Vendored: 2026-08-09

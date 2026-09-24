@@ -44,7 +44,7 @@ function harnessSource(): string {
 import { installCloudPlugin, readInstalledCloudPlugins } from ${JSON.stringify(moduleUrl("cloud-plugins.ts"))};
 import { readSofiaWorkspaceConfig, writeSofiaWorkspaceConfig } from ${JSON.stringify(moduleUrl("sofia-workspace-config-store.ts"))};
 import { openRuntimeSqliteDatabase, runtimeDbPath, runtimeStorageDir } from ${JSON.stringify(moduleUrl("runtime-db.ts"))};
-import { readRuntimeOpencodeConfig, writeRuntimeOpencodeConfig } from ${JSON.stringify(moduleUrl("runtime-opencode-config-store.ts"))};
+import { readRuntimeWorkspaceEngineConfig, writeRuntimeWorkspaceEngineConfig } from ${JSON.stringify(moduleUrl("runtime-engine-config-store.ts"))};
 import { readSessionGroupState, writeSessionGroupState } from ${JSON.stringify(moduleUrl("session-groups.ts"))};
 
 const mode = process.argv[2] ?? "";
@@ -86,7 +86,7 @@ async function writeSessionAndWorkspace(config) {
 }
 
 async function writeRuntimeAndCloud(config) {
-  await writeRuntimeOpencodeConfig(config, workspaceId, (current) => ({
+  await writeRuntimeWorkspaceEngineConfig(config, workspaceId, (current) => ({
     ...current,
     plugin: ["flow-runtime-plugin"],
     mcp: { flow: { type: "remote", url: "https://runtime-db-primitive.example/mcp" } },
@@ -115,7 +115,7 @@ async function readSessionAndWorkspace(config) {
 }
 
 async function readRuntimeAndCloud(config) {
-  const runtime = await readRuntimeOpencodeConfig(config, workspaceId);
+  const runtime = await readRuntimeWorkspaceEngineConfig(config, workspaceId);
   const cloud = await readInstalledCloudPlugins(config, workspaceId);
   return {
     runtimePlugin: runtime.plugin?.[0] ?? null,
@@ -149,7 +149,7 @@ if (mode === "paths") {
   print({ mode, ...(await readSessionAndWorkspace(config)) });
 } else if (mode === "write-runtime-cloud") {
   await writeRuntimeAndCloud(config);
-  print({ mode, wrote: ["runtime_opencode_configs", "cloud_plugin_install_configs"] });
+  print({ mode, wrote: ["runtime_engine_configs", "cloud_plugin_install_configs"] });
 } else if (mode === "read-runtime-cloud") {
   print({ mode, ...(await readRuntimeAndCloud(config)) });
 } else if (mode === "write-all") {
@@ -309,7 +309,7 @@ export default defineFlow({
         try {
           let writeRun: SpawnSyncReturns<string> | null = null;
           let readRun: SpawnSyncReturns<string> | null = null;
-          await ctx.prove("Runtime OpenCode configuration and cloud plugin installs use the primitive without sharing rows", {
+          await ctx.prove("Runtime Sofia configuration and cloud plugin installs use the primitive without sharing rows", {
             voiceover: vo[2],
             action: async () => {
               writeRun = runHarness(paths, "write-runtime-cloud");
@@ -320,12 +320,12 @@ export default defineFlow({
               witness(ctx, writeRun.status === 0 && readRun.status === 0, "Runtime/cloud write and read harnesses exit 0", [commandOutput(writeRun), commandOutput(readRun)].join("\n"));
               const output = parseHarnessJson(readRun);
               const tables = readTableNames(paths.dbPath);
-              const runtimeRow = readJsonCell(paths.dbPath, "SELECT config_json AS value FROM runtime_opencode_configs WHERE workspace_id = 'ws_runtime_db_primitive_flow'");
+              const runtimeRow = readJsonCell(paths.dbPath, "SELECT config_json AS value FROM runtime_engine_configs WHERE workspace_id = 'ws_runtime_db_primitive_flow'");
               const cloudRow = readJsonCell(paths.dbPath, "SELECT config_json AS value FROM cloud_plugin_install_configs WHERE workspace_id = 'ws_runtime_db_primitive_flow'");
-              witness(ctx, tables.includes("runtime_opencode_configs"), "runtime_opencode_configs table exists", tables.join(", "));
+              witness(ctx, tables.includes("runtime_engine_configs"), "runtime_engine_configs table exists", tables.join(", "));
               witness(ctx, tables.includes("cloud_plugin_install_configs"), "cloud_plugin_install_configs table exists", tables.join(", "));
-              witness(ctx, output.runtimePlugin === "flow-runtime-plugin", "Runtime OpenCode plugin reads back through its store", JSON.stringify(output));
-              witness(ctx, output.runtimeMcpUrl === "https://runtime-db-primitive.example/mcp", "Runtime OpenCode MCP reads back through its store", JSON.stringify(output));
+              witness(ctx, output.runtimePlugin === "flow-runtime-plugin", "Runtime Sofia plugin reads back through its store", JSON.stringify(output));
+              witness(ctx, output.runtimeMcpUrl === "https://runtime-db-primitive.example/mcp", "Runtime Sofia MCP reads back through its store", JSON.stringify(output));
               witness(ctx, output.cloudPluginName === "Flow Runtime Plugin", "Cloud plugin install state reads back through its store", JSON.stringify(output));
               witness(ctx, Array.isArray(runtimeRow.plugin) && isRecord(cloudRow.plugins), "Raw DB rows keep runtime config and cloud imports in separate JSON documents", JSON.stringify({ runtimeRow, cloudRow }));
               ctx.output("$ bun runtime-db-primitive-harness.mjs write-runtime-cloud", commandOutput(writeRun));
@@ -358,7 +358,7 @@ export default defineFlow({
               const tables = readTableNames(paths.dbPath);
               witness(ctx, output.groupLabel === "Flow group", "Fresh process reads session groups", JSON.stringify(output));
               witness(ctx, output.workspaceLabel === "Flow workspace config", "Fresh process reads workspace config", JSON.stringify(output));
-              witness(ctx, output.runtimePlugin === "flow-runtime-plugin", "Fresh process reads runtime OpenCode config", JSON.stringify(output));
+              witness(ctx, output.runtimePlugin === "flow-runtime-plugin", "Fresh process reads runtime Sofia config", JSON.stringify(output));
               witness(ctx, output.cloudPluginName === "Flow Runtime Plugin", "Fresh process reads cloud plugin install state", JSON.stringify(output));
               witness(ctx, tables.length === 4, "The reopened DB contains exactly the four migrated domain tables", tables.join(", "));
               ctx.output("$ bun runtime-db-primitive-harness.mjs write-all", commandOutput(writeRun));

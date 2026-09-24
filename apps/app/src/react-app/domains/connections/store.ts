@@ -13,7 +13,7 @@ import {
   mintCloudControlMcpToken,
   readDenSettings,
 } from "../../../app/lib/den";
-import { createClient, unwrap } from "../../../app/lib/opencode";
+import { createClient, unwrap } from "../../../app/lib/engine";
 import { finishPerf, perfNow, recordPerfLog } from "../../../app/lib/perf-log";
 import {
   assertDesktopWebUrl,
@@ -259,7 +259,7 @@ export function createConnectionsStore(options: {
 
     const mountedBaseUrl =
       buildSofiaWorkspaceBaseUrl(sofiaBaseUrl, await resolveSofiaWorkspaceId()) ?? sofiaBaseUrl;
-    activeClient = createClient(`${mountedBaseUrl.replace(/\/+$/, "")}/opencode`, undefined, {
+    activeClient = createClient(`${mountedBaseUrl.replace(/\/+$/, "")}/engine`, undefined, {
       token,
       mode: "sofia",
     });
@@ -738,7 +738,7 @@ export function createConnectionsStore(options: {
         if (resolvedHeaders) {
           mcpEntryConfig["headers"] = resolvedHeaders;
           // Header-authed entries must not trigger OAuth auto-detection;
-          // otherwise opencode reports "needs_auth" despite valid headers.
+          // otherwise engine reports "needs_auth" despite valid headers.
           mcpEntryConfig["oauth"] = false;
         }
         if (!resolvedHeaders) {
@@ -772,9 +772,9 @@ export function createConnectionsStore(options: {
 
       if (canUseSofiaServer && sofiaClient && sofiaWorkspaceId) {
         // The Sofia App server is the source of truth for workspace-scoped MCP
-        // config in the React port. Avoid also calling the OpenCode SDK's MCP
+        // config in the React port. Avoid also calling the Sofia SDK's MCP
         // hot-add endpoint here: when the SDK client is rooted at the aggregate
-        // `/opencode` route it can resolve to an internal `local_*` workspace
+        // `/engine` route it can resolve to an internal `local_*` workspace
         // id that the Sofia App server does not expose, producing a confusing
         // `workspace_not_found` after the config write already succeeded.
         setStateField("mcpStatuses", filterConfiguredStatuses(snapshot.mcpStatuses, snapshot.mcpServers));
@@ -1093,7 +1093,7 @@ export function createConnectionsStore(options: {
     setStateField("mcpStatus", t("mcp.reloading_status"));
   }
 
-  // OpenCode reconnects MCP servers asynchronously after /instance/dispose,
+  // Sofia reconnects MCP servers asynchronously after /instance/dispose,
   // so an immediate mcp.status query returns stale "disconnected". Poll on
   // a backoff until every enabled MCP reaches a terminal status, with the
   // banner up the whole time so users see continuous feedback.
@@ -1127,7 +1127,7 @@ export function createConnectionsStore(options: {
     }
   }
 
-  // Server-only path. Local fallback would rewrite opencode.jsonc whole and
+  // Server-only path. Local fallback would rewrite engine.jsonc whole and
   // clobber inline comments — settings-route.tsx already gates the prop so
   // this never gets called when the server is unavailable. Reload UX comes
   // from the existing reload-required popup; no extra banner here.

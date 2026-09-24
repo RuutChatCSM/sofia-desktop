@@ -21,7 +21,7 @@ import { toast } from "@/components/ui/sonner";
 const reloadAfterOrgOnboardingKey = "sofia.reloadAfterOrgOnboarding";
 
 function taskCreateUnavailableToastId(workspaceId: string) {
-  return `opencode-unavailable:${workspaceId}`;
+  return `engine-unavailable:${workspaceId}`;
 }
 
 export type UseEngineReloadInput = {
@@ -125,7 +125,7 @@ export function useEngineReload(input: UseEngineReloadInput) {
     // Marking is enough: the reload coordinator auto-reloads once idle.
     reloadCoordinator.markReloadRequired("config", {
       type: "config",
-      name: "opencode.json",
+      name: "engine.json",
       action: "updated",
     });
   }, [reloadCoordinator, reloadCoordinator.canReloadWorkspaceEngine]);

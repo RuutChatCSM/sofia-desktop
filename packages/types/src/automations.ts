@@ -80,7 +80,7 @@ export type AutomationAction = z.infer<typeof automationActionSchema>
  * configuration belongs to the desktop's Sofia engine installation, not Den.
  */
 export const AUTOMATION_FREE_MODEL = {
-  providerId: "opencode",
+  providerId: "engine",
   modelId: "big-pickle",
   providerName: "Sofia Zen",
   modelName: "Big Pickle",

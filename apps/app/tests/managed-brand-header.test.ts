@@ -13,8 +13,8 @@ describe("managed brand header", () => {
     expect(source).toMatch(/\{brandLogoUrl \? \([\s\S]*?data-testid="brand-logo"[\s\S]*?<img/);
     expect(source).not.toContain("brand-app-name");
     expect(source).not.toContain("useBrandAppName");
-    expect(source).toMatch(/className="flex h-12 shrink-0 items-center/);
-    expect(source).toMatch(/className={`max-h-9 w-auto max-w-\[140px\] object-contain object-left/);
+    expect(source).toMatch(/className="flex h-16 shrink-0 items-center/);
+    expect(source).toMatch(/className={`h-8 w-8 object-contain object-left/);
     expect(source).toContain("sofia-brand-mark");
   });
 });

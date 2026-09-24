@@ -11,7 +11,7 @@ import {
   type SofiaConnectSkill,
 } from "./connect-skill-catalog.js";
 import { readConnectCloudMcp, writeConnectCloudMcp } from "./connect-state.js";
-import { writeRuntimeOpencodeConfig } from "./runtime-opencode-config-store.js";
+import { writeRuntimeWorkspaceEngineConfig } from "./runtime-engine-config-store.js";
 import type { ServerConfig } from "./types.js";
 
 const roots: string[] = [];
@@ -268,7 +268,7 @@ describe("Sofia App Connect skill catalog", () => {
 
   test("promotes legacy workspace sofia-cloud config into server scope", async () => {
     const config = await serverConfig();
-    await writeRuntimeOpencodeConfig(config, "ws_legacy", (current) => ({
+    await writeRuntimeWorkspaceEngineConfig(config, "ws_legacy", (current) => ({
       ...current,
       mcp: {
         "sofia-cloud": {
@@ -283,7 +283,7 @@ describe("Sofia App Connect skill catalog", () => {
     expect(skills[0]?.capability).toBe("skill:skill_promoted");
 
     // Second read should use the promoted host-level copy even if workspace config is cleared.
-    await writeRuntimeOpencodeConfig(config, "ws_legacy", () => ({ mcp: {} }));
+    await writeRuntimeWorkspaceEngineConfig(config, "ws_legacy", () => ({ mcp: {} }));
     resetSofiaConnectSkillCatalogCacheForTests();
     const again = await readSofiaConnectSkillCatalog(config, skillIndexFetcher("skill:skill_promoted"));
     expect(again[0]?.capability).toBe("skill:skill_promoted");
@@ -298,7 +298,7 @@ describe("Sofia App Connect skill catalog", () => {
       enabled: true,
       headers: { Authorization: "Bearer revoked" },
     });
-    await writeRuntimeOpencodeConfig(config, "ws_legacy", (current) => ({
+    await writeRuntimeWorkspaceEngineConfig(config, "ws_legacy", (current) => ({
       ...current,
       mcp: {
         "sofia-cloud": {

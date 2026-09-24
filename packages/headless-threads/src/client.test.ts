@@ -59,7 +59,7 @@ function createSofiaDouble(input?: { beats?: Beat[]; messages?: MessageWire[] })
         },
       });
     }
-    if (method === "POST" && parsed.pathname === `/workspace/ws_1/opencode/session/${SESSION_ID}/prompt_async`) {
+    if (method === "POST" && parsed.pathname === `/workspace/ws_1/engine/session/${SESSION_ID}/prompt_async`) {
       return new Response(null, { status: 204 });
     }
     if (method === "POST" && parsed.pathname === `/workspace/ws_1/sessions/${SESSION_ID}/abort`) {
@@ -164,7 +164,7 @@ describe("createThread", () => {
 });
 
 describe("sendTurn", () => {
-  test("records the pre-turn message count and prompts in OpenCode's casing", async () => {
+  test("records the pre-turn message count and prompts in Sofia's casing", async () => {
     const double = createSofiaDouble({ messages: [reply("msg_1", "user"), reply("msg_2", "assistant", "hi")] });
     const acceptance = await createClient(double).sendTurn(SESSION_ID, {
       prompt: "They also lost the receipt.",
@@ -180,7 +180,7 @@ describe("sendTurn", () => {
     });
     expect(double.requests.map((request) => request.path)).toEqual([
       "/workspace/ws_1/sessions/ses_1/messages",
-      "/workspace/ws_1/opencode/session/ses_1/prompt_async",
+      "/workspace/ws_1/engine/session/ses_1/prompt_async",
     ]);
     expect(double.requests[1]?.body).toEqual({
       parts: [{ type: "text", text: "They also lost the receipt." }],
@@ -220,7 +220,7 @@ describe("sendTurn", () => {
     expect(double.requests[0]?.path).toBe("/workspace/ws_1/sessions/ses_1/messages");
   });
 
-  test("passes a new stable message id to OpenCode", async () => {
+  test("passes a new stable message id to Sofia", async () => {
     const double = createSofiaDouble({ messages: [] });
 
     await createClient(double).sendTurn(SESSION_ID, { prompt: "Run it.", messageId: "msg_run_2" });

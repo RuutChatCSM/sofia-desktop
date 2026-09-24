@@ -135,7 +135,7 @@
             "group": "MCP Gateway",
             "pages": [
               "cloud/run-in-the-cloud/cloud-mcp",
-              "model-context-protocol/opencode",
+              "model-context-protocol/engine",
               "model-context-protocol/claude-code",
               "model-context-protocol/codex",
               "model-context-protocol/claude-desktop",

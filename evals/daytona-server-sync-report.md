@@ -55,8 +55,8 @@ Result: pass.
 - Cloud Providers settings displayed the providers as available/imported.
 - Direct provider list from Electron renderer took about `69ms`.
 - A newly created provider appeared in the Cloud Providers UI after pressing Refresh in about `252ms`.
-- After a local workspace was created, cloud-provider sync wrote providers into `/workspace/sync-eval/opencode.jsonc`.
-- A provider created after workspace sync was imported into `opencode.jsonc` when opening the workspace Cloud Providers settings.
+- After a local workspace was created, cloud-provider sync wrote providers into `/workspace/sync-eval/engine.jsonc`.
+- A provider created after workspace sync was imported into `engine.jsonc` when opening the workspace Cloud Providers settings.
 
 Observation: automatic interval sync is configured for `5 * 60 * 1000` ms. Immediate sync happens on sign-in, Den settings changes, workspace availability, and opening cloud-provider settings.
 

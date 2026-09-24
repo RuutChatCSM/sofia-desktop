@@ -8,7 +8,7 @@ import { clearSofiaEnvSystemContextCache } from "@/react-app/domains/session/syn
 import type { EnvironmentVariableItem } from "./environment-variable-table";
 
 const KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
-const RESERVED_PREFIXES = ["SOFIA_", "OPENCODE_"] as const;
+const RESERVED_PREFIXES = ["SOFIA_", "SOFIA_ENGINE_"] as const;
 const PERSISTABLE_INTERNAL_KEYS = new Set([
   "SOFIA_API_KEY",
   "SOFIA_MODELS_API_KEY",

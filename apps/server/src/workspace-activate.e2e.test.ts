@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { startServer } from "./server.js";
-import { writeRuntimeOpencodeConfig } from "./runtime-opencode-config-store.js";
+import { writeRuntimeWorkspaceEngineConfig } from "./runtime-engine-config-store.js";
 import type { ServerConfig } from "./types.js";
 
 type Served = {
@@ -72,7 +72,7 @@ async function readPersistedConfig(configPath: string): Promise<unknown> {
   return JSON.parse(await readFile(configPath, "utf8"));
 }
 
-function startMockOpencode() {
+function startMockWorkspaceEngine() {
   const requests: Array<{ method: string; pathname: string; search: string; directory: string | null }> = [];
   const busyDirectories = new Set<string>();
   const abortedDirectories = new Set<string>();
@@ -87,7 +87,7 @@ function startMockOpencode() {
     port: 0,
     async fetch(request) {
       const url = new URL(request.url);
-      const directory = request.headers.get("x-opencode-directory");
+      const directory = request.headers.get("x-engine-directory");
       requests.push({ method: request.method, pathname: url.pathname, search: url.search, directory });
 
       if (url.pathname === "/session/status") {
@@ -211,9 +211,9 @@ async function startSofiaServerWithWorkspaces(input: {
   configPath: string;
   workspaces: ServerConfig["workspaces"];
   authorizedRoots: string[];
-  opencodeBaseUrl?: string;
-  opencodeUsername?: string;
-  opencodePassword?: string;
+  engineBaseUrl?: string;
+  engineUsername?: string;
+  enginePassword?: string;
 }) {
   const config: ServerConfig = {
     host: "127.0.0.1",
@@ -225,9 +225,9 @@ async function startSofiaServerWithWorkspaces(input: {
     corsOrigins: ["*"],
     workspaces: input.workspaces,
     authorizedRoots: input.authorizedRoots,
-    opencodeBaseUrl: input.opencodeBaseUrl,
-    opencodeUsername: input.opencodeUsername,
-    opencodePassword: input.opencodePassword,
+    engineBaseUrl: input.engineBaseUrl,
+    engineUsername: input.engineUsername,
+    enginePassword: input.enginePassword,
     readOnly: false,
     startedAt: Date.now(),
     tokenSource: "cli",
@@ -245,8 +245,8 @@ describe("workspace activation", () => {
   test("reloads the bound Sofia engine on workspace switch only", async () => {
     const firstRoot = await createWorkspaceRoot();
     const secondRoot = await createWorkspaceRoot();
-    const mock = startMockOpencode();
-    const opencodeBaseUrl = `http://127.0.0.1:${mock.server.port}`;
+    const mock = startMockWorkspaceEngine();
+    const engineBaseUrl = `http://127.0.0.1:${mock.server.port}`;
     const workspaces: ServerConfig["workspaces"] = [
       {
         id: "ws_1",
@@ -254,7 +254,7 @@ describe("workspace activation", () => {
         path: firstRoot,
         preset: "starter",
         workspaceType: "local",
-        baseUrl: opencodeBaseUrl,
+        baseUrl: engineBaseUrl,
       },
       {
         id: "ws_2",
@@ -262,7 +262,7 @@ describe("workspace activation", () => {
         path: secondRoot,
         preset: "starter",
         workspaceType: "local",
-        baseUrl: opencodeBaseUrl,
+        baseUrl: engineBaseUrl,
       },
     ];
     const sofia = await startSofiaServerWithWorkspaces({
@@ -308,11 +308,11 @@ describe("workspace activation", () => {
     const secondRoot = await createWorkspaceRoot();
     const previousDb = process.env.SOFIA_RUNTIME_DB;
     process.env.SOFIA_RUNTIME_DB = join(firstRoot, "runtime.sqlite");
-    const mock = startMockOpencode();
-    const opencodeBaseUrl = `http://127.0.0.1:${mock.server.port}`;
+    const mock = startMockWorkspaceEngine();
+    const engineBaseUrl = `http://127.0.0.1:${mock.server.port}`;
     const workspaces: ServerConfig["workspaces"] = [
-      { id: "ws_1", name: "One", path: firstRoot, preset: "starter", workspaceType: "local", baseUrl: opencodeBaseUrl },
-      { id: "ws_2", name: "Two", path: secondRoot, preset: "starter", workspaceType: "local", baseUrl: opencodeBaseUrl },
+      { id: "ws_1", name: "One", path: firstRoot, preset: "starter", workspaceType: "local", baseUrl: engineBaseUrl },
+      { id: "ws_2", name: "Two", path: secondRoot, preset: "starter", workspaceType: "local", baseUrl: engineBaseUrl },
     ];
     const heldRegistration = mock.holdNextMcpRegistration();
     try {
@@ -321,7 +321,7 @@ describe("workspace activation", () => {
         workspaces,
         authorizedRoots: [firstRoot, secondRoot],
       });
-      await writeRuntimeOpencodeConfig(sofia.config, "ws_2", (current) => ({
+      await writeRuntimeWorkspaceEngineConfig(sofia.config, "ws_2", (current) => ({
         ...current,
         mcp: {
           posthog: { type: "remote", url: "https://mcp.posthog.com/mcp", enabled: true },
@@ -364,11 +364,11 @@ describe("workspace activation", () => {
   test("does not let a busy task in another directory block an idle target reload", async () => {
     const firstRoot = await createWorkspaceRoot();
     const secondRoot = await createWorkspaceRoot();
-    const mock = startMockOpencode();
-    const opencodeBaseUrl = `http://127.0.0.1:${mock.server.port}`;
+    const mock = startMockWorkspaceEngine();
+    const engineBaseUrl = `http://127.0.0.1:${mock.server.port}`;
     const workspaces: ServerConfig["workspaces"] = [
-      { id: "ws_1", name: "One", path: firstRoot, preset: "starter", workspaceType: "local", baseUrl: opencodeBaseUrl },
-      { id: "ws_2", name: "Two", path: secondRoot, preset: "starter", workspaceType: "local", baseUrl: opencodeBaseUrl },
+      { id: "ws_1", name: "One", path: firstRoot, preset: "starter", workspaceType: "local", baseUrl: engineBaseUrl },
+      { id: "ws_2", name: "Two", path: secondRoot, preset: "starter", workspaceType: "local", baseUrl: engineBaseUrl },
     ];
     const sofia = await startSofiaServerWithWorkspaces({
       configPath: join(firstRoot, "server.json"),
@@ -494,9 +494,9 @@ describe("workspace lifecycle registry", () => {
       configPath,
       workspaces: [],
       authorizedRoots: [],
-      opencodeBaseUrl: "http://127.0.0.1:49999",
-      opencodeUsername: "runtime-user",
-      opencodePassword: "runtime-pass",
+      engineBaseUrl: "http://127.0.0.1:49999",
+      engineUsername: "runtime-user",
+      enginePassword: "runtime-pass",
     });
 
     const base = `http://127.0.0.1:${sofia.server.port}`;
@@ -512,8 +512,8 @@ describe("workspace lifecycle registry", () => {
     expect(workspace?.path).toBe(workspaceRoot);
     expect(workspace?.baseUrl).toBeUndefined();
     expect(workspace?.directory).toBeUndefined();
-    expect(workspace?.opencodeUsername).toBeUndefined();
-    expect(workspace?.opencodePassword).toBeUndefined();
+    expect(workspace?.engineUsername).toBeUndefined();
+    expect(workspace?.enginePassword).toBeUndefined();
   });
 
   test("creates and persists remote Sofia App workspace records", async () => {

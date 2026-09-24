@@ -30,16 +30,16 @@ function resolveDefaultServerUrl(): string {
       ? import.meta.env.VITE_SOFIA_URL.trim()
       : "";
   if (sofiaUrl) {
-    return `${sofiaUrl.replace(/\/+$/, "")}/opencode`;
+    return `${sofiaUrl.replace(/\/+$/, "")}/engine`;
   }
 
   if (isWebDeployment() && import.meta.env.PROD && typeof window !== "undefined") {
-    return `${window.location.origin}/opencode`;
+    return `${window.location.origin}/engine`;
   }
 
   const envUrl =
-    typeof import.meta.env?.VITE_OPENCODE_URL === "string"
-      ? import.meta.env.VITE_OPENCODE_URL.trim()
+    typeof import.meta.env?.VITE_SOFIA_ENGINE_URL === "string"
+      ? import.meta.env.VITE_SOFIA_ENGINE_URL.trim()
       : "";
   return envUrl || "http://127.0.0.1:4096";
 }

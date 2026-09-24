@@ -62,18 +62,18 @@ async function collectWorkspaceEntries(workspaceRoot) {
   const entries = [];
   const excluded = [];
 
-  const configPath = path.join(workspaceRoot, "opencode.json");
+  const configPath = path.join(workspaceRoot, "engine.json");
   if (await pathExists(configPath)) {
     if (isSecretName(path.basename(configPath))) {
-      excluded.push("opencode.json");
+      excluded.push("engine.json");
     } else {
-      entries.push({ absolute: configPath, rel: "opencode.json" });
+      entries.push({ absolute: configPath, rel: "engine.json" });
     }
   }
 
-  const opencodeDir = path.join(workspaceRoot, ".opencode");
-  if (await pathExists(opencodeDir)) {
-    for (const file of await collectFiles(workspaceRoot, opencodeDir)) {
+  const engineDir = path.join(workspaceRoot, ".sofia");
+  if (await pathExists(engineDir)) {
+    for (const file of await collectFiles(workspaceRoot, engineDir)) {
       if (isSecretName(path.basename(file.absolute))) {
         if (!excluded.includes(file.rel)) excluded.push(file.rel);
         continue;
@@ -297,17 +297,17 @@ export async function importWorkspaceConfig({ archivePath, targetDir, name }) {
   for (const entry of listZipEntries(buffer)) {
     if (entry.name === "manifest.json" || entry.name.endsWith("/")) continue;
     if (!isSafeArchivePath(entry.name)) throw new Error("Archive contains an unsafe path");
-    if (!(entry.name === "opencode.json" || entry.name.startsWith(".opencode/"))) continue;
+    if (!(entry.name === "engine.json" || entry.name.startsWith(".sofia/"))) continue;
     if (isSecretName(path.basename(entry.name))) continue;
     const outPath = path.join(targetDir, ...entry.name.split("/"));
     await mkdir(path.dirname(outPath), { recursive: true });
     await writeFile(outPath, readZipEntryData(buffer, entry));
   }
 
-  const opencodeDir = path.join(targetDir, ".opencode");
-  if (!(await pathExists(opencodeDir))) throw new Error("Archive is missing .opencode config");
+  const engineDir = path.join(targetDir, ".sofia");
+  if (!(await pathExists(engineDir))) throw new Error("Archive is missing .engine config");
 
-  const sofiaPath = path.join(opencodeDir, "sofia.json");
+  const sofiaPath = path.join(engineDir, "sofia.json");
   let preset = "starter";
   let workspaceName = typeof name === "string" && name.trim() ? name.trim() : null;
 

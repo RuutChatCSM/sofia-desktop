@@ -73,7 +73,7 @@ function renderList(messages: UIMessage[]) {
 const userMessage: UIMessage = {
   id: "user-1",
   role: "user",
-  metadata: { opencode: { created: 1_000 } },
+  metadata: { engine: { created: 1_000 } },
   parts: [{ type: "text", text: "do the thing", state: "done" }],
 };
 
@@ -82,7 +82,7 @@ describe("finished turn step fold (single Sofia engine message per turn)", () =>
     const assistant: UIMessage = {
       id: "assistant-1",
       role: "assistant",
-      metadata: { opencode: { created: 1_000, completed: 80_000 } },
+      metadata: { engine: { created: 1_000, completed: 80_000 } },
       parts: [
         { type: "step-start" },
         { type: "reasoning", text: "planning the change", state: "done" },
@@ -108,7 +108,7 @@ describe("finished turn step fold (single Sofia engine message per turn)", () =>
     const assistant: UIMessage = {
       id: "assistant-2",
       role: "assistant",
-      metadata: { opencode: { created: 1_000, completed: 5_000 } },
+      metadata: { engine: { created: 1_000, completed: 5_000 } },
       parts: [
         { type: "step-start" },
         bashPart("c1"),
@@ -129,7 +129,7 @@ describe("finished turn step fold (single Sofia engine message per turn)", () =>
     const assistant: UIMessage = {
       id: "assistant-3",
       role: "assistant",
-      metadata: { opencode: { created: 1_000, completed: 4_000 } },
+      metadata: { engine: { created: 1_000, completed: 4_000 } },
       parts: [
         { type: "step-start" },
         { type: "reasoning", text: "first", state: "done" },

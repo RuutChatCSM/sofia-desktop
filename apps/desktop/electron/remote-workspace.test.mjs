@@ -51,14 +51,14 @@ describe("selectSofiaWorkspaceForConnection", () => {
     assert.equal(selected?.id, "ws_demo");
   });
 
-  it("selects by opencode directory when workers expose it there", () => {
+  it("selects by engine directory when workers expose it there", () => {
     const selected = selectSofiaWorkspaceForConnection(
       {
         items: [
           {
             id: "ws_demo",
             path: "/workspace",
-            opencode: { directory: "/home/user/workspaces/demo" },
+            engine: { directory: "/home/user/workspaces/demo" },
           },
         ],
       },

@@ -7,7 +7,7 @@ export const homeFaq: FaqEntry[] = [
   {
     question: "What is Sofia?",
     answer:
-      "Sofia is a free, open-source desktop app for macOS, Windows, and Linux that lets you do work with AI agents on your own files. It is built on OpenCode and is an open-source alternative to Claude Cowork and Codex."
+      "Sofia is a free, open-source desktop app for macOS, Windows, and Linux that lets you do work with AI agents on your own files. It is built on Sofia and is an open-source alternative to Claude Cowork and Codex."
   },
   {
     question: "Is Sofia free?",
@@ -22,7 +22,7 @@ export const homeFaq: FaqEntry[] = [
   {
     question: "Which AI models does Sofia support?",
     answer:
-      "Any model OpenCode supports — OpenAI, Anthropic, Google, and local models across 50+ providers. You connect your own API keys, or use a managed provider on the cloud plans."
+      "Any model Sofia supports — OpenAI, Anthropic, Google, and local models across 50+ providers. You connect your own API keys, or use a managed provider on the cloud plans."
   },
   {
     question: "Does Sofia send my files to the cloud?",

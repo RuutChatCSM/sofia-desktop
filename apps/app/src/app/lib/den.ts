@@ -660,7 +660,10 @@ export function getDenInferenceUrl(baseUrl?: string | null): string {
 }
 
 function isHostedWebAppHost(hostname: string): boolean {
-  return hostname.trim().toLowerCase().startsWith("app.");
+  const host = hostname.trim().toLowerCase();
+  // The hosted web app answers on `app.<apex>` and on the Sofia-branded
+  // `sofia-app.<apex>`; nothing else is a bare web-app MCP origin.
+  return host.startsWith("app.") || host.startsWith("sofia-app.");
 }
 
 function stripDenApiBasePath(input: string | null | undefined): string | null {
@@ -1789,7 +1792,7 @@ function parseExtensionSourceFormat(value: unknown): SofiaExtensionSourceFormat 
     case "sofia-builtin":
     case "sofia-extension-manifest":
     case "claude-plugin":
-    case "opencode-plugin":
+    case "engine-plugin":
     case "mcp-directory":
     case "manual":
       return value;
@@ -1835,7 +1838,7 @@ function parseExtensionResourceType(value: unknown): SofiaExtensionResourceType 
     case "command":
     case "tool":
     case "mcp":
-    case "opencode-plugin":
+    case "engine-plugin":
     case "provider":
     case "hook":
     case "context":

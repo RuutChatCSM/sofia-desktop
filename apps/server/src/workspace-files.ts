@@ -3,8 +3,8 @@ import { join } from "node:path";
 /**
  * Workspace-local directory Sofia owns.
  *
- * Sofia no longer reads or writes OpenCode's `.opencode` directory or its
- * `opencode.json(c)` config files. Workspace skills, commands, and plugins
+ * Sofia no longer reads or writes Sofia's `.sofia` directory or its
+ * `engine.json(c)` config files. Workspace skills, commands, and plugins
  * live under `.sofia`, and the engine config is generated from the runtime
  * config store into the Sofia home (`~/.sofia/config.toml`).
  */

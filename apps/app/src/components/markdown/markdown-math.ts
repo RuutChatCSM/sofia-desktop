@@ -3,7 +3,7 @@ import type { MarkedExtension, TokenizerAndRendererExtension, Tokens } from "mar
 import markedKatex from "marked-katex-extension";
 
 // Models emit LaTeX with two delimiter families. `marked-katex-extension` covers the
-// standard `$...$` / `$$...$$` pair (same approach as upstream opencode web); the
+// standard `$...$` / `$$...$$` pair (same approach as upstream engine web); the
 // `\(...\)` / `\[...\]` pair below is added here because models emit it just as often
 // and markdown would otherwise swallow the backslash escapes.
 const INLINE_PAREN_RULE = /^\\\(([\s\S]+?)\\\)/;

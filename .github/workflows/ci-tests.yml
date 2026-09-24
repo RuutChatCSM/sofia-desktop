@@ -36,20 +36,20 @@ jobs:
         with:
           version: 11.4.0
 
-      - name: Install OpenCode CLI
+      - name: Install Sofia CLI
         shell: bash
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          OPENCODE_GITHUB_REPO: ${{ vars.OPENCODE_GITHUB_REPO || 'anomalyco/opencode' }}
+          SOFIA_ENGINE_GITHUB_REPO: ${{ vars.SOFIA_ENGINE_GITHUB_REPO || 'anomalyco/engine' }}
         run: |
           set -euo pipefail
 
-          repo="${OPENCODE_GITHUB_REPO:-anomalyco/opencode}"
-          version="$(node -e "const fs=require('fs'); const parsed=JSON.parse(fs.readFileSync('constants.json','utf8')); process.stdout.write(String(parsed.opencodeVersion||'').trim().replace(/^v/,''));")"
+          repo="${SOFIA_ENGINE_GITHUB_REPO:-anomalyco/engine}"
+          version="$(node -e "const fs=require('fs'); const parsed=JSON.parse(fs.readFileSync('constants.json','utf8')); process.stdout.write(String(parsed.engineVersion||'').trim().replace(/^v/,''));")"
           version="$(echo "$version" | tr -d '\r\n' | sed 's/^v//')"
 
           if [ -z "$version" ]; then
-            echo "Unable to resolve OpenCode version from constants.json." >&2
+            echo "Unable to resolve Sofia version from constants.json." >&2
             exit 1
           fi
 
@@ -57,16 +57,16 @@ jobs:
           case "${RUNNER_OS}" in
             Linux)
               if [ "$arch" = "aarch64" ] || [ "$arch" = "arm64" ]; then
-                opencode_asset="opencode-linux-arm64.tar.gz"
+                engine_asset="engine-linux-arm64.tar.gz"
               else
-                opencode_asset="opencode-linux-x64-baseline.tar.gz"
+                engine_asset="engine-linux-x64-baseline.tar.gz"
               fi
               ;;
             macOS)
               if [ "$arch" = "arm64" ]; then
-                opencode_asset="opencode-darwin-arm64.zip"
+                engine_asset="engine-darwin-arm64.zip"
               else
-                opencode_asset="opencode-darwin-x64-baseline.zip"
+                engine_asset="engine-darwin-x64-baseline.zip"
               fi
               ;;
             *)
@@ -75,8 +75,8 @@ jobs:
               ;;
           esac
 
-          url="https://github.com/${repo}/releases/download/v${version}/${opencode_asset}"
-          tmp_dir="$RUNNER_TEMP/opencode"
+          url="https://github.com/${repo}/releases/download/v${version}/${engine_asset}"
+          tmp_dir="$RUNNER_TEMP/engine"
           extract_dir="$tmp_dir/extracted"
           rm -rf "$tmp_dir"
           mkdir -p "$extract_dir"
@@ -86,32 +86,32 @@ jobs:
             curl_headers+=( -H "Authorization: Bearer ${GITHUB_TOKEN}" )
           fi
 
-          curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 "${curl_headers[@]}" -o "$tmp_dir/$opencode_asset" "$url"
+          curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 "${curl_headers[@]}" -o "$tmp_dir/$engine_asset" "$url"
 
-          if [[ "$opencode_asset" == *.tar.gz ]]; then
-            tar -xzf "$tmp_dir/$opencode_asset" -C "$extract_dir"
+          if [[ "$engine_asset" == *.tar.gz ]]; then
+            tar -xzf "$tmp_dir/$engine_asset" -C "$extract_dir"
           else
-            unzip -q "$tmp_dir/$opencode_asset" -d "$extract_dir"
+            unzip -q "$tmp_dir/$engine_asset" -d "$extract_dir"
           fi
 
-          if [ -f "$extract_dir/opencode" ]; then
-            bin_path="$extract_dir/opencode"
-          elif [ -f "$extract_dir/opencode.exe" ]; then
-            bin_path="$extract_dir/opencode.exe"
+          if [ -f "$extract_dir/engine" ]; then
+            bin_path="$extract_dir/engine"
+          elif [ -f "$extract_dir/engine.exe" ]; then
+            bin_path="$extract_dir/engine.exe"
           else
-            echo "OpenCode binary not found in archive" >&2
+            echo "Sofia binary not found in archive" >&2
             ls -la "$extract_dir"
             exit 1
           fi
 
-          install_dir="$HOME/.opencode/bin"
+          install_dir="$HOME/.sofia/bin"
           mkdir -p "$install_dir"
-          cp "$bin_path" "$install_dir/opencode"
-          chmod 755 "$install_dir/opencode"
+          cp "$bin_path" "$install_dir/engine"
+          chmod 755 "$install_dir/engine"
           echo "$install_dir" >> "$GITHUB_PATH"
 
-      - name: Verify OpenCode
-        run: opencode --version
+      - name: Verify Sofia
+        run: engine --version
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2

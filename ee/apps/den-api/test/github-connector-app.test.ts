@@ -67,7 +67,7 @@ describe("github connector app helpers", () => {
         }
 
         if (String(url).endsWith("/contents/.claude-plugin/plugin.json")) {
-          if (String(url).includes("RuutChatCSM/opencode")) {
+          if (String(url).includes("RuutChatCSM/engine")) {
             return new Response(JSON.stringify({ name: "plugin.json" }), { status: 200 })
           }
           return new Response(JSON.stringify({ message: "not found" }), { status: 404 })
@@ -76,7 +76,7 @@ describe("github connector app helpers", () => {
         return new Response(JSON.stringify({
           repositories: [
             { default_branch: "main", full_name: "RuutChatCSM/sofia-desktop", id: 42, private: true },
-            { default_branch: "dev", full_name: "RuutChatCSM/opencode", id: 99, private: false },
+            { default_branch: "dev", full_name: "RuutChatCSM/engine", id: 99, private: false },
           ],
         }), { status: 200 })
       },
@@ -90,17 +90,17 @@ describe("github connector app helpers", () => {
     ])
     expect(requestUrls.slice(2).sort()).toEqual([
       "https://api.github.com/repos/RuutChatCSM/sofia-desktop/contents/.claude-plugin/marketplace.json",
-      "https://api.github.com/repos/RuutChatCSM/opencode/contents/.claude-plugin/marketplace.json",
-      "https://api.github.com/repos/RuutChatCSM/opencode/contents/.claude-plugin/plugin.json",
+      "https://api.github.com/repos/RuutChatCSM/engine/contents/.claude-plugin/marketplace.json",
+      "https://api.github.com/repos/RuutChatCSM/engine/contents/.claude-plugin/plugin.json",
     ].sort())
-    expect(requestUrls.filter((url) => url.includes("/repos/RuutChatCSM/opencode/contents/"))).toEqual([
-      "https://api.github.com/repos/RuutChatCSM/opencode/contents/.claude-plugin/marketplace.json",
-      "https://api.github.com/repos/RuutChatCSM/opencode/contents/.claude-plugin/plugin.json",
+    expect(requestUrls.filter((url) => url.includes("/repos/RuutChatCSM/engine/contents/"))).toEqual([
+      "https://api.github.com/repos/RuutChatCSM/engine/contents/.claude-plugin/marketplace.json",
+      "https://api.github.com/repos/RuutChatCSM/engine/contents/.claude-plugin/plugin.json",
     ])
     expect(requestUrls).not.toContain("https://api.github.com/installation/repositories?per_page=100&page=2")
     expect(repositories).toEqual([
       { defaultBranch: "main", fullName: "RuutChatCSM/sofia-desktop", hasPluginManifest: true, id: 42, manifestKind: "marketplace", marketplacePluginCount: 3, private: true },
-      { defaultBranch: "dev", fullName: "RuutChatCSM/opencode", hasPluginManifest: true, id: 99, manifestKind: "plugin", marketplacePluginCount: null, private: false },
+      { defaultBranch: "dev", fullName: "RuutChatCSM/engine", hasPluginManifest: true, id: 99, manifestKind: "plugin", marketplacePluginCount: null, private: false },
     ])
   })
 

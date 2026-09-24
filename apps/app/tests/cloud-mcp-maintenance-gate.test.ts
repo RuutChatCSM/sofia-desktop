@@ -122,7 +122,7 @@ function health(input: { usable: boolean; failure?: SofiaCloudMcpFailure | null 
     },
     compatibility: {
       sofia: { serverVersion: "test", app: null },
-      opencode: { expectedVersion: "1.17.11", actualVersion: "1.17.11", probe: "ok" },
+      engine: { expectedVersion: "1.17.11", actualVersion: "1.17.11", probe: "ok" },
       pluginFileHashes: [],
       supportedFeatures: { dynamicMcp: true, directoryScoping: true, toolIds: true, providerToolProjection: usable, pluginCanaries: true },
       experimentalToolIds: {

@@ -38,9 +38,9 @@ import {
   syncAllWorkspacesRuntimeMcpToEngine,
 } from "./server.js";
 import {
-  writeRuntimeOpencodeConfig,
-  type RuntimeOpencodeConfig,
-} from "./runtime-opencode-config-store.js";
+  writeRuntimeWorkspaceEngineConfig,
+  type RuntimeWorkspaceEngineConfig,
+} from "./runtime-engine-config-store.js";
 import type { ServerConfig, WorkspaceInfo } from "./types.js";
 
 type Served = {
@@ -84,7 +84,7 @@ function cloudConfig(): Record<string, unknown> {
   };
 }
 
-function diagnosticRuntimeConfig(): RuntimeOpencodeConfig {
+function diagnosticRuntimeConfig(): RuntimeWorkspaceEngineConfig {
   return {
     default_agent: `sofia ${DYNAMIC_BEARER_CANARY}`,
     plugin: [`audit-label ${DYNAMIC_SECRET_ASSIGNMENT_CANARY}`],
@@ -105,7 +105,7 @@ function diagnosticRuntimeConfig(): RuntimeOpencodeConfig {
   };
 }
 
-function openCodeNormalizedPluginSpecs(value: unknown): string[] {
+function workspaceEngineNormalizedPluginSpecs(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value.flatMap((raw) => {
     const spec = typeof raw === "string"
@@ -121,7 +121,7 @@ function openCodeNormalizedPluginSpecs(value: unknown): string[] {
 }
 
 function effectiveEngineInspection(
-  runtime: RuntimeOpencodeConfig = diagnosticRuntimeConfig(),
+  runtime: RuntimeWorkspaceEngineConfig = diagnosticRuntimeConfig(),
   options?: {
     defaultAgent?: string | null;
     agentName?: string;
@@ -149,7 +149,7 @@ function effectiveEngineInspection(
   return async () => ({
     config: {
       default_agent: options?.defaultAgent === null ? undefined : options?.defaultAgent ?? "sofia",
-      plugin: options?.pluginSpecs ?? openCodeNormalizedPluginSpecs(canonicalConfig.plugin),
+      plugin: options?.pluginSpecs ?? workspaceEngineNormalizedPluginSpecs(canonicalConfig.plugin),
       mcp: canonicalConfig.mcp,
     },
     agents: [{
@@ -229,7 +229,7 @@ async function startSelfSignedTlsServer(): Promise<number> {
 async function createFixture(options?: {
   workspace?: Partial<WorkspaceInfo>;
   withRuntime?: boolean;
-  runtime?: RuntimeOpencodeConfig;
+  runtime?: RuntimeWorkspaceEngineConfig;
 }): Promise<{ root: string; workspaceRoot: string; workspace: WorkspaceInfo; config: ServerConfig }> {
   const root = await createRoot();
   const workspaceRoot = join(root, "workspace");
@@ -261,7 +261,7 @@ async function createFixture(options?: {
     logRequests: false,
   };
   if (options?.withRuntime !== false) {
-    await writeRuntimeOpencodeConfig(config, workspace.id, () => options?.runtime ?? diagnosticRuntimeConfig());
+    await writeRuntimeWorkspaceEngineConfig(config, workspace.id, () => options?.runtime ?? diagnosticRuntimeConfig());
   }
   return { root, workspaceRoot, workspace, config };
 }
@@ -344,7 +344,7 @@ function startRecordingServer() {
       if (request.method === "GET" && url.pathname === "/config") {
         return Response.json({
           default_agent: "sofia",
-          plugin: openCodeNormalizedPluginSpecs(canonicalConfig.plugin),
+          plugin: workspaceEngineNormalizedPluginSpecs(canonicalConfig.plugin),
           mcp: canonicalConfig.mcp,
         });
       }
@@ -375,7 +375,7 @@ function startRecordingServer() {
 }
 
 async function startSofia(config: ServerConfig) {
-  const baseUrl = config.workspaces[0]?.baseUrl ?? config.opencodeBaseUrl;
+  const baseUrl = config.workspaces[0]?.baseUrl ?? config.engineBaseUrl;
   if (baseUrl) {
     registerTrustedEngineProcess(config, {
       baseUrl,
@@ -741,7 +741,7 @@ describe("agent context diagnostics analyzer", () => {
       status: "warning",
       evidenceKind: "unavailable",
       code: "effective_connect_tool_policy_unavailable",
-      owner: "opencode-engine",
+      owner: "sofia-engine",
       details: {
         effectivePolicySnapshotApplied: false,
         policyUnavailableReasons: expect.arrayContaining([
@@ -1062,7 +1062,7 @@ describe("agent context diagnostics analyzer", () => {
     expect(checkById(report, "cloud-endpoint-differential")).toMatchObject({
       status: "failed",
       code: "runtime_connected_engine_failed",
-      owner: "opencode-engine",
+      owner: "sofia-engine",
     });
     expect(fetchCalls).toHaveLength(4);
     // The handshake must reach the operator's own Den deployment. Trusting an
@@ -1280,7 +1280,7 @@ describe("agent context diagnostics analyzer", () => {
   test("matches the canonical Connect plugin after Sofia engine normalizes its absolute path to a file URL", async () => {
     const fixture = await createFixture();
     const canonicalConfig = buildSofiaRuntimeConfigObjectFromSnapshot(diagnosticRuntimeConfig());
-    const normalizedPlugins = openCodeNormalizedPluginSpecs(canonicalConfig.plugin);
+    const normalizedPlugins = workspaceEngineNormalizedPluginSpecs(canonicalConfig.plugin);
     const canonicalConnectPlugin = normalizedPlugins.find((spec) => spec.includes("sofia-extensions-preview"));
     if (!canonicalConnectPlugin) throw new Error("Expected the canonical Connect plugin fixture.");
     expect(canonicalConnectPlugin.startsWith("file://")).toBe(true);
@@ -1462,7 +1462,7 @@ describe("agent context diagnostics analyzer", () => {
     expect(checkById(report, "cloud-endpoint-differential")).toMatchObject({
       status: "failed",
       code: "runtime_connected_engine_failed",
-      owner: "opencode-engine",
+      owner: "sofia-engine",
       details: { engineRegistrationStatus: "needs-auth" },
     });
     expect(checkById(report, "cloud-endpoint-transport")).toMatchObject({
@@ -1765,7 +1765,7 @@ describe("agent context diagnostics analyzer", () => {
       status: "warning",
       evidenceKind: "unavailable",
       code: "effective_connect_tool_policy_unavailable",
-      owner: "opencode-engine",
+      owner: "sofia-engine",
     });
     expect(checkById(report, "mcp-inventory")).toMatchObject({
       code: "bounded_mcp_sources_inventoried",
@@ -2247,11 +2247,11 @@ describe("agent context diagnostics route", () => {
     const fixture = await createFixture({
       withRuntime: false,
       workspace: {
-        id: "ws_agent_diagnostics_remote_opencode",
+        id: "ws_agent_diagnostics_remote_engine",
         path: "",
         workspaceType: "remote",
-        remoteType: "opencode",
-        baseUrl: "https://remote-opencode.invalid",
+        remoteType: "engine",
+        baseUrl: "https://remote-engine.invalid",
       },
     });
     const downstreamFetches: string[] = [];
