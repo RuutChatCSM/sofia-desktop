@@ -3,6 +3,9 @@
   "private": true,
   "version": "0.0.0-dev",
   "desktopName": "app.sofia.desktop",
+  "sofiaRelease": {
+    "repository": "RuutChatCSM/sofia-desktop"
+  },
   "description": "Sofia App \u2014 your local multi-model agent workspace",
   "author": {
     "name": "Sofia contributors"
