@@ -1,9 +1,9 @@
-// Reproducible logo derivatives from the committed brand masters.
+// Reproducible logo derivatives from the committed brand master.
 //
-// Two masters, because the launcher tile and the in-app mark have different
-// jobs: `sofia-source.png` is the opaque tile, which stays legible on any
-// desktop, dock or browser tab; `sofia-mark.png` is the transparent cut-out
-// rendered inside the app next to the "Sofia" wordmark.
+// `sofia-mark.png` is the transparent colour cut-out. The launcher tile is that
+// mark composited over TILE_BACKGROUND, so the tile background is a constant
+// here rather than something baked into a second opaque master; the in-app mark
+// is the same artwork with its transparency kept.
 import { app, BrowserWindow, nativeImage } from "electron";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -20,6 +20,15 @@ const sizes = [16, 24, 32, 48, 64, 96, 128, 180, 256, 512, 1024];
 // off to the edge of the bitmap master.
 const TILE_CORNER_RADIUS_RATIO = 275 / 1254;
 const MASTER_SIZE = 1024;
+// Apple's macOS icon grid: an 824x824 tile with a 185.4 corner radius on a
+// 1024 canvas. A tile drawn edge to edge reads visibly larger than the system
+// apps beside it in the Dock and Finder, so the macOS outputs are inset to the
+// grid while the Linux, Windows and web outputs stay full bleed.
+const MACOS_TILE_BODY_RATIO = 824 / MASTER_SIZE;
+const MACOS_TILE_CORNER_RADIUS_RATIO = 185.4 / 824;
+// Launcher tile background, and how much of the tile height the mark fills.
+const TILE_BACKGROUND = "#f5f1e8";
+const TILE_GLYPH_HEIGHT_RATIO = 0.7;
 
 function loadMaster(name) {
   const image = nativeImage.createFromPath(path.join(icons, name));
@@ -32,14 +41,18 @@ function render(master, size) {
 }
 
 /**
- * Clip the opaque tile to the brand's rounded square, keeping transparent
- * corners. The shell is written beside the master so the page and its image
- * share one `file://` origin; a data: URL page cannot load a file: subresource.
+ * Draw the launcher tile: the mark centred on TILE_BACKGROUND, clipped to a
+ * rounded square with transparent corners. The shell is written beside the
+ * master so the page and its image share one `file://` origin; a data: URL page
+ * cannot load a file: subresource.
  */
-async function renderTile() {
+async function renderTile({ bodyRatio = 1, cornerRadiusRatio = TILE_CORNER_RADIUS_RATIO } = {}) {
   const shellPath = path.join(icons, ".sofia-tile.html");
-  const radius = Math.round(MASTER_SIZE * TILE_CORNER_RADIUS_RATIO);
-  await writeFile(shellPath, `<style>html,body{margin:0;width:100%;height:100%;background:transparent;overflow:hidden}img{display:block;width:100%;height:100%;border-radius:${radius}px}</style><img src="sofia-source.png">`, "utf8");
+  const body = Math.round(MASTER_SIZE * bodyRatio);
+  const inset = Math.round((MASTER_SIZE - body) / 2);
+  const radius = Math.round(body * cornerRadiusRatio);
+  const glyphHeight = Math.round(body * TILE_GLYPH_HEIGHT_RATIO);
+  await writeFile(shellPath, `<style>html,body{margin:0;width:100%;height:100%;background:transparent;overflow:hidden}.tile{position:absolute;left:${inset}px;top:${inset}px;width:${body}px;height:${body}px;background:${TILE_BACKGROUND};border-radius:${radius}px;display:flex;align-items:center;justify-content:center}.tile img{height:${glyphHeight}px}</style><div class="tile"><img src="sofia-mark.png"></div>`, "utf8");
   const window = new BrowserWindow({
     width: MASTER_SIZE, height: MASTER_SIZE, show: false, transparent: true,
     webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, offscreen: true },
@@ -62,7 +75,12 @@ app.on("window-all-closed", () => {});
 
 app.whenReady().then(async () => {
   const tile = await renderTile();
+  const macTile = await renderTile({
+    bodyRatio: MACOS_TILE_BODY_RATIO,
+    cornerRadiusRatio: MACOS_TILE_CORNER_RADIUS_RATIO,
+  });
   const images = new Map(sizes.map((size) => [size, render(tile, size)]));
+  const macImages = new Map(sizes.map((size) => [size, render(macTile, size)]));
 
   await mkdir(path.join(icons, "linux"), { recursive: true });
   await mkdir(path.join(icons, "dev"), { recursive: true });
@@ -76,7 +94,7 @@ app.whenReady().then(async () => {
   await writeFile(path.join(publicDir, "sofia-mark.png"), render(loadMaster("sofia-mark.png"), 512));
 
   const chunks = [["icp4",16],["icp5",32],["icp6",64],["ic07",128],["ic08",256],["ic09",512],["ic10",1024]].map(([type,size]) => {
-    const png = images.get(size), header = Buffer.alloc(8);
+    const png = macImages.get(size), header = Buffer.alloc(8);
     header.write(type); header.writeUInt32BE(png.length + 8, 4);
     return Buffer.concat([header, png]);
   });
@@ -86,8 +104,9 @@ app.whenReady().then(async () => {
   // resolveAppIconPath() in electron/main.mjs reads these three for dev builds,
   // falling through icon.png → 128x128@2x.png → icon-dev.icns, so all of them
   // have to track the master or the dev dock icon silently reverts to old art.
-  await writeFile(path.join(icons, "dev/icon.png"), images.get(1024));
-  await writeFile(path.join(icons, "dev/128x128@2x.png"), images.get(256));
+  // They are the macOS dock icon, so they take the macOS grid.
+  await writeFile(path.join(icons, "dev/icon.png"), macImages.get(1024));
+  await writeFile(path.join(icons, "dev/128x128@2x.png"), macImages.get(256));
   await writeFile(path.join(icons, "dev/icon-dev.icns"), icns);
 
   const icoSizes = [16,32,48,64,128,256], icoHeader = Buffer.alloc(6);
