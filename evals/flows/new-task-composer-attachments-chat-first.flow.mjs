@@ -14,7 +14,7 @@
  *
  * Requires a genuinely fresh desktop profile (no chat workspace folder yet).
  * Required env:
- * - OPENWORK_EVAL_DAYTONA_SANDBOX  Daytona sandbox running the Electron app.
+ * - SOFIA_EVAL_DAYTONA_SANDBOX  Daytona sandbox running the Electron app.
  */
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -42,9 +42,9 @@ const OLD_BLOCK_MESSAGE = "Attachments become available once the task starts.";
 
 // Fixed by the Daytona devcontainer profile; the desktop "home" the chat-first
 // path writes into lives under the dev data dir, not $HOME.
-const DEV_PROFILE_DIR = "/home/daytona/.config/com.differentai.openwork.dev";
-const DEV_HOME = `${DEV_PROFILE_DIR}/openwork-dev-data/home`;
-const CHAT_WORKSPACE_PATH = `${DEV_HOME}/OpenWork Chat`;
+const DEV_PROFILE_DIR = "/home/daytona/.config/com.differentai.sofia.dev";
+const DEV_HOME = `${DEV_PROFILE_DIR}/sofia-dev-data/home`;
+const CHAT_WORKSPACE_PATH = `${DEV_HOME}/Sofia Chat`;
 
 const vo = await loadVoiceoverParagraphs(FLOW_ID);
 const execFileAsync = promisify(execFile);
@@ -64,7 +64,7 @@ function errorMessage(error) {
 }
 
 async function daytonaBash(ctx, script, timeout = 90_000) {
-  const sandbox = ctx.env.OPENWORK_EVAL_DAYTONA_SANDBOX.trim();
+  const sandbox = ctx.env.SOFIA_EVAL_DAYTONA_SANDBOX.trim();
   const encoded = Buffer.from(script, "utf8").toString("base64");
   try {
     return await execFileAsync(
@@ -87,19 +87,19 @@ async function daytonaBash(ctx, script, timeout = 90_000) {
 async function requireSeededMockProvider(ctx) {
   const script = `set -euo pipefail
 curl -sf http://127.0.0.1:${MOCK_PORT}/v1/models >/dev/null && echo mock-ready
-grep -q ${JSON.stringify(PROVIDER_ID)} ${JSON.stringify(`${CHAT_WORKSPACE_PATH}/opencode.jsonc`)} && echo provider-seeded
+grep -q ${JSON.stringify(PROVIDER_ID)} ${JSON.stringify(`${CHAT_WORKSPACE_PATH}/engine.jsonc`)} && echo provider-seeded
 `;
   const result = await daytonaBash(ctx, script, 30_000);
   ctx.assert(result.stdout.includes("mock-ready"), `Mock provider is not listening on ${MOCK_PORT}: ${result.stdout} ${result.stderr}`);
   ctx.assert(
     result.stdout.includes("provider-seeded"),
-    `Harness setup missing: ${CHAT_WORKSPACE_PATH}/opencode.jsonc must pre-declare the mock provider (the workspace does not exist until Run task, so its engine cannot be configured later). Wipe ${DEV_PROFILE_DIR}, seed that file, and restart Electron.`,
+    `Harness setup missing: ${CHAT_WORKSPACE_PATH}/engine.jsonc must pre-declare the mock provider (the workspace does not exist until Run task, so its engine cannot be configured later). Wipe ${DEV_PROFILE_DIR}, seed that file, and restart Electron.`,
   );
 }
 
 async function loadZeroWorkspaceProfile(ctx) {
   await ctx.eval(`(() => {
-    const raw = localStorage.getItem("openwork.preferences");
+    const raw = localStorage.getItem("sofia.preferences");
     let prefs = {};
     try {
       prefs = raw ? JSON.parse(raw) : {};
@@ -109,23 +109,23 @@ async function loadZeroWorkspaceProfile(ctx) {
     if (!prefs || typeof prefs !== "object" || Array.isArray(prefs)) prefs = {};
     // Skip the welcome redirect so we land on the chat-first hero with no
     // workspace, which is exactly the state under test.
-    localStorage.setItem("openwork.preferences", JSON.stringify({
+    localStorage.setItem("sofia.preferences", JSON.stringify({
       ...prefs,
       hasCompletedOnboarding: true,
       defaultModel: { providerID: ${JSON.stringify(PROVIDER_ID)}, modelID: ${JSON.stringify(MODEL_ID)} },
       modelVariant: null,
       providerStepCompleted: true,
     }));
-    localStorage.setItem("openwork.defaultModel", ${JSON.stringify(`${PROVIDER_ID}/${MODEL_ID}`)});
-    localStorage.removeItem("openwork.react.activeWorkspace");
+    localStorage.setItem("sofia.defaultModel", ${JSON.stringify(`${PROVIDER_ID}/${MODEL_ID}`)});
+    localStorage.removeItem("sofia.react.activeWorkspace");
     location.hash = "#/session";
     location.reload();
     return true;
   })()`);
-  await ctx.waitFor("Boolean(window.__openworkControl)", { timeoutMs: 90_000, label: "control API after reload" });
+  await ctx.waitFor("Boolean(window.__sofiaControl)", { timeoutMs: 90_000, label: "control API after reload" });
   await ctx.waitFor(
     `(() => {
-      const inspector = window.__openwork;
+      const inspector = window.__sofia;
       if (!inspector) return null;
       const workspaces = inspector.slice("route").workspaces || [];
       if (workspaces.length !== 0) return null;
@@ -136,17 +136,17 @@ async function loadZeroWorkspaceProfile(ctx) {
 }
 
 async function workspaceCount(ctx) {
-  return await ctx.eval(`(window.__openwork.slice("route").workspaces || []).length`);
+  return await ctx.eval(`(window.__sofia.slice("route").workspaces || []).length`);
 }
 
 const MODEL_UPSELL_TITLE = "Start working without API keys";
 
 /**
- * A fresh, signed-out profile pops the OpenWork Models upsell over the
+ * A fresh, signed-out profile pops the Sofia Models upsell over the
  * transcript once the first session opens. Dismiss it so the frames show the
  * actual experience instead of an unrelated overlay.
  */
-async function dismissOpenWorkModelsModal(ctx) {
+async function dismissSofiaModelsModal(ctx) {
   await ctx.eval(`(() => {
     const dialogs = Array.from(document.querySelectorAll('[role="dialog"], [data-slot="dialog-content"]'));
     const dialog = dialogs.find((item) => (item.textContent || "").includes(${JSON.stringify(MODEL_UPSELL_TITLE)}));
@@ -164,7 +164,7 @@ async function dismissOpenWorkModelsModal(ctx) {
       const dialogs = Array.from(document.querySelectorAll('[role="dialog"], [data-slot="dialog-content"]'));
       return dialogs.some((item) => (item.textContent || "").includes(${JSON.stringify(MODEL_UPSELL_TITLE)})) ? null : true;
     })()`,
-    { timeoutMs: 20_000, label: "OpenWork Models upsell dismissed" },
+    { timeoutMs: 20_000, label: "Sofia Models upsell dismissed" },
   );
 }
 
@@ -205,9 +205,9 @@ export default {
   id: FLOW_ID,
   title: "New Task composer accepts attachments when no workspace exists yet",
   kind: "user-facing",
-  requiredEnv: ["OPENWORK_EVAL_DAYTONA_SANDBOX"],
+  requiredEnv: ["SOFIA_EVAL_DAYTONA_SANDBOX"],
   precondition: async (ctx) => {
-    await ctx.waitFor("Boolean(window.__openworkControl)", { timeoutMs: 60_000, label: "control API" });
+    await ctx.waitFor("Boolean(window.__sofiaControl)", { timeoutMs: 60_000, label: "control API" });
     return null;
   },
   steps: [
@@ -232,7 +232,7 @@ export default {
             await ctx.waitForText(FILENAME, { timeoutMs: 10_000 });
             const count = await workspaceCount(ctx);
             assertEvidence(ctx, count === 0, "No workspace exists while the file sits in the composer", `workspaces=${count}`);
-            const route = await ctx.eval(`String(window.__openworkControl.snapshot().route || "")`);
+            const route = await ctx.eval(`String(window.__sofiaControl.snapshot().route || "")`);
             assertEvidence(ctx, !String(route).includes("/workspace/"), "The route has no workspace yet", String(route));
             const state = await ctx.eval(`(() => {
               const buttons = Array.from(document.querySelectorAll("button"));
@@ -266,20 +266,20 @@ export default {
               return true;
             })()`);
             ctx.assert(clicked === true, "Could not click Run task on the chat-first hero.");
-            await ctx.waitFor(`String(window.__openworkControl.snapshot().route || "").includes("/session/ses_")`, { timeoutMs: 120_000, label: "session route after workspace creation" });
+            await ctx.waitFor(`String(window.__sofiaControl.snapshot().route || "").includes("/session/ses_")`, { timeoutMs: 120_000, label: "session route after workspace creation" });
             await ctx.waitFor(`(() => {
               const messages = Array.from(document.querySelectorAll('[data-message-role="assistant"]'));
               return messages.some((message) => (message.innerText || "").includes(${JSON.stringify(ASSISTANT_SENTINEL)})) || null;
             })()`, { timeoutMs: 120_000, label: "assistant reply in the created session" });
-            await dismissOpenWorkModelsModal(ctx);
+            await dismissSofiaModelsModal(ctx);
           },
           assert: async () => {
             const count = await workspaceCount(ctx);
             assertEvidence(ctx, count === 1, "Running the task created exactly one workspace", `workspaces=${count}`);
-            const route = await ctx.eval(`String(window.__openworkControl.snapshot().route || "")`);
+            const route = await ctx.eval(`String(window.__sofiaControl.snapshot().route || "")`);
             assertEvidence(ctx, route.includes("/workspace/ws_") && route.includes("/session/ses_"), "The route now points at the created workspace and session", route);
             const workspacePath = await ctx.eval(`(() => {
-              const workspaces = window.__openwork.slice("route").workspaces || [];
+              const workspaces = window.__sofia.slice("route").workspaces || [];
               return workspaces[0] ? String(workspaces[0].path || "") : "";
             })()`);
             assertEvidence(ctx, workspacePath === CHAT_WORKSPACE_PATH, "The created workspace is the chat-first default folder", workspacePath);
@@ -293,7 +293,7 @@ export default {
             assertEvidence(ctx, (sent?.cards ?? []).length >= 1, "The sent user turn shows the attachment card", JSON.stringify(sent));
             const transcript = await ctx.control("session.read_transcript", { count: 8 });
             const text = transcriptText(transcript);
-            assertEvidence(ctx, text.includes(".opencode/openwork/inbox/chat-attachments/"), "The first turn exposes the new workspace's inbox path", text.slice(0, 600));
+            assertEvidence(ctx, text.includes(".sofia/sofia/inbox/chat-attachments/"), "The first turn exposes the new workspace's inbox path", text.slice(0, 600));
             assertEvidence(ctx, !text.includes("[attachment "), "No raw attachment token leaked into the message text", text.slice(0, 600));
             ctx.output("created workspace", workspacePath);
           },
@@ -320,7 +320,7 @@ export default {
             })()`);
             ctx.assert(clicked === true, "Could not open the uploaded CSV from the FILES panel.");
             await ctx.waitForText(`${EXPECTED_BYTES.length} bytes`, { timeoutMs: 15_000 });
-            await dismissOpenWorkModelsModal(ctx);
+            await dismissSofiaModelsModal(ctx);
           },
           assert: async () => {
             const transcript = await ctx.control("session.read_transcript", { count: 8 });

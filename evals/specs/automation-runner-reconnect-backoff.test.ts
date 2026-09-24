@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { test } from "@openwork/testkit";
+import { test } from "@sofia/testkit";
 import { expect } from "vitest";
 
 const expectedDelays = [500, 1_000, 2_000, 4_000, 8_000, 16_000, 30_000, 30_000, 30_000, 30_000];

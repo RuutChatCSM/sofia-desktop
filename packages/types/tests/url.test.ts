@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { hostLabel, joinBaseUrl, normalizeBaseUrl, readBaseUrlEnv } from "@openwork/types/url";
+import { hostLabel, joinBaseUrl, normalizeBaseUrl, readBaseUrlEnv } from "@sofia/types/url";
 
 describe("url primitives", () => {
   test("normalizes trailing slashes canonically", () => {
@@ -26,7 +26,7 @@ describe("url primitives", () => {
   });
 
   test("joins paths without producing a double slash", () => {
-    expect(joinBaseUrl("http://host//", "/opencode")).toBe("http://host/opencode");
+    expect(joinBaseUrl("http://host//", "/engine")).toBe("http://host/engine");
   });
 
   test("formats host labels with fallback normalization", () => {

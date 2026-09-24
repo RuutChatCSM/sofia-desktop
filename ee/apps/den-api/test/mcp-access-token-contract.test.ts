@@ -11,23 +11,23 @@ function runContractProbe() {
   const script = `
 const crypto = await import("node:crypto")
 const { mock } = await import("bun:test")
-const schema = await import("@openwork-ee/den-db/schema")
-const { createDenTypeId } = await import("@openwork-ee/utils/typeid")
+const schema = await import("@sofia-ee/den-db/schema")
+const { createDenTypeId } = await import("@sofia-ee/utils/typeid")
 
 const apiOrigin = process.env.API_ORIGIN
 if (!apiOrigin) throw new Error("Missing API_ORIGIN")
 
 const agentResource = apiOrigin + "/mcp/agent"
 const parentResource = apiOrigin + "/mcp"
-const tokenUseClaim = "https://openworklabs.com/token_use"
-const resourceClaim = "https://openworklabs.com/resource"
-const orgIdClaim = "https://openworklabs.com/org_id"
-const grantIdClaim = "https://openworklabs.com/grant_id"
+const tokenUseClaim = "https://sofia.ruut.chat/token_use"
+const resourceClaim = "https://sofia.ruut.chat/resource"
+const orgIdClaim = "https://sofia.ruut.chat/org_id"
+const grantIdClaim = "https://sofia.ruut.chat/grant_id"
 const userId = createDenTypeId("user")
 const organizationId = createDenTypeId("organization")
 const sessionId = createDenTypeId("session")
 const memberId = createDenTypeId("member")
-const firstPartyClientId = "openwork-desktop"
+const firstPartyClientId = "sofia-desktop"
 const opaqueSecret = "opaque_mcp_contract_secret"
 const opaqueToken = "ow_mcp_at_" + opaqueSecret
 const { privateKey, publicKey } = crypto.generateKeyPairSync("ed25519")
@@ -226,13 +226,13 @@ console.log("ok")
       PATH: process.env.PATH ?? "",
       HOME: process.env.HOME ?? "",
       TMPDIR: process.env.TMPDIR ?? "",
-      DATABASE_URL: "mysql://root:password@127.0.0.1:3306/openwork_test",
+      DATABASE_URL: "mysql://root:password@127.0.0.1:3306/sofia_test",
       DB_MODE: "mysql",
       DEN_DB_ENCRYPTION_KEY: "x".repeat(32),
       BETTER_AUTH_SECRET: "y".repeat(32),
       BETTER_AUTH_URL: API_ORIGIN,
       DEN_API_PUBLIC_URL: API_ORIGIN,
-      OPENWORK_DEV_MODE: "0",
+      SOFIA_DEV_MODE: "0",
       PROVISIONER_MODE: "stub",
       DEN_MCP_RESOURCE_URL: "",
       DEN_MCP_ADDITIONAL_RESOURCES: "",

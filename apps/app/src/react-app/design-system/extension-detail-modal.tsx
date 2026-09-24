@@ -127,17 +127,17 @@ const taxonomyDesc: Record<ExtensionTaxonomy, string> = {
 
 const uiControlClientConfig = `{
   "mcpServers": {
-    "openwork-ui": {
+    "sofia-ui": {
       "command": "npx",
-      "args": ["-y", "openwork-ui-mcp"]
+      "args": ["-y", "sofia-ui-mcp"]
     }
   }
 }`;
 
-function uiControlOpencodeConfig(command: string[], environment?: Record<string, string>) {
+function uiControlWorkspaceEngineConfig(command: string[], environment?: Record<string, string>) {
   return JSON.stringify({
     mcp: {
-      "openwork-ui": {
+      "sofia-ui": {
         type: "local",
         command,
         ...(environment ? { environment } : {}),
@@ -147,13 +147,13 @@ function uiControlOpencodeConfig(command: string[], environment?: Record<string,
   }, null, 2);
 }
 
-const fallbackUiControlCommand = ["npx", "-y", "openwork-ui-mcp"];
+const fallbackUiControlCommand = ["npx", "-y", "sofia-ui-mcp"];
 
-const fallbackUiControlOpencodeConfig = `{
+const fallbackUiControlWorkspaceEngineConfig = `{
   "mcp": {
-    "openwork-ui": {
+    "sofia-ui": {
       "type": "local",
-      "command": ["npx", "-y", "openwork-ui-mcp"],
+      "command": ["npx", "-y", "sofia-ui-mcp"],
       "enabled": true
     }
   }
@@ -773,7 +773,7 @@ interface UiControlConnectionDetailsProps {
 function UiControlConnectionDetails(props: UiControlConnectionDetailsProps) {
   "use memo";
 
-  const opencodeConfig = props.launchCommand ? uiControlOpencodeConfig(props.launchCommand, props.environment) : fallbackUiControlOpencodeConfig;
+  const engineConfig = props.launchCommand ? uiControlWorkspaceEngineConfig(props.launchCommand, props.environment) : fallbackUiControlWorkspaceEngineConfig;
 
   return (
     <div className="space-y-4">
@@ -784,7 +784,7 @@ function UiControlConnectionDetails(props: UiControlConnectionDetailsProps) {
         <CardContent>
           <div className="flex flex-col gap-2 text-sm leading-relaxed text-muted-foreground">
             <div>Sofia App desktop starts a private localhost bridge automatically.</div>
-            <div>Your MCP client starts <span className="font-mono text-card-foreground">openwork-ui-mcp</span> over stdio; the wrapper discovers the bridge and proxies UI tools to it.</div>
+            <div>Your MCP client starts <span className="font-mono text-card-foreground">sofia-ui-mcp</span> over stdio; the wrapper discovers the bridge and proxies UI tools to it.</div>
             <div>Do not point clients at the random localhost bridge URL directly.</div>
           </div>
         </CardContent>
@@ -803,11 +803,11 @@ function UiControlConnectionDetails(props: UiControlConnectionDetailsProps) {
 
       <Card variant="outline" size="sm">
         <CardHeader>
-          <CardTitle>OpenCode</CardTitle>
+          <CardTitle>Sofia</CardTitle>
         </CardHeader>
         <CardContent>
           <pre className="max-h-[180px] overflow-x-auto rounded-xl border border-border p-3 text-xs leading-relaxed text-card-foreground">
-            <code>{opencodeConfig}</code>
+            <code>{engineConfig}</code>
           </pre>
         </CardContent>
       </Card>
@@ -825,7 +825,7 @@ function UiControlConnectionDetails(props: UiControlConnectionDetailsProps) {
                     Production discovery file
                   </TableCell>
                   <TableCell className="py-2 whitespace-normal">
-                    <span className="font-mono text-xs break-all">~/Library/Application Support/com.differentai.openwork/openwork-ui-control.json</span>
+                    <span className="font-mono text-xs break-all">~/Library/Application Support/com.differentai.sofia/sofia-ui-control.json</span>
                   </TableCell>
                 </TableRow>
                 <TableRow className="*:border-border hover:bg-transparent [&>:not(:last-child)]:border-r">
@@ -833,7 +833,7 @@ function UiControlConnectionDetails(props: UiControlConnectionDetailsProps) {
                     Dev discovery file
                   </TableCell>
                   <TableCell className="py-2 whitespace-normal">
-                    <span className="font-mono text-xs break-all">~/Library/Application Support/com.differentai.openwork.dev/openwork-ui-control.json</span>
+                    <span className="font-mono text-xs break-all">~/Library/Application Support/com.differentai.sofia.dev/sofia-ui-control.json</span>
                   </TableCell>
                 </TableRow>
                 <TableRow className="*:border-border hover:bg-transparent [&>:not(:last-child)]:border-r">
@@ -841,16 +841,16 @@ function UiControlConnectionDetails(props: UiControlConnectionDetailsProps) {
                     Override
                   </TableCell>
                   <TableCell className="py-2 whitespace-normal">
-                    <span className="font-mono text-xs break-all">OPENWORK_UI_CONTROL_DISCOVERY=/path/to/openwork-ui-control.json</span>
+                    <span className="font-mono text-xs break-all">SOFIA_UI_CONTROL_DISCOVERY=/path/to/sofia-ui-control.json</span>
                   </TableCell>
                 </TableRow>
-                {props.environment?.OPENWORK_UI_CONTROL_DISCOVERY ? (
+                {props.environment?.SOFIA_UI_CONTROL_DISCOVERY ? (
                   <TableRow className="*:border-border hover:bg-transparent [&>:not(:last-child)]:border-r">
                     <TableCell className="bg-muted/50 py-2 text-xs font-medium">
                       Current override
                     </TableCell>
                     <TableCell className="py-2 whitespace-normal">
-                      <span className="font-mono text-xs break-all">{props.environment.OPENWORK_UI_CONTROL_DISCOVERY}</span>
+                      <span className="font-mono text-xs break-all">{props.environment.SOFIA_UI_CONTROL_DISCOVERY}</span>
                     </TableCell>
                   </TableRow>
                 ) : null}

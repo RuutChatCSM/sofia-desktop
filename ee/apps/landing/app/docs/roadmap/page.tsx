@@ -3,18 +3,18 @@ import { getGithubData } from "../../../lib/github";
 import { baseOpenGraph } from "../../../lib/seo";
 
 export const metadata = {
-  title: "OpenWork Roadmap",
+  title: "Sofia Roadmap",
   description:
-    "What OpenWork supports today and what is coming next across desktop, hosted workspaces, external agents, and new surfaces.",
+    "What Sofia supports today and what is coming next across desktop, hosted workspaces, external agents, and new surfaces.",
   alternates: {
     canonical: "/roadmap"
   },
   openGraph: {
     ...baseOpenGraph,
-    title: "OpenWork Roadmap | Your workspace, on every surface",
+    title: "Sofia Roadmap | Your workspace, on every surface",
     description:
-      "The roadmap for the OpenWork desktop app, portable agent capabilities, hosted workspaces, and every surface where work happens.",
-    url: "https://openworklabs.com/roadmap"
+      "The roadmap for the Sofia desktop app, portable agent capabilities, hosted workspaces, and every surface where work happens.",
+    url: "https://sofia.ruut.chat/roadmap"
   }
 };
 

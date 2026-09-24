@@ -17,7 +17,7 @@ export type ReconcileTranscriptInput = {
 /**
  * Reconcile a server snapshot into the canonical transcript cache.
  *
- * Snapshot reads can lag behind the OpenCode event stream during prompt
+ * Snapshot reads can lag behind the Sofia event stream during prompt
  * submission. This helper centralizes the invariant that ordinary snapshots
  * may fill/update the cache, but must not make the visible transcript move
  * backwards. Explicit history operations such as revert can opt into their own
@@ -34,11 +34,11 @@ export function reconcileTranscriptMessages(input: ReconcileTranscriptInput): UI
 }
 
 /**
- * Hide messages at and after OpenCode's revert cursor. Revert is an explicit
+ * Hide messages at and after Sofia's revert cursor. Revert is an explicit
  * history mutation, so it is the one place the rendered transcript is allowed
  * to move backwards.
  *
- * OpenCode treats `session.revert.messageID` as the FIRST reverted message
+ * Sofia treats `session.revert.messageID` as the FIRST reverted message
  * (every message with `id >= revert.messageID` is reverted), so the cursor
  * message itself must be hidden too.
  */
@@ -54,10 +54,10 @@ function isSyntheticMessageId(id: string) {
 }
 
 /**
- * Resolve the message id to pass to OpenCode's `session.fork` so the branch
+ * Resolve the message id to pass to Sofia's `session.fork` so the branch
  * INCLUDES the message the user branched at.
  *
- * OpenCode copies messages strictly BEFORE the given id, so branching "at" a
+ * Sofia copies messages strictly BEFORE the given id, so branching "at" a
  * message means forking at the next real message after it. Synthetic
  * client-side messages (e.g. `session-error:*`) are skipped because their ids
  * do not exist server-side and would corrupt the fork boundary. Returns null

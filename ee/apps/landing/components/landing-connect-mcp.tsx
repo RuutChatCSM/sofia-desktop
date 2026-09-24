@@ -18,18 +18,18 @@ import {
   CONNECT_CLIENT_SUPPORT,
   CURSOR_SNIPPET,
   MCP_SERVER_URL,
-  OPENCODE_AUTH_COMMAND,
-  OPENCODE_RECONNECT_COMMAND,
-  OPENCODE_SNIPPET,
+  SOFIA_ENGINE_AUTH_COMMAND,
+  SOFIA_ENGINE_RECONNECT_COMMAND,
+  SOFIA_ENGINE_SNIPPET,
   VS_CODE_COMMAND,
-} from "./openwork-connect-installer-config";
-import type { OpenWorkConnectClientId } from "./openwork-connect-installer-config";
+} from "./sofia-connect-installer-config";
+import type { SofiaConnectClientId } from "./sofia-connect-installer-config";
 
-const DOCS_URL = "https://openworklabs.com/docs/cloud/run-in-the-cloud/cloud-mcp#connect-mcp-install-opencode";
-const SIGNUP_URL = "https://app.openworklabs.com?mode=sign-up";
+const DOCS_URL = "https://sofia.ruut.chat/docs/cloud/run-in-the-cloud/cloud-mcp#connect-mcp-install-engine";
+const SIGNUP_URL = "https://sofia-app.ruut.chat?mode=sign-up";
 
 type CopyMethod = "clipboard" | "execCommand" | "none";
-type ClientId = OpenWorkConnectClientId;
+type ClientId = SofiaConnectClientId;
 
 type ClientInstall = {
   id: ClientId;
@@ -52,7 +52,7 @@ const clientIconClass: Record<ClientId, string> = {
   codex: "text-[#111111]",
   "chatgpt-desktop": "text-[#10A37F]",
   "claude-code": "text-[#D97757]",
-  opencode: "text-[#656363]",
+  engine: "text-[#656363]",
   "vs-code": "text-[#007ACC]",
   "any-client": "text-gray-500"
 };
@@ -70,7 +70,7 @@ const CLIENT_INSTALLS: Record<ClientId, ClientInstall> = {
     label: "Codex",
     eyebrow: "Codex desktop, CLI, and IDE",
     copyText: CODEX_COMMAND,
-    helper: "Add OpenWork once, then sign in with Codex's MCP login command.",
+    helper: "Add Sofia once, then sign in with Codex's MCP login command.",
     authText: CODEX_LOGIN_COMMAND,
     reconnectText: CODEX_RECONNECT_COMMAND
   },
@@ -88,14 +88,14 @@ const CLIENT_INSTALLS: Record<ClientId, ClientInstall> = {
     copyText: CLAUDE_CODE_COMMAND,
     helper: "Add the remote HTTP server, then use /mcp in Claude Code and follow the client auth flow."
   },
-  opencode: {
-    id: "opencode",
-    label: "OpenCode",
-    eyebrow: "opencode.json MCP config",
-    copyText: OPENCODE_SNIPPET,
-    helper: "Add this remote MCP server entry to your OpenCode config, then authenticate.",
-    authText: OPENCODE_AUTH_COMMAND,
-    reconnectText: OPENCODE_RECONNECT_COMMAND
+  engine: {
+    id: "engine",
+    label: "Sofia",
+    eyebrow: "engine.json MCP config",
+    copyText: SOFIA_ENGINE_SNIPPET,
+    helper: "Add this remote MCP server entry to your Sofia config, then authenticate.",
+    authText: SOFIA_ENGINE_AUTH_COMMAND,
+    reconnectText: SOFIA_ENGINE_RECONNECT_COMMAND
   },
   "vs-code": {
     id: "vs-code",
@@ -138,7 +138,7 @@ function ClientIcon({ clientId, className }: { clientId: ClientId; className: st
     );
   }
 
-  if (clientId === "opencode") {
+  if (clientId === "engine") {
     return (
       <svg className={className} viewBox="0 6 24 30" fill="none" aria-hidden="true">
         <path d="M18 30H6V18H18V30Z" fill="#CFCECD" />
@@ -234,14 +234,14 @@ export function LandingConnectMcp() {
       <div className="mb-10">
         <div className="mb-4 flex items-center gap-2.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-400">
           <Plug size={18} />
-          OpenWork Connect
+          Sofia Connect
         </div>
         <h2 className="max-w-3xl text-3xl font-medium leading-[1.15] tracking-tight md:text-4xl lg:text-5xl">
-          Already doing it in your agent?<br />Add it to OpenWork. Share it with everyone.
+          Already doing it in your agent?<br />Add it to Sofia. Share it with everyone.
         </h2>
         <p className="mt-5 max-w-3xl text-[16px] leading-7 text-gray-600 md:text-lg md:leading-8">
           Skills and MCPs move in as-is — same SKILL.md format, same server URLs. Share once,
-          and your whole team runs them in OpenWork — or from their own agent.
+          and your whole team runs them in Sofia — or from their own agent.
         </p>
       </div>
 
@@ -261,7 +261,7 @@ export function LandingConnectMcp() {
 
           <div className="flex flex-1 flex-col gap-4 p-4 font-mono text-[12px] leading-6 text-gray-100 md:p-5">
             <div>
-              <span className="text-cyan-300">❯</span> share my skills and MCPs with my OpenWork org
+              <span className="text-cyan-300">❯</span> share my skills and MCPs with my Sofia org
             </div>
 
             <div className="space-y-2">
@@ -302,7 +302,7 @@ export function LandingConnectMcp() {
                 <div className="h-2.5 w-2.5 rounded-full bg-yellow-400/70" />
                 <div className="h-2.5 w-2.5 rounded-full bg-green-400/70" />
               </div>
-              <div className="text-[12px] font-medium text-gray-500">OpenWork</div>
+              <div className="text-[12px] font-medium text-gray-500">Sofia</div>
             </div>
             <div className="text-[11px] text-gray-400">Your teammate&apos;s view</div>
           </div>
@@ -351,7 +351,7 @@ export function LandingConnectMcp() {
           <div className="flex min-w-0 shrink-0 items-center gap-2 text-gray-400">
             <Plug size={14} aria-hidden="true" />
             <span className="text-xs text-gray-400">
-              Verified for OpenCode only; setup guides for Codex, Cursor, ChatGPT, Claude Code, VS Code, and more
+              Verified for Sofia only; setup guides for Codex, Cursor, ChatGPT, Claude Code, VS Code, and more
             </span>
           </div>
         </div>
@@ -359,7 +359,7 @@ export function LandingConnectMcp() {
         <div className="min-w-0">
           <div
             role="tablist"
-            aria-label="OpenWork MCP client install options"
+            aria-label="Sofia MCP client install options"
             className="landing-chip mb-4 flex flex-nowrap gap-1 overflow-x-auto rounded-full p-1"
           >
             {CLIENT_ORDER.map((clientId) => {
@@ -489,7 +489,7 @@ export function LandingConnectMcp() {
                       ) : null}
                       <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <p className="text-[12px] leading-5 text-gray-500">
-                          Works with your OpenWork account —{" "}
+                          Works with your Sofia account —{" "}
                           <a
                             href={SIGNUP_URL}
                             target="_blank"
@@ -502,7 +502,7 @@ export function LandingConnectMcp() {
                         </p>
                         <button
                           type="button"
-                          aria-label="Copy the OpenWork MCP install command"
+                          aria-label="Copy the Sofia MCP install command"
                           onClick={() => {
                             void copyInstall(install);
                           }}
@@ -592,7 +592,7 @@ export function LandingConnectMcp() {
             </code>
             <button
               type="button"
-              aria-label="Copy the OpenWork MCP server URL"
+              aria-label="Copy the Sofia MCP server URL"
               onClick={() => {
                 void copyServerUrl();
               }}
@@ -606,8 +606,8 @@ export function LandingConnectMcp() {
 
       <div className="mt-8 flex flex-col gap-3 border-t border-gray-100 pt-5 text-[13px] leading-6 text-gray-600 sm:flex-row sm:items-center sm:justify-between">
         <p>
-          Verified in OpenCode. Codex and other setup guides require remote Streamable HTTP MCP and OAuth
-          support — your agent signs in with your OpenWork account, and access is scoped by org membership, roles, policies, and exposure allowlists.
+          Verified in Sofia. Codex and other setup guides require remote Streamable HTTP MCP and OAuth
+          support — your agent signs in with your Sofia account, and access is scoped by org membership, roles, policies, and exposure allowlists.
         </p>
         <a
           href={DOCS_URL}

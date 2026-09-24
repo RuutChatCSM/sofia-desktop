@@ -2,10 +2,10 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, onTestFinished, test } from "vitest";
-import type { Surface } from "@openwork/cdp";
-import { createVisualEvidence, screenshot, validate } from "@openwork/test-evidence";
-import { readActiveWorkspaceId } from "@openwork/cdp";
-import { desktop } from "@openwork/hosts";
+import type { Surface } from "@sofia/cdp";
+import { createVisualEvidence, screenshot, validate } from "@sofia/test-evidence";
+import { readActiveWorkspaceId } from "@sofia/cdp";
+import { desktop } from "@sofia/hosts";
 import {
   clickButton,
   createLocalWorkspaceViaUi,
@@ -20,13 +20,13 @@ import {
   waitForAssistantReply,
   waitForText,
   waitUntilTextStable,
-} from "@openwork/behaviors";
+} from "@sofia/behaviors";
 
-const e2eTestsEnabled = process.env.OPENWORK_EVAL_E2E_TESTS === "1";
+const e2eTestsEnabled = process.env.SOFIA_EVAL_E2E_TESTS === "1";
 const title = e2eTestsEnabled
   ? "first use without an invite or cloud reaches local task UI with honest model setup"
-  : "first-run local skipped: set OPENWORK_EVAL_E2E_TESTS=1 to opt in";
-const prompt = "Create a short welcome checklist for this OpenWork workspace. Use exactly three bullets and mention one thing I can do next.";
+  : "first-run local skipped: set SOFIA_EVAL_E2E_TESTS=1 to opt in";
+const prompt = "Create a short welcome checklist for this Sofia App workspace. Use exactly three bullets and mention one thing I can do next.";
 
 interface TaskAvailability {
   createTaskEnabled: boolean;
@@ -47,7 +47,7 @@ function taskAvailability(value: unknown): TaskAvailability {
 
 async function readTaskAvailability(app: Surface): Promise<TaskAvailability> {
   const value = await evalIn(app, `(() => {
-    const action = window.__openworkControl.listActions()
+    const action = window.__sofiaControl.listActions()
       .find((entry) => entry.id === "session.create_task");
     const buttons = [...document.querySelectorAll("button")];
     const run = buttons.find((button) => (button.textContent ?? "").trim() === "Run task");
@@ -64,7 +64,7 @@ async function readTaskAvailability(app: Surface): Promise<TaskAvailability> {
 async function createTask(app: Surface): Promise<void> {
   const value = await evalIn(
     app,
-    `window.__openworkControl.execute("session.create_task", null)`,
+    `window.__sofiaControl.execute("session.create_task", null)`,
     { awaitPromise: true },
   );
   if (typeof value !== "object" || value === null || Reflect.get(value, "ok") !== true) {
@@ -86,18 +86,18 @@ test.skipIf(!e2eTestsEnabled)(title, async () => {
 
   expect(app.readiness.route).toContain("/welcome");
   expect(app.readiness.state).toBe("welcome");
-  await waitForText(app, "Welcome to OpenWork");
+  await waitForText(app, "Welcome to Sofia App");
   {
     const shot = await screenshot(app);
     const seen = await validate(shot, [
-      "The Welcome to OpenWork heading and Use Without Cloud option are visible",
+      "The Welcome to Sofia App heading and Use Without Cloud option are visible",
       "No generic error or 'Something went wrong' crash message is visible",
     ]);
     expect(seen.ok, seen.why).toBe(true);
     await visualEvidence.recordScreenshot(shot, seen);
   }
 
-  workspacePath = await mkdtemp(join(tmpdir(), "openwork-first-run-local-"));
+  workspacePath = await mkdtemp(join(tmpdir(), "sofia-first-run-local-"));
   await clickButton(app, "Use Without Cloud");
   const workspace = await createLocalWorkspaceViaUi(app, { path: workspacePath });
   expect(workspace.path).toBe(workspacePath);
@@ -115,9 +115,9 @@ test.skipIf(!e2eTestsEnabled)(title, async () => {
   }
 
   await clickButton(app, "Skip and use the free model", { timeoutMs: 90_000 });
-  await waitForText(app, "How did you hear about OpenWork?", { timeoutMs: 90_000 });
+  await waitForText(app, "How did you hear about Sofia App?", { timeoutMs: 90_000 });
   await clickButton(app, "Skip", { timeoutMs: 15_000 });
-  await waitFor(app, `Boolean(localStorage.getItem("openwork.react.activeWorkspace"))
+  await waitFor(app, `Boolean(localStorage.getItem("sofia.react.activeWorkspace"))
     || /\\/workspace\\/[^/?#]+/.test(window.location.hash)`, {
     timeoutMs: 180_000,
     label: "first-run workspace selected",

@@ -5,7 +5,7 @@ set -euo pipefail
 # This centralizes the graphics-safe Chromium flags and optional secret-volume
 # env loading used by Daytona evals.
 
-cd "${OPENWORK_WORKSPACE_DIR:-/workspace}"
+cd "${SOFIA_WORKSPACE_DIR:-/workspace}"
 
 if [ "${1:-}" = "--detach" ]; then
   shift
@@ -20,7 +20,7 @@ script_path, log_path, *args = sys.argv[1:]
 log = open(log_path, "ab", buffering=0)
 subprocess.Popen(
     ["bash", script_path, *args],
-    cwd=os.environ.get("OPENWORK_WORKSPACE_DIR", "/workspace"),
+    cwd=os.environ.get("SOFIA_WORKSPACE_DIR", "/workspace"),
     env=os.environ.copy(),
     stdin=subprocess.DEVNULL,
     stdout=log,
@@ -61,26 +61,26 @@ fi
 export DISPLAY="${DISPLAY:-:99}"
 export ELECTRON_DISABLE_SANDBOX="${ELECTRON_DISABLE_SANDBOX:-1}"
 export ELECTRON_EXTRA_LAUNCH_ARGS="${ELECTRON_EXTRA_LAUNCH_ARGS:-$DAYTONA_ELECTRON_EXTRA_LAUNCH_ARGS}"
-export OPENWORK_REACT_DEVTOOLS="${OPENWORK_REACT_DEVTOOLS:-0}"
-export OPENWORK_DEV_MODE="${OPENWORK_DEV_MODE:-1}"
-export OPENWORK_ELECTRON_REMOTE_DEBUG_PORT="${OPENWORK_ELECTRON_REMOTE_DEBUG_PORT:-9825}"
-export OPENWORK_ELECTRON_FAKE_MEDIA="${OPENWORK_ELECTRON_FAKE_MEDIA:-0}"
-if [ -n "${OPENWORK_ELECTRON_USERDATA:-}" ]; then
-  export OPENWORK_ELECTRON_USERDATA
+export SOFIA_REACT_DEVTOOLS="${SOFIA_REACT_DEVTOOLS:-0}"
+export SOFIA_DEV_MODE="${SOFIA_DEV_MODE:-1}"
+export SOFIA_ELECTRON_REMOTE_DEBUG_PORT="${SOFIA_ELECTRON_REMOTE_DEBUG_PORT:-9825}"
+export SOFIA_ELECTRON_FAKE_MEDIA="${SOFIA_ELECTRON_FAKE_MEDIA:-0}"
+if [ -n "${SOFIA_ELECTRON_USERDATA:-}" ]; then
+  export SOFIA_ELECTRON_USERDATA
 fi
-if [ -n "${OPENWORK_ELECTRON_APP_IDENTIFIER:-}" ]; then
-  export OPENWORK_ELECTRON_APP_IDENTIFIER
+if [ -n "${SOFIA_ELECTRON_APP_IDENTIFIER:-}" ]; then
+  export SOFIA_ELECTRON_APP_IDENTIFIER
 fi
-if [ -n "${OPENWORK_ELECTRON_APP_NAME:-}" ]; then
-  export OPENWORK_ELECTRON_APP_NAME
+if [ -n "${SOFIA_ELECTRON_APP_NAME:-}" ]; then
+  export SOFIA_ELECTRON_APP_NAME
 fi
 
-if [ -n "${OPENWORK_EVAL_ELECTRON_BINARY:-}" ]; then
-  if [ ! -x "$OPENWORK_EVAL_ELECTRON_BINARY" ]; then
-    echo "OPENWORK_EVAL_ELECTRON_BINARY is not an executable file: $OPENWORK_EVAL_ELECTRON_BINARY" >&2
+if [ -n "${SOFIA_EVAL_ELECTRON_BINARY:-}" ]; then
+  if [ ! -x "$SOFIA_EVAL_ELECTRON_BINARY" ]; then
+    echo "SOFIA_EVAL_ELECTRON_BINARY is not an executable file: $SOFIA_EVAL_ELECTRON_BINARY" >&2
     exit 1
   fi
-  exec "$OPENWORK_EVAL_ELECTRON_BINARY"
+  exec "$SOFIA_EVAL_ELECTRON_BINARY"
 fi
 
-exec pnpm --filter @openwork/desktop dev:electron
+exec pnpm --filter @sofia/desktop dev:electron

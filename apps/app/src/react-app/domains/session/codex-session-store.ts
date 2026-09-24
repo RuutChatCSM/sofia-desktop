@@ -1,11 +1,11 @@
 // Sofia session store: holds codex engine sessions and their transcripts as
-// accumulated from the SSE stream. Mirrors the opencode session surface enough
+// accumulated from the SSE stream. Mirrors the engine session surface enough
 // to drive the existing transcript UI: each session accumulates a text body
 // from `message.delta`, and status from `item.*` / `turn.completed`.
 import { create } from "zustand";
 
 import type { CodexEvent, CodexSession, CodexSessionClient, CodexSessionStatus } from "@/app/lib/codex-session";
-import type { OpencodeSessionErrorPresentation } from "./sync/session-error";
+import type { WorkspaceEngineSessionErrorPresentation } from "./sync/session-error";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -33,13 +33,13 @@ export type SofiaErrorDetails = {
 /**
  * Turn a raw engine/provider error into conversation-level prose instead of
  * dumping JSON into the chat. The structured `{"error":{"message":...}}` body,
- * `codex rpc error (…):` prefix, and known failure shapes (missing credentials)
+ * `Sofia RPC error (…):` prefix, and known failure shapes (missing credentials)
  * are unwrapped so the primary content reads like a sentence, not a payload.
  */
 export function describeSofiaError(message: string): SofiaErrorDetails {
   const raw = message;
   // Unwrap the JSON error body if one is embedded anywhere in the message.
-  let detail = message.replace(/^codex rpc error \([^)]*\):\s*/i, "").trim();
+  let detail = message.replace(/^(?:sofia|codex) rpc error \([^)]*\):\s*/i, "").trim();
   const jsonStart = detail.indexOf("{");
   if (jsonStart >= 0) {
     try {
@@ -90,7 +90,7 @@ export type CodexTranscriptMessage = {
   status: "pending" | "done" | "error";
 };
 
-/** A codex ThreadItem as tracked by the store: its type, opencode-translated
+/** A codex ThreadItem as tracked by the store: its type, engine-translated
  * parts, and live accumulator buffers for deltas. */
 export type CodexTrackedItem = {
   id: string;
@@ -102,11 +102,12 @@ export type CodexTrackedItem = {
   output: string;      // accumulated command output
   status: "pending" | "done" | "error";
   /** Structured error for the transcript to render as a card (reuses the
-   * opencode session-error presentation). */
-  errorPresentation?: OpencodeSessionErrorPresentation;
+   * engine session-error presentation). */
+  errorPresentation?: WorkspaceEngineSessionErrorPresentation;
 };
 
 export type CodexSessionEntry = {
+  warning?: string;
   session: CodexSession;
   messages: CodexTranscriptMessage[];
   items: CodexTrackedItem[];
@@ -137,6 +138,7 @@ type CodexSessionActions = {
   startTurn: (sessionId: string) => void;
   completeTurn: (sessionId: string) => void;
   failSession: (sessionId: string, message: string, turnId?: string) => void;
+  setWarning: (sessionId: string, message: string | undefined) => void;
   addPendingUserMessage: (sessionId: string, text: string) => void;
   confirmPendingUserMessage: (sessionId: string, text?: string) => void;
   removeSession: (sessionId: string) => void;
@@ -313,7 +315,7 @@ export const useCodexSessionStore = create<CodexSessionStore>((set, get) => ({
         .filter((item) => item.id !== id)
         .map((item) => item.status === "pending" ? { ...item, status: "error" } : item);
       const described = describeSofiaError(message);
-      const errorPresentation: OpencodeSessionErrorPresentation = {
+      const errorPresentation: WorkspaceEngineSessionErrorPresentation = {
         kind: "generic",
         title: described.title,
         description: described.body,
@@ -333,6 +335,19 @@ export const useCodexSessionStore = create<CodexSessionStore>((set, get) => ({
           [sessionId]: { ...entry, session: { ...entry.session, status: "error" }, messages, items, pendingUserTexts: [] },
         },
       };
+    }),
+
+  /**
+   * Show (or clear) a session-level notice above the transcript. Used for
+   * engine warnings and for states the user would otherwise only see as an
+   * empty pane — a task held by another Sofia process, or a transcript that
+   * could not be loaded.
+   */
+  setWarning: (sessionId, message) =>
+    set((state) => {
+      const entry = state.sessions[sessionId];
+      if (!entry || entry.warning === message) return state;
+      return { sessions: { ...state.sessions, [sessionId]: { ...entry, warning: message } } };
     }),
 
   // Optimistically render a sent/steered user message until the engine echoes
@@ -464,6 +479,10 @@ export async function runCodexStream(
           case "turn.completed":
             s.completeTurn(event.sessionId);
             break;
+          case "warning": {
+            s.setWarning(event.sessionId, event.message);
+            break;
+          }
           case "error":
             s.failSession(event.sessionId, event.message, event.turnId);
             break;

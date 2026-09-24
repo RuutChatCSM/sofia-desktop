@@ -37,8 +37,8 @@ type Props = {
   isMobileVisitor: boolean;
 };
 
-const CLOUD_SIGNUP_URL = "https://app.openworklabs.com";
-const GATEWAY_URL = "https://api.openworklabs.com/mcp/agent";
+const CLOUD_SIGNUP_URL = "https://sofia-app.ruut.chat";
+const GATEWAY_URL = "https://sofia-api.ruut.chat/mcp/agent";
 
 type ProviderLogoName =
   | "openai"
@@ -93,7 +93,7 @@ export function LandingHome(props: Props) {
               </span>
             </h1>
             <p className="mb-6 max-w-4xl text-lg leading-relaxed text-gray-700 md:mb-7 md:text-xl">
-              OpenWork is the desktop app that lets you use 50+ LLMs, bring your
+              Sofia is the desktop app that lets you use 50+ LLMs, bring your
               own keys, and share your setups seamlessly with your team.
             </p>
 
@@ -165,7 +165,7 @@ export function LandingHome(props: Props) {
 
           <section
             className="relative mt-16 flex flex-col gap-6 overflow-hidden md:mt-20 md:gap-8"
-            aria-label="OpenWork product demo"
+            aria-label="Sofia product demo"
           >
             <div className="landing-shell relative flex flex-col overflow-hidden rounded-2xl">
               <div className="relative z-20 flex h-10 w-full shrink-0 items-center border-b border-white/50 bg-gradient-to-b from-white/90 to-white/60 px-4">
@@ -175,7 +175,7 @@ export function LandingHome(props: Props) {
                   <div className="h-3 w-3 rounded-full border border-[#1aab29]/20 bg-[#27c93f]/90 shadow-sm"></div>
                 </div>
                 <div className="absolute left-1/2 -translate-x-1/2 text-[12px] font-medium tracking-wide text-gray-500">
-                  OpenWork
+                  Sofia
                 </div>
               </div>
 
@@ -271,7 +271,7 @@ export function LandingHome(props: Props) {
 
           <section className="mt-[120px]" id="comparison">
             <LpSectionHeader
-              label="OpenWork vs Claude Cowork"
+              label="Sofia vs Claude Cowork"
               heading="Feature parity. Zero lock-in."
               right={
                 <a href="/docs/start-here/migrate-from-claude-cowork" className="lp-pill-secondary lp-pill-sm !hidden md:!inline-flex">
@@ -303,7 +303,7 @@ export function LandingHome(props: Props) {
                 <div>
                   <div className="text-[14px] text-[var(--lp-muted)]">Import existing repos</div>
                   <p className="mt-2 text-[15.5px] leading-[23px] text-[var(--lp-ink)]">
-                    Point OpenWork at any repository and start working with full
+                    Point Sofia at any repository and start working with full
                     context.
                   </p>
                 </div>
@@ -328,7 +328,7 @@ export function LandingHome(props: Props) {
                 </div>
                 <div>
                   <div className="flex items-center gap-2 text-[14px] text-[var(--lp-muted)]">
-                    OpenWork Web <LpAlphaBadge />
+                    Sofia Web <LpAlphaBadge />
                   </div>
                   <p className="mt-2 text-[15.5px] leading-[23px] text-[var(--lp-ink)]">
                     The same workspace in your browser. Nothing to install.
@@ -340,22 +340,22 @@ export function LandingHome(props: Props) {
 
           <section className="mt-[120px]">
             <LpSectionHeader
-              label="OpenWork Connect"
+              label="Sofia Connect"
               heading="Set up your MCPs once. Your whole team has them."
               headingLines={["Set up your MCPs once.", "Your whole team has them."]}
               right={
                 <a href="/connect" className="lp-pill-secondary lp-pill-sm !hidden md:!inline-flex">
-                  Explore OpenWork Connect
+                  Explore Sofia Connect
                 </a>
               }
             />
             <p className="mt-6 max-w-[640px] text-[16px] leading-[25px] text-[var(--lp-body)]">
-              OpenWork Connect is our MCP gateway. Add a server or skill to your org
-              once — every teammate and agent gets it instantly, in OpenWork and in
+              Sofia Connect is our MCP gateway. Add a server or skill to your org
+              once — every teammate and agent gets it instantly, in Sofia and in
               any MCP-compatible client. Claude Cowork has no equivalent.
             </p>
             <a href="/connect" className="lp-pill-secondary lp-pill-sm mt-6 md:!hidden">
-              Explore OpenWork Connect
+              Explore Sofia Connect
             </a>
             <div className="mt-10">
               <LpGatewayDiagram />
@@ -365,7 +365,7 @@ export function LandingHome(props: Props) {
             </div>
             <p className="mt-3 text-[13.5px] text-[var(--lp-muted)]">
               One URL for your whole org — skills, MCPs, roles, and policies
-              included. Works with your OpenWork account.
+              included. Works with your Sofia account.
             </p>
           </section>
 
@@ -412,11 +412,11 @@ export function LandingHome(props: Props) {
                     In your browser <LpAlphaBadge />
                   </h3>
                   <p className="mt-2 max-w-[280px] text-[14px] leading-[22px] text-[var(--lp-body)] md:min-h-[66px]">
-                    OpenWork Web. Nothing to install — sign in and run your first
+                    Sofia Web. Nothing to install — sign in and run your first
                     task.
                   </p>
                   <a
-                    href="https://app.openworklabs.com"
+                    href="https://sofia-app.ruut.chat"
                     className="lp-pill-secondary lp-pill-sm mt-5"
                   >
                     Open in browser
@@ -433,7 +433,7 @@ export function LandingHome(props: Props) {
                   <h3 className="mt-4 text-[17px] font-medium">From your agent</h3>
                   <p className="mt-2 max-w-[280px] text-[14px] leading-[22px] text-[var(--lp-body)] md:min-h-[66px]">
                     In Claude Code, Cursor, or Codex? One pasted prompt installs
-                    and sets up OpenWork for you.
+                    and sets up Sofia for you.
                   </p>
                   <LandingHeroPrompt compact className="mt-5" />
                 </div>
@@ -466,7 +466,7 @@ export function LandingHome(props: Props) {
                 <div>
                   <h3 className="text-[19px] font-medium">Manage it centrally</h3>
                   <p className="mt-2 text-[14.5px] leading-[22px] text-[var(--lp-body)]">
-                    Deploy skills, MCPs, and models to every seat with OpenWork
+                    Deploy skills, MCPs, and models to every seat with Sofia
                     Cloud.
                   </p>
                   <div className="mt-4">

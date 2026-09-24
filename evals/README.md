@@ -1,7 +1,7 @@
-# OpenWork tests and test evidence
+# Sofia tests and test evidence
 
 All new executable end-to-end coverage lives in
-[`specs/**/*.test.ts`](./specs) and imports `test` from `@openwork/testkit`.
+[`specs/**/*.test.ts`](./specs) and imports `test` from `@sofia/testkit`.
 Tests that drive Electron, Den, or another app surface use `.e2e.test.ts`.
 The legacy corpus under `flows/` is frozen compatibility coverage, not an
 authoring path.
@@ -34,7 +34,7 @@ pnpm evals:pr                      # app-less PR project
 
 Run the E2E lane with `pnpm evals:e2e [test-names...]`. Naming a test
 auto-satisfies the opt-in flags declared in its source, but value-bearing
-environment variables such as `OPENWORK_EVAL_MODEL` are never auto-set. Vision
+environment variables such as `SOFIA_EVAL_MODEL` are never auto-set. Vision
 judging is deferred by default; add `--with-llm-vision` to judge inline. Use
 `--daytona` for Daytona resources, `--den <url>` to reuse Den, or
 `--publish --pr <number>` to judge and publish existing evidence.
@@ -48,7 +48,7 @@ judging is deferred by default; add `--with-llm-vision` to judge inline. Use
 Run one app-driving test through the E2E project:
 
 ```bash
-OPENWORK_EVAL_E2E_TESTS=1 \
+SOFIA_EVAL_E2E_TESTS=1 \
   pnpm --dir evals exec vitest run --config vitest.config.ts \
   --project e2e specs/<slug>.e2e.test.ts
 ```
@@ -62,7 +62,7 @@ cold-boot verdict check.
 
 ## Authoring contract
 
-- Import `test` from `@openwork/testkit`.
+- Import `test` from `@sofia/testkit`.
 - Name app-driving files `<slug>.e2e.test.ts`; app-less tests use `<slug>.test.ts`.
 - Acquire resources in dependency order with `needs()` → `server()` → `app()`.
 - Drive user-visible behavior and assert observable outcomes. Backend, file,
@@ -78,15 +78,15 @@ new executable coverage is always assembled as a test under `specs/`.
 
 | Package | Owns |
 | --- | --- |
-| `@openwork/testkit` | test fixture plus `needs()`, `server()`, `app()`, mock, and placement resources |
-| `@openwork/cdp` | raw CDP client, targets, `Surface`, and `attachSurface` |
-| `@openwork/labs` | egress, identity-provider, release-feed, and mock-MCP labs |
-| `@openwork/hosts` | local and Daytona hosts and `resolveHost()` |
-| `@openwork/behaviors` | framework-free actions and observations over narrow handles |
-| `@openwork/matchers` | pure findings over facts, with no I/O |
-| `@openwork/test-evidence` | screenshot capture, visual validation, and ambient test-evidence recording used by testkit |
-| `@openwork/timeline` | timing spans for long test journeys |
-| `@openwork/test-artifacts` | index, render, and PR publication for completed test runs |
+| `@sofia/testkit` | test fixture plus `needs()`, `server()`, `app()`, mock, and placement resources |
+| `@sofia/cdp` | raw CDP client, targets, `Surface`, and `attachSurface` |
+| `@sofia/labs` | egress, identity-provider, release-feed, and mock-MCP labs |
+| `@sofia/hosts` | local and Daytona hosts and `resolveHost()` |
+| `@sofia/behaviors` | framework-free actions and observations over narrow handles |
+| `@sofia/matchers` | pure findings over facts, with no I/O |
+| `@sofia/test-evidence` | screenshot capture, visual validation, and ambient test-evidence recording used by testkit |
+| `@sofia/timeline` | timing spans for long test journeys |
+| `@sofia/test-artifacts` | index, render, and PR publication for completed test runs |
 
 Because behaviors and matchers do not depend on a test context, they also power
 the standalone diagnostic script:
@@ -95,7 +95,7 @@ the standalone diagnostic script:
 node evals/scripts/diagnose.mts https://den.customer.example
 ```
 
-It imports only `@openwork/behaviors` and `@openwork/matchers` and can point at
+It imports only `@sofia/behaviors` and `@sofia/matchers` and can point at
 a real endpoint without creating test evidence.
 
 ## Ambient evidence and verdicts
@@ -126,13 +126,13 @@ never determine the pass/fail verdict.
 For an isolated Den API without Electron or Den Web, use the development helper:
 
 ```bash
-pnpm --dir evals dev:den -- up --port 8891 --database openwork_den_my_eval --seed
+pnpm --dir evals dev:den -- up --port 8891 --database sofia_den_my_eval --seed
 pnpm --dir evals dev:den -- down --port 8891 --drop-database
 ```
 
 The port and database are generated when omitted. The helper starts MySQL,
 pushes the current schema, and prints the eval URL exports and teardown command.
-It also adds the printed `OPENWORK_EVAL_DEN_WEB_URL` to the trusted origins;
+It also adds the printed `SOFIA_EVAL_DEN_WEB_URL` to the trusted origins;
 without that origin, Better Auth rejects eval sign-in with
 `403 INVALID_ORIGIN`.
 
@@ -146,14 +146,14 @@ bash .devcontainer/test-on-daytona.sh [branch-or-commit] --artifacts-volume
 ```
 
 Then run the selected `.e2e.test.ts` with both
-`OPENWORK_EVAL_E2E_TESTS=1` and `OPENWORK_EVAL_DAYTONA=1`. Use direct CDP tools
+`SOFIA_EVAL_E2E_TESTS=1` and `SOFIA_EVAL_DAYTONA=1`. Use direct CDP tools
 only to explore or debug. Convert repeatable new coverage into a testkit test;
 do not add a legacy flow. [`daytona-flows.md`](./daytona-flows.md) retains the
 manual sandbox notes.
 
 ## CDP manual-debugging tools
 
-The `opencode-chrome-devtools` plugin exposes these browser tools. Every call
+The `engine-chrome-devtools` plugin exposes these browser tools. Every call
 takes `browser_url`; target-specific calls also use the selected target ID.
 
 | Tool | Purpose |
@@ -178,7 +178,7 @@ for compatibility. The corpus is frozen:
 - Deleting an obsolete flow is allowed.
 - Adding, modifying, copying, renaming, or scaffolding a flow is forbidden.
 - A user request for new coverage always goes to `evals/specs` and
-  `@openwork/testkit`.
+  `@sofia/testkit`.
 
 Only when a user explicitly requests an existing legacy flow, load the
 `run-evals` or the deprecated `fraimz` compatibility skill and run that unchanged flow:

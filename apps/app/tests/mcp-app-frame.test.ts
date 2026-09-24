@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test"
 
 import {
-  createOpenworkServerClient,
+  createSofiaServerClient,
   normalizeMcpAppHostOrigin,
-  OpenworkServerError,
-  type OpenworkMcpAppResource,
-} from "../src/app/lib/openwork-server"
+  SofiaServerError,
+  type SofiaMcpAppResource,
+} from "../src/app/lib/sofia-server"
 import { formatMcpAppDiagnostic, safeMcpAppDiagnosticMessage } from "../src/components/chat/mcp-app-diagnostics"
 import {
   buildMcpAppCsp,
@@ -14,7 +14,7 @@ import {
   secureMcpAppHtml,
 } from "../src/components/chat/mcp-app-frame"
 
-function fixture(overrides: Partial<OpenworkMcpAppResource> = {}): OpenworkMcpAppResource {
+function fixture(overrides: Partial<SofiaMcpAppResource> = {}): SofiaMcpAppResource {
   return {
     serverName: "fixture",
     toolName: "render",
@@ -35,7 +35,7 @@ describe("MCP App iframe policy", () => {
   test("accepts a namespaced gateway launch reference without exposing credentials", () => {
     expect(gatewayMcpAppLaunch({
       source: "provider",
-      "openwork/mcpApp": {
+      "sofia/mcpApp": {
         connectionId: "emc_01atlas",
         toolName: "open_project_atlas",
         resourceUri: "ui://atlas/1/index.html",
@@ -48,7 +48,7 @@ describe("MCP App iframe policy", () => {
       arguments: { query: "migration" },
     })
     expect(gatewayMcpAppLaunch({
-      "openwork/mcpApp": {
+      "sofia/mcpApp": {
         connectionId: "emc_01atlas",
         toolName: "open_project_atlas",
         resourceUri: "ui://atlas/1/index.html",
@@ -58,14 +58,14 @@ describe("MCP App iframe policy", () => {
 
   test("accepts a same-server generated App launch without a connection reference", () => {
     expect(gatewayMcpAppLaunch({
-      "openwork/mcpApp": {
+      "sofia/mcpApp": {
         toolName: "render_artifact_view",
-        resourceUri: "ui://openwork/artifacts/atlas/views/1/index.html",
+        resourceUri: "ui://sofia/artifacts/atlas/views/1/index.html",
         arguments: { input: { query: "migration" } },
       },
     })).toEqual({
       toolName: "render_artifact_view",
-      resourceUri: "ui://openwork/artifacts/atlas/views/1/index.html",
+      resourceUri: "ui://sofia/artifacts/atlas/views/1/index.html",
       arguments: { input: { query: "migration" } },
     })
   })
@@ -75,14 +75,14 @@ describe("MCP App iframe policy", () => {
     expect(normalizeMcpAppHostOrigin("null")).toBe("null")
     expect(normalizeMcpAppHostOrigin("https://desktop.example")).toBe("https://desktop.example")
 
-    const client = createOpenworkServerClient({ baseUrl: "http://localhost:61856" })
+    const client = createSofiaServerClient({ baseUrl: "http://localhost:61856" })
     const sandbox = client.mcpAppSandbox(fixture(), "file://")
     expect(new URL(sandbox.url).searchParams.get("hostOrigin")).toBe("null")
   })
 
   test("keeps ordinary tools silent while surfacing advertised resource failures", () => {
-    expect(isActionableMcpAppResolutionError(new OpenworkServerError(503, "mcp_unreachable", "offline"))).toBe(false)
-    expect(isActionableMcpAppResolutionError(new OpenworkServerError(404, "resource_read_failed", "missing"))).toBe(true)
+    expect(isActionableMcpAppResolutionError(new SofiaServerError(503, "mcp_unreachable", "offline"))).toBe(false)
+    expect(isActionableMcpAppResolutionError(new SofiaServerError(404, "resource_read_failed", "missing"))).toBe(true)
     expect(isActionableMcpAppResolutionError(new Error("generic failure"))).toBe(false)
   })
 
@@ -93,7 +93,7 @@ describe("MCP App iframe policy", () => {
       stage: "app-initialization",
       message: "The HTML document loaded, but initialization did not complete.",
       toolName: "artifact_render_card",
-      resourceUri: "ui://openwork/artifacts/arv_1/views/avr_2/index.html",
+      resourceUri: "ui://sofia/artifacts/arv_1/views/avr_2/index.html",
       sandboxOrigin: "http://127.0.0.1:4321",
       elapsedMs: 10_025,
       checkpoints: ["resource-resolved+0ms", "resource-document-loaded+24ms"],
@@ -102,7 +102,7 @@ describe("MCP App iframe policy", () => {
     expect(details).toContain("Code: MCP_APP_INITIALIZE_TIMEOUT")
     expect(details).toContain("Cause code: mcp_unreachable")
     expect(details).toContain("Stage: app-initialization")
-    expect(details).toContain("Resource: ui://openwork/artifacts/arv_1/views/avr_2/index.html")
+    expect(details).toContain("Resource: ui://sofia/artifacts/arv_1/views/avr_2/index.html")
     expect(details).toContain("Document: readyState=complete, htmlRoot=true, scripts=1")
     expect(details).toContain("resource-document-loaded+24ms")
   })

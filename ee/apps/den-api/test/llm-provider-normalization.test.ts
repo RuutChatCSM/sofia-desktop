@@ -1,11 +1,11 @@
 import { expect, test } from "bun:test"
 import { CustomProviderConfigError, normalizeCustomProviderConfig } from "../src/llm/custom-provider.js"
 
-test("normalizes a full opencode JSONC config with provider and models maps", () => {
+test("normalizes a full engine JSONC config with provider and models maps", () => {
   const normalized = normalizeCustomProviderConfig({
     customConfigText: `{
-      // Support attachment format: full opencode config, not a bare provider.
-      "$schema": "https://opencode.ai/config.json",
+      // Support attachment format: full engine config, not a bare provider.
+      "$schema": "https://github.com/RuutChatCSM/sofia/config.json",
       "provider": {
         "meettie": {
           "id": "meettie-gateway",
@@ -89,7 +89,7 @@ test("returns field paths for invalid custom provider configs", () => {
   )
 })
 
-test("rejects full opencode configs with multiple providers", () => {
+test("rejects full engine configs with multiple providers", () => {
   expect(() => normalizeCustomProviderConfig({
     customConfig: {
       provider: {

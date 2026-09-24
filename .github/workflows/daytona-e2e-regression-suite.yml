@@ -2,7 +2,7 @@
 # one prewarmed Den + desktop pair and reuses it across its assigned tests.
 # The checked-in lane profile removes legitimate skips before the matrix is built.
 # The critical-path journey is excluded because its nightly workflow owns it.
-# Tests that drive raw desktop() from @openwork/hosts are excluded dynamically:
+# Tests that drive raw desktop() from @sofia/hosts are excluded dynamically:
 # they spawn Electron on the caller's machine (correct inside a VNC sandbox or
 # on a dev workstation, impossible on a headless runner) and need a follow-up
 # in-sandbox vitest lane. The plan job lists every exclusion in its summary.
@@ -31,7 +31,7 @@ concurrency:
 jobs:
   plan:
     if: >-
-      github.repository == 'different-ai/openwork' &&
+      github.repository == 'RuutChatCSM/sofia-desktop' &&
       (github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.event == 'pull_request' &&
       github.event.workflow_run.conclusion == 'success' &&
@@ -130,7 +130,7 @@ jobs:
           # headless runner that dies before CDP. Exclude them until the
           # in-sandbox vitest lane exists, and surface the list in the summary.
           raw_desktop="$(
-             grep -l '"@openwork/hosts"' evals/specs/*.e2e.test.ts 2>/dev/null \
+             grep -l '"@sofia/hosts"' evals/specs/*.e2e.test.ts 2>/dev/null \
                | xargs grep -l '\bdesktop(' 2>/dev/null \
                | sed 's#^evals/specs/##' \
                | sort \
@@ -249,27 +249,27 @@ jobs:
           pnpm install --frozen-lockfile
           pnpm --dir evals install --frozen-lockfile --ignore-scripts
 
-      # The opencode MCP OAuth spec (opencode-mcp-agent-oauth.e2e.test.ts)
-      # drives the real opencode CLI as an OAuth MCP client against the Den
+      # The engine MCP OAuth spec (engine-mcp-agent-oauth.e2e.test.ts)
+      # drives the real engine CLI as an OAuth MCP client against the Den
       # agent endpoint. Install the exact validated version without lifecycle
       # scripts before Daytona credentials are provisioned on the runner, then
       # run the package's one known postinstall deliberately — the bin shim
       # refuses to start without it, and --ignore-scripts must not silently
       # skip it for every transitive dependency's sake.
-      - name: Install opencode CLI
+      - name: Install engine CLI
         shell: bash
         run: |
           set -euo pipefail
           export PNPM_HOME="$RUNNER_TEMP/pnpm-global"
           export PATH="$PNPM_HOME:$PATH"
           mkdir -p "$PNPM_HOME"
-          pnpm add --global --ignore-scripts opencode-ai@1.18.18
-          (cd "$(pnpm root -g)/opencode-ai" && node postinstall.mjs)
-          opencode --version
+          pnpm add --global --ignore-scripts engine-ai@1.18.18
+          (cd "$(pnpm root -g)/engine-ai" && node postinstall.mjs)
+          engine --version
           echo "$PNPM_HOME" >> "$GITHUB_PATH"
 
       # The eval harness shells out to the daytona CLI (testkit daytonaAvailable
-      # gate and @openwork/hosts exec). The binary is pinned to a release tag
+      # gate and @sofia/hosts exec). The binary is pinned to a release tag
       # and checksum-verified before it can run with CI secrets. When bumping,
       # take the digest from GitHub's authoritative asset metadata, never from
       # a local download (a truncating proxy once poisoned the pin):
@@ -309,12 +309,12 @@ jobs:
           fi
 
           set +e
-          OPENWORK_EVAL_DAYTONA=1 OPENWORK_EVAL_E2E_TESTS=1 \
-          OPENWORK_EVAL_MAX_WORKERS=1 \
-          OPENWORK_EVAL_AUTOMATIONS_E2E_TEST=1 OPENWORK_EVAL_CONNECTOR_E2E_TEST=1 \
-          OPENWORK_EVAL_LOCAL_MANAGED_MCP=1 OPENWORK_EVAL_GENERATED_ARTIFACT_VIEWS_E2E_TEST=1 \
-          OPENWORK_EVAL_SAVED_SCRIPT_AUTOMATIONS_E2E_TEST=1 OPENWORK_EVAL_ENGINE_ROLLOVER_E2E_TEST=1 \
-          OPENWORK_EVAL_MODEL=big-pickle OPENWORK_EVAL_VISION=defer \
+          SOFIA_EVAL_DAYTONA=1 SOFIA_EVAL_E2E_TESTS=1 \
+          SOFIA_EVAL_MAX_WORKERS=1 \
+          SOFIA_EVAL_AUTOMATIONS_E2E_TEST=1 SOFIA_EVAL_CONNECTOR_E2E_TEST=1 \
+          SOFIA_EVAL_LOCAL_MANAGED_MCP=1 SOFIA_EVAL_GENERATED_ARTIFACT_VIEWS_E2E_TEST=1 \
+          SOFIA_EVAL_SAVED_SCRIPT_AUTOMATIONS_E2E_TEST=1 SOFIA_EVAL_ENGINE_ROLLOVER_E2E_TEST=1 \
+          SOFIA_EVAL_MODEL=big-pickle SOFIA_EVAL_VISION=defer \
           pnpm --dir evals exec vitest run --config vitest.config.ts --project e2e "${tests[@]}" \
             2>&1 | tee /tmp/e2e-run.log
           vitest_status="${PIPESTATUS[0]}"

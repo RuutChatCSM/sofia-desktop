@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import { createDenTypeId } from "@openwork-ee/utils/typeid"
+import { createDenTypeId } from "@sofia-ee/utils/typeid"
 import { contributeMcpGrantClaim } from "../src/mcp/grant-claims.js"
 import {
   assertLiveMcpRefreshGrant,
@@ -7,7 +7,7 @@ import {
   type McpRefreshGrantRow,
 } from "../src/mcp/refresh-grant-liveness.js"
 
-const GRANT_CLAIM = "https://openworklabs.com/grant_id"
+const GRANT_CLAIM = "https://sofia.ruut.chat/grant_id"
 
 function refreshGrant(sessionId: string | null): McpRefreshGrantRow {
   return {

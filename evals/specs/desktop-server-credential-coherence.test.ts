@@ -1,14 +1,14 @@
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { test } from "@openwork/testkit";
+import { test } from "@sofia/testkit";
 import { expect } from "vitest";
 
-import { migrateOpenworkServerTokenStore } from "../../apps/desktop/electron/runtime.mjs";
+import { migrateSofiaServerTokenStore } from "../../apps/desktop/electron/runtime.mjs";
 
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
 
 test("desktop server credentials remain coherent across workspaces and reconnects", ({ evidence }) => {
-  const migrated = migrateOpenworkServerTokenStore({
+  const migrated = migrateSofiaServerTokenStore({
     version: 1,
     workspaces: {
       "/workspace/older": {
@@ -36,7 +36,7 @@ test("desktop server credentials remain coherent across workspaces and reconnect
     },
   });
   expect(migrated).not.toHaveProperty("workspaces");
-  expect(migrateOpenworkServerTokenStore(migrated)).toEqual(migrated);
+  expect(migrateSofiaServerTokenStore(migrated)).toEqual(migrated);
 
   const reconnect = spawnSync("pnpm", [
     "--dir",

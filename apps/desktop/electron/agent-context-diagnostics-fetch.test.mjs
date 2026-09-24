@@ -53,7 +53,7 @@ test("Electron diagnostics fetch keeps the absolute deadline through a stalled r
   await assert.rejects(
     fetchAgentContextDiagnosticsResponse(
       async () => response,
-      "https://remote.openwork.test/workspace/test/diagnostics/agent-context",
+      "https://remote.sofia.test/workspace/test/diagnostics/agent-context",
       { method: "POST", body: "{}" },
       startedAtMs + 40,
     ),
@@ -82,7 +82,7 @@ test("Electron diagnostics fetch rejects a chunked oversized remote response", a
   await assert.rejects(
     fetchAgentContextDiagnosticsResponse(
       async () => response,
-      "https://remote.openwork.test/workspace/test/diagnostics/agent-context",
+      "https://remote.sofia.test/workspace/test/diagnostics/agent-context",
       { method: "POST", body: "{}" },
       Date.now() + 1_000,
     ),
@@ -105,7 +105,7 @@ test("Electron diagnostics fetch rejects an oversized declared response before b
   await assert.rejects(
     fetchAgentContextDiagnosticsResponse(
       async () => response,
-      "https://remote.openwork.test/workspace/test/diagnostics/agent-context",
+      "https://remote.sofia.test/workspace/test/diagnostics/agent-context",
       { method: "POST", body: "{}" },
       Date.now() + 1_000,
     ),

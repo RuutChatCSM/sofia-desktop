@@ -1,5 +1,5 @@
-import { isOpenworkGatewayRuntime } from "./gateway-runtime";
+import { isSofiaGatewayRuntime } from "./gateway-runtime";
 
 export function canCreateWorkspaces() {
-  return !isOpenworkGatewayRuntime();
+  return !isSofiaGatewayRuntime();
 }

@@ -109,7 +109,7 @@ describe("cloud provider runtime patch (re-import diff #2346)", () => {
   test("cloud-managed key predicate guards re-import vs manual clobber", () => {
     expect(isCloudManagedProviderKey(LPR_ID)).toBe(true);
     expect(isCloudManagedProviderKey("lpr_anything")).toBe(true);
-    expect(isCloudManagedProviderKey("openwork")).toBe(true);
+    expect(isCloudManagedProviderKey("sofia")).toBe(true);
     expect(isCloudManagedProviderKey("openai")).toBe(false);
     expect(isCloudManagedProviderKey("anthropic")).toBe(false);
   });
@@ -135,29 +135,29 @@ describe("cloud provider runtime patch (re-import diff #2346)", () => {
   test("provider baseline persistence does not refresh the desktop cloud snapshot", () => {
     const source = readFileSync(providerAuthStoreSourcePath, "utf8");
     const persistStart = source.indexOf("const persistImportedCloudProviders = async");
-    const persistEnd = source.indexOf("const readProjectConfigFile", persistStart);
+    const persistEnd = source.indexOf("\n  const ", persistStart + 10);
     expect(persistStart).toBeGreaterThanOrEqual(0);
     expect(persistEnd).toBeGreaterThan(persistStart);
 
     const persistSource = source.slice(persistStart, persistEnd);
-    expect(persistSource).toContain("const config = await readWorkspaceOpenworkConfigRecord();");
+    expect(persistSource).toContain("const config = await readWorkspaceSofiaConfigRecord();");
     expect(persistSource).toContain("const cloudImports = readWorkspaceCloudImports(config);");
     expect(persistSource).toContain("const nextConfig = withWorkspaceCloudImports(config");
-    expect(persistSource).toContain("const persisted = await writeWorkspaceOpenworkConfigRecord(nextConfig);");
+    expect(persistSource).toContain("const persisted = await writeWorkspaceSofiaConfigRecord(nextConfig);");
     expect(persistSource).toContain('setStateField("importedCloudProviders", nextProviders);');
     expect(source).not.toContain("refreshDesktop" + "CloudSync");
     expect(source).not.toContain("getResource" + "Snapshot");
   });
 
-  test("client env mirror includes non-openwork provider credentials", () => {
+  test("client env mirror includes non-sofia provider credentials", () => {
     const source = readFileSync(providerAuthStoreSourcePath, "utf8");
-    const mirrorStart = source.indexOf("const mirrorOpenWorkModelsVoiceEnv = async");
-    const mirrorEnd = source.indexOf("const readWorkspaceOpenworkConfigRecord", mirrorStart);
+    const mirrorStart = source.indexOf("const mirrorSofiaModelsVoiceEnv = async");
+    const mirrorEnd = source.indexOf("const readWorkspaceSofiaConfigRecord", mirrorStart);
     expect(mirrorStart).toBeGreaterThanOrEqual(0);
     expect(mirrorEnd).toBeGreaterThan(mirrorStart);
 
     const mirrorSource = source.slice(mirrorStart, mirrorEnd);
-    expect(mirrorSource).not.toContain('provider.source !== "openwork"');
+    expect(mirrorSource).not.toContain('provider.source !== "sofia"');
     expect(mirrorSource).toContain("getCloudProviderEnv(provider.providerConfig)");
     expect(mirrorSource).toContain(".slice(0, 1)");
   });

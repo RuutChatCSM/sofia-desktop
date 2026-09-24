@@ -9,7 +9,7 @@ export type InferenceRequestReport = {
   organizationId: string
   orgMembershipId: string
   inferenceKeyId: string
-  openworkRequestId: string
+  sofiaRequestId: string
   route: string
   method: string
   incomingModel: string | null
@@ -24,7 +24,7 @@ export type InferenceHandledErrorReport = {
   organizationId?: string
   orgMembershipId?: string
   inferenceKeyId?: string
-  openworkRequestId?: string
+  sofiaRequestId?: string
   route: string
   method: string
   incomingModel?: string | null
@@ -294,7 +294,7 @@ function reportAttributes(report: InferenceRequestReport | InferenceHandledError
     organizationId: report.organizationId,
     orgMembershipId: report.orgMembershipId,
     inferenceKeyId: report.inferenceKeyId,
-    openworkRequestId: report.openworkRequestId,
+    sofiaRequestId: report.sofiaRequestId,
     route: report.route,
     method: report.method,
     incomingModel: report.incomingModel,
@@ -307,7 +307,7 @@ function reportTags(report: InferenceRequestReport | InferenceHandledErrorReport
   return {
     organization_id: report.organizationId,
     inference_key_id: report.inferenceKeyId,
-    openwork_request_id: report.openworkRequestId,
+    sofia_request_id: report.sofiaRequestId,
     route: report.route,
     method: report.method,
   }
@@ -319,7 +319,7 @@ export const sentryInferenceReporter: InferenceReporter = {
       return
     }
 
-    Sentry.logger.info("OpenWork chat completions inference request", {
+    Sentry.logger.info("Sofia chat completions inference request", {
       ...reportAttributes(report),
       payloadMode: report.payloadMode,
       payload: report.payload,
@@ -335,10 +335,10 @@ export const sentryInferenceReporter: InferenceReporter = {
       error: report.error,
     }
     if (shouldEmitSentryLog("error")) {
-      Sentry.logger.error("OpenWork inference handled error", attributes)
+      Sentry.logger.error("Sofia inference handled error", attributes)
     }
     if (report.exception === undefined) {
-      Sentry.captureMessage(`OpenWork inference handled error: ${report.reason}`, {
+      Sentry.captureMessage(`Sofia inference handled error: ${report.reason}`, {
         level: "error",
         tags: reportTags(report),
         contexts: { inference: attributes },

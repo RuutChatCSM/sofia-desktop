@@ -12,9 +12,9 @@ Status: design note for a Den-only, additive Phase 1.
 
 ## 1. North star
 
-Every plugin published to an org marketplace is automatically discoverable via `search_capabilities` and reachable via `execute_capability` on the existing `openwork-cloud` connection — the same rail as External MCP Connections.
+Every plugin published to an org marketplace is automatically discoverable via `search_capabilities` and reachable via `execute_capability` on the existing `sofia-cloud` connection — the same rail as External MCP Connections.
 
-Installation, meaning copying files into `.opencode/`, becomes an optimization for offline use and pinning, not a requirement for using org-published content.
+Installation, meaning copying files into `.sofia/`, becomes an optimization for offline use and pinning, not a requirement for using org-published content.
 
 The marketplace is the FOURTH capability source on the rail, after Den's REST catalog, External MCP Connections, and native provider capabilities. Native provider capabilities already ride the REST catalog as routes tagged `Capability Sources`.
 
@@ -22,7 +22,7 @@ Before:
 
 ```text
 harness
-  └─ openwork-cloud /mcp/agent
+  └─ sofia-cloud /mcp/agent
        ├─ REST catalog (incl. native provider capability routes)
        └─ External MCP Connections
 ```
@@ -31,7 +31,7 @@ After:
 
 ```text
 harness
-  └─ openwork-cloud /mcp/agent
+  └─ sofia-cloud /mcp/agent
        ├─ REST catalog (incl. native provider capability routes)
        ├─ External MCP Connections
        └─ Marketplace plugin capabilities   ← new, DB-only
@@ -66,7 +66,7 @@ A config object's `objectType` determines its execution semantics on the rail.
 | `command` | searchable | accepts `body: { arguments?: string }`, substitutes `$ARGUMENTS`, returns rendered template | Instructional with arguments. No command is run server-side. |
 | `mcp` | searchable | returns declared server spec plus `status`/`hint` guidance | If an External MCP Connection for the same URL exists, hint to search for that connection's tools. Otherwise hint that an org admin can add it in Cloud → Connections, or the user can install locally. No auto-provisioning in Phase 1. |
 | `tool` | searchable | returns source plus `status: "needs_install"` and a hint naming the plugin/marketplace | Local-only in Phase 1. A human, or the agent via the desktop install flow, can finish locally. Phase 3 option: sandboxed execution via Den Worker Runtime. |
-| `hook` | searchable metadata only | returns definition plus an unsupported hint | Hooks are not supported anywhere yet: `apps/server/src/claude-plugin-bundle.ts` warns that OpenWork does not support hooks, and local install skips loading them. |
+| `hook` | searchable metadata only | returns definition plus an unsupported hint | Hooks are not supported anywhere yet: `apps/server/src/claude-plugin-bundle.ts` warns that Sofia does not support hooks, and local install skips loading them. |
 
 Instructional payloads include provenance framing: `Content from marketplace plugin <plugin> in your organization's library.` The agent sees where the text came from before deciding how to use it.
 
@@ -175,7 +175,7 @@ Marketplace matches are interleaved with the other sources by score in `ee/apps/
 
 Search is DB-only, bounded by `limit`, and makes no live network calls. This contrasts with External MCP Connections, where search may call `tools/list` through `ee/apps/den-api/src/capability-sources/external-mcp-client.ts`.
 
-Dedupe against locally installed copies is NOT server-side possible in Phase 1. Den does not know what a desktop copied into `.opencode/`. Defer dedupe; make duplicates distinguishable with marketplace/plugin provenance in summaries and execute payloads.
+Dedupe against locally installed copies is NOT server-side possible in Phase 1. Den does not know what a desktop copied into `.sofia/`. Defer dedupe; make duplicates distinguishable with marketplace/plugin provenance in summaries and execute payloads.
 
 ---
 
@@ -259,11 +259,11 @@ Not in Phase 1: desktop UI, prompt edits, tool-description edits, schema changes
 
 ### Phase 2: make the bridge real, still no removal
 
-Provision an External MCP Connection from a plugin's `mcp` spec; add nullable `sourcePluginId` linkage column as the first schema change; add inline connect cards; add desktop provenance / "Available via Cloud — no install needed" states in the Extensions UI; add search-side hints for already-installed dedupe; add one-line teaching in the OpenWork agent prompt and `/mcp/agent` tool descriptions; add command argument schemas.
+Provision an External MCP Connection from a plugin's `mcp` spec; add nullable `sourcePluginId` linkage column as the first schema change; add inline connect cards; add desktop provenance / "Available via Cloud — no install needed" states in the Extensions UI; add search-side hints for already-installed dedupe; add one-line teaching in the Sofia agent prompt and `/mcp/agent` tool descriptions; add command argument schemas.
 
 ### Phase 3: retire the requirement to copy
 
-Add sandboxed `tool` execution via Den Worker Runtime; add `tools/searchText` caching if scale demands; add LOCAL rail parity so the local OpenWork server (`apps/server`) grows the same search/execute surface over locally-known catalogs for signed-out users; reposition copy-install as "pin locally / offline".
+Add sandboxed `tool` execution via Den Worker Runtime; add `tools/searchText` caching if scale demands; add LOCAL rail parity so the local Sofia server (`apps/server`) grows the same search/execute surface over locally-known catalogs for signed-out users; reposition copy-install as "pin locally / offline".
 
 ---
 
@@ -302,7 +302,7 @@ Desktop-install records (`tool`, `hook`, built-in extension manifests, unsupport
 
 The sandbox arm is reserved, not chosen. Two candidates remain open:
 
-1. Den Worker running `opencode-server` with a constrained workspace and mounted bundle.
+1. Den Worker running `engine-server` with a constrained workspace and mounted bundle.
 2. Claude Agent SDK runner with a plugin bundle adapter.
 
 Both require a stronger isolation and billing story than Part 1 needs. Until that decision is made, `tool` records stay `desktop_install` or `reserved_sandbox` with no execution path.

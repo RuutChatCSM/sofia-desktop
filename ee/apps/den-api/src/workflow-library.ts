@@ -1,13 +1,13 @@
-import { and, asc, desc, eq, isNull } from "@openwork-ee/den-db/drizzle"
+import { and, asc, desc, eq, isNull } from "@sofia-ee/den-db/drizzle"
 import {
   ConfigObjectAccessGrantTable,
   ConfigObjectTable,
   PluginConfigObjectTable,
   PluginTable,
-} from "@openwork-ee/den-db/schema"
-import type { GeneratedArtifactView } from "@openwork/types/workflows"
+} from "@sofia-ee/den-db/schema"
+import type { GeneratedArtifactView } from "@sofia/types/workflows"
 import { db } from "./db.js"
-import { normalizeDenTypeId } from "@openwork-ee/utils/typeid"
+import { normalizeDenTypeId } from "@sofia-ee/utils/typeid"
 import { getWorkflowDetail } from "./workflows.js"
 import { listArtifactViewsForScript } from "./artifact-views.js"
 import {

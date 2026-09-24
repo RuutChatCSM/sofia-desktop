@@ -23,7 +23,7 @@ concurrency:
 
 jobs:
   critical-path-e2e:
-    if: github.repository == 'different-ai/openwork'
+    if: github.repository == 'RuutChatCSM/sofia-desktop'
     runs-on: ubuntu-24.04
     timeout-minutes: 100
 
@@ -72,7 +72,7 @@ jobs:
           pnpm --dir evals install --frozen-lockfile
 
       # The eval harness shells out to the daytona CLI (testkit daytonaAvailable
-      # gate and @openwork/hosts exec). The binary is pinned to a release tag
+      # gate and @sofia/hosts exec). The binary is pinned to a release tag
       # and checksum-verified before it can run with CI secrets. When bumping,
       # take the digest from GitHub's authoritative asset metadata, never from
       # a local download (a truncating proxy once poisoned the pin):
@@ -103,7 +103,7 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           DISPATCH_MODEL: ${{ inputs.model }}
           EVENT_NAME: ${{ github.event_name }}
-          NIGHTLY_MODEL: ${{ vars.OPENWORK_EVAL_NIGHTLY_MODEL }}
+          NIGHTLY_MODEL: ${{ vars.SOFIA_EVAL_NIGHTLY_MODEL }}
         run: |
           set -euo pipefail
 
@@ -113,8 +113,8 @@ jobs:
             MODEL="${NIGHTLY_MODEL:-gpt-5.6-luna}"
           fi
 
-          OPENWORK_EVAL_DAYTONA=1 OPENWORK_EVAL_E2E_TESTS=1 OPENWORK_EVAL_CRITICAL_PATH_E2E_JOURNEY=1 \
-          OPENWORK_EVAL_MODEL="${MODEL}" OPENWORK_EVAL_VISION=defer \
+          SOFIA_EVAL_DAYTONA=1 SOFIA_EVAL_E2E_TESTS=1 SOFIA_EVAL_CRITICAL_PATH_E2E_JOURNEY=1 \
+          SOFIA_EVAL_MODEL="${MODEL}" SOFIA_EVAL_VISION=defer \
           pnpm --dir evals exec vitest run --config vitest.config.ts --project e2e specs/org-team-lifecycle-critical-path.e2e.test.ts \
             2>&1 | tee /tmp/critical-path-e2e-run.log
 

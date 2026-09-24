@@ -3,7 +3,7 @@ import type { MarkedExtension, TokenizerAndRendererExtension, Tokens } from "mar
 import markedKatex from "marked-katex-extension";
 
 // Models emit LaTeX with two delimiter families. `marked-katex-extension` covers the
-// standard `$...$` / `$$...$$` pair (same approach as upstream opencode web); the
+// standard `$...$` / `$$...$$` pair (same approach as upstream engine web); the
 // `\(...\)` / `\[...\]` pair below is added here because models emit it just as often
 // and markdown would otherwise swallow the backslash escapes.
 const INLINE_PAREN_RULE = /^\\\(([\s\S]+?)\\\)/;
@@ -34,7 +34,7 @@ function escapeMathSource(value: string) {
  * still gets the content, and leaves the rest of the message intact.
  */
 function mathFallbackHtml(source: string) {
-  return `<code data-openwork-math-error="" class="rounded-md bg-gray-2/70 px-1.5 py-0.5 font-mono text-sm text-foreground">${escapeMathSource(source)}</code>`;
+  return `<code data-sofia-math-error="" class="rounded-md bg-gray-2/70 px-1.5 py-0.5 font-mono text-sm text-foreground">${escapeMathSource(source)}</code>`;
 }
 
 export function renderMathHtml(text: string, displayMode: boolean) {

@@ -2,7 +2,7 @@ import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect } from "vitest";
-import { briefTest, claim, testBrief } from "@openwork/testkit";
+import { briefTest, claim, testBrief } from "@sofia/testkit";
 
 const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
 
@@ -43,17 +43,17 @@ briefTest(testBrief({
 
   expect(packageDirectories).toContain("test-evidence");
   expect(packageDirectories).toContain("test-artifacts");
-  expect(testEvidencePackage).toContain('"name": "@openwork/test-evidence"');
-  expect(testArtifactsPackage).toContain('"name": "@openwork/test-artifacts"');
-  expect(evalsPackage).not.toContain('"@openwork/fraimz"');
-  expect(evalsPackage).not.toContain('"@openwork/evidence"');
+  expect(testEvidencePackage).toContain('"name": "@sofia/test-evidence"');
+  expect(testArtifactsPackage).toContain('"name": "@sofia/test-artifacts"');
+  expect(evalsPackage).not.toContain('"@sofia/fraimz"');
+  expect(evalsPackage).not.toContain('"@sofia/evidence"');
   expect(evalsPackage).toContain('"evidence:judge"');
   expect(evalsPackage).toContain('"artifacts:publish"');
   expect(evalsCli).toContain("--test-run");
   expect(evalsCli).not.toContain("--roll");
   prove.evidencePackages(
     true,
-    "the workspace exposes @openwork/test-evidence, @openwork/test-artifacts, evidence:judge, artifacts:publish, and --test-run",
+    "the workspace exposes @sofia/test-evidence, @sofia/test-artifacts, evidence:judge, artifacts:publish, and --test-run",
   );
 
   const workflowFiles = await readdir(join(repoRoot, ".github", "workflows"));

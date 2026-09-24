@@ -22,6 +22,6 @@ test("selfHostServer skips Daytona placement", async () => {
 
   await assert.rejects(
     selfHostServer({ place, name: "Test", slug: "test", ownerEmails: ["owner@example.test"] }),
-    (error: unknown) => error instanceof Error && error.name === "SkipError" && error.message.includes("OPENWORK_EVAL_DAYTONA"),
+    (error: unknown) => error instanceof Error && error.name === "SkipError" && error.message.includes("SOFIA_EVAL_DAYTONA"),
   );
 });

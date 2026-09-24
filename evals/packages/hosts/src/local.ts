@@ -3,7 +3,7 @@ import { constants, existsSync, openSync } from "node:fs";
 import { access, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
-import { allocateFreePort, allocateFreePorts, listTargets, waitForCdp } from "@openwork/cdp";
+import { allocateFreePort, allocateFreePorts, listTargets, waitForCdp } from "@sofia/cdp";
 import { ensureDenStack } from "../../../runner/den-stack.ts";
 import type { ChildProcess } from "node:child_process";
 import type { DisposableHost, SurfaceHandle, ElectronSurfaceOptions, ChromeSurfaceOptions, DenServiceOptions, DenServiceHandle, ShareLinks } from "./types.ts";
@@ -26,7 +26,7 @@ export interface ElectronProfilePaths {
   envStorePath: string;
   homeDir: string;
   localAppDataDir: string;
-  opencodeConfigDir: string;
+  engineConfigDir: string;
   root: string;
   stateHome: string;
   userDataDir: string;
@@ -339,7 +339,7 @@ async function runPrepareScript(scriptPath: string, outDir: string, desktopRoot:
 }
 
 async function prepareSharedElectronResources(repoRoot: string, log: (message: string) => void): Promise<void> {
-  if (process.env.OPENWORK_EVAL_ELECTRON_RESOURCES_PREPARED === "1") return;
+  if (process.env.SOFIA_EVAL_ELECTRON_RESOURCES_PREPARED === "1") return;
   if (!prepareSharedResourcesPromise) {
     prepareSharedResourcesPromise = (async () => {
       const desktopRoot = join(repoRoot, "apps", "desktop");
@@ -358,7 +358,7 @@ async function ensureElectronProfile(paths: ElectronProfilePaths): Promise<void>
     mkdir(paths.userDataDir, { recursive: true }),
     mkdir(paths.appDataDir, { recursive: true }),
     mkdir(paths.localAppDataDir, { recursive: true }),
-    mkdir(paths.opencodeConfigDir, { recursive: true }),
+    mkdir(paths.engineConfigDir, { recursive: true }),
     mkdir(paths.dataDir, { recursive: true }),
     mkdir(paths.homeDir, { recursive: true }),
     mkdir(paths.configHome, { recursive: true }),
@@ -400,12 +400,12 @@ export function electronProfilePaths(root: string): ElectronProfilePaths {
     bootstrapPath: join(root, "bootstrap.json"),
     cacheHome: join(root, "xdg-cache"),
     configHome: join(root, "xdg-config"),
-    dataDir: join(root, "openwork-data"),
+    dataDir: join(root, "sofia-data"),
     dataHome: join(root, "xdg-data"),
-    envStorePath: join(root, "openwork-env.json"),
+    envStorePath: join(root, "sofia-env.json"),
     homeDir: join(root, "home"),
     localAppDataDir: join(root, "local-appdata"),
-    opencodeConfigDir: join(root, "opencode-config"),
+    engineConfigDir: join(root, "engine-config"),
     root,
     stateHome: join(root, "xdg-state"),
     userDataDir: join(root, "electron-userdata"),
@@ -445,20 +445,20 @@ export function electronSurfaceEnv(paths: ElectronProfilePaths, options: Electro
     APPDATA: paths.appDataDir,
     HOME: paths.homeDir,
     LOCALAPPDATA: paths.localAppDataDir,
-    OPENWORK_DATA_DIR: paths.dataDir,
-    OPENWORK_DESKTOP_BOOTSTRAP_PATH: paths.bootstrapPath,
-    OPENWORK_DESKTOP_DISABLE_WORKSPACE_RECOVERY: "1",
-    OPENWORK_DEV_MODE: "1",
-    OPENWORK_ENV_STORE: paths.envStorePath,
-    OPENCODE_CONFIG_DIR: paths.opencodeConfigDir,
-    VITE_DISABLE_OPENWORK_MODELS: "1",
-    OPENWORK_ELECTRON_APP_IDENTIFIER: options.appIdentifier,
-    OPENWORK_ELECTRON_APP_NAME: options.appName,
-    OPENWORK_ELECTRON_DISABLE_PROTOCOL_REGISTRATION: "1",
-    OPENWORK_ELECTRON_REMOTE_DEBUG_PORT: String(options.cdpPort),
-    OPENWORK_ELECTRON_SKIP_SHARED_PREPARE: "1",
-    OPENWORK_ELECTRON_USE_MOCK_KEYCHAIN: "1",
-    OPENWORK_ELECTRON_USERDATA: paths.userDataDir,
+    SOFIA_DATA_DIR: paths.dataDir,
+    SOFIA_DESKTOP_BOOTSTRAP_PATH: paths.bootstrapPath,
+    SOFIA_DESKTOP_DISABLE_WORKSPACE_RECOVERY: "1",
+    SOFIA_DEV_MODE: "1",
+    SOFIA_ENV_STORE: paths.envStorePath,
+    SOFIA_ENGINE_CONFIG_DIR: paths.engineConfigDir,
+    VITE_DISABLE_SOFIA_MODELS: "1",
+    SOFIA_ELECTRON_APP_IDENTIFIER: options.appIdentifier,
+    SOFIA_ELECTRON_APP_NAME: options.appName,
+    SOFIA_ELECTRON_DISABLE_PROTOCOL_REGISTRATION: "1",
+    SOFIA_ELECTRON_REMOTE_DEBUG_PORT: String(options.cdpPort),
+    SOFIA_ELECTRON_SKIP_SHARED_PREPARE: "1",
+    SOFIA_ELECTRON_USE_MOCK_KEYCHAIN: "1",
+    SOFIA_ELECTRON_USERDATA: paths.userDataDir,
     PORT: String(options.port),
     XDG_CACHE_HOME: paths.cacheHome,
     XDG_CONFIG_HOME: paths.configHome,
@@ -532,7 +532,7 @@ export function createLocalHost(options: LocalHostOptions): DisposableHost {
   // generate Makefiles with unquoted include paths under that HOME, so a repo
   // checkout on a path containing spaces breaks every native rebuild. The env
   // override lets such machines park surfaces on a space-free path (e.g. /tmp).
-  const surfacesRootOverride = process.env.OPENWORK_EVAL_SURFACES_DIR?.trim();
+  const surfacesRootOverride = process.env.SOFIA_EVAL_SURFACES_DIR?.trim();
   const rootDir = options.rootDir ?? (surfacesRootOverride
     ? surfacesRootOverride
     : join(options.repoRoot, "evals", "results", ".surfaces", String(process.pid)));
@@ -557,7 +557,7 @@ export function createLocalHost(options: LocalHostOptions): DisposableHost {
 // so pass the container-safe switches when we detect a sandbox.
 function insideContainerSandbox(env: NodeJS.ProcessEnv = process.env): boolean {
   if ((env.DAYTONA_SANDBOX_ID ?? "").trim().length > 0) return true;
-  if ((env.OPENWORK_EVAL_CONTAINER_ELECTRON ?? "").trim() === "1") return true;
+  if ((env.SOFIA_EVAL_CONTAINER_ELECTRON ?? "").trim() === "1") return true;
   return existsSync("/daytona-secrets") || existsSync("/daytona-artifacts");
 }
 
@@ -650,8 +650,8 @@ async function clearStaleSurfaces(rootDir: string, log: (message: string) => voi
       await writeBootstrap(paths.bootstrapPath, opts.bootstrap);
       const [port, cdpPort] = await allocateFreePorts(2);
       if (port === undefined || cdpPort === undefined) throw new Error("Could not allocate Electron Vite/CDP ports.");
-      const appName = `OpenWork Eval ${name}`;
-      const appIdentifier = `com.differentai.openwork.eval.${sanitizeSlug(name)}`;
+      const appName = `Sofia Eval ${name}`;
+      const appIdentifier = `com.differentai.sofia.eval.${sanitizeSlug(name)}`;
       const isolationEnv = electronSurfaceEnv(paths, { appName, appIdentifier, port, cdpPort });
       const env: NodeJS.ProcessEnv = { ...process.env, ...isolationEnv, ...opts.env };
       const launchArgs = containerLaunchArgs(env.ELECTRON_EXTRA_LAUNCH_ARGS);
@@ -665,11 +665,11 @@ async function clearStaleSurfaces(rootDir: string, log: (message: string) => voi
       // segfaults instead of opening a window.
       if (insideContainerSandbox() && (env.DISPLAY ?? "").trim().length === 0) env.DISPLAY = ":99";
       const logPath = join(profileRoot, "electron.log");
-      const packagedBinary = process.env.OPENWORK_EVAL_ELECTRON_BINARY?.trim();
+      const packagedBinary = process.env.SOFIA_EVAL_ELECTRON_BINARY?.trim();
       let spawned: SpawnedDetached;
       if (packagedBinary) {
         await access(packagedBinary, constants.F_OK).catch(() => {
-          throw new Error(`OPENWORK_EVAL_ELECTRON_BINARY does not exist: ${packagedBinary}`);
+          throw new Error(`SOFIA_EVAL_ELECTRON_BINARY does not exist: ${packagedBinary}`);
         });
         log(`Starting local Electron surface ${name} from packaged binary ${packagedBinary} (CDP :${cdpPort})...`);
         spawned = spawnDetached(packagedBinary, [], { cwd: options.repoRoot, env, logPath });
@@ -713,7 +713,7 @@ async function clearStaleSurfaces(rootDir: string, log: (message: string) => voi
       const cdpUrl = `http://127.0.0.1:${cdpPort}`;
       const launch = async (headless: boolean): Promise<SpawnedDetached> => {
         const spawned = spawnDetached(binary, chromeArgs(cdpPort, profileDir, startUrl, headless), { cwd: profileRoot, env, logPath });
-        await writeFile(join(profileDir, "openwork-eval-chrome.pid"), `${spawned.pid}\n`, "utf8");
+        await writeFile(join(profileDir, "sofia-eval-chrome.pid"), `${spawned.pid}\n`, "utf8");
         try {
           await waitForCdpOrExit("Chrome", cdpUrl, spawned, logPath);
         } catch (error) {
@@ -726,7 +726,7 @@ async function clearStaleSurfaces(rootDir: string, log: (message: string) => voi
       };
       let spawned: SpawnedDetached;
       try {
-        spawned = await launch(opts.headless === true || process.env.OPENWORK_EVAL_CHROME_HEADLESS === "1");
+        spawned = await launch(opts.headless === true || process.env.SOFIA_EVAL_CHROME_HEADLESS === "1");
       } catch (error) {
         if (!messageText(error).includes("SIGTRAP")) throw error;
         log(`Chrome surface ${name} exited with SIGTRAP under the windowed launch; retrying with --headless=new.`);
@@ -750,9 +750,9 @@ async function clearStaleSurfaces(rootDir: string, log: (message: string) => voi
         log("seed:none requested; local Den stack currently keeps the Acme demo seed, so continuing with the default seed.");
       }
       await ensureDenStack({ log, cdpCandidates: [], skipApp: true, orgMode: opts.orgMode });
-      const apiUrl = process.env.OPENWORK_EVAL_DEN_API_URL?.trim();
-      const webUrl = process.env.OPENWORK_EVAL_DEN_WEB_URL?.trim();
-      if (!apiUrl || !webUrl) throw new Error("Den stack did not export OPENWORK_EVAL_DEN_API_URL / OPENWORK_EVAL_DEN_WEB_URL.");
+      const apiUrl = process.env.SOFIA_EVAL_DEN_API_URL?.trim();
+      const webUrl = process.env.SOFIA_EVAL_DEN_WEB_URL?.trim();
+      if (!apiUrl || !webUrl) throw new Error("Den stack did not export SOFIA_EVAL_DEN_API_URL / SOFIA_EVAL_DEN_WEB_URL.");
       const orgMode = await runtimeOrgMode(webUrl);
       const apiPort = explicitPort(apiUrl);
       const webPort = explicitPort(webUrl);
@@ -763,8 +763,8 @@ async function clearStaleSurfaces(rootDir: string, log: (message: string) => voi
 
     async share(): Promise<ShareLinks> {
       const links: ShareLinks = [];
-      const webUrl = process.env.OPENWORK_EVAL_DEN_WEB_URL?.trim();
-      const apiUrl = process.env.OPENWORK_EVAL_DEN_API_URL?.trim();
+      const webUrl = process.env.SOFIA_EVAL_DEN_WEB_URL?.trim();
+      const apiUrl = process.env.SOFIA_EVAL_DEN_API_URL?.trim();
       if (webUrl) links.push({ label: "Den Web", url: webUrl });
       if (apiUrl) links.push({ label: "Den API", url: apiUrl });
       return links;

@@ -29,10 +29,10 @@ describe("release feed URL and filename handling", () => {
       catalog: createReleaseCatalog(["0.17.40"], { platforms: ["win-x64"], distribution: "enterprise" }),
     }).start();
     try {
-      const fileName = "openwork-enterprise-win-x64-0.17.40.exe";
+      const fileName = "sofia-enterprise-win-x64-0.17.40.exe";
       assert.equal(
         buildReleaseAssetUrl({ baseUrl: feed.baseUrl, version: "0.17.40", fileName }),
-        `${feed.baseUrl}/different-ai/openwork/releases/download/v0.17.40/openwork-enterprise-win-x64-0.17.40.exe`,
+        `${feed.baseUrl}/RuutChatCSM/sofia-desktop/releases/download/v0.17.40/sofia-enterprise-win-x64-0.17.40.exe`,
       );
       const renamed = simulateBrowserRenamedFileName(fileName);
       assert.equal(feed.resolveClientDownloadedAsset("0.17.40", "win-x64", renamed).fileName, fileName);

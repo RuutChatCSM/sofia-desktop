@@ -11,7 +11,7 @@ describe("codex-runtime-mcp", () => {
     const toml = codexMcpServersToml([
       {
         name: "computer-use",
-        command: "/path/to/openwork-handsfree-computer-use.mjs",
+        command: "/path/to/sofia-handsfree-computer-use.mjs",
         args: ["mcp"],
         defaultApprovalMode: "prompt",
         enabled: true,
@@ -24,7 +24,7 @@ describe("codex-runtime-mcp", () => {
       },
     ]);
     expect(toml).toContain("[mcp_servers.computer-use]");
-    expect(toml).toContain('command = "/path/to/openwork-handsfree-computer-use.mjs"');
+    expect(toml).toContain('command = "/path/to/sofia-handsfree-computer-use.mjs"');
     expect(toml).toContain('args = ["mcp"]');
     expect(toml).toContain('default_tools_approval_mode = "prompt"');
     expect(toml).toContain("enabled = true");

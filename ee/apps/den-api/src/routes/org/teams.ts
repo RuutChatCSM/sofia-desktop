@@ -1,4 +1,4 @@
-import { and, eq, isNull } from "@openwork-ee/den-db/drizzle"
+import { and, eq, isNull } from "@sofia-ee/den-db/drizzle"
 import {
   ConfigObjectAccessGrantTable,
   ConnectorInstanceAccessGrantTable,
@@ -11,8 +11,8 @@ import {
   PluginAccessGrantTable,
   TeamMemberTable,
   TeamTable,
-} from "@openwork-ee/den-db/schema"
-import { createDenTypeId, normalizeDenTypeId } from "@openwork-ee/utils/typeid"
+} from "@sofia-ee/den-db/schema"
+import { createDenTypeId, normalizeDenTypeId } from "@sofia-ee/utils/typeid"
 import type { Hono } from "hono"
 import { describeRoute } from "hono-openapi"
 import { z } from "zod"

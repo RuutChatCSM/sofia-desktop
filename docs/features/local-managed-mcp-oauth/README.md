@@ -1,20 +1,20 @@
 # Local managed MCP OAuth
 
-OpenWork desktop can own OAuth for a custom remote MCP and expose its tools to
-the bundled OpenCode engine through an authenticated loopback MCP gateway. This
+Sofia desktop can own OAuth for a custom remote MCP and expose its tools to
+the bundled Sofia engine through an authenticated loopback MCP gateway. This
 provides a compatibility path for providers whose OAuth flow works through
-OpenWork's enterprise MCP client but not through OpenCode's direct MCP client.
+Sofia's enterprise MCP client but not through Sofia's direct MCP client.
 
 ## User flow
 
-1. In a local desktop workspace, add a remote MCP and expand **OpenWork-managed
+1. In a local desktop workspace, add a remote MCP and expand **Sofia-managed
    OAuth**.
 2. Optionally enter a pre-registered client ID, client secret, and scopes. If
    the provider supports dynamic client registration, those fields may remain
    empty.
-3. OpenWork performs OAuth discovery, DCR when needed, PKCE authorization, the
+3. Sofia performs OAuth discovery, DCR when needed, PKCE authorization, the
    loopback callback, token exchange, and an authenticated `tools/list` check.
-4. OpenCode receives a remote MCP entry pointing at the OpenWork loopback
+4. Sofia receives a remote MCP entry pointing at the Sofia loopback
    gateway with `oauth: false`. It sees the provider tools but never receives
    the provider access token, refresh token, or OAuth client secret.
 
@@ -24,13 +24,13 @@ The managed path is opt-in per connection and is currently desktop-only.
 ## Persistence and lifecycle
 
 - Provider credentials, OAuth registrations, discovery state, and PKCE
-  transactions are encrypted with AES-256-GCM in OpenWork's runtime storage.
-- OpenWork Desktop keeps the encryption key behind the operating system's
+  transactions are encrypted with AES-256-GCM in Sofia's runtime storage.
+- Sofia Desktop keeps the encryption key behind the operating system's
   secure-storage service and persists only the protected key blob, separately
   from the encrypted vault. A standalone server must set
-  `OPENWORK_ENCRYPTION_KEY`; there is no plaintext key-file fallback.
+  `SOFIA_ENCRYPTION_KEY`; there is no plaintext key-file fallback.
 - The gateway bearer is scoped to a workspace and connection, generated from a
-  process-only secret, and rotated on every OpenWork server restart.
+  process-only secret, and rotated on every Sofia server restart.
 - Startup reconciliation rewrites managed runtime MCP entries with the current
   loopback port and bearer while keeping the encrypted provider credential.
 - Disconnect deletes the stored credential and disables the gateway entry.
@@ -46,7 +46,7 @@ an internal-network request proxy.
 ## Verification
 
 Focused server coverage proves discovery and DCR, PKCE authorization, encrypted
-credential persistence, OpenCode runtime registration, gateway tool listing and
+credential persistence, Sofia runtime registration, gateway tool listing and
 invocation, refresh-token recovery, restart reconciliation with bearer
 rotation, disconnect, and the outbound URL guard. The desktop and server
 TypeScript projects and the compiled embedded server build are also checked.

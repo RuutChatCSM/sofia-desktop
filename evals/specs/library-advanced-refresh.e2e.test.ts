@@ -1,10 +1,10 @@
 import { expect } from "vitest";
-import { createOrgConnection, evalIn, waitFor } from "@openwork/behaviors";
-import { app, eventually, faultProxy, mcpMock, needs, server, test, unmetNeeds } from "@openwork/testkit";
-import type { TestNeeds } from "@openwork/testkit";
+import { createOrgConnection, evalIn, waitFor } from "@sofia/behaviors";
+import { app, eventually, faultProxy, mcpMock, needs, server, test, unmetNeeds } from "@sofia/testkit";
+import type { TestNeeds } from "@sofia/testkit";
 
 const requirements: TestNeeds = {
-  optIn: ["OPENWORK_EVAL_E2E_TESTS"],
+  optIn: ["SOFIA_EVAL_E2E_TESTS"],
 };
 const missingRequirements = unmetNeeds(requirements, process.env);
 const title = missingRequirements.length > 0
@@ -99,7 +99,7 @@ test(title, async ({ evidence, place }) => {
       if (!visible()) probe.everMissing = true;
     });
     observer.observe(document.body, { subtree: true, childList: true, attributes: true });
-    window.__openworkAdvancedRefreshProbe = { observer, probe, visible };
+    window.__sofiaAdvancedRefreshProbe = { observer, probe, visible };
     return visible();
   })()`);
   expect(probeInstalled).toBe(true);
@@ -157,7 +157,7 @@ test(title, async ({ evidence, place }) => {
     label: "new organization connection rendered from refreshed inventory",
   });
   const stayedExpanded = await evalIn(desktop, `(() => {
-    const current = window.__openworkAdvancedRefreshProbe;
+    const current = window.__sofiaAdvancedRefreshProbe;
     if (!current) return false;
     current.observer.disconnect();
     return current.probe.samples > 1 && !current.probe.everMissing && current.visible();

@@ -1,5 +1,5 @@
-# mcp-write-scope — OpenWork Cloud can update organization settings
+# mcp-write-scope — Sofia Cloud can update organization settings
 
-1. I connect OpenWork Cloud and the connection receives the write permission needed for organization changes.
+1. I connect Sofia Cloud and the connection receives the write permission needed for organization changes.
 
-2. I update an organization setting through OpenWork Cloud MCP, and the change succeeds without an insufficient scope error.
+2. I update an organization setting through Sofia Cloud MCP, and the change succeeds without an insufficient scope error.

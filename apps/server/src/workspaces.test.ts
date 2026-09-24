@@ -21,7 +21,7 @@ function ws(fields: {
 
 describe("findManagedEngineWorkspace", () => {
   test("selects the local workspace in a typical local + remote config", () => {
-    // Mirrors the real desktop config: a local workspace followed by an OpenWork
+    // Mirrors the real desktop config: a local workspace followed by an Sofia App
     // remote worker that has no local path.
     const workspaces = [
       ws({ id: "ws_local", path: "/home/user/cloud/work", workspaceType: "local" }),
@@ -46,7 +46,7 @@ describe("findManagedEngineWorkspace", () => {
   });
 
   test("ignores a remote workspace that carries a non-empty directory path", () => {
-    // OpenCode remotes can store a `directory`, giving the remote a non-empty
+    // Sofia engine remotes can store a `directory`, giving the remote a non-empty
     // path; it still runs on its host, so it must not be chosen as the local cwd.
     const workspaces = [ws({ id: "rem_dir", path: "/remote/dir", workspaceType: "remote" })];
     expect(findManagedEngineWorkspace(workspaces)).toBeUndefined();

@@ -30,16 +30,16 @@ export type UseModelPickerInput = {
   onOpen?: () => void;
   /** Optional: surface option-load failures (settings shows a toast; the session route stays silent). */
   onLoadError?: (error: unknown) => void;
-  /** Member-scoped models available before a workspace OpenCode client exists. */
+  /** Member-scoped models available before a workspace Sofia client exists. */
   fallbackOptions?: readonly ModelOption[];
   /** Account-scoped providers are hidden immediately after cloud sign-out. */
   cloudProvidersEnabled?: boolean;
   /** Active agent engine. Codex keeps only the providers its runtime is configured with. */
-  engine?: "codex" | "opencode";
+  engine?: "codex" | "engine";
   /**
    * The codex engine's providers and their models (`codexEngine.config.providers`).
    * When set on the codex engine, the picker is engine-native: it shows exactly
-   * these providers/models instead of the opencode runtime's provider list.
+   * these providers/models instead of the engine runtime's provider list.
    */
   codexProviders?: readonly CodexProviderConfigWire[];
   /**
@@ -59,7 +59,7 @@ export function useModelPicker(input: UseModelPickerInput) {
     onLoadError,
     fallbackOptions = [],
     cloudProvidersEnabled = true,
-    engine = "opencode",
+    engine = "engine",
     codexProviders = [],
     codexProviderIds = [],
   } = input;
@@ -137,8 +137,8 @@ export function useModelPicker(input: UseModelPickerInput) {
 
   const modelOptions = useMemo(() => {
     // Engine-native: on the codex engine, surface exactly the providers/models
-    // the codex runtime is configured with (codexengine.json), not the opencode
-    // provider list. Falls back to the opencode list when the codex config has
+    // the codex runtime is configured with (codexengine.json), not the engine
+    // provider list. Falls back to the engine list when the codex config has
     // no models yet so the picker is never empty.
     if (isCodexEngine) {
       const codexModels: ModelOption[] = codexProviders.flatMap((provider) =>
@@ -173,7 +173,7 @@ export function useModelPicker(input: UseModelPickerInput) {
     // (2) providers passed via the openModelPickerEvent from the toast.
     let seenIds: Set<string>;
     try {
-      const raw = window.localStorage.getItem("openwork.seenProviderIds");
+      const raw = window.localStorage.getItem("sofia.seenProviderIds");
       seenIds = new Set(raw ? JSON.parse(raw) : []);
     } catch {
       seenIds = new Set();
@@ -182,9 +182,9 @@ export function useModelPicker(input: UseModelPickerInput) {
     const next: ModelOption[] = [];
     for (const provider of getConnectedProviderItems(data)) {
       const providerId = provider.id.trim().toLowerCase();
-      // The built-in opencode (Zen) provider is only routable by the opencode
+      // The built-in engine (Zen) provider is only routable by the engine
       // engine; hide it while codex is active.
-      if (isCodexEngine && providerId === "opencode") continue;
+      if (isCodexEngine && providerId === "engine") continue;
       // Keep only the providers the codex runtime is configured with.
       if (isCodexEngine && codexAllowedProviders && !codexAllowedProviders.has(providerId)) continue;
       const modelIds = Object.keys(provider.models);
@@ -214,7 +214,7 @@ export function useModelPicker(input: UseModelPickerInput) {
 
   // Apply org-level restrictions (dev #1505) on top of the raw model list
   // so the picker never surfaces blocked options:
-  //   - `allowZenModel` hides the built-in OpenCode provider entries when false
+  //   - `allowZenModel` hides the built-in Sofia provider entries when false
   //   - `allowCustomProviders` keeps org-managed providers, plus Zen when allowed.
   const options = useMemo(() => {
     const restrictToCloud = checkDesktopRestriction({

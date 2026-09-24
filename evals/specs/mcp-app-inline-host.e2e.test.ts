@@ -1,10 +1,10 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { expect, onTestFinished } from "vitest";
-import { clickButton, control, createAndSelectWorkspace, evalIn, waitFor } from "@openwork/behaviors";
-import { connect, debuggerUrlFor, evaluate, listTargets } from "@openwork/cdp";
-import { screenshot, validate } from "@openwork/test-evidence";
-import { desktop } from "@openwork/hosts";
-import { needs, test } from "@openwork/testkit";
+import { clickButton, control, createAndSelectWorkspace, evalIn, waitFor } from "@sofia/behaviors";
+import { connect, debuggerUrlFor, evaluate, listTargets } from "@sofia/cdp";
+import { screenshot, validate } from "@sofia/test-evidence";
+import { desktop } from "@sofia/hosts";
+import { needs, test } from "@sofia/testkit";
 import { buildGeneratedArtifactViewInWorker } from "../../ee/apps/den-api/src/generated-artifact-view-builder.js";
 
 const providerId = "mcp-app-inline-host-mock";
@@ -12,15 +12,15 @@ const modelId = "mcp-app-inline-host-model";
 const mcpServerName = "artifact-view";
 const saveToolName = "save_artifact_view";
 const mcpToolName = "render_card";
-const resourceUri = "ui://openwork/artifacts/arv_eval_card/views/avr_eval_card/index.html";
+const resourceUri = "ui://sofia/artifacts/arv_eval_card/views/avr_eval_card/index.html";
 const closingReply = "The interactive artifact card is ready.";
-const e2eTestsEnabled = process.env.OPENWORK_EVAL_E2E_TESTS === "1";
-const localPlacement = process.env.OPENWORK_EVAL_DAYTONA !== "1"
-  && !process.env.OPENWORK_EVAL_DEN_API_URL?.trim();
+const e2eTestsEnabled = process.env.SOFIA_EVAL_E2E_TESTS === "1";
+const localPlacement = process.env.SOFIA_EVAL_DAYTONA !== "1"
+  && !process.env.SOFIA_EVAL_DEN_API_URL?.trim();
 const title = !e2eTestsEnabled
-  ? "MCP App inline host skipped — needs: set OPENWORK_EVAL_E2E_TESTS=1"
+  ? "MCP App inline host skipped — needs: set SOFIA_EVAL_E2E_TESTS=1"
   : !localPlacement
-    ? "MCP App inline host skipped — needs local placement without OPENWORK_EVAL_DEN_API_URL"
+    ? "MCP App inline host skipped — needs local placement without SOFIA_EVAL_DEN_API_URL"
     : "a generated Artifact saves normally, then initializes and renders structuredContent inline";
 
 async function createWorkspaceForRenderer(
@@ -31,16 +31,16 @@ async function createWorkspaceForRenderer(
   if (packaged !== true) return createAndSelectWorkspace(app, { path });
 
   const created = await evalIn(app, `(async () => {
-    const port = localStorage.getItem("openwork.server.port");
-    const hostToken = localStorage.getItem("openwork.server.hostToken");
-    const invokeDesktop = window.__OPENWORK_ELECTRON__?.invokeDesktop;
+    const port = localStorage.getItem("sofia.server.port");
+    const hostToken = localStorage.getItem("sofia.server.hostToken");
+    const invokeDesktop = window.__SOFIA_ELECTRON__?.invokeDesktop;
     if (!port || !hostToken || !invokeDesktop) return {
       error: "packaged host prerequisites unavailable",
       missing: [!port ? "port" : null, !hostToken ? "hostToken" : null, !invokeDesktop ? "invokeDesktop" : null].filter(Boolean),
     };
     const response = await fetch("http://127.0.0.1:" + port + "/workspaces/local", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-OpenWork-Host-Token": hostToken },
+      headers: { "Content-Type": "application/json", "X-Sofia-Host-Token": hostToken },
       body: JSON.stringify({ folderPath: ${JSON.stringify(path)}, preset: "starter" }),
     });
     const payload = await response.json();
@@ -50,12 +50,12 @@ async function createWorkspaceForRenderer(
     const workspaceId = payload.activeId;
     await invokeDesktop("workspaceSetSelected", workspaceId);
     await invokeDesktop("workspaceSetRuntimeActive", workspaceId);
-    localStorage.setItem("openwork.react.activeWorkspace", workspaceId);
-    const raw = localStorage.getItem("openwork.preferences");
+    localStorage.setItem("sofia.react.activeWorkspace", workspaceId);
+    const raw = localStorage.getItem("sofia.preferences");
     let preferences = {};
     try { preferences = raw ? JSON.parse(raw) : {}; } catch { preferences = {}; }
     if (!preferences || typeof preferences !== "object" || Array.isArray(preferences)) preferences = {};
-    localStorage.setItem("openwork.preferences", JSON.stringify({ ...preferences, hasCompletedOnboarding: true }));
+    localStorage.setItem("sofia.preferences", JSON.stringify({ ...preferences, hasCompletedOnboarding: true }));
     return { workspaceId };
   })()`, { awaitPromise: true, timeoutMs: 60_000 });
   if (!isRecord(created) || typeof created.workspaceId !== "string") {
@@ -68,39 +68,39 @@ async function createWorkspaceForRenderer(
   })()`);
   await waitFor(app, `location.protocol === "file:"
     && location.hash.includes(${JSON.stringify(`/workspace/${created.workspaceId}/session`)})
-    && Boolean(window.__openworkControl)`, {
+    && Boolean(window.__sofiaControl)`, {
     timeoutMs: 120_000,
     label: "packaged workspace task route",
   });
   const engineStarted = await evalIn(app, `(async () => {
-    const invokeDesktop = window.__OPENWORK_ELECTRON__?.invokeDesktop;
+    const invokeDesktop = window.__SOFIA_ELECTRON__?.invokeDesktop;
     if (!invokeDesktop) return "invokeDesktop unavailable";
     await invokeDesktop("engineStart", ${JSON.stringify(path)}, {
       runtime: "direct",
       workspacePaths: [${JSON.stringify(path)}],
-      openworkRemoteAccess: false,
+      sofiaRemoteAccess: false,
     });
-    const serverInfo = await invokeDesktop("openworkServerInfo");
+    const serverInfo = await invokeDesktop("sofiaServerInfo");
     if (serverInfo?.baseUrl) {
       const serverUrl = new URL(serverInfo.baseUrl);
-      localStorage.setItem("openwork.server.url", serverInfo.baseUrl);
-      localStorage.setItem("openwork.server.port", serverUrl.port);
-      if (serverInfo.clientToken) localStorage.setItem("openwork.server.token", serverInfo.clientToken);
-      if (serverInfo.hostToken) localStorage.setItem("openwork.server.hostToken", serverInfo.hostToken);
+      localStorage.setItem("sofia.server.url", serverInfo.baseUrl);
+      localStorage.setItem("sofia.server.port", serverUrl.port);
+      if (serverInfo.clientToken) localStorage.setItem("sofia.server.token", serverInfo.clientToken);
+      if (serverInfo.hostToken) localStorage.setItem("sofia.server.hostToken", serverInfo.hostToken);
     }
     return "started";
   })()`, { awaitPromise: true, timeoutMs: 60_000 });
   if (engineStarted !== "started") throw new Error(String(engineStarted));
   const engineReady = await evalIn(app, `(async () => {
-    const port = localStorage.getItem("openwork.server.port");
-    const token = localStorage.getItem("openwork.server.token");
+    const port = localStorage.getItem("sofia.server.port");
+    const token = localStorage.getItem("sofia.server.token");
     if (!port || !token) return "missing local server credentials";
     const deadline = Date.now() + 120_000;
     let last = "";
     while (Date.now() < deadline) {
       try {
         const response = await fetch(
-          "http://127.0.0.1:" + port + "/workspace/" + encodeURIComponent(${JSON.stringify(created.workspaceId)}) + "/opencode/session",
+          "http://127.0.0.1:" + port + "/workspace/" + encodeURIComponent(${JSON.stringify(created.workspaceId)}) + "/engine/session",
           { headers: { Authorization: "Bearer " + token }, signal: AbortSignal.timeout(2_000) },
         );
         if (response.ok) return "ready";
@@ -354,7 +354,7 @@ function sendStream(response: ServerResponse, chunks: Record<string, unknown>[])
 }
 
 test.skipIf(!e2eTestsEnabled || !localPlacement)(title, { timeout: 240_000 }, async ({ evidence }) => {
-  needs({ optIn: ["OPENWORK_EVAL_E2E_TESTS"] });
+  needs({ optIn: ["SOFIA_EVAL_E2E_TESTS"] });
 
   let saveCalls = 0;
   let renderCalls = 0;
@@ -458,20 +458,20 @@ test.skipIf(!e2eTestsEnabled || !localPlacement)(title, { timeout: 240_000 }, as
 
   await using app = await desktop({
     name: "mcp-app-inline-host",
-    mode: process.env.OPENWORK_EVAL_CDP_URL?.trim() ? "attach" : "spawn",
+    mode: process.env.SOFIA_EVAL_CDP_URL?.trim() ? "attach" : "spawn",
     env: {
       ANTHROPIC_API_KEY: "",
       OPENAI_API_KEY: "",
       OPENROUTER_API_KEY: "",
       GOOGLE_GENERATIVE_AI_API_KEY: "",
-      OPENWORK_API_KEY: "",
-      OPENWORK_INFERENCE_BASE_URL: "",
+      SOFIA_API_KEY: "",
+      SOFIA_INFERENCE_BASE_URL: "",
     },
   });
-  const workspace = await createWorkspaceForRenderer(app, `/tmp/openwork-mcp-app-inline-host-${Date.now()}`);
+  const workspace = await createWorkspaceForRenderer(app, `/tmp/sofia-mcp-app-inline-host-${Date.now()}`);
   const configured = await evalIn(app, `(async () => {
-    const port = localStorage.getItem("openwork.server.port");
-    const token = localStorage.getItem("openwork.server.token");
+    const port = localStorage.getItem("sofia.server.port");
+    const token = localStorage.getItem("sofia.server.token");
     if (!port || !token) return "missing local server credentials";
     const request = async (path, init) => {
       const response = await fetch("http://127.0.0.1:" + port + path, {
@@ -485,7 +485,7 @@ test.skipIf(!e2eTestsEnabled || !localPlacement)(title, { timeout: 240_000 }, as
     const patched = await request("/workspace/" + encodeURIComponent(workspaceId) + "/config", {
       method: "PATCH",
       body: JSON.stringify({
-        opencode: {
+        engine: {
           provider: {
             [${JSON.stringify(providerId)}]: {
               npm: "@ai-sdk/openai-compatible",
@@ -507,34 +507,34 @@ test.skipIf(!e2eTestsEnabled || !localPlacement)(title, { timeout: 240_000 }, as
     });
     if (patched !== "ok") return patched;
     const reloaded = await request("/workspace/" + encodeURIComponent(workspaceId) + "/engine/reload", { method: "POST" });
-    if (reloaded !== "ok" && !reloaded.includes("opencode_reload_timeout")) return reloaded;
-    const raw = localStorage.getItem("openwork.preferences");
+    if (reloaded !== "ok" && !reloaded.includes("engine_reload_timeout")) return reloaded;
+    const raw = localStorage.getItem("sofia.preferences");
     let preferences = {};
     try { preferences = raw ? JSON.parse(raw) : {}; } catch { preferences = {}; }
     if (!preferences || typeof preferences !== "object" || Array.isArray(preferences)) preferences = {};
-    localStorage.setItem("openwork.preferences", JSON.stringify({
+    localStorage.setItem("sofia.preferences", JSON.stringify({
       ...preferences,
       defaultModel: { providerID: ${JSON.stringify(providerId)}, modelID: ${JSON.stringify(modelId)} },
       modelVariant: null,
       providerStepCompleted: true,
     }));
-    localStorage.setItem("openwork.defaultModel", ${JSON.stringify(`${providerId}/${modelId}`)});
-    localStorage.removeItem("openwork.sessionModels." + workspaceId);
+    localStorage.setItem("sofia.defaultModel", ${JSON.stringify(`${providerId}/${modelId}`)});
+    localStorage.removeItem("sofia.sessionModels." + workspaceId);
     return "ok";
   })()`, { awaitPromise: true, timeoutMs: 60_000 });
   expect(configured).toBe("ok");
 
   await evalIn(app, "location.reload(); true");
-  await waitFor(app, "Boolean(window.__openworkControl)", { timeoutMs: 30_000, label: "app control API after reload" });
+  await waitFor(app, "Boolean(window.__sofiaControl)", { timeoutMs: 30_000, label: "app control API after reload" });
   const engineReady = await evalIn(app, `(async () => {
-    const port = localStorage.getItem("openwork.server.port");
-    const token = localStorage.getItem("openwork.server.token");
+    const port = localStorage.getItem("sofia.server.port");
+    const token = localStorage.getItem("sofia.server.token");
     if (!port || !token) return "missing local server credentials";
     const deadline = Date.now() + 60_000;
     let last = "";
     while (Date.now() < deadline) {
       try {
-        const response = await fetch("http://127.0.0.1:" + port + "/workspace/" + encodeURIComponent(${JSON.stringify(workspace.workspaceId)}) + "/opencode/session", {
+        const response = await fetch("http://127.0.0.1:" + port + "/workspace/" + encodeURIComponent(${JSON.stringify(workspace.workspaceId)}) + "/engine/session", {
           headers: { Authorization: "Bearer " + token },
         });
         if (response.ok) return "ready";
@@ -545,7 +545,7 @@ test.skipIf(!e2eTestsEnabled || !localPlacement)(title, { timeout: 240_000 }, as
     return "engine not ready: " + last;
   })()`, { awaitPromise: true, timeoutMs: 70_000 });
   expect(engineReady).toBe("ready");
-  await waitFor(app, `window.__openworkControl.listActions().some((action) => action.id === "session.create_task" && !action.disabled)`, {
+  await waitFor(app, `window.__sofiaControl.listActions().some((action) => action.id === "session.create_task" && !action.disabled)`, {
     timeoutMs: 30_000,
     label: "new task action enabled",
   });
@@ -614,7 +614,7 @@ test.skipIf(!e2eTestsEnabled || !localPlacement)(title, { timeout: 240_000 }, as
     // Keep the checked-in tape runnable without a separate vision-model key.
     ask: async (request) => request.prompt.startsWith("Objectively describe")
       ? JSON.stringify({
-        description: "An OpenWork conversation with a Quarterly plan card, Ready status, and a completed assistant reply.",
+        description: "An Sofia App conversation with a Quarterly plan card, Ready status, and a completed assistant reply.",
       })
       : JSON.stringify({
         results: expectations.map((expectation) => ({

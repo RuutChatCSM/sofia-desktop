@@ -20,7 +20,7 @@ concurrency:
 
 jobs:
   changelog:
-    if: github.repository == 'different-ai/openwork'
+    if: github.repository == 'RuutChatCSM/sofia-desktop'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
@@ -51,7 +51,7 @@ jobs:
         if: steps.guard.outputs.stable == 'true'
         id: dedupe
         run: |
-          if grep -Fq "[$TAG](https://github.com/different-ai/openwork/compare/" packages/docs/changelog.mdx; then
+          if grep -Fq "[$TAG](https://github.com/RuutChatCSM/sofia-desktop/compare/" packages/docs/changelog.mdx; then
             echo "documented=true" >> "$GITHUB_OUTPUT"
             echo "$TAG is already documented; skipping changelog automation."
           else
@@ -109,7 +109,7 @@ jobs:
 
           git log --no-merges --format='%h %s' "$PREV".."$TAG" | head -400 > /tmp/commits.txt
           cat > /tmp/changelog_prompt.txt <<PROMPT_EOF
-          Document OpenWork release $TAG in the changelog. Use these facts exactly; do not invent or recompute any of them.
+          Document Sofia release $TAG in the changelog. Use these facts exactly; do not invent or recompute any of them.
 
           - version: $TAG
           - previous version: $PREV
@@ -118,7 +118,7 @@ jobs:
           - docs date label: $DATE_LABEL
           - tracker file: $TRACKER_FILE
           - loc line (copy verbatim into the tracker): $LOC_LINE
-          - compare url: https://github.com/different-ai/openwork/compare/$PREV...$TAG
+          - compare url: https://github.com/RuutChatCSM/sofia-desktop/compare/$PREV...$TAG
 
           Commits between $PREV and $TAG (hash subject):
           PROMPT_EOF
@@ -131,23 +131,23 @@ jobs:
         with:
           node-version: 24
 
-      - name: Install opencode
+      - name: Install engine
         if: steps.guard.outputs.stable == 'true' && steps.dedupe.outputs.documented == 'false'
         run: |
-          version="$(node -e "const fs=require('fs'); const parsed=JSON.parse(fs.readFileSync('constants.json','utf8')); process.stdout.write(String(parsed.opencodeVersion||'').trim().replace(/^v/,''));")"
-          curl -fsSL https://opencode.ai/install | bash -s -- --version "$version" --no-modify-path
+          version="$(node -e "const fs=require('fs'); const parsed=JSON.parse(fs.readFileSync('constants.json','utf8')); process.stdout.write(String(parsed.engineVersion||'').trim().replace(/^v/,''));")"
+          curl -fsSL https://github.com/RuutChatCSM/sofia/install | bash -s -- --version "$version" --no-modify-path
 
       - name: Draft changelog entries
         if: steps.guard.outputs.stable == 'true' && steps.dedupe.outputs.documented == 'false'
         env:
-          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
-        run: opencode run --agent changelog "$(cat /tmp/changelog_prompt.txt)"
+          SOFIA_ENGINE_API_KEY: ${{ secrets.SOFIA_ENGINE_API_KEY }}
+        run: engine run --agent changelog "$(cat /tmp/changelog_prompt.txt)"
 
-      - name: Discard opencode runtime churn
+      - name: Discard engine runtime churn
         if: steps.guard.outputs.stable == 'true' && steps.dedupe.outputs.documented == 'false'
         run: |
-          git checkout -- .opencode/
-          git clean -fd .opencode/
+          git checkout -- .sofia/
+          git clean -fd .sofia/
 
       - name: Verify generated output
         if: steps.guard.outputs.stable == 'true' && steps.dedupe.outputs.documented == 'false'

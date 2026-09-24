@@ -5,7 +5,7 @@ import { join } from "node:path";
 
 import { startServer } from "./server.js";
 import type { ServerConfig } from "./types.js";
-import { readRuntimeOpencodeConfig } from "./runtime-opencode-config-store.js";
+import { readRuntimeWorkspaceEngineConfig } from "./runtime-engine-config-store.js";
 
 type Served = {
   port: number;
@@ -16,8 +16,8 @@ const CLIENT_TOKEN = "owt_runtime_migrate_client";
 const HOST_TOKEN = "owt_runtime_migrate_host";
 const stops: Array<() => void | Promise<void>> = [];
 const roots: string[] = [];
-const priorDataDir = process.env.OPENWORK_DATA_DIR;
-const priorTokenStore = process.env.OPENWORK_TOKEN_STORE;
+const priorDataDir = process.env.SOFIA_DATA_DIR;
+const priorTokenStore = process.env.SOFIA_TOKEN_STORE;
 
 function asRecord(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
@@ -34,7 +34,7 @@ async function createTempRoot(prefix: string) {
   return root;
 }
 
-async function startOpenworkServer(workspaceRoot: string) {
+async function startSofiaServer(workspaceRoot: string) {
   const config: ServerConfig = {
     host: "127.0.0.1",
     port: 0,
@@ -58,9 +58,9 @@ async function startOpenworkServer(workspaceRoot: string) {
 }
 
 beforeEach(async () => {
-  const envRoot = await createTempRoot("openwork-runtime-migrate-env-");
-  process.env.OPENWORK_DATA_DIR = join(envRoot, "data");
-  process.env.OPENWORK_TOKEN_STORE = join(envRoot, "tokens.json");
+  const envRoot = await createTempRoot("sofia-runtime-migrate-env-");
+  process.env.SOFIA_DATA_DIR = join(envRoot, "data");
+  process.env.SOFIA_TOKEN_STORE = join(envRoot, "tokens.json");
 });
 
 afterEach(async () => {
@@ -71,24 +71,24 @@ afterEach(async () => {
     await rm(roots.pop()!, { recursive: true, force: true });
   }
   if (priorDataDir === undefined) {
-    delete process.env.OPENWORK_DATA_DIR;
+    delete process.env.SOFIA_DATA_DIR;
   } else {
-    process.env.OPENWORK_DATA_DIR = priorDataDir;
+    process.env.SOFIA_DATA_DIR = priorDataDir;
   }
   if (priorTokenStore === undefined) {
-    delete process.env.OPENWORK_TOKEN_STORE;
+    delete process.env.SOFIA_TOKEN_STORE;
   } else {
-    process.env.OPENWORK_TOKEN_STORE = priorTokenStore;
+    process.env.SOFIA_TOKEN_STORE = priorTokenStore;
   }
 });
 
 describe("runtime-config migrate route", () => {
-  test("lifts MCP entries from project opencode.jsonc into the runtime store", async () => {
-    const workspaceRoot = await createTempRoot("openwork-runtime-migrate-");
+  test("ignores a legacy project engine.jsonc on the migrate route", async () => {
+    const workspaceRoot = await createTempRoot("sofia-runtime-migrate-");
     await writeFile(
-      join(workspaceRoot, "opencode.jsonc"),
+      join(workspaceRoot, "engine.jsonc"),
       JSON.stringify({
-        $schema: "https://opencode.ai/config.json",
+        $schema: "https://github.com/RuutChatCSM/sofia/config.json",
         mcp: {
           "nova-mail": { type: "remote", url: "https://example.com/mcp/mail", enabled: true },
         },
@@ -96,7 +96,7 @@ describe("runtime-config migrate route", () => {
       "utf8",
     );
 
-    const { base, config } = await startOpenworkServer(workspaceRoot);
+    const { base, config } = await startSofiaServer(workspaceRoot);
 
     const response = await fetch(`${base}/workspace/ws_1/runtime-config/migrate`, {
       method: "POST",
@@ -105,13 +105,15 @@ describe("runtime-config migrate route", () => {
     expect(response.status).toBe(200);
 
     const body = asRecord(await response.json());
-    expect(body.migrated).toBe(true);
-    expect(Array.isArray(body.userOpencodeKeys) && body.userOpencodeKeys.includes("mcp")).toBe(true);
+    // Sofia no longer reads Sofia config files, so there is nothing to lift.
+    expect(body.migrated).toBe(false);
+    expect(body.userWorkspaceEngineKeys).toEqual([]);
 
-    const runtime = await readRuntimeOpencodeConfig(config, "ws_1");
-    expect(runtime.mcp?.["nova-mail"]?.url).toBe("https://example.com/mcp/mail");
+    const runtime = await readRuntimeWorkspaceEngineConfig(config, "ws_1");
+    expect(runtime.mcp).toBeUndefined();
 
-    const parsed = asRecord(JSON.parse(await readFile(join(workspaceRoot, "opencode.jsonc"), "utf8")));
-    expect(parsed.mcp).toBeUndefined();
+    // The legacy file is left exactly as the user wrote it.
+    const parsed = asRecord(JSON.parse(await readFile(join(workspaceRoot, "engine.jsonc"), "utf8")));
+    expect(asRecord(parsed.mcp)?.["nova-mail"]).toBeDefined();
   });
 });

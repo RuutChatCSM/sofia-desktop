@@ -127,7 +127,7 @@ export const INTEGRATION_PROVIDERS: Record<IntegrationProvider, IntegrationProvi
   github: {
     provider: "github",
     name: "GitHub",
-    description: "Install the OpenWork GitHub App, then pick a repository to turn into a connector instance.",
+    description: "Install the Sofia GitHub App, then pick a repository to turn into a connector instance.",
     docsHref: "https://docs.github.com/en/apps/creating-github-apps/about-creating-github-apps",
     scopes: ["metadata:read", "contents:read", "webhooks"],
   },
@@ -146,13 +146,13 @@ export function getMockAccountsFor(provider: IntegrationProvider): IntegrationAc
   if (provider === "github") {
     return [
       { id: "acc_gh_user", name: "bshafii", kind: "user", avatarInitial: "B" },
-      { id: "acc_gh_different_ai", name: "different-ai", kind: "org", avatarInitial: "D" },
-      { id: "acc_gh_openwork", name: "openwork-labs", kind: "org", avatarInitial: "O" },
+      { id: "acc_gh_different_ai", name: "RuutChatCSM", kind: "org", avatarInitial: "D" },
+      { id: "acc_gh_sofia", name: "sofia-labs", kind: "org", avatarInitial: "O" },
     ];
   }
   return [
     { id: "acc_bb_user", name: "bshafii", kind: "user", avatarInitial: "B" },
-    { id: "acc_bb_openwork", name: "openwork", kind: "org", avatarInitial: "O" },
+    { id: "acc_bb_sofia", name: "sofia", kind: "org", avatarInitial: "O" },
   ];
 }
 
@@ -160,16 +160,16 @@ export function getMockReposFor(provider: IntegrationProvider, accountId: string
   const tag = `${provider}:${accountId}`;
   const base: IntegrationRepo[] = [
     {
-      id: `${tag}:openwork`,
-      name: "openwork",
-      fullName: `${accountToLabel(accountId)}/openwork`,
-      description: "Core OpenWork monorepo — desktop, server, and cloud apps.",
+      id: `${tag}:sofia`,
+      name: "sofia",
+      fullName: `${accountToLabel(accountId)}/sofia`,
+      description: "Core Sofia monorepo — desktop, server, and cloud apps.",
       hasPlugins: true,
     },
     {
-      id: `${tag}:openwork-plugins`,
-      name: "openwork-plugins",
-      fullName: `${accountToLabel(accountId)}/openwork-plugins`,
+      id: `${tag}:sofia-plugins`,
+      name: "sofia-plugins",
+      fullName: `${accountToLabel(accountId)}/sofia-plugins`,
       description: "Internal plugin collection: release kit, commit commands, linear groomer.",
       hasPlugins: true,
     },
@@ -185,9 +185,9 @@ export function getMockReposFor(provider: IntegrationProvider, accountId: string
 }
 
 function accountToLabel(accountId: string): string {
-  if (accountId.includes("openwork-labs")) return "openwork-labs";
-  if (accountId.includes("openwork")) return "openwork";
-  if (accountId.includes("different-ai")) return "different-ai";
+  if (accountId.includes("sofia-labs")) return "sofia-labs";
+  if (accountId.includes("sofia")) return "sofia";
+  if (accountId.includes("RuutChatCSM")) return "RuutChatCSM";
   return "bshafii";
 }
 

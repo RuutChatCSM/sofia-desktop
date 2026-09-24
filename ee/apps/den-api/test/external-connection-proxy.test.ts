@@ -5,8 +5,8 @@ import { expect, test } from "bun:test"
 process.env.DEN_DB_ENCRYPTION_KEY ??= "x".repeat(32)
 process.env.BETTER_AUTH_SECRET ??= "y".repeat(32)
 process.env.BETTER_AUTH_URL ??= "http://127.0.0.1:3005"
-process.env.OPENWORK_DEV_MODE ??= "1"
-process.env.DATABASE_URL ??= "mysql://root:password@127.0.0.1:3306/openwork_den"
+process.env.SOFIA_DEV_MODE ??= "1"
+process.env.DATABASE_URL ??= "mysql://root:password@127.0.0.1:3306/sofia_den"
 
 const {
   createDisabledExternalConnectionProxyServer,
@@ -34,7 +34,7 @@ const connection = {
 } as never
 const operation = {
   connection,
-  redirectUri: "https://openwork.example/v1/mcp-connections/fixture/connect/callback",
+  redirectUri: "https://sofia.example/v1/mcp-connections/fixture/connect/callback",
   member: { orgMembershipId: "mem_01k28e8q8pf8r9sff9mhyqxved" },
   diagnosticReferenceId: "req_proxy_fixture",
 } as never
@@ -110,7 +110,7 @@ test("ordinary MCP clients receive only bounded search and execute without the p
     await expect(client.callTool({ name: "open_fixture", arguments: {} }))
       .rejects.toThrow("Use search_capabilities and execute_capability")
     await expect(client.readResource({ uri: resourceUri }))
-      .rejects.toThrow("only through the OpenWork App host")
+      .rejects.toThrow("only through the Sofia App host")
   }, {}, false)
 })
 
@@ -133,7 +133,7 @@ test("legacy clients retain ordinary operations through bounded search and execu
     await expect(client.callTool({ name: "search_fixture", arguments: { query: "ordinary" } }))
       .rejects.toThrow("Use search_capabilities and execute_capability")
     await expect(client.readResource({ uri: resourceUri }))
-      .rejects.toThrow("only through the OpenWork App host")
+      .rejects.toThrow("only through the Sofia App host")
   }, {
     listTools: async () => [{
       name: "search_fixture",
@@ -145,9 +145,9 @@ test("legacy clients retain ordinary operations through bounded search and execu
 
 test("a forged App-host audience header cannot unlock the provider surface", async () => {
   let toolNames: string[] = []
-  const request = new Request("https://openwork.example/mcp/agent/connections/fixture", {
+  const request = new Request("https://sofia.example/mcp/agent/connections/fixture", {
     method: "POST",
-    headers: { "x-openwork-mcp-client-audience": "app-host" },
+    headers: { "x-sofia-mcp-client-audience": "app-host" },
   })
   await handleExternalConnectionProxyRequest({
     context: requestContext(request),
@@ -320,7 +320,7 @@ test("OAuth registration and network failures become sanitized protocol errors",
     message: "The provider rejected OAuth client registration.",
     operatorAction: "Configure a provider-approved OAuth client, then reconnect the MCP connection.",
   })
-  const oauthRequest = new Request("https://openwork.example/mcp", {
+  const oauthRequest = new Request("https://sofia.example/mcp", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ jsonrpc: "2.0", id: 41, method: "initialize", params: {} }),
@@ -348,7 +348,7 @@ test("OAuth registration and network failures become sanitized protocol errors",
   expect(serializedOauth).not.toContain("stack")
   expect(serializedOauth).not.toContain("providerResponse")
 
-  const networkRequest = new Request("https://openwork.example/mcp", {
+  const networkRequest = new Request("https://sofia.example/mcp", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ jsonrpc: "2.0", id: "network", method: "initialize", params: {} }),
@@ -370,7 +370,7 @@ test("OAuth registration and network failures become sanitized protocol errors",
 
 test("unsupported GET requests never trigger downstream discovery", async () => {
   let discoveryCalls = 0
-  const request = new Request("https://openwork.example/mcp", { method: "GET" })
+  const request = new Request("https://sofia.example/mcp", { method: "GET" })
   const response = await handleExternalConnectionProxyRequest({
     context: requestContext(request),
     operation,
@@ -390,7 +390,7 @@ test("the disabled MCP Apps rollout publishes no providers and gives stale clien
   expect(buildConnectMcpServerIndex({
     enabled: false,
     connections: [connection],
-    publicOrigin: "https://openwork.example",
+    publicOrigin: "https://sofia.example",
   }).servers).toEqual([])
 
   const server = createDisabledExternalConnectionProxyServer()
@@ -450,6 +450,6 @@ test("disconnected and issuer-blocked OAuth connections are not ready for the na
   expect(buildConnectMcpServerIndex({
     enabled: true,
     connections: ready,
-    publicOrigin: "https://openwork.example",
+    publicOrigin: "https://sofia.example",
   }).servers).toEqual([])
 })

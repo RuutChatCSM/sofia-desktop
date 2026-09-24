@@ -28,16 +28,16 @@ export const desktopPolicyDefinitions = [
     id: "allowCustomProviders",
     name: "Custom providers",
     description:
-      "Allow users to add and use models that are not deployed through OpenWork Cloud.",
+      "Allow users to add and use models that are not deployed through Sofia Cloud.",
     userNotice:
       "Your organization administrator has disabled adding custom providers.",
     defaultValue: true,
   },
   {
     id: "allowZenModel",
-    name: "Enable OpenCode Zen Models",
-    description: "Allow users to use the built in models provided by OpenCode.",
-    userNotice: "Your administrator has disabled access to OpenCode Models.",
+    name: "Enable Sofia Zen Models",
+    description: "Allow users to use the built in models provided by Sofia.",
+    userNotice: "Your administrator has disabled access to Sofia Models.",
     defaultValue: true,
   },
   {
@@ -69,9 +69,9 @@ export const desktopPolicyDefinitions = [
     id: "allowBuiltInExtensions",
     name: "Built-in Extensions",
     description:
-      "Allow users to see and use OpenWork's built-in extensions, including browser, image, and local-provider extensions.",
+      "Allow users to see and use Sofia's built-in extensions, including browser, image, and local-provider extensions.",
     userNotice:
-      "Your organization administrator has disabled built-in OpenWork extensions.",
+      "Your organization administrator has disabled built-in Sofia extensions.",
     defaultValue: true,
   },
   {

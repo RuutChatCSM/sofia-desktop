@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 
 import { addMcp, listMcp, removeMcp } from "./mcp.js";
-import { readRuntimeOpencodeConfig } from "./runtime-opencode-config-store.js";
+import { readRuntimeWorkspaceEngineConfig } from "./runtime-engine-config-store.js";
 import type { ServerConfig } from "./types.js";
 
 const WORKSPACE_ID = "ws_mcp_remote";
@@ -31,9 +31,9 @@ function serverConfig(workspaceRoot: string): ServerConfig {
 
 describe("mcp remote connect flow", () => {
   test("adds, lists, and removes a remote MCP without OAuth", async () => {
-    const workspaceRoot = await mkdtemp(join(tmpdir(), "openwork-mcp-remote-e2e-"));
-    const previousDb = process.env.OPENWORK_RUNTIME_DB;
-    process.env.OPENWORK_RUNTIME_DB = join(workspaceRoot, "runtime.sqlite");
+    const workspaceRoot = await mkdtemp(join(tmpdir(), "sofia-mcp-remote-e2e-"));
+    const previousDb = process.env.SOFIA_RUNTIME_DB;
+    process.env.SOFIA_RUNTIME_DB = join(workspaceRoot, "runtime.sqlite");
     const config = serverConfig(workspaceRoot);
 
     try {
@@ -54,9 +54,9 @@ describe("mcp remote connect flow", () => {
       });
       expect(item?.source).toBe("config.remote");
 
-      await expect(readFile(join(workspaceRoot, "opencode.jsonc"), "utf8")).rejects.toThrow();
-      await expect(stat(join(workspaceRoot, ".opencode", "openwork.json"))).rejects.toThrow();
-      expect((await readRuntimeOpencodeConfig(config, WORKSPACE_ID)).mcp?.["simple-remote"]?.url).toBe("https://example.com/mcp");
+      await expect(readFile(join(workspaceRoot, "engine.jsonc"), "utf8")).rejects.toThrow();
+      await expect(stat(join(workspaceRoot, ".sofia", "sofia.json"))).rejects.toThrow();
+      expect((await readRuntimeWorkspaceEngineConfig(config, WORKSPACE_ID)).mcp?.["simple-remote"]?.url).toBe("https://example.com/mcp");
 
       const removed = await removeMcp(config, WORKSPACE_ID, "simple-remote");
       expect(removed).toBe(true);
@@ -64,8 +64,8 @@ describe("mcp remote connect flow", () => {
       const listedAfterRemove = await listMcp(config, WORKSPACE_ID, workspaceRoot);
       expect(listedAfterRemove.some((entry) => entry.name === "simple-remote")).toBe(false);
     } finally {
-      if (previousDb === undefined) delete process.env.OPENWORK_RUNTIME_DB;
-      else process.env.OPENWORK_RUNTIME_DB = previousDb;
+      if (previousDb === undefined) delete process.env.SOFIA_RUNTIME_DB;
+      else process.env.SOFIA_RUNTIME_DB = previousDb;
       await rm(workspaceRoot, { recursive: true, force: true });
     }
   });

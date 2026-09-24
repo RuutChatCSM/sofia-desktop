@@ -1,5 +1,5 @@
-import { evalIn } from "@openwork/behaviors";
-import type { Surface } from "@openwork/cdp";
+import { evalIn } from "@sofia/behaviors";
+import type { Surface } from "@sofia/cdp";
 
 export interface InPageOptions {
   awaitPromise?: boolean;

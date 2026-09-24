@@ -2,25 +2,18 @@ import { createHash } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
 import { join, relative } from "node:path";
 
-import { sanitizeOpenworkTemplateConfig } from "./blueprint-sessions.js";
+import { sanitizeSofiaTemplateConfig } from "./blueprint-sessions.js";
 import { buildCommandContent } from "./commands.js";
 import { ApiError } from "./errors.js";
 import { parseFrontmatter } from "./frontmatter.js";
-import { readJsoncFile } from "./jsonc.js";
 import { planPortableFiles, listPortableFilePaths, type PortableFile } from "./portable-files.js";
-import { sanitizePortableOpencodeConfig } from "./portable-opencode.js";
 import { buildSkillContent } from "./skills.js";
 import { exists } from "./utils.js";
 import { sanitizeCommandName, validateCommandName, validateSkillName } from "./validators.js";
-import {
-  opencodeConfigPath,
-  openworkConfigPath,
-  projectCommandsDir,
-  projectSkillsDir,
-} from "./workspace-files.js";
+import { projectCommandsDir, projectSkillsDir } from "./workspace-files.js";
 
 export type WorkspaceImportMode = "merge" | "replace";
-export type WorkspaceImportChangeKind = "opencode" | "openwork" | "skill" | "command" | "file";
+export type WorkspaceImportChangeKind = "sofia" | "skill" | "command" | "file";
 export type WorkspaceImportChangeAction = "create" | "update" | "replace" | "delete" | "unchanged";
 
 export type WorkspaceImportChange = {
@@ -53,13 +46,18 @@ export type WorkspaceImportPlan = Omit<WorkspaceImportPreview, "changes"> & {
   changes: WorkspaceImportPlannedChange[];
 };
 
-type WorkspaceImportSection = "opencode" | "openwork" | "skills" | "commands" | "files";
+type WorkspaceImportSection = "sofia" | "skills" | "commands" | "files";
+
+/**
+ * The workspace config is DB-backed, not a file: import/export plans refer to
+ * it by this virtual path instead of a workspace path.
+ */
+export const WORKSPACE_CONFIG_VIRTUAL_PATH = "sofia-workspace-config";
 
 export type NormalizedWorkspaceImport = {
   modes: Record<string, WorkspaceImportMode>;
   sections: Record<WorkspaceImportSection, boolean>;
-  opencode?: Record<string, unknown>;
-  openwork?: Record<string, unknown>;
+  sofia?: Record<string, unknown>;
   skills: Array<{ name: string; content: string; description?: string }>;
   commands: Array<{
     name: string;
@@ -85,8 +83,7 @@ function readMode(value: unknown): WorkspaceImportMode {
 function normalizeModes(value: unknown): Record<string, WorkspaceImportMode> {
   const record = readRecord(value) ?? {};
   return {
-    opencode: readMode(record.opencode),
-    openwork: readMode(record.openwork),
+    sofia: readMode(record.sofia),
     skills: readMode(record.skills),
     commands: readMode(record.commands),
     files: readMode(record.files),
@@ -174,17 +171,13 @@ export function normalizeWorkspaceImportPayload(
   return {
     modes: normalizeModes(payload.mode),
     sections: {
-      opencode: payload.opencode !== undefined,
-      openwork: payload.openwork !== undefined,
+      sofia: payload.sofia !== undefined,
       skills: payload.skills !== undefined,
       commands: payload.commands !== undefined,
       files: payload.files !== undefined,
     },
-    ...(payload.opencode !== undefined
-      ? { opencode: sanitizePortableOpencodeConfig(readRecord(payload.opencode)) }
-      : {}),
-    ...(payload.openwork !== undefined
-      ? { openwork: sanitizeOpenworkTemplateConfig(readRecord(payload.openwork)) }
+    ...(payload.sofia !== undefined
+      ? { sofia: sanitizeSofiaTemplateConfig(readRecord(payload.sofia)) }
       : {}),
     skills: normalizeSkills(payload.skills),
     commands: normalizeCommands(payload.commands),
@@ -274,16 +267,6 @@ function fingerprintWorkspaceImportChanges(changes: WorkspaceImportPlannedChange
   );
 }
 
-async function readOpenworkConfig(path: string): Promise<Record<string, unknown>> {
-  const raw = await readTextIfPresent(path);
-  if (raw === null) return {};
-  try {
-    return JSON.parse(raw) as Record<string, unknown>;
-  } catch {
-    throw new ApiError(422, "invalid_json", "Failed to parse openwork.json");
-  }
-}
-
 async function listProjectSkillNames(workspaceRoot: string): Promise<string[]> {
   const dir = projectSkillsDir(workspaceRoot);
   if (!(await exists(dir))) return [];
@@ -315,34 +298,17 @@ export async function buildWorkspaceImportPreview(
   const input = normalizeWorkspaceImportPayload(workspaceRoot, payload);
   const changes: WorkspaceImportPlannedChange[] = [];
 
-  if (input.opencode !== undefined) {
-    const path = opencodeConfigPath(workspaceRoot);
-    const before = await readJsoncFile(path, {} as Record<string, unknown>);
-    const after = input.modes.opencode === "replace" ? input.opencode : { ...before.data, ...input.opencode };
+  if (input.sofia !== undefined) {
+    // The workspace config lives in the runtime DB, so the plan reports the
+    // incoming change without reading a workspace file.
     changes.push({
-      kind: "opencode",
-      action: actionForTarget(Boolean(before.raw), !sameJson(before.data, after), input.modes.opencode),
-      label: "OpenCode config",
-      path: rel(workspaceRoot, path),
-      absolutePath: path,
-      beforeDigest: jsonDigest(before.data),
-      afterDigest: jsonDigest(after),
-    });
-  }
-
-  if (input.openwork !== undefined) {
-    const path = openworkConfigPath(workspaceRoot);
-    const existsBefore = await exists(path);
-    const before = await readOpenworkConfig(path);
-    const after = input.modes.openwork === "replace" ? input.openwork : { ...before, ...input.openwork };
-    changes.push({
-      kind: "openwork",
-      action: actionForTarget(existsBefore, !sameJson(before, after), input.modes.openwork),
-      label: "OpenWork config",
-      path: rel(workspaceRoot, path),
-      absolutePath: path,
-      beforeDigest: existsBefore ? jsonDigest(before) : textDigest(null),
-      afterDigest: jsonDigest(after),
+      kind: "sofia",
+      action: input.modes.sofia === "replace" ? "replace" : "update",
+      label: "Sofia App config",
+      path: WORKSPACE_CONFIG_VIRTUAL_PATH,
+      absolutePath: WORKSPACE_CONFIG_VIRTUAL_PATH,
+      beforeDigest: textDigest(null),
+      afterDigest: jsonDigest(input.sofia),
     });
   }
 

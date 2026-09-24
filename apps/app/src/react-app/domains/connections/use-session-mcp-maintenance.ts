@@ -8,13 +8,13 @@ import {
 } from "../../../app/lib/den";
 import { recordInspectorEvent } from "../../../app/lib/app-inspector";
 import {
-  OpenworkServerError,
-  type OpenworkCloudMcpFailure,
-  type OpenworkCloudMcpHealth,
-  type OpenworkCloudMcpProviderModelContext,
-  type OpenworkServerClient,
-} from "../../../app/lib/openwork-server";
-import { unwrap } from "../../../app/lib/opencode";
+  SofiaServerError,
+  type SofiaCloudMcpFailure,
+  type SofiaCloudMcpHealth,
+  type SofiaCloudMcpProviderModelContext,
+  type SofiaServerClient,
+} from "../../../app/lib/sofia-server";
+import { unwrap } from "../../../app/lib/engine";
 import type { Client, McpServerEntry, McpStatusMap } from "../../../app/types";
 import { attemptSilentMcpReauth } from "./mcp-silent-reauth";
 import { recordCloudMcpMaintenanceOutcome } from "./cloud-mcp-maintenance-outcome";
@@ -23,7 +23,7 @@ import {
   readCloudMcpUserState,
 } from "./cloud-mcp-user-state";
 import {
-  runOpenworkCloudMcpReconciler,
+  runSofiaCloudMcpReconciler,
   type CloudMcpClient,
 } from "./cloud-mcp-reconciler";
 
@@ -32,12 +32,12 @@ export const SESSION_MCP_MAINTENANCE_TIMEOUT_MS = 2 * 60 * 1000;
 export const CLOUD_MCP_REFRESH_MARGIN_MS = 24 * 60 * 60 * 1000;
 export const CLOUD_MCP_MAINTENANCE_RETRY_DELAYS_MS = [1_000, 3_000];
 
-type CloudMcpMaintenanceClient = CloudMcpClient & Pick<OpenworkServerClient, "listMcp">;
+type CloudMcpMaintenanceClient = CloudMcpClient & Pick<SofiaServerClient, "listMcp">;
 
 const maintenanceInFlight = new Map<string, symbol>();
 
 export type CloudMcpMaintenanceIssue = Pick<
-  OpenworkCloudMcpFailure,
+  SofiaCloudMcpFailure,
   "code" | "stage" | "retryable" | "recommendedAction" | "message"
 >;
 
@@ -45,7 +45,7 @@ export type CloudMcpBackgroundSyncResult =
   | {
       outcome: "ready";
       status: "synced" | "unchanged";
-      health: OpenworkCloudMcpHealth;
+      health: SofiaCloudMcpHealth;
     }
   | {
       outcome: "skipped";
@@ -57,7 +57,7 @@ export type CloudMcpBackgroundSyncResult =
       outcome: "failed";
       status: "failed";
       issue: CloudMcpMaintenanceIssue;
-      health: OpenworkCloudMcpHealth | null;
+      health: SofiaCloudMcpHealth | null;
     };
 
 export type SessionCloudMcpMaintenanceState = {
@@ -89,7 +89,7 @@ function genericCloudMcpMaintenanceIssue(input?: {
 }
 
 function failedCloudMcpBackgroundSync(input: {
-  health: OpenworkCloudMcpHealth | null;
+  health: SofiaCloudMcpHealth | null;
   issue?: CloudMcpMaintenanceIssue;
   code?: string;
   message?: string;
@@ -103,12 +103,12 @@ function failedCloudMcpBackgroundSync(input: {
 }
 
 export function getSessionMcpMaintenanceTargetKey(input: {
-  client: Pick<OpenworkServerClient, "baseUrl">;
+  client: Pick<SofiaServerClient, "baseUrl">;
   cloudSignedIn: boolean;
   denBaseUrl?: string | null;
   orgId?: string | null;
   workspaceId: string;
-  providerModel?: OpenworkCloudMcpProviderModelContext;
+  providerModel?: SofiaCloudMcpProviderModelContext;
 }): string {
   return JSON.stringify([
     input.denBaseUrl?.trim().replace(/\/+$/, "") ?? "",
@@ -179,7 +179,7 @@ export async function syncCloudControlMcpInBackground(input: {
   now?: number;
   settings?: DenSettings;
   mintToken?: () => Promise<DenMcpToken | null>;
-  providerModel?: OpenworkCloudMcpProviderModelContext;
+  providerModel?: SofiaCloudMcpProviderModelContext;
 }): Promise<CloudMcpBackgroundSyncResult> {
   const workspaceId = input.workspaceId.trim();
   const settings = input.settings ?? readDenSettings();
@@ -205,7 +205,7 @@ export async function syncCloudControlMcpInBackground(input: {
   try {
     listed = await input.client.listMcp(workspaceId);
   } catch (error) {
-    if (error instanceof OpenworkServerError) {
+    if (error instanceof SofiaServerError) {
       return failedCloudMcpBackgroundSync({ health: null, code: error.code, message: error.message });
     }
     throw error;
@@ -225,7 +225,7 @@ export async function syncCloudControlMcpInBackground(input: {
   }
   const configuredUrl = typeof configured?.config.url === "string" ? configured.config.url : null;
 
-  const result = await runOpenworkCloudMcpReconciler({
+  const result = await runSofiaCloudMcpReconciler({
     mode: "repair",
     client: input.client,
     context: {
@@ -315,7 +315,7 @@ export async function runCloudMcpMaintenanceWithRetry(input: {
 export async function healWorkspaceMcpInBackground(input: {
   client: CloudMcpMaintenanceClient;
   workspaceId: string;
-  opencodeClient: Client;
+  engineClient: Client;
   directory: string;
 }): Promise<boolean> {
   const workspaceId = input.workspaceId.trim();
@@ -329,9 +329,9 @@ export async function healWorkspaceMcpInBackground(input: {
   }));
   if (servers.length === 0) return false;
 
-  const statuses = unwrap(await input.opencodeClient.mcp.status({ directory })) as McpStatusMap;
+  const statuses = unwrap(await input.engineClient.mcp.status({ directory })) as McpStatusMap;
   return attemptSilentMcpReauth({
-    client: input.opencodeClient,
+    client: input.engineClient,
     directory,
     servers,
     statuses,
@@ -340,12 +340,12 @@ export async function healWorkspaceMcpInBackground(input: {
 
 export function useSessionMcpMaintenance(input: {
   cloudSignedIn: boolean;
-  client: OpenworkServerClient | null;
+  client: SofiaServerClient | null;
   workspaceId: string | null;
-  opencodeClient: Client | null;
+  engineClient: Client | null;
   directory: string;
   engineReloadBusy?: boolean;
-  providerModel?: OpenworkCloudMcpProviderModelContext;
+  providerModel?: SofiaCloudMcpProviderModelContext;
 }): SessionCloudMcpMaintenanceState {
   const [cloudMcpState, setCloudMcpState] = useState<SessionCloudMcpMaintenanceState>(
     IDLE_CLOUD_MCP_MAINTENANCE_STATE,
@@ -361,8 +361,8 @@ export function useSessionMcpMaintenance(input: {
     const workspaceId = input.workspaceId?.trim() ?? "";
     const directory = input.directory.trim();
     const client = input.client;
-    const opencodeClient = input.opencodeClient;
-    if (!client || !opencodeClient || !workspaceId || !directory) {
+    const engineClient = input.engineClient;
+    if (!client || !engineClient || !workspaceId || !directory) {
       setCloudMcpState(IDLE_CLOUD_MCP_MAINTENANCE_STATE);
       return;
     }
@@ -441,7 +441,7 @@ export function useSessionMcpMaintenance(input: {
           await healWorkspaceMcpInBackground({
             client,
             workspaceId,
-            opencodeClient,
+            engineClient,
             directory,
           }).catch(() => {
             recordInspectorEvent("mcp.session_reauth_failed", { workspaceId });
@@ -472,7 +472,7 @@ export function useSessionMcpMaintenance(input: {
     input.cloudSignedIn,
     input.directory,
     input.engineReloadBusy,
-    input.opencodeClient,
+    input.engineClient,
     input.providerModel?.model,
     input.providerModel?.provider,
     input.workspaceId,

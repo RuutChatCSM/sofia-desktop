@@ -1,4 +1,4 @@
-// Codex runtime surfaces: MCP servers + skills that OpenWork provisions into the
+// Codex runtime surfaces: MCP servers + skills that Sofia App provisions into the
 // bundled codex (Sofia) engine's config.toml and codex home. Mirrors the
 // ChatGPT/Codex app's "capabilities = SKILL.md + plugin that registers tools +
 // MCP bridge" model (see reference/codex-app TOOLS-SKILLS.md): each surface is a
@@ -25,7 +25,7 @@ export type CodexRuntimeMcpServer = {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const serverRoot = resolve(__dirname, "..", "..");
-const handsfreeBin = resolve(serverRoot, "packages", "handsfree", "bin", "openwork-handsfree-computer-use.mjs");
+const handsfreeBin = resolve(serverRoot, "packages", "handsfree", "bin", "sofia-handsfree-computer-use.mjs");
 
 /** Resolve the handsfree computer-use adapter as a direct `node` invocation. */
 export function resolveComputerUseInvocation(): { command: string; args: string[]; env: Record<string, string> } | null {
@@ -42,17 +42,17 @@ export function resolveBrowserReplInvocation(): { command: string; args: string[
   // Dev build: the harness sits beside this module in src/. Dist builds may keep
   // it under a copied location; try the source dir as the fallback.
   const candidates = [
-    resolve(here, "openwork-browser-repl.mjs"),
-    resolve(here, "..", "src", "openwork-browser-repl.mjs"),
+    resolve(here, "sofia-browser-repl.mjs"),
+    resolve(here, "..", "src", "sofia-browser-repl.mjs"),
   ];
   const harness = candidates.find((candidate) => existsSync(candidate));
   if (!harness) return null;
-  const brokerUrl = process.env.OPENWORK_ELECTRON_AGENT_CDP_BASE_URL?.trim();
+  const brokerUrl = process.env.SOFIA_ELECTRON_AGENT_CDP_BASE_URL?.trim();
   if (!brokerUrl) return null;
   return {
     command: process.execPath,
     args: [harness],
-    env: { ELECTRON_RUN_AS_NODE: "1", OPENWORK_BROWSER_CDP_URL: brokerUrl },
+    env: { ELECTRON_RUN_AS_NODE: "1", SOFIA_BROWSER_CDP_URL: brokerUrl },
   };
 }
 
@@ -71,21 +71,21 @@ export function resolveComputerUseCommand(): string | null {
   const pinned = process.env.HANDSFREE_COMPUTER_USE_BINARY?.trim();
   if (pinned) return pinned;
   if (existsSync(handsfreeBin)) return handsfreeBin;
-  return "openwork-handsfree-computer-use";
+  return "sofia-handsfree-computer-use";
 }
 
 /** True when computer use should be wired into the codex engine. Opt-in only:
  * computer-use surfaces macOS Accessibility/Screen Recording permission prompts,
  * so it must never auto-enable from the binary's mere presence. The user enables
- * it (OPENWORK_CODEX_COMPUTER_USE=1) or a packaged helper grants the grant; a
+ * it (SOFIA_CODEX_COMPUTER_USE=1) or a packaged helper grants the grant; a
  * bare build stays silent until then. */
 export function computerUseEnabled(): boolean {
   if (!isMacOS()) return false;
-  return envFlag("OPENWORK_CODEX_COMPUTER_USE", false);
+  return envFlag("SOFIA_CODEX_COMPUTER_USE", false);
 }
 
 /**
- * The MCP servers OpenWork registers with the codex engine. Additive and
+ * The MCP servers Sofia App registers with the codex engine. Additive and
  * best-effort: only servers whose backing runtime is present are returned, so a
  * bare server build never references a missing sidecar.
  */
@@ -115,7 +115,7 @@ export function defaultCodexRuntimeMcpServers(): CodexRuntimeMcpServer[] {
   // codex agent gets the app-parity surface instead: a Node REPL `js` tool
   // (mcp__node_repl__js) that exposes `agent.browsers.get("iab")` backed by the
   // same local CDP broker, driven over each tab's page-level websocket.
-  const brokerUrl = process.env.OPENWORK_ELECTRON_AGENT_CDP_BASE_URL?.trim();
+  const brokerUrl = process.env.SOFIA_ELECTRON_AGENT_CDP_BASE_URL?.trim();
   const replInvocation = resolveBrowserReplInvocation();
   if (brokerUrl && replInvocation) {
     servers.push({
@@ -169,7 +169,7 @@ export function codexRuntimeSkill(name: "computer-use" | "browser"): string {
   return [
     "---",
     "name: \"browser\"",
-    "description: \"Drive the built-in OpenWork in-app browser through the Node REPL tool (mcp__node_repl__js) which exposes globalThis.agent.browsers. Use when the task requires browsing the web, filling forms, or inspecting a live page in a visible tab. Do not use it to interact with the OpenWork app itself.\"",
+    "description: \"Drive the built-in Sofia App in-app browser through the Node REPL tool (mcp__node_repl__js) which exposes globalThis.agent.browsers. Use when the task requires browsing the web, filling forms, or inspecting a live page in a visible tab. Do not use it to interact with the Sofia App itself.\"",
     "---",
     "",
     "# In-App Browser",
@@ -195,7 +195,7 @@ export function codexRuntimeSkill(name: "computer-use" | "browser"): string {
     "",
     "## Protocol",
     "",
-    "1. `browser.tabs.list()` to see open tabs; skip any page whose url is the OpenWork app (localhost:5173).",
+    "1. `browser.tabs.list()` to see open tabs; skip any page whose url is the Sofia App (localhost:5173).",
     "   `browser.user.openTabs()` is the equivalent user-session tab listing.",
     "2. `browser.tabs.open(url)` opens a new **visible** browser tab and returns it.",
     "3. Always `tab.snapshot()` before acting. After an action changes the page, take a fresh snapshot before choosing the next action.",
@@ -204,7 +204,7 @@ export function codexRuntimeSkill(name: "computer-use" | "browser"): string {
     "",
     "## Rules",
     "",
-    "- Never drive the OpenWork app's own tab (the page whose url is the OpenWork UI).",
+    "- Never drive the Sofia App's own tab (the page whose url is the Sofia App UI).",
     "- The opened tab is already signed in to the user's session; do not attempt login again.",
     "- Keep discovery read-only: do not copy cookies or credentials.",
     "- Prefer `tab.goto(url)` to navigate instead of opening new tabs repeatedly.",
@@ -268,7 +268,7 @@ export function codexRuntimeSkillsDir(codexHome: string): string {
   return join(codexHome, "skills");
 }
 
-export const OPENWORK_CODEX_HOME_DEFAULT = () => {
+export const SOFIA_CODEX_HOME_DEFAULT = () => {
   const home = process.env.HOME?.trim() || homedir();
   return join(home, ".sofia");
 };

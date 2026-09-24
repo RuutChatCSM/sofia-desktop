@@ -7,7 +7,7 @@ import type { Client } from "../types";
  * workspaces, sessions, composer draft, boot phase, and the last
  * refreshRouteState() call — without crawling the UI tree.
  *
- * Consumers read via `window.__openwork` from a devtools console or from
+ * Consumers read via `window.__sofia` from a devtools console or from
  * browser-tool `evaluate_script`. The surface is intentionally plain JSON so
  * it survives postMessage-style bridges.
  *
@@ -19,8 +19,8 @@ export type InspectorSliceGetter = () => unknown;
 
 type InspectorAPI = {
   version: number;
-  /** Active workspace's authenticated OpenCode SDK client when developer mode is enabled. */
-  readonly opencode: Client | null;
+  /** Active workspace's authenticated Sofia SDK client when developer mode is enabled. */
+  readonly engine: Client | null;
   snapshot(): Record<string, unknown>;
   slice(name: string): unknown;
   listSlices(): string[];
@@ -34,7 +34,7 @@ type InspectorAPI = {
 
 declare global {
   // eslint-disable-next-line no-var
-  var __openwork: InspectorAPI | undefined;
+  var __sofia: InspectorAPI | undefined;
 }
 
 const INSPECTOR_VERSION = 1;
@@ -43,14 +43,14 @@ const EVENT_BUFFER_MAX = 200;
 type Registry = {
   slices: Map<string, InspectorSliceGetter>;
   events: Array<{ at: number; name: string; data: unknown }>;
-  opencodeClient: Client | null;
+  engineClient: Client | null;
   installed: boolean;
 };
 
 const registry: Registry = {
   slices: new Map(),
   events: [],
-  opencodeClient: null,
+  engineClient: null,
   installed: false,
 };
 
@@ -80,8 +80,8 @@ function installIfNeeded() {
 
   const api: InspectorAPI = {
     version: INSPECTOR_VERSION,
-    get opencode() {
-      return registry.opencodeClient;
+    get engine() {
+      return registry.engineClient;
     },
     snapshot: buildSnapshot,
     slice(name) {
@@ -106,7 +106,7 @@ function installIfNeeded() {
     },
   };
 
-  Object.defineProperty(window, "__openwork", {
+  Object.defineProperty(window, "__sofia", {
     value: api,
     configurable: true,
     writable: false,
@@ -127,17 +127,17 @@ export function publishInspectorSlice(
   };
 }
 
-export function publishInspectorOpencodeClient(client: Client): () => void {
+export function publishInspectorWorkspaceEngineClient(client: Client): () => void {
   installIfNeeded();
-  registry.opencodeClient = client;
+  registry.engineClient = client;
   return () => {
-    if (registry.opencodeClient === client) registry.opencodeClient = null;
+    if (registry.engineClient === client) registry.engineClient = null;
   };
 }
 
 export function recordInspectorEvent(name: string, data?: unknown) {
   installIfNeeded();
-  window.__openwork?.record(name, data);
+  window.__sofia?.record(name, data);
 }
 
 export function ensureInspectorInstalled() {

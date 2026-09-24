@@ -95,7 +95,7 @@ export function LpAnalyticsScreen() {
           <h3 className="text-[18px] font-semibold tracking-[-0.02em] text-[#07192C]">
             Usage — last 30 days
           </h3>
-          <p className="mt-1 text-[12px] text-[#637291]">Across every OpenWork client and workspace</p>
+          <p className="mt-1 text-[12px] text-[#637291]">Across every Sofia client and workspace</p>
         </div>
         <div className="flex gap-2">
           <span className="inline-flex h-9 items-center rounded-full border border-[#d8e0ec] bg-white px-3 text-[11.5px] text-[#30405F]">

@@ -1,13 +1,13 @@
 import { expect } from "vitest";
-import { denFetch, evalIn, signIn, waitFor } from "@openwork/behaviors";
-import { navigate } from "@openwork/cdp";
-import { screenshot, validate } from "@openwork/test-evidence";
-import { chrome } from "@openwork/hosts";
-import { needs, server, test, unmetNeeds } from "@openwork/testkit";
-import type { TestNeeds } from "@openwork/testkit";
+import { denFetch, evalIn, signIn, waitFor } from "@sofia/behaviors";
+import { navigate } from "@sofia/cdp";
+import { screenshot, validate } from "@sofia/test-evidence";
+import { chrome } from "@sofia/hosts";
+import { needs, server, test, unmetNeeds } from "@sofia/testkit";
+import type { TestNeeds } from "@sofia/testkit";
 
 const requirements: TestNeeds = {
-  optIn: ["OPENWORK_EVAL_E2E_TESTS"],
+  optIn: ["SOFIA_EVAL_E2E_TESTS"],
 };
 const missingRequirements = unmetNeeds(requirements, process.env);
 const title = missingRequirements.length > 0
@@ -30,9 +30,9 @@ test(title, async ({ evidence, place }) => {
   const runId = `${Date.now().toString(36)}${process.pid.toString(36)}`;
   const orgName = `Acme Robotics ${runId}`;
   const invitee = {
-    email: `maya+${runId}@openwork.test`,
+    email: `maya+${runId}@sofia.test`,
     name: "Maya Chen",
-    password: "OpenWorkEval123!",
+    password: "SofiaEval123!",
   };
 
   await using den = await server({
@@ -80,8 +80,8 @@ test(title, async ({ evidence, place }) => {
   });
 
   const tokenStored = await evalIn(browser, `(() => {
-    localStorage.setItem("openwork:web:auth-token", ${JSON.stringify(member.token)});
-    return localStorage.getItem("openwork:web:auth-token") === ${JSON.stringify(member.token)};
+    localStorage.setItem("sofia:web:auth-token", ${JSON.stringify(member.token)});
+    return localStorage.getItem("sofia:web:auth-token") === ${JSON.stringify(member.token)};
   })()`);
   expect(tokenStored).toBe(true);
 
@@ -148,7 +148,7 @@ test(title, async ({ evidence, place }) => {
 
   const shot = await screenshot(browser);
   const seen = await validate(shot, [
-    "The page is an OpenWork download or install guide",
+    "The page is an Sofia App download or install guide",
     "The page offers downloads for desktop computers",
   ]);
   expect(seen.ok, seen.why).toBe(true);

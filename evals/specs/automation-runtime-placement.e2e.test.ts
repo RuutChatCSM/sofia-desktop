@@ -1,9 +1,9 @@
 import { expect } from "vitest";
-import { screenshot, validate } from "@openwork/test-evidence";
-import { evalIn, waitFor, waitForText } from "@openwork/behaviors";
-import { navigate } from "@openwork/cdp";
-import { chrome } from "@openwork/hosts";
-import { needs, server, test } from "@openwork/testkit";
+import { screenshot, validate } from "@sofia/test-evidence";
+import { evalIn, waitFor, waitForText } from "@sofia/behaviors";
+import { navigate } from "@sofia/cdp";
+import { chrome } from "@sofia/hosts";
+import { needs, server, test } from "@sofia/testkit";
 
 /**
  * CORE JOURNEY: the creation surface owns immutable execution placement.
@@ -17,7 +17,7 @@ import { needs, server, test } from "@openwork/testkit";
  */
 
 test("Web creates Cloud-owned Automations while Desktop creation remains local", async ({ evidence, place }) => {
-  needs({ optIn: ["OPENWORK_EVAL_E2E_TESTS", "OPENWORK_EVAL_AUTOMATIONS_E2E_TEST"] });
+  needs({ optIn: ["SOFIA_EVAL_E2E_TESTS", "SOFIA_EVAL_AUTOMATIONS_E2E_TEST"] });
   await using den = await server({ place });
   await using browser = await chrome({
     name: "automation-runtime-placement",
@@ -29,18 +29,18 @@ test("Web creates Cloud-owned Automations while Desktop creation remains local",
     timeoutMs: 60_000,
     label: "Den Web loaded",
   });
-  await evalIn(browser, `localStorage.setItem("openwork:web:auth-token", ${JSON.stringify(den.admin.token)})`);
+  await evalIn(browser, `localStorage.setItem("sofia:web:auth-token", ${JSON.stringify(den.admin.token)})`);
   await navigate(browser.client, `${den.ref.webUrl}/dashboard/automations`);
   await waitForText(browser, "New Automation", { timeoutMs: 60_000 });
 
   const surfaceCopy = await evalIn(browser, "document.body.innerText");
-  expect(surfaceCopy).toContain("Automations created here run headlessly in OpenWork Cloud");
+  expect(surfaceCopy).toContain("Automations created here run headlessly in Sofia Cloud");
   expect(surfaceCopy).toContain("Desktop-created Automations stay on Desktop");
   await evalIn(browser, `([...document.querySelectorAll("button")].find((button) => button.textContent?.includes("New Automation")))?.click()`);
   await waitForText(browser, "A stopped Cloud container wakes automatically", { timeoutMs: 10_000 });
   evidence.recordAssertionEvidence(
     "Creation surface explains immutable runtime placement",
-    "Web identifies new Automations as OpenWork Cloud-owned and preserves Desktop-created Automations as Desktop-owned.",
+    "Web identifies new Automations as Sofia Cloud-owned and preserves Desktop-created Automations as Desktop-owned.",
     true,
   );
 

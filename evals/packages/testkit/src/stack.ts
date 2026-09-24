@@ -1,5 +1,5 @@
-export * from "@openwork/behaviors";
-export * from "@openwork/hosts";
+export * from "@sofia/behaviors";
+export * from "@sofia/hosts";
 export * from "./app.ts";
 export * from "./eventually.ts";
 export * from "./faults.ts";

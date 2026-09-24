@@ -1,6 +1,6 @@
 /**
  * Docs screenshot pipeline: recomposes the eval app-driver packages
- * (@openwork/hosts, @openwork/behaviors, @openwork/cdp) into declarative
+ * (@sofia/hosts, @sofia/behaviors, @sofia/cdp) into declarative
  * scenes that regenerate the images under packages/docs/images.
  *
  * Usage (from the repo root, Node >= 24):
@@ -13,7 +13,7 @@
  */
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
-import { emulateFocus, freezeMotion, paintBackdrop, setViewport } from "@openwork/cdp";
+import { emulateFocus, freezeMotion, paintBackdrop, setViewport } from "@sofia/cdp";
 import { Ctx } from "./ctx.ts";
 import { captureUntil } from "./loop.ts";
 import { shots } from "./shots/index.ts";
@@ -27,8 +27,8 @@ for (const key of [
   "OPENAI_API_KEY",
   "OPENROUTER_API_KEY",
   "GOOGLE_GENERATIVE_AI_API_KEY",
-  "OPENWORK_API_KEY",
-  "OPENWORK_INFERENCE_BASE_URL",
+  "SOFIA_API_KEY",
+  "SOFIA_INFERENCE_BASE_URL",
 ]) {
   process.env[key] = "";
 }

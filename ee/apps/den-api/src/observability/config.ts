@@ -1,7 +1,7 @@
 import "../load-env.js"
 
-import { parseObservabilityEnv } from "@openwork-ee/utils/observability"
-import type { ObservabilityConfig, ObservabilityEnv } from "@openwork-ee/utils/observability"
+import { parseObservabilityEnv } from "@sofia-ee/utils/observability"
+import type { ObservabilityConfig, ObservabilityEnv } from "@sofia-ee/utils/observability"
 
 const SERVICE_NAME = "den-api"
 

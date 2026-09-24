@@ -104,17 +104,17 @@ describe("deriveOpenTargets", () => {
 
   it("extracts PowerPoint decks from assistant artifact summaries", () => {
     const targets = deriveOpenTargets([
-      message("msg_1", "assistant", "Updated file: decks/openwork-vertebrae-deck.pptx"),
+      message("msg_1", "assistant", "Updated file: decks/sofia-vertebrae-deck.pptx"),
     ]);
-    const deck = targets.find((target) => target.value === "decks/openwork-vertebrae-deck.pptx");
+    const deck = targets.find((target) => target.value === "decks/sofia-vertebrae-deck.pptx");
 
     expect(deck).toMatchObject({ preview: "slides", confidence: 65 });
     expect(deck ? isCollectibleArtifactTarget({ ...deck, exists: true }) : false).toBe(true);
   });
 
-  it("extracts artifact paths from OpenWork extension call metadata", () => {
+  it("extracts artifact paths from Sofia App extension call metadata", () => {
     const targets = deriveOpenTargets([
-      toolMessage("msg_tool", "openwork_extension_call", {
+      toolMessage("msg_tool", "sofia_extension_call", {
         extensionId: "openai-image-generation",
         action: "image_generate",
       }, {
@@ -219,7 +219,7 @@ describe("deriveOpenTargets", () => {
       toolMessage("msg_tool", "glob", { pattern: "**/*.md" }, {
         files: [
           "README.md",
-          ".opencode/skills/example/SKILL.md",
+          ".sofia/skills/example/SKILL.md",
           "reports/created-report.md",
         ],
       }),
@@ -228,7 +228,7 @@ describe("deriveOpenTargets", () => {
 
     expect(targets.map((target) => target.value)).toContain("reports/created-report.md");
     expect(targets.map((target) => target.value)).not.toContain("README.md");
-    expect(targets.map((target) => target.value)).not.toContain(".opencode/skills/example/SKILL.md");
+    expect(targets.map((target) => target.value)).not.toContain(".sofia/skills/example/SKILL.md");
   });
 
   it("does not collect server-verified missing file targets", () => {

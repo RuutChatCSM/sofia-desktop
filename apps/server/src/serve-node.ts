@@ -1,5 +1,5 @@
 /**
- * Node.js HTTP adapter for the OpenWork server.
+ * Node.js HTTP adapter for the Sofia App server.
  *
  * Provides a `serve()` function with the same interface as Bun.serve()
  * but backed by `node:http`. This allows the server to run in any Node.js
@@ -216,10 +216,14 @@ export function serve(options: ServeOptions): Promise<ServeResult> {
       }
       console.error("[serve-node] Unhandled error:", error);
       if (!isResponseWritable(nodeRes)) return;
+      const errorBody = JSON.stringify({ error: "internal_error" });
       if (!nodeRes.headersSent) {
-        nodeRes.writeHead(500, { "Content-Type": "application/json" });
+        nodeRes.writeHead(500, {
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(errorBody),
+        });
       }
-      endResponse(nodeRes, JSON.stringify({ error: "internal_error" }));
+      endResponse(nodeRes, errorBody);
     } finally {
       detachCancellation?.();
     }

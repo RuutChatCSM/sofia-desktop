@@ -32,7 +32,7 @@ import { LazyMotion, Reorder, domMax, m, useDragControls } from "motion/react";
 
 import { getDisplaySessionTitle } from "../../../../app/lib/session-title";
 import type { WorkspaceInfo } from "../../../../app/lib/desktop";
-import { OpenWorkDenHelpLink } from "../../workspace/openwork-den-help-link";
+import { SofiaDenHelpLink } from "../../workspace/sofia-den-help-link";
 import { NotificationBell } from "../../../shell/notification-center";
 import type {
   WorkspaceConnectionState,
@@ -46,7 +46,7 @@ import {
   isWindowsPlatform,
 } from "../../../../app/utils";
 import { t } from "../../../../i18n";
-import { useBrandLogoUrl } from "../../cloud/brand-theme";
+import { DEFAULT_BRAND_LOGO_SRC, useBrandLogoUrl } from "../../cloud/brand-theme";
 import { canCreateWorkspaces } from "../../../../app/lib/workspace-creation-policy";
 
 import {
@@ -700,7 +700,7 @@ function RemoteConnectionIssueCard(props: {
             >
               {props.message}
             </div>
-            <OpenWorkDenHelpLink />
+            <SofiaDenHelpLink />
             <div className="mt-2 flex flex-wrap gap-1.5">
               {props.canRecover ? (
                 <Button
@@ -1087,20 +1087,20 @@ export function AppSidebar(props: AppSidebarProps) {
     <SidebarContext.Provider value={contextValue}>
       <Sidebar
         collapsible="offcanvas"
-        className="border-e-0 group-data-[side=left]:border-e-0"
+        className="mac:**:data-[sidebar=sidebar]:bg-transparent border-e-0 group-data-[side=left]:border-e-0"
       >
         <div className="hidden h-12 mac:block mac:titlebar-drag"/>
         {brandLogoUrl ? (
           <div
             data-testid="brand-logo"
-            className="flex h-12 shrink-0 items-center gap-2 px-3 pb-2 pt-1 mac:pt-0"
+            className="flex h-16 shrink-0 items-center gap-3 px-5 pb-3 pt-2 mac:pt-0"
           >
             <img
               src={brandLogoUrl}
-              alt={brandLogoUrl === "/sofia-mark.svg" ? "Sofia" : "Organization logo"}
-              className={`max-h-9 w-auto max-w-[140px] object-contain object-left ${brandLogoUrl === "/sofia-mark.svg" ? "sofia-brand-mark" : ""}`}
+              alt={brandLogoUrl === DEFAULT_BRAND_LOGO_SRC ? "Sofia" : "Organization logo"}
+              className="h-8 w-8 object-contain object-left"
             />
-            {brandLogoUrl === "/sofia-mark.svg" ? <span className="text-base font-semibold tracking-tight">Sofia</span> : null}
+            {brandLogoUrl === DEFAULT_BRAND_LOGO_SRC ? <span className="text-xl font-semibold tracking-tight">Sofia</span> : null}
           </div>
         ) : null}
         {props.conversationHistory ? (
@@ -1762,9 +1762,9 @@ function WorkspaceSidebarGroup({
   );
 }
 
-const SESSION_DRAG_TYPE = "application/x-openwork-session-id";
+const SESSION_DRAG_TYPE = "application/x-sofia-session-id";
 const EMPTY_PINNED_IDS = new Set<string>();
-const UNGROUPED_GROUP_ID = "__openwork_ungrouped";
+const UNGROUPED_GROUP_ID = "__sofia_ungrouped";
 
 function SessionGroupActions({ group, groups, workspaceId, count }: {
   group: SessionGroupDefinition;

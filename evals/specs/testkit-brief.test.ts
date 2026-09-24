@@ -1,7 +1,7 @@
 import { readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { afterAll, expect } from "vitest";
-import { briefTest, claim, createBriefRun, test, testBrief } from "@openwork/testkit";
+import { briefTest, claim, createBriefRun, test, testBrief } from "@sofia/testkit";
 
 const testRunDirs: string[] = [];
 let recordedDir = "";

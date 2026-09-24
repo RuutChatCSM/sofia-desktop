@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, jest, setSystemTime, test } fr
 type SyncInput = {
   workspaceId: string;
   baseUrl: string;
-  openworkToken: string;
+  sofiaToken: string;
 };
 
 type Subscription = {
@@ -26,8 +26,8 @@ const {
 const inputs: SyncInput[] = [];
 const originalSetInterval = globalThis.setInterval;
 
-function input(baseUrl: string, openworkToken: string): SyncInput {
-  const value = { workspaceId: "ws_shared", baseUrl, openworkToken };
+function input(baseUrl: string, sofiaToken: string): SyncInput {
+  const value = { workspaceId: "ws_shared", baseUrl, sofiaToken };
   inputs.push(value);
   return value;
 }
@@ -79,7 +79,7 @@ afterEach(() => {
 describe("workspace session sync lifecycle", () => {
   test("reuses the stream when immediately re-ensured after release", async () => {
     __setWorkspaceSessionSyncSubscriptionFactoryForTest(createSubscription);
-    const syncInput = input("https://one.example/opencode", "token");
+    const syncInput = input("https://one.example/engine", "token");
 
     const releaseFirst = ensureWorkspaceSessionSync(syncInput);
     await waitForSubscriptions(1);
@@ -95,7 +95,7 @@ describe("workspace session sync lifecycle", () => {
 
   test("disposes after the release grace period when nobody re-ensures", async () => {
     __setWorkspaceSessionSyncSubscriptionFactoryForTest(createSubscription);
-    const syncInput = input("https://one.example/opencode", "token");
+    const syncInput = input("https://one.example/engine", "token");
     const release = ensureWorkspaceSessionSync(syncInput);
     await waitForSubscriptions(1);
 
@@ -112,7 +112,7 @@ describe("workspace session sync lifecycle", () => {
 
   test("re-ensure cancels pending disposal", async () => {
     __setWorkspaceSessionSyncSubscriptionFactoryForTest(createSubscription);
-    const syncInput = input("https://one.example/opencode", "token");
+    const syncInput = input("https://one.example/engine", "token");
     const releaseFirst = ensureWorkspaceSessionSync(syncInput);
     await waitForSubscriptions(1);
 
@@ -130,8 +130,8 @@ describe("workspace session sync lifecycle", () => {
 
   test("reuses an active stream when only the token changes", async () => {
     __setWorkspaceSessionSyncSubscriptionFactoryForTest(createSubscription);
-    const first = input("https://one.example/opencode", "token-old");
-    const second = input("https://one.example/opencode", "token-new");
+    const first = input("https://one.example/engine", "token-old");
+    const second = input("https://one.example/engine", "token-new");
 
     const releaseFirst = ensureWorkspaceSessionSync(first);
     await waitForSubscriptions(1);
@@ -148,8 +148,8 @@ describe("workspace session sync lifecycle", () => {
 
   test("uses the updated token after a stream reconnects", async () => {
     __setWorkspaceSessionSyncSubscriptionFactoryForTest(createSubscription);
-    const first = input("https://one.example/opencode", "token-old");
-    const second = input("https://one.example/opencode", "token-new");
+    const first = input("https://one.example/engine", "token-old");
+    const second = input("https://one.example/engine", "token-new");
     const releaseFirst = ensureWorkspaceSessionSync(first);
     await waitForSubscriptions(1);
     const releaseSecond = ensureWorkspaceSessionSync(second);
@@ -164,15 +164,15 @@ describe("workspace session sync lifecycle", () => {
 
   test("keeps the same workspace id separate across base URLs", async () => {
     __setWorkspaceSessionSyncSubscriptionFactoryForTest(createSubscription);
-    const first = input("https://one.example/opencode", "token-one");
-    const second = input("https://two.example/opencode", "token-two");
+    const first = input("https://one.example/engine", "token-one");
+    const second = input("https://two.example/engine", "token-two");
     const releaseFirst = ensureWorkspaceSessionSync(first);
     const releaseSecond = ensureWorkspaceSessionSync(second);
 
     await waitForSubscriptions(2);
     expect(subscriptions.map(({ baseUrl }) => baseUrl).sort()).toEqual([
-      "https://one.example/opencode",
-      "https://two.example/opencode",
+      "https://one.example/engine",
+      "https://two.example/engine",
     ]);
     expect(subscriptions.every(({ signal }) => !signal.aborted)).toBe(true);
 
@@ -182,14 +182,14 @@ describe("workspace session sync lifecycle", () => {
 
   test("dispose aborts the active stream and cancels a pending retry", async () => {
     __setWorkspaceSessionSyncSubscriptionFactoryForTest(createSubscription);
-    const activeInput = input("https://one.example/opencode", "token");
+    const activeInput = input("https://one.example/engine", "token");
     ensureWorkspaceSessionSync(activeInput);
     await waitForSubscriptions(1);
 
     __disposeWorkspaceSessionSyncForTest(activeInput);
     expect(subscriptions[0]!.signal.aborted).toBe(true);
 
-    const retryInput = input("https://two.example/opencode", "token");
+    const retryInput = input("https://two.example/engine", "token");
     ensureWorkspaceSessionSync(retryInput);
     await waitForSubscriptions(2);
     subscriptions[1]!.end();
@@ -207,7 +207,7 @@ describe("workspace session sync lifecycle", () => {
       writable: true,
       value: (handler: TimerHandler) => originalSetInterval(handler, 5),
     });
-    const syncInput = input("https://one.example/opencode", "token");
+    const syncInput = input("https://one.example/engine", "token");
     ensureWorkspaceSessionSync(syncInput);
     await waitForSubscriptions(1);
 

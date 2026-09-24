@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import type { UIMessage } from "ai";
 
-import type { OpenworkSessionSnapshot } from "../src/app/lib/openwork-server";
+import type { SofiaSessionSnapshot } from "../src/app/lib/sofia-server";
 import {
   deriveRenderedSessionMessages,
   resolveRenderedSessionSnapshot,
@@ -11,12 +11,12 @@ import {
   reconcileTranscriptMessages,
   resolveForkBoundaryId,
 } from "../src/react-app/domains/session/sync/transcript-reconcile";
-import { describeOpencodeSessionError } from "../src/react-app/domains/session/sync/usechat-adapter";
+import { describeWorkspaceEngineSessionError } from "../src/react-app/domains/session/sync/usechat-adapter";
 
 function snapshotWithMessages(
   messages: Array<{ id: string; role: "user" | "assistant"; text: string; created?: number }>,
   sessionId = "ses_test",
-): OpenworkSessionSnapshot {
+): SofiaSessionSnapshot {
   return {
     session: {
       id: sessionId,
@@ -45,19 +45,19 @@ function snapshotWithMessages(
     })),
     todos: [],
     status: { type: "idle" },
-  } as unknown as OpenworkSessionSnapshot;
+  } as unknown as SofiaSessionSnapshot;
 }
 
 function uiMessage(id: string, role: "user" | "assistant", text: string, created?: number): UIMessage {
   return {
     id,
     role,
-    ...(typeof created === "number" ? { metadata: { opencode: { created } } } : {}),
+    ...(typeof created === "number" ? { metadata: { engine: { created } } } : {}),
     parts: [{ type: "text", text, state: "done" }],
   };
 }
 
-function snapshotWithText(text: string, sessionId = "ses_test"): OpenworkSessionSnapshot {
+function snapshotWithText(text: string, sessionId = "ses_test"): SofiaSessionSnapshot {
   return snapshotWithMessages([{ id: "msg_user", role: "user", text }], sessionId);
 }
 
@@ -311,9 +311,9 @@ describe("deriveRenderedSessionMessages", () => {
   });
 });
 
-describe("describeOpencodeSessionError", () => {
+describe("describeWorkspaceEngineSessionError", () => {
   it("includes API error status and response details", () => {
-    expect(describeOpencodeSessionError({
+    expect(describeWorkspaceEngineSessionError({
       name: "APIError",
       data: {
         message: "Service unavailable",
@@ -326,7 +326,7 @@ describe("describeOpencodeSessionError", () => {
 
   it("summarizes and bounds an HTML API response body", () => {
     const responseBody = `<!DOCTYPE html><html><head><title>502 Bad Gateway</title></head><body>${"x".repeat(1_024 * 1_024)}</body></html>`;
-    const described = describeOpencodeSessionError({
+    const described = describeWorkspaceEngineSessionError({
       name: "APIError",
       data: { message: "Proxy request failed", statusCode: 502, responseBody },
     });
@@ -338,15 +338,15 @@ describe("describeOpencodeSessionError", () => {
     expect(described.length).toBeLessThanOrEqual(500);
   });
 
-  it("uses named error defaults when opencode omits a message", () => {
-    expect(describeOpencodeSessionError({
+  it("uses named error defaults when engine omits a message", () => {
+    expect(describeWorkspaceEngineSessionError({
       name: "MessageOutputLengthError",
       data: {},
     })).toBe("The model reached its output limit before finishing");
   });
 
   it("surfaces structured output retry counts", () => {
-    expect(describeOpencodeSessionError({
+    expect(describeWorkspaceEngineSessionError({
       name: "StructuredOutputError",
       data: {
         message: "Invalid JSON",
@@ -356,10 +356,10 @@ describe("describeOpencodeSessionError", () => {
   });
 
   it("maps OpenAI ChatGPT token refresh 401 to reconnect guidance", () => {
-    expect(describeOpencodeSessionError(new Error("Token refresh failed: 401"))).toBe(
+    expect(describeWorkspaceEngineSessionError(new Error("Token refresh failed: 401"))).toBe(
       "OpenAI couldn’t renew the ChatGPT sign-in for this worker. Retry once. If it happens again, reconnect OpenAI under Connect providers → OpenAI → ChatGPT Pro/Plus.",
     );
-    expect(describeOpencodeSessionError("Token refresh failed: 403")).toBe("Token refresh failed: 403");
+    expect(describeWorkspaceEngineSessionError("Token refresh failed: 403")).toBe("Token refresh failed: 403");
   });
 });
 
@@ -372,7 +372,7 @@ describe("applyRevertCursor", () => {
   ];
 
   it("hides the reverted message itself and everything after it", () => {
-    // OpenCode marks revert.messageID as the FIRST reverted message.
+    // Sofia engine marks revert.messageID as the FIRST reverted message.
     const result = applyRevertCursor(transcript, "msg_3");
     expect(result.map((message) => message.id)).toEqual(["msg_1", "msg_2"]);
   });

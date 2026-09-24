@@ -1,3 +1,4 @@
+import { resolveSofiaEngine } from "./sofia-engine.mjs";
 import { processBlankSlateProfile, resolveBlankSlateLaunch } from "./blank-slate-profile.mjs";
 import { execFileSync, spawn } from "node:child_process";
 import { createServer } from "node:http";
@@ -17,7 +18,6 @@ import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { globalOpencodeConfigDir, workspaceOpencodeConfigCandidates } from "@openwork/paths";
 
 import { configureFakeMediaForTests, installMediaPermissionHandlers } from "./media-permissions.mjs";
 import { registerMigrationIpc } from "./migration.mjs";
@@ -76,9 +76,9 @@ import {
 import { resetMacDockIcon } from "./brand-icon-darwin.mjs";
 import { createDesktopVaultKeyProvider } from "./secure-vault-key.mjs";
 import {
-  clearOpenworkSentrySession,
-  initOpenworkSentry,
-  setOpenworkSentrySession,
+  clearSofiaSentrySession,
+  initSofiaSentry,
+  setSofiaSentrySession,
 } from "./sentry.mjs";
 import { installStdioErrorHandlers } from "./stdio-errors.mjs";
 
@@ -87,27 +87,8 @@ const APP_ROOT = path.resolve(__dirname, "../../..");
 const require = createRequire(import.meta.url);
 const desktopPackageMetadata = require("../package.json");
 
-/**
- * Resolve the bundled codex sidecar (built from the mona-chen/codex source).
- * Mirrors runtime.mjs's sidecar dirs: resources/sidecars in dev and packaged
- * builds. Bundled-only — never falls back to a system codex install.
- */
-function resolveBundledCodexBinary() {
-  const exeName = process.platform === "win32" ? "codex.exe" : "codex";
-  const sidecarDirs = [
-    path.join(__dirname, "..", "resources", "sidecars"),
-    process.resourcesPath ? path.join(process.resourcesPath, "sidecars") : null,
-    path.join(path.dirname(app?.getPath?.("exe") ?? ""), "sidecars"),
-  ].filter(Boolean);
-  for (const dir of sidecarDirs) {
-    const candidate = path.join(dir, exeName);
-    if (existsSync(candidate)) return candidate;
-  }
-  return null;
-}
-
 /** Engine-selection file the renderer mirrors so the main process can gate
- * whether the opencode engine boots at startup. */
+ * whether the engine engine boots at startup. */
 function engineSelectionFilePath() {
   return path.join(app.getPath("userData"), "codex-engine-selection.json");
 }
@@ -116,7 +97,7 @@ function readEngineSelectionFile() {
   try {
     const raw = readFileSync(engineSelectionFilePath(), "utf8");
     const parsed = JSON.parse(raw);
-    return parsed?.engine === "opencode" ? "opencode" : "codex";
+    return parsed?.engine === "engine" ? "engine" : "codex";
   } catch {
     // Codex (Sofia) is the default engine; missing file means codex-only.
     return "codex";
@@ -140,19 +121,19 @@ const {
   systemPreferences,
 } = require("electron");
 const pty = require(["node", "pty"].join("-"));
-const NATIVE_DEEP_LINK_EVENT = "openwork:deep-link-native";
-const AUTOMATION_RUNNER_CREDENTIAL_REJECTED_EVENT = "openwork:automation-runner:credential-rejected";
-const isDevMode = process.env.OPENWORK_DEV_MODE === "1";
+const NATIVE_DEEP_LINK_EVENT = "sofia:deep-link-native";
+const AUTOMATION_RUNNER_CREDENTIAL_REJECTED_EVENT = "sofia:automation-runner:credential-rejected";
+const isDevMode = process.env.SOFIA_DEV_MODE === "1";
 const DESKTOP_DISTRIBUTION = resolveDesktopDistribution({
   isPackaged: app.isPackaged,
-  packageFlavor: Reflect.get(desktopPackageMetadata, "openworkDistribution"),
-  environmentFlavor: process.env.OPENWORK_DESKTOP_DISTRIBUTION,
+  packageFlavor: Reflect.get(desktopPackageMetadata, "sofiaDistribution"),
+  environmentFlavor: process.env.SOFIA_DESKTOP_DISTRIBUTION,
 });
 const TAURI_APP_IDENTIFIER = DESKTOP_DISTRIBUTION.appIdentifier;
 const DEV_APP_IDENTIFIER = `${DESKTOP_DISTRIBUTION.appIdentifier}.dev`;
 const DESKTOP_PROTOCOL_SCHEME = DESKTOP_DISTRIBUTION.protocolScheme;
 const DEFAULT_APP_NAME =
-  (!app.isPackaged ? process.env.OPENWORK_ELECTRON_APP_NAME?.trim() : "") ||
+  (!app.isPackaged ? process.env.SOFIA_ELECTRON_APP_NAME?.trim() : "") ||
   (isDevMode ? `${DESKTOP_DISTRIBUTION.appName} - Dev` : DESKTOP_DISTRIBUTION.appName);
 const BLANK_SLATE_LAUNCH = resolveBlankSlateLaunch({
   appName: DEFAULT_APP_NAME,
@@ -161,22 +142,22 @@ const BLANK_SLATE_LAUNCH = resolveBlankSlateLaunch({
 const APP_NAME = BLANK_SLATE_LAUNCH.appName;
 let currentDisplayAppName = APP_NAME;
 installStdioErrorHandlers();
-await initOpenworkSentry({
+await initSofiaSentry({
   app,
   distribution: DESKTOP_DISTRIBUTION,
   packageMetadata: desktopPackageMetadata,
 });
 const BASE_APP_IDENTIFIER = isDevMode ? DEV_APP_IDENTIFIER : TAURI_APP_IDENTIFIER;
 const APP_IDENTIFIER = resolveAppIdentifier({
-  appIdentifierOverride: process.env.OPENWORK_ELECTRON_APP_IDENTIFIER,
+  appIdentifierOverride: process.env.SOFIA_ELECTRON_APP_IDENTIFIER,
   appRootPath: APP_ROOT,
   baseAppIdentifier: BASE_APP_IDENTIFIER,
   devAppIdentifier: DEV_APP_IDENTIFIER,
-  devProfile: process.env.OPENWORK_DEV_PROFILE,
+  devProfile: process.env.SOFIA_DEV_PROFILE,
   isDevMode,
   isPackaged: app.isPackaged,
 });
-const mockKeychainRequested = process.env.OPENWORK_ELECTRON_USE_MOCK_KEYCHAIN?.trim().toLowerCase();
+const mockKeychainRequested = process.env.SOFIA_ELECTRON_USE_MOCK_KEYCHAIN?.trim().toLowerCase();
 // Fresh, isolated development profiles otherwise trigger macOS's native
 // "Login" keychain prompt as soon as Chromium persists an authenticated
 // cookie (e.g. in the built-in browser partition). That modal blocks the
@@ -191,7 +172,7 @@ if (BLANK_SLATE_LAUNCH.enabled || mockKeychainDefault || mockKeychainRequested =
 const { SOFIA_RELEASE } = await import("./sofia-release.mjs");
 const RELEASE_DOWNLOAD_BASE_URL = SOFIA_RELEASE.stable;
 const RELEASE_PAGE_URL = SOFIA_RELEASE.page;
-const DOCS_PAGE_URL = "https://openworklabs.com/docs";
+const DOCS_PAGE_URL = "https://sofia.ruut.chat/docs";
 const applicationMenu = createApplicationMenu({
   appName: APP_NAME,
   docsUrl: DOCS_PAGE_URL,
@@ -243,16 +224,16 @@ function killTerminalsForWebContents(webContentsId) {
 // so in-place migration is a no-op for almost every file. Dev mode uses the
 // separate dev identifier so it can run beside the production app.
 //
-// Dev profile precedence: OPENWORK_ELECTRON_USERDATA (explicit profile path)
-// wins over everything; then OPENWORK_ELECTRON_APP_IDENTIFIER; then
-// OPENWORK_DEV_PROFILE in unpackaged dev; then the legacy identifier default.
+// Dev profile precedence: SOFIA_ELECTRON_USERDATA (explicit profile path)
+// wins over everything; then SOFIA_ELECTRON_APP_IDENTIFIER; then
+// SOFIA_DEV_PROFILE in unpackaged dev; then the legacy identifier default.
 app.setName(APP_NAME);
 app.setAppUserModelId(APP_IDENTIFIER);
 if (BLANK_SLATE_LAUNCH.homePath) app.setPath("home", BLANK_SLATE_LAUNCH.homePath);
 if (
   app.isPackaged
   && !BLANK_SLATE_LAUNCH.enabled
-  && process.env.OPENWORK_ELECTRON_DISABLE_PROTOCOL_REGISTRATION !== "1"
+  && process.env.SOFIA_ELECTRON_DISABLE_PROTOCOL_REGISTRATION !== "1"
   && !(process.platform === "linux" && process.env.APPIMAGE)
 ) {
   app.setAsDefaultProtocolClient(DESKTOP_PROTOCOL_SCHEME);
@@ -260,7 +241,7 @@ if (
 const userDataPath = BLANK_SLATE_LAUNCH.userDataPath ?? resolveUserDataPath({
   appDataPath: app.getPath("appData"),
   appIdentifier: APP_IDENTIFIER,
-  userDataOverride: process.env.OPENWORK_ELECTRON_USERDATA,
+  userDataOverride: process.env.SOFIA_ELECTRON_USERDATA,
 });
 app.setPath("userData", userDataPath);
 const linuxDesktopIntegration = createLinuxDesktopIntegration({
@@ -414,7 +395,7 @@ async function resolveArchitectureInfo() {
   const systemArch = resolveSystemArch();
   const version = app.getVersion();
   const targetArch = systemArch === "arm64" || systemArch === "x64" ? systemArch : appArch;
-  const assetName = `sofia-app-${platformDownloadSlug()}-${downloadAssetArch(targetArch)}-${version}.${downloadAssetExtension()}`;
+  const assetName = `sofia-${platformDownloadSlug()}-${downloadAssetArch(targetArch)}-${version}.${downloadAssetExtension()}`;
   const latestDownloadUrl = await resolveCorrectArchitectureDownloadUrl(targetArch);
   const hasCorrectArchitectureDownload = Boolean(latestDownloadUrl);
   return {
@@ -475,7 +456,7 @@ function brandIconWindowsPath() {
 }
 
 function defaultAppWindowsIconPath() {
-  return path.join(app.getPath("userData"), "openwork-stock.ico");
+  return path.join(app.getPath("userData"), "sofia-stock.ico");
 }
 
 let cachedWindowsProgramsPath = null;
@@ -700,7 +681,7 @@ async function focusMainWindowFromNotification() {
 
 /**
  * @param {unknown} input
- * @returns {import("@openwork/types/desktop-ipc").DesktopNotificationResult}
+ * @returns {import("@sofia/types/desktop-ipc").DesktopNotificationResult}
  */
 function showDesktopNotification(input) {
   if (!ElectronNotification.isSupported()) {
@@ -975,8 +956,8 @@ if (process.platform === "darwin" && INITIAL_APP_ICON_IMAGE && !INITIAL_APP_ICON
   app.dock.setIcon(INITIAL_APP_ICON_IMAGE);
 }
 
-// Expose Chrome DevTools Protocol so the opencode-chrome-devtools plugin can
-// drive the built-in browser panel.  Use OPENWORK_ELECTRON_REMOTE_DEBUG_PORT to
+// Expose Chrome DevTools Protocol so the engine-chrome-devtools plugin can
+// drive the built-in browser panel.  Use SOFIA_ELECTRON_REMOTE_DEBUG_PORT to
 // pin a specific port; otherwise probe for a free one starting at 9223.
 // Must resolve before app.commandLine.appendSwitch (before `ready`).
 function probePort(port) {
@@ -997,7 +978,7 @@ async function findFreeCdpPort(candidates) {
 }
 
 const explicitCdpPort = Number.parseInt(
-  process.env.OPENWORK_ELECTRON_REMOTE_DEBUG_PORT?.trim() ?? "",
+  process.env.SOFIA_ELECTRON_REMOTE_DEBUG_PORT?.trim() ?? "",
   10,
 );
 const remoteDebugPort = Number.isFinite(explicitCdpPort) && explicitCdpPort > 0
@@ -1008,17 +989,25 @@ if (remoteDebugPort > 0) {
   app.commandLine.appendSwitch("remote-debugging-address", "127.0.0.1");
 }
 // Make the resolved port available to the embedded server so it flows into
-// agent instructions via ensureOpenworkAgent → resolveAgentTemplate.
-process.env.OPENWORK_ELECTRON_REMOTE_DEBUG_PORT = String(remoteDebugPort);
+// agent instructions via ensureSofiaAgent → resolveAgentTemplate.
+process.env.SOFIA_ELECTRON_REMOTE_DEBUG_PORT = String(remoteDebugPort);
 
-// Sofia engine home: a DEDICATED OpenWork-managed dir under the REAL user home
+// Sofia engine home: a DEDICATED Sofia-managed dir under the REAL user home
 // (Electron's app.getPath("home") ignores the dev-sandbox HOME override). Dev
 // and packaged builds share one session store; the bundled engine never touches
 // the user's own ~/.codex config. Set at module scope so the in-process server
 // inherits it regardless of the CDP broker block below.
-if (!process.env.OPENWORK_CODEX_HOME?.trim()) {
-  process.env.OPENWORK_CODEX_HOME = path.join(app.getPath("home"), ".sofia");
-}
+process.env.SOFIA_HOME ||= process.env.SOFIA_CODEX_HOME?.trim() || path.join(app.getPath("home"), ".sofia");
+// Binary resolution must also run when remote debugging/the CDP broker is disabled.
+const sofiaEngine = resolveSofiaEngine({
+  home: app.getPath("home"),
+  sidecarDirs: [
+    path.join(__dirname, "..", "resources", "sidecars"),
+    ...(process.resourcesPath ? [path.join(process.resourcesPath, "sidecars")] : []),
+    path.join(path.dirname(app.getPath("exe")), "sidecars"),
+  ],
+});
+if (sofiaEngine) process.env.SOFIA_BIN = sofiaEngine.path;
 // Pin the REAL user home so the server resolves the user's actual ~/.codex
 // even in dev (the dev sandbox rewrites HOME). The server reads REAL_HOME for
 // legacy session import and any ~-based path that must never hit the sandbox.
@@ -1027,22 +1016,22 @@ process.env.REAL_HOME = app.getPath("home");
 process.env.SOFIA_PROVIDER_HOME ||= path.join(app.getPath("home"), ".sofia");
 // Import the user's legacy ~/.codex sessions (ChatGPT/Codex desktop store) into
 // the Sofia session list.
-process.env.OPENWORK_CODEX_IMPORT_LEGACY = "1";
+process.env.SOFIA_CODEX_IMPORT_LEGACY = "1";
 
 if (isDevMode && !app.isPackaged) {
   const cdpAddress = remoteDebugPort > 0 ? `http://127.0.0.1:${remoteDebugPort}` : "disabled";
-  console.log(`[openwork] dev profile=${app.getPath("userData")} cdp=${cdpAddress}`);
+  console.log(`[sofia] dev profile=${app.getPath("userData")} cdp=${cdpAddress}`);
 }
 
 // Agent-facing CDP broker: rewrites agent Input events with human-like cursor
 // motion before they reach the built-in browser panel's Chromium. Engine
-// agnostic — any CDP client (opencode-chrome-devtools today, a Codex runtime
+// agnostic — any CDP client (engine-chrome-devtools today, a Codex runtime
 // later) connects here. Falls back to the raw CDP port if unavailable.
 let cdpBrokerBaseUrl = null;
 let closeCdpBroker = null;
 let cdpBrokerCreateTarget = null;
 const agentCdpBrokerPort = Number.parseInt(
-  process.env.OPENWORK_ELECTRON_AGENT_CDP_PORT?.trim() ?? "",
+  process.env.SOFIA_ELECTRON_AGENT_CDP_PORT?.trim() ?? "",
   10,
 );
 if (remoteDebugPort > 0) {
@@ -1053,7 +1042,7 @@ if (remoteDebugPort > 0) {
     const broker = await createCdpBroker({
       upstreamBaseUrl: `http://127.0.0.1:${remoteDebugPort}`,
       port: brokerPort,
-      debug: envFlagEnabled("OPENWORK_CDP_BROKER_DEBUG"),
+      debug: envFlagEnabled("SOFIA_CDP_BROKER_DEBUG"),
       // Electron cannot create raw CDP targets; route Target.createTarget
       // (chrome-devtools-mcp new_page) to a real visible built-in tab instead.
       createTarget: (params) => cdpBrokerCreateTarget?.(params) ?? Promise.reject(new Error("browser panel not ready")),
@@ -1062,22 +1051,13 @@ if (remoteDebugPort > 0) {
     closeCdpBroker = broker.close;
     // Expose the broker endpoint to the embedded server so it can register the
     // chrome-devtools MCP server pointing at it (the browser surface for both
-    // the opencode and future codex runtimes).
-    process.env.OPENWORK_ELECTRON_AGENT_CDP_BASE_URL = broker.baseUrl;
-    // Codex binary path forwarded to embedded server (additive engine). Always
-    // resolve the bundled sidecar (built from the mona-chen/codex source) so
-    // the server runs codex with our own binary — never a system install.
-    const codexBinPath = process.env.OPENWORK_CODEX_BIN?.trim()
-      || resolveBundledCodexBinary()
-      || null;
-    if (codexBinPath) {
-      process.env.OPENWORK_CODEX_BIN = codexBinPath;
-    }
+    // the engine and future codex runtimes).
+    process.env.SOFIA_ELECTRON_AGENT_CDP_BASE_URL = broker.baseUrl;
     if (isDevMode && !app.isPackaged) {
-      console.log(`[openwork] dev cdp-broker=${broker.baseUrl} (upstream http://127.0.0.1:${remoteDebugPort})`);
+      console.log(`[sofia] dev cdp-broker=${broker.baseUrl} (upstream http://127.0.0.1:${remoteDebugPort})`);
     }
   } catch (error) {
-    console.warn("[openwork] CDP broker unavailable; agent will use raw CDP port", error);
+    console.warn("[sofia] CDP broker unavailable; agent will use raw CDP port", error);
   }
 }
 
@@ -1096,11 +1076,11 @@ if (extraLaunchArgs) {
     }
   }
 }
-configureFakeMediaForTests(app, envFlagEnabled("OPENWORK_ELECTRON_FAKE_MEDIA"));
-const DEFAULT_DEN_BASE_URL = "https://app.openworklabs.com";
+configureFakeMediaForTests(app, envFlagEnabled("SOFIA_ELECTRON_FAKE_MEDIA"));
+const DEFAULT_DEN_BASE_URL = "https://sofia-app.ruut.chat";
 const DEFAULT_LOCAL_BASE_URL = "http://127.0.0.1:4096";
 const FORCE_DESKTOP_REQUIRE_SIGNIN =
-  DESKTOP_DISTRIBUTION.requireSignin || envFlagEnabled("OPENWORK_FORCE_SIGNIN");
+  DESKTOP_DISTRIBUTION.requireSignin || envFlagEnabled("SOFIA_FORCE_SIGNIN");
 const DEFAULT_DESKTOP_REQUIRE_SIGNIN = FORCE_DESKTOP_REQUIRE_SIGNIN;
 
 function envFlagEnabled(name) {
@@ -1116,16 +1096,16 @@ const IDLE_ENGINE_INFO = Object.freeze({
   projectDir: null,
   hostname: null,
   port: null,
-  opencodeUsername: null,
-  opencodePassword: null,
-  opencodeBinPath: null,
-  opencodeBinSource: null,
+  engineUsername: null,
+  enginePassword: null,
+  engineBinPath: null,
+  engineBinSource: null,
   pid: null,
   lastStdout: null,
   lastStderr: null,
 });
 
-const IDLE_OPENWORK_SERVER_INFO = Object.freeze({
+const IDLE_SOFIA_SERVER_INFO = Object.freeze({
   running: false,
   remoteAccessEnabled: false,
   host: null,
@@ -1137,8 +1117,8 @@ const IDLE_OPENWORK_SERVER_INFO = Object.freeze({
   clientToken: null,
   ownerToken: null,
   hostToken: null,
-  managedOpencodeBinPath: null,
-  managedOpencodeBinSource: null,
+  managedWorkspaceEngineBinPath: null,
+  managedWorkspaceEngineBinSource: null,
   pid: null,
   lastStdout: null,
   lastStderr: null,
@@ -1148,7 +1128,7 @@ const IDLE_ROUTER_INFO = Object.freeze({
   running: false,
   version: null,
   workspacePath: null,
-  opencodeUrl: null,
+  engineUrl: null,
   healthPort: null,
   pid: null,
   lastStdout: null,
@@ -1180,7 +1160,7 @@ const connectLinkReplayGuard = createConnectLinkReplayGuard({
 
 /**
  * @param {string} rawUrl
- * @returns {import("@openwork/types/connect-link").ConnectLinkVerifyResult}
+ * @returns {import("@sofia/types/connect-link").ConnectLinkVerifyResult}
  */
 function verifyConnectLink(rawUrl) {
   return verifyConnectLinkUrl(String(rawUrl ?? ""), {
@@ -1250,7 +1230,7 @@ function forwardedDeepLinks(argv) {
     .filter(
       (entry) =>
         entry.startsWith(`${DESKTOP_PROTOCOL_SCHEME}://`) ||
-        (!app.isPackaged && entry.startsWith("openwork-dev://")) ||
+        (!app.isPackaged && entry.startsWith("sofia-dev://")) ||
         entry.startsWith("https://") ||
         entry.startsWith("http://"),
     );
@@ -1269,10 +1249,6 @@ function flushPendingDeepLinks() {
   if (!mainWindow?.webContents || pendingDeepLinks.length === 0) return;
   const urls = pendingDeepLinks.splice(0, pendingDeepLinks.length);
   mainWindow.webContents.send(NATIVE_DEEP_LINK_EVENT, urls);
-}
-
-function globalOpencodeRoot() {
-  return globalOpencodeConfigDir();
 }
 
 function execResult(ok, stdout = "", stderr = "", status = ok ? 0 : 1) {
@@ -1344,8 +1320,8 @@ const runtimeManager = createRuntimeManager({
   app,
   desktopRoot: path.resolve(__dirname, ".."),
   listLocalWorkspacePaths: () => workspaceStore.listLocalWorkspacePaths(),
-  // When OPENWORK_ENCRYPTION_KEY is set, skip the safeStorage provider so it does not shadow the documented env override used by CI/headless/enterprise.
-  localManagedMcpVaultKey: process.env.OPENWORK_ENCRYPTION_KEY?.trim()
+  // When SOFIA_ENCRYPTION_KEY is set, skip the safeStorage provider so it does not shadow the documented env override used by CI/headless/enterprise.
+  localManagedMcpVaultKey: process.env.SOFIA_ENCRYPTION_KEY?.trim()
     ? undefined
     : createDesktopVaultKeyProvider({
         filePath: path.join(app.getPath("userData"), "local-managed-mcp-vault-key.bin"),
@@ -1367,7 +1343,7 @@ const desktopAutomationRunner = createDesktopAutomationRunner({
   // rollout only for endpoints trusted before the renderer starts issuing IPC.
   legacyBaseUrls: legacyRunnerBaseUrls,
   getLocalRuntime: async () => {
-    const server = await runtimeManager.openworkServerInfo();
+    const server = await runtimeManager.sofiaServerInfo();
     return { baseUrl: server.baseUrl, token: server.clientToken ?? server.ownerToken };
   },
   log: (state) => console.info(`[automation-runner] ${state}`),
@@ -1415,7 +1391,7 @@ function showShutdownScreen() {
   <body>
     <main>
       <div class="spinner" aria-hidden="true"></div>
-      <div class="title">Stopping OpenWork services</div>
+      <div class="title">Stopping Sofia App services</div>
       <div class="body">Closing local workers and background services...</div>
     </main>
   </body>
@@ -1436,22 +1412,22 @@ async function disposeRuntimeBeforeQuit() {
   }
 }
 
-function assertOpenworkServerReady(info) {
+function assertSofiaServerReady(info) {
   if (!info?.running) {
-    throw new Error("OpenWork server did not stay running after startup.");
+    throw new Error("Sofia App server did not stay running after startup.");
   }
   if (!info.baseUrl) {
-    throw new Error("OpenWork server did not report a base URL after startup.");
+    throw new Error("Sofia App server did not report a base URL after startup.");
   }
   if (!info.ownerToken && !info.clientToken) {
-    throw new Error("OpenWork server did not report an access token after startup.");
+    throw new Error("Sofia App server did not report an access token after startup.");
   }
   return info;
 }
 
 async function bootRuntimeForSelectedWorkspace() {
-  if (typeof process.env.OPENWORK_EVAL_FATAL_DESKTOP_BOOTSTRAP_FAILURE === "string") {
-    throw new Error(process.env.OPENWORK_EVAL_FATAL_DESKTOP_BOOTSTRAP_FAILURE);
+  if (typeof process.env.SOFIA_EVAL_FATAL_DESKTOP_BOOTSTRAP_FAILURE === "string") {
+    throw new Error(process.env.SOFIA_EVAL_FATAL_DESKTOP_BOOTSTRAP_FAILURE);
   }
   const list = await workspaceStore.readWorkspaceState();
   const selectedId = list.selectedId || list.activeId || list.workspaces[0]?.id || "";
@@ -1507,8 +1483,8 @@ async function bootRuntimeForSelectedWorkspace() {
       watchedId: String(fallback.id ?? ""),
     }).catch(() => undefined);
   }
-  const openworkServer = assertOpenworkServerReady(await runtimeManager.openworkServerInfo());
-  return { ok: true, skipped: false, engine, openworkServer, workspaceId: bootWorkspace.id ?? null };
+  const sofiaServer = assertSofiaServerReady(await runtimeManager.sofiaServerInfo());
+  return { ok: true, skipped: false, engine, sofiaServer, workspaceId: bootWorkspace.id ?? null };
 }
 
 function ensureRuntimeBootstrap() {
@@ -1521,53 +1497,15 @@ function ensureRuntimeBootstrap() {
   return runtimeBootstrapPromise;
 }
 
-function resolveOpencodeConfigPath(scope, projectDir) {
-  if (scope === "project") {
-    if (!String(projectDir ?? "").trim()) {
-      throw new Error("projectDir is required");
-    }
-    return workspaceOpencodeConfigCandidates(projectDir);
-  } else if (scope === "global") {
-    const root = globalOpencodeRoot();
-    return [path.join(root, "opencode.jsonc"), path.join(root, "opencode.json")];
-  } else {
-    throw new Error("scope must be 'project' or 'global'");
-  }
-}
-
-async function selectOpencodeConfigPath(candidates) {
-  for (const candidate of candidates) {
-    if (await pathExists(candidate)) return candidate;
-  }
-  return candidates[0];
-}
-
-async function readOpencodeConfig(scope, projectDir) {
-  const chosenPath = await selectOpencodeConfigPath(resolveOpencodeConfigPath(scope, projectDir));
-  const exists = await pathExists(chosenPath);
-  return {
-    path: chosenPath,
-    exists,
-    content: exists ? await readFile(chosenPath, "utf8") : null,
-  };
-}
-
-async function writeOpencodeConfig(scope, projectDir, content) {
-  const targetPath = await selectOpencodeConfigPath(resolveOpencodeConfigPath(scope, projectDir));
-  await mkdir(path.dirname(targetPath), { recursive: true });
-  await writeFile(targetPath, content, "utf8");
-  return execResult(true, `Wrote ${targetPath}`);
-}
-
 function resolveCommandsDir(scope, projectDir) {
   if (scope === "workspace") {
     if (!String(projectDir ?? "").trim()) {
       throw new Error("projectDir is required");
     }
-    return path.join(projectDir, ".opencode", "commands");
+    return path.join(projectDir, ".sofia", "commands");
   }
   if (scope === "global") {
-    return path.join(globalOpencodeRoot(), "commands");
+    return path.join(os.homedir(), ".sofia", "commands");
   }
   throw new Error("scope must be 'workspace' or 'global'");
 }
@@ -1614,11 +1552,11 @@ async function collectProjectSkillRoots(projectDir) {
   let current = path.resolve(projectDir);
 
   while (true) {
-    const opencodeSkills = path.join(current, ".opencode", "skills");
-    const legacySkills = path.join(current, ".opencode", "skill");
+    const sofiaSkills = path.join(current, ".sofia", "skills");
+    const legacySkills = path.join(current, ".sofia", "skill");
     const claudeSkills = path.join(current, ".claude", "skills");
 
-    if (await isDirectory(opencodeSkills)) roots.push(opencodeSkills);
+    if (await isDirectory(sofiaSkills)) roots.push(sofiaSkills);
     if (await isDirectory(legacySkills)) roots.push(legacySkills);
     if (await isDirectory(claudeSkills)) roots.push(claudeSkills);
 
@@ -1637,7 +1575,7 @@ async function collectProjectSkillRoots(projectDir) {
 async function collectGlobalSkillRoots() {
   const roots = [];
   const candidates = [
-    path.join(globalOpencodeRoot(), "skills"),
+    path.join(os.homedir(), ".sofia", "skills"),
     path.join(os.homedir(), ".claude", "skills"),
     path.join(os.homedir(), ".agents", "skills"),
     path.join(os.homedir(), ".agent", "skills"),
@@ -1766,9 +1704,9 @@ async function ensureProjectSkillRoot(projectDir) {
   if (!String(projectDir ?? "").trim()) {
     throw new Error("projectDir is required");
   }
-  const opencodeRoot = path.join(projectDir, ".opencode");
-  const legacy = path.join(opencodeRoot, "skill");
-  const modern = path.join(opencodeRoot, "skills");
+  const sofiaRoot = path.join(projectDir, ".sofia");
+  const legacy = path.join(sofiaRoot, "skill");
+  const modern = path.join(sofiaRoot, "skills");
   if ((await isDirectory(legacy)) && !(await pathExists(modern))) {
     await rename(legacy, modern);
   }
@@ -1806,9 +1744,9 @@ function applyNativeTheme(mode) {
 // entry here; handlers receive the ipcMain event followed by the renderer
 // arguments. The @type below asserts this registry against the shared
 // DesktopCommandMap contract (packages/types/src/desktop-ipc.ts): a missing,
-// extra, or renamed command fails `pnpm --filter @openwork/desktop
+// extra, or renamed command fails `pnpm --filter @sofia/desktop
 // typecheck:electron`.
-/** @type {import("@openwork/types/desktop-ipc").DesktopCommandHandlers<import("electron").IpcMainInvokeEvent>} */
+/** @type {import("@sofia/types/desktop-ipc").DesktopCommandHandlers<import("electron").IpcMainInvokeEvent>} */
 const desktopCommandHandlers = {
   "workspaceBootstrap": async (event, ...args) => {
       return workspaceStore.readWorkspaceState();
@@ -1837,13 +1775,13 @@ const desktopCommandHandlers = {
   "workspaceAddAuthorizedRoot": async (event, ...args) => {
       return workspaceStore.addAuthorizedRoot(args[0] ?? {});
   },
-  "workspaceOpenworkRead": async (event, ...args) => {
-      return workspaceStore.readWorkspaceOpenworkConfig(String(args[0]?.workspacePath ?? "").trim());
+  "workspaceSofiaRead": async (event, ...args) => {
+      return workspaceStore.readWorkspaceSofiaConfig(String(args[0]?.workspacePath ?? "").trim());
   },
-  "workspaceOpenworkWrite": async (event, ...args) => {
-      return workspaceStore.writeWorkspaceOpenworkConfig(
+  "workspaceSofiaWrite": async (event, ...args) => {
+      return workspaceStore.writeWorkspaceSofiaConfig(
         String(args[0]?.workspacePath ?? "").trim(),
-        args[0]?.config ?? workspaceStore.defaultWorkspaceOpenworkConfig(""),
+        args[0]?.config ?? workspaceStore.defaultWorkspaceSofiaConfig(""),
       );
   },
   "workspaceExportConfig": async (event, ...args) => {
@@ -1852,17 +1790,17 @@ const desktopCommandHandlers = {
   "workspaceImportConfig": async (event, ...args) => {
       return workspaceStore.importConfig(args[0] ?? {});
   },
-  "opencodeCommandList": async (event, ...args) => {
+  "engineCommandList": async (event, ...args) => {
       return listCommandNames(String(args[0]?.scope ?? "").trim(), String(args[0]?.projectDir ?? "").trim());
   },
-  "opencodeCommandWrite": async (event, ...args) => {
+  "engineCommandWrite": async (event, ...args) => {
       return writeCommandFile(
         String(args[0]?.scope ?? "").trim(),
         String(args[0]?.projectDir ?? "").trim(),
         args[0]?.command ?? {},
       );
   },
-  "opencodeCommandDelete": async (event, ...args) => {
+  "engineCommandDelete": async (event, ...args) => {
       return deleteCommandFile(
         String(args[0]?.scope ?? "").trim(),
         String(args[0]?.projectDir ?? "").trim(),
@@ -1900,7 +1838,7 @@ const desktopCommandHandlers = {
   },
   "codexEngineSelectionWrite": async (event, ...args) => {
       const engine = String(args[0]?.engine ?? "").trim();
-      if (engine !== "codex" && engine !== "opencode") return { ok: false };
+      if (engine !== "codex" && engine !== "engine") return { ok: false };
       await writeFile(engineSelectionFilePath(), JSON.stringify({ engine }, null, 2), "utf8");
       return { ok: true };
   },
@@ -1916,9 +1854,9 @@ const desktopCommandHandlers = {
   "appBuildInfo": async (event, ...args) => {
       return {
         version: app.getVersion(),
-        gitSha: process.env.OPENWORK_GIT_SHA ?? null,
-        buildEpoch: process.env.OPENWORK_BUILD_EPOCH ?? null,
-        openworkDevMode: process.env.OPENWORK_DEV_MODE === "1",
+        gitSha: process.env.SOFIA_GIT_SHA ?? null,
+        buildEpoch: process.env.SOFIA_BUILD_EPOCH ?? null,
+        sofiaDevMode: process.env.SOFIA_DEV_MODE === "1",
       };
   },
   "desktopNotificationShow": async (event, ...args) => {
@@ -1927,14 +1865,14 @@ const desktopCommandHandlers = {
   "desktopSentrySetSession": async (event, ...args) => {
       const input = args[0] ?? {};
       return {
-        enabled: setOpenworkSentrySession({
+        enabled: setSofiaSentrySession({
           userId: input.userId,
           orgId: input.orgId,
         }),
       };
   },
   "desktopSentryClearSession": async (event, ...args) => {
-      return { enabled: clearOpenworkSentrySession() };
+      return { enabled: clearSofiaSentrySession() };
   },
   "desktopIntegrationStatus": async (event, ...args) => {
       return linuxDesktopIntegration.getStatus();
@@ -1949,17 +1887,17 @@ const desktopCommandHandlers = {
   },
   "getUiControlBridgeInfo": async (event, ...args) => {
       try {
-        const raw = await readFile(path.join(app.getPath("userData"), "openwork-ui-control.json"), "utf8");
+        const raw = await readFile(path.join(app.getPath("userData"), "sofia-ui-control.json"), "utf8");
         return JSON.parse(raw);
       } catch {
         return null;
       }
   },
-  "getOpenworkUiMcpCommand": async (event, ...args) => {
-      if (process.env.OPENWORK_DEV_MODE === "1") {
-        return ["node", path.resolve(__dirname, "../../..", "packages/openwork-ui-mcp/index.mjs")];
+  "getSofiaUiMcpCommand": async (event, ...args) => {
+      if (process.env.SOFIA_DEV_MODE === "1") {
+        return ["node", path.resolve(__dirname, "../../..", "packages/sofia-ui-mcp/index.mjs")];
       }
-      return ["npx", "-y", "openwork-ui-mcp"];
+      return ["npx", "-y", "sofia-ui-mcp"];
   },
   "getComputerUseMcpCommand": async (event, ...args) => {
       return getComputerUseMcpCommand();
@@ -1983,9 +1921,9 @@ const desktopCommandHandlers = {
       await openComputerUseSetupApp();
       return checkComputerUsePermissions();
   },
-  "getOpenworkUiMcpEnvironment": async (event, ...args) => {
+  "getSofiaUiMcpEnvironment": async (event, ...args) => {
       return {
-        OPENWORK_UI_CONTROL_DISCOVERY: path.join(app.getPath("userData"), "openwork-ui-control.json"),
+        SOFIA_UI_CONTROL_DISCOVERY: path.join(app.getPath("userData"), "sofia-ui-control.json"),
       };
   },
   "getDesktopBootstrapConfig": async (event, ...args) => {
@@ -2051,7 +1989,7 @@ const desktopCommandHandlers = {
       const config = await persistConnectLinkClaims(verified.claims);
       return { ok: true, config };
   },
-  "nukeOpenworkAndOpencodeConfigPreview": async (event, ...args) => {
+  "nukeSofiaAndWorkspaceEngineConfigPreview": async (event, ...args) => {
       return buildNukeManifest({
         env: process.env,
         homedir: os.homedir(),
@@ -2061,7 +1999,7 @@ const desktopCommandHandlers = {
         workspacePaths: await workspaceStore.listLocalWorkspacePaths(),
       });
   },
-  "nukeOpenworkAndOpencodeConfigAndExit": async (event, ...args) => {
+  "nukeSofiaAndWorkspaceEngineConfigAndExit": async (event, ...args) => {
       return executeNukeFreshStart({
         app,
         session,
@@ -2079,17 +2017,17 @@ const desktopCommandHandlers = {
         },
       });
   },
-  "sandboxCleanupOpenworkContainers": async (event, ...args) => {
-      return runtimeManager.sandboxCleanupOpenworkContainers();
+  "sandboxCleanupSofiaContainers": async (event, ...args) => {
+      return runtimeManager.sandboxCleanupSofiaContainers();
   },
-  "openworkServerInfo": async (event, ...args) => {
-      return runtimeManager.openworkServerInfo();
+  "sofiaServerInfo": async (event, ...args) => {
+      return runtimeManager.sofiaServerInfo();
   },
   "automationRunnerConfigure": async (event, ...args) => {
       return desktopAutomationRunner.configure(args[0] ?? null);
   },
-  "openworkServerRestart": async (event, ...args) => {
-      return runtimeManager.openworkServerRestart(args[0] ?? {});
+  "sofiaServerRestart": async (event, ...args) => {
+      return runtimeManager.sofiaServerRestart(args[0] ?? {});
   },
   "pickDirectory": async (event, ...args) => {
       const options = args[0] ?? {};
@@ -2189,7 +2127,7 @@ const desktopCommandHandlers = {
       const projectDir = String(args[0] ?? "").trim();
       const skillPath = await findSkillFile(projectDir, args[1]);
       if (!skillPath) {
-        return execResult(false, "", "Skill not found in .opencode/skills or .claude/skills");
+        return execResult(false, "", "Skill not found in .sofia/skills or .claude/skills");
       }
       await rm(path.dirname(skillPath), { recursive: true, force: true });
       return execResult(true, `Removed skill ${args[1]}`);
@@ -2206,24 +2144,14 @@ const desktopCommandHandlers = {
             : path.dirname(executablePath),
       };
   },
-  "readOpencodeConfig": async (event, ...args) => {
-      return readOpencodeConfig(String(args[0] ?? "").trim(), String(args[1] ?? "").trim());
+  "resetSofiaState": async (event, ...args) => {
+      return workspaceStore.resetSofiaState();
   },
-  "writeOpencodeConfig": async (event, ...args) => {
-      return writeOpencodeConfig(
-        String(args[0] ?? "").trim(),
-        String(args[1] ?? "").trim(),
-        String(args[2] ?? ""),
-      );
-  },
-  "resetOpenworkState": async (event, ...args) => {
-      return workspaceStore.resetOpenworkState();
-  },
-  "resetOpencodeCache": async (event, ...args) => {
+  "resetWorkspaceEngineCache": async (event, ...args) => {
       return { removed: [], missing: [], errors: [] };
   },
-  "opencodeMcpAuth": async (event, ...args) => {
-      return runtimeManager.opencodeMcpAuth(String(args[0] ?? "").trim(), String(args[1] ?? "").trim());
+  "engineMcpAuth": async (event, ...args) => {
+      return runtimeManager.engineMcpAuth(String(args[0] ?? "").trim(), String(args[1] ?? "").trim());
   },
   "setWindowDecorations": async (event, ...args) => {
       return undefined;
@@ -2503,7 +2431,7 @@ function assertDesktopActivation() {
     DESKTOP_DISTRIBUTION,
     workspaceStore.readDesktopBootstrapConfigSync(),
   )) {
-    throw new Error("OpenWork must be activated from your Den portal before this command is available.");
+    throw new Error("Sofia App must be activated from your organization portal before this command is available.");
   }
 }
 
@@ -2643,7 +2571,7 @@ async function createMainWindow() {
     browserPanel.routeBlockedMainWindowNavigation(url);
   });
 
-  const startUrl = process.env.OPENWORK_ELECTRON_START_URL?.trim() || process.env.ELECTRON_START_URL?.trim();
+  const startUrl = process.env.SOFIA_ELECTRON_START_URL?.trim() || process.env.ELECTRON_START_URL?.trim();
   if (startUrl) {
     await mainWindow.loadURL(startUrl);
   } else {
@@ -2655,29 +2583,29 @@ async function createMainWindow() {
   return mainWindow;
 }
 
-ipcMain.on("openwork:desktop-bootstrap-sync", (event) => {
+ipcMain.on("sofia:desktop-bootstrap-sync", (event) => {
   event.returnValue = workspaceStore.readDesktopBootstrapConfigSync();
 });
-ipcMain.on("openwork:desktop-distribution-sync", (event) => {
+ipcMain.on("sofia:desktop-distribution-sync", (event) => {
   event.returnValue = DESKTOP_DISTRIBUTION;
 });
-ipcMain.handle("openwork:desktop", handleDesktopInvoke);
-ipcMain.handle("openwork:shell:openExternal", async (_event, url) => {
+ipcMain.handle("sofia:desktop", handleDesktopInvoke);
+ipcMain.handle("sofia:shell:openExternal", async (_event, url) => {
   if (typeof url !== "string" || url.trim().length === 0) {
     return { ok: false, error: "empty url" };
   }
   return openExternalUrl(url.trim());
 });
-ipcMain.handle("openwork:shell:relaunch", async () => {
+ipcMain.handle("sofia:shell:relaunch", async () => {
   app.relaunch();
   app.quit();
 });
-ipcMain.handle("openwork:system:architecture", async () => resolveArchitectureInfo());
-ipcMain.handle("openwork:system:microphoneStatus", async () => {
+ipcMain.handle("sofia:system:architecture", async () => resolveArchitectureInfo());
+ipcMain.handle("sofia:system:microphoneStatus", async () => {
   if (process.platform !== "darwin") return { platform: process.platform, status: "not-mac" };
   return { platform: process.platform, status: systemPreferences.getMediaAccessStatus("microphone") };
 });
-ipcMain.handle("openwork:system:askMicrophoneAccess", async () => {
+ipcMain.handle("sofia:system:askMicrophoneAccess", async () => {
   if (process.platform !== "darwin") return { platform: process.platform, granted: true, status: "not-mac" };
   const before = systemPreferences.getMediaAccessStatus("microphone");
   const granted = await systemPreferences.askForMediaAccess("microphone");
@@ -2686,7 +2614,7 @@ ipcMain.handle("openwork:system:askMicrophoneAccess", async () => {
 });
 
 // ── Terminal IPC ────────────────────────────────────────────────────────
-ipcMain.handle("openwork:terminal:create", async (event, options = {}) => {
+ipcMain.handle("sofia:terminal:create", async (event, options = {}) => {
   assertDesktopActivation();
   const cwd = await resolveTerminalCwd(options?.cwd);
   const cols = Number.isFinite(options?.cols) ? Math.max(20, Math.floor(options.cols)) : 80;
@@ -2702,7 +2630,7 @@ ipcMain.handle("openwork:terminal:create", async (event, options = {}) => {
       ...process.env,
       TERM: "xterm-256color",
       COLORTERM: "truecolor",
-      OPENWORK_TERMINAL: "1",
+      SOFIA_TERMINAL: "1",
     },
   });
 
@@ -2710,27 +2638,27 @@ ipcMain.handle("openwork:terminal:create", async (event, options = {}) => {
   event.sender.once("destroyed", () => killTerminalsForWebContents(event.sender.id));
   child.onData((data) => {
     if (event.sender.isDestroyed()) return;
-    event.sender.send("openwork:terminal:data", { terminalId, data });
+    event.sender.send("sofia:terminal:data", { terminalId, data });
   });
   child.onExit(({ exitCode, signal }) => {
     terminalProcesses.delete(terminalId);
     if (event.sender.isDestroyed()) return;
-    event.sender.send("openwork:terminal:exit", { terminalId, exitCode, signal });
+    event.sender.send("sofia:terminal:exit", { terminalId, exitCode, signal });
   });
 
   return { terminalId };
 });
-ipcMain.handle("openwork:terminal:write", (event, terminalId, data) => {
+ipcMain.handle("sofia:terminal:write", (event, terminalId, data) => {
   const terminal = terminalForSender(event, terminalId);
   if (!terminal || typeof data !== "string") return;
   terminal.process.write(data);
 });
-ipcMain.handle("openwork:terminal:resize", (event, terminalId, cols, rows) => {
+ipcMain.handle("sofia:terminal:resize", (event, terminalId, cols, rows) => {
   const terminal = terminalForSender(event, terminalId);
   if (!terminal || !Number.isFinite(cols) || !Number.isFinite(rows)) return;
   terminal.process.resize(Math.max(20, Math.floor(cols)), Math.max(5, Math.floor(rows)));
 });
-ipcMain.handle("openwork:terminal:kill", (event, terminalId) => {
+ipcMain.handle("sofia:terminal:kill", (event, terminalId) => {
   const terminal = terminalForSender(event, terminalId);
   if (!terminal) return;
   killTerminal(String(terminalId));
@@ -2758,10 +2686,10 @@ const { ensureAutoUpdater } = registerUpdaterIpc({
 
 if (!app.requestSingleInstanceLock()) {
   if (isDevMode && !app.isPackaged) {
-    console.error(`[openwork] Another OpenWork dev instance already holds this profile directory:
+    console.error(`[sofia] Another Sofia App dev instance already holds this profile directory:
   ${app.getPath("userData")}
 The second process is exiting so its CDP port is released.
-Run this worktree with an isolated profile: OPENWORK_DEV_PROFILE=auto pnpm dev
+Run this worktree with an isolated profile: SOFIA_DEV_PROFILE=auto pnpm dev
 or use: pnpm dev:worktree`);
     app.exit(1);
     setImmediate(() => process.exit(1));

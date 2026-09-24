@@ -1,5 +1,5 @@
 import { externalFetch } from "./server-fetch.js";
-import { createWorkspaceOpencodeClient } from "./server.js";
+import { createWorkspaceWorkspaceEngineClient } from "./server.js";
 import type { ServerConfig } from "./types.js";
 
 const DEFAULT_ACTIVITY_WINDOW_MS = 5 * 60_000;
@@ -140,12 +140,12 @@ export async function postWorkerActivityHeartbeat(input: {
 async function listOpenSessions(config: ServerConfig): Promise<readonly unknown[]> {
   const workspace = config.workspaces[0];
   if (!workspace) return [];
-  const opencode = createWorkspaceOpencodeClient(config, workspace);
-  const result = await opencode.session.list({ limit: 200 });
+  const engine = createWorkspaceWorkspaceEngineClient(config, workspace);
+  const result = await engine.session.list({ limit: 200 });
   if (result.data != null) return result.data;
-  if (result.error === undefined) throw new Error("opencode_empty_response");
+  if (result.error === undefined) throw new Error("engine_empty_response");
   const upstreamStatus = result.response?.status;
-  throw new Error(upstreamStatus === undefined ? "opencode_request_failed" : `opencode_request_failed:${upstreamStatus}`);
+  throw new Error(upstreamStatus === undefined ? "engine_request_failed" : `engine_request_failed:${upstreamStatus}`);
 }
 
 function errorMessage(error: unknown): string {

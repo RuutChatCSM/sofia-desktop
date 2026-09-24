@@ -9,7 +9,7 @@ import {
 } from "./mcp-tool-error-attribution";
 import type { McpAuthorizationDebugDetails } from "./mcp-authorization-url";
 
-const ORG_SCOPE_HEADER = "x-openwork-org-id";
+const ORG_SCOPE_HEADER = "x-sofia-org-id";
 
 function getOrgScopeHeaders(orgId: string) {
   return { [ORG_SCOPE_HEADER]: orgId };
@@ -193,7 +193,7 @@ export type ExternalMcpToolCallInspection = {
   };
   diagnosis: {
     status: "succeeded" | "failed";
-    layer: "openwork" | "network" | "mcp_connection" | "remote_http" | "mcp_tool";
+    layer: "sofia" | "network" | "mcp_connection" | "remote_http" | "mcp_tool";
     summary: string;
   };
 };
@@ -523,7 +523,7 @@ function parseToolCallInspection(value: unknown): ExternalMcpToolCallInspection 
   const layer = value.diagnosis.layer;
   if (
     (status !== "succeeded" && status !== "failed")
-    || (layer !== "openwork" && layer !== "network" && layer !== "mcp_connection" && layer !== "remote_http" && layer !== "mcp_tool")
+    || (layer !== "sofia" && layer !== "network" && layer !== "mcp_connection" && layer !== "remote_http" && layer !== "mcp_tool")
     || typeof value.diagnosis.summary !== "string"
   ) return null;
   const request = value.request === undefined ? undefined : parseInspectionRequest(value.request);

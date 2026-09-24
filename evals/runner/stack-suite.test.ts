@@ -13,9 +13,9 @@ test("multi-file, glob, and whole-project runs prepare shared stack resources", 
 });
 
 test("Daytona defaults to two workers and never prepares more slots than explicit files", () => {
-  assert.equal(suiteWorkerCount(["vitest", "specs/a.test.ts", "specs/b.test.ts"], { OPENWORK_EVAL_DAYTONA: "1" }), 2);
-  assert.equal(suiteWorkerCount(["vitest", "specs/a.test.ts"], { OPENWORK_EVAL_DAYTONA: "1", OPENWORK_EVAL_MAX_WORKERS: "8" }), 1);
-  assert.equal(suiteWorkerCount(["vitest", "specs/*.test.ts"], { OPENWORK_EVAL_DAYTONA: "1", OPENWORK_EVAL_MAX_WORKERS: "4" }), 4);
+  assert.equal(suiteWorkerCount(["vitest", "specs/a.test.ts", "specs/b.test.ts"], { SOFIA_EVAL_DAYTONA: "1" }), 2);
+  assert.equal(suiteWorkerCount(["vitest", "specs/a.test.ts"], { SOFIA_EVAL_DAYTONA: "1", SOFIA_EVAL_MAX_WORKERS: "8" }), 1);
+  assert.equal(suiteWorkerCount(["vitest", "specs/*.test.ts"], { SOFIA_EVAL_DAYTONA: "1", SOFIA_EVAL_MAX_WORKERS: "4" }), 4);
 });
 
 test("worker ids wrap onto the prepared slot pool", () => {

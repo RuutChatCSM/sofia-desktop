@@ -1,10 +1,10 @@
-import type { OpenworkServerClient } from "@/app/lib/openwork-server";
+import type { SofiaServerClient } from "@/app/lib/sofia-server";
 import type { Client } from "@/app/types";
 import type { DesktopAppRestrictionChecker } from "@/app/cloud/desktop-app-restrictions";
 import { updateManagedDisabledProviders } from "./managed-engine-config";
 import { isProviderAllowedByDesktopPolicy } from "./provider-auth/provider-policy";
 
-export const POLICY_DISABLED_PROVIDERS_STORAGE_KEY = "openwork.policy.disabledProviders";
+export const POLICY_DISABLED_PROVIDERS_STORAGE_KEY = "sofia.policy.disabledProviders";
 
 export type PolicyProviderListItem = {
   id: string;
@@ -27,8 +27,8 @@ export type PolicyProviderReconcilePlan = {
 type PolicyDisabledProvidersStorage = Pick<Storage, "getItem" | "setItem">;
 
 export type ReconcilePolicyDisabledProvidersInput = {
-  opencodeClient: Client | null;
-  openworkClient?: OpenworkServerClient | null;
+  engineClient: Client | null;
+  sofiaClient?: SofiaServerClient | null;
   workspaceId?: string | null;
   workspaceType?: string | null;
   allProviders: readonly PolicyProviderListItem[];
@@ -165,8 +165,8 @@ export async function reconcilePolicyDisabledProviders(
   for (const providerId of initialPlan.toDisable) {
     if (disabledProviderIds.includes(providerId)) continue;
     const result = await updateManagedDisabledProviders({
-      opencodeClient: input.opencodeClient,
-      openworkClient: input.openworkClient,
+      engineClient: input.engineClient,
+      sofiaClient: input.sofiaClient,
       workspaceId: input.workspaceId,
       workspaceType: input.workspaceType,
       disabledProviders: addProviderId(disabledProviderIds, providerId),
@@ -187,8 +187,8 @@ export async function reconcilePolicyDisabledProviders(
       continue;
     }
     const result = await updateManagedDisabledProviders({
-      opencodeClient: input.opencodeClient,
-      openworkClient: input.openworkClient,
+      engineClient: input.engineClient,
+      sofiaClient: input.sofiaClient,
       workspaceId: input.workspaceId,
       workspaceType: input.workspaceType,
       disabledProviders: removeProviderId(disabledProviderIds, providerId),

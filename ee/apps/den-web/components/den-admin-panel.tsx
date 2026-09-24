@@ -954,7 +954,7 @@ function adminScaleFixturePayload(path: string): unknown | null {
   return null;
 }
 
-const AUTH_TOKEN_STORAGE_KEY = "openwork:web:auth-token";
+const AUTH_TOKEN_STORAGE_KEY = "sofia:web:auth-token";
 
 // The den proxy strips cookies from requests whose Origin matches a cloud
 // instance origin (they are bearer-only by design), and browsers always send
@@ -2622,7 +2622,7 @@ export function DenAdminPanel() {
                           }}
                           className="h-4 w-4 rounded border-slate-300"
                         />
-                        OpenWork Connect (alpha)
+                        Sofia Connect (alpha)
                       </label>
                       <label className="inline-flex items-center gap-2 text-sm text-slate-700">
                         <input
@@ -2816,7 +2816,7 @@ export function DenAdminPanel() {
                     <div data-testid="admin-usage-section" className="rounded-2xl border border-slate-200 bg-white px-4 py-4 lg:col-span-2">
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div>
-                          <p className="text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-slate-500">OpenWork model consumption</p>
+                          <p className="text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-slate-500">Sofia model consumption</p>
                           <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
                             Limits are shared by everyone in each organization. Reset only forgives this user&apos;s consumption in the current windows; it does not change shared limits or other members&apos; usage.
                           </p>
@@ -2986,7 +2986,7 @@ export function DenAdminPanel() {
               Edit free seats
             </h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">
-              Set the total number of free seats for {freeSeatsDialog.org.name}. The default {DEFAULT_FREE_SEAT_COUNT} seats stay included; OpenWork saves only the additional seats in organization metadata.
+              Set the total number of free seats for {freeSeatsDialog.org.name}. The default {DEFAULT_FREE_SEAT_COUNT} seats stay included; Sofia saves only the additional seats in organization metadata.
             </p>
 
             <label className="mt-5 grid gap-2">

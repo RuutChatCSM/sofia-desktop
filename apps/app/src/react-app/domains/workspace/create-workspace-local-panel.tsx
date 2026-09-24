@@ -80,7 +80,7 @@ export type CreateWorkspaceLocalPanelProps = {
 
 function stepIcon(status: CreateWorkspaceProgressStep["status"]) {
   if (status === "done")
-    return <XCircle size={16} className="text-emerald-10" />;
+    return <Check size={16} className="text-emerald-10" />;
   if (status === "active")
     return <Loader2 size={16} className="animate-spin text-dls-accent" />;
   if (status === "error") return <XCircle size={16} className="text-red-10" />;
@@ -115,102 +115,26 @@ export function CreateWorkspaceLocalPanel(
         className={`${modalBodyClass} transition-opacity duration-300 ${props.submitting ? "pointer-events-none opacity-40" : "opacity-100"}`}
       >
         <div className="space-y-4">
-          <div className={surfaceCardClass}>
-            <div className={sectionTitleClass}>
-              {t("welcome.folder_title")}
-            </div>
-            <div className={`${sectionBodyClass} mt-2`}>
-              {t("welcome.folder_explanation")}
-            </div>
-            <ul className="mt-3 space-y-1.5 pl-1">
-              <li className="flex items-start gap-2 text-[13px] text-dls-secondary">
-                <Check size={14} className="mt-0.5 shrink-0 text-emerald-10" />
-                {t("welcome.folder_read")}
-              </li>
-              <li className="flex items-start gap-2 text-[13px] text-dls-secondary">
-                <Check size={14} className="mt-0.5 shrink-0 text-emerald-10" />
-                {t("welcome.folder_write")}
-              </li>
-              <li className="flex items-start gap-2 text-[13px] text-dls-secondary">
-                <Check size={14} className="mt-0.5 shrink-0 text-emerald-10" />
-                {t("welcome.folder_anything")}
-              </li>
-            </ul>
-            <div className="mt-2 text-[12px] text-dls-secondary italic">
-              {t("welcome.folder_drop_hint")}
-            </div>
-
-            <div className="mt-4 rounded-[20px] border border-dls-border bg-dls-hover px-4 py-3">
-              {props.hasSelectedFolder ? (
-                <span className="block truncate font-mono text-[12px] text-dls-text">
-                  {props.selectedFolder}
-                </span>
-              ) : (
-                <span className="text-[14px] text-dls-secondary">
-                  No folder selected yet.
-                </span>
-              )}
-            </div>
-
-            {props.showProjectLabel ? (
-              <Accordion
-                multiple
-                defaultValue={hasProjectLabel ? ["analytics"] : []}
-                className="mt-4 overflow-hidden rounded-[20px] border-dls-border bg-dls-hover/60 shadow-none before:hidden"
-              >
-                <AccordionItem value="analytics" className="border-b-0">
-                  <AccordionTrigger className="items-center px-4 py-4 hover:no-underline focus-visible:ring-2 focus-visible:ring-[rgba(var(--dls-accent-rgb),0.18)]">
-                    <span className="flex min-w-0 flex-1 items-start gap-3">
-                      <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-xl border border-dls-border bg-dls-surface text-dls-text">
-                        <ChartNoAxesColumnIncreasing size={17} className="shrink-0 text-current" />
-                      </span>
-                      <span className="min-w-0">
-                        <span className="block text-[14px] font-semibold text-dls-text">
-                          Want more analytics?
-                        </span>
-                        <span className="mt-1 block text-[12px] leading-5 text-dls-secondary">
-                          Add a project name to group this workspace's sessions in Analytics.
-                        </span>
-                      </span>
-                    </span>
-                  </AccordionTrigger>
-                  <AccordionContent className="space-y-3 px-4 pb-4">
-                    <div>
-                      <label className="text-[13px] font-medium text-dls-text">
-                        Project name <span className="text-dls-secondary">(optional)</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={props.projectLabel}
-                        onChange={(event) => props.onProjectLabelInput(event.currentTarget.value)}
-                        placeholder="Billing API"
-                        disabled={props.submitting}
-                        className="mt-2 w-full rounded-[20px] border border-dls-border bg-dls-surface px-4 py-3 text-[14px] text-dls-text outline-none placeholder:text-dls-secondary transition-colors focus:border-dls-accent disabled:cursor-not-allowed disabled:opacity-60"
-                      />
-                    </div>
-                  </AccordionContent>
-                </AccordionItem>
-              </Accordion>
-            ) : null}
-            <div className="mt-4">
-              <button
-                type="button"
-                onClick={props.onPickFolder}
-                disabled={props.pickingFolder || props.submitting}
-                className={pillSecondaryClass}
-              >
-                {props.pickingFolder ? (
-                  <Loader2 size={14} className="animate-spin" />
-                ) : (
-                  <FolderPlus size={14} />
-                )}
-                {props.hasSelectedFolder
-                  ? t("dashboard.change")
-                  : "Select folder"}
-              </button>
-            </div>
-          </div>
-
+          <button
+            type="button"
+            onClick={props.onPickFolder}
+            disabled={props.pickingFolder || props.submitting}
+            className="flex min-h-14 w-full items-center gap-3 rounded-lg border border-dls-border px-3 py-2.5 text-left text-sm transition-colors hover:bg-dls-hover disabled:opacity-50"
+          >
+            {props.pickingFolder ? <Loader2 size={18} className="shrink-0 animate-spin" /> : <FolderPlus size={18} className="shrink-0 text-dls-secondary" />}
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-dls-text">{props.hasSelectedFolder ? props.selectedFolder?.split(/[\\/]/).filter(Boolean).at(-1) : "Choose a folder"}</span>
+              {props.hasSelectedFolder ? <span className="block truncate text-xs text-dls-secondary" title={props.selectedFolder ?? undefined}>{props.selectedFolder}</span> : null}
+            </span>
+            {props.hasSelectedFolder ? <span className="text-xs text-dls-secondary">Change</span> : null}
+          </button>
+          {props.showProjectLabel ? <details className="text-xs text-dls-secondary" open={hasProjectLabel || undefined}>
+            <summary className="w-fit cursor-pointer py-1">Analytics label (optional)</summary>
+            <label className="mt-2 block">
+              Group this project's activity in analytics
+              <input type="text" value={props.projectLabel} onChange={(event) => props.onProjectLabelInput(event.currentTarget.value)} placeholder="Project label" disabled={props.submitting} className="mt-1.5 w-full rounded-md border border-dls-border bg-dls-surface px-3 py-2 text-sm text-dls-text" />
+            </label>
+          </details> : null}
         </div>
       </div>
 

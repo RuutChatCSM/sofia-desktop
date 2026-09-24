@@ -1,6 +1,6 @@
 # Daytona sandbox flows
 
-End-to-end scenarios that run against a real Electron OpenWork instance in a
+End-to-end scenarios that run against a real Electron Sofia instance in a
 Daytona cloud sandbox. The agent drives the app through CDP browser tools
 (`browser_list`, `browser_eval`, `browser_screenshot`, etc.) over the
 Daytona proxy.
@@ -14,21 +14,21 @@ daytona organization use "<org-name>"
 bash .devcontainer/test-on-daytona.sh [branch-or-commit] --artifacts-volume
 ```
 
-Use the helper. It creates from the reusable `openwork-eval-vnc` snapshot,
+Use the helper. It creates from the reusable `sofia-eval-vnc` snapshot,
 mounts secrets, mounts the reusable pnpm store volume, checks out the requested
 ref, conditionally installs deps, starts services, waits for CDP, and prints the
 CDP/noVNC URLs. Keep `--artifacts-volume` on for UI validation so frame proof can
 be served from port 8090. If the snapshot is missing, create it with
-`bash .devcontainer/create-daytona-openwork-snapshot.sh`.
+`bash .devcontainer/create-daytona-sofia-snapshot.sh`.
 
-The reusable `openwork-eval-secrets` volume is mounted at `/daytona-secrets`.
+The reusable `sofia-eval-secrets` volume is mounted at `/daytona-secrets`.
 Create/populate it with `bash .devcontainer/setup-daytona-secrets-volume.sh
 .newtoken`; future eval sandboxes reuse it and source every
 `/daytona-secrets/*.env` file before Electron starts. The Electron starter also
 applies Daytona-safe Chromium flags via `ELECTRON_EXTRA_LAUNCH_ARGS`.
 
 To persist downloadable artifacts, pass `--artifacts-volume`. The helper mounts
-the reusable `openwork-eval-artifacts` volume at `/daytona-artifacts`, starts a
+the reusable `sofia-eval-artifacts` volume at `/daytona-artifacts`, starts a
 static download server, and prints its Daytona preview URL. Capture screenshot
 checkpoints with `daytona exec <sandbox> -- 'bash .devcontainer/capture-daytona-screenshot.sh'`.
 
@@ -36,12 +36,12 @@ For repeatable PR verdict evidence, run an app-driving testkit spec (or use
 `write-a-spec` to add new coverage under `evals/specs/`):
 
 ```bash
-OPENWORK_EVAL_E2E_TESTS=1 OPENWORK_EVAL_DAYTONA=1 \
+SOFIA_EVAL_E2E_TESTS=1 SOFIA_EVAL_DAYTONA=1 \
   pnpm --dir evals exec vitest run --config vitest.config.ts \
   --project e2e specs/<slug>.e2e.test.ts
 ```
 
-The `@openwork/testkit` ambient tape binds observable assertions to validated
+The `@sofia/testkit` ambient tape binds observable assertions to validated
 takes. Use the manual CDP snippets below only for debugging; custom screenshots
 and recordings are supplementary rather than verdict evidence.
 
@@ -76,15 +76,15 @@ Use the `browser_list` tool:
 browser_list({ browser_url: "https://9825-xxx.daytonaproxy01.net" })
 ```
 
-Should return the OpenWork page target.
+Should return the Sofia page target.
 
-### 4. Verify opencode sidecar
+### 4. Verify engine sidecar
 
 ```bash
-daytona exec openwork-test 'ps aux | grep opencode | grep -v grep'
+daytona exec sofia-test 'ps aux | grep engine | grep -v grep'
 ```
 
-If no opencode process, the workspace hasn't been created yet (expected on fresh sandbox).
+If no engine process, the workspace hasn't been created yet (expected on fresh sandbox).
 
 ---
 
@@ -96,7 +96,7 @@ If no opencode process, the workspace hasn't been created yet (expected on fresh
 
 1. Create the workspace directory on the sandbox:
    ```bash
-   daytona exec openwork-test 'mkdir -p /workspace/hello'
+   daytona exec sofia-test 'mkdir -p /workspace/hello'
    ```
 
 2. Verify we're on the Welcome page:
@@ -133,7 +133,7 @@ If no opencode process, the workspace hasn't been created yet (expected on fresh
    browser_eval({ browser_url: CDP_URL, expression: "(function() { var btns = document.querySelectorAll('button'); for (var i = 0; i < btns.length; i++) { if (btns[i].textContent.trim() === 'Create Workspace' && !btns[i].disabled) { btns[i].click(); return 'clicked'; } } return 'not found'; })()" })
    ```
 
-8. Wait 10s for workspace creation + opencode sidecar boot.
+8. Wait 10s for workspace creation + engine sidecar boot.
 
 9. Verify navigation to session page:
    ```
@@ -141,23 +141,23 @@ If no opencode process, the workspace hasn't been created yet (expected on fresh
    → should contain "/session"
    ```
 
-10. Verify opencode sidecar started:
+10. Verify engine sidecar started:
     ```bash
-    daytona exec openwork-test 'ps aux | grep opencode | grep -v grep'
-    → should show opencode serve process
+    daytona exec sofia-test 'ps aux | grep engine | grep -v grep'
+    → should show engine serve process
     ```
 
 ### Expected outcome
 - URL contains `#/workspace/ws_.../session`
 - Sidebar shows "hello" workspace
-- Status bar shows "OpenWork Ready"
-- opencode process running on a random port
+- Status bar shows "Sofia Ready"
+- engine process running on a random port
 
 ---
 
 ## Flow 2: Send a message in a session
 
-**Prerequisite:** Flow 1 completed (workspace exists, opencode running).
+**Prerequisite:** Flow 1 completed (workspace exists, engine running).
 
 ### Steps
 
@@ -214,7 +214,7 @@ Returns path to a PNG file. Verify it's not empty.
 ## Flow 4: Connect OpenAI via UI and run GPT-5.5
 
 **Goal:** Prove provider key setup works through the Electron UI, not by editing
-`opencode.jsonc` directly.
+`engine.jsonc` directly.
 
 ### Source references for controls
 
@@ -375,7 +375,7 @@ worker reload, completes the callback, and appears as `Ready`.
 
 1. Start the reusable mock OAuth MCP server in the Daytona sandbox:
    ```bash
-   daytona exec openwork-test 'bash -lc "cd /workspace && nohup env PORT=3978 HOST=127.0.0.1 AUTO_APPROVE=1 node scripts/mock-oauth-mcp-server.mjs > /tmp/mock-mcp.log 2>&1 &"'
+   daytona exec sofia-test 'bash -lc "cd /workspace && nohup env PORT=3978 HOST=127.0.0.1 AUTO_APPROVE=1 node scripts/mock-oauth-mcp-server.mjs > /tmp/mock-mcp.log 2>&1 &"'
    ```
 
    Use `AUTO_APPROVE=0` when you specifically want to verify that a real browser
@@ -383,7 +383,7 @@ worker reload, completes the callback, and appears as `Ready`.
 
 2. Verify the mock server is healthy:
    ```bash
-   daytona exec openwork-test 'bash -lc "curl -s http://127.0.0.1:3978/health"'
+   daytona exec sofia-test 'bash -lc "curl -s http://127.0.0.1:3978/health"'
    ```
 
    Expected: `{"ok":true,...}`.
@@ -430,7 +430,7 @@ worker reload, completes the callback, and appears as `Ready`.
 8. Wait up to 30s, then verify the mock OAuth server saw an authorization
    request and token exchange:
    ```bash
-   daytona exec openwork-test 'bash -lc "curl -s http://127.0.0.1:3978/requests"'
+   daytona exec sofia-test 'bash -lc "curl -s http://127.0.0.1:3978/requests"'
    ```
 
    Expected request paths include `/authorize`, `/token`, and authenticated
@@ -489,7 +489,7 @@ Daytona-hosted Den server stack.
    URL, and the signed-out panel is visible.
 
 5. Create or sign in to a Den Web account, then use the desktop handoff code or
-   full `openwork://den-auth?...` link in `Paste sign-in code`.
+   full `sofia://den-auth?...` link in `Paste sign-in code`.
 
 6. Verify Electron shows the cloud account as connected and can load orgs from
    the Daytona Den API.
@@ -508,13 +508,13 @@ Daytona-hosted Den server stack.
 
 **Goal:** Prove a fresh Electron desktop app can receive a Den-managed LLM
 provider, import it into the workspace, select the managed model, and complete a
-real OpenCode task without relying on locally injected provider environment
+real Sofia task without relying on locally injected provider environment
 variables.
 
 ### Verified run: 2026-06-02
 
-- Server sandbox: `openwork-server-20260602-154721`
-- Electron sandbox: `openwork-test-20260602-155000`
+- Server sandbox: `sofia-server-20260602-154721`
+- Electron sandbox: `sofia-test-20260602-155000`
 - Workspace: `ws_d3840983187b`, `/tmp/llm-den-provisioning-workspace`
 - Den org: `acme-robotics-demo`, `org_01kt58ejd1extvd0p7nqagxaky`
 - Recording: `https://8090-zz8rblselmaj10a5.daytonaproxy01.net/recordings/llm-api-provisioning-desktop-from-den.mp4`
@@ -538,11 +538,11 @@ variables.
 3. Restart Electron without local AI-provider secrets so the baseline has no
    local OpenAI provider:
    ```bash
-   DAYTONA_SECRETS_ENV=/tmp/no-daytona-secrets bash /opt/openwork-daytona/start-daytona-electron.sh --detach
+   DAYTONA_SECRETS_ENV=/tmp/no-daytona-secrets bash /opt/sofia-daytona/start-daytona-electron.sh --detach
    ```
 
 4. Create a clean workspace and verify Settings -> AI Providers initially shows
-   only `OpenCode Zen`.
+   only `Sofia Zen`.
 
 5. Create a Den-managed OpenAI provider through the Den API. Do not print the API
    key; read it inside the sandbox only for the provider creation request.
@@ -614,18 +614,18 @@ latency, especially after changing Den provider payloads or desktop policy code.
      policy on transient failure.
 
 6. Local file checks:
-   - Confirm OpenWork-owned cloud import metadata is stored in the OpenWork
-     runtime DB, not `.opencode/openwork.json`.
-   - Confirm the provider executable config currently lands in `opencode.jsonc`;
+   - Confirm Sofia-owned cloud import metadata is stored in the Sofia
+     runtime DB, not `.sofia/sofia.json`.
+   - Confirm the provider executable config currently lands in `engine.jsonc`;
      this remains a follow-up if the desired end state is no cloud-managed
-     provider writes to user-owned OpenCode config.
+     provider writes to user-owned Sofia config.
 
 ### Expected outcome
 
 - Fresh desktop starts without a local OpenAI provider.
 - Den-managed provider appears as a cloud provider with `Credential ready`.
 - Imported provider config includes the executable provider config fields needed
-  by OpenCode, including the provider package metadata.
+  by Sofia, including the provider package metadata.
 - The selected model completes a real task and returns `Den LLM provisioning OK`.
 - Removing the Den provider removes the imported local provider on the next
   desktop provider sync and reload.
@@ -636,7 +636,7 @@ latency, especially after changing Den provider payloads or desktop policy code.
 
 Den returned `providerConfig` and model `config` as JSON strings. The desktop
 client must parse those stringified records; otherwise imported provider config
-is incomplete and OpenCode fails with `"undefined/chat/completions" cannot be
+is incomplete and Sofia fails with `"undefined/chat/completions" cannot be
 parsed as a URL.`
 
 ---
@@ -644,8 +644,8 @@ parsed as a URL.`
 ## Teardown
 
 ```bash
-daytona stop openwork-test    # preserves state
-daytona delete openwork-test  # destroys everything
+daytona stop sofia-test    # preserves state
+daytona delete sofia-test  # destroys everything
 ```
 
 ---
@@ -658,18 +658,18 @@ The reducer uses `{ key, value }` actions. If you dispatched a full state object
 **Lexical editor doesn't accept text:**
 Use `document.execCommand('insertText', false, text)` after focusing. Direct `textContent` assignment doesn't trigger Lexical's internal state update.
 
-**opencode sidecar not starting:**
-Check memory and disk. Electron + opencode + Vite needs ~6GB. Use `--memory 8`.
+**engine sidecar not starting:**
+Check memory and disk. Electron + engine + Vite needs ~6GB. Use `--memory 8`.
 Dependencies/sidecars need more than the default 3GB disk; use `--disk 10`.
 
 **CDP timeouts:**
 The renderer might be frozen (e.g., a blocking IPC call). Restart Electron:
 ```bash
-daytona exec openwork-test 'bash -lc "pkill -f electron || true; pkill -f electron-dev || true"'
+daytona exec sofia-test 'bash -lc "pkill -f electron || true; pkill -f electron-dev || true"'
 sleep 3
-daytona exec openwork-test 'bash -lc "cd /workspace && bash /opt/openwork-daytona/start-daytona-electron.sh --detach"'
+daytona exec sofia-test 'bash -lc "cd /workspace && bash /opt/sofia-daytona/start-daytona-electron.sh --detach"'
 ```
 
-`[openwork] Electron CDP exposed...` only means OpenWork requested CDP. The real
+`[sofia] Electron CDP exposed...` only means Sofia requested CDP. The real
 success marker is Chromium's own `DevTools listening on ws://127.0.0.1:9825/...`
 line in `/tmp/electron.log`.

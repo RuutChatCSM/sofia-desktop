@@ -8,8 +8,8 @@ Automation's lifetime:
 - Desktop creation produces a `desktop` Automation and continues to use the
   authenticated desktop runner introduced by the existing Automations work.
 - Web and Cloud Chat creation produce a `cloud` Automation. Den schedules the
-  occurrence, wakes the owner's existing OpenWork Cloud container when it is
-  stopped, and runs a native OpenWork thread headlessly inside that container.
+  occurrence, wakes the owner's existing Sofia Cloud container when it is
+  stopped, and runs a native Sofia thread headlessly inside that container.
 
 Both surfaces read the same Den Automation and run history. Placement is shown
 on list cards and receipts, but it is not an editable setting. Moving execution
@@ -34,7 +34,7 @@ automatic retries because an agent may already have produced external side
 effects; the user can inspect the native run and choose Run now explicitly.
 
 Before prompt admission, Den probes and repairs the worker's persisted
-`openwork-cloud` MCP registration for the selected model. A missing Connect
+`sofia-cloud` MCP registration for the selected model. A missing Connect
 configuration or model projection becomes durable needs-attention rather than
 a headless run that silently lacks the user's connected services.
 

@@ -1,5 +1,5 @@
-import type { ObservabilityEnv } from "@openwork-ee/utils/observability";
-import type { JsonObject, StructuredLogLevel } from "@openwork-ee/utils/observability";
+import type { ObservabilityEnv } from "@sofia-ee/utils/observability";
+import type { JsonObject, StructuredLogLevel } from "@sofia-ee/utils/observability";
 import type * as SentryModule from "@sentry/nextjs";
 
 import { getDenWebObservabilityConfig } from "./server-config";

@@ -1,8 +1,8 @@
-import { and, eq, isNull, sql } from "@openwork-ee/den-db/drizzle"
-import { InferenceOrgLimitPolicyTable, InferenceOrgUsageBucketTable, MemberTable, OrganizationTable } from "@openwork-ee/den-db"
-import { createDenTypeId, normalizeDenTypeId, type DenTypeId } from "@openwork-ee/utils/typeid"
-import { INFERENCE_TIER_LIMITS, INFERENCE_WINDOW_DURATIONS_MS } from "@openwork/types/den/inference"
-import type { InferenceTier, InferenceWindowType } from "@openwork/types/den/inference"
+import { and, eq, isNull, sql } from "@sofia-ee/den-db/drizzle"
+import { InferenceOrgLimitPolicyTable, InferenceOrgUsageBucketTable, MemberTable, OrganizationTable } from "@sofia-ee/den-db"
+import { createDenTypeId, normalizeDenTypeId, type DenTypeId } from "@sofia-ee/utils/typeid"
+import { INFERENCE_TIER_LIMITS, INFERENCE_WINDOW_DURATIONS_MS } from "@sofia/types/den/inference"
+import type { InferenceTier, InferenceWindowType } from "@sofia/types/den/inference"
 import { db } from "./db.js"
 
 export type BucketMetadata = Partial<Record<string, DenTypeId<"inferenceOrgUsageBucket">>>

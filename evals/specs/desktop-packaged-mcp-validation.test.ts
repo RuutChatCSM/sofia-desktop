@@ -4,12 +4,12 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
-import { test } from "@openwork/testkit";
+import { test } from "@sofia/testkit";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
 test("the packaged Desktop runtime can load MCP validation and SSE transport", async () => {
-  const root = mkdtempSync(join(tmpdir(), "openwork-mcp-validation-"));
+  const root = mkdtempSync(join(tmpdir(), "sofia-mcp-validation-"));
   try {
     const nodeModules = join(root, "node_modules");
     const prepare = spawnSync(process.execPath, [

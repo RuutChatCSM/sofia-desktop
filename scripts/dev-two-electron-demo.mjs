@@ -14,14 +14,14 @@ const desktopRequire = createRequire(path.join(desktopRoot, "package.json"));
 const electronCli = desktopRequire.resolve("electron/cli.js");
 const pnpmCmd = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
 export function resolveDemoRoot(env = process.env) {
-  return env.OPENWORK_ELECTRON_DEMO_ROOT?.trim() || path.join(os.tmpdir(), "openwork-two-electron-demo");
+  return env.SOFIA_ELECTRON_DEMO_ROOT?.trim() || path.join(os.tmpdir(), "sofia-two-electron-demo");
 }
 
 const demoRoot = resolveDemoRoot();
 const appProfiles = {
   admin: {
-    appIdentifier: "com.differentai.openwork.demo.admin",
-    appName: "OpenWork Demo A",
+    appIdentifier: "com.differentai.sofia.demo.admin",
+    appName: "Sofia Demo A",
     bootstrapName: "admin-bootstrap.json",
     cdpFlag: "--admin-cdp",
     cdpPort: "9923",
@@ -31,8 +31,8 @@ const appProfiles = {
     requireSignin: false,
   },
   consumer: {
-    appIdentifier: "com.differentai.openwork.demo.consumer",
-    appName: "OpenWork Demo B",
+    appIdentifier: "com.differentai.sofia.demo.consumer",
+    appName: "Sofia Demo B",
     bootstrapName: "consumer-bootstrap.json",
     cdpFlag: "--consumer-cdp",
     cdpPort: "9924",
@@ -50,12 +50,12 @@ function profilePaths(runRoot, profile) {
     bootstrapPath: path.join(root, profile.bootstrapName),
     cacheHome: path.join(root, "xdg-cache"),
     configHome: path.join(root, "xdg-config"),
-    dataDir: path.join(root, "openwork-data"),
+    dataDir: path.join(root, "sofia-data"),
     dataHome: path.join(root, "xdg-data"),
-    envStorePath: path.join(root, "openwork-env.json"),
+    envStorePath: path.join(root, "sofia-env.json"),
     homeDir: path.join(root, "home"),
     localAppDataDir: path.join(root, "local-appdata"),
-    opencodeConfigDir: path.join(root, "opencode-config"),
+    engineConfigDir: path.join(root, "engine-config"),
     root,
     stateHome: path.join(root, "xdg-state"),
     userDataDir: path.join(root, "electron-userdata"),
@@ -87,7 +87,7 @@ export async function createDemoRun(root = demoRoot) {
       mkdir(profile.userDataDir, { recursive: true }),
       mkdir(profile.appDataDir, { recursive: true }),
       mkdir(profile.localAppDataDir, { recursive: true }),
-      mkdir(profile.opencodeConfigDir, { recursive: true }),
+      mkdir(profile.engineConfigDir, { recursive: true }),
       mkdir(profile.dataDir, { recursive: true }),
       mkdir(profile.homeDir, { recursive: true }),
       mkdir(profile.configHome, { recursive: true }),
@@ -322,7 +322,7 @@ function startElectron(profile, env, built, packaged) {
     : built
       ? [
         electronCli,
-        ...(env.OPENWORK_ELECTRON_USE_MOCK_KEYCHAIN === "1" ? ["--use-mock-keychain"] : []),
+        ...(env.SOFIA_ELECTRON_USE_MOCK_KEYCHAIN === "1" ? ["--use-mock-keychain"] : []),
         "./electron/main.mjs",
       ]
       : ["dev:electron"];
@@ -398,20 +398,20 @@ export function demoEnv(profile, paths, port, cdpPort) {
     APPDATA: paths.appDataDir,
     HOME: paths.homeDir,
     LOCALAPPDATA: paths.localAppDataDir,
-    OPENWORK_DATA_DIR: paths.dataDir,
-    OPENWORK_DESKTOP_BOOTSTRAP_PATH: paths.bootstrapPath,
-    OPENWORK_DESKTOP_DISABLE_WORKSPACE_RECOVERY: "1",
-    OPENWORK_DEV_MODE: "1",
-    OPENWORK_ENV_STORE: paths.envStorePath,
-    OPENCODE_CONFIG_DIR: paths.opencodeConfigDir,
-    VITE_DISABLE_OPENWORK_MODELS: "1",
-    OPENWORK_ELECTRON_APP_IDENTIFIER: profile.appIdentifier,
-    OPENWORK_ELECTRON_APP_NAME: profile.appName,
-    OPENWORK_ELECTRON_DISABLE_PROTOCOL_REGISTRATION: "1",
-    OPENWORK_ELECTRON_REMOTE_DEBUG_PORT: cdpPort,
-    OPENWORK_ELECTRON_SKIP_SHARED_PREPARE: "1",
-    OPENWORK_ELECTRON_USE_MOCK_KEYCHAIN: "1",
-    OPENWORK_ELECTRON_USERDATA: paths.userDataDir,
+    SOFIA_DATA_DIR: paths.dataDir,
+    SOFIA_DESKTOP_BOOTSTRAP_PATH: paths.bootstrapPath,
+    SOFIA_DESKTOP_DISABLE_WORKSPACE_RECOVERY: "1",
+    SOFIA_DEV_MODE: "1",
+    SOFIA_ENV_STORE: paths.envStorePath,
+    SOFIA_ENGINE_CONFIG_DIR: paths.engineConfigDir,
+    VITE_DISABLE_SOFIA_MODELS: "1",
+    SOFIA_ELECTRON_APP_IDENTIFIER: profile.appIdentifier,
+    SOFIA_ELECTRON_APP_NAME: profile.appName,
+    SOFIA_ELECTRON_DISABLE_PROTOCOL_REGISTRATION: "1",
+    SOFIA_ELECTRON_REMOTE_DEBUG_PORT: cdpPort,
+    SOFIA_ELECTRON_SKIP_SHARED_PREPARE: "1",
+    SOFIA_ELECTRON_USE_MOCK_KEYCHAIN: "1",
+    SOFIA_ELECTRON_USERDATA: paths.userDataDir,
     PORT: port,
     XDG_CACHE_HOME: paths.cacheHome,
     XDG_CONFIG_HOME: paths.configHome,
@@ -483,7 +483,7 @@ async function main() {
   await assertDemoPortsAvailable(portEntries);
 
   if (built && !existsSync(path.join(repoRoot, "apps", "app", "dist", "index.html"))) {
-    throw new Error("The desktop renderer is not built. Run pnpm --filter @openwork/desktop build:electron first.");
+    throw new Error("The desktop renderer is not built. Run pnpm --filter @sofia/desktop build:electron first.");
   }
 
   const demoRun = requestedRunRoot
@@ -532,14 +532,14 @@ async function main() {
   console.log(`Demo B CDP:    http://127.0.0.1:${consumerCdp}`);
   console.log(`Demo A folder: ${demoRun.admin.root}`);
   console.log(`  Electron:    ${demoRun.admin.userDataDir}`);
-  console.log(`  OpenWork:    ${demoRun.admin.dataDir}`);
+  console.log(`  Sofia:    ${demoRun.admin.dataDir}`);
   console.log(`Demo B folder: ${demoRun.consumer.root}`);
   console.log(`  Electron:    ${demoRun.consumer.userDataDir}`);
-  console.log(`  OpenWork:    ${demoRun.consumer.dataDir}`);
+  console.log(`  Sofia:    ${demoRun.consumer.dataDir}`);
   const denStartup =
     adminPort === appProfiles.admin.port && consumerPort === appProfiles.consumer.port
       ? "pnpm demo:den"
-      : `OPENWORK_EXTRA_APP_PORTS=${adminPort},${consumerPort} pnpm dev:den`;
+      : `SOFIA_EXTRA_APP_PORTS=${adminPort},${consumerPort} pnpm dev:den`;
   console.log(`Den startup:   ${denStartup}`);
   console.log("Press Ctrl-C to stop both instances.\n");
 }

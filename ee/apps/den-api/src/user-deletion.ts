@@ -1,4 +1,4 @@
-import { eq } from "@openwork-ee/den-db/drizzle"
+import { eq } from "@sofia-ee/den-db/drizzle"
 import {
   AuthAccountTable,
   AuthApiKeyTable,
@@ -13,7 +13,7 @@ import {
   OAuthRefreshTokenTable,
   ScimSyncEventTable,
   WorkerTable,
-} from "@openwork-ee/den-db/schema"
+} from "@sofia-ee/den-db/schema"
 import { cache } from "./cache.js"
 import { db } from "./db.js"
 

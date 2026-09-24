@@ -1,8 +1,8 @@
-import type { WorkspaceWire } from "@openwork/types/workspace";
+import type { WorkspaceWire } from "@sofia/types/workspace";
 
 export type WorkspaceType = "local" | "remote";
 
-export type RemoteType = "opencode" | "openwork";
+export type RemoteType = "engine" | "sofia";
 
 export type ApprovalMode = "manual" | "auto" | "ask" | "approve" | "full";
 
@@ -24,15 +24,15 @@ export interface WorkspaceConfig {
   baseUrl?: string;
   directory?: string;
   displayName?: string;
-  openworkHostUrl?: string;
-  openworkToken?: string;
-  openworkWorkspaceId?: string;
-  openworkWorkspaceName?: string;
+  sofiaHostUrl?: string;
+  sofiaToken?: string;
+  sofiaWorkspaceId?: string;
+  sofiaWorkspaceName?: string;
   sandboxBackend?: string;
   sandboxRunId?: string;
   sandboxContainerName?: string;
-  opencodeUsername?: string;
-  opencodePassword?: string;
+  engineUsername?: string;
+  enginePassword?: string;
 }
 
 export interface WorkspaceInfo {
@@ -45,16 +45,16 @@ export interface WorkspaceInfo {
   baseUrl?: string;
   directory?: string;
   displayName?: string;
-  openworkHostUrl?: string;
-  openworkToken?: string;
-  openworkWorkspaceId?: string;
-  openworkWorkspaceName?: string;
+  sofiaHostUrl?: string;
+  sofiaToken?: string;
+  sofiaWorkspaceId?: string;
+  sofiaWorkspaceName?: string;
   sandboxBackend?: string;
   sandboxRunId?: string;
   sandboxContainerName?: string;
-  opencodeUsername?: string;
-  opencodePassword?: string;
-  opencode?: {
+  engineUsername?: string;
+  enginePassword?: string;
+  engine?: {
     baseUrl?: string;
     directory?: string;
     username?: string;
@@ -70,7 +70,7 @@ type Extends<A extends B, B> = A;
 type _WorkspaceInfoFitsWire = Extends<WorkspaceInfo, WorkspaceWire>;
 type _WorkspaceInfoKeysKnown = Extends<keyof WorkspaceInfo, keyof WorkspaceWire>;
 
-export interface OpencodeConfigFile {
+export interface WorkspaceEngineConfigFile {
   path: string;
   exists: boolean;
   content: string | null;
@@ -89,10 +89,10 @@ export interface ServerConfig {
   token: string;
   hostToken: string;
   configPath?: string;
-  opencodeBaseUrl?: string;
-  opencodeDirectory?: string;
-  opencodeUsername?: string;
-  opencodePassword?: string;
+  engineBaseUrl?: string;
+  engineDirectory?: string;
+  engineUsername?: string;
+  enginePassword?: string;
   approval: ApprovalConfig;
   corsOrigins: string[];
   workspaces: WorkspaceInfo[];
@@ -109,16 +109,16 @@ export interface ServerConfig {
    * old one is closed once its runs finish. Off by default (alpha).
    */
   engineRollover?: boolean;
-  /** In-memory secure key custody supplied by an embedding host such as OpenWork Desktop. */
+  /** In-memory secure key custody supplied by an embedding host such as Sofia App Desktop. */
   localManagedMcpVaultKey?: LocalManagedMcpVaultKeyProvider;
 }
 
 export interface Capabilities {
   schemaVersion: number;
   serverVersion: string;
-  opencodeVersion: string;
+  engineVersion: string;
   providerSync: true;
-  skills: { read: boolean; write: boolean; source: "openwork" | "opencode" };
+  skills: { read: boolean; write: boolean; source: "sofia" | "engine" };
   plugins: { read: boolean; write: boolean };
   mcp: { read: boolean; write: boolean };
   commands: { read: boolean; write: boolean };

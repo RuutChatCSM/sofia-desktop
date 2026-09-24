@@ -1,1 +1,1 @@
-export * from "@openwork/hosts/daytona";
+export * from "@sofia/hosts/daytona";

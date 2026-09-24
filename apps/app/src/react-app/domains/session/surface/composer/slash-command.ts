@@ -1,6 +1,6 @@
 import type { SkillCard, SlashCommandOption } from "@/app/types";
 
-const SLASH_COMMAND_QUERY_RE = /^\/([A-Za-z0-9_-]*)$/;
+const SLASH_COMMAND_QUERY_RE = /^\s*\/([A-Za-z0-9_-]*)\s*$/;
 const SLASH_COMMAND_INVOCATION_RE = /^\/([A-Za-z0-9_-]+)(?:[ \t]+([\s\S]*))?$/;
 
 export type ComposerSlashCommandOption = SlashCommandOption & {
@@ -19,12 +19,12 @@ export function skillSlashCommandName(skill: Pick<SkillCard, "name" | "trigger">
 }
 
 export function skillMenuSlashCommandName(skill: Pick<SkillCard, "name" | "trigger" | "origin">) {
-  return skill.origin === "openwork-connect" ? skillSlashCommandName(skill) : skill.name;
+  return skill.origin === "sofia-connect" ? skillSlashCommandName(skill) : skill.name;
 }
 
 export function connectSkillSlashCommandOptions(skills: SkillCard[]): ComposerSlashCommandOption[] {
   return skills.flatMap((skill) => {
-    if (skill.origin !== "openwork-connect" || !skill.connectCapabilityName) return [];
+    if (skill.origin !== "sofia-connect" || !skill.connectCapabilityName) return [];
     return [{
       id: `connect-skill:${skill.connectCapabilityName}`,
       name: skillSlashCommandName(skill),

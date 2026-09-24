@@ -1,8 +1,8 @@
 # daytona-windows-cert-assets — Skill assets for Windows enterprise certificate validation
 
-Cast is an OpenWork maintainer reviewing the checked-in skill and helper scripts locally before anyone spends time in a Daytona Windows sandbox.
+Cast is an Sofia maintainer reviewing the checked-in skill and helper scripts locally before anyone spends time in a Daytona Windows sandbox.
 
-1. The maintainer opens the new skill and sees that opencode can discover it by name, with the exact Windows, enterprise CA, GPO cert, TLS fetch, and self-hosted certificate phrases that should trigger it.
+1. The maintainer opens the new skill and sees that engine can discover it by name, with the exact Windows, enterprise CA, GPO cert, TLS fetch, and self-hosted certificate phrases that should trigger it.
 
 2. The maintainer checks that the skill does not fork the repro logic. It points to the existing TLS repro and doctor scripts, and the eval proves those files are still present in the repo.
 

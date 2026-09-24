@@ -1,9 +1,9 @@
-// Managed Codex engine: spawns `codex app-server --listen stdio://` and speaks
+// Managed Codex engine: spawns `Sofia app-server --listen stdio://` and speaks
 // its JSON-RPC 2.0 protocol (newline-delimited JSON over stdio). This is the
-// embedding surface the ChatGPT/Codex desktop app uses, so OpenWork can drive a
-// real Codex runtime side-by-side with the OpenCode engine.
+// embedding surface the ChatGPT/Codex desktop app uses, so Sofia App can drive a
+// real Codex runtime side-by-side with the Sofia engine.
 //
-// Protocol (from openai/codex app-server-transport + app-server-protocol):
+// Protocol (from openai/Sofia app-server-transport + app-server-protocol):
 //   - Transport: newline-delimited JSON-RPC 2.0 over stdin/stdout.
 //   - Handshake: LSP-style `initialize` request with `clientInfo`.
 //   - Requests:   `thread/start`, `turn/start`, `turn/read`, etc.
@@ -57,7 +57,7 @@ export type CodexEngineInfo = {
   version: string | null;
 };
 
-const DEBUG_TAG = "[codex-engine]";
+const DEBUG_TAG = "[sofia-engine]";
 
 const DEFAULT_RETRY_BASE_MS = 250;
 const DEFAULT_MAX_RETRY_MS = 4000;
@@ -65,13 +65,23 @@ const DEFAULT_REQUEST_TIMEOUT_MS = 60_000;
 
 function buildEnv(options: CodexEngineOptions): Record<string, string> {
   const base = { ...(options.env ?? {}) };
-  if (options.codexHome) base.CODEX_HOME = options.codexHome;
+  if (options.codexHome) {
+    // Released Sofia uses SOFIA_HOME; older bundled engines use CODEX_HOME.
+    // Both must read the same config, credentials and session store.
+    base.SOFIA_HOME = options.codexHome;
+    base.CODEX_HOME = options.codexHome;
+  }
   // The engine resolves provider API keys from its scratch homes
   // (`~/.sofia`, `~/.config/sofia`) relative to $HOME. Keep HOME exported so
   // that fallback (and the `~/.codex` import) works — without it the only key
   // file the engine can read is `$CODEX_HOME/sofia-auth.json`.
   if (!base.HOME && process.env.HOME) base.HOME = process.env.HOME;
   if (!base.USERPROFILE && process.env.USERPROFILE) base.USERPROFILE = process.env.USERPROFILE;
+  // A bare engine command (e.g. SOFIA_CODEX_BIN=sofia in headless
+  // deployments) is resolved through PATH, but child processes do not inherit
+  // the parent environment automatically. Pass PATH through so spawn succeeds.
+  if (!base.PATH && process.env.PATH) base.PATH = process.env.PATH;
+  if (!base.PATHEXT && process.env.PATHEXT) base.PATHEXT = process.env.PATHEXT;
   // Force non-interactive app-server mode.
   base.CODEX_EXPERIMENTAL_APP_SERVER = "1";
   return base;
@@ -207,7 +217,7 @@ export class ManagedCodexEngine {
     // Reject pending requests — they cannot be answered by a dead server.
     for (const { reject, timer } of this.pending.values()) {
       clearTimeout(timer);
-      reject(new Error(`codex app-server exited (code=${code}, signal=${signal})`));
+      reject(new Error(`Sofia app-server exited (code=${code}, signal=${signal})`));
     }
     this.pending.clear();
 
@@ -254,7 +264,7 @@ export class ManagedCodexEngine {
   private send(message: Record<string, unknown>): void {
     const child = this.child;
     if (!this.isAlive() || !child?.stdin?.writable) {
-      throw new Error("codex app-server is not running");
+      throw new Error("Sofia app-server is not running");
     }
     if (this.options.debug) console.log(DEBUG_TAG, "->", JSON.stringify(message));
     child.stdin.write(`${JSON.stringify(message)}\n`);
@@ -300,7 +310,7 @@ export class ManagedCodexEngine {
     if (!this.versionChecked) {
       this.versionChecked = true;
       // Probe the version once for diagnostics (`info.version`). There is no
-      // enforced minimum here: OpenWork only ever spawns its own bundled Sofia
+      // enforced minimum here: Sofia App only ever spawns its own bundled Sofia
       // binary (a source build that reports `codex-cli 0.0.0`), so a hard gate
       // would just block the runtime it ships. The version is surfaced for the
       // feature gates and diagnostics, never used to refuse startup.
@@ -313,13 +323,13 @@ export class ManagedCodexEngine {
 
   private async initializeConnection(): Promise<{ userAgent: string; codexHome: string }> {
     const result = await this.request("initialize", {
-      clientInfo: { name: "openwork", version: "1.0.0" },
+      clientInfo: { name: "sofia", version: "1.0.0" },
       capabilities: { experimentalApi: true },
     });
-    const response = result as { userAgent?: string; codexHome?: string };
+    const response = result as { userAgent?: string; sofiaHome?: string; codexHome?: string };
     this.initializeResult = {
       userAgent: response.userAgent ?? "",
-      codexHome: response.codexHome ?? "",
+      codexHome: response.sofiaHome ?? response.codexHome ?? "",
     };
     this.reconnectAttempt = 0;
     this.events.emit("connected");
@@ -329,14 +339,14 @@ export class ManagedCodexEngine {
   /** Send a JSON-RPC request and await its result. */
   request(method: string, params?: unknown): Promise<unknown> {
     if (!this.isAlive()) {
-      return Promise.reject(new Error(`codex app-server is not running (${method})`));
+      return Promise.reject(new Error(`Sofia app-server is not running (${method})`));
     }
     const id = this.nextRequestId++;
     const timeoutMs = this.options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
-        reject(new Error(`codex rpc request timed out after ${timeoutMs}ms: ${method}`));
+        reject(new Error(`Sofia RPC request timed out after ${timeoutMs}ms: ${method}`));
       }, timeoutMs);
       this.pending.set(id, { resolve, reject, timer });
       const message: Record<string, unknown> = { jsonrpc: "2.0", id, method };
@@ -392,6 +402,7 @@ export class ManagedCodexEngine {
     model?: string;
     approvalPolicy?: string;
     sandboxPolicy?: { type: string; networkAccess?: boolean };
+    approvalsReviewer?: "user" | "auto_review";
   }): Promise<string | null> {
     // The fork's UserInput is a serde-tagged enum: every entry needs a `type`.
     const input = params.input.map((entry) =>
@@ -441,9 +452,9 @@ export class ManagedCodexEngine {
     return payload.threadId ?? payload.thread?.id ?? null;
   }
 
-  /** Resume an archived thread (thread/resume). */
-  async resumeThread(threadId: string): Promise<unknown> {
-    return await this.request("thread/resume", { threadId });
+  /** Load a persisted thread, optionally from a legacy rollout outside this home. */
+  async resumeThread(threadId: string, options?: { path?: string; model?: string; modelProvider?: string }): Promise<unknown> {
+    return await this.request("thread/resume", { threadId, ...options });
   }
 
   /** Archive / unarchive / unsubscribe a thread. */
@@ -479,17 +490,38 @@ export class ManagedCodexEngine {
     return payload.data ?? [];
   }
 
-  /** List a thread's items (with turn ids) to restore a full transcript. */
-  async listThreadItems(threadId: string, params?: { limit?: number }): Promise<Array<{ turnId: string; item: Record<string, unknown> }>> {
+  /** Thread ids currently loaded in the app-server process (writer-lock holders). */
+  async listLoadedThreads(): Promise<string[]> {
+    const result = await this.request("thread/loaded/list", {});
+    const payload = result as { data?: unknown };
+    return Array.isArray(payload.data) ? payload.data.filter((id): id is string => typeof id === "string") : [];
+  }
+
+  /**
+   * List one page of a thread's items (with turn ids). The engine serves pages
+   * from the oldest item and returns a `nextCursor`; callers that want the whole
+   * transcript must follow it (see CodexSessionManager.getSessionItems).
+   */
+  async listThreadItems(
+    threadId: string,
+    params?: { limit?: number; cursor?: string },
+  ): Promise<{ items: Array<{ turnId: string; item: Record<string, unknown> }>; nextCursor: string | null }> {
     const result = await this.request("thread/items/list", {
       threadId,
       ...(params?.limit ? { limit: params.limit } : {}),
+      ...(params?.cursor ? { cursor: params.cursor } : {}),
     });
-    const payload = result as { data?: Array<{ turnId?: string; item?: Record<string, unknown> }> };
-    return (payload.data ?? []).map((entry) => ({
-      turnId: typeof entry.turnId === "string" ? entry.turnId : "",
-      item: entry.item ?? {},
-    }));
+    const payload = result as {
+      data?: Array<{ turnId?: string; item?: Record<string, unknown> }>;
+      nextCursor?: unknown;
+    };
+    return {
+      items: (payload.data ?? []).map((entry) => ({
+        turnId: typeof entry.turnId === "string" ? entry.turnId : "",
+        item: entry.item ?? {},
+      })),
+      nextCursor: typeof payload.nextCursor === "string" ? payload.nextCursor : null,
+    };
   }
 
   async close(): Promise<void> {
@@ -525,5 +557,5 @@ export class ManagedCodexEngine {
 function describeRpcError(error: unknown): string {
   if (!error || typeof error !== "object") return String(error);
   const e = error as { code?: number | string; message?: string };
-  return `codex rpc error (${String(e.code ?? "?")}): ${e.message ?? "unknown"}`;
+  return `Sofia RPC error (${String(e.code ?? "?")}): ${e.message ?? "unknown"}`;
 }

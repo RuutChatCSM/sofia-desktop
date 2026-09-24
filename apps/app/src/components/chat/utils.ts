@@ -1,3 +1,4 @@
+import { messageTurnId } from "./turn-structure"
 import { isReasoningUIPart, isToolUIPart, type DynamicToolUIPart, type FileUIPart, type ToolUIPart, type UIMessage } from "ai"
 import type { ThreadStatus } from "@/lib/messages"
 import { isAggregatableToolPart } from "@/lib/tool-aggregate"
@@ -93,26 +94,26 @@ export function getSafeFileRevealPath(part: Pick<FileUIPart, "url">) {
   }
 }
 
-function getMessageOpencodeMetadata(message: UIMessage): object | null {
+function getMessageWorkspaceEngineMetadata(message: UIMessage): object | null {
   const metadata: unknown = message.metadata
-  if (!metadata || typeof metadata !== "object" || !("opencode" in metadata)) return null
+  if (!metadata || typeof metadata !== "object" || !("engine" in metadata)) return null
 
-  const opencode: unknown = metadata.opencode
-  return opencode && typeof opencode === "object" ? opencode : null
+  const engine: unknown = metadata.engine
+  return engine && typeof engine === "object" ? engine : null
 }
 
 export function getMessageCreated(message: UIMessage): number | null {
-  const opencode = getMessageOpencodeMetadata(message)
-  if (!opencode || !("created" in opencode)) return null
-  const created: unknown = opencode.created
+  const engine = getMessageWorkspaceEngineMetadata(message)
+  if (!engine || !("created" in engine)) return null
+  const created: unknown = engine.created
   return typeof created === "number" ? created : null
 }
 
 /** When the assistant finished the turn (server timestamp), if known. */
 export function getMessageCompleted(message: UIMessage): number | null {
-  const opencode = getMessageOpencodeMetadata(message)
-  if (!opencode || !("completed" in opencode)) return null
-  const completed: unknown = opencode.completed
+  const engine = getMessageWorkspaceEngineMetadata(message)
+  if (!engine || !("completed" in engine)) return null
+  const completed: unknown = engine.completed
   return typeof completed === "number" ? completed : null
 }
 
@@ -154,7 +155,8 @@ export function groupMessages(messages: UIMessage[], status: ThreadStatus): Mess
 
     const assistantMessages: UIMessageWithIndex[] = []
 
-    while (index < messages.length && messages[index].role === "assistant") {
+    const turnId = messageTurnId(message)
+    while (index < messages.length && messages[index].role === "assistant" && messageTurnId(messages[index]) === turnId) {
       assistantMessages.push({ message: messages[index], index });
       index++
     }
@@ -203,7 +205,7 @@ export function getAggregateOnlyParts(
 }
 
 /**
- * An OpenCode turn usually arrives as ONE assistant message with steps
+ * An Sofia turn usually arrives as ONE assistant message with steps
  * (reasoning, tool calls, narration) and the final answer interleaved in
  * `parts`. Split at the last non-empty text part so the step portion can
  * fold into the "Worked for…" run while the answer stays visible. Returns

@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process"
 import { fileURLToPath } from "node:url"
 import { expect } from "vitest"
-import { test } from "@openwork/testkit"
+import { test } from "@sofia/testkit"
 
 const script = fileURLToPath(new URL("../scripts/spec-impact.mjs", import.meta.url))
 

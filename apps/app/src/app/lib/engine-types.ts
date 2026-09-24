@@ -1,8 +1,8 @@
 // Local engine types.
 //
-// These declarations are the subset of the OpenCode v2 generated type surface
+// These declarations are the subset of the Sofia v2 generated type surface
 // that the app consumes. They were vendored verbatim (type-only, no runtime
-// code) from the OpenCode SDK so the app can drop the SDK dependency while
+// code) from the Sofia SDK so the app can drop the SDK dependency while
 // remaining structurally compatible with the server adapter payloads.
 /* eslint-disable */
 

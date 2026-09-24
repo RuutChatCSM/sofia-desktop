@@ -2,14 +2,14 @@ import { spawnSync } from "node:child_process"
 import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { expect } from "vitest"
-import { test } from "@openwork/testkit"
+import { test } from "@sofia/testkit"
 
 const repoRoot = resolve(import.meta.dirname, "../..")
 
 test("Daytona provisioning builds the skill-created MCP App before Den starts", ({ evidence }) => {
   const script = readFileSync(resolve(repoRoot, ".devcontainer/start-daytona-server.sh"), "utf8")
-  const build = "pnpm --filter @openwork-ee/den-api run build:mcp-apps"
-  const start = "pnpm --filter @openwork-ee/den-api exec tsx watch src/main.ts"
+  const build = "pnpm --filter @sofia-ee/den-api run build:mcp-apps"
+  const start = "pnpm --filter @sofia-ee/den-api exec tsx watch src/main.ts"
 
   expect(script.split(build)).toHaveLength(2)
   expect(script.indexOf(build)).toBeLessThan(script.indexOf(start))
@@ -21,7 +21,7 @@ test("Daytona provisioning builds the skill-created MCP App before Den starts", 
 })
 
 test("create_skill publishes a standard MCP App contract and text fallback", ({ evidence }) => {
-  const build = spawnSync("pnpm", ["--filter", "@openwork-ee/den-api", "run", "build:mcp-apps"], {
+  const build = spawnSync("pnpm", ["--filter", "@sofia-ee/den-api", "run", "build:mcp-apps"], {
     cwd: repoRoot,
     encoding: "utf8",
     timeout: 120_000,
@@ -33,7 +33,7 @@ test("create_skill publishes a standard MCP App contract and text fallback", ({ 
 
   const gateway = spawnSync("pnpm", [
     "--filter",
-    "@openwork-ee/den-api",
+    "@sofia-ee/den-api",
     "exec",
     "bun",
     "test",
@@ -52,7 +52,7 @@ test("create_skill publishes a standard MCP App contract and text fallback", ({ 
 
   evidence.recordAssertionEvidence(
     "create_skill is a standard MCP App tool",
-    "The gateway lists one create_skill tool with ui://openwork/skill-created/v1/view.html, model/app visibility, compatibility metadata, and a CSP-closed text/html;profile=mcp-app resource.",
+    "The gateway lists one create_skill tool with ui://sofia/skill-created/v1/view.html, model/app visibility, compatibility metadata, and a CSP-closed text/html;profile=mcp-app resource.",
     true,
   )
   evidence.recordAssertionEvidence(

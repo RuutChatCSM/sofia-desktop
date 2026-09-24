@@ -3,7 +3,7 @@ import { z } from "zod"
 const idSchema = z.string().trim().min(1).max(160)
 
 export const connectionActionAppSchemaVersion = "1" as const
-export const connectionActionAppResourceUri = "ui://openwork/connection-action/v1/view.html"
+export const connectionActionAppResourceUri = "ui://sofia/connection-action/v1/view.html"
 export const connectionActionToolName = "connection_action"
 
 /**
@@ -23,7 +23,7 @@ export const connectionActionPayloadSchema = z.object({
     "organization_admin",
     "provider_admin",
     "network_admin",
-    "openwork",
+    "sofia",
   ]).nullable(),
   message: z.string().trim().min(1).max(2_000),
   action: z.object({
@@ -34,15 +34,15 @@ export const connectionActionPayloadSchema = z.object({
       "inspect_connection",
       "fix_provider",
       "fix_network",
-      "contact_openwork",
+      "contact_sofia",
     ]),
     label: z.string().trim().min(1).max(255),
     surface: z.enum([
-      "openwork_your_connections",
-      "openwork_organization_connections",
+      "sofia_your_connections",
+      "sofia_organization_connections",
       "provider_admin_console",
       "network_infrastructure",
-      "openwork_support",
+      "sofia_support",
     ]),
     url: z.string().url().optional(),
   }).nullable(),

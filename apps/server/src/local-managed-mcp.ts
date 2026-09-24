@@ -32,16 +32,16 @@ import {
   type EnterpriseMcpOAuthPersistence,
   type EnterpriseMcpPersistenceContext,
   type EnterpriseMcpRequestPhase,
-} from "@openwork/enterprise-mcp-client";
+} from "@sofia/enterprise-mcp-client";
 import { ApiError } from "./errors.js";
 import { sanitizeDiagnosticString } from "./diagnostic-sanitizer.js";
 import { backupTimestamp } from "./legacy-config-sweep.js";
 import { runtimeStorageDir } from "./runtime-db.js";
 import {
-  readRuntimeOpencodeConfig,
+  readRuntimeWorkspaceEngineConfig,
   runtimeMcpMap,
-  writeRuntimeOpencodeConfig,
-} from "./runtime-opencode-config-store.js";
+  writeRuntimeWorkspaceEngineConfig,
+} from "./runtime-engine-config-store.js";
 import type { ServerConfig } from "./types.js";
 import { isRecord } from "./workspace-kv-store.js";
 import {
@@ -156,12 +156,12 @@ export type CreateLocalManagedMcpInput = {
   };
 };
 
-const VAULT_AAD = Buffer.from("openwork-local-managed-mcp-v1", "utf8");
+const VAULT_AAD = Buffer.from("sofia-local-managed-mcp-v1", "utf8");
 const VAULT_RECOVERY_REASON = "secure_storage_changed";
 const VAULT_RECOVERED_LAST_ERROR =
   "Secure storage on this device changed, so saved sign-ins were cleared. Reconnect to restore this connection.";
 const MANAGED_MCP_CONNECTION_FAILED_MESSAGE =
-  "OpenWork could not connect to this MCP server. Check its OAuth settings and availability, then try again.";
+  "Sofia App could not connect to this MCP server. Check its OAuth settings and availability, then try again.";
 const EXTERNAL_HANDSHAKE_REQUEST_PHASES = new Set<EnterpriseMcpRequestPhase>([
   "oauth-client-registration",
   "mcp-initialize",
@@ -183,7 +183,7 @@ function secureVaultStorageUnavailable(): ApiError {
   return new ApiError(
     503,
     "managed_mcp_secure_storage_unavailable",
-    "Secure storage for OpenWork-managed MCP credentials is unavailable. Start through OpenWork Desktop or set OPENWORK_ENCRYPTION_KEY.",
+    "Secure storage for Sofia-managed MCP credentials is unavailable. Start through Sofia App Desktop or set SOFIA_ENCRYPTION_KEY.",
   );
 }
 
@@ -197,7 +197,7 @@ async function resolveVaultKey(config: ServerConfig): Promise<Buffer> {
       throw secureVaultStorageUnavailable();
     }
   }
-  const configured = process.env.OPENWORK_ENCRYPTION_KEY?.trim();
+  const configured = process.env.SOFIA_ENCRYPTION_KEY?.trim();
   if (configured) return createHash("sha256").update(configured).digest();
   throw secureVaultStorageUnavailable();
 }
@@ -411,7 +411,7 @@ function isManagedGatewayRuntimeEntry(entry: Record<string, unknown>): boolean {
 async function pruneOrphanedManagedRuntimeEntries(config: ServerConfig, vault: LocalManagedMcpVault): Promise<void> {
   for (const workspace of config.workspaces) {
     try {
-      const mcp = runtimeMcpMap(await readRuntimeOpencodeConfig(config, workspace.id));
+      const mcp = runtimeMcpMap(await readRuntimeWorkspaceEngineConfig(config, workspace.id));
       for (const [name, entry] of Object.entries(mcp)) {
         if (!isManagedGatewayRuntimeEntry(entry)) continue;
         if (vault.connections[connectionKey(workspace.id, name)]) continue;
@@ -433,7 +433,7 @@ async function pruneOrphanedManagedRuntimeEntries(config: ServerConfig, vault: L
  */
 async function recoverVaultLocked(config: ServerConfig, file: VaultFileState): Promise<LoadedVault> {
   const path = vaultPath(config);
-  const backupName = `${basename(path)}.openwork-backup-${backupTimestamp(new Date())}`;
+  const backupName = `${basename(path)}.sofia-backup-${backupTimestamp(new Date())}`;
   await rename(path, join(dirname(path), backupName));
   const vault = emptyVault();
   for (const [key, entry] of Object.entries(file.index ?? {})) {
@@ -684,7 +684,7 @@ async function enterpriseConnection(config: ServerConfig, workspaceId: string, n
 function enterpriseClient(diagnostics?: EnterpriseMcpDiagnosticEvent[]) {
   return createEnterpriseMcpClient({
     fetch: guardedFetch,
-    clientName: "OpenWork Local MCP Gateway",
+    clientName: "Sofia App Local MCP Gateway",
     clientVersion: "1.0.0",
     operationTimeoutMs: 45_000,
     ...(diagnostics ? { diagnosticSink: (event) => diagnostics.push(event) } : {}),
@@ -726,14 +726,14 @@ function runtimeConfig(config: ServerConfig, workspaceId: string, name: string, 
 }
 
 async function writeManagedRuntimeEntry(config: ServerConfig, workspaceId: string, name: string, enabled: boolean): Promise<void> {
-  await writeRuntimeOpencodeConfig(config, workspaceId, (current) => ({
+  await writeRuntimeWorkspaceEngineConfig(config, workspaceId, (current) => ({
     ...current,
     mcp: { ...runtimeMcpMap(current), [name]: runtimeConfig(config, workspaceId, name, enabled) },
   }));
 }
 
 async function removeManagedRuntimeEntry(config: ServerConfig, workspaceId: string, name: string): Promise<void> {
-  await writeRuntimeOpencodeConfig(config, workspaceId, (current) => {
+  await writeRuntimeWorkspaceEngineConfig(config, workspaceId, (current) => {
     const mcp = { ...runtimeMcpMap(current) };
     delete mcp[name];
     return { ...current, mcp };
@@ -760,7 +760,7 @@ export async function createLocalManagedMcpConnection(config: ServerConfig, inpu
   } catch (error) {
     if (!(error instanceof LocalManagedMcpPrivateUrlError)) throw error;
     const message = error.message.includes("managed MCP egress requires HTTPS")
-      ? `OpenWork-managed sign-in requires an HTTPS server URL. ${error.message}`
+      ? `Sofia-managed sign-in requires an HTTPS server URL. ${error.message}`
       : error.message;
     throw new ApiError(400, "managed_mcp_url_not_allowed", message);
   }
@@ -1237,7 +1237,7 @@ export async function handleLocalManagedMcpGateway(
   }
   const redirectUri = localManagedMcpCallbackUrl(config);
   const server = new Server(
-    { name: `openwork-local-${name}`, version: "1.0.0" },
+    { name: `sofia-local-${name}`, version: "1.0.0" },
     { capabilities: { tools: {} } },
   );
   server.setRequestHandler(ListToolsRequestSchema, async () => {
@@ -1249,7 +1249,7 @@ export async function handleLocalManagedMcpGateway(
       throw new McpError(
         ErrorCode.InternalError,
         reconnect
-          ? "This MCP connection needs to be reconnected in OpenWork."
+          ? "This MCP connection needs to be reconnected in Sofia App."
           : "This MCP tool catalog could not be loaded. Retry the request.",
       );
     }
@@ -1269,7 +1269,7 @@ export async function handleLocalManagedMcpGateway(
       throw new McpError(
         ErrorCode.InternalError,
         reconnect
-          ? "This MCP tool could not run. Reconnect it in OpenWork and retry."
+          ? "This MCP tool could not run. Reconnect it in Sofia App and retry."
           : "This MCP tool could not run. Review the tool input or provider response and retry.",
       );
     }

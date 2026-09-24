@@ -206,7 +206,7 @@ async function readSandboxes({ apiUrl, apiKey, fetchImpl }) {
 
 export async function pruneDaytonaDevSnapshots({
   apiUrl = DEFAULT_API_URL,
-  nameBase = "openwork",
+  nameBase = "sofia",
   keepNames,
   keepCount = 5,
   dryRun = false,
@@ -287,7 +287,7 @@ Usage:
 
 Options:
   --api-url <url>       Daytona API base URL (default: https://app.daytona.io/api).
-  --name-base <base>    Snapshot name base (default: openwork).
+  --name-base <base>    Snapshot name base (default: sofia).
   --keep <name>         Snapshot name to protect; may be repeated.
   --keep-count <n>      Protect the newest n dev snapshots (default: 5).
   --dry-run             Fetch and report without deleting snapshots.
@@ -299,7 +299,7 @@ Environment:
 export function parseArgs(args) {
   const options = {
     apiUrl: DEFAULT_API_URL,
-    nameBase: "openwork",
+    nameBase: "sofia",
     keepNames: [],
     keepCount: 5,
     dryRun: false,

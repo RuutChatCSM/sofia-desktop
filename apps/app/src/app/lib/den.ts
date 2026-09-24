@@ -1,11 +1,11 @@
 import {
   normalizeDesktopConfig,
   type DesktopConfig as SharedDesktopConfig,
-} from "@openwork/types/den/desktop-policies";
+} from "@sofia/types/den/desktop-policies";
 import {
   AUTOMATION_MODEL_ATTENTION_CAPABILITY,
   AUTOMATION_MODEL_ATTENTION_CAPABILITY_HEADER,
-} from "@openwork/types/automations";
+} from "@sofia/types/automations";
 import type {
   AutomationDetail,
   AutomationDesktopRunnerPresence,
@@ -16,7 +16,7 @@ import type {
   AutomationRunnerTokenResponse,
   CreateAutomation,
   UpdateAutomation,
-} from "@openwork/types/automations";
+} from "@sofia/types/automations";
 
 // Re-export the shared schema under the local alias so React consumers
 // (e.g. the cloud domain's desktop-config provider) can import it alongside
@@ -25,7 +25,7 @@ import type {
 export type { SharedDesktopConfig };
 export { normalizeDesktopConfig };
 
-import { isDesktopDeployment, isWebDeployment } from "./openwork-deployment";
+import { isDesktopDeployment, isWebDeployment } from "./sofia-deployment";
 import {
   dispatchDenSessionUpdated,
   dispatchDenSettingsChanged,
@@ -38,45 +38,45 @@ import {
   setDesktopBootstrapConfig as setDesktopBootstrapConfigInShell,
   type DesktopBootstrapConfig as ShellDesktopBootstrapConfig,
 } from "./desktop";
-import { getOpenworkGatewayOrigin } from "./gateway-runtime";
+import { getSofiaGatewayOrigin } from "./gateway-runtime";
 import { clearDesktopSignInIntent, clearOrgSelectionPending } from "./den-sign-in-intent";
 import { isDesktopRuntime } from "./runtime-env";
 import type { ReloadReason } from "../types";
 import type {
-  OpenWorkExtensionContribution,
-  OpenWorkExtensionContributionType,
-  OpenWorkExtensionLifecycle,
-  OpenWorkExtensionManifest,
-  OpenWorkExtensionResource,
-  OpenWorkExtensionResourceType,
-  OpenWorkExtensionSetup,
-  OpenWorkExtensionSource,
-  OpenWorkExtensionSourceFormat,
+  SofiaExtensionContribution,
+  SofiaExtensionContributionType,
+  SofiaExtensionLifecycle,
+  SofiaExtensionManifest,
+  SofiaExtensionResource,
+  SofiaExtensionResourceType,
+  SofiaExtensionSetup,
+  SofiaExtensionSource,
+  SofiaExtensionSourceFormat,
 } from "../extensions";
 
 declare global {
   interface Window {
-    __openworkOrgDropWarnings?: string[];
+    __sofiaOrgDropWarnings?: string[];
   }
 }
 
-export const STORAGE_BASE_URL = "openwork.den.baseUrl";
-const LEGACY_STORAGE_API_BASE_URL = "openwork.den.apiBaseUrl";
-const STORAGE_AUTH_TOKEN = "openwork.den.authToken";
-const STORAGE_ACTIVE_ORG_ID = "openwork.den.activeOrgId";
-const STORAGE_ACTIVE_ORG_SLUG = "openwork.den.activeOrgSlug";
-const STORAGE_ACTIVE_ORG_NAME = "openwork.den.activeOrgName";
-const DESKTOP_CONFIG_CACHE_PREFIX = "openwork.den.desktopConfig:";
-export const CLOUD_MCP_SYNC_MARKER_STORAGE_KEY = "openwork.den.mcp.sync";
-const ORG_PROXY_HEADER = "x-openwork-legacy-org-id";
-const ORG_SCOPE_HEADER = "x-openwork-org-id";
+export const STORAGE_BASE_URL = "sofia.den.baseUrl";
+const LEGACY_STORAGE_API_BASE_URL = "sofia.den.apiBaseUrl";
+const STORAGE_AUTH_TOKEN = "sofia.den.authToken";
+const STORAGE_ACTIVE_ORG_ID = "sofia.den.activeOrgId";
+const STORAGE_ACTIVE_ORG_SLUG = "sofia.den.activeOrgSlug";
+const STORAGE_ACTIVE_ORG_NAME = "sofia.den.activeOrgName";
+const DESKTOP_CONFIG_CACHE_PREFIX = "sofia.den.desktopConfig:";
+export const CLOUD_MCP_SYNC_MARKER_STORAGE_KEY = "sofia.den.mcp.sync";
+const ORG_PROXY_HEADER = "x-sofia-legacy-org-id";
+const ORG_SCOPE_HEADER = "x-sofia-org-id";
 const DEFAULT_DEN_TIMEOUT_MS = 12_000;
 
 export const DEFAULT_DEN_AUTH_NAME = "Sofia App User";
 const BUILD_DEN_BASE_URL =
   (typeof import.meta !== "undefined" && typeof import.meta.env?.VITE_DEN_BASE_URL === "string"
     ? import.meta.env.VITE_DEN_BASE_URL
-    : "").trim() || "https://app.openworklabs.com";
+    : "").trim() || "https://sofia-app.ruut.chat";
 const BUILD_DEN_REQUIRE_SIGNIN =
   (typeof import.meta !== "undefined" && typeof import.meta.env?.VITE_DEN_REQUIRE_SIGNIN === "string"
     ? /^(1|true|yes|on)$/i.test(import.meta.env.VITE_DEN_REQUIRE_SIGNIN.trim())
@@ -95,12 +95,12 @@ function readBuildDenApiBaseUrl(): string {
 }
 
 function readForceEnvDenSettings(): boolean {
-  return (typeof import.meta !== "undefined" && typeof import.meta.env?.VITE_OPENWORK_FORCE_ENV_SETTINGS === "string"
-    ? /^(1|true|yes|on)$/i.test(import.meta.env.VITE_OPENWORK_FORCE_ENV_SETTINGS.trim())
+  return (typeof import.meta !== "undefined" && typeof import.meta.env?.VITE_SOFIA_FORCE_ENV_SETTINGS === "string"
+    ? /^(1|true|yes|on)$/i.test(import.meta.env.VITE_SOFIA_FORCE_ENV_SETTINGS.trim())
     : false);
 }
 
-export const HOSTED_DEFAULT_DEN_BASE_URL = "https://app.openworklabs.com";
+export const HOSTED_DEFAULT_DEN_BASE_URL = "https://sofia-app.ruut.chat";
 export const DEFAULT_DEN_BASE_URL = BUILD_DEN_BASE_URL;
 export const DEN_INFERENCE_PATH = "/dashboard/inference";
 
@@ -258,7 +258,7 @@ export type DenWorkerTokens = {
   clientToken: string | null;
   ownerToken: string | null;
   hostToken: string | null;
-  openworkUrl: string | null;
+  sofiaUrl: string | null;
   workspaceId: string | null;
 };
 
@@ -312,7 +312,7 @@ export type DenOrgLlmProviderModel = {
 
 export type DenOrgLlmProvider = {
   id: string;
-  source: "models_dev" | "custom" | "openwork";
+  source: "models_dev" | "custom" | "sofia";
   providerId: string;
   name: string;
   providerConfig: Record<string, unknown>;
@@ -643,7 +643,7 @@ export function denOriginComparisonKey(input: string | null | undefined): string
 
 /**
  * True when the effective Den control plane is not the hosted Organization cloud
- * (app.openworklabs.com). Self-hosted deployments point the app at their own
+ * (sofia-app.ruut.chat). Self-hosted deployments point the app at their own
  * control plane via VITE_DEN_BASE_URL or the desktop bootstrap config, so
  * hosted-only surfaces (e.g. Hosted models upsells) should stay hidden.
  */
@@ -660,7 +660,10 @@ export function getDenInferenceUrl(baseUrl?: string | null): string {
 }
 
 function isHostedWebAppHost(hostname: string): boolean {
-  return hostname.trim().toLowerCase().startsWith("app.");
+  const host = hostname.trim().toLowerCase();
+  // The hosted web app answers on `app.<apex>` and on the Sofia-branded
+  // `sofia-app.<apex>`; nothing else is a bare web-app MCP origin.
+  return host.startsWith("app.") || host.startsWith("sofia-app.");
 }
 
 function stripDenApiBasePath(input: string | null | undefined): string | null {
@@ -704,7 +707,7 @@ export function resolveDenBaseUrls(input: { baseUrl?: string | null; apiBaseUrl?
   const rawBaseUrl = typeof input === "string" ? input : input?.baseUrl;
   const normalizedBaseUrl = normalizeDenBaseUrl(rawBaseUrl);
   const normalizedApiBaseUrl = typeof input === "string" ? null : normalizeDenBaseUrl(input?.apiBaseUrl);
-  const gatewayOrigin = getOpenworkGatewayOrigin();
+  const gatewayOrigin = getSofiaGatewayOrigin();
 
   if (gatewayOrigin) {
     const normalizedGatewayOrigin = normalizeDenBaseUrl(gatewayOrigin) ?? gatewayOrigin;
@@ -745,7 +748,7 @@ export function getDenMcpUrl(): string {
 
 /**
  * Detects MCP URLs written by older builds that pointed `/mcp` at the bare
- * web-app origin (e.g. `https://app.openworklabs.com/mcp`). Nothing serves
+ * web-app origin (e.g. `https://sofia-app.ruut.chat/mcp`). Nothing serves
  * MCP there — those entries fail with a 404 and must be reconfigured.
  */
 export function isLegacyWebAppMcpUrl(input: string | null | undefined): boolean {
@@ -761,7 +764,7 @@ export function isLegacyWebAppMcpUrl(input: string | null | undefined): boolean 
 /**
  * Resolve the URL the cloud MCP entry should connect to from a minted
  * token's `resource`. Older den-api builds mint the bare web-app origin
- * (`https://app.openworklabs.com/mcp`) where nothing serves MCP — heal
+ * (`https://sofia-app.ruut.chat/mcp`) where nothing serves MCP — heal
  * those to the `/api/den` proxy on the same origin instead of trusting
  * them verbatim. Returns null when the resource is unusable so callers
  * can keep their bootstrap-derived URL.
@@ -841,7 +844,7 @@ function applyDesktopBootstrapConfig(config: DenBootstrapConfig) {
 }
 
 export function readDenBootstrapConfig(): DenBootstrapConfig {
-  const gatewayOrigin = getOpenworkGatewayOrigin();
+  const gatewayOrigin = getSofiaGatewayOrigin();
   if (gatewayOrigin) {
     if (
       gatewayBootstrapConfig &&
@@ -868,7 +871,7 @@ export function readDenBootstrapConfig(): DenBootstrapConfig {
 
 export async function initializeDenBootstrapConfig(): Promise<DenBootstrapConfig> {
   if (!isDesktopRuntime()) {
-    const gatewayOrigin = getOpenworkGatewayOrigin();
+    const gatewayOrigin = getSofiaGatewayOrigin();
     // Forced env settings (headless/dev runs): stale stored base URLs from
     // earlier sessions must not override the launcher-provided control plane.
     if (readForceEnvDenSettings() && typeof window !== "undefined") {
@@ -1033,9 +1036,9 @@ export function buildDenAuthUrl(baseUrl: string, mode: "sign-in" | "sign-up"): s
     || (webReturnOrigin !== null && !canUseCloudWebAuthReturn(webReturnOrigin))
   ) {
     // Desktop app, or local/dev web that cannot receive an approved webAuth
-    // redirect: Den shows the copyable openwork:// / grant handoff instead.
+    // redirect: Den shows the copyable sofia:// / grant handoff instead.
     target.searchParams.set("desktopAuth", "1");
-    target.searchParams.set("desktopScheme", "openwork");
+    target.searchParams.set("desktopScheme", "sofia");
   } else if (webReturnOrigin !== null) {
     target.searchParams.set("webAuth", "1");
     target.searchParams.set("webAuthReturn", webReturnOrigin);
@@ -1060,7 +1063,7 @@ export function readDenSettings(): DenSettings {
 
   const bootstrapConfig = readDenBootstrapConfig();
   const baseUrls = resolveDenBaseUrls(
-    isDesktopRuntime() || getOpenworkGatewayOrigin()
+    isDesktopRuntime() || getSofiaGatewayOrigin()
       ? bootstrapConfig
       : { baseUrl: window.localStorage.getItem(STORAGE_BASE_URL) ?? bootstrapConfig.baseUrl },
   );
@@ -1166,8 +1169,8 @@ function warnOnUnexpectedActiveOrgDrop(input: {
   const message = `[den-settings] activeOrgId dropped unexpectedly from ${previousActiveOrgId}`;
   const stack = new Error(message).stack ?? message;
   try {
-    window.__openworkOrgDropWarnings ??= [];
-    window.__openworkOrgDropWarnings.push(stack);
+    window.__sofiaOrgDropWarnings ??= [];
+    window.__sofiaOrgDropWarnings.push(stack);
     console.warn(stack);
   } catch {
     // Diagnostics must never block the settings write they observe.
@@ -1530,7 +1533,7 @@ function getWorkerTokens(payload: unknown): DenWorkerTokens | null {
     clientToken: typeof tokens.client === "string" ? tokens.client : null,
     ownerToken: typeof tokens.owner === "string" ? tokens.owner : null,
     hostToken: typeof tokens.host === "string" ? tokens.host : null,
-    openworkUrl: connect && typeof connect.openworkUrl === "string" ? connect.openworkUrl : null,
+    sofiaUrl: connect && typeof connect.sofiaUrl === "string" ? connect.sofiaUrl : null,
     workspaceId: connect && typeof connect.workspaceId === "string" ? connect.workspaceId : null,
   };
 }
@@ -1625,7 +1628,7 @@ function parseDenOrgLlmProvider(value: unknown): DenOrgLlmProvider | null {
     typeof value.name !== "string" ||
     (value.source !== "models_dev" &&
       value.source !== "custom" &&
-      value.source !== "openwork")
+      value.source !== "sofia")
   ) {
     return null;
   }
@@ -1784,12 +1787,12 @@ function parsePluginConfigObject(value: unknown): DenPluginConfigObject | null {
   };
 }
 
-function parseExtensionSourceFormat(value: unknown): OpenWorkExtensionSourceFormat | null {
+function parseExtensionSourceFormat(value: unknown): SofiaExtensionSourceFormat | null {
   switch (value) {
-    case "openwork-builtin":
-    case "openwork-extension-manifest":
+    case "sofia-builtin":
+    case "sofia-extension-manifest":
     case "claude-plugin":
-    case "opencode-plugin":
+    case "engine-plugin":
     case "mcp-directory":
     case "manual":
       return value;
@@ -1798,7 +1801,7 @@ function parseExtensionSourceFormat(value: unknown): OpenWorkExtensionSourceForm
   }
 }
 
-function parseExtensionSourceOrigin(value: unknown): OpenWorkExtensionSource["origin"] | undefined {
+function parseExtensionSourceOrigin(value: unknown): SofiaExtensionSource["origin"] | undefined {
   switch (value) {
     case "builtin":
     case "den":
@@ -1810,7 +1813,7 @@ function parseExtensionSourceOrigin(value: unknown): OpenWorkExtensionSource["or
   }
 }
 
-function parseExtensionSource(value: unknown): OpenWorkExtensionSource | null {
+function parseExtensionSource(value: unknown): SofiaExtensionSource | null {
   if (!isRecord(value) || typeof value.trusted !== "boolean") return null;
   const format = parseExtensionSourceFormat(value.format);
   if (!format) return null;
@@ -1828,14 +1831,14 @@ function parseStringList(value: unknown): string[] | undefined {
   return value;
 }
 
-function parseExtensionResourceType(value: unknown): OpenWorkExtensionResourceType | null {
+function parseExtensionResourceType(value: unknown): SofiaExtensionResourceType | null {
   switch (value) {
     case "skill":
     case "agent":
     case "command":
     case "tool":
     case "mcp":
-    case "opencode-plugin":
+    case "engine-plugin":
     case "provider":
     case "hook":
     case "context":
@@ -1849,17 +1852,17 @@ function parseExtensionResourceType(value: unknown): OpenWorkExtensionResourceTy
   }
 }
 
-function parseExtensionLocalCommandRef(value: unknown): OpenWorkExtensionResource["localCommandRef"] | undefined {
+function parseExtensionLocalCommandRef(value: unknown): SofiaExtensionResource["localCommandRef"] | undefined {
   switch (value) {
-    case "openwork.computerUseMcp":
-    case "openwork.uiMcp":
+    case "sofia.computerUseMcp":
+    case "sofia.uiMcp":
       return value;
     default:
       return undefined;
   }
 }
 
-function parseExtensionResource(value: unknown): OpenWorkExtensionResource | null {
+function parseExtensionResource(value: unknown): SofiaExtensionResource | null {
   if (!isRecord(value) || typeof value.id !== "string") return null;
   const type = parseExtensionResourceType(value.type);
   if (!type) return null;
@@ -1881,7 +1884,7 @@ function parseExtensionResource(value: unknown): OpenWorkExtensionResource | nul
   };
 }
 
-function parseExtensionContributionType(value: unknown): OpenWorkExtensionContributionType | null {
+function parseExtensionContributionType(value: unknown): SofiaExtensionContributionType | null {
   switch (value) {
     case "settings-panel":
     case "setup-instructions":
@@ -1898,7 +1901,7 @@ function parseExtensionContributionType(value: unknown): OpenWorkExtensionContri
   }
 }
 
-function parseExtensionContributionLocation(value: unknown): OpenWorkExtensionContribution["location"] | undefined {
+function parseExtensionContributionLocation(value: unknown): SofiaExtensionContribution["location"] | undefined {
   switch (value) {
     case "settings-detail":
     case "composer":
@@ -1912,7 +1915,7 @@ function parseExtensionContributionLocation(value: unknown): OpenWorkExtensionCo
   }
 }
 
-function parseExtensionContribution(value: unknown): OpenWorkExtensionContribution | null {
+function parseExtensionContribution(value: unknown): SofiaExtensionContribution | null {
   if (!isRecord(value)) return null;
   const type = parseExtensionContributionType(value.type);
   if (!type) return null;
@@ -1927,7 +1930,7 @@ function parseExtensionContribution(value: unknown): OpenWorkExtensionContributi
   };
 }
 
-function parseExtensionSetup(value: unknown): OpenWorkExtensionSetup | undefined {
+function parseExtensionSetup(value: unknown): SofiaExtensionSetup | undefined {
   if (!isRecord(value)) return undefined;
   const requiredEnv = parseStringList(value.requiredEnv);
   return {
@@ -1962,7 +1965,7 @@ function parseReloadReasons(value: unknown): ReloadReason[] | undefined {
   return reasons.length === value.length ? reasons : undefined;
 }
 
-function parseExtensionLifecycle(value: unknown): OpenWorkExtensionLifecycle | undefined {
+function parseExtensionLifecycle(value: unknown): SofiaExtensionLifecycle | undefined {
   if (!isRecord(value)) return undefined;
   const reload = parseReloadReasons(value.reload);
   const detection = parseStringList(value.detection);
@@ -1972,7 +1975,7 @@ function parseExtensionLifecycle(value: unknown): OpenWorkExtensionLifecycle | u
   };
 }
 
-function parseExtensionPlatform(value: unknown): OpenWorkExtensionManifest["platform"] | undefined {
+function parseExtensionPlatform(value: unknown): SofiaExtensionManifest["platform"] | undefined {
   if (!Array.isArray(value)) return undefined;
   const platforms = value.flatMap((item) => {
     switch (item) {
@@ -1988,7 +1991,7 @@ function parseExtensionPlatform(value: unknown): OpenWorkExtensionManifest["plat
   return platforms.length === value.length ? platforms : undefined;
 }
 
-function parseOpenWorkExtensionManifest(value: unknown): OpenWorkExtensionManifest | null {
+function parseSofiaExtensionManifest(value: unknown): SofiaExtensionManifest | null {
   if (
     !isRecord(value) ||
     value.schemaVersion !== 1 ||
@@ -2049,7 +2052,7 @@ function parseDenExtensionProjection(value: unknown): DenOrgExtensionProjection 
     name: value.name,
     description: typeof value.description === "string" ? value.description : null,
     sourceFormat,
-    manifest: parseOpenWorkExtensionManifest(value.manifest),
+    manifest: parseSofiaExtensionManifest(value.manifest),
   };
 }
 

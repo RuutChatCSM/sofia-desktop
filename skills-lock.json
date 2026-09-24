@@ -10,91 +10,91 @@
     "arxiv": {
       "source": "mimocode-builtin/0.1.13",
       "sourceType": "local",
-      "skillPath": ".opencode/skills/arxiv/SKILL.md",
+      "skillPath": ".sofia/skills/arxiv/SKILL.md",
       "computedHash": "bde7b90998e9e5d0c6e1111b17eae4b9093810e957a415b97677c092393d4aba"
     },
     "deep-research": {
       "source": "mimocode-builtin/0.1.13",
       "sourceType": "local",
-      "skillPath": ".opencode/skills/deep-research/SKILL.md",
+      "skillPath": ".sofia/skills/deep-research/SKILL.md",
       "computedHash": "44c8232b1a50f7fe90de990e32e093a0c69e6391479c4f6db660af798242e9af"
     },
     "design-blueprint": {
       "source": "mimocode-builtin/0.1.13",
       "sourceType": "local",
-      "skillPath": ".opencode/skills/design-blueprint/SKILL.md",
+      "skillPath": ".sofia/skills/design-blueprint/SKILL.md",
       "computedHash": "2152c5f1877f9f528edca28a7ecf65c07022cdfc2a7966abbf530038bd3c3bd6"
     },
     "docx-official": {
       "source": "mimocode-builtin/0.1.13",
       "sourceType": "local",
-      "skillPath": ".opencode/skills/docx-official/SKILL.md",
+      "skillPath": ".sofia/skills/docx-official/SKILL.md",
       "computedHash": "5648d5d0b5051ee34c64e1feb379888cd1f23e38d2b2a84dfe296759c03c4e7e"
     },
     "frontend-design": {
       "source": "mimocode-builtin/0.1.13",
       "sourceType": "local",
-      "skillPath": ".opencode/skills/frontend-design/SKILL.md",
+      "skillPath": ".sofia/skills/frontend-design/SKILL.md",
       "computedHash": "13cad11ddda6a9e83579533d7a732f205850c0b114ca7f3270f3937360ed7df5"
     },
     "html-to-video-pipeline": {
       "source": "mimocode-builtin/0.1.13",
       "sourceType": "local",
-      "skillPath": ".opencode/skills/html-to-video-pipeline/SKILL.md",
+      "skillPath": ".sofia/skills/html-to-video-pipeline/SKILL.md",
       "computedHash": "6cfda4254ca66ea59de9cf5de5722a1f0a4859d3b359d1195522e199c8ac60e0"
     },
     "learn-everything": {
       "source": "mimocode-builtin/0.1.13",
       "sourceType": "local",
-      "skillPath": ".opencode/skills/learn-everything/SKILL.md",
+      "skillPath": ".sofia/skills/learn-everything/SKILL.md",
       "computedHash": "1ed71d09ac18773bd2877cf8c947960c3f80e52e50b087fd52706fe7b061fbaf"
     },
     "modern-python-toolchain": {
       "source": "mimocode-builtin/0.1.13",
       "sourceType": "local",
-      "skillPath": ".opencode/skills/modern-python-toolchain/SKILL.md",
+      "skillPath": ".sofia/skills/modern-python-toolchain/SKILL.md",
       "computedHash": "3089662203562f16ffa5e4c05f2ff6acd6917921627b9b4715ba1a3d6eaf635b"
     },
     "pdf-official": {
       "source": "mimocode-builtin/0.1.13",
       "sourceType": "local",
-      "skillPath": ".opencode/skills/pdf-official/SKILL.md",
+      "skillPath": ".sofia/skills/pdf-official/SKILL.md",
       "computedHash": "8e110850aa5f5aa92b443072236595322fa82e0c49265f336a0030815232ce07"
     },
     "playwright": {
       "source": "mimocode-builtin/0.1.13",
       "sourceType": "local",
-      "skillPath": ".opencode/skills/playwright/SKILL.md",
+      "skillPath": ".sofia/skills/playwright/SKILL.md",
       "computedHash": "0ffaabcc8e0990627c4725f18bf1c7955534a796c1c199e872909de2013ce6a8"
     },
     "pptx-official": {
       "source": "mimocode-builtin/0.1.13",
       "sourceType": "local",
-      "skillPath": ".opencode/skills/pptx-official/SKILL.md",
+      "skillPath": ".sofia/skills/pptx-official/SKILL.md",
       "computedHash": "c241713af649b963aaf674829dca4f46099681c7e6c97d2ed4d19549281d6487"
     },
     "research-paper-writing": {
       "source": "mimocode-builtin/0.1.13",
       "sourceType": "local",
-      "skillPath": ".opencode/skills/research-paper-writing/SKILL.md",
+      "skillPath": ".sofia/skills/research-paper-writing/SKILL.md",
       "computedHash": "296435acea1fc90ee5c26ace8f30896335000e05163d726d09e7fa0140351341"
     },
     "skill-creator": {
       "source": "mimocode-builtin/0.1.13",
       "sourceType": "local",
-      "skillPath": ".opencode/skills/skill-creator/SKILL.md",
+      "skillPath": ".sofia/skills/skill-creator/SKILL.md",
       "computedHash": "bd02bef15987b1338f3605ebf66daf311b9c992ed8bebca4720a25b6ffd2dd63"
     },
     "super-research": {
       "source": "mimocode-builtin/0.1.13",
       "sourceType": "local",
-      "skillPath": ".opencode/skills/super-research/SKILL.md",
+      "skillPath": ".sofia/skills/super-research/SKILL.md",
       "computedHash": "828ed6ec0fddf87eaaa29ae0e68b7f77560ac01df246f740f1f1900f23ec9e8b"
     },
     "xlsx-official": {
       "source": "mimocode-builtin/0.1.13",
       "sourceType": "local",
-      "skillPath": ".opencode/skills/xlsx-official/SKILL.md",
+      "skillPath": ".sofia/skills/xlsx-official/SKILL.md",
       "computedHash": "7c5c117d342edcf36a9bac02909a6c6f2b082db9390201c8d2931a235b303cbb"
     }
   }

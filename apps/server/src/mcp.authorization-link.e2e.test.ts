@@ -4,7 +4,7 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-import { buildOpenworkRuntimeConfigObjectFromSnapshot } from "./openwork-runtime-config.js";
+import { buildSofiaRuntimeConfigObjectFromSnapshot } from "./sofia-runtime-config.js";
 
 const repoRoot = resolve(import.meta.dir, "../../..");
 const sidecarDir = join(repoRoot, "apps/desktop/resources/sidecars");
@@ -12,13 +12,13 @@ const connectUrl = "https://connect.example.test/salesforce/start";
 const toolName = "request_salesforce_authorization";
 
 function findEngine(): string | null {
-  const explicit = process.env.OPENWORK_TEST_OPENCODE_PATH;
+  const explicit = process.env.SOFIA_TEST_SOFIA_ENGINE_PATH;
   if (explicit && existsSync(explicit)) return explicit;
   const arch = process.arch === "arm64" ? "aarch64" : "x86_64";
   const name = process.platform === "darwin"
-    ? `opencode-${arch}-apple-darwin`
+    ? `engine-${arch}-apple-darwin`
     : process.platform === "linux"
-      ? `opencode-${arch}-unknown-linux-gnu`
+      ? `engine-${arch}-unknown-linux-gnu`
       : "";
   const candidate = join(sidecarDir, name);
   return name && existsSync(candidate) ? candidate : null;
@@ -142,13 +142,13 @@ describeMaybe("authorization-required MCP tool error pass-through", () => {
       },
     });
 
-    const runtime = buildOpenworkRuntimeConfigObjectFromSnapshot({});
-    const configPath = join(workspace, "opencode.json");
+    const runtime = buildSofiaRuntimeConfigObjectFromSnapshot({});
+    const configPath = join(workspace, "engine.json");
     writeFileSync(configPath, JSON.stringify({
-      $schema: "https://opencode.ai/config.json",
+      $schema: "https://github.com/RuutChatCSM/sofia/config.json",
       formatter: false,
       lsp: false,
-      default_agent: "openwork",
+      default_agent: "sofia",
       agent: runtime.agent,
       model: "test/test-model",
       provider: {
@@ -200,8 +200,8 @@ describeMaybe("authorization-required MCP tool error pass-through", () => {
     engine = spawn(enginePath!, ["serve", "--pure", "--hostname", "127.0.0.1", "--port", String(enginePort)], {
       env: {
         ...process.env,
-        OPENCODE_CONFIG: configPath,
-        OPENCODE_DISABLE_AUTOUPDATE: "1",
+        SOFIA_ENGINE_CONFIG: configPath,
+        SOFIA_ENGINE_DISABLE_AUTOUPDATE: "1",
         XDG_DATA_HOME: join(dataDir, "data"),
         XDG_CONFIG_HOME: join(dataDir, "config"),
         XDG_STATE_HOME: join(dataDir, "state"),
@@ -215,7 +215,7 @@ describeMaybe("authorization-required MCP tool error pass-through", () => {
     engine.stderr?.on("data", (chunk) => {
       engineLogs = `${engineLogs}${String(chunk)}`.slice(-8_000);
     });
-    await waitFor(async () => (await engineFetch("/mcp")).ok ? true : null, "OpenCode engine");
+    await waitFor(async () => (await engineFetch("/mcp")).ok ? true : null, "Sofia engine");
     await waitFor(async () => {
       const statuses = await (await engineFetch("/mcp")).json() as Record<string, { status?: string }>;
       return statuses["mock-authorization"]?.status === "connected" ? true : null;
@@ -243,7 +243,7 @@ describeMaybe("authorization-required MCP tool error pass-through", () => {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        agent: "openwork",
+        agent: "sofia",
         model: { providerID: "test", modelID: "test-model" },
         parts: [{ type: "text", text: "Use Salesforce to find the account." }],
       }),

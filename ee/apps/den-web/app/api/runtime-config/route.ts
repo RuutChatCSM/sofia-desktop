@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { joinBaseUrl, readBaseUrlEnv } from "@openwork/types/url";
-import { DEFAULT_OPENWORK_WEB_URL } from "../../(den)/_lib/runtime-config";
+import { joinBaseUrl, readBaseUrlEnv } from "@sofia/types/url";
+import { DEFAULT_SOFIA_WEB_URL } from "../../(den)/_lib/runtime-config";
 
 export const dynamic = "force-dynamic";
 
@@ -69,11 +69,11 @@ export async function GET() {
 
   return NextResponse.json(
     {
-      openworkAppConnectUrl: readPublicRuntimeEnv("DEN_WEB_OPENWORK_APP_CONNECT_URL"),
-      openworkWebUrl: readPublicRuntimeEnv("DEN_WEB_OPENWORK_WEB_URL") || DEFAULT_OPENWORK_WEB_URL,
-      openworkAuthCallbackUrl: readPublicRuntimeEnv("DEN_WEB_OPENWORK_AUTH_CALLBACK_URL"),
+      sofiaAppConnectUrl: readPublicRuntimeEnv("DEN_WEB_SOFIA_APP_CONNECT_URL"),
+      sofiaWebUrl: readPublicRuntimeEnv("DEN_WEB_SOFIA_WEB_URL") || DEFAULT_SOFIA_WEB_URL,
+      sofiaAuthCallbackUrl: readPublicRuntimeEnv("DEN_WEB_SOFIA_AUTH_CALLBACK_URL"),
       orgMode,
-      singleOrgName: readPublicRuntimeEnv("DEN_SINGLE_ORG_NAME") || "OpenWork",
+      singleOrgName: readPublicRuntimeEnv("DEN_SINGLE_ORG_NAME") || "Sofia",
       singleOrgSlug: readPublicRuntimeEnv("DEN_SINGLE_ORG_SLUG") || "default",
       singleOrgAllowPublicSignup: readBooleanEnv("DEN_SINGLE_ORG_ALLOW_PUBLIC_SIGNUP", orgMode === "multi_org"),
       singleOrgSsoConfigured

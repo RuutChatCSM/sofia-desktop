@@ -6,7 +6,7 @@
  *
  * Requires an installed workspace skill so the Skills filter has content.
  * Seed one before running, e.g.
- *   mkdir -p <workspace>/.opencode/skills/release-notes-draft && write SKILL.md
+ *   mkdir -p <workspace>/.sofia/skills/release-notes-draft && write SKILL.md
  */
 
 const SKILL_TITLE = "release-notes-draft";
@@ -19,9 +19,9 @@ export default {
     {
       name: "App boots and the control API is ready",
       run: async (ctx) => {
-        await ctx.waitFor("Boolean(window.__openworkControl)", {
+        await ctx.waitFor("Boolean(window.__sofiaControl)", {
           timeoutMs: 60_000,
-          label: "window.__openworkControl",
+          label: "window.__sofiaControl",
         });
         await ctx.waitFor("document.body.innerText.trim().length > 40", {
           label: "rendered body text",
@@ -44,7 +44,7 @@ export default {
           assert: async () => {
             await ctx.expectText(SKILL_TITLE);
             await ctx.expectNoText("GitHub-backed hubs");
-            await ctx.expectNoText("openwork-hub");
+            await ctx.expectNoText("sofia-hub");
             await ctx.expectNoText("Skill hub");
             const filters = await ctx.eval(`(() => {
               const labels = Array.from(document.querySelectorAll("button"))
@@ -60,7 +60,7 @@ export default {
           screenshot: {
             name: "extensions-skills-no-hub",
             requireText: ["Skills", SKILL_TITLE],
-            rejectText: ["GitHub-backed hubs", "openwork-hub", "Skill hub"],
+            rejectText: ["GitHub-backed hubs", "sofia-hub", "Skill hub"],
           },
         });
       },

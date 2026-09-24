@@ -8,28 +8,28 @@ importers:
 
   .:
     dependencies:
-      '@openwork/behaviors':
+      '@sofia/behaviors':
         specifier: workspace:*
         version: link:packages/behaviors
-      '@openwork/cdp':
+      '@sofia/cdp':
         specifier: workspace:*
         version: link:packages/cdp
-      '@openwork/hosts':
+      '@sofia/hosts':
         specifier: workspace:*
         version: link:packages/hosts
-      '@openwork/labs':
+      '@sofia/labs':
         specifier: workspace:*
         version: link:packages/labs
-      '@openwork/matchers':
+      '@sofia/matchers':
         specifier: workspace:*
         version: link:packages/matchers
-      '@openwork/test-artifacts':
+      '@sofia/test-artifacts':
         specifier: workspace:*
         version: link:packages/test-artifacts
-      '@openwork/test-evidence':
+      '@sofia/test-evidence':
         specifier: workspace:*
         version: link:packages/test-evidence
-      '@openwork/testkit':
+      '@sofia/testkit':
         specifier: workspace:*
         version: link:packages/testkit
     devDependencies:
@@ -39,16 +39,16 @@ importers:
 
   packages/behaviors:
     dependencies:
-      '@openwork/cdp':
+      '@sofia/cdp':
         specifier: workspace:*
         version: link:../cdp
-      '@openwork/labs':
+      '@sofia/labs':
         specifier: workspace:*
         version: link:../labs
-      '@openwork/matchers':
+      '@sofia/matchers':
         specifier: workspace:*
         version: link:../matchers
-      '@openwork/timeline':
+      '@sofia/timeline':
         specifier: workspace:*
         version: link:../timeline
 
@@ -56,10 +56,10 @@ importers:
 
   packages/hosts:
     dependencies:
-      '@openwork/cdp':
+      '@sofia/cdp':
         specifier: workspace:*
         version: link:../cdp
-      '@openwork/timeline':
+      '@sofia/timeline':
         specifier: workspace:*
         version: link:../timeline
 
@@ -71,28 +71,28 @@ importers:
 
   packages/test-evidence:
     dependencies:
-      '@openwork/cdp':
+      '@sofia/cdp':
         specifier: workspace:*
         version: link:../cdp
-      '@openwork/timeline':
+      '@sofia/timeline':
         specifier: workspace:*
         version: link:../timeline
 
   packages/testkit:
     dependencies:
-      '@openwork/behaviors':
+      '@sofia/behaviors':
         specifier: workspace:*
         version: link:../behaviors
-      '@openwork/cdp':
+      '@sofia/cdp':
         specifier: workspace:*
         version: link:../cdp
-      '@openwork/hosts':
+      '@sofia/hosts':
         specifier: workspace:*
         version: link:../hosts
-      '@openwork/labs':
+      '@sofia/labs':
         specifier: workspace:*
         version: link:../labs
-      '@openwork/test-evidence':
+      '@sofia/test-evidence':
         specifier: workspace:*
         version: link:../test-evidence
       mysql2:

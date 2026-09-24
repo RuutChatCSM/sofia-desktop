@@ -1,6 +1,6 @@
 /** @jsxImportSource react */
 import { useEffect, useMemo, useRef, useState } from "react"
-import { AUTOMATION_FREE_MODEL, type AutomationSchedule, type CreateAutomation } from "@openwork/types/automations"
+import { AUTOMATION_FREE_MODEL, type AutomationSchedule, type CreateAutomation } from "@sofia/types/automations"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -181,7 +181,7 @@ export function AutomationEditor(props: AutomationEditorProps) {
             setInput((current) => ({ ...current, instructions }))
           }}
         />
-        <p className="text-xs text-muted-foreground">Each claimed run starts a fresh task in your desktop OpenCode runtime.</p>
+        <p className="text-xs text-muted-foreground">Each claimed run starts a fresh task in your desktop Sofia runtime.</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
@@ -303,7 +303,7 @@ export function AutomationEditor(props: AutomationEditorProps) {
       </div>
 
       <div className="rounded-xl border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
-        Den keeps the schedule and run history. Your signed-in desktop claims each occurrence and executes it with the selected model in its local OpenCode runtime. If the desktop is unavailable before the claim deadline, the occurrence is recorded as missed.
+        Den keeps the schedule and run history. Your signed-in desktop claims each occurrence and executes it with the selected model in its local Sofia runtime. If the desktop is unavailable before the claim deadline, the occurrence is recorded as missed.
       </div>
 
       <div className="flex justify-end gap-2">

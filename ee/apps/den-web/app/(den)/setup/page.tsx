@@ -80,7 +80,7 @@ export default function SetupPage() {
         method: "POST",
         body: JSON.stringify({
           email,
-          name: name.trim() || "OpenWork Administrator",
+          name: name.trim() || "Sofia Administrator",
           password,
           bootstrapGrant: grant,
         }),
@@ -112,8 +112,8 @@ export default function SetupPage() {
           <h1 className="den-title-lg">{complete ? "Setup is complete" : "Set up your administrator account"}</h1>
           <p className="den-copy">
             {complete
-              ? "This OpenWork deployment already has its first administrator. Continue with the normal sign-in flow."
-              : "Create the first administrator for this private OpenWork deployment. Public signup remains disabled during setup."}
+              ? "This Sofia deployment already has its first administrator. Continue with the normal sign-in flow."
+              : "Create the first administrator for this private Sofia deployment. Public signup remains disabled during setup."}
           </p>
         </div>
 
@@ -176,7 +176,7 @@ export default function SetupPage() {
           <form className="grid gap-5" onSubmit={submitAccount}>
             <div className="grid gap-2">
               <p className="den-eyebrow">Create your administrator account</p>
-              <p className="den-copy">Enter your name and password. OpenWork will create the first account, sign you in, and permanently close setup.</p>
+              <p className="den-copy">Enter your name and password. Sofia will create the first account, sign you in, and permanently close setup.</p>
             </div>
             <div className="grid gap-2">
               <label className="den-label" htmlFor="setup-name">Name</label>

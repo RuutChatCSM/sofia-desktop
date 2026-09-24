@@ -8,20 +8,20 @@ const vo = await loadVoiceoverParagraphs("chat-step-fold");
  * calls no longer fragments the aggregate summary. Proven on the
  * deterministic seeded turn (dev-only `eval.chat_transcript.seed`), which
  * ships steps and the final answer interleaved in ONE assistant message —
- * the exact shape OpenCode delivers.
+ * the exact shape Sofia delivers.
  */
 export default {
   id: "chat-step-fold",
   title: "Finished turns fold behind 'Worked for …'; aggregates survive thinking",
   kind: "user-facing",
   precondition: async (ctx) => {
-    await ctx.waitFor("Boolean(window.__openworkControl)", {
+    await ctx.waitFor("Boolean(window.__sofiaControl)", {
       timeoutMs: 60_000,
       label: "control API",
     });
     const state = await ctx.waitFor(
       `(() => {
-        const control = window.__openworkControl;
+        const control = window.__sofiaControl;
         const route = control.snapshot().route;
         if (route.startsWith("/welcome") || route.startsWith("/signin")) return "blocked";
         const action = control.listActions().find((a) => a.id === "session.create_task");
@@ -40,14 +40,14 @@ export default {
       run: async (ctx) => {
         // Idempotency: reload resets any panels a previous run left open.
         await ctx.eval("location.reload()");
-        await ctx.waitFor("Boolean(window.__openworkControl)", { timeoutMs: 60_000, label: "control API after reload" });
+        await ctx.waitFor("Boolean(window.__sofiaControl)", { timeoutMs: 60_000, label: "control API after reload" });
         await ctx.waitFor(
-          `window.__openworkControl.listActions().some((a) => a.id === "session.create_task" && !a.disabled)`,
+          `window.__sofiaControl.listActions().some((a) => a.id === "session.create_task" && !a.disabled)`,
           { timeoutMs: 30_000, label: "task creation ready" },
         );
         await ctx.control("session.create_task");
         await ctx.waitFor(
-          `window.__openworkControl.listActions().some((a) => a.id === "eval.chat_transcript.seed" && !a.disabled)`,
+          `window.__sofiaControl.listActions().some((a) => a.id === "eval.chat_transcript.seed" && !a.disabled)`,
           { timeoutMs: 30_000, label: "chat transcript seed action" },
         );
         await ctx.control("eval.chat_transcript.seed");

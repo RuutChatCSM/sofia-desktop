@@ -2,7 +2,7 @@ import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import {
-  readOpenworkCloudMcpHealth,
+  readSofiaCloudMcpHealth,
   type CloudMcpHealth,
   type CloudMcpLiveStatusObserver,
   type CloudMcpProviderModelContext,
@@ -13,23 +13,23 @@ import { googleWorkspaceLegacyConfigured } from "./extensions/google-workspace.j
 import { readBoundedRegularTextFile } from "./jsonc.js";
 import { runtimeStorageDir } from "./runtime-db.js";
 import {
-  inspectRuntimeOpencodeConfigState,
+  inspectRuntimeWorkspaceEngineConfigState,
   runtimeMcpMap,
-} from "./runtime-opencode-config-store.js";
+} from "./runtime-engine-config-store.js";
 import type { ServerConfig, WorkspaceInfo } from "./types.js";
 import { ensureDir } from "./utils.js";
 
 const CONNECT_STATE_FILE = "connect-state.json";
 const CONNECT_STATE_MAX_BYTES = 16 * 1024;
 const CONNECT_SNAPSHOT_MAX_RUNTIME_ROWS = 100;
-const OPENWORK_CLOUD_MCP_NAME = "openwork-cloud";
-type WorkspaceOpencodeClient = WorkspaceEngineClient;
+const SOFIA_CLOUD_MCP_NAME = "sofia-cloud";
+type WorkspaceWorkspaceEngineClient = WorkspaceEngineClient;
 
 type PersistedConnectState = {
   connectEnabled: boolean;
   updatedAt: number;
   /**
-   * Server-scoped OpenWork Connect (`openwork-cloud`) MCP desired config.
+   * Server-scoped Sofia App Connect (`sofia-cloud`) MCP desired config.
    * Connect is identity/org scoped, not per-workspace — workspace runtime
    * copies remain for engine registration, but catalog/skill injection reads
    * this host-level entry.
@@ -66,8 +66,8 @@ export type ConnectSnapshotOptions = {
   directory?: string;
   providerModel?: CloudMcpProviderModelContext;
   serverMetadata?: CloudMcpServerMetadata;
-  resolveOpencodeDirectory?: (workspace: WorkspaceInfo) => string | null;
-  createWorkspaceOpencodeClient?: (config: ServerConfig, workspace: WorkspaceInfo) => WorkspaceOpencodeClient;
+  resolveWorkspaceEngineDirectory?: (workspace: WorkspaceInfo) => string | null;
+  createWorkspaceWorkspaceEngineClient?: (config: ServerConfig, workspace: WorkspaceInfo) => WorkspaceWorkspaceEngineClient;
   refreshRegistrationFromLiveStatus?: CloudMcpLiveStatusObserver;
 };
 
@@ -114,12 +114,12 @@ function normalizeConnectState(value: Record<string, unknown>): PersistedConnect
 export function googleWorkspaceConnectGuidance(cloudHealthOrReady: CloudMcpHealth | boolean | null): string {
   const usable = typeof cloudHealthOrReady === "boolean" ? cloudHealthOrReady : cloudHealthOrReady?.usable === true;
   if (usable) {
-    return "Google Workspace is available through the OpenWork Cloud connection: call search_capabilities to find the capability, then execute_capability to run it. Do not tell the user to reconfigure extensions; the relevant settings surface is Settings > Connect.";
+    return "Google Workspace is available through the Sofia Cloud connection: call search_capabilities to find the capability, then execute_capability to run it. Do not tell the user to reconfigure extensions; the relevant settings surface is Settings > Connect.";
   }
   if (cloudHealthOrReady && typeof cloudHealthOrReady !== "boolean" && cloudHealthOrReady.desired.present) {
     const failure = cloudHealthOrReady.firstFailure;
     const suffix = failure ? ` Current health check: ${failure.code}.` : "";
-    return `Google Workspace is connected through OpenWork Connect, but agent access needs attention for this workspace. Direct the user to Settings > Connect.${suffix}`;
+    return `Google Workspace is connected through Sofia App Connect, but agent access needs attention for this workspace. Direct the user to Settings > Connect.${suffix}`;
   }
   return "Google Workspace is not connected on this device. Direct the user to Settings > Connect to connect their account. Do not direct them to Settings > Extensions.";
 }
@@ -178,12 +178,12 @@ export async function writeConnectState(config: ServerConfig, state: { connectEn
   });
 }
 
-/** Read the host-level openwork-cloud MCP config used for Connect catalog/skills. */
+/** Read the host-level sofia-cloud MCP config used for Connect catalog/skills. */
 export async function readConnectCloudMcp(config: ServerConfig): Promise<Record<string, unknown> | null> {
   return (await readConnectState(config)).cloudMcp;
 }
 
-/** Persist the host-level openwork-cloud MCP config (server-scoped Connect). */
+/** Persist the host-level sofia-cloud MCP config (server-scoped Connect). */
 export async function writeConnectCloudMcp(
   config: ServerConfig,
   cloudMcp: Record<string, unknown> | null,
@@ -200,8 +200,8 @@ function normalizeDirectory(directory: string): string {
   return directory.trim().replace(/[\/]+$/, "");
 }
 
-function workspaceDirectory(workspace: WorkspaceInfo, resolveOpencodeDirectory?: (workspace: WorkspaceInfo) => string | null): string | null {
-  return resolveOpencodeDirectory?.(workspace) ?? (workspace.workspaceType === "local" ? workspace.path : workspace.directory ?? null);
+function workspaceDirectory(workspace: WorkspaceInfo, resolveWorkspaceEngineDirectory?: (workspace: WorkspaceInfo) => string | null): string | null {
+  return resolveWorkspaceEngineDirectory?.(workspace) ?? (workspace.workspaceType === "local" ? workspace.path : workspace.directory ?? null);
 }
 
 export function resolveConnectWorkspace(config: ServerConfig, options: ConnectSnapshotOptions): { workspace: WorkspaceInfo; directory: string | null } | { resolution: "unknown" | "ambiguous"; directory: string | null; reason: string } {
@@ -212,28 +212,28 @@ export function resolveConnectWorkspace(config: ServerConfig, options: ConnectSn
     if (!workspace) {
       return { resolution: "unknown", directory: requestedDirectory ? normalizeDirectory(requestedDirectory) : null, reason: `Workspace ${workspaceId} was not found` };
     }
-    return { workspace, directory: workspaceDirectory(workspace, options.resolveOpencodeDirectory) };
+    return { workspace, directory: workspaceDirectory(workspace, options.resolveWorkspaceEngineDirectory) };
   }
 
   if (requestedDirectory) {
     const normalizedRequested = normalizeDirectory(requestedDirectory);
     const matches = config.workspaces.filter((workspace) => {
-      const directory = workspaceDirectory(workspace, options.resolveOpencodeDirectory);
+      const directory = workspaceDirectory(workspace, options.resolveWorkspaceEngineDirectory);
       return directory !== null && normalizeDirectory(directory) === normalizedRequested;
     });
     if (matches.length === 1) {
       const workspace = matches[0];
-      if (workspace) return { workspace, directory: workspaceDirectory(workspace, options.resolveOpencodeDirectory) };
+      if (workspace) return { workspace, directory: workspaceDirectory(workspace, options.resolveWorkspaceEngineDirectory) };
     }
     if (matches.length > 1) {
-      return { resolution: "ambiguous", directory: normalizedRequested, reason: "Multiple workspaces have this exact OpenCode directory" };
+      return { resolution: "ambiguous", directory: normalizedRequested, reason: "Multiple workspaces have this exact Sofia engine directory" };
     }
-    return { resolution: "unknown", directory: normalizedRequested, reason: "No workspace has this exact OpenCode directory" };
+    return { resolution: "unknown", directory: normalizedRequested, reason: "No workspace has this exact Sofia engine directory" };
   }
 
   const only = config.workspaces[0];
   if (config.workspaces.length === 1 && only) {
-    return { workspace: only, directory: workspaceDirectory(only, options.resolveOpencodeDirectory) };
+    return { workspace: only, directory: workspaceDirectory(only, options.resolveWorkspaceEngineDirectory) };
   }
   return { resolution: "unknown", directory: null, reason: "Workspace id or exact directory is required when multiple workspaces are configured" };
 }
@@ -251,25 +251,25 @@ async function resolveCloudHealth(config: ServerConfig, options: ConnectSnapshot
       },
     };
   }
-  if (!options.createWorkspaceOpencodeClient) {
+  if (!options.createWorkspaceWorkspaceEngineClient) {
     return {
       cloudHealth: null,
       workspace: {
         resolution: "resolved",
         id: resolved.workspace.id,
         directory: resolved.directory,
-        reason: "OpenCode health probe is not available in this route",
+        reason: "Sofia engine health probe is not available in this route",
       },
     };
   }
-  const cloudHealth = await readOpenworkCloudMcpHealth({
+  const cloudHealth = await readSofiaCloudMcpHealth({
     config,
     workspace: resolved.workspace,
     directory: resolved.directory,
     providerModel: options.providerModel,
     serverMetadata: options.serverMetadata,
     probe: false,
-    createWorkspaceOpencodeClient: options.createWorkspaceOpencodeClient,
+    createWorkspaceWorkspaceEngineClient: options.createWorkspaceWorkspaceEngineClient,
     refreshRegistrationFromLiveStatus: options.refreshRegistrationFromLiveStatus,
   });
   return {
@@ -301,7 +301,7 @@ export async function getConnectSnapshot(config: ServerConfig, options: ConnectS
 }
 
 /**
- * Inspect Connect state without calling OpenCode or a remote MCP. This passive
+ * Inspect Connect state without calling Sofia engine or a remote MCP. This passive
  * path is intentionally separate from getConnectSnapshot's active health
  * check so diagnostics cannot create an egress attempt while building its
  * eligibility report.
@@ -328,7 +328,7 @@ export async function inspectConnectSnapshot(
         resolution: "unknown",
         id: null,
         directory: null,
-        reason: "Passive diagnostics inspection does not probe OpenCode health",
+        reason: "Passive diagnostics inspection does not probe Sofia engine health",
       },
       googleWorkspace: { legacyConfigured: googleWorkspaceLegacyConfigured() },
     },
@@ -358,14 +358,14 @@ async function inspectConnectRuntime(
     }
     inspectedRows += 1;
 
-    const inspection = await inspectRuntimeOpencodeConfigState(config, workspace.id, {
+    const inspection = await inspectRuntimeWorkspaceEngineConfigState(config, workspace.id, {
       maxBytes: options?.runtimeConfigMaxBytes,
       signal: options?.signal,
     });
     if (inspection.status === "unreadable" || inspection.status === "invalid-row") {
       return { cloudMcpPresent: false, complete: false };
     }
-    if (Object.hasOwn(runtimeMcpMap(inspection.config), OPENWORK_CLOUD_MCP_NAME)) {
+    if (Object.hasOwn(runtimeMcpMap(inspection.config), SOFIA_CLOUD_MCP_NAME)) {
       return { cloudMcpPresent: true, complete: true };
     }
     if (inspection.status === "database-missing" || inspection.status === "table-missing") {

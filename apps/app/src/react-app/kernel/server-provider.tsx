@@ -9,20 +9,20 @@ import {
   useRef,
   type ReactNode,
 } from "react";
-import { createOpencodeClient } from "../../app/lib/engine-client";
+import { createWorkspaceEngineClient } from "../../app/lib/engine-client";
 
 import { desktopFetch } from "../../app/lib/desktop";
 import {
-  getOpenworkGatewayOrigin,
-  readOpenworkGatewayDenToken,
+  getSofiaGatewayOrigin,
+  readSofiaGatewayDenToken,
 } from "../../app/lib/gateway-runtime";
-import { isWebDeployment } from "../../app/lib/openwork-deployment";
-import { normalizeOpenworkServerUrl } from "../../app/lib/openwork-server";
+import { isWebDeployment } from "../../app/lib/sofia-deployment";
+import { normalizeSofiaServerUrl } from "../../app/lib/sofia-server";
 import { isDesktopRuntime } from "../../app/utils";
 import { initialServerState, serverReducer } from "./server-provider-state";
 
 export function normalizeServerUrl(input: string): string | undefined {
-  return normalizeOpenworkServerUrl(input) ?? undefined;
+  return normalizeSofiaServerUrl(input) ?? undefined;
 }
 
 export function serverDisplayName(url: string): string {
@@ -45,7 +45,7 @@ const ServerContext = createContext<ServerContextValue | undefined>(undefined);
 function readStoredList(): string[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = window.localStorage.getItem("openwork.server.list");
+    const raw = window.localStorage.getItem("sofia.server.list");
     const parsed = raw ? (JSON.parse(raw) as unknown) : [];
     return Array.isArray(parsed) ? parsed.filter((item) => typeof item === "string") : [];
   } catch {
@@ -56,33 +56,33 @@ function readStoredList(): string[] {
 function readStoredActive(): string {
   if (typeof window === "undefined") return "";
   try {
-    const stored = window.localStorage.getItem("openwork.server.active");
+    const stored = window.localStorage.getItem("sofia.server.active");
     return typeof stored === "string" ? stored : "";
   } catch {
     return "";
   }
 }
 
-function readOpenworkToken(): string {
-  if (getOpenworkGatewayOrigin()) return readOpenworkGatewayDenToken();
+function readSofiaToken(): string {
+  if (getSofiaGatewayOrigin()) return readSofiaGatewayDenToken();
 
   if (typeof window === "undefined") return "";
   try {
-    return (window.localStorage.getItem("openwork.server.token") ?? "").trim();
+    return (window.localStorage.getItem("sofia.server.token") ?? "").trim();
   } catch {
     return "";
   }
 }
 
-export function buildOpenworkHealthHeaders(url: string): Record<string, string> | undefined {
-  const token = readOpenworkToken();
-  return token && url.includes("/opencode") ? { Authorization: `Bearer ${token}` } : undefined;
+export function buildSofiaHealthHeaders(url: string): Record<string, string> | undefined {
+  const token = readSofiaToken();
+  return token && url.includes("/engine") ? { Authorization: `Bearer ${token}` } : undefined;
 }
 
 async function checkHealth(url: string): Promise<boolean> {
   if (!url) return false;
-  const headers = buildOpenworkHealthHeaders(url);
-  const client = createOpencodeClient({
+  const headers = buildSofiaHealthHeaders(url);
+  const client = createWorkspaceEngineClient({
     baseUrl: url,
     headers,
     signal: AbortSignal.timeout(3000),
@@ -107,18 +107,18 @@ export function ServerProvider({ children, defaultUrl }: ServerProviderProps) {
     if (readyRef.current) return;
     if (typeof window === "undefined") return;
 
-    const gatewayOrigin = getOpenworkGatewayOrigin();
-    const fallback = normalizeServerUrl(gatewayOrigin ? `${gatewayOrigin}/opencode` : defaultUrl) ?? "";
+    const gatewayOrigin = getSofiaGatewayOrigin();
+    const fallback = normalizeServerUrl(gatewayOrigin ? `${gatewayOrigin}/engine` : defaultUrl) ?? "";
 
-    // Hosted web deployments served by Sofia App must reuse the OpenCode proxy
+    // Hosted web deployments served by Sofia App must reuse the Sofia proxy
     // rather than any persisted localhost target.
     const forceProxy =
       Boolean(gatewayOrigin) ||
       (!isDesktopRuntime() &&
         isWebDeployment() &&
         (import.meta.env.PROD ||
-          (typeof import.meta.env?.VITE_OPENWORK_URL === "string" &&
-            import.meta.env.VITE_OPENWORK_URL.trim().length > 0)));
+          (typeof import.meta.env?.VITE_SOFIA_URL === "string" &&
+            import.meta.env.VITE_SOFIA_URL.trim().length > 0)));
 
     if (forceProxy && fallback) {
       dispatchServer({ type: "ready", list: [fallback], active: fallback });
@@ -140,8 +140,8 @@ export function ServerProvider({ children, defaultUrl }: ServerProviderProps) {
     if (!readyRef.current) return;
     if (typeof window === "undefined") return;
     try {
-      window.localStorage.setItem("openwork.server.list", JSON.stringify(list));
-      window.localStorage.setItem("openwork.server.active", active);
+      window.localStorage.setItem("sofia.server.list", JSON.stringify(list));
+      window.localStorage.setItem("sofia.server.active", active);
     } catch {
       // ignore
     }
@@ -149,9 +149,9 @@ export function ServerProvider({ children, defaultUrl }: ServerProviderProps) {
 
   useEffect(() => {
     if (!active) return;
-    if (isDesktopRuntime() && !active.includes("/opencode")) {
+    if (isDesktopRuntime() && !active.includes("/engine")) {
       // Desktop React routes now talk to Sofia App server workspace-mounted
-      // `/opencode` URLs directly. Ignore old persisted raw OpenCode daemon
+      // `/engine` URLs directly. Ignore old persisted raw Sofia daemon
       // URLs here; their ephemeral ports go stale across restarts and otherwise
       // produce noisy `/global/health` connection-refused polling forever.
       dispatchServer({ type: "healthy", healthy: undefined });

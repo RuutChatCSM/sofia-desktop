@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, inArray, isNull, or } from "@openwork-ee/den-db/drizzle"
+import { and, asc, count, desc, eq, inArray, isNull, or } from "@sofia-ee/den-db/drizzle"
 import {
   AuthUserTable,
   ConfigObjectAccessGrantTable,
@@ -25,9 +25,9 @@ import {
   PluginTable,
   RemoteMcpAppTable,
   TeamTable,
-} from "@openwork-ee/den-db/schema"
-import { createDenTypeId, normalizeDenTypeId } from "@openwork-ee/utils/typeid"
-import { hasSkillFrontmatterName, parseSkillMarkdown } from "@openwork-ee/utils"
+} from "@sofia-ee/den-db/schema"
+import { createDenTypeId, normalizeDenTypeId } from "@sofia-ee/utils/typeid"
+import { hasSkillFrontmatterName, parseSkillMarkdown } from "@sofia-ee/utils"
 import type { PluginArchActorContext, PluginArchResourceKind, PluginArchRole } from "./access.js"
 import { isPluginArchOrgAdmin, PluginArchAuthorizationError, pluginArchResourceHasExpandedAudience, requirePluginArchResourceRole, resolvePluginArchGrantRole, resolvePluginArchResourceRole } from "./access.js"
 import { clampCodePoints, clampUtf8Bytes, PROJECTION_TEXT_MAX_BYTES, PROJECTION_TITLE_MAX_CHARS } from "./projection-text.js"
@@ -61,9 +61,9 @@ import {
   DEFAULT_ANTHROPIC_MARKETPLACE_LOGO_URL,
   DEFAULT_ANTHROPIC_MARKETPLACE_NAME,
   DEFAULT_ANTHROPIC_STARTER_PLUGINS,
-  DEFAULT_OPENWORK_MARKETPLACE_DESCRIPTION,
-  DEFAULT_OPENWORK_MARKETPLACE_LOGO_URL,
-  DEFAULT_OPENWORK_MARKETPLACE_NAME,
+  DEFAULT_SOFIA_MARKETPLACE_DESCRIPTION,
+  DEFAULT_SOFIA_MARKETPLACE_LOGO_URL,
+  DEFAULT_SOFIA_MARKETPLACE_NAME,
   type DefaultMarketplacePluginEntry,
 } from "./default-marketplaces.js"
 import { db } from "../../../db.js"
@@ -97,7 +97,7 @@ import {
   upsertPluginMcpRequirementBinding,
   type PluginMcpRequirementBindingRow,
 } from "../../../mcp/plugin-mcp-requirement-bindings.js"
-import { openworkYourConnectionsUrl } from "../../../mcp/connection-navigation.js"
+import { sofiaYourConnectionsUrl } from "../../../mcp/connection-navigation.js"
 import {
   declaredPluginMcpAuthType,
   requiredPluginMcpAuthType,
@@ -423,7 +423,7 @@ async function requestPublicGithubJson(input: { path: string; allowStatuses?: nu
   const response = await fetch(`https://api.github.com${input.path}`, {
     headers: {
       Accept: "application/vnd.github+json",
-      "User-Agent": "openwork-den-api",
+      "User-Agent": "sofia-den-api",
       "X-GitHub-Api-Version": "2022-11-28",
     },
   })
@@ -750,24 +750,24 @@ type PluginMarketplaceSummary = {
   name: string
 }
 
-const DEFAULT_OPENWORK_EXTENSION_MANIFESTS = [
+const DEFAULT_SOFIA_EXTENSION_MANIFESTS = [
   {
     schemaVersion: 1,
-    id: "openwork-browser",
-    name: "OpenWork Browser",
-    description: "Automate the built-in browser panel that stays visible inside OpenWork.",
-    source: { format: "openwork-builtin", origin: "builtin", trusted: true },
-    icon: { src: "/openwork-mark.svg" },
-    composer: { prompt: "Use the OpenWork Browser extension to " },
-    setup: { instructions: "OpenWork Browser is ready by default in desktop workspaces." },
-    resources: [{ type: "opencode-plugin", id: "opencode-chrome-devtools", packageName: "opencode-chrome-devtools", required: true }],
+    id: "sofia-browser",
+    name: "Sofia Browser",
+    description: "Automate the built-in browser panel that stays visible inside Sofia.",
+    source: { format: "sofia-builtin", origin: "builtin", trusted: true },
+    icon: { src: "/sofia-mark.svg" },
+    composer: { prompt: "Use the Sofia Browser extension to " },
+    setup: { instructions: "Sofia Browser is ready by default in desktop workspaces." },
+    resources: [{ type: "engine-plugin", id: "engine-chrome-devtools", packageName: "engine-chrome-devtools", required: true }],
     contributions: [
-      { type: "settings-panel", ref: "openwork.browser.settings", location: "settings-detail" },
-      { type: "session-side-panel", ref: "openwork.browser.panel", location: "session-right-pane" },
-      { type: "composer-prompt", prompt: "Use the OpenWork Browser extension to ", location: "composer" },
+      { type: "settings-panel", ref: "sofia.browser.settings", location: "settings-detail" },
+      { type: "session-side-panel", ref: "sofia.browser.panel", location: "session-right-pane" },
+      { type: "composer-prompt", prompt: "Use the Sofia Browser extension to ", location: "composer" },
     ],
-    enablement: [{ type: "toggle-enabled", ref: "openwork-browser", label: "Enabled" }],
-    lifecycle: { reload: ["plugins", "agents"], detection: ["plugin:opencode-chrome-devtools"] },
+    enablement: [{ type: "toggle-enabled", ref: "sofia-browser", label: "Enabled" }],
+    lifecycle: { reload: ["plugins", "agents"], detection: ["plugin:engine-chrome-devtools"] },
     defaultEnabled: true,
   },
   {
@@ -775,16 +775,16 @@ const DEFAULT_OPENWORK_EXTENSION_MANIFESTS = [
     id: "computer-use",
     name: "Computer Use",
     description: "Mac only: control Mac apps through semantic accessibility refs, screenshots, background-safe clicks, keyboard input, and strict mode.",
-    source: { format: "openwork-builtin", origin: "builtin", trusted: true },
-    icon: { src: "/openwork-mark.svg" },
+    source: { format: "sofia-builtin", origin: "builtin", trusted: true },
+    icon: { src: "/sofia-mark.svg" },
     composer: { prompt: "Use Computer Use to " },
     setup: { instructions: "Computer Use is Mac only. Grant Accessibility and Screen Recording permissions, then connect the local MCP server in this workspace." },
     resources: [
-      { type: "mcp", id: "computer-use-mcp", label: "Computer Use MCP", mcpServerName: "computer-use", command: ["npx", "-y", "@openwork/handsfree", "mcp"], localCommandRef: "openwork.computerUseMcp", required: true },
-      { type: "native-binary", id: "computer-use-native", label: "macOS accessibility runtime", packageName: "@openwork/handsfree", required: true },
+      { type: "mcp", id: "computer-use-mcp", label: "Computer Use MCP", mcpServerName: "computer-use", command: ["npx", "-y", "@sofia/handsfree", "mcp"], localCommandRef: "sofia.computerUseMcp", required: true },
+      { type: "native-binary", id: "computer-use-native", label: "macOS accessibility runtime", packageName: "@sofia/handsfree", required: true },
     ],
     contributions: [
-      { type: "setup-instructions", ref: "openwork.computerUse.setup", location: "settings-detail" },
+      { type: "setup-instructions", ref: "sofia.computerUse.setup", location: "settings-detail" },
       { type: "composer-prompt", prompt: "Use Computer Use to ", location: "composer" },
     ],
     enablement: [
@@ -800,17 +800,17 @@ const DEFAULT_OPENWORK_EXTENSION_MANIFESTS = [
     id: "openai-image-gen",
     name: "OpenAI Image Gen",
     description: "Generate image artifacts with gpt-image-2.",
-    source: { format: "openwork-builtin", origin: "builtin", trusted: true },
+    source: { format: "sofia-builtin", origin: "builtin", trusted: true },
     icon: { src: "/ext-openai.svg" },
     composer: { prompt: "Use the OpenAI Image Gen extension to " },
-    setup: { instructions: "Add an OpenAI API key, then agents can generate image artifacts through OpenWork extension actions." },
+    setup: { instructions: "Add an OpenAI API key, then agents can generate image artifacts through Sofia extension actions." },
     resources: [
       { type: "secret", id: "openai-api-key", envKey: "OPENAI_API_KEY", required: true },
       { type: "local-service", id: "openai-image-generation-service", label: "OpenAI image generation", required: true },
       { type: "tool", id: "openai-image-generate", label: "Image generation", required: true },
     ],
     contributions: [
-      { type: "settings-panel", ref: "openwork.imageGen.settings", location: "settings-detail" },
+      { type: "settings-panel", ref: "sofia.imageGen.settings", location: "settings-detail" },
       { type: "composer-prompt", prompt: "Use the OpenAI Image Gen extension to ", location: "composer" },
     ],
     enablement: [{ type: "env-set", ref: "OPENAI_API_KEY", label: "OpenAI API key" }],
@@ -820,11 +820,11 @@ const DEFAULT_OPENWORK_EXTENSION_MANIFESTS = [
     schemaVersion: 1,
     id: "google-workspace",
     name: "Google Workspace",
-    description: "Let OpenWork help with meetings, selected Drive files, and Gmail drafts.",
-    source: { format: "openwork-builtin", origin: "builtin", trusted: true },
+    description: "Let Sofia help with meetings, selected Drive files, and Gmail drafts.",
+    source: { format: "sofia-builtin", origin: "builtin", trusted: true },
     icon: { simpleIconSlug: "google" },
     composer: { prompt: "Use Google Workspace to " },
-    setup: { instructions: "Connect your Google account to use Calendar, Drive, and Gmail drafts in OpenWork." },
+    setup: { instructions: "Connect your Google account to use Calendar, Drive, and Gmail drafts in Sofia." },
     resources: [
       { type: "provider", id: "google-oauth", label: "Google account", providerId: "google-workspace", required: true },
       { type: "local-service", id: "google-workspace-connector", label: "Secure local connection", required: true },
@@ -837,7 +837,7 @@ const DEFAULT_OPENWORK_EXTENSION_MANIFESTS = [
       { type: "tool", id: "google-chat", label: "Google Chat (opt-in)", required: false },
     ],
     contributions: [
-      { type: "settings-panel", ref: "openwork.googleWorkspace.settings", location: "settings-detail" },
+      { type: "settings-panel", ref: "sofia.googleWorkspace.settings", location: "settings-detail" },
       { type: "composer-prompt", prompt: "Use Google Workspace to ", location: "composer" },
     ],
     lifecycle: { reload: ["config"], detection: ["provider:google-workspace"] },
@@ -847,16 +847,16 @@ const DEFAULT_OPENWORK_EXTENSION_MANIFESTS = [
     id: "ollama",
     name: "Ollama",
     description: "Local model provider at http://localhost:11434.",
-    source: { format: "openwork-builtin", origin: "builtin", trusted: true },
+    source: { format: "sofia-builtin", origin: "builtin", trusted: true },
     icon: { src: "/ext-ollama.svg" },
     composer: { prompt: "Use the Ollama extension to " },
-    setup: { instructions: "Run Ollama locally, choose or pull a model, then add it as an OpenCode provider." },
+    setup: { instructions: "Run Ollama locally, choose or pull a model, then add it as an Sofia provider." },
     resources: [
       { type: "local-service", id: "ollama-api", label: "Ollama API", description: "http://localhost:11434", required: true },
       { type: "provider", id: "ollama", providerId: "ollama", packageName: "@ai-sdk/openai-compatible", required: true },
     ],
     contributions: [
-      { type: "settings-panel", ref: "openwork.ollama.settings", location: "settings-detail" },
+      { type: "settings-panel", ref: "sofia.ollama.settings", location: "settings-detail" },
       { type: "composer-prompt", prompt: "Use the Ollama extension to ", location: "composer" },
     ],
     enablement: [{ type: "provider-connected", ref: "ollama", label: "Ollama provider" }],
@@ -864,8 +864,8 @@ const DEFAULT_OPENWORK_EXTENSION_MANIFESTS = [
   },
 ] as const
 
-function defaultOpenWorkManifestForPlugin(row: PluginRow) {
-  return DEFAULT_OPENWORK_EXTENSION_MANIFESTS.find((manifest) => manifest.name === row.name && manifest.description === row.description) ?? null
+function defaultSofiaManifestForPlugin(row: PluginRow) {
+  return DEFAULT_SOFIA_EXTENSION_MANIFESTS.find((manifest) => manifest.name === row.name && manifest.description === row.description) ?? null
 }
 
 function extensionResourceTypeForConfigObject(objectType: string) {
@@ -884,14 +884,14 @@ function extensionResourceTypeForConfigObject(objectType: string) {
 }
 
 function serializePluginExtension(row: PluginRow, componentCounts: Record<string, number>) {
-  const builtInManifest = defaultOpenWorkManifestForPlugin(row)
+  const builtInManifest = defaultSofiaManifestForPlugin(row)
   if (builtInManifest) {
     return {
       description: builtInManifest.description,
       id: builtInManifest.id,
       manifest: builtInManifest,
       name: builtInManifest.name,
-      sourceFormat: "openwork-builtin",
+      sourceFormat: "sofia-builtin",
     }
   }
 
@@ -929,7 +929,7 @@ function serializePluginExtension(row: PluginRow, componentCounts: Record<string
         location: "settings-detail",
       }],
       setup: {
-        instructions: "Imported from a Claude-compatible plugin. OpenWork installs its resources into this workspace as extension components.",
+        instructions: "Imported from a Claude-compatible plugin. Sofia installs its resources into this workspace as extension components.",
       },
       lifecycle: {
         detection: Object.keys(componentCounts).map((objectType) => `${objectType}:${row.id}`),
@@ -2775,7 +2775,7 @@ export async function removePluginMembership(input: { configObjectId: ConfigObje
 }
 
 export async function listMarketplaces(input: { context: PluginArchActorContext; cursor?: string; limit?: number; q?: string; status?: MarketplaceRow["status"] }) {
-  await ensureDefaultOpenWorkMarketplace(input.context)
+  await ensureDefaultSofiaMarketplace(input.context)
 
   const rows = await db
     .select()
@@ -2813,9 +2813,9 @@ export async function listMarketplaces(input: { context: PluginArchActorContext;
   return pageItems(visible, input.cursor, input.limit)
 }
 
-async function ensureDefaultOpenWorkMarketplace(context: PluginArchActorContext) {
+async function ensureDefaultSofiaMarketplace(context: PluginArchActorContext) {
   const organizationId = context.organizationContext.organization.id
-  if (await defaultOpenWorkMarketplaceSeedComplete(organizationId)) {
+  if (await defaultSofiaMarketplaceSeedComplete(organizationId)) {
     return
   }
 
@@ -2849,44 +2849,44 @@ async function ensureDefaultOpenWorkMarketplace(context: PluginArchActorContext)
       context,
       createdAt: now,
       database: tx,
-      description: DEFAULT_OPENWORK_MARKETPLACE_DESCRIPTION,
-      logoUrl: DEFAULT_OPENWORK_MARKETPLACE_LOGO_URL,
-      name: DEFAULT_OPENWORK_MARKETPLACE_NAME,
+      description: DEFAULT_SOFIA_MARKETPLACE_DESCRIPTION,
+      logoUrl: DEFAULT_SOFIA_MARKETPLACE_LOGO_URL,
+      name: DEFAULT_SOFIA_MARKETPLACE_NAME,
     })
     await ensureDefaultMarketplacePlugins({
       context,
       createdAt: now,
       database: tx,
-      entries: DEFAULT_OPENWORK_EXTENSION_MANIFESTS.map((manifest) => ({ description: manifest.description, name: manifest.name })),
+      entries: DEFAULT_SOFIA_EXTENSION_MANIFESTS.map((manifest) => ({ description: manifest.description, name: manifest.name })),
       marketplaceId: marketplace.id,
     })
   })
 }
 
-async function defaultOpenWorkMarketplaceSeedComplete(organizationId: OrganizationId) {
+async function defaultSofiaMarketplaceSeedComplete(organizationId: OrganizationId) {
   const defaultMarketplaces = await db
     .select({ id: MarketplaceTable.id, logoUrl: MarketplaceTable.logoUrl, name: MarketplaceTable.name })
     .from(MarketplaceTable)
     .where(and(
       eq(MarketplaceTable.organizationId, organizationId),
-      inArray(MarketplaceTable.name, [DEFAULT_ANTHROPIC_MARKETPLACE_NAME, DEFAULT_OPENWORK_MARKETPLACE_NAME]),
+      inArray(MarketplaceTable.name, [DEFAULT_ANTHROPIC_MARKETPLACE_NAME, DEFAULT_SOFIA_MARKETPLACE_NAME]),
       eq(MarketplaceTable.status, "active"),
       isNull(MarketplaceTable.deletedAt),
     ))
   const marketplaceIdByName = new Map(defaultMarketplaces.map((marketplace) => [marketplace.name, marketplace.id]))
   const anthropicMarketplaceId = marketplaceIdByName.get(DEFAULT_ANTHROPIC_MARKETPLACE_NAME)
-  const openWorkMarketplaceId = marketplaceIdByName.get(DEFAULT_OPENWORK_MARKETPLACE_NAME)
-  if (!anthropicMarketplaceId || !openWorkMarketplaceId) {
+  const sofiaMarketplaceId = marketplaceIdByName.get(DEFAULT_SOFIA_MARKETPLACE_NAME)
+  if (!anthropicMarketplaceId || !sofiaMarketplaceId) {
     return false
   }
   if (!defaultMarketplaces.some((marketplace) => marketplace.name === DEFAULT_ANTHROPIC_MARKETPLACE_NAME && marketplace.logoUrl === DEFAULT_ANTHROPIC_MARKETPLACE_LOGO_URL)) {
     return false
   }
-  if (!defaultMarketplaces.some((marketplace) => marketplace.name === DEFAULT_OPENWORK_MARKETPLACE_NAME && marketplace.logoUrl === DEFAULT_OPENWORK_MARKETPLACE_LOGO_URL)) {
+  if (!defaultMarketplaces.some((marketplace) => marketplace.name === DEFAULT_SOFIA_MARKETPLACE_NAME && marketplace.logoUrl === DEFAULT_SOFIA_MARKETPLACE_LOGO_URL)) {
     return false
   }
 
-  const marketplaceIds = [anthropicMarketplaceId, openWorkMarketplaceId]
+  const marketplaceIds = [anthropicMarketplaceId, sofiaMarketplaceId]
   const marketplaceGrantRows = await db
     .select({ marketplaceId: MarketplaceAccessGrantTable.marketplaceId, role: MarketplaceAccessGrantTable.role })
     .from(MarketplaceAccessGrantTable)
@@ -2903,8 +2903,8 @@ async function defaultOpenWorkMarketplaceSeedComplete(organizationId: Organizati
   }
 
   const anthropicPluginEntries = DEFAULT_ANTHROPIC_STARTER_PLUGINS
-  const openWorkPluginEntries = DEFAULT_OPENWORK_EXTENSION_MANIFESTS.map((manifest) => ({ description: manifest.description, name: manifest.name }))
-  const defaultPluginEntries = [...anthropicPluginEntries, ...openWorkPluginEntries]
+  const sofiaPluginEntries = DEFAULT_SOFIA_EXTENSION_MANIFESTS.map((manifest) => ({ description: manifest.description, name: manifest.name }))
+  const defaultPluginEntries = [...anthropicPluginEntries, ...sofiaPluginEntries]
   const defaultPluginRows = await db
     .select({ id: PluginTable.id, name: PluginTable.name, description: PluginTable.description })
     .from(PluginTable)
@@ -2945,9 +2945,9 @@ async function defaultOpenWorkMarketplaceSeedComplete(organizationId: Organizati
     const pluginId = pluginIdByEntry.get(defaultMarketplacePluginEntryKey(entry))
     if (pluginId) expectedMemberships.add(defaultMarketplacePluginMembershipKey(anthropicMarketplaceId, pluginId))
   }
-  for (const entry of openWorkPluginEntries) {
+  for (const entry of sofiaPluginEntries) {
     const pluginId = pluginIdByEntry.get(defaultMarketplacePluginEntryKey(entry))
-    if (pluginId) expectedMemberships.add(defaultMarketplacePluginMembershipKey(openWorkMarketplaceId, pluginId))
+    if (pluginId) expectedMemberships.add(defaultMarketplacePluginMembershipKey(sofiaMarketplaceId, pluginId))
   }
 
   const membershipRows = await db
@@ -3330,7 +3330,7 @@ export async function getMarketplaceResolved(input: { context: PluginArchActorCo
           teamIds: input.context.memberTeams.map((team) => team.id),
         },
         pluginIds,
-        desktopManifestPluginIds: pluginRows.flatMap((row) => defaultOpenWorkManifestForPlugin(row) ? [row.id] : []),
+        desktopManifestPluginIds: pluginRows.flatMap((row) => defaultSofiaManifestForPlugin(row) ? [row.id] : []),
       })
     : new Map<string, never>()
 
@@ -5231,14 +5231,14 @@ function importedConnectionBackedMcpPayload(input: {
       [serverName]: {
         type: "remote",
         url: input.server.url,
-        openworkManaged: "den_external_mcp",
+        sofiaManaged: "den_external_mcp",
         externalMcpConnectionId: input.connectionId,
         externalMcpConnectionOwnedByPlugin: input.ownedByImportedPlugin,
         requiredAuthType: input.authType,
         ...(input.authType === "oauth" ? { oauth: true } : {}),
       },
     },
-    openworkManaged: "den_external_mcp",
+    sofiaManaged: "den_external_mcp",
     externalMcpConnectionId: input.connectionId,
     externalMcpConnectionOwnedByPlugin: input.ownedByImportedPlugin,
     requiredAuthType: input.authType,
@@ -5368,7 +5368,7 @@ export async function configureMarketplacePluginMcpRequirement(input: {
     binding: serializePluginMcpRequirementBinding(binding),
     connection: serializePluginMcpRequirementConnection(refreshedConnection ?? connection),
     links: {
-      yourConnections: openworkYourConnectionsUrl(connection.id),
+      yourConnections: sofiaYourConnectionsUrl(connection.id),
     },
   }
 }
@@ -5511,12 +5511,12 @@ export async function importGithubPluginMcps(input: {
           requiredAuthType: authType,
           githubUrl: input.githubUrl,
           name: externalMcpConnectionName({ pluginName: server.pluginName, serverName: server.name }),
-          openworkManaged: "den_external_mcp",
+          sofiaManaged: "den_external_mcp",
           repositoryFullName: plan.repositoryFullName,
           sourcePath: server.sourcePath,
         },
         normalizedPayloadJson: payload,
-        schemaVersion: "openwork.den_external_mcp.v1",
+        schemaVersion: "sofia.den_external_mcp.v1",
       },
     })
     await upsertPluginMcpRequirementBinding({

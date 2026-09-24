@@ -108,27 +108,25 @@ export function PanelEmpty({ onOpenBrowser, onOpenExtensions, onOpenVoice }: Pan
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4 sm:p-6">
       <div className="my-auto w-full max-w-xl self-center">
-        <h2 className="text-base font-medium text-foreground">Choose a destination</h2>
-        <p className="mt-1 text-sm leading-6 text-muted-foreground">
-          Open a tool or return here whenever you want to switch.
-        </p>
-        <div className="mt-5 grid gap-2" aria-label="Panel destinations">
+        <h2 className="mb-2 px-2 text-xs font-medium text-muted-foreground">Open in this panel</h2>
+        <div className="grid gap-1" aria-label="Panel destinations">
           {destinations.map((item) => (
             <button
               key={item.id}
               type="button"
               className={cn(
-                "group flex min-h-16 w-full items-center gap-3 rounded-xl border border-border bg-background p-3 text-left",
+                "group flex min-h-10 w-full items-center gap-2.5 rounded-lg bg-muted/30 px-3 py-2 text-left",
                 "transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               )}
+              title={item.description}
               onClick={() => item.activate()}
             >
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground [&_svg]:size-4">
+              <span className="flex size-5 shrink-0 items-center justify-center text-muted-foreground [&_svg]:size-4">
                 {item.icon}
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block text-sm font-medium text-foreground">{item.label}</span>
-                <span className="mt-0.5 block text-xs leading-5 text-muted-foreground">{item.description}</span>
+                
               </span>
               <ArrowRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
             </button>

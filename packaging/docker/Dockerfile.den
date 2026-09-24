@@ -25,7 +25,7 @@ COPY packages/connect-link/package.json /app/packages/connect-link/package.json
 COPY packages/headless-threads/package.json /app/packages/headless-threads/package.json
 COPY packages/mcp-apps/package.json /app/packages/mcp-apps/package.json
 # apps/desktop/package.json is copied below for version metadata, and it depends
-# on @openwork/paths, so the package must exist for workspace resolution.
+# on @sofia/paths, so the package must exist for workspace resolution.
 COPY packages/paths/package.json /app/packages/paths/package.json
 # The root workspace declares the shared evaluator helpers as dev dependencies.
 # Their manifests must be present even though the Den API image does not build

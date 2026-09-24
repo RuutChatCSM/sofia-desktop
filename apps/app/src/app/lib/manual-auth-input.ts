@@ -18,7 +18,7 @@ export function parseManualAuthInput(value: string): ManualAuthInput | null {
     const routeSegments = routePath.split("/").filter(Boolean);
     const routeTail = routeSegments[routeSegments.length - 1] ?? "";
     if (
-      (protocol === "openwork:" || protocol === "openwork-dev:") &&
+      (protocol === "sofia:" || protocol === "sofia-dev:") &&
       (routeHost === "den-auth" ||
         routePath === "den-auth" ||
         routeTail === "den-auth")

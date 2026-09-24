@@ -1,7 +1,7 @@
-import type { OpenworkSessionGroupEvent } from "@/app/lib/openwork-server";
+import type { SofiaSessionGroupEvent } from "@/app/lib/sofia-server";
 
 export type SessionGroupEventResponse = {
-  items: OpenworkSessionGroupEvent[];
+  items: SofiaSessionGroupEvent[];
   gap?: boolean;
   reset?: boolean;
 };
@@ -19,7 +19,7 @@ export class SessionGroupEventPoller {
   async poll(
     key: string,
     request: (options: { since: number }) => Promise<SessionGroupEventResponse>,
-    apply: (items: OpenworkSessionGroupEvent[]) => Promise<void>,
+    apply: (items: SofiaSessionGroupEvent[]) => Promise<void>,
   ): Promise<void> {
     const currentCursor = this.cursorByWorkspace.get(key) ?? 0;
     try {

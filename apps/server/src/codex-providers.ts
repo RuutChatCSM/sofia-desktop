@@ -71,7 +71,7 @@ export function codexEnvKeyForProvider(providerId: string): string {
  */
 export function codexHomeDir(opts?: { env?: NodeJS.ProcessEnv }): string {
   const env = opts?.env ?? process.env;
-  const pinned = env.OPENWORK_CODEX_HOME?.trim() || env.CODEX_HOME?.trim();
+  const pinned = env.SOFIA_HOME?.trim() || env.SOFIA_CODEX_HOME?.trim() || env.CODEX_HOME?.trim();
   if (pinned) return pinned;
   const home = env.HOME?.trim() || homedir();
   return join(home, ".sofia");

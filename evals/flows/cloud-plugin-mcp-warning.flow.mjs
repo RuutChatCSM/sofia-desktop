@@ -31,16 +31,16 @@ function slugify(value) {
 }
 
 function baseWorkspacePath(ctx) {
-  return ctx.env.OPENWORK_EVAL_WORKSPACE_PATH.trim().replace(/\/+$/, "");
+  return ctx.env.SOFIA_EVAL_WORKSPACE_PATH.trim().replace(/\/+$/, "");
 }
 
 async function denJson(ctx, path, options = {}) {
-  const apiBase = ctx.env.OPENWORK_EVAL_DEN_API_URL.trim().replace(/\/+$/, "");
+  const apiBase = ctx.env.SOFIA_EVAL_DEN_API_URL.trim().replace(/\/+$/, "");
   const response = await fetch(`${apiBase}${path}`, {
     ...options,
     headers: {
       "content-type": "application/json",
-      authorization: `Bearer ${ctx.env.OPENWORK_EVAL_DEN_TOKEN.trim()}`,
+      authorization: `Bearer ${ctx.env.SOFIA_EVAL_DEN_TOKEN.trim()}`,
       ...(options.headers ?? {}),
     },
   });
@@ -144,11 +144,11 @@ async function setupCloudPlugins(ctx) {
 }
 
 async function signInViaHandoff(ctx) {
-  const apiBase = ctx.env.OPENWORK_EVAL_DEN_API_URL.trim().replace(/\/+$/, "");
+  const apiBase = ctx.env.SOFIA_EVAL_DEN_API_URL.trim().replace(/\/+$/, "");
   const response = await fetch(`${apiBase}/v1/auth/desktop-handoff`, {
     method: "POST",
     headers: {
-      authorization: `Bearer ${ctx.env.OPENWORK_EVAL_DEN_TOKEN.trim()}`,
+      authorization: `Bearer ${ctx.env.SOFIA_EVAL_DEN_TOKEN.trim()}`,
       "content-type": "application/json",
     },
     body: JSON.stringify({}),
@@ -157,11 +157,11 @@ async function signInViaHandoff(ctx) {
   ctx.assert(response.ok && typeof payload.grant === "string", `Handoff create failed: ${response.status}`);
   await ctx.control("auth.exchange-grant", { grant: payload.grant, baseUrl: apiBase });
   await ctx.waitFor(
-    "window.__openworkControl.execute('auth.status').then(r => r.result?.status === 'signed_in')",
+    "window.__sofiaControl.execute('auth.status').then(r => r.result?.status === 'signed_in')",
     { timeoutMs: 30_000, label: "auth signed_in" },
   );
   await ctx.waitFor(
-    "Boolean((localStorage.getItem('openwork.den.activeOrgId') ?? '').trim())",
+    "Boolean((localStorage.getItem('sofia.den.activeOrgId') ?? '').trim())",
     { timeoutMs: 60_000, label: "active org resolved" },
   );
 }
@@ -207,7 +207,7 @@ async function createFreshWorkspace(ctx) {
   await handleOnboarding(ctx);
 
   const hasActiveWorkspace = await ctx.eval(
-    "location.hash.includes('/workspace/') || Boolean(localStorage.getItem('openwork.react.activeWorkspace'))",
+    "location.hash.includes('/workspace/') || Boolean(localStorage.getItem('sofia.react.activeWorkspace'))",
   );
   if (!hasActiveWorkspace) {
     await useWelcomeFolder(ctx);
@@ -228,7 +228,7 @@ async function createFreshWorkspace(ctx) {
   );
   await ensureRenderedApp(ctx);
   await ctx.waitFor(
-    "Boolean(window.__openworkControl?.listActions().find(a => a.id === 'workspace.create'))",
+    "Boolean(window.__sofiaControl?.listActions().find(a => a.id === 'workspace.create'))",
     { timeoutMs: 20_000, label: "workspace.create control action on session route" },
   );
   await ctx.control("workspace.create", {
@@ -247,7 +247,7 @@ async function waitForWorkspaceReady(ctx) {
 
 async function activeWorkspaceId(ctx) {
   const workspaceId = await ctx.eval(
-    "(location.hash.match(/\\/workspace\\/([^/]+)/) || [])[1] || localStorage.getItem('openwork.react.activeWorkspace') || ''",
+    "(location.hash.match(/\\/workspace\\/([^/]+)/) || [])[1] || localStorage.getItem('sofia.react.activeWorkspace') || ''",
   );
   ctx.assert(typeof workspaceId === "string" && workspaceId.trim().length > 0, "No active workspace id for settings route.");
   return workspaceId.trim();
@@ -266,12 +266,12 @@ async function openWorkspaceSettings(ctx, panel) {
 
 async function ensureRenderedApp(ctx) {
   const ready = await ctx.waitFor(
-    "Boolean(window.__openworkControl) && document.body.innerText.trim().length > 20",
+    "Boolean(window.__sofiaControl) && document.body.innerText.trim().length > 20",
     { timeoutMs: 8_000, label: "rendered app shell" },
   ).then(() => true).catch(() => false);
   if (ready) return;
   await ctx.eval("location.reload()");
-  await ctx.waitFor("Boolean(window.__openworkControl)", {
+  await ctx.waitFor("Boolean(window.__sofiaControl)", {
     timeoutMs: 60_000,
     label: "control API after app reload",
   });
@@ -286,7 +286,7 @@ async function openMarketplace(ctx) {
   await openWorkspaceSettings(ctx, "cloud-marketplaces");
   await ctx.waitForText("Marketplace", { timeoutMs: 30_000 });
   const hasRefresh = await ctx.eval(
-    "Boolean(window.__openworkControl?.listActions().find(a => a.id === 'extensions.refresh-marketplace'))",
+    "Boolean(window.__sofiaControl?.listActions().find(a => a.id === 'extensions.refresh-marketplace'))",
   );
   if (hasRefresh) {
     await ctx.control("extensions.refresh-marketplace");
@@ -327,13 +327,13 @@ function assertNoDialogInstallButtons(ctx, state) {
 
 async function workspaceServerJson(ctx, path) {
   return ctx.eval(`(async () => {
-    const bridge = window.__OPENWORK_ELECTRON__?.invokeDesktop;
+    const bridge = window.__SOFIA_ELECTRON__?.invokeDesktop;
     if (!bridge) throw new Error("Electron bridge unavailable");
-    const info = await bridge("openworkServerInfo");
+    const info = await bridge("sofiaServerInfo");
     const baseUrl = String(info?.baseUrl ?? "").replace(/\\/+$/, "");
     const token = String(info?.ownerToken || info?.clientToken || "").trim();
-    const workspaceId = (location.hash.match(/\\/workspace\\/([^/]+)/) || [])[1] || localStorage.getItem("openwork.react.activeWorkspace") || "";
-    if (!baseUrl || !token || !workspaceId) throw new Error("Missing OpenWork server connection");
+    const workspaceId = (location.hash.match(/\\/workspace\\/([^/]+)/) || [])[1] || localStorage.getItem("sofia.react.activeWorkspace") || "";
+    if (!baseUrl || !token || !workspaceId) throw new Error("Missing Sofia server connection");
     const response = await fetch(baseUrl + "/workspace/" + encodeURIComponent(workspaceId) + ${JSON.stringify(path)}, {
       headers: { authorization: "Bearer " + token },
     });
@@ -375,7 +375,7 @@ export default {
   id: FLOW_ID,
   title: "Retired local import warning path: marketplace plugins are cloud-delivered only",
   kind: "user-facing",
-  requiredEnv: ["OPENWORK_EVAL_DEN_API_URL", "OPENWORK_EVAL_DEN_TOKEN", "OPENWORK_EVAL_WORKSPACE_PATH"],
+  requiredEnv: ["SOFIA_EVAL_DEN_API_URL", "SOFIA_EVAL_DEN_TOKEN", "SOFIA_EVAL_WORKSPACE_PATH"],
   steps: [
     {
       name: "Prepare Den plugins and desktop workspace",

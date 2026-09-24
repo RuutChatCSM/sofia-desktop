@@ -1,4 +1,4 @@
-import type { DenTypeId } from "@openwork-ee/utils/typeid"
+import type { DenTypeId } from "@sofia-ee/utils/typeid"
 import type { Hono } from "hono"
 import { listNativeProviderUsableEntries, type NativeProviderConnectionEntry } from "../capability-sources/native-provider-connections.js"
 import type { McpPrincipal } from "./auth.js"
@@ -106,7 +106,7 @@ function connectionStatusMatch(
     hasBody: false,
     kind: "connection_status",
     status: "needs_connection",
-    hint: `Ask the user to open OpenWork Cloud -> Your Connections and click Connect on "${connection.name}", then search again.`,
+    hint: `Ask the user to open Sofia Cloud -> Your Connections and click Connect on "${connection.name}", then search again.`,
     connectionStatus: buildExternalConnectionStatus({
       connection,
       state: "needs_connection",

@@ -35,7 +35,7 @@ export type LocalPreferences = {
   modelVariant: string | null;
   defaultModel: ModelRef | null;
   /**
-   * Name of the opencode agent used for new prompts (null = the server's
+   * Name of the engine agent used for new prompts (null = the server's
    * default, usually "build"). Persisted so a reload does not silently
    * fall back to the default agent (#2101).
    */
@@ -85,7 +85,7 @@ type LocalContextValue = {
 
 const LocalContext = createContext<LocalContextValue | undefined>(undefined);
 
-const UI_STORAGE_KEY = "openwork.ui";
+const UI_STORAGE_KEY = "sofia.ui";
 export const DEFAULT_SHOW_THINKING = true;
 
 const INITIAL_UI: LocalUIState = { view: "settings", tab: "general" };

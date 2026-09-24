@@ -9,7 +9,7 @@ import {
 } from "./integration-data";
 
 /**
- * Plugin primitives — mirror OpenCode / Claude Code's plugin surface:
+ * Plugin primitives — mirror Sofia / Claude Code's plugin surface:
  *
  *  A plugin is a *bundle* of reusable pieces that extend an agent runtime:
  *   - skills      natural-language playbooks/instructions agents can load on demand
@@ -376,18 +376,18 @@ const MOCK_PLUGINS: DenPlugin[] = [
     requiresProvider: "any",
   },
   {
-    id: "plg_openwork_release",
-    name: "OpenWork Release Kit",
-    slug: "openwork-release-kit",
+    id: "plg_sofia_release",
+    name: "Sofia Release Kit",
+    slug: "sofia-release-kit",
     description:
-      "Internal plugin that automates OpenWork release prep, server package checks, and changelog generation. Shipped by OpenWork infra.",
+      "Internal plugin that automates Sofia release prep, server package checks, and changelog generation. Shipped by Sofia infra.",
     version: "2.3.1",
-    author: "OpenWork",
+    author: "Sofia",
     category: "workflows",
     installed: true,
-    source: { type: "github", repo: "different-ai/openwork-plugins" },
+    source: { type: "github", repo: "RuutChatCSM/sofia-desktop-plugins" },
     skills: [
-      { id: "sk_ow_release_prep", name: "Release Prep", description: "Bump versions across app, desktop, and openwork-server in lockstep." },
+      { id: "sk_ow_release_prep", name: "Release Prep", description: "Bump versions across app, desktop, and sofia-server in lockstep." },
       { id: "sk_ow_changelog", name: "Changelog Drafter", description: "Generate markdown release notes from merged PRs." },
     ],
     hooks: [

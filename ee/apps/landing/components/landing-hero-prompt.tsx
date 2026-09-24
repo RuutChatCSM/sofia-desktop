@@ -12,7 +12,7 @@ import { capturePosthogEvent } from "../lib/posthog-client";
 import { LandingAgentGlyphs } from "./landing-agent-glyphs";
 
 const PROMPT_VARIANT = "hero";
-export const AGENT_START_PROMPT = `Install OpenWork on my computer, set up my first workspace, and open it ready to use. Follow the steps in https://openworklabs.com/start.md?v=${PROMPT_VARIANT}`;
+export const AGENT_START_PROMPT = `Install Sofia on my computer, set up my first workspace, and open it ready to use. Follow the steps in https://sofia.ruut.chat/start.md?v=${PROMPT_VARIANT}`;
 
 type CopyMethod = "clipboard" | "execCommand" | "none";
 
@@ -21,7 +21,7 @@ type Props = {
   compact?: boolean;
 };
 
-const steps = ["Installs OpenWork", "Creates your workspace", "Opens ready to run"];
+const steps = ["Installs Sofia", "Creates your workspace", "Opens ready to run"];
 
 export function LandingHeroPrompt({ className, compact = false }: Props) {
   const [feedback, setFeedback] = useState(false);
@@ -129,13 +129,13 @@ export function LandingHeroPrompt({ className, compact = false }: Props) {
         className="group cursor-pointer rounded-2xl bg-white p-5 shadow-[0_8px_24px_rgba(1,22,39,0.05)] transition-shadow hover:shadow-[0_10px_28px_rgba(1,22,39,0.08)]"
       >
         <div className="mb-2 text-[13px] text-[var(--lp-muted)]">
-          Already use an AI agent? Paste this prompt — it installs OpenWork for you.
+          Already use an AI agent? Paste this prompt — it installs Sofia for you.
         </div>
         <p className="text-[15px] leading-relaxed text-[#011627]">
-          Install OpenWork on my computer, set up my first workspace, and open it
+          Install Sofia on my computer, set up my first workspace, and open it
           ready to use. Follow the steps in{" "}
           <span className="text-[var(--lp-muted)]">
-            https://openworklabs.com/start.md?v={PROMPT_VARIANT}
+            https://sofia.ruut.chat/start.md?v={PROMPT_VARIANT}
           </span>
           <span
             className="hero-prompt-caret ml-0.5 inline-block h-[1.1em] w-[2px] translate-y-[2px] bg-[#011627]"

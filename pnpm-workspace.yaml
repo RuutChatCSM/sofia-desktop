@@ -1,6 +1,6 @@
 minimumReleaseAge: 4320
 minimumReleaseAgeExclude:
-  - "@opencode-ai/sdk"
+  - "@engine-ai/sdk"
   - "acorn"
   - "dompurify"
   - "enhanced-resolve"

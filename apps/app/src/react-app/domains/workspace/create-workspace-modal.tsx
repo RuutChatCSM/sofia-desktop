@@ -4,6 +4,7 @@ import {
   useMemo,
   useReducer,
   useRef,
+  useState,
   type SetStateAction,
 } from "react";
 import { ArrowLeft, FolderPlus, Globe, Loader2 } from "lucide-react";
@@ -40,6 +41,7 @@ import type {
 } from "./types";
 
 export function CreateWorkspaceModal(props: CreateWorkspaceModalProps) {
+  const [pickerError, setPickerError] = useState<string | null>(null);
   const remoteUrlRef = useRef<HTMLInputElement | null>(null);
 
   const [localState, dispatchLocal] = useReducer(
@@ -101,7 +103,7 @@ export function CreateWorkspaceModal(props: CreateWorkspaceModalProps) {
   const headerTitle = (() => {
     switch (screen) {
       case "local":
-        return t("dashboard.create_local_workspace_title");
+        return "Add project";
       case "remote":
         return t("dashboard.create_remote_custom_title");
       default:
@@ -112,7 +114,7 @@ export function CreateWorkspaceModal(props: CreateWorkspaceModalProps) {
   const headerSubtitle = (() => {
     switch (screen) {
       case "local":
-        return t("dashboard.create_local_workspace_subtitle");
+        return "Choose a folder for Sofia to work in.";
       case "remote":
         return t("dashboard.create_remote_custom_subtitle");
       default:
@@ -124,7 +126,9 @@ export function CreateWorkspaceModal(props: CreateWorkspaceModalProps) {
   useEffect(() => {
     if (!props.open) return;
     dispatchLocal({ type: "reset" });
-  }, [props.open]);
+    dispatchLocal({ type: "set", key: "screen", value: props.localDisabled ? "chooser" : "local" });
+    setPickerError(null);
+  }, [props.open, props.localDisabled]);
 
   // Tick the "elapsed" clock while submitting.
   useEffect(() => {
@@ -147,15 +151,15 @@ export function CreateWorkspaceModal(props: CreateWorkspaceModalProps) {
   const handlePickFolder = async () => {
     if (pickingFolder) return;
     setPickingFolder(true);
+    setPickerError(null);
     try {
       await new Promise((resolve) =>
         requestAnimationFrame(() => resolve(null)),
       );
       const next = await props.onPickFolder();
       if (next) setSelectedFolder(next);
-    } catch {
-      // Folder picker cancellation or bridge errors should never leave the
-      // modal in a busy state.
+    } catch (error) {
+      setPickerError(error instanceof Error ? error.message : "The folder picker could not open. Please try again.");
     } finally {
       setPickingFolder(false);
     }
@@ -165,8 +169,8 @@ export function CreateWorkspaceModal(props: CreateWorkspaceModalProps) {
     if (!props.onConfirmRemote) return;
     await Promise.resolve(
       props.onConfirmRemote({
-        openworkHostUrl: remoteUrl.trim(),
-        openworkToken: remoteToken.trim() || null,
+        sofiaHostUrl: remoteUrl.trim(),
+        sofiaToken: remoteToken.trim() || null,
         directory: null,
         displayName: remoteDisplayName.trim() || null,
         closeModal: true,
@@ -189,12 +193,12 @@ export function CreateWorkspaceModal(props: CreateWorkspaceModalProps) {
     >
       <DialogContent
         showCloseButton={showClose}
-        className="flex max-h-[90vh] min-h-0 w-full max-w-xl flex-col overflow-hidden sm:max-w-xl"
+        className="flex max-h-[90vh] min-h-0 w-full max-w-md flex-col overflow-hidden sm:max-w-md"
       >
         <DialogHeader className="flex-row">
-          {screen !== "chooser" ? (
+          {screen === "remote" ? (
             <Button
-              onClick={() => setScreen("chooser")}
+              onClick={() => setScreen(props.localDisabled ? "chooser" : "local")}
               disabled={submitting || remoteSubmitting}
               variant="ghost"
               size="icon"
@@ -263,6 +267,7 @@ export function CreateWorkspaceModal(props: CreateWorkspaceModalProps) {
         ) : null}
 
         {screen === "local" ? (
+          <>
           <CreateWorkspaceLocalPanel
             selectedFolder={selectedFolder}
             hasSelectedFolder={hasSelectedFolder}
@@ -272,10 +277,10 @@ export function CreateWorkspaceModal(props: CreateWorkspaceModalProps) {
             onProjectLabelInput={setProjectLabel}
             showProjectLabel={showProjectLabel}
             submitting={submitting}
-            localError={localError}
+            localError={pickerError ?? localError}
             onClose={props.onClose}
             onSubmit={() => void handleLocalSubmit()}
-            confirmLabel={props.confirmLabel}
+            confirmLabel={props.confirmLabel ?? "Add project"}
             workerLabel={props.workerLabel}
             onConfirmWorker={props.onConfirmWorker}
             preset={preset}
@@ -295,6 +300,11 @@ export function CreateWorkspaceModal(props: CreateWorkspaceModalProps) {
               setShowProgressDetails((prev) => !prev)
             }
           />
+          <div className="flex items-center gap-3 border-t border-dls-border pt-3 text-xs text-dls-secondary">
+            {props.onConfirmRemote ? <button type="button" className="hover:text-dls-text" disabled={submitting} onClick={() => setScreen("remote")}>Connect a remote project</button> : null}
+            {props.onImportConfig ? <button type="button" className="hover:text-dls-text" disabled={submitting || props.importingConfig} onClick={props.onImportConfig}>{t("dashboard.import_config")}</button> : null}
+          </div>
+          </>
         ) : null}
 
         {screen === "remote" ? (

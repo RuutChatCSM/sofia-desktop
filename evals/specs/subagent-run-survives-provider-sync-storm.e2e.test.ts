@@ -6,10 +6,10 @@ import {
   selectModel,
   sendComposerMessage,
   waitFor,
-} from "@openwork/behaviors";
-import { screenshot, validate } from "@openwork/test-evidence";
-import { app, eventually, needs, server, test, unmetNeeds } from "@openwork/testkit";
-import type { TestNeeds } from "@openwork/testkit";
+} from "@sofia/behaviors";
+import { screenshot, validate } from "@sofia/test-evidence";
+import { app, eventually, needs, server, test, unmetNeeds } from "@sofia/testkit";
+import type { TestNeeds } from "@sofia/testkit";
 
 /**
  * REPRODUCTION SPEC for the "aborted messages on almost every message,
@@ -18,7 +18,7 @@ import type { TestNeeds } from "@openwork/testkit";
  *
  * Suspected mechanism (from code reading, to be proven or cleared here):
  *  - apps/server/src/cloud-provider-sync.ts apply()/sweep() call
- *    reloadOpencodeEngine() -> engine POST /instance/dispose with NO
+ *    reloadWorkspaceEngineEngine() -> engine POST /instance/dispose with NO
  *    "sessions are running" guard (#3526).
  *  - apps/app/src/react-app/domains/cloud/use-cloud-provider-auto-sync.ts
  *    triggers that sync on window focus, network online, visibilitychange and
@@ -42,7 +42,7 @@ import type { TestNeeds } from "@openwork/testkit";
 
 const requirements: TestNeeds = {
   env: ["ANTHROPIC_API_KEY"],
-  optIn: ["OPENWORK_EVAL_E2E_TESTS"],
+  optIn: ["SOFIA_EVAL_E2E_TESTS"],
 };
 const missingRequirements = unmetNeeds(requirements, process.env);
 const title = missingRequirements.length > 0
@@ -134,12 +134,12 @@ const assistantHasText = (text: string): string => `(() => {
 })()`;
 
 const stopEnabledExpression = `(() => {
-  const stop = window.__openworkControl?.listActions().find((action) => action.id === "composer.stop");
+  const stop = window.__sofiaControl?.listActions().find((action) => action.id === "composer.stop");
   return Boolean(stop && !stop.disabled);
 })()`;
 
 const stopDisabledExpression = `(() => {
-  const stop = window.__openworkControl?.listActions().find((action) => action.id === "composer.stop");
+  const stop = window.__sofiaControl?.listActions().find((action) => action.id === "composer.stop");
   return Boolean(stop?.disabled);
 })()`;
 
@@ -162,8 +162,8 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 2_700_000 }, async
   // it cannot contaminate the mid-run dispose/abort claims below.
   const anthropicKey = process.env.ANTHROPIC_API_KEY?.trim() ?? "";
   const providerConfigured = await evalIn(desktopApp, `(async () => {
-    const port = localStorage.getItem("openwork.server.port");
-    const token = localStorage.getItem("openwork.server.token");
+    const port = localStorage.getItem("sofia.server.port");
+    const token = localStorage.getItem("sofia.server.token");
     if (!port || !token) return "missing local server credentials";
     const request = async (path, init) => {
       const response = await fetch("http://127.0.0.1:" + port + path, {
@@ -176,7 +176,7 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 2_700_000 }, async
     const workspaceId = ${JSON.stringify(workspaceId)};
     const patched = await request("/workspace/" + encodeURIComponent(workspaceId) + "/config", {
       method: "PATCH",
-      body: JSON.stringify({ opencode: { provider: { anthropic: { options: { apiKey: ${JSON.stringify(anthropicKey)} } } } } }),
+      body: JSON.stringify({ engine: { provider: { anthropic: { options: { apiKey: ${JSON.stringify(anthropicKey)} } } } } }),
     });
     if (patched !== "ok") return patched;
     return request("/workspace/" + encodeURIComponent(workspaceId) + "/engine/reload", { method: "POST" });
@@ -185,9 +185,9 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 2_700_000 }, async
 
   // ── Pick a real Anthropic model through the product picker ─────────────
   // Picker rows carry bare model ids (e.g. "claude-sonnet-4-5"). Sonnet-class
-  // keeps the run affordable; set OPENWORK_EVAL_MODEL=claude-opus-4-8 to
+  // keeps the run affordable; set SOFIA_EVAL_MODEL=claude-opus-4-8 to
   // mirror the support report exactly.
-  const preferredModel = process.env.OPENWORK_EVAL_MODEL?.trim() ?? "";
+  const preferredModel = process.env.SOFIA_EVAL_MODEL?.trim() ?? "";
   const models = await readAvailableModels(desktopApp);
   const selectable = models.filter((model) => model.selectable);
   const claudes = selectable.filter((model) => /anthropic/i.test(model.providerName) || /^claude-/i.test(model.id));
@@ -207,8 +207,8 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 2_700_000 }, async
 
   // ── Start the engine event tail (dispose / retry / session.error witness) ──
   const tailStarted = await evalIn(desktopApp, `(() => {
-    const port = localStorage.getItem("openwork.server.port");
-    const token = localStorage.getItem("openwork.server.token");
+    const port = localStorage.getItem("sofia.server.port");
+    const token = localStorage.getItem("sofia.server.token");
     if (!port || !token) return "missing local server credentials";
     window.__owStorm = { active: true, reconnects: -1, disposes: [], retries: [], errors: [], eventCounts: {} };
     const record = (event) => {
@@ -236,7 +236,7 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 2_700_000 }, async
       }
     };
     (async () => {
-      const url = "http://127.0.0.1:" + port + "/workspace/" + encodeURIComponent(${JSON.stringify(workspaceId)}) + "/opencode/event";
+      const url = "http://127.0.0.1:" + port + "/workspace/" + encodeURIComponent(${JSON.stringify(workspaceId)}) + "/engine/event";
       while (window.__owStorm.active) {
         window.__owStorm.reconnects += 1;
         try {
@@ -267,8 +267,8 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 2_700_000 }, async
 
   // The sync layer must actually be armed, otherwise this spec stresses nothing.
   const readSyncStatusExpression = `(async () => {
-    const port = localStorage.getItem("openwork.server.port");
-    const token = localStorage.getItem("openwork.server.token");
+    const port = localStorage.getItem("sofia.server.port");
+    const token = localStorage.getItem("sofia.server.token");
     const response = await fetch("http://127.0.0.1:" + port + "/cloud-provider-sync/status", {
       headers: { Authorization: "Bearer " + token },
     });
@@ -291,12 +291,12 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 2_700_000 }, async
     // sends, with the product's own persisted credentials — the failure, if
     // any, names itself instead of no-oping.
     armingProbe = String(await evalIn(desktopApp, `(async () => {
-      const port = localStorage.getItem("openwork.server.port");
-      const clientToken = localStorage.getItem("openwork.server.token");
-      const hostToken = localStorage.getItem("openwork.server.hostToken");
-      const denToken = (localStorage.getItem("openwork.den.authToken") ?? "").trim();
-      const orgId = (localStorage.getItem("openwork.den.activeOrgId") ?? "").trim();
-      const apiBaseUrl = (localStorage.getItem("openwork.den.apiBaseUrl") ?? "").trim()
+      const port = localStorage.getItem("sofia.server.port");
+      const clientToken = localStorage.getItem("sofia.server.token");
+      const hostToken = localStorage.getItem("sofia.server.hostToken");
+      const denToken = (localStorage.getItem("sofia.den.authToken") ?? "").trim();
+      const orgId = (localStorage.getItem("sofia.den.activeOrgId") ?? "").trim();
+      const apiBaseUrl = (localStorage.getItem("sofia.den.apiBaseUrl") ?? "").trim()
         || ${JSON.stringify(den.ref.apiUrl)};
       const facts = [
         "hostToken=" + (hostToken ? "present" : "MISSING"),
@@ -307,7 +307,7 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 2_700_000 }, async
       if (!port || !hostToken || !denToken || !orgId || !apiBaseUrl) return facts.join(" ");
       const response = await fetch("http://127.0.0.1:" + port + "/den-session", {
         method: "PUT",
-        headers: { "x-openwork-host-token": hostToken, "Content-Type": "application/json" },
+        headers: { "x-sofia-host-token": hostToken, "Content-Type": "application/json" },
         body: JSON.stringify({ baseUrl: apiBaseUrl, token: denToken, orgId }),
       });
       facts.push("PUT /den-session -> " + response.status + " " + (await response.text()).slice(0, 200));
@@ -336,11 +336,11 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 2_700_000 }, async
   const convergence: string[] = [];
   for (let pass = 1; pass <= 3; pass += 1) {
     const result = await evalIn(desktopApp, `(async () => {
-      const port = localStorage.getItem("openwork.server.port");
-      const hostToken = localStorage.getItem("openwork.server.hostToken");
+      const port = localStorage.getItem("sofia.server.port");
+      const hostToken = localStorage.getItem("sofia.server.hostToken");
       const response = await fetch("http://127.0.0.1:" + port + "/cloud-provider-sync/run", {
         method: "POST",
-        headers: { "x-openwork-host-token": hostToken, "Content-Type": "application/json" },
+        headers: { "x-sofia-host-token": hostToken, "Content-Type": "application/json" },
         body: JSON.stringify({ reason: "spec_convergence_probe" }),
       });
       const body = await response.text();
@@ -404,8 +404,8 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 2_700_000 }, async
     if (stillBusy === true) busyTicks += 1;
 
     const status = parseSyncStatus(await evalIn(desktopApp, `(async () => {
-      const port = localStorage.getItem("openwork.server.port");
-      const token = localStorage.getItem("openwork.server.token");
+      const port = localStorage.getItem("sofia.server.port");
+      const token = localStorage.getItem("sofia.server.token");
       const response = await fetch("http://127.0.0.1:" + port + "/cloud-provider-sync/status", {
         headers: { Authorization: "Bearer " + token },
       });
@@ -468,8 +468,8 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 2_700_000 }, async
   const headerTimeoutRetries = probe.retries.filter((retry) => /headers? timed out/i.test(retry.message));
 
   const finalStatusRaw = await evalIn(desktopApp, `(async () => {
-    const port = localStorage.getItem("openwork.server.port");
-    const token = localStorage.getItem("openwork.server.token");
+    const port = localStorage.getItem("sofia.server.port");
+    const token = localStorage.getItem("sofia.server.token");
     const response = await fetch("http://127.0.0.1:" + port + "/cloud-provider-sync/status", {
       headers: { Authorization: "Bearer " + token },
     });

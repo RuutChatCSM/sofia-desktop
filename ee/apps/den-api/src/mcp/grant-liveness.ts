@@ -1,4 +1,4 @@
-import { normalizeDenTypeId } from "@openwork-ee/utils/typeid"
+import { normalizeDenTypeId } from "@sofia-ee/utils/typeid"
 import { cache } from "../cache.js"
 
 export type McpGrantLiveness = "live" | "missing" | "check_failed"

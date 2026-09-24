@@ -1,9 +1,9 @@
 import { expect } from "vitest"
-import { denFetch, evalIn, go } from "@openwork/behaviors"
-import { app, needs, server, test } from "@openwork/testkit"
+import { denFetch, evalIn, go } from "@sofia/behaviors"
+import { app, needs, server, test } from "@sofia/testkit"
 
 const requirements = {
-  optIn: ["OPENWORK_EVAL_E2E_TESTS", "OPENWORK_EVAL_AUTOMATION_DEPLOYMENT_GATE_E2E_TEST"],
+  optIn: ["SOFIA_EVAL_E2E_TESTS", "SOFIA_EVAL_AUTOMATION_DEPLOYMENT_GATE_E2E_TEST"],
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

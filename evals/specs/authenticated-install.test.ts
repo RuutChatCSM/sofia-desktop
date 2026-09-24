@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { expect } from "vitest";
-import { test } from "@openwork/testkit";
+import { test } from "@sofia/testkit";
 import { buildAuthenticatedInstallDownloadHref } from "../../ee/apps/den-web/app/(den)/_lib/install-download";
 
 const installScreenPath = fileURLToPath(
@@ -47,7 +47,7 @@ test("signed-in members use clean active-organization install routes without min
 
   evidence.recordAssertionEvidence(
     "Authenticated onboarding uses the active organization without install tokens",
-    "Clean /install loads /v1/me/install-config, downloads through /v1/me/install/:platform, post-invite and member actions navigate to /install, and the clipboard OpenWork-link guide remains present.",
+    "Clean /install loads /v1/me/install-config, downloads through /v1/me/install/:platform, post-invite and member actions navigate to /install, and the clipboard Sofia-link guide remains present.",
     true,
   );
 });

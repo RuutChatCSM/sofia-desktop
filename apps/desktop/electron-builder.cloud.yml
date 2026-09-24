@@ -2,12 +2,12 @@ extends: ./electron-builder.base.yml
 appId: app.sofia.desktop
 productName: Sofia App Cloud
 extraMetadata:
-  openworkDistribution: cloud
+  sofiaDistribution: cloud
 protocols:
   - name: Sofia App Cloud
     schemes:
-      - openwork
+      - sofia
 publish: null
 linux:
   executableName: sofia-app-cloud
-artifactName: sofia-app-cloud-${os}-${arch}-${version}.${ext}
+artifactName: sofia-cloud-${os}-${arch}-${version}.${ext}

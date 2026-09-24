@@ -2,8 +2,8 @@ import { defineFlow, type FlowContext } from "../runner/flow.ts";
 import { loadVoiceoverParagraphs } from "../runner/voiceover.ts";
 
 const FLOW_ID = "den-gateway";
-const DEFAULT_FLOW_BASE_URL = "https://web.openworklabs.com";
-const DEFAULT_DEN_WEB_URL = "https://app.openworklabs.com";
+const DEFAULT_FLOW_BASE_URL = "https://sofia-web.ruut.chat";
+const DEFAULT_DEN_WEB_URL = "https://sofia-app.ruut.chat";
 const MARKER_PATH = `cloud-workspace-overlay-${Date.now()}.txt`;
 const MARKER_CONTENT = `cloud workspace overlay proof ${Date.now()}`;
 
@@ -73,18 +73,18 @@ function trimBase(value: string | undefined, fallback: string) {
 }
 
 function flowBase(ctx: FlowContext) {
-  return trimBase(ctx.env.OPENWORK_FLOW_BASE_URL, DEFAULT_FLOW_BASE_URL);
+  return trimBase(ctx.env.SOFIA_FLOW_BASE_URL, DEFAULT_FLOW_BASE_URL);
 }
 
 function denWebBase(ctx: FlowContext) {
-  return trimBase(ctx.env.OPENWORK_FLOW_DEN_URL, DEFAULT_DEN_WEB_URL);
+  return trimBase(ctx.env.SOFIA_FLOW_DEN_URL, DEFAULT_DEN_WEB_URL);
 }
 
 function joinUrl(base: string, path: string) {
   return `${base}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
-function requiredEnv(ctx: FlowContext, name: "OPENWORK_FLOW_EMAIL" | "OPENWORK_FLOW_PASSWORD") {
+function requiredEnv(ctx: FlowContext, name: "SOFIA_FLOW_EMAIL" | "SOFIA_FLOW_PASSWORD") {
   const value = ctx.env[name]?.trim() ?? "";
   witness(ctx, value.length > 0, `${name} is set`);
   return value;
@@ -95,7 +95,7 @@ function authHeaders(ctx: FlowContext) {
   return {
     "content-type": "application/json",
     authorization: `Bearer ${state.denToken}`,
-    ...(org ? { "x-openwork-legacy-org-id": org.id } : {}),
+    ...(org ? { "x-sofia-legacy-org-id": org.id } : {}),
   };
 }
 
@@ -131,8 +131,8 @@ async function signIn(ctx: FlowContext) {
       origin: flowBase(ctx),
     },
     body: JSON.stringify({
-      email: requiredEnv(ctx, "OPENWORK_FLOW_EMAIL"),
-      password: requiredEnv(ctx, "OPENWORK_FLOW_PASSWORD"),
+      email: requiredEnv(ctx, "SOFIA_FLOW_EMAIL"),
+      password: requiredEnv(ctx, "SOFIA_FLOW_PASSWORD"),
     }),
   });
   witness(ctx, result.response.ok, "Email/password sign-in returns HTTP 200", {
@@ -201,16 +201,16 @@ async function seedBrowserSession(ctx: FlowContext) {
   const org = state.org;
   witness(ctx, Boolean(org), "An organization is available before browser session seeding", org);
   await navigateAbsolute(ctx, flowBase(ctx));
-  await ctx.waitFor("window.__OPENWORK_GATEWAY__?.version === 1", {
+  await ctx.waitFor("window.__SOFIA_GATEWAY__?.version === 1", {
     timeoutMs: 30_000,
     label: "gateway marker is injected",
   });
   await ctx.eval(`(() => {
-    localStorage.setItem("openwork.den.baseUrl", ${JSON.stringify(denWebBase(ctx))});
-    localStorage.setItem("openwork.den.authToken", ${JSON.stringify(state.denToken)});
-    localStorage.setItem("openwork.den.activeOrgId", ${JSON.stringify(org?.id ?? "")});
-    localStorage.setItem("openwork.den.activeOrgSlug", ${JSON.stringify(org?.slug ?? "")});
-    localStorage.setItem("openwork.den.activeOrgName", ${JSON.stringify(org?.name ?? "")});
+    localStorage.setItem("sofia.den.baseUrl", ${JSON.stringify(denWebBase(ctx))});
+    localStorage.setItem("sofia.den.authToken", ${JSON.stringify(state.denToken)});
+    localStorage.setItem("sofia.den.activeOrgId", ${JSON.stringify(org?.id ?? "")});
+    localStorage.setItem("sofia.den.activeOrgSlug", ${JSON.stringify(org?.slug ?? "")});
+    localStorage.setItem("sofia.den.activeOrgName", ${JSON.stringify(org?.name ?? "")});
     location.href = ${JSON.stringify(joinUrl(flowBase(ctx), "/session"))};
     return true;
   })()`);
@@ -245,7 +245,7 @@ async function readCloudInstance(ctx: FlowContext) {
 function formatVersion(version: string | null) {
   const trimmed = version?.trim() ?? "";
   if (!trimmed) return null;
-  const prefix = "openwork-";
+  const prefix = "sofia-";
   if (!trimmed.toLowerCase().startsWith(prefix)) return trimmed;
   const withoutPrefix = trimmed.slice(prefix.length);
   return withoutPrefix.toLowerCase().startsWith("v") ? withoutPrefix : `v${withoutPrefix}`;
@@ -404,7 +404,7 @@ export default defineFlow({
   kind: "user-facing",
   preserveTheme: true,
   requiresApp: true,
-  requiredEnv: ["OPENWORK_FLOW_EMAIL", "OPENWORK_FLOW_PASSWORD"],
+  requiredEnv: ["SOFIA_FLOW_EMAIL", "SOFIA_FLOW_PASSWORD"],
   steps: [
     {
       name: "Frame 1 — current cloud pill",

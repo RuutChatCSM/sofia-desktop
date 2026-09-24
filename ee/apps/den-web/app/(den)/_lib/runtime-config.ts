@@ -1,9 +1,9 @@
 export type DenOrgMode = "single_org" | "multi_org";
 
 export type DenWebRuntimeConfig = {
-  openworkAppConnectUrl: string;
-  openworkWebUrl: string;
-  openworkAuthCallbackUrl: string;
+  sofiaAppConnectUrl: string;
+  sofiaWebUrl: string;
+  sofiaAuthCallbackUrl: string;
   orgMode: DenOrgMode;
   singleOrgName: string;
   singleOrgSlug: string;
@@ -11,14 +11,14 @@ export type DenWebRuntimeConfig = {
   singleOrgSsoConfigured: boolean;
 };
 
-export const DEFAULT_OPENWORK_WEB_URL = "https://web.openworklabs.com";
+export const DEFAULT_SOFIA_WEB_URL = "https://sofia-web.ruut.chat";
 
 export const EMPTY_RUNTIME_CONFIG: DenWebRuntimeConfig = {
-  openworkAppConnectUrl: "",
-  openworkWebUrl: DEFAULT_OPENWORK_WEB_URL,
-  openworkAuthCallbackUrl: "",
+  sofiaAppConnectUrl: "",
+  sofiaWebUrl: DEFAULT_SOFIA_WEB_URL,
+  sofiaAuthCallbackUrl: "",
   orgMode: "single_org",
-  singleOrgName: "OpenWork",
+  singleOrgName: "Sofia",
   singleOrgSlug: "default",
   singleOrgAllowPublicSignup: false,
   singleOrgSsoConfigured: false
@@ -47,11 +47,11 @@ function normalizeRuntimeConfig(value: unknown): DenWebRuntimeConfig {
   const singleOrgName = readStringProperty(value, "singleOrgName");
   const singleOrgSlug = readStringProperty(value, "singleOrgSlug");
   return {
-    openworkAppConnectUrl: readStringProperty(value, "openworkAppConnectUrl"),
-    openworkWebUrl: readStringProperty(value, "openworkWebUrl") || DEFAULT_OPENWORK_WEB_URL,
-    openworkAuthCallbackUrl: readStringProperty(value, "openworkAuthCallbackUrl"),
+    sofiaAppConnectUrl: readStringProperty(value, "sofiaAppConnectUrl"),
+    sofiaWebUrl: readStringProperty(value, "sofiaWebUrl") || DEFAULT_SOFIA_WEB_URL,
+    sofiaAuthCallbackUrl: readStringProperty(value, "sofiaAuthCallbackUrl"),
     orgMode: normalizeOrgMode(readStringProperty(value, "orgMode")),
-    singleOrgName: singleOrgName || "OpenWork",
+    singleOrgName: singleOrgName || "Sofia",
     singleOrgSlug: singleOrgSlug || "default",
     singleOrgAllowPublicSignup: readBooleanProperty(value, "singleOrgAllowPublicSignup"),
     singleOrgSsoConfigured: readBooleanProperty(value, "singleOrgSsoConfigured")

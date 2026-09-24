@@ -1,5 +1,5 @@
 {
-  "name": "@openwork/mcp-apps",
+  "name": "@sofia/mcp-apps",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -26,7 +26,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/ext-apps": "^1.7.5",
-    "@openwork/types": "workspace:*",
+    "@sofia/types": "workspace:*",
     "react": "catalog:",
     "react-dom": "catalog:",
     "zod": "^4.3.6"

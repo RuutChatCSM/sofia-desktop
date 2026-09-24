@@ -8,9 +8,9 @@
  * discovery reuses these plugin rows by name and fills in their content.
  */
 
-export const DEFAULT_OPENWORK_MARKETPLACE_NAME = "OpenWork Marketplace"
-export const DEFAULT_OPENWORK_MARKETPLACE_DESCRIPTION = "Built-in OpenWork AI capabilities available in the desktop app after sign-in."
-export const DEFAULT_OPENWORK_MARKETPLACE_LOGO_URL = "/openwork-mark.svg"
+export const DEFAULT_SOFIA_MARKETPLACE_NAME = "Sofia Marketplace"
+export const DEFAULT_SOFIA_MARKETPLACE_DESCRIPTION = "Built-in Sofia AI capabilities available in the desktop app after sign-in."
+export const DEFAULT_SOFIA_MARKETPLACE_LOGO_URL = "/sofia-mark.svg"
 
 export const DEFAULT_ANTHROPIC_MARKETPLACE_NAME = "Anthropic-Compatible Plugins"
 export const DEFAULT_ANTHROPIC_MARKETPLACE_DESCRIPTION = "Starter marketplace for Claude/Anthropic-compatible plugin repos. Example source: https://github.com/anthropics/knowledge-work-plugins."

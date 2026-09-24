@@ -24,7 +24,7 @@ import type {
 } from "@/app/lib/engine-types";
 
 import { t } from "../../i18n";
-import { unwrap } from "../../app/lib/opencode";
+import { unwrap } from "../../app/lib/engine";
 import type { McpStatusMap, TodoItem } from "../../app/types";
 import { safeStringify } from "../../app/utils";
 import { filterProviderList } from "../../app/utils/providers";

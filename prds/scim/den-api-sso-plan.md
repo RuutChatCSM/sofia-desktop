@@ -2,7 +2,7 @@
 
 ## Goal
 
-Add self-serve enterprise SSO to Den so each OpenWork organization can configure its own SAML or OIDC provider, expose an organization-specific sign-in URL, and keep SSO identity state aligned with SCIM provisioning state.
+Add self-serve enterprise SSO to Den so each Sofia organization can configure its own SAML or OIDC provider, expose an organization-specific sign-in URL, and keep SSO identity state aligned with SCIM provisioning state.
 
 The intended product model is:
 
@@ -141,12 +141,12 @@ Provider ids are global in Better Auth. Den should never let admins choose the r
 
 Use deterministic internal ids:
 
-- SSO: `openwork-sso-${organizationId}`
-- SCIM: `openwork-scim-${organizationId}`
+- SSO: `sofia-sso-${organizationId}`
+- SCIM: `sofia-scim-${organizationId}`
 
 If multiple SSO providers per org become necessary, use:
 
-- `openwork-sso-${organizationId}-${connectionId}`
+- `sofia-sso-${organizationId}-${connectionId}`
 
 Initial recommendation:
 
@@ -309,7 +309,7 @@ If both SSO and SCIM provide the same attribute:
 Each org should have a stable sign-in URL:
 
 ```text
-https://app.openworklabs.com/sso/:orgSlug
+https://sofia-app.ruut.chat/sso/:orgSlug
 ```
 
 The route should render a minimal page or immediately redirect.

@@ -1,4 +1,4 @@
-import { and, asc, count, eq, gt, inArray, isNotNull, isNull, sql } from "@openwork-ee/den-db/drizzle"
+import { and, asc, count, eq, gt, inArray, isNotNull, isNull, sql } from "@sofia-ee/den-db/drizzle"
 import {
   AuthSessionTable,
   AuthUserTable,
@@ -14,8 +14,8 @@ import {
   SsoProviderTable,
   TeamMemberTable,
   TeamTable,
-} from "@openwork-ee/den-db/schema"
-import { createDenTypeId, normalizeDenTypeId } from "@openwork-ee/utils/typeid"
+} from "@sofia-ee/den-db/schema"
+import { createDenTypeId, normalizeDenTypeId } from "@sofia-ee/utils/typeid"
 import { revokeOrganizationApiKeysForMember } from "./api-keys.js"
 import { cache } from "./cache.js"
 import { revokeMembershipSessionCredentials } from "./credential-revocation.js"
@@ -1038,7 +1038,7 @@ export async function getInvitationPreview(invitationIdRaw: string): Promise<Inv
       slug: row.organization.slug,
       allowedEmailDomains: normalizeStoredAllowedEmailDomains(row.organization.allowedEmailDomains),
       branding: {
-        appName: typeof organizationMetadata.brandAppName === "string" ? organizationMetadata.brandAppName : "OpenWork",
+        appName: typeof organizationMetadata.brandAppName === "string" ? organizationMetadata.brandAppName : "Sofia",
         logoUrl: typeof organizationMetadata.brandLogoUrl === "string" ? organizationMetadata.brandLogoUrl : row.organization.logo,
         iconUrl: typeof organizationMetadata.brandIconUrl === "string" ? organizationMetadata.brandIconUrl : null,
       },

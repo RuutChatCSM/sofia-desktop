@@ -1,7 +1,7 @@
 /** @jsxImportSource react */
 import { useEffect, useRef, useState } from "react";
 import { Activity } from "lucide-react";
-import type { AgentContextDiagnosticsReport } from "@openwork/types/agent-context-diagnostics";
+import type { AgentContextDiagnosticsReport } from "@sofia/types/agent-context-diagnostics";
 
 import { serializeAgentContextDiagnosticsReport } from "@/app/lib/agent-context-diagnostics";
 import { Button } from "@/components/ui/button";
@@ -21,7 +21,7 @@ const cardClass =
 export type AgentContextDiagnosticsSectionProps = {
   scopeKey: object;
   available: boolean;
-  unavailableReason: "direct-remote-opencode" | null;
+  unavailableReason: "direct-remote-engine" | null;
   onRun: () => Promise<AgentContextDiagnosticsReport>;
 };
 
@@ -272,9 +272,9 @@ export function AgentContextDiagnosticsSection(props: AgentContextDiagnosticsSec
           {diagnosticsState.busy ? t("connect.diagnostics_running") : t("connect.diagnostics_run")}
         </Button>
       </div>
-      {props.unavailableReason === "direct-remote-opencode" ? (
-        <div data-testid="agent-diagnostics-unavailable-direct-opencode">
-          <SettingsNotice>{t("connect.diagnostics_unavailable_direct_opencode")}</SettingsNotice>
+      {props.unavailableReason === "direct-remote-engine" ? (
+        <div data-testid="agent-diagnostics-unavailable-direct-engine">
+          <SettingsNotice>{t("connect.diagnostics_unavailable_direct_engine")}</SettingsNotice>
         </div>
       ) : null}
       {diagnosticsState.error ? <AgentContextDiagnosticsErrorNotice message={diagnosticsState.error} /> : null}

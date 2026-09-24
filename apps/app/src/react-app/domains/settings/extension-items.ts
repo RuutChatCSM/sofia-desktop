@@ -1,4 +1,4 @@
-import { getMcpServerName, isBuiltInOpenWorkExtension, type McpDirectoryInfo } from "../../../app/constants";
+import { getMcpServerName, isBuiltInSofiaExtension, type McpDirectoryInfo } from "../../../app/constants";
 import type { CloudImportedPlugin, CloudImportedPluginFile } from "../../../app/cloud/import-state";
 import type { PendingCloudPluginChange } from "../../../app/cloud/desktop-cloud-sync";
 import { evaluateEnablement, type EnablementContext } from "../../../app/enablement";
@@ -99,17 +99,17 @@ export type ExtensionItemBuildInput = {
   isBuiltInConnected: (entry: McpDirectoryInfo) => boolean;
 };
 
-const MCP_IMPORT_PATH_PREFIX = "opencode.jsonc#mcp.";
-const OPENWORK_PROVIDED_SKILL_NAMES = new Set([
+const MCP_IMPORT_PATH_PREFIX = "engine.jsonc#mcp.";
+const SOFIA_PROVIDED_SKILL_NAMES = new Set([
   "workspace-guide",
   "skill-creator",
 ]);
 
-export function isOpenworkProvidedSkill(skill: Pick<SkillCard, "name" | "path">) {
+export function isSofiaProvidedSkill(skill: Pick<SkillCard, "name" | "path">) {
   const normalizedName = skill.name.trim().toLowerCase();
   const normalizedPath = skill.path.replace(/\\/g, "/").toLowerCase();
-  return normalizedPath.includes("/.opencode/skills/") &&
-    OPENWORK_PROVIDED_SKILL_NAMES.has(normalizedName);
+  return normalizedPath.includes("/.sofia/skills/") &&
+    SOFIA_PROVIDED_SKILL_NAMES.has(normalizedName);
 }
 
 export function isToggleControlledExtension(entry: McpDirectoryInfo) {
@@ -197,7 +197,7 @@ function childKeysForPlugin(plugin: CloudImportedPlugin) {
     }
     if (file.objectType === "skill") {
       skillPaths.add(file.path);
-      const name = file.path.match(/^\.opencode\/skills\/(?:[^/]+\/)?([^/]+)\/SKILL\.md$/)?.[1];
+      const name = file.path.match(/^\.sofia\/skills\/(?:[^/]+\/)?([^/]+)\/SKILL\.md$/)?.[1];
       if (name) skillNames.add(name);
       skillNames.add(file.title);
     }
@@ -206,7 +206,7 @@ function childKeysForPlugin(plugin: CloudImportedPlugin) {
 }
 
 export function buildExtensionItems(input: ExtensionItemBuildInput) {
-  const builtInItems = input.quickConnect.filter(isBuiltInOpenWorkExtension).map((entry): ExtensionItem => {
+  const builtInItems = input.quickConnect.filter(isBuiltInSofiaExtension).map((entry): ExtensionItem => {
     const enablement = entry.extensionManifest?.enablement
       ? evaluateEnablement(entry.extensionManifest.enablement, input.enablementContext)
       : null;
@@ -315,7 +315,7 @@ export function buildExtensionItems(input: ExtensionItemBuildInput) {
   }
 
   const standaloneMcpEntries = input.quickConnect.filter((entry) => {
-    if (isBuiltInOpenWorkExtension(entry)) return false;
+    if (isBuiltInSofiaExtension(entry)) return false;
     const serverName = getMcpServerName(entry);
     if (groupedMcpServerNames.has(serverName)) return false;
     return input.mcpServers.some((server) => server.name === serverName);

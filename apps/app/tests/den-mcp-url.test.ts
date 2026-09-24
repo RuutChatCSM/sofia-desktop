@@ -11,18 +11,18 @@ import {
 describe("resolveDenBaseUrls", () => {
   test("adds the API proxy path to an explicit API base URL", () => {
     const resolved = resolveDenBaseUrls({
-      baseUrl: "https://app.openworklabs.com",
-      apiBaseUrl: "https://app.openworklabs.com",
+      baseUrl: "https://sofia-app.ruut.chat",
+      apiBaseUrl: "https://sofia-app.ruut.chat",
     });
-    expect(resolved.apiBaseUrl).toBe("https://app.openworklabs.com/api/den");
+    expect(resolved.apiBaseUrl).toBe("https://sofia-app.ruut.chat/api/den");
   });
 
   test("keeps an explicit API origin independent from the web base URL", () => {
     const resolved = resolveDenBaseUrls({
-      baseUrl: "https://app.openworklabs.com",
+      baseUrl: "https://sofia-app.ruut.chat",
       apiBaseUrl: "https://api.example.com",
     });
-    expect(resolved.baseUrl).toBe("https://app.openworklabs.com");
+    expect(resolved.baseUrl).toBe("https://sofia-app.ruut.chat");
     expect(resolved.apiBaseUrl).toBe("https://api.example.com/api/den");
   });
 
@@ -52,12 +52,12 @@ describe("getDenMcpUrl", () => {
 
 describe("isLegacyWebAppMcpUrl", () => {
   test("flags the legacy bare web-app MCP URL", () => {
-    expect(isLegacyWebAppMcpUrl("https://app.openworklabs.com/mcp")).toBe(true);
-    expect(isLegacyWebAppMcpUrl("https://app.openwork.software/mcp/")).toBe(true);
+    expect(isLegacyWebAppMcpUrl("https://sofia-app.ruut.chat/mcp")).toBe(true);
+    expect(isLegacyWebAppMcpUrl("https://app.sofia.software/mcp/")).toBe(true);
   });
 
   test("accepts valid MCP URLs", () => {
-    expect(isLegacyWebAppMcpUrl("https://app.openworklabs.com/api/den/mcp")).toBe(false);
+    expect(isLegacyWebAppMcpUrl("https://sofia-app.ruut.chat/api/den/mcp")).toBe(false);
     expect(isLegacyWebAppMcpUrl("http://127.0.0.1:8787/mcp")).toBe(false);
   });
 
@@ -69,17 +69,17 @@ describe("isLegacyWebAppMcpUrl", () => {
 
 describe("resolveCloudMcpResourceUrl", () => {
   test("heals a minted legacy web-app resource through the /api/den proxy", () => {
-    expect(resolveCloudMcpResourceUrl("https://app.openworklabs.com/mcp")).toBe(
-      "https://app.openworklabs.com/api/den/mcp",
+    expect(resolveCloudMcpResourceUrl("https://sofia-app.ruut.chat/mcp")).toBe(
+      "https://sofia-app.ruut.chat/api/den/mcp",
     );
-    expect(resolveCloudMcpResourceUrl("https://app.openwork.software/mcp/")).toBe(
-      "https://app.openwork.software/api/den/mcp",
+    expect(resolveCloudMcpResourceUrl("https://app.sofia.software/mcp/")).toBe(
+      "https://app.sofia.software/api/den/mcp",
     );
   });
 
   test("keeps healthy resources verbatim", () => {
-    expect(resolveCloudMcpResourceUrl("https://app.openworklabs.com/api/den/mcp")).toBe(
-      "https://app.openworklabs.com/api/den/mcp",
+    expect(resolveCloudMcpResourceUrl("https://sofia-app.ruut.chat/api/den/mcp")).toBe(
+      "https://sofia-app.ruut.chat/api/den/mcp",
     );
     expect(resolveCloudMcpResourceUrl("http://127.0.0.1:8787/mcp")).toBe(
       "http://127.0.0.1:8787/mcp",
@@ -91,7 +91,7 @@ describe("resolveCloudMcpResourceUrl", () => {
     expect(resolveCloudMcpResourceUrl("")).toBeNull();
     expect(resolveCloudMcpResourceUrl("   ")).toBeNull();
     expect(resolveCloudMcpResourceUrl("not a url")).toBeNull();
-    expect(resolveCloudMcpResourceUrl("ftp://app.openworklabs.com/mcp")).toBeNull();
+    expect(resolveCloudMcpResourceUrl("ftp://sofia-app.ruut.chat/mcp")).toBeNull();
   });
 });
 
@@ -102,13 +102,13 @@ describe("parseDenMcpToken", () => {
       expiresAt: "2026-08-18T00:00:00.000Z",
       organizationId: "org_1",
       scopes: ["mcp:read", "mcp:write"],
-      resource: "https://api.openwork.test/mcp",
+      resource: "https://api.sofia.test/mcp",
     })).toEqual({
       token: "central-token",
       expiresAt: "2026-08-18T00:00:00.000Z",
       organizationId: "org_1",
       scopes: ["mcp:read", "mcp:write"],
-      resource: "https://api.openwork.test/mcp",
+      resource: "https://api.sofia.test/mcp",
     });
   });
 
@@ -118,7 +118,7 @@ describe("parseDenMcpToken", () => {
       expiresAt: "2026-08-18T00:00:00.000Z",
       organizationId: "org_1",
       scopes: ["mcp:read", "mcp:write"],
-      resource: "https://api.openwork.test/mcp",
+      resource: "https://api.sofia.test/mcp",
     };
     expect(parseDenMcpToken({ ...base, appHostToken: "private-token" })?.appHostToken).toBeUndefined();
     expect(parseDenMcpToken({

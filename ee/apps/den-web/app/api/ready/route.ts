@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { joinBaseUrl, readBaseUrlEnv } from "@openwork/types/url";
+import { joinBaseUrl, readBaseUrlEnv } from "@sofia/types/url";
 
 import { denWebLogger } from "../../../observability/runtime-logger";
 

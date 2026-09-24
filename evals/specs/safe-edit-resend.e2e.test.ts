@@ -1,10 +1,10 @@
 import { createServer } from "node:http";
 import { expect, onTestFinished } from "vitest";
-import { clickButton, control, createAndSelectWorkspace, evalIn, waitFor } from "@openwork/behaviors";
-import type { Surface } from "@openwork/cdp";
-import { screenshot, validate } from "@openwork/test-evidence";
-import { desktop } from "@openwork/hosts";
-import { needs, test } from "@openwork/testkit";
+import { clickButton, control, createAndSelectWorkspace, evalIn, waitFor } from "@sofia/behaviors";
+import type { Surface } from "@sofia/cdp";
+import { screenshot, validate } from "@sofia/test-evidence";
+import { desktop } from "@sofia/hosts";
+import { needs, test } from "@sofia/testkit";
 
 const providerId = "safe-edit-resend-mock";
 const modelId = "safe-edit-resend-model";
@@ -18,10 +18,10 @@ const replies = [
   "Deterministic edited reply.",
   "Deterministic legacy reply.",
 ];
-const e2eTestsEnabled = process.env.OPENWORK_EVAL_E2E_TESTS === "1";
+const e2eTestsEnabled = process.env.SOFIA_EVAL_E2E_TESTS === "1";
 const title = e2eTestsEnabled
   ? "edit resend defers history mutation, rolls back failures, and restores stranded sessions"
-  : "safe edit resend skipped — needs: set OPENWORK_EVAL_E2E_TESTS=1";
+  : "safe edit resend skipped — needs: set SOFIA_EVAL_E2E_TESTS=1";
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -116,7 +116,7 @@ async function waitForEngineReady(
   while (Date.now() < deadline) {
     try {
       const response = await fetch(
-        `http://127.0.0.1:${credentials.port}/workspace/${encodeURIComponent(workspaceId)}/opencode/session`,
+        `http://127.0.0.1:${credentials.port}/workspace/${encodeURIComponent(workspaceId)}/engine/session`,
         { headers: { Authorization: `Bearer ${credentials.token}` }, signal: AbortSignal.timeout(15_000) },
       );
       if (response.ok) return;
@@ -174,7 +174,7 @@ async function applyEngineRevert(
   messageId: string,
 ): Promise<void> {
   const response = await fetch(
-    `http://127.0.0.1:${credentials.port}/workspace/${encodeURIComponent(workspaceId)}/opencode/session/${encodeURIComponent(sessionId)}/revert`,
+    `http://127.0.0.1:${credentials.port}/workspace/${encodeURIComponent(workspaceId)}/engine/session/${encodeURIComponent(sessionId)}/revert`,
     {
       method: "POST",
       headers: {
@@ -189,7 +189,7 @@ async function applyEngineRevert(
 }
 
 test.skipIf(!e2eTestsEnabled)(title, async ({ evidence }) => {
-  needs({ optIn: ["OPENWORK_EVAL_E2E_TESTS"] });
+  needs({ optIn: ["SOFIA_EVAL_E2E_TESTS"] });
 
   // The engine also sends small utility requests (session titles) to the same
   // provider, so replies must key off conversation content, never ordinals.
@@ -267,7 +267,7 @@ test.skipIf(!e2eTestsEnabled)(title, async ({ evidence }) => {
 
   await using app = await desktop({
     name: "safe-edit-resend",
-    mode: process.env.OPENWORK_EVAL_CDP_URL?.trim() ? "attach" : "spawn",
+    mode: process.env.SOFIA_EVAL_CDP_URL?.trim() ? "attach" : "spawn",
     // Provider keys in the runner env (e.g. via infisical) would make the
     // engine register real providers and out-default the deterministic mock.
     env: {
@@ -275,16 +275,16 @@ test.skipIf(!e2eTestsEnabled)(title, async ({ evidence }) => {
       OPENAI_API_KEY: "",
       OPENROUTER_API_KEY: "",
       GOOGLE_GENERATIVE_AI_API_KEY: "",
-      OPENWORK_API_KEY: "",
-      OPENWORK_INFERENCE_BASE_URL: "",
+      SOFIA_API_KEY: "",
+      SOFIA_INFERENCE_BASE_URL: "",
     },
   });
   const workspace = await createAndSelectWorkspace(app, {
-    path: `/tmp/openwork-safe-edit-resend-${Date.now()}`,
+    path: `/tmp/sofia-safe-edit-resend-${Date.now()}`,
   });
   const configured = await evalIn(app, `(async () => {
-    const port = localStorage.getItem("openwork.server.port");
-    const token = localStorage.getItem("openwork.server.token");
+    const port = localStorage.getItem("sofia.server.port");
+    const token = localStorage.getItem("sofia.server.token");
     if (!port || !token) return "missing local server credentials";
     const request = async (path, init) => {
       const response = await fetch("http://127.0.0.1:" + port + path, {
@@ -298,7 +298,7 @@ test.skipIf(!e2eTestsEnabled)(title, async ({ evidence }) => {
     const patched = await request("/workspace/" + encodeURIComponent(workspaceId) + "/config", {
       method: "PATCH",
       body: JSON.stringify({
-        opencode: {
+        engine: {
           provider: {
             [${JSON.stringify(providerId)}]: {
               npm: "@ai-sdk/openai-compatible",
@@ -312,40 +312,40 @@ test.skipIf(!e2eTestsEnabled)(title, async ({ evidence }) => {
     });
     if (patched !== "ok") return patched;
     const reloaded = await request("/workspace/" + encodeURIComponent(workspaceId) + "/engine/reload", { method: "POST" });
-    // A slow dispose reports 504 opencode_reload_timeout while the reload
+    // A slow dispose reports 504 engine_reload_timeout while the reload
     // keeps going; the engine-ready poll below owns convergence.
-    if (reloaded !== "ok" && !reloaded.includes("opencode_reload_timeout")) return reloaded;
-    const raw = localStorage.getItem("openwork.preferences");
+    if (reloaded !== "ok" && !reloaded.includes("engine_reload_timeout")) return reloaded;
+    const raw = localStorage.getItem("sofia.preferences");
     let preferences = {};
     try { preferences = raw ? JSON.parse(raw) : {}; } catch { preferences = {}; }
     if (!preferences || typeof preferences !== "object" || Array.isArray(preferences)) preferences = {};
-    localStorage.setItem("openwork.preferences", JSON.stringify({
+    localStorage.setItem("sofia.preferences", JSON.stringify({
       ...preferences,
       defaultModel: { providerID: ${JSON.stringify(providerId)}, modelID: ${JSON.stringify(modelId)} },
       modelVariant: null,
       providerStepCompleted: true,
     }));
-    localStorage.setItem("openwork.defaultModel", ${JSON.stringify(`${providerId}/${modelId}`)});
-    localStorage.removeItem("openwork.sessionModels." + workspaceId);
+    localStorage.setItem("sofia.defaultModel", ${JSON.stringify(`${providerId}/${modelId}`)});
+    localStorage.removeItem("sofia.sessionModels." + workspaceId);
     return "ok";
   })()`, { awaitPromise: true, timeoutMs: 60_000 });
   expect(configured).toBe("ok");
   // Preferences hydrate at boot, so reload unconditionally: without this the
   // engine's built-in free model stays the default and out-competes the mock.
   await evalIn(app, "location.reload(); true");
-  await waitFor(app, "Boolean(window.__openworkControl)", {
+  await waitFor(app, "Boolean(window.__sofiaControl)", {
     timeoutMs: 30_000,
     label: "app reloaded with safe edit mock model preferences",
   });
 
   const credentials = parseRuntimeCredentials(await evalIn(app, `JSON.stringify({
-    port: localStorage.getItem("openwork.server.port") ?? "",
-    token: localStorage.getItem("openwork.server.token") ?? "",
+    port: localStorage.getItem("sofia.server.port") ?? "",
+    token: localStorage.getItem("sofia.server.token") ?? "",
   })`));
   // The engine restarts after /engine/reload; sending into that window races
-  // the swap and strands the run behind an "OpenCode unavailable" banner.
+  // the swap and strands the run behind an "Sofia engine unavailable" banner.
   await waitForEngineReady(credentials, workspace.workspaceId);
-  await waitFor(app, `window.__openworkControl.listActions().some((action) => action.id === "session.create_task" && !action.disabled)`, {
+  await waitFor(app, `window.__sofiaControl.listActions().some((action) => action.id === "session.create_task" && !action.disabled)`, {
     timeoutMs: 30_000,
     label: "new task action enabled",
   });
@@ -417,15 +417,15 @@ test.skipIf(!e2eTestsEnabled)(title, async ({ evidence }) => {
   );
 
   const faultInstalled = await evalIn(app, `(() => {
-    const originalKey = "__openworkSafeEditOriginalFetch";
-    const countKey = "__openworkSafeEditFaultCount";
+    const originalKey = "__sofiaSafeEditOriginalFetch";
+    const countKey = "__sofiaSafeEditFaultCount";
     if (!globalThis[originalKey]) globalThis[originalKey] = globalThis.fetch.bind(globalThis);
     const original = globalThis[originalKey];
     globalThis[countKey] = 0;
     globalThis.fetch = (input, init) => {
       const url = typeof input === "string" ? input : input instanceof Request ? input.url : String(input);
       const method = input instanceof Request ? input.method : init?.method ?? "GET";
-      if (method.toUpperCase() === "POST" && url.includes(${JSON.stringify(`/opencode/session/${firstSessionId}/prompt_async`)})) {
+      if (method.toUpperCase() === "POST" && url.includes(${JSON.stringify(`/engine/session/${firstSessionId}/prompt_async`)})) {
         globalThis[countKey] += 1;
         return Promise.resolve(new Response("<html>injected prompt failure</html>", {
           status: 502,
@@ -449,7 +449,7 @@ test.skipIf(!e2eTestsEnabled)(title, async ({ evidence }) => {
       && transcript.includes(${JSON.stringify(replies[0])})
       && transcript.includes(${JSON.stringify(secondPrompt)})
       && transcript.includes(${JSON.stringify(replies[1])})
-      && globalThis["__openworkSafeEditFaultCount"] === 1;
+      && globalThis["__sofiaSafeEditFaultCount"] === 1;
   })()`, { timeoutMs: 30_000, label: "failed edit send kept transcript and surfaced error" });
   const rolledBack = await waitForEngineSnapshot(
     credentials,
@@ -468,11 +468,11 @@ test.skipIf(!e2eTestsEnabled)(title, async ({ evidence }) => {
   );
 
   const faultCleared = await evalIn(app, `(() => {
-    const original = globalThis["__openworkSafeEditOriginalFetch"];
+    const original = globalThis["__sofiaSafeEditOriginalFetch"];
     if (typeof original !== "function") return false;
     globalThis.fetch = original;
-    delete globalThis["__openworkSafeEditOriginalFetch"];
-    delete globalThis["__openworkSafeEditFaultCount"];
+    delete globalThis["__sofiaSafeEditOriginalFetch"];
+    delete globalThis["__sofiaSafeEditFaultCount"];
     return true;
   })()`);
   expect(faultCleared).toBe(true);

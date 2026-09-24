@@ -293,7 +293,7 @@ export function SessionFindBar({
 
   return (
     <div className="absolute top-2 right-3 z-30 sm:right-5">
-      <div className="flex items-center gap-1 rounded-xl border border-dls-border bg-dls-surface/95 px-1.5 py-1 shadow-(--dls-card-shadow) backdrop-blur-md">
+      <div className="flex items-center gap-1 rounded-xl border border-dls-border bg-dls-canvas/95 px-1.5 py-1 shadow-(--dls-card-shadow) backdrop-blur-md">
         <Search className="ml-1 size-3.5 shrink-0 text-dls-secondary" />
         <input
           ref={inputRef}

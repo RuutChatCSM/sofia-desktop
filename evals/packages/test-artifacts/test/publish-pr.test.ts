@@ -44,7 +44,7 @@ function testRunRecord(dir: string): TestRunRecord {
 }
 
 test("publishPr dry-run emits the new marker without upload or gh calls", async () => {
-  const testRunDir = await mkdtemp(join(tmpdir(), "openwork-test-artifacts-publish-"));
+  const testRunDir = await mkdtemp(join(tmpdir(), "sofia-test-artifacts-publish-"));
   try {
     await writeFile(join(testRunDir, "test-run.json"), JSON.stringify(testRunRecord(testRunDir)));
     let commandCalled = false;
@@ -73,7 +73,7 @@ test("publishPr dry-run emits the new marker without upload or gh calls", async 
 });
 
 test("publishPr recognizes an old sticky marker and uploads under the test-artifacts prefix", async () => {
-  const testRunDir = await mkdtemp(join(tmpdir(), "openwork-test-artifacts-current-"));
+  const testRunDir = await mkdtemp(join(tmpdir(), "sofia-test-artifacts-current-"));
   const previousToken = process.env.BLOB_READ_WRITE_TOKEN;
   try {
     await writeFile(join(testRunDir, "test-run.json"), JSON.stringify(testRunRecord(testRunDir)));
@@ -110,7 +110,7 @@ test("publishPr recognizes an old sticky marker and uploads under the test-artif
 });
 
 test("publishPr reads persisted legacy roll.json input", async () => {
-  const testRunDir = await mkdtemp(join(tmpdir(), "openwork-test-artifacts-legacy-"));
+  const testRunDir = await mkdtemp(join(tmpdir(), "sofia-test-artifacts-legacy-"));
   try {
     const current = testRunRecord(testRunDir);
     await writeFile(join(testRunDir, "roll.json"), JSON.stringify({
@@ -137,7 +137,7 @@ test("publishPr reads persisted legacy roll.json input", async () => {
 });
 
 test("publishPr refuses a symlinked screenshot before upload", async () => {
-  const root = await mkdtemp(join(tmpdir(), "openwork-test-artifacts-symlink-"));
+  const root = await mkdtemp(join(tmpdir(), "sofia-test-artifacts-symlink-"));
   const testRunDir = join(root, "test-run");
   const previousToken = process.env.BLOB_READ_WRITE_TOKEN;
   try {

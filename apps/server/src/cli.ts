@@ -26,12 +26,12 @@ if (!config.readOnly) {
   await ensureLocalWorkspaceFiles(config.workspaces);
 }
 
-// The bundled Sofia/Codex engine is spawned per session, so the server only
+// The bundled Sofia engine is spawned per workspace, so the server only
 // needs to know which binary to use. Resolution is owned by the embedding
-// host (desktop) or the OPENWORK_CODEX_BIN env for headless deployments.
-const codexBin = process.env.OPENWORK_CODEX_BIN?.trim();
-if (codexBin) {
-  setCodexBinaryForConfig(config, { path: codexBin, source: "custom" });
+// host (desktop) or the SOFIA_BIN env for headless deployments.
+const sofiaBin = process.env.SOFIA_BIN?.trim() || process.env.SOFIA_CODEX_BIN?.trim();
+if (sofiaBin) {
+  setCodexBinaryForConfig(config, { path: sofiaBin, source: "custom" });
 }
 
 const server = await startServer(config);
@@ -39,7 +39,7 @@ config.port = server.port;
 const workerActivityHeartbeat = startWorkerActivityHeartbeat(config, logger);
 
 const url = `http://${config.host}:${server.port}`;
-logger.log("info", `OpenWork server listening on ${url}`);
+logger.log("info", `Sofia App server listening on ${url}`);
 
 if (config.tokenSource === "generated") {
   logger.log("info", `Client token: ${config.token}`);

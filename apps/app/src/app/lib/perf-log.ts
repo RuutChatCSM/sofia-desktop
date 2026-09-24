@@ -10,10 +10,10 @@ export type PerfLogRecord = {
 };
 
 type PerfRoot = typeof globalThis & {
-  __openworkPerfSeq?: number;
-  __openworkPerfLogs?: PerfLogRecord[];
-  __openworkPerfConsoleAt?: Record<string, number>;
-  __openworkPerfConsoleSuppressed?: Record<string, number>;
+  __sofiaPerfSeq?: number;
+  __sofiaPerfLogs?: PerfLogRecord[];
+  __sofiaPerfConsoleAt?: Record<string, number>;
+  __sofiaPerfConsoleSuppressed?: Record<string, number>;
 };
 
 const PERF_LOG_LIMIT = 500;
@@ -50,8 +50,8 @@ export const recordPerfLog = (
   if (!enabled) return;
 
   const root = globalThis as PerfRoot;
-  const id = (root.__openworkPerfSeq ?? 0) + 1;
-  root.__openworkPerfSeq = id;
+  const id = (root.__sofiaPerfSeq ?? 0) + 1;
+  root.__sofiaPerfSeq = id;
 
   const entry: PerfLogRecord = {
     id,
@@ -62,12 +62,12 @@ export const recordPerfLog = (
     payload,
   };
 
-  const logs = root.__openworkPerfLogs ?? [];
+  const logs = root.__sofiaPerfLogs ?? [];
   logs.push(entry);
   if (logs.length > PERF_LOG_LIMIT) {
     logs.splice(0, logs.length - PERF_LOG_LIMIT);
   }
-  root.__openworkPerfLogs = logs;
+  root.__sofiaPerfLogs = logs;
   recordDevLog(enabled, {
     level: "perf",
     source: scope,
@@ -78,9 +78,9 @@ export const recordPerfLog = (
   try {
     const key = `${scope}:${event}`;
     const now = Date.now();
-    const lastByKey = root.__openworkPerfConsoleAt ?? (root.__openworkPerfConsoleAt = {});
+    const lastByKey = root.__sofiaPerfConsoleAt ?? (root.__sofiaPerfConsoleAt = {});
     const suppressedByKey =
-      root.__openworkPerfConsoleSuppressed ?? (root.__openworkPerfConsoleSuppressed = {});
+      root.__sofiaPerfConsoleSuppressed ?? (root.__sofiaPerfConsoleSuppressed = {});
     if (HOT_EVENT_KEYS.has(key)) {
       const last = lastByKey[key] ?? 0;
       if (now - last < HOT_EVENT_MIN_INTERVAL_MS) {
@@ -117,7 +117,7 @@ export const recordPerfLog = (
 
 export const readPerfLogs = (limit = 120) => {
   const root = globalThis as PerfRoot;
-  const logs = root.__openworkPerfLogs ?? [];
+  const logs = root.__sofiaPerfLogs ?? [];
   if (limit <= 0) return [];
   if (logs.length <= limit) return logs.slice();
   return logs.slice(logs.length - limit);
@@ -125,8 +125,8 @@ export const readPerfLogs = (limit = 120) => {
 
 export const clearPerfLogs = () => {
   const root = globalThis as PerfRoot;
-  root.__openworkPerfLogs = [];
-  root.__openworkPerfSeq = 0;
+  root.__sofiaPerfLogs = [];
+  root.__sofiaPerfSeq = 0;
 };
 
 export const finishPerf = (

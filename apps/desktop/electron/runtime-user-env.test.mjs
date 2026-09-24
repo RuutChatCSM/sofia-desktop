@@ -9,9 +9,9 @@ test("resolves the user env store from the effective desktop profile", () => {
   assert.equal(
     resolveUserEnvFilePath({
       HOME: "/Users/example",
-      XDG_CONFIG_HOME: "/tmp/openwork-dev-profile/config",
+      XDG_CONFIG_HOME: "/tmp/sofia-dev-profile/config",
     }),
-    path.join("/tmp/openwork-dev-profile/config", "openwork", "env.json"),
+    path.join("/tmp/sofia-dev-profile/config", "sofia", "env.json"),
   );
 });
 

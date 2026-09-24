@@ -9,11 +9,11 @@ type Props = {
 };
 
 const carryOvers = [
-  ["Files and folders", "Open the same folder or repository as an OpenWork workspace."],
+  ["Files and folders", "Open the same folder or repository as an Sofia workspace."],
   ["SKILL.md skills", "Copy the skill folder or install the plugin that contains it."],
-  ["Claude-compatible plugins", "Import the manifest; OpenWork normalizes its skills and MCP dependencies."],
-  ["MCP servers", "Reconnect through OpenWork Connect or add the server URL as a custom app."],
-  ["Claude models", "Add an Anthropic API key or provision Anthropic through OpenWork Cloud."],
+  ["Claude-compatible plugins", "Import the manifest; Sofia normalizes its skills and MCP dependencies."],
+  ["MCP servers", "Reconnect through Sofia Connect or add the server URL as a custom app."],
+  ["Claude models", "Add an Anthropic API key or provision Anthropic through Sofia Cloud."],
   ["Scheduled tasks", "Recreate each schedule, then verify its workspace, permissions, and output."]
 ];
 
@@ -39,11 +39,11 @@ export function MigrationGuidePage({ stars, downloadHref }: Props) {
           </h1>
           <p className="mt-7 max-w-[720px] text-[18px] leading-[29px] text-[var(--lp-body)]">
             Start with one real task, bring over the capabilities it needs, and
-            keep Cowork available until that task works end to end in OpenWork.
+            keep Cowork available until that task works end to end in Sofia.
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <a href={downloadHref} className="lp-pill-primary">
-              Download OpenWork
+              Download Sofia
             </a>
             <a href="/docs/start-here/get-started" className="lp-pill-secondary">
               Open the getting-started guide
@@ -67,7 +67,7 @@ export function MigrationGuidePage({ stars, downloadHref }: Props) {
           <p className="mt-5 rounded-[14px] bg-[#fff7ed] p-4 text-[13.5px] leading-[22px] text-[#7c2d12]">
             Conversation history and credentials do not transfer automatically.
             Save important instructions in workspace files or skills, then authorize
-            each connected service in OpenWork.
+            each connected service in Sofia.
           </p>
         </section>
 
@@ -81,7 +81,7 @@ export function MigrationGuidePage({ stars, downloadHref }: Props) {
             </div>
             <div className="divide-y divide-[var(--lp-border)] border-y border-[var(--lp-border)]">
               <GuideStep number="01" title="Open the same work">
-                Install OpenWork, create a workspace from the folder or repository
+                Install Sofia, create a workspace from the folder or repository
                 you used with Cowork, and ask the agent to summarize it before making
                 changes.
               </GuideStep>
@@ -91,7 +91,7 @@ export function MigrationGuidePage({ stars, downloadHref }: Props) {
                 and Anthropic API billing may be separate.
               </GuideStep>
               <GuideStep number="03" title="Bring over skills and plugins">
-                OpenWork uses the same SKILL.md format. Import one skill at a time,
+                Sofia uses the same SKILL.md format. Import one skill at a time,
                 check its paths and environment variables, then run the smallest task
                 that should trigger it.
               </GuideStep>
@@ -104,7 +104,7 @@ export function MigrationGuidePage({ stars, downloadHref }: Props) {
                 output location. Run it manually once before enabling recurrence.
               </GuideStep>
               <GuideStep number="06" title="Roll it out without configuration drift">
-                Use OpenWork Cloud to publish approved capabilities once, assign them
+                Use Sofia Cloud to publish approved capabilities once, assign them
                 by team, and apply desktop policies centrally instead of repeating
                 setup on every machine.
               </GuideStep>
@@ -124,7 +124,7 @@ export function MigrationGuidePage({ stars, downloadHref }: Props) {
                 <GuideLink href="/docs/start-here/do-work-with-it/skills-plugins-and-mcp">Connectors, skills, and plugins</GuideLink>
                 <GuideLink href="/docs/start-here/connect-your-stack/connect-services">Connect your services</GuideLink>
                 <GuideLink href="/docs/start-here/connect-your-stack/add-an-mcp-server">Add a custom MCP server</GuideLink>
-                <GuideLink href="/docs/cloud/team-quickstart">OpenWork Cloud team quickstart</GuideLink>
+                <GuideLink href="/docs/cloud/team-quickstart">Sofia Cloud team quickstart</GuideLink>
               </div>
             </div>
             <div className="rounded-[24px] bg-[var(--lp-tonal)] p-7 md:p-9">
@@ -145,14 +145,14 @@ export function MigrationGuidePage({ stars, downloadHref }: Props) {
 
         <section className="rounded-[24px] bg-[var(--lp-tonal)] p-7 md:p-12">
           <h2 className="max-w-[620px] text-[34px] font-light leading-[41px] tracking-[-0.015em]">
-            Make OpenWork the default only after the real workflow passes.
+            Make Sofia the default only after the real workflow passes.
           </h2>
           <p className="mt-4 max-w-[650px] text-[15px] leading-6 text-[var(--lp-body)]">
             Keep Cowork available during validation. Once the checklist passes,
             switch that workflow and migrate the next one.
           </p>
           <a href={downloadHref} className="lp-pill-primary mt-7">
-            Download OpenWork
+            Download Sofia
           </a>
         </section>
 

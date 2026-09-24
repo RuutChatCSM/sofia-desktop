@@ -4,24 +4,24 @@ import { mkdtemp, rm, stat } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { installCloudPlugin, readInstalledCloudPlugins } from "./cloud-plugins.js";
-import { readOpenworkWorkspaceConfig, writeOpenworkWorkspaceConfig } from "./openwork-workspace-config-store.js";
+import { readSofiaWorkspaceConfig, writeSofiaWorkspaceConfig } from "./sofia-workspace-config-store.js";
 import { openRuntimeSqliteDatabase, runtimeDbPath, runtimeStorageDir } from "./runtime-db.js";
-import { readRuntimeOpencodeConfig, writeRuntimeOpencodeConfig } from "./runtime-opencode-config-store.js";
+import { readRuntimeWorkspaceEngineConfig, writeRuntimeWorkspaceEngineConfig } from "./runtime-engine-config-store.js";
 import { readSessionGroupState, writeSessionGroupState } from "./session-groups.js";
 import type { ServerConfig } from "./types.js";
 
 const WORKSPACE_ID = "ws_runtime_db_primitive";
 
 const roots: string[] = [];
-const previousRuntimeDb = process.env.OPENWORK_RUNTIME_DB;
+const previousRuntimeDb = process.env.SOFIA_RUNTIME_DB;
 
 afterEach(async () => {
   while (roots.length) {
     const root = roots.pop();
     if (root) await rm(root, { recursive: true, force: true });
   }
-  if (previousRuntimeDb === undefined) delete process.env.OPENWORK_RUNTIME_DB;
-  else process.env.OPENWORK_RUNTIME_DB = previousRuntimeDb;
+  if (previousRuntimeDb === undefined) delete process.env.SOFIA_RUNTIME_DB;
+  else process.env.SOFIA_RUNTIME_DB = previousRuntimeDb;
 });
 
 function serverConfig(root: string, configPath: string | null = join(root, "server.json")): ServerConfig {
@@ -46,7 +46,7 @@ function serverConfig(root: string, configPath: string | null = join(root, "serv
 }
 
 async function tempRoot(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "openwork-runtime-db-primitive-"));
+  const root = await mkdtemp(join(tmpdir(), "sofia-runtime-db-primitive-"));
   roots.push(root);
   return root;
 }
@@ -67,21 +67,21 @@ function rowCount(db: Database, tableName: string): number {
 describe("runtime DB primitive", () => {
   test("resolves default and env-overridden runtime database paths", async () => {
     const root = await tempRoot();
-    delete process.env.OPENWORK_RUNTIME_DB;
+    delete process.env.SOFIA_RUNTIME_DB;
 
     const config = serverConfig(root);
     expect(runtimeDbPath(config)).toBe(join(root, "runtime.sqlite"));
     expect(runtimeStorageDir(config)).toBe(root);
 
     const configWithoutPath = serverConfig(root, null);
-    expect(runtimeDbPath(configWithoutPath)).toBe(join(homedir(), ".config", "openwork", "runtime.sqlite"));
+    expect(runtimeDbPath(configWithoutPath)).toBe(join(homedir(), ".config", "sofia", "runtime.sqlite"));
 
     const overridePath = join(root, "state", "override.sqlite");
-    process.env.OPENWORK_RUNTIME_DB = ` ${overridePath} `;
+    process.env.SOFIA_RUNTIME_DB = ` ${overridePath} `;
     expect(runtimeDbPath(configWithoutPath)).toBe(resolve(overridePath));
     expect(runtimeStorageDir(configWithoutPath)).toBe(join(root, "state"));
 
-    process.env.OPENWORK_RUNTIME_DB = "   ";
+    process.env.SOFIA_RUNTIME_DB = "   ";
     expect(runtimeDbPath(config)).toBe(join(root, "runtime.sqlite"));
   });
 
@@ -106,18 +106,18 @@ describe("runtime DB primitive", () => {
   test("keeps each migrated store in its own runtime DB table", async () => {
     const root = await tempRoot();
     const dbPath = join(root, "runtime.sqlite");
-    process.env.OPENWORK_RUNTIME_DB = dbPath;
+    process.env.SOFIA_RUNTIME_DB = dbPath;
     const config = serverConfig(root);
 
     await writeSessionGroupState(config, WORKSPACE_ID, {
       groups: [{ id: "grp_runtime", label: "Runtime" }],
       assignments: { ses_runtime: "grp_runtime" },
     });
-    await writeOpenworkWorkspaceConfig(config, WORKSPACE_ID, (current) => ({
+    await writeSofiaWorkspaceConfig(config, WORKSPACE_ID, (current) => ({
       ...current,
       workspace: { label: "Workspace config" },
     }));
-    await writeRuntimeOpencodeConfig(config, WORKSPACE_ID, (current) => ({
+    await writeRuntimeWorkspaceEngineConfig(config, WORKSPACE_ID, (current) => ({
       ...current,
       plugin: ["runtime-plugin"],
     }));
@@ -137,8 +137,8 @@ describe("runtime DB primitive", () => {
       groups: [{ id: "grp_runtime", label: "Runtime" }],
       assignments: { ses_runtime: "grp_runtime" },
     });
-    expect((await readOpenworkWorkspaceConfig(config, WORKSPACE_ID)).workspace).toEqual({ label: "Workspace config" });
-    expect((await readRuntimeOpencodeConfig(config, WORKSPACE_ID)).plugin).toEqual(["runtime-plugin"]);
+    expect((await readSofiaWorkspaceConfig(config, WORKSPACE_ID)).workspace).toEqual({ label: "Workspace config" });
+    expect((await readRuntimeWorkspaceEngineConfig(config, WORKSPACE_ID)).plugin).toEqual(["runtime-plugin"]);
     expect((await readInstalledCloudPlugins(config, WORKSPACE_ID)).plugins.plugin_runtime?.name).toBe("Runtime Primitive Plugin");
 
     const sqlite = new Database(dbPath, { readonly: true, create: false });
@@ -146,9 +146,9 @@ describe("runtime DB primitive", () => {
       const tables = rowNames(sqlite.query("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").all());
       expect(tables).toEqual([
         "cloud_plugin_install_configs",
-        "openwork_workspace_configs",
-        "runtime_opencode_configs",
+        "runtime_engine_configs",
         "session_group_states",
+        "sofia_workspace_configs",
       ]);
       for (const table of tables) expect(rowCount(sqlite, table)).toBe(1);
     } finally {

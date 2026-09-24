@@ -3,20 +3,20 @@ import { nativeDeepLinkEvent } from "./deep-link-bridge";
 export type * from "./desktop-types";
 export type {
   EngineInfo,
-  OpenworkServerInfo,
+  SofiaServerInfo,
   EngineDoctorResult,
   WorkspaceInfo,
   WorkspaceList,
   WorkspaceExportSummary,
-  OpencodeCommandDraft,
-  WorkspaceOpenworkConfig,
+  WorkspaceEngineCommandDraft,
+  WorkspaceSofiaConfig,
   AppBuildInfo,
   DesktopDistributionInfo,
   BrandIconApplyResult,
   BrandIconState,
   DesktopBootstrapConfig,
   EvalRelaunchResult,
-  OpenworkDockerCleanupResult,
+  SofiaDockerCleanupResult,
   ExecResult,
   LocalSkillCard,
   LocalSkillContent,
@@ -24,7 +24,6 @@ export type {
   NukeOptions,
   NukeReceipt,
   NukeReceiptError,
-  OpencodeConfigFile,
   UpdaterEnvironment,
   CacheResetResult,
 } from "./desktop-types";
@@ -74,11 +73,11 @@ export type RecoveryActionResult = {
 
 declare global {
   interface Window {
-    __openworkRecoveryControl?: {
+    __sofiaRecoveryControl?: {
       snapshot: () => Promise<unknown>;
       select: (id: string) => Promise<unknown>;
     };
-    __OPENWORK_ELECTRON__?: {
+    __SOFIA_ELECTRON__?: {
       invokeDesktop?: <C extends DesktopCommandName>(
         command: C,
         ...args: DesktopCommandArgs<C>
@@ -221,7 +220,7 @@ async function invokeElectronHelper<C extends DesktopCommandName>(
   command: C,
   ...args: DesktopCommandArgs<C>
 ): Promise<DesktopCommandResult<C>> {
-  const invokeDesktop = window.__OPENWORK_ELECTRON__?.invokeDesktop;
+  const invokeDesktop = window.__SOFIA_ELECTRON__?.invokeDesktop;
   if (!invokeDesktop) {
     throw new Error(`Electron desktop helper is unavailable: ${command}`);
   }
@@ -270,7 +269,7 @@ export const desktopBridge = new Proxy(electronBridge, {
     if (cached) return cached;
 
     const fn = async (...args: unknown[]) => {
-      const invokeDesktop = window.__OPENWORK_ELECTRON__?.invokeDesktop;
+      const invokeDesktop = window.__SOFIA_ELECTRON__?.invokeDesktop;
       if (!invokeDesktop) {
         throw new Error(`Electron desktop helper is unavailable: ${prop}`);
       }
@@ -289,7 +288,7 @@ export const desktopBridge = new Proxy(electronBridge, {
 
 // ---------------------------------------------------------------------------
 // desktopFetch — proxies non-loopback requests through the Electron main
-// process. Loopback hosts (the local opencode/openwork server) use the
+// process. Loopback hosts (the local engine/sofia server) use the
 // renderer's own fetch, which works against same-machine services. Cross-origin
 // requests that need CORS headers the target does not send (e.g. the Den API on
 // a different control plane) should instead use `desktopFetchViaMain` directly.
@@ -316,7 +315,7 @@ async function desktopFetchThroughMain(
   options: DesktopFetchMainOptions = {},
 ): Promise<Response> {
   // Extract method/headers/body from either a Request object or the (input, init)
-  // pair. The OpenCode SDK calls fetch(request) (no init), so reading these only
+  // pair. The Sofia SDK calls fetch(request) (no init), so reading these only
   // from `init` would silently drop the Authorization header and the POST body
   // — the remote would then reject every request with "Invalid bearer token".
   let url: string;
@@ -409,7 +408,7 @@ export function assertDesktopWebUrl(url: string): string {
 
 export async function openDesktopUrl(url: string): Promise<void> {
   const safeUrl = assertDesktopWebUrl(url);
-  const openExternal = window.__OPENWORK_ELECTRON__?.shell?.openExternal;
+  const openExternal = window.__SOFIA_ELECTRON__?.shell?.openExternal;
   if (openExternal) {
     const result = await openExternal(safeUrl);
     if (result && result.ok === false) {
@@ -446,18 +445,18 @@ export async function applyBrandAppName(appName: string | null): Promise<string>
 }
 
 export async function applyBrandIcon(url: string | null): Promise<BrandIconApplyResult> {
-  const apply = typeof window !== "undefined" ? window.__OPENWORK_ELECTRON__?.brandIcon?.apply : undefined;
+  const apply = typeof window !== "undefined" ? window.__SOFIA_ELECTRON__?.brandIcon?.apply : undefined;
   if (!apply) return { ok: false, reason: "bridge-unavailable" };
   return apply(url);
 }
 
 export async function getBrandIconState(): Promise<BrandIconState | null> {
-  const getState = typeof window !== "undefined" ? window.__OPENWORK_ELECTRON__?.brandIcon?.getState : undefined;
+  const getState = typeof window !== "undefined" ? window.__SOFIA_ELECTRON__?.brandIcon?.getState : undefined;
   return getState ? getState() : null;
 }
 
 export async function evalRelaunchDesktopApp(): Promise<EvalRelaunchResult> {
-  const relaunch = typeof window !== "undefined" ? window.__OPENWORK_ELECTRON__?.dev?.evalRelaunch : undefined;
+  const relaunch = typeof window !== "undefined" ? window.__SOFIA_ELECTRON__?.dev?.evalRelaunch : undefined;
   if (!relaunch) {
     throw new Error("Electron eval relaunch helper is unavailable.");
   }
@@ -482,7 +481,7 @@ export async function openDesktopWithApp(target: string, appPath: string): Promi
 }
 
 export async function relaunchDesktopApp(): Promise<void> {
-  await window.__OPENWORK_ELECTRON__?.shell?.relaunch?.();
+  await window.__SOFIA_ELECTRON__?.shell?.relaunch?.();
 }
 
 export async function getDesktopHomeDir(): Promise<string> {
@@ -507,7 +506,7 @@ export async function subscribeDesktopDeepLinks(
     }
   };
   window.addEventListener(nativeDeepLinkEvent, listener as EventListener);
-  const initialUrls = window.__OPENWORK_ELECTRON__?.meta?.initialDeepLinks;
+  const initialUrls = window.__SOFIA_ELECTRON__?.meta?.initialDeepLinks;
   if (Array.isArray(initialUrls) && initialUrls.length > 0) {
     handler(initialUrls);
   }
@@ -518,18 +517,18 @@ export async function subscribeDesktopDeepLinks(
 
 export function readInitialDesktopBootstrapConfig(): DesktopBootstrapConfig | null | undefined {
   if (typeof window === "undefined") return undefined;
-  return window.__OPENWORK_ELECTRON__?.meta?.desktopBootstrap;
+  return window.__SOFIA_ELECTRON__?.meta?.desktopBootstrap;
 }
 
 export function readDesktopDistributionInfo(): DesktopDistributionInfo {
   const distribution = typeof window === "undefined"
     ? undefined
-    : window.__OPENWORK_ELECTRON__?.meta?.distribution;
+    : window.__SOFIA_ELECTRON__?.meta?.distribution;
   return distribution ?? {
     flavor: "public",
     appName: "Sofia App",
-    appIdentifier: "com.differentai.openwork",
-    protocolScheme: "openwork",
+    appIdentifier: "com.differentai.sofia",
+    protocolScheme: "sofia",
     requireSignin: false,
     requireActivation: false,
   };
@@ -552,11 +551,11 @@ const {
   workspaceAddAuthorizedRoot,
   workspaceExportConfig,
   workspaceImportConfig,
-  workspaceOpenworkRead,
-  workspaceOpenworkWrite,
-  opencodeCommandList,
-  opencodeCommandWrite,
-  opencodeCommandDelete,
+  workspaceSofiaRead,
+  workspaceSofiaWrite,
+  engineCommandList,
+  engineCommandWrite,
+  engineCommandDelete,
   engineStop,
   engineRestart,
   appBuildInfo,
@@ -566,11 +565,11 @@ const {
   setDesktopBootstrapConfig,
   connectLinkVerify,
   connectLinkAccept,
-  nukeOpenworkAndOpencodeConfigPreview,
-  nukeOpenworkAndOpencodeConfigAndExit,
-  sandboxCleanupOpenworkContainers,
-  openworkServerInfo,
-  openworkServerRestart,
+  nukeSofiaAndWorkspaceEngineConfigPreview,
+  nukeSofiaAndWorkspaceEngineConfigAndExit,
+  sandboxCleanupSofiaContainers,
+  sofiaServerInfo,
+  sofiaServerRestart,
   runtimeBootstrap,
   engineInfo,
   engineDoctor,
@@ -590,11 +589,9 @@ const {
   writeLocalSkill,
   uninstallSkill,
   updaterEnvironment,
-  readOpencodeConfig,
-  writeOpencodeConfig,
-  resetOpenworkState,
-  resetOpencodeCache,
-  opencodeMcpAuth,
+  resetSofiaState,
+  resetWorkspaceEngineCache,
+  engineMcpAuth,
   setWindowDecorations,
 } = desktopBridge;
 
@@ -611,11 +608,11 @@ export {
   workspaceAddAuthorizedRoot,
   workspaceExportConfig,
   workspaceImportConfig,
-  workspaceOpenworkRead,
-  workspaceOpenworkWrite,
-  opencodeCommandList,
-  opencodeCommandWrite,
-  opencodeCommandDelete,
+  workspaceSofiaRead,
+  workspaceSofiaWrite,
+  engineCommandList,
+  engineCommandWrite,
+  engineCommandDelete,
   engineStop,
   engineRestart,
   appBuildInfo,
@@ -625,11 +622,11 @@ export {
   setDesktopBootstrapConfig,
   connectLinkVerify,
   connectLinkAccept,
-  nukeOpenworkAndOpencodeConfigPreview,
-  nukeOpenworkAndOpencodeConfigAndExit,
-  sandboxCleanupOpenworkContainers,
-  openworkServerInfo,
-  openworkServerRestart,
+  nukeSofiaAndWorkspaceEngineConfigPreview,
+  nukeSofiaAndWorkspaceEngineConfigAndExit,
+  sandboxCleanupSofiaContainers,
+  sofiaServerInfo,
+  sofiaServerRestart,
   runtimeBootstrap,
   engineInfo,
   engineDoctor,
@@ -649,10 +646,8 @@ export {
   writeLocalSkill,
   uninstallSkill,
   updaterEnvironment,
-  readOpencodeConfig,
-  writeOpencodeConfig,
-  resetOpenworkState,
-  resetOpencodeCache,
-  opencodeMcpAuth,
+  resetSofiaState,
+  resetWorkspaceEngineCache,
+  engineMcpAuth,
   setWindowDecorations,
 };

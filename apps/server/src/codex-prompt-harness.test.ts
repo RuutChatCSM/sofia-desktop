@@ -12,7 +12,7 @@ afterEach(async () => {
 });
 
 async function createRoot(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "openwork-prompt-harness-"));
+  const root = await mkdtemp(join(tmpdir(), "sofia-prompt-harness-"));
   roots.push(root);
   return root;
 }
@@ -23,7 +23,7 @@ describe("codex-prompt-harness", () => {
       workspaceId: "ws_1",
       cwd: "/repo",
     });
-    expect(instructions).toContain("OpenWork is hosting this Codex engine");
+    expect(instructions).toContain("Sofia is running this thread");
     expect(instructions).toContain("Workspace id: ws_1");
     expect(instructions).toContain("Working directory: /repo");
     expect(instructions).not.toContain("Make a short plan");

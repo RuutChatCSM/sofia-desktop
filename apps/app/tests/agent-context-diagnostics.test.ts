@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { agentContextDiagnosticsRequestSchema } from "@openwork/types/agent-context-diagnostics";
+import { agentContextDiagnosticsRequestSchema } from "@sofia/types/agent-context-diagnostics";
 
 import {
   collectAgentContextDiagnosticObservations,
@@ -205,7 +205,7 @@ describe("organization connection diagnostic observations", () => {
     expect(agentContextDiagnosticsRequestSchema.safeParse(request).success).toBe(true);
   });
 
-  test("omits local organization topology from remote OpenWork diagnostic requests", () => {
+  test("omits local organization topology from remote Sofia App diagnostic requests", () => {
     const request = collectAgentContextDiagnosticObservations({
       organizationConnections: [connection],
       organizationConnectionsProbe: {
@@ -372,14 +372,14 @@ describe("organization connection diagnostic observations", () => {
 });
 
 describe("agent diagnostics workspace trust", () => {
-  test("blocks explicit and legacy remote OpenCode while allowing local and remote OpenWork", () => {
+  test("blocks explicit and legacy remote Sofia engine while allowing local and remote Sofia App", () => {
     expect(isAgentContextDiagnosticsWorkspaceAllowed({
       workspaceType: "remote",
-      remoteType: "opencode",
+      remoteType: "engine",
     })).toBe(false);
     expect(isAgentContextDiagnosticsWorkspaceAllowed({
       workspaceType: "remote",
-      remoteType: "openwork",
+      remoteType: "sofia",
     })).toBe(true);
     expect(isAgentContextDiagnosticsWorkspaceAllowed({
       workspaceType: "remote",

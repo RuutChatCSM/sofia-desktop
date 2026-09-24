@@ -17,15 +17,15 @@ function normalizeIdentifier(value) {
   return trimmed || null;
 }
 
-export function resolveOpenworkSentryAppVersion({ app, packageMetadata }) {
+export function resolveSofiaSentryAppVersion({ app, packageMetadata }) {
   const electronAppVersion = normalizeIdentifier(app?.getVersion?.());
   const packageVersion = normalizeIdentifier(packageMetadata?.version);
   if (app?.isPackaged) return electronAppVersion || packageVersion || "unknown";
   return packageVersion || electronAppVersion || "unknown";
 }
 
-export function resolveOpenworkSentryRelease({ appVersion, environmentRelease = process.env.SENTRY_RELEASE }) {
-  return normalizeIdentifier(environmentRelease) || `openwork-desktop@${normalizeIdentifier(appVersion) || "unknown"}`;
+export function resolveSofiaSentryRelease({ appVersion, environmentRelease = process.env.SENTRY_RELEASE }) {
+  return normalizeIdentifier(environmentRelease) || `sofia-desktop@${normalizeIdentifier(appVersion) || "unknown"}`;
 }
 
 function parseBuildConfig(path) {
@@ -46,25 +46,25 @@ function parseBuildConfig(path) {
 
 function readBuildConfig(app) {
   if (app.isPackaged) {
-    return parseBuildConfig(resolve(process.resourcesPath, "openwork-sentry.json"));
+    return parseBuildConfig(resolve(process.resourcesPath, "sofia-sentry.json"));
   }
-  return parseBuildConfig(resolve(__dirname, "..", ".electron-runtime", "openwork-sentry.json"));
+  return parseBuildConfig(resolve(__dirname, "..", ".electron-runtime", "sofia-sentry.json"));
 }
 
-export async function initOpenworkSentry({ app, distribution, packageMetadata }) {
+export async function initSofiaSentry({ app, distribution, packageMetadata }) {
   const buildConfig = readBuildConfig(app);
   const dsn = buildConfig.dsn;
-  if (!dsn || envFlagEnabled("OPENWORK_DESKTOP_SENTRY_DISABLED")) return false;
+  if (!dsn || envFlagEnabled("SOFIA_DESKTOP_SENTRY_DISABLED")) return false;
 
   sentry = await import("@sentry/electron/main");
-  const appVersion = resolveOpenworkSentryAppVersion({ app, packageMetadata });
-  const release = resolveOpenworkSentryRelease({ appVersion });
+  const appVersion = resolveSofiaSentryAppVersion({ app, packageMetadata });
+  const release = resolveSofiaSentryRelease({ appVersion });
   const sampleRate = buildConfig.tracesSampleRate;
 
   sentry.init({
     dsn,
     release,
-    environment: process.env.OPENWORK_DESKTOP_SENTRY_ENVIRONMENT?.trim() || (app.isPackaged ? "production" : "development"),
+    environment: process.env.SOFIA_DESKTOP_SENTRY_ENVIRONMENT?.trim() || (app.isPackaged ? "production" : "development"),
     sendDefaultPii: false,
     integrations: (defaultIntegrations) => defaultIntegrations.filter(
       (integration) => !["BrowserWindowSession", "ElectronMinidump", "MainProcessSession", "SentryMinidump"].includes(integration.name),
@@ -90,15 +90,15 @@ export async function initOpenworkSentry({ app, distribution, packageMetadata })
   });
 
   initialized = true;
-  globalThis.__openworkDesktopTelemetry = {
+  globalThis.__sofiaDesktopTelemetry = {
     captureException,
-    clearSession: clearOpenworkSentrySession,
-    setSession: setOpenworkSentrySession,
+    clearSession: clearSofiaSentrySession,
+    setSession: setSofiaSentrySession,
   };
   return true;
 }
 
-export function setOpenworkSentrySession(input) {
+export function setSofiaSentrySession(input) {
   const userId = normalizeIdentifier(input?.userId);
   const orgId = normalizeIdentifier(input?.orgId);
   if (!initialized || !sentry || !userId || !orgId) return false;
@@ -106,19 +106,19 @@ export function setOpenworkSentrySession(input) {
   telemetryActive = true;
   sentry.setUser({ id: userId });
   sentry.setTag("org_id", orgId);
-  sentry.setContext("openwork_cloud", {
+  sentry.setContext("sofia_cloud", {
     organization_id: orgId,
     user_id: userId,
   });
   return true;
 }
 
-export function clearOpenworkSentrySession() {
+export function clearSofiaSentrySession() {
   telemetryActive = false;
   if (!initialized || !sentry) return false;
 
   sentry.setUser(null);
-  sentry.setContext("openwork_cloud", null);
+  sentry.setContext("sofia_cloud", null);
   return true;
 }
 

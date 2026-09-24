@@ -12,23 +12,23 @@ import {
   waitFor,
   waitForAssistantReply,
   writeComposerText,
-} from "@openwork/behaviors";
-import type { DenSession } from "@openwork/behaviors";
-import { navigate } from "@openwork/cdp";
-import { screenshot, validate } from "@openwork/test-evidence";
-import { chrome } from "@openwork/hosts";
-import { app, mcpMock, needs, server, test, unmetNeeds } from "@openwork/testkit";
-import type { TestNeeds } from "@openwork/testkit";
+} from "@sofia/behaviors";
+import type { DenSession } from "@sofia/behaviors";
+import { navigate } from "@sofia/cdp";
+import { screenshot, validate } from "@sofia/test-evidence";
+import { chrome } from "@sofia/hosts";
+import { app, mcpMock, needs, server, test, unmetNeeds } from "@sofia/testkit";
+import type { TestNeeds } from "@sofia/testkit";
 
 const requirements: TestNeeds = {
   model: "tool-capable",
-  optIn: ["OPENWORK_EVAL_E2E_TESTS"],
+  optIn: ["SOFIA_EVAL_E2E_TESTS"],
 };
 const missingRequirements = unmetNeeds(requirements, process.env);
 const title = missingRequirements.length > 0
   ? `Workflows skipped — needs: ${missingRequirements.join(", ")}`
   : "Workflows: a 40-step question becomes one step, gets saved, and a teammate reuses it";
-const modelId = process.env.OPENWORK_EVAL_MODEL?.trim() || "";
+const modelId = process.env.SOFIA_EVAL_MODEL?.trim() || "";
 
 let requestId = 0;
 
@@ -103,7 +103,7 @@ async function mintMcpToken(session: DenSession, orgId: string): Promise<string>
     method: "POST",
     headers: {
       authorization: `Bearer ${session.token}`,
-      "x-openwork-org-id": orgId,
+      "x-sofia-org-id": orgId,
     },
     body: JSON.stringify({ scopes: ["mcp:read", "mcp:write"] }),
   });
@@ -256,7 +256,7 @@ test(title, { timeout: 1_500_000 }, async ({ evidence, place }) => {
     const created = await denFetch(den.admin, "/v1/workers", {
       method: "POST",
       headers: { authorization: `Bearer ${den.admin.token}` },
-      body: JSON.stringify({ name, destination: "local", workspacePath: "/tmp/openwork-eval-worker" }),
+      body: JSON.stringify({ name, destination: "local", workspacePath: "/tmp/sofia-eval-worker" }),
     });
     if (!created.response.ok) {
       throw new Error(`Seeding worker ${name} failed: HTTP ${created.response.status} ${created.text.slice(0, 500)}`);
@@ -637,7 +637,7 @@ return { drive, gmail }`,
     timeoutMs: 60_000,
     label: "Den Web loaded",
   });
-  await evalIn(browser, `localStorage.setItem("openwork:web:auth-token", ${JSON.stringify(den.admin.token)})`);
+  await evalIn(browser, `localStorage.setItem("sofia:web:auth-token", ${JSON.stringify(den.admin.token)})`);
   await navigate(browser.client, `${den.ref.webUrl}/dashboard/script-runs`);
   await waitFor(browser, `document.body.innerText.includes("Workflow Runs") || document.body.innerText.includes("workflow runs")`, {
     timeoutMs: 60_000,

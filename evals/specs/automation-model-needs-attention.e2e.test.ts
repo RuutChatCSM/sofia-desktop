@@ -1,5 +1,5 @@
 import { expect } from "vitest";
-import { screenshot, validate } from "@openwork/test-evidence";
+import { screenshot, validate } from "@sofia/test-evidence";
 import {
   clickButton,
   denFetch,
@@ -8,10 +8,10 @@ import {
   visibleText,
   waitFor,
   waitForText,
-} from "@openwork/behaviors";
-import type { DenSession } from "@openwork/behaviors";
-import type { Surface } from "@openwork/cdp";
-import { app, needs, server, test } from "@openwork/testkit";
+} from "@sofia/behaviors";
+import type { DenSession } from "@sofia/behaviors";
+import type { Surface } from "@sofia/cdp";
+import { app, needs, server, test } from "@sofia/testkit";
 
 /**
  * CORE JOURNEY: an active Automation keeps its instructions, cadence, and
@@ -68,7 +68,7 @@ async function createProvider(input: {
 }): Promise<string> {
   const result = await denFetch(input.admin, "/v1/llm-providers", {
     method: "POST",
-    headers: { ...auth(input.admin), "x-openwork-org-id": input.orgId },
+    headers: { ...auth(input.admin), "x-sofia-org-id": input.orgId },
     body: JSON.stringify({
       name: input.providerName,
       source: "custom",
@@ -79,7 +79,7 @@ async function createProvider(input: {
         env: [`${input.providerKey.toUpperCase().replaceAll("-", "_")}_API_KEY`],
         models: [{ id: input.modelId, name: input.modelName }],
       },
-      apiKey: "sk-openwork-automation-transition-eval-only",
+      apiKey: "sk-sofia-automation-transition-eval-only",
       allMembers: true,
     }),
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
@@ -104,7 +104,7 @@ async function createDueAutomation(input: {
   const nextMinute = new Date(Date.now() + 90_000);
   const result = await denFetch(input.admin, "/v1/automations", {
     method: "POST",
-    headers: { ...auth(input.admin), "x-openwork-org-id": input.orgId },
+    headers: { ...auth(input.admin), "x-sofia-org-id": input.orgId },
     body: JSON.stringify({
       name: input.name,
       instructions: input.instructions,
@@ -135,7 +135,7 @@ async function createDueAutomation(input: {
 async function deleteProvider(admin: DenSession, orgId: string, providerId: string): Promise<void> {
   const result = await denFetch(admin, `/v1/llm-providers/${encodeURIComponent(providerId)}`, {
     method: "DELETE",
-    headers: { ...auth(admin), "x-openwork-org-id": orgId },
+    headers: { ...auth(admin), "x-sofia-org-id": orgId },
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
   expect(result.response.status).toBe(204);
@@ -146,7 +146,7 @@ async function skippedModelReceipt(admin: DenSession, orgId: string, automationI
   let lastResponse = "not requested";
   while (Date.now() < deadline) {
     const result = await denFetch(admin, `/v1/automations/${encodeURIComponent(automationId)}/runs`, {
-      headers: { ...auth(admin), "x-openwork-org-id": orgId },
+      headers: { ...auth(admin), "x-sofia-org-id": orgId },
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
     lastResponse = `HTTP ${result.response.status} ${result.text.slice(0, 1_000)}`;
@@ -176,7 +176,7 @@ async function clickAutomationCard(surface: Surface, name: string): Promise<void
 }
 
 test("an unavailable Automation model needs attention until the owner selects a supported replacement", async ({ evidence, place }) => {
-  needs({ optIn: ["OPENWORK_EVAL_E2E_TESTS", "OPENWORK_EVAL_AUTOMATIONS_E2E_TEST"] });
+  needs({ optIn: ["SOFIA_EVAL_E2E_TESTS", "SOFIA_EVAL_AUTOMATIONS_E2E_TEST"] });
 
   await using den = await server({ place });
   const orgId = await activeOrganizationId(den.admin);
@@ -261,7 +261,7 @@ test("an unavailable Automation model needs attention until the owner selects a 
   expect(String(pickerText)).toContain("Replacement Automation Model");
   expect(String(pickerText)).not.toContain("Legacy Automation Model");
   // Provider groups start collapsed unless they hold the current model, a
-  // cloud-sourced group, or OpenWork models — none apply here, so the model
+  // cloud-sourced group, or Sofia App models — none apply here, so the model
   // rows are not in the DOM yet. The shipped interaction is: expand the
   // provider group via its header button, then click the model row (a
   // role="button" div whose label span is the model's display name).
@@ -328,7 +328,7 @@ test("an unavailable Automation model needs attention until the owner selects a 
   });
 
   const runs = await denFetch(den.admin, `/v1/automations/${encodeURIComponent(automationId)}/runs`, {
-    headers: { ...auth(den.admin), "x-openwork-org-id": orgId },
+    headers: { ...auth(den.admin), "x-sofia-org-id": orgId },
   });
   const runItems = isRecord(runs.body) && Array.isArray(runs.body.items) ? runs.body.items : [];
   expect(runItems).toHaveLength(1);

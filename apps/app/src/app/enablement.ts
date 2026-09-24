@@ -8,7 +8,7 @@ import type { McpStatusMap } from "./types";
 export type EnablementContext = {
   /** MCP server runtime statuses keyed by server name. */
   mcpStatuses?: McpStatusMap;
-  /** Set of MCP server names that are at least configured (in opencode.json). */
+  /** Set of MCP server names that are at least configured (in engine.json). */
   mcpConfigured?: Set<string>;
   /** Set of loaded plugin package names or path fragments. */
   loadedPlugins?: Set<string>;

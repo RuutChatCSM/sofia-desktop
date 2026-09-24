@@ -2,7 +2,7 @@ export const TOTAL_GUIDE_STEPS = 3;
 
 export type GuideStep = 1 | 2 | 3;
 
-/** Step 3 copies the OpenWork link and waits for the app to use it. */
+/** Step 3 copies the Sofia link and waits for the app to use it. */
 export const LINK_STEP = 3;
 
 export function parseGuideStep(value: string | null): GuideStep {

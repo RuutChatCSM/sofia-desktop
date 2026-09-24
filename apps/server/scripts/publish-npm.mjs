@@ -28,12 +28,12 @@ async function main() {
   await mkdir(resolve(outputRoot, "bin"), { recursive: true });
   await mkdir(resolve(outputRoot, "dist/bin"), { recursive: true });
   await cp(
-    resolve(packageRoot, "bin/openwork-server.mjs"),
-    resolve(outputRoot, "bin/openwork-server.mjs")
+    resolve(packageRoot, "bin/sofia-server.mjs"),
+    resolve(outputRoot, "bin/sofia-server.mjs")
   );
   await cp(
-    resolve(packageRoot, "dist/bin/openwork-server"),
-    resolve(outputRoot, "dist/bin/openwork-server")
+    resolve(packageRoot, "dist/bin/sofia-server"),
+    resolve(outputRoot, "dist/bin/sofia-server")
   );
   await cp(resolve(packageRoot, "README.md"), resolve(outputRoot, "README.md"));
   await writeFile(

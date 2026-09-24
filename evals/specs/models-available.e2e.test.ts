@@ -1,7 +1,7 @@
 import { expect, onTestFinished, test } from "vitest";
-import type { Surface } from "@openwork/cdp";
-import { createVisualEvidence, screenshot, validate } from "@openwork/test-evidence";
-import { desktop } from "@openwork/hosts";
+import type { Surface } from "@sofia/cdp";
+import { createVisualEvidence, screenshot, validate } from "@sofia/test-evidence";
+import { desktop } from "@sofia/hosts";
 import {
   createAndSelectWorkspace,
   denFetch,
@@ -18,18 +18,18 @@ import {
   waitFor,
   waitForText,
   writeComposerText,
-} from "@openwork/behaviors";
-import type { DenRef, DenSession } from "@openwork/behaviors";
+} from "@sofia/behaviors";
+import type { DenRef, DenSession } from "@sofia/behaviors";
 
-const e2eTestsEnabled = process.env.OPENWORK_EVAL_E2E_TESTS === "1";
-const apiUrl = process.env.OPENWORK_EVAL_DEN_API_URL?.trim().replace(/\/+$/, "") ?? "";
+const e2eTestsEnabled = process.env.SOFIA_EVAL_E2E_TESTS === "1";
+const apiUrl = process.env.SOFIA_EVAL_DEN_API_URL?.trim().replace(/\/+$/, "") ?? "";
 const appTitle = e2eTestsEnabled
   ? "available models are selectable and a disappeared model blocks until recovery"
-  : "models available skipped: set OPENWORK_EVAL_E2E_TESTS=1 to opt in";
+  : "models available skipped: set SOFIA_EVAL_E2E_TESTS=1 to opt in";
 const managedTitle = !e2eTestsEnabled
-  ? "managed models empty recovery skipped: set OPENWORK_EVAL_E2E_TESTS=1 to opt in"
+  ? "managed models empty recovery skipped: set SOFIA_EVAL_E2E_TESTS=1 to opt in"
   : !apiUrl
-    ? "managed models empty recovery skipped: set OPENWORK_EVAL_DEN_API_URL"
+    ? "managed models empty recovery skipped: set SOFIA_EVAL_DEN_API_URL"
     : "managed organization empty-models notice stays usable (live recovery after publish is a pinned defect)";
 const emptyMessage = "Your organization hasn't published any models for you yet.";
 const guidance = "The model you were using is no longer available, please select a different model for this session.";
@@ -68,7 +68,7 @@ function numberField(value: unknown): number {
 async function executeControl(app: Surface, action: string, args?: unknown): Promise<unknown> {
   const value = await evalIn(
     app,
-    `window.__openworkControl.execute(${JSON.stringify(action)}, ${JSON.stringify(args ?? null)})`,
+    `window.__sofiaControl.execute(${JSON.stringify(action)}, ${JSON.stringify(args ?? null)})`,
     { awaitPromise: true },
   );
   if (!isRecord(value) || value.ok !== true) throw new Error(`Control action ${action} failed: ${JSON.stringify(value)}`);
@@ -180,7 +180,7 @@ async function createProofProvider(admin: DenSession, state: ManagedModelState):
       source: "models_dev",
       providerId: "openai",
       modelIds: [modelId],
-      apiKey: "sk-openwork-local-eval-only",
+      apiKey: "sk-sofia-local-eval-only",
       memberIds: [state.ownerMemberId],
       teamIds: [],
     }),
@@ -211,7 +211,7 @@ async function restoreManagedState(admin: DenSession, state: ManagedModelState):
 test.skipIf(!e2eTestsEnabled)(appTitle, async () => {
   await using app = await desktop({ name: "models-available" });
   await using visualEvidence = createVisualEvidence("models-available");
-  const workspacePath = `/tmp/openwork-models-available-${Date.now()}`;
+  const workspacePath = `/tmp/sofia-models-available-${Date.now()}`;
   await ensureSession(app, workspacePath);
 
   // The engine's model catalog can land after the picker first paints its
@@ -303,11 +303,11 @@ test.skipIf(!e2eTestsEnabled)(appTitle, async () => {
 test.skipIf(!e2eTestsEnabled || !apiUrl)(managedTitle, async () => {
   const den: DenRef = {
     apiUrl,
-    webUrl: (process.env.OPENWORK_EVAL_DEN_WEB_URL?.trim() || apiUrl.replace("127.0.0.1", "localhost")).replace(/\/+$/, ""),
+    webUrl: (process.env.SOFIA_EVAL_DEN_WEB_URL?.trim() || apiUrl.replace("127.0.0.1", "localhost")).replace(/\/+$/, ""),
   };
   const admin = await signIn(den, {
-    email: process.env.OPENWORK_EVAL_DEMO_EMAIL?.trim() || "alex@acme.test",
-    password: process.env.OPENWORK_EVAL_DEMO_PASSWORD?.trim() || "OpenWorkDemo123!",
+    email: process.env.SOFIA_EVAL_DEMO_EMAIL?.trim() || "alex@acme.test",
+    password: process.env.SOFIA_EVAL_DEMO_PASSWORD?.trim() || "SofiaDemo123!",
   });
   const state: ManagedModelState = {
     orgId: "",
@@ -328,7 +328,7 @@ test.skipIf(!e2eTestsEnabled || !apiUrl)(managedTitle, async () => {
   // Workspace first, then the org sign-in: the org's managed-model policy
   // then lands on an existing composer. (Signed-in-first has no workspace
   // affordance to drive: the org shell offers no Add workspace entry there.)
-  const workspacePath = `/tmp/openwork-managed-models-${Date.now()}`;
+  const workspacePath = `/tmp/sofia-managed-models-${Date.now()}`;
   await createAndSelectWorkspace(app, { path: workspacePath });
   await signInDesktopAs(app, den, admin);
   // Completes organization onboarding if it appears, and reselects the

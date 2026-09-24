@@ -6,9 +6,9 @@ import { parseFrontmatter, buildFrontmatter } from "./frontmatter.js";
 import { addMcp, removeMcp } from "./mcp.js";
 import { createWorkspaceKvStore, isRecord } from "./workspace-kv-store.js";
 
-const OPENCODE_SKILL_NAME_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
-const OPENCODE_MCP_NAME_RE = /^[A-Za-z0-9_][A-Za-z0-9_-]*$/;
-const OPENCODE_MCP_IMPORT_PATH_PREFIX = "opencode.jsonc#mcp.";
+const SOFIA_ENGINE_SKILL_NAME_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+const SOFIA_ENGINE_MCP_NAME_RE = /^[A-Za-z0-9_][A-Za-z0-9_-]*$/;
+const SOFIA_ENGINE_MCP_IMPORT_PATH_PREFIX = "engine.jsonc#mcp.";
 
 type CloudPluginConfigObjectType = "skill" | "agent" | "command" | "tool" | "mcp" | "hook" | "context" | "custom";
 
@@ -189,7 +189,7 @@ function slugifyConfigObjectName(title: string, fallback: string): string {
     .replace(/^-+|-+$/g, "");
   if (!base) base = "skill";
   if (base.length > 64) base = base.slice(0, 64).replace(/-+$/g, "");
-  if (!OPENCODE_SKILL_NAME_RE.test(base)) base = "skill";
+  if (!SOFIA_ENGINE_SKILL_NAME_RE.test(base)) base = "skill";
   if (base === "skill" && fallback) return slugifyConfigObjectName(fallback, "");
   return base;
 }
@@ -214,13 +214,13 @@ function normalizePluginSourcePath(path: string, objectType: string, namespace: 
   };
   const folder = folderByType[objectType];
   if (!folder) return "";
-  const opencodeIndex = parts.findIndex((part) => part === ".opencode");
-  const searchParts = opencodeIndex >= 0 ? parts.slice(opencodeIndex + 1) : parts;
+  const engineIndex = parts.findIndex((part) => part === ".sofia");
+  const searchParts = engineIndex >= 0 ? parts.slice(engineIndex + 1) : parts;
   const folderIndex = searchParts.findIndex((part) => part === folder);
   if (folderIndex < 0 || folderIndex === searchParts.length - 1) return "";
   const rest = searchParts.slice(folderIndex + 1);
-  if (rest[0] === namespace) return [".opencode", folder, ...rest].join("/");
-  return [".opencode", folder, namespace, ...rest].join("/");
+  if (rest[0] === namespace) return [".sofia", folder, ...rest].join("/");
+  return [".sofia", folder, namespace, ...rest].join("/");
 }
 
 function getPluginObjectInstallPath(object: CloudPluginConfigObject, namespace: string): string {
@@ -232,28 +232,28 @@ function getPluginObjectInstallPath(object: CloudPluginConfigObject, namespace: 
       const skillName = /^SKILL\.md$/i.test(lastPart)
         ? parts.at(-2) ?? slugifyConfigObjectName(object.title, object.id)
         : lastPart || slugifyConfigObjectName(object.title, object.id);
-      return `.opencode/skills/${namespace}/${skillName}/SKILL.md`;
+      return `.sofia/skills/${namespace}/${skillName}/SKILL.md`;
     }
     return existing;
   }
   const name = slugifyConfigObjectName(object.title, object.id);
   switch (object.objectType) {
     case "skill":
-      return `.opencode/skills/${namespace}/${name}/SKILL.md`;
+      return `.sofia/skills/${namespace}/${name}/SKILL.md`;
     case "agent":
-      return `.opencode/agents/${namespace}/${name}.md`;
+      return `.sofia/agents/${namespace}/${name}.md`;
     case "command":
-      return `.opencode/commands/${namespace}/${name}.md`;
+      return `.sofia/commands/${namespace}/${name}.md`;
     case "mcp":
-      return `.opencode/mcps/${namespace}/${name}.json`;
+      return `.sofia/mcps/${namespace}/${name}.json`;
     case "hook":
-      return `.opencode/hooks/${namespace}/${name}.json`;
+      return `.sofia/hooks/${namespace}/${name}.json`;
     case "tool":
-      return `.opencode/tools/${namespace}/${name}.ts`;
+      return `.sofia/tools/${namespace}/${name}.ts`;
     case "context":
-      return `.opencode/context/${namespace}/${name}.md`;
+      return `.sofia/context/${namespace}/${name}.md`;
     default:
-      return `.opencode/plugins/${namespace}/${name}.txt`;
+      return `.sofia/plugins/${namespace}/${name}.txt`;
   }
 }
 
@@ -270,7 +270,7 @@ function buildCloudSkillContent(name: string, description: string, body: string)
   ].join("\n");
 }
 
-const OPENCODE_MODEL_ID_RE = /^[^\s/]+\/[^\s]+$/;
+const SOFIA_ENGINE_MODEL_ID_RE = /^[^\s/]+\/[^\s]+$/;
 
 function translateClaudeTools(value: unknown): Record<string, boolean> | null {
   const names = typeof value === "string"
@@ -299,7 +299,7 @@ function translateClaudeTools(value: unknown): Record<string, boolean> | null {
 
 function translateClaudeModel(value: unknown): string | null {
   const model = readString(value);
-  return model && OPENCODE_MODEL_ID_RE.test(model) ? model : null;
+  return model && SOFIA_ENGINE_MODEL_ID_RE.test(model) ? model : null;
 }
 
 function cloudConfigObjectDescription(object: CloudPluginConfigObject): string {
@@ -337,10 +337,10 @@ function buildCloudCommandContent(name: string, description: string, rawSourceTe
 
 function pluginMcpName(rawName: string, namespace: string, fallback: string, namespaceName: boolean): string {
   const trimmed = rawName.trim();
-  const base = OPENCODE_MCP_NAME_RE.test(trimmed) ? trimmed : slugifyConfigObjectName(trimmed || fallback, fallback);
+  const base = SOFIA_ENGINE_MCP_NAME_RE.test(trimmed) ? trimmed : slugifyConfigObjectName(trimmed || fallback, fallback);
   if (!namespaceName) return base;
   const namespaced = base.startsWith(`${namespace}-`) ? base : `${namespace}-${base}`;
-  return OPENCODE_MCP_NAME_RE.test(namespaced) ? namespaced : slugifyConfigObjectName(namespaced, fallback);
+  return SOFIA_ENGINE_MCP_NAME_RE.test(namespaced) ? namespaced : slugifyConfigObjectName(namespaced, fallback);
 }
 
 function mcpCommandFromConfig(config: Record<string, unknown>): string[] {
@@ -391,7 +391,7 @@ function pluginMcpConfigsFromPayload(object: CloudPluginConfigObject, namespace:
     configs.set(name, {
       name,
       config,
-      path: `${OPENCODE_MCP_IMPORT_PATH_PREFIX}${name}`,
+      path: `${SOFIA_ENGINE_MCP_IMPORT_PATH_PREFIX}${name}`,
     });
   };
 
@@ -500,7 +500,7 @@ async function writeInstalledCloudPlugins(
 function resolveWorkspaceInstallPath(workspaceRoot: string, relativePath: string): string {
   const normalized = relativePath.trim().replace(/^\/+/, "");
   const parts = normalized.split("/").filter(Boolean);
-  if (!normalized.startsWith(".opencode/") || parts.some((part) => part === "." || part === "..")) {
+  if (!normalized.startsWith(".sofia/") || parts.some((part) => part === "." || part === "..")) {
     throw new ApiError(400, "invalid_cloud_plugin_path", `Invalid cloud plugin path: ${relativePath}`);
   }
   const root = resolve(workspaceRoot);
@@ -518,9 +518,9 @@ async function writePluginWorkspaceFile(workspaceRoot: string, path: string, con
 }
 
 async function removePluginWorkspaceFile(workspaceRoot: string, path: string): Promise<void> {
-  if (!path.startsWith(".opencode/")) return;
+  if (!path.startsWith(".sofia/")) return;
   const absolutePath = resolveWorkspaceInstallPath(workspaceRoot, path);
-  if (/^\.opencode\/skills\/[^/]+\/[^/]+\/SKILL\.md$/.test(path)) {
+  if (/^\.sofia\/skills\/[^/]+\/[^/]+\/SKILL\.md$/.test(path)) {
     await rm(dirname(absolutePath), { recursive: true, force: true });
     return;
   }
@@ -528,9 +528,9 @@ async function removePluginWorkspaceFile(workspaceRoot: string, path: string): P
 }
 
 function cloudPluginMcpNameFromPath(path: string): string | null {
-  if (!path.startsWith(OPENCODE_MCP_IMPORT_PATH_PREFIX)) return null;
-  const name = path.slice(OPENCODE_MCP_IMPORT_PATH_PREFIX.length).trim();
-  return OPENCODE_MCP_NAME_RE.test(name) ? name : null;
+  if (!path.startsWith(SOFIA_ENGINE_MCP_IMPORT_PATH_PREFIX)) return null;
+  const name = path.slice(SOFIA_ENGINE_MCP_IMPORT_PATH_PREFIX.length).trim();
+  return SOFIA_ENGINE_MCP_NAME_RE.test(name) ? name : null;
 }
 
 export async function installCloudPlugin(input: {
@@ -579,7 +579,7 @@ export async function installCloudPlugin(input: {
     let content = version.rawSourceText;
     if (object.objectType === "skill") {
       const description = cloudConfigObjectDescription(object) || "Skill";
-      const installName = path.match(/^\.opencode\/skills\/[^/]+\/([^/]+)\/SKILL\.md$/)?.[1] ?? slugifyConfigObjectName(object.title, object.id);
+      const installName = path.match(/^\.sofia\/skills\/[^/]+\/([^/]+)\/SKILL\.md$/)?.[1] ?? slugifyConfigObjectName(object.title, object.id);
       content = buildCloudSkillContent(installName, description, extractSkillBodyMarkdown(content));
     } else if (object.objectType === "agent") {
       content = buildCloudAgentContent(cloudConfigObjectDescription(object), content);

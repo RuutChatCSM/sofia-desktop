@@ -5,6 +5,7 @@ import { Readable } from "node:stream";
 import { recordAudit } from "../audit.js";
 import { ApiError } from "../errors.js";
 import { FileSessionStore } from "../file-sessions.js";
+import { searchWorkspaceFiles } from "../workspace-file-search.js";
 import type { ApprovalRequest, ServerConfig, TokenScope, WorkspaceInfo } from "../types.js";
 import { ensureDir, exists, shortId } from "../utils.js";
 import { addRoute, type RequestContext, type Route } from "./registry.js";
@@ -38,11 +39,11 @@ interface RegisterFileRoutesOptions {
 }
 
 function resolveInboxDir(workspaceRoot: string): string {
-  return join(workspaceRoot, ".opencode", "openwork", "inbox");
+  return join(workspaceRoot, ".sofia", "sofia", "inbox");
 }
 
 function resolveOutboxDir(workspaceRoot: string): string {
-  return join(workspaceRoot, ".opencode", "openwork", "outbox");
+  return join(workspaceRoot, ".sofia", "sofia", "outbox");
 }
 
 export function normalizeWorkspaceRelativePath(input: string, options: { allowSubdirs: boolean }): string {
@@ -1049,6 +1050,14 @@ export function registerFileRoutes(options: RegisterFileRoutesOptions): void {
 
     const events = fileSessions.listWorkspaceEvents(workspace.id, Number.MAX_SAFE_INTEGER);
     return jsonResponse({ items, cursor: events.cursor });
+  });
+
+  addRoute(routes, "GET", "/workspace/:id/files/search", "client", async (ctx) => {
+    const workspace = await resolveWorkspace(config, ctx.params.id);
+    const rawLimit = Number(ctx.url.searchParams.get("limit") ?? 50);
+    const limit = Number.isFinite(rawLimit) ? Math.min(100, Math.max(1, Math.floor(rawLimit))) : 50;
+    const items = await searchWorkspaceFiles(workspace.path, ctx.url.searchParams.get("query") ?? "", limit);
+    return jsonResponse({ items });
   });
 
   addRoute(routes, "GET", "/workspace/:id/files/content", "client", async (ctx) => {

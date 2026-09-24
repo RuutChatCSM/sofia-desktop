@@ -5,13 +5,13 @@ import { join } from "node:path";
 
 import { EnvService } from "./env-file.js";
 import { CloudProviderSync } from "./cloud-provider-sync.js";
-import { readOpenworkWorkspaceConfig, writeOpenworkWorkspaceConfig } from "./openwork-workspace-config-store.js";
+import { readSofiaWorkspaceConfig, writeSofiaWorkspaceConfig } from "./sofia-workspace-config-store.js";
 import {
-  readGlobalRuntimeOpencodeConfig,
-  readRuntimeOpencodeConfig,
+  readGlobalRuntimeWorkspaceEngineConfig,
+  readRuntimeWorkspaceEngineConfig,
   runtimeProviderMap,
-  writeRuntimeOpencodeConfig,
-} from "./runtime-opencode-config-store.js";
+  writeRuntimeWorkspaceEngineConfig,
+} from "./runtime-engine-config-store.js";
 import { startServer } from "./server.js";
 import type { ServerConfig } from "./types.js";
 
@@ -19,9 +19,9 @@ const clientToken = "owt_cloud_provider_client";
 const hostToken = "owt_cloud_provider_host";
 const roots: string[] = [];
 const stops: Array<() => void | Promise<void>> = [];
-const previousRuntimeDb = process.env.OPENWORK_RUNTIME_DB;
-const previousEnvStore = process.env.OPENWORK_ENV_STORE;
-const previousInterval = process.env.OPENWORK_CLOUD_PROVIDER_SYNC_INTERVAL_MS;
+const previousRuntimeDb = process.env.SOFIA_RUNTIME_DB;
+const previousEnvStore = process.env.SOFIA_ENV_STORE;
+const previousInterval = process.env.SOFIA_CLOUD_PROVIDER_SYNC_INTERVAL_MS;
 
 type FakeModel = {
   id: string;
@@ -63,11 +63,11 @@ async function responseRecord(response: Response, label: string): Promise<Record
 }
 
 async function createRoot(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "openwork-cloud-provider-sync-"));
+  const root = await mkdtemp(join(tmpdir(), "sofia-cloud-provider-sync-"));
   roots.push(root);
-  process.env.OPENWORK_RUNTIME_DB = join(root, "runtime.sqlite");
-  process.env.OPENWORK_ENV_STORE = join(root, "env.json");
-  process.env.OPENWORK_CLOUD_PROVIDER_SYNC_INTERVAL_MS = "3600000";
+  process.env.SOFIA_RUNTIME_DB = join(root, "runtime.sqlite");
+  process.env.SOFIA_ENV_STORE = join(root, "env.json");
+  process.env.SOFIA_CLOUD_PROVIDER_SYNC_INTERVAL_MS = "3600000";
   return root;
 }
 
@@ -167,12 +167,12 @@ afterEach(async () => {
     const root = roots.pop();
     if (root) await rm(root, { recursive: true, force: true });
   }
-  if (previousRuntimeDb === undefined) delete process.env.OPENWORK_RUNTIME_DB;
-  else process.env.OPENWORK_RUNTIME_DB = previousRuntimeDb;
-  if (previousEnvStore === undefined) delete process.env.OPENWORK_ENV_STORE;
-  else process.env.OPENWORK_ENV_STORE = previousEnvStore;
-  if (previousInterval === undefined) delete process.env.OPENWORK_CLOUD_PROVIDER_SYNC_INTERVAL_MS;
-  else process.env.OPENWORK_CLOUD_PROVIDER_SYNC_INTERVAL_MS = previousInterval;
+  if (previousRuntimeDb === undefined) delete process.env.SOFIA_RUNTIME_DB;
+  else process.env.SOFIA_RUNTIME_DB = previousRuntimeDb;
+  if (previousEnvStore === undefined) delete process.env.SOFIA_ENV_STORE;
+  else process.env.SOFIA_ENV_STORE = previousEnvStore;
+  if (previousInterval === undefined) delete process.env.SOFIA_CLOUD_PROVIDER_SYNC_INTERVAL_MS;
+  else process.env.SOFIA_CLOUD_PROVIDER_SYNC_INTERVAL_MS = previousInterval;
 });
 
 describe("cloud provider sync gateway", () => {
@@ -196,7 +196,7 @@ describe("cloud provider sync gateway", () => {
         if (url.pathname !== "/v1/llm-providers") {
           return Response.json({ error: "not_found" }, { status: 404 });
         }
-        listOrgIds.push(request.headers.get("x-openwork-legacy-org-id") ?? "");
+        listOrgIds.push(request.headers.get("x-sofia-legacy-org-id") ?? "");
         listRequestsInFlight += 1;
         maxListRequestsInFlight = Math.max(maxListRequestsInFlight, listRequestsInFlight);
         try {
@@ -284,7 +284,7 @@ describe("cloud provider sync gateway", () => {
     stops.push(() => den.stop(true));
     const sync = new CloudProviderSync({
       config,
-      env: new EnvService({ path: process.env.OPENWORK_ENV_STORE }),
+      env: new EnvService({ path: process.env.SOFIA_ENV_STORE }),
       reloadEngine: async () => {
         reloads += 1;
       },
@@ -299,7 +299,7 @@ describe("cloud provider sync gateway", () => {
     });
     expect((await sync.run("before-workspace")).status).toBe("applied");
     expect(sync.status().lastRun?.status).toBe("applied");
-    expect(runtimeProviderMap(await readGlobalRuntimeOpencodeConfig(config)).lpr_test).toBeDefined();
+    expect(runtimeProviderMap(await readGlobalRuntimeWorkspaceEngineConfig(config)).lpr_test).toBeDefined();
     expect(reloads).toBe(0);
     expect(engineRequests).toEqual([]);
 
@@ -351,7 +351,7 @@ describe("cloud provider sync gateway", () => {
         denRequests.push({
           path: url.pathname,
           authorization: request.headers.get("authorization"),
-          orgId: request.headers.get("x-openwork-legacy-org-id"),
+          orgId: request.headers.get("x-sofia-legacy-org-id"),
         });
         if (denFailure) return Response.json({ error: "unavailable" }, { status: 503 });
         if (url.pathname === "/v1/llm-providers") return Response.json({ llmProviders: denProviders });
@@ -365,13 +365,13 @@ describe("cloud provider sync gateway", () => {
     stops.push(() => den.stop(true));
 
     const config = serverConfig(root, `http://127.0.0.1:${engine.port}`);
-    await writeRuntimeOpencodeConfig(config, "ws_1", () => ({
+    await writeRuntimeWorkspaceEngineConfig(config, "ws_1", () => ({
       provider: {
         lpr_stale: { id: "stale", name: "Stale", env: ["STALE_KEY"] },
         local_provider: { id: "local", name: "Local" },
       },
     }));
-    await writeOpenworkWorkspaceConfig(config, "ws_1", () => ({
+    await writeSofiaWorkspaceConfig(config, "ws_1", () => ({
       cloudImports: {
         providers: { lpr_stale: { cloudProviderId: "lpr_stale" } },
         marketplaces: { mkp_keep: { name: "Keep" } },
@@ -380,7 +380,7 @@ describe("cloud provider sync gateway", () => {
     // Simulate an upgrade/restart after an older process persisted the cloud
     // credential. The next sync sees the same value, performs no upsert, and
     // must still reclaim ownership so logout removes it.
-    await new EnvService({ path: process.env.OPENWORK_ENV_STORE }).upsertMany([
+    await new EnvService({ path: process.env.SOFIA_ENV_STORE }).upsertMany([
       { key: "TEST_PROVIDER_API_KEY", value: "sk-test-provider" },
     ]);
 
@@ -435,20 +435,20 @@ describe("cloud provider sync gateway", () => {
     expect(denRequests.every((request) => request.orgId === "org_test")).toBe(true);
     expect(denRequests.map((request) => request.path)).toContain("/v1/llm-providers/lpr_test/connect");
 
-    const globalProviders = runtimeProviderMap(await readGlobalRuntimeOpencodeConfig(config));
+    const globalProviders = runtimeProviderMap(await readGlobalRuntimeWorkspaceEngineConfig(config));
     const globalProvider = expectRecord(globalProviders.lpr_test, "global runtime provider");
     const globalModels = expectRecord(globalProvider.models, "global runtime provider models");
     expect(Object.keys(globalModels).sort()).toEqual(["model-a", "model-z"]);
     expect(expectRecord(globalModels["model-z"], "model-z runtime config").reasoning).toBe(true);
-    expect((await new EnvService({ path: process.env.OPENWORK_ENV_STORE }).list()).find(
+    expect((await new EnvService({ path: process.env.SOFIA_ENV_STORE }).list()).find(
       (entry) => entry.key === "TEST_PROVIDER_API_KEY",
     )?.value).toBe("sk-test-provider");
 
-    const workspaceProviders = runtimeProviderMap(await readRuntimeOpencodeConfig(config, "ws_1"));
+    const workspaceProviders = runtimeProviderMap(await readRuntimeWorkspaceEngineConfig(config, "ws_1"));
     expect(workspaceProviders.lpr_stale).toBeUndefined();
     expect(workspaceProviders.local_provider).toBeDefined();
-    const openwork = await readOpenworkWorkspaceConfig(config, "ws_1");
-    const cloudImports = expectRecord(openwork.cloudImports, "workspace cloud imports");
+    const sofia = await readSofiaWorkspaceConfig(config, "ws_1");
+    const cloudImports = expectRecord(sofia.cloudImports, "workspace cloud imports");
     expect(cloudImports.providers).toEqual({});
     expect(cloudImports.marketplaces).toEqual({ mkp_keep: { name: "Keep" } });
 
@@ -456,7 +456,7 @@ describe("cloud provider sync gateway", () => {
 
     denProviders = [buildProvider([{ id: "model-b", name: "Model B", config: { tool_call: true } }])];
     expect(await runSync(base, "models-changed")).toEqual({ status: "applied" });
-    const updatedGlobal = runtimeProviderMap(await readGlobalRuntimeOpencodeConfig(config));
+    const updatedGlobal = runtimeProviderMap(await readGlobalRuntimeWorkspaceEngineConfig(config));
     expect(Object.keys(expectRecord(updatedGlobal.lpr_test, "updated global provider").models ?? {})).toEqual(["model-b"]);
     const updatedStatusResponse = await fetch(`${base}/cloud-provider-sync/status`, { headers: clientHeaders() });
     const updatedStatus = await responseRecord(updatedStatusResponse, "updated status");
@@ -467,7 +467,7 @@ describe("cloud provider sync gateway", () => {
 
     denProviders = [];
     expect(await runSync(base, "provider-removed")).toEqual({ status: "applied" });
-    expect(runtimeProviderMap(await readGlobalRuntimeOpencodeConfig(config)).lpr_test).toBeUndefined();
+    expect(runtimeProviderMap(await readGlobalRuntimeWorkspaceEngineConfig(config)).lpr_test).toBeUndefined();
     const removedStatusResponse = await fetch(`${base}/cloud-provider-sync/status`, { headers: clientHeaders() });
     expect((await responseRecord(removedStatusResponse, "removed status")).providers).toEqual([]);
 
@@ -475,8 +475,8 @@ describe("cloud provider sync gateway", () => {
     expect(await runSync(base, "provider-restored")).toEqual({ status: "applied" });
     const deleteResponse = await fetch(`${base}/den-session`, { method: "DELETE", headers: hostHeaders() });
     expect(deleteResponse.status).toBe(204);
-    expect(runtimeProviderMap(await readGlobalRuntimeOpencodeConfig(config)).lpr_test).toBeUndefined();
-    expect((await new EnvService({ path: process.env.OPENWORK_ENV_STORE }).list()).find(
+    expect(runtimeProviderMap(await readGlobalRuntimeWorkspaceEngineConfig(config)).lpr_test).toBeUndefined();
+    expect((await new EnvService({ path: process.env.SOFIA_ENV_STORE }).list()).find(
       (entry) => entry.key === "TEST_PROVIDER_API_KEY",
     )).toBeUndefined();
     const clearedStatusResponse = await fetch(`${base}/cloud-provider-sync/status`, { headers: clientHeaders() });

@@ -1,5 +1,5 @@
-import { createJsonStdoutLogger } from "@openwork-ee/utils/observability"
-import type { JsonObject, StructuredLogLevel } from "@openwork-ee/utils/observability"
+import { createJsonStdoutLogger } from "@sofia-ee/utils/observability"
+import type { JsonObject, StructuredLogLevel } from "@sofia-ee/utils/observability"
 import { observabilityConfig } from "./config.js"
 import { getRuntimeState } from "./runtime.js"
 import { sanitizeFields, sanitizeText } from "./safe-fields.js"

@@ -11,38 +11,38 @@ import {
   readDenClientState,
   server,
   test,
-} from "@openwork/testkit";
+} from "@sofia/testkit";
 
 const orgsPath = "/api/den/v1/me/orgs";
-const e2eTestsEnabled = process.env.OPENWORK_EVAL_E2E_TESTS === "1";
-const localPlacement = process.env.OPENWORK_EVAL_DAYTONA !== "1" && !process.env.OPENWORK_EVAL_DEN_API_URL?.trim();
+const e2eTestsEnabled = process.env.SOFIA_EVAL_E2E_TESTS === "1";
+const localPlacement = process.env.SOFIA_EVAL_DAYTONA !== "1" && !process.env.SOFIA_EVAL_DEN_API_URL?.trim();
 const mysqlOpen = await localMysqlIsRunning();
 const title = !e2eTestsEnabled
-  ? "fresh-profile first sign-in healing skipped — needs: set OPENWORK_EVAL_E2E_TESTS=1"
+  ? "fresh-profile first sign-in healing skipped — needs: set SOFIA_EVAL_E2E_TESTS=1"
   : !localPlacement
-    ? "fresh-profile first sign-in healing skipped — needs local placement without OPENWORK_EVAL_DEN_API_URL"
+    ? "fresh-profile first sign-in healing skipped — needs local placement without SOFIA_EVAL_DEN_API_URL"
     : !mysqlOpen
       ? "fresh-profile first sign-in healing skipped — needs MySQL on 127.0.0.1:3306"
       : "fresh-profile first sign-in heals organization and Connect state after transient faults";
 
 test.skipIf(!e2eTestsEnabled || !localPlacement || !mysqlOpen)(title, async ({ evidence, place }) => {
-  needs({ optIn: ["OPENWORK_EVAL_E2E_TESTS"] });
+  needs({ optIn: ["SOFIA_EVAL_E2E_TESTS"] });
 
   await using den = await server({
     place,
     org: {
       name: "First Signin Heal",
       admin: {
-        email: `first-signin-admin-${Date.now()}@openwork.test`,
+        email: `first-signin-admin-${Date.now()}@sofia.test`,
         name: "First Signin Admin",
-        password: "OpenWorkEval123!",
+        password: "SofiaEval123!",
       },
     },
   });
   await inviteMember(den, "fresh", {
-    email: `first-signin-member-${Date.now()}@openwork.test`,
+    email: `first-signin-member-${Date.now()}@sofia.test`,
     name: "Fresh Profile Member",
-    password: "OpenWorkEval123!",
+    password: "SofiaEval123!",
   });
   await using proxy = await faultProxy(den.ref);
   proxy.faults.status(orgsPath, 429, { times: 3 });

@@ -7,29 +7,29 @@ during the React port cutover. Run them before shipping any change that touches:
 - `apps/app/src/react-app/shell/settings-route.tsx`
 - `apps/app/src/react-app/domains/session/**`
 - `apps/app/src/react-app/domains/settings/**`
-- OpenWork server proxy endpoints for `/w/:workspaceId/opencode/session/**`
+- Sofia server proxy endpoints for `/w/:workspaceId/engine/session/**`
 
 ## Preflight
 
 Before running any eval:
 
-1. Install dependencies in the OpenWork repo:
+1. Install dependencies in the Sofia repo:
    ```bash
    pnpm install --frozen-lockfile
    ```
 2. Start the Electron dev app:
    ```bash
-   nohup pnpm dev:electron > .openwork-run/electron.log 2>&1 &
+   nohup pnpm dev:electron > .sofia-run/electron.log 2>&1 &
    ```
    Wait ~15s for Vite + Electron to boot. The log will show
-   `[openwork] Electron CDP exposed at http://127.0.0.1:9823` when ready.
+   `[sofia] Electron CDP exposed at http://127.0.0.1:9823` when ready.
 3. Chrome MCP automatically connects to the Electron renderer via CDP on
    port 9823. Verify by taking a snapshot:
    ```
    chrome-devtools_take_snapshot
    ```
-   You should see the full OpenWork UI tree (sidebar, composer, footer).
-4. Confirm the footer shows **"OpenWork Ready"**.
+   You should see the full Sofia UI tree (sidebar, composer, footer).
+4. Confirm the footer shows **"Sofia Ready"**.
 5. Check the JS console for errors with
    `chrome-devtools_list_console_messages { types: ["error"] }`. It must be
    empty of `Maximum update depth exceeded` warnings. Any of those means the
@@ -62,7 +62,7 @@ osascript \
 
 ## Flow 1 — Send a message and observe streaming
 
-**Why**: Streaming uses `ReactSessionRuntime` to subscribe to the OpenCode
+**Why**: Streaming uses `ReactSessionRuntime` to subscribe to the Sofia
 event stream and populate the transcript cache. If the subscription isn't
 mounted, prompts still submit but the UI shows empty responses until reload.
 
@@ -105,7 +105,7 @@ classification, right-pane mode switching, and artifact preview fallbacks.
 
 Steps:
 1. Run this once in an existing workspace, then create a new workspace and run
-   it again there. The default OpenWork agent should include artifact guidance
+   it again there. The default Sofia agent should include artifact guidance
    in both cases.
 2. Hover the workspace header in the sidebar → click **New task**.
 3. Fill the composer:
@@ -117,7 +117,7 @@ Pass criteria:
 - The right pane opens automatically after the run completes.
 - The right-side rail shows compact Browser and Artifact icon buttons, and the
   Artifact icon is active while the artifact pane is visible.
-- The artifact pane only auto-opens a file after the OpenWork server confirms
+- The artifact pane only auto-opens a file after the Sofia server confirms
   it exists on the workspace filesystem.
 - Searching or listing implementation files such as `package.json` does not
   populate the artifact rail; only previewable deliverables are shown there.
@@ -127,11 +127,11 @@ Pass criteria:
 - The artifact pane includes a per-session artifact strip when multiple files
   are detected.
 - CSV/XLSX spreadsheet artifacts allow editing cells and saving through the
-  OpenWork server.
+  Sofia server.
 - Markdown artifacts open directly in the text editor and can save through the
-  OpenWork server write API without switching into a separate edit view.
+  Sofia server write API without switching into a separate edit view.
 - CSV/XLSX/Markdown artifacts expose a **Download artifact** action backed by
-  the OpenWork server, so it works for local and remote workspaces.
+  the Sofia server, so it works for local and remote workspaces.
 - Clicking **Browser** still restores the browser panel without losing the
   selected artifact button.
 - There are no console errors from `ArtifactPanel`, `deriveOpenTargets`, or
@@ -203,16 +203,16 @@ Pass criteria:
 - Composer is focused so typing starts in **"Describe your task..."** without
   an extra click.
 - Composer model label is whatever is saved as default (e.g.
-  `opencode/minimax-m2.5-free`).
+  `engine/minimax-m2.5-free`).
 - No **"Reload required"** toast appears when the new session is created or
   while the session route polls workspace events.
 
 Known regressions this catches:
 - `onCreateTaskInWorkspace` silently failing because the route has no
-  OpenCode client.
+  Sofia client.
 - Created session not landing in the sidebar list (sidebar not refreshed
   after create).
-- Routine workspace resolution rewrites `opencode.jsonc`, causing a stale
+- Routine workspace resolution rewrites `engine.jsonc`, causing a stale
   **"Reload required"** toast after every new session.
 
 Tool recipe add-on for the reload toast regression:
@@ -223,7 +223,7 @@ chrome-devtools_evaluate_script { function: "() => new Promise((resolve) => setT
 ```
 
 Expected result: the returned body text does not contain `Reload required` or
-`Config 'opencode.jsonc' was updated`.
+`Config 'engine.jsonc' was updated`.
 
 ---
 
@@ -263,7 +263,7 @@ Pass criteria:
 
 Known regressions this catches:
 - `onRenameSession` not wired → menu has no Rename entry.
-- Missing call to `opencodeClient.session.update({ sessionID, title })`.
+- Missing call to `engineClient.session.update({ sessionID, title })`.
 - Local state not refreshed, so only the server knows the new title until
   reload.
 
@@ -292,7 +292,7 @@ Known regressions this catches:
 Steps:
 1. On the General tab click **Change** (under "Model").
 2. In the picker, search or scroll to a model in an already-connected
-   provider (e.g. `opencode/minimax-m2.5-free`).
+   provider (e.g. `engine/minimax-m2.5-free`).
 3. Click the model card.
 
 Pass criteria:
@@ -304,7 +304,7 @@ Pass criteria:
 
 Known regressions this catches:
 - Missing wiring of `ModelPickerModal`.
-- Model list empty because `opencodeClient.config.providers` call was not
+- Model list empty because `engineClient.config.providers` call was not
   made or was filtered too aggressively.
 - Infinite loop caused by `refreshProviders()` inside a `useEffect` whose
   deps include `providerConnectedIds` (see changelog in
@@ -601,7 +601,7 @@ Steps:
 3. Expect: navigates to a new session.
 4. Type `/skill-creator create a skill about weather alerts`.
 5. Select the command and run it.
-6. Expect: the assistant creates `.opencode/skills/weather-alerts/SKILL.md`
+6. Expect: the assistant creates `.sofia/skills/weather-alerts/SKILL.md`
    (requires a model with tool-use capability).
 7. Verify the file exists on disk.
 8. Reload the app (or trigger config reload).
@@ -611,7 +611,7 @@ Steps:
 
 Pass criteria:
 - "Create skill in chat" navigates away from settings to a session.
-- The skill command actually writes files to `.opencode/skills/`.
+- The skill command actually writes files to `.sofia/skills/`.
 - After reload, the new skill appears in the slash menu.
 - Running the new skill uses its template as the user message.
 
@@ -684,7 +684,7 @@ Known regressions this catches:
 ## Flow 21 — Streaming survives session and route interruptions
 
 **Why**: Long-running assistant streams must continue when users click away.
-The session runtime filters OpenCode events by tracked session id, and route
+The session runtime filters Sofia events by tracked session id, and route
 changes can unmount the session surface. This flow catches regressions where
 streaming stops, aborts, or only resumes after a full reload.
 
@@ -734,18 +734,18 @@ Pass criteria:
 - Session C does not show `MessageAbortedError` or an aborted assistant turn.
 - Session C eventually contains `SETTINGS_ROUTE_500_DONE` in assistant text.
 - The highest numbered line in Session C is `500.`.
-- Returning from Settings must not reload the OpenCode engine for the same
+- Returning from Settings must not reload the Sofia engine for the same
   already-active workspace.
 
 Known regressions this catches:
 - Disposing the workspace SSE subscription when `SessionRoute` unmounts.
 - Re-activating the already-active workspace when returning from Settings,
-  which reloads the OpenCode engine and aborts the run.
+  which reloads the Sofia engine and aborts the run.
 
 ### Browser tool recipe
 
 Use `browser_eval` against the Electron CDP target. The snippets below use
-the OpenWork inspector and React Query cache so the eval can assert transcript
+the Sofia inspector and React Query cache so the eval can assert transcript
 state directly instead of relying on a visual snapshot cadence.
 
 Create a new session:
@@ -774,7 +774,7 @@ Fill and run a prompt:
     .find((b) => b.textContent.trim() === 'Run task' && !b.disabled);
   if (!btn) return JSON.stringify({ ok: false, error: 'run disabled', editorText: editor.textContent });
   btn.click();
-  return JSON.stringify({ ok: true, sessionId: window.__openwork.snapshot().route.selectedSessionId });
+  return JSON.stringify({ ok: true, sessionId: window.__sofia.snapshot().route.selectedSessionId });
 })()
 ```
 
@@ -805,7 +805,7 @@ Assert transcript completion for a marker:
 (async function() {
   const { getReactQueryClient } = await import('/src/react-app/infra/query-client.ts');
   const { transcriptKey, statusKey } = await import('/src/react-app/domains/session/sync/session-sync.ts');
-  const route = window.__openwork.snapshot().route;
+  const route = window.__sofia.snapshot().route;
   const messages = getReactQueryClient().getQueryData(transcriptKey(route.selectedWorkspaceId, route.selectedSessionId)) || [];
   const status = getReactQueryClient().getQueryData(statusKey(route.selectedWorkspaceId, route.selectedSessionId));
   const assistant = [...messages].reverse().find((message) => message.role === 'assistant');

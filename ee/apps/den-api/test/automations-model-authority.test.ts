@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, test } from "bun:test"
-import { createDenTypeId } from "@openwork-ee/utils/typeid"
+import { createDenTypeId } from "@sofia-ee/utils/typeid"
 import type {
   AutomationAuthorityMember,
   AutomationAuthorityModel,
@@ -8,7 +8,7 @@ import type {
 } from "../src/automations/authority.js"
 
 function seedRequiredEnv() {
-  process.env.DATABASE_URL ??= "mysql://root:password@127.0.0.1:3306/openwork_test"
+  process.env.DATABASE_URL ??= "mysql://root:password@127.0.0.1:3306/sofia_test"
   process.env.DEN_DB_ENCRYPTION_KEY ??= "x".repeat(32)
   process.env.BETTER_AUTH_SECRET ??= "y".repeat(32)
   process.env.BETTER_AUTH_URL ??= "http://127.0.0.1:8790"
@@ -23,10 +23,10 @@ beforeAll(async () => {
 })
 
 const member: AutomationAuthorityMember = { id: createDenTypeId("member") }
-const openWorkProvider: AutomationAuthorityProvider = {
+const sofiaProvider: AutomationAuthorityProvider = {
   id: createDenTypeId("llmProvider"),
-  source: "openwork",
-  name: "OpenWork Models",
+  source: "sofia",
+  name: "Sofia Models",
 }
 const customProvider: AutomationAuthorityProvider = {
   id: createDenTypeId("llmProvider"),
@@ -41,7 +41,7 @@ const customModel: AutomationAuthorityModel = {
 function authorityStore(overrides: Partial<AutomationModelAuthorityStore> = {}): AutomationModelAuthorityStore {
   return {
     async findActiveMember() { return member },
-    async findOpenWorkProvider() { return openWorkProvider },
+    async findSofiaProvider() { return sofiaProvider },
     async findProvider() { return customProvider },
     async findModel() { return customModel },
     async canAccessProvider() { return true },
@@ -64,7 +64,7 @@ describe("Automation normalized model authority", () => {
 
     const result = await resolveAutomationModelAccessWithStore({
       ...base,
-      providerId: "opencode",
+      providerId: "engine",
       modelId: "big-pickle",
     }, store)
 
@@ -73,7 +73,7 @@ describe("Automation normalized model authority", () => {
       value: {
         accessKind: "free",
         providerRecordId: null,
-        providerId: "opencode",
+        providerId: "engine",
         modelId: "big-pickle",
       },
     })
@@ -81,15 +81,15 @@ describe("Automation normalized model authority", () => {
 
     expect(await resolveAutomationModelAccessWithStore({
       ...base,
-      providerId: "opencode",
+      providerId: "engine",
       modelId: "not-a-free-model",
     }, store)).toMatchObject({ ok: false, code: "model_access_lost" })
   })
 
-  test("rejects the legacy free starter model when desktop policy disables OpenCode Zen", async () => {
+  test("rejects the legacy free starter model when desktop policy disables Sofia Zen", async () => {
     const result = await resolveAutomationModelAccessWithStore({
       ...base,
-      providerId: "opencode",
+      providerId: "engine",
       modelId: "big-pickle",
     }, authorityStore({ async allowsZenModel() { return false } }))
 
@@ -100,26 +100,26 @@ describe("Automation normalized model authority", () => {
     })
   })
 
-  test("resolves enabled OpenWork aliases through the owner's managed provider", async () => {
+  test("resolves enabled Sofia aliases through the owner's managed provider", async () => {
     const result = await resolveAutomationModelAccessWithStore({
       ...base,
-      providerId: "openwork",
+      providerId: "sofia",
       modelId: "z-ai/glm-5.2",
     }, authorityStore())
 
     expect(result).toMatchObject({
       ok: true,
       value: {
-        accessKind: "openwork_managed",
-        providerRecordId: openWorkProvider.id,
-        providerId: "openwork",
+        accessKind: "sofia_managed",
+        providerRecordId: sofiaProvider.id,
+        providerId: "sofia",
         modelId: "z-ai/glm-5.2",
       },
     })
 
     expect(await resolveAutomationModelAccessWithStore({
       ...base,
-      providerId: "openwork",
+      providerId: "sofia",
       modelId: "unknown/model",
     }, authorityStore())).toMatchObject({ ok: false, code: "model_access_lost" })
   })
@@ -163,7 +163,7 @@ describe("Automation normalized model authority", () => {
   test("never lets a removed membership inherit model access", async () => {
     const result = await resolveAutomationModelAccessWithStore({
       ...base,
-      providerId: "opencode",
+      providerId: "engine",
       modelId: "big-pickle",
     }, authorityStore({ async findActiveMember() { return null } }))
 

@@ -1,6 +1,6 @@
 // Codex version helpers: parse the `codex --version` string and compare semver
 // (with prerelease + build metadata) and check per-feature minimums. The
-// app-server engine itself does not hard-gate on a minimum version — OpenWork
+// app-server engine itself does not hard-gate on a minimum version — Sofia App
 // only ever runs its own bundled Sofia binary — so version is probed for
 // diagnostics and feature-gating, never to refuse startup.
 

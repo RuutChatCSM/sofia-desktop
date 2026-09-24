@@ -12,16 +12,16 @@ import {
   readAvailableModels,
   visibleText,
   waitForText,
-} from "@openwork/behaviors";
-import type { DenSession } from "@openwork/behaviors";
-import type { Surface } from "@openwork/cdp";
+} from "@sofia/behaviors";
+import type { DenSession } from "@sofia/behaviors";
+import type { Surface } from "@sofia/cdp";
 import {
   app,
   eventually,
   needs,
   server,
   test,
-} from "@openwork/testkit";
+} from "@sofia/testkit";
 
 const PROVIDER_NAME = "Automation Reliability Gateway";
 const PROVIDER_KEY = "automation-reliability-gateway";
@@ -137,7 +137,7 @@ async function createProvider(
 ): Promise<string> {
   const result = await denFetch(admin, "/v1/llm-providers", {
     method: "POST",
-    headers: { ...auth(admin), "x-openwork-org-id": orgId },
+    headers: { ...auth(admin), "x-sofia-org-id": orgId },
     body: JSON.stringify({
       name: PROVIDER_NAME,
       source: "custom",
@@ -172,7 +172,7 @@ async function createAutomation(
 ): Promise<{ automationId: string; revisionId: string }> {
   const result = await denFetch(admin, "/v1/automations", {
     method: "POST",
-    headers: { ...auth(admin), "x-openwork-org-id": orgId },
+    headers: { ...auth(admin), "x-sofia-org-id": orgId },
     body: JSON.stringify({
       name: input.name,
       instructions: input.instructions,
@@ -269,7 +269,7 @@ async function assertSucceededReceipt(
     executionLocation: "desktop",
     automationId: expected.automationId,
     automationRunId: runId,
-    engineKind: "openwork-desktop-runner-v1",
+    engineKind: "sofia-desktop-runner-v1",
   });
   expect(sessionId).not.toBe("");
   expect(typeof thread.workspaceId).toBe("string");
@@ -327,7 +327,7 @@ async function triggerManualRun(
 }
 
 test("a Desktop Automation completes through UI, API, schedule, thread, and receipt", { timeout: 20 * 60_000 }, async ({ evidence, place }) => {
-  needs({ optIn: ["OPENWORK_EVAL_E2E_TESTS"] });
+  needs({ optIn: ["SOFIA_EVAL_E2E_TESTS"] });
   const completionBodies: unknown[] = [];
   const providerBaseUrl = await startProviderMock(completionBodies);
   await using den = await server({
@@ -346,7 +346,7 @@ test("a Desktop Automation completes through UI, API, schedule, thread, and rece
 
   const invalid = await denFetch(den.admin, "/v1/automations", {
     method: "POST",
-    headers: { ...auth(den.admin), "x-openwork-org-id": orgId },
+    headers: { ...auth(den.admin), "x-sofia-org-id": orgId },
     body: JSON.stringify({
       name: `Invalid lifecycle ${stamp}`,
       instructions,
@@ -510,7 +510,7 @@ test("a Desktop Automation completes through UI, API, schedule, thread, and rece
 });
 
 test("a Desktop Automation recovers across restart before execution and while work is queued", { timeout: 20 * 60_000 }, async ({ evidence, place }) => {
-  needs({ optIn: ["OPENWORK_EVAL_E2E_TESTS"] });
+  needs({ optIn: ["SOFIA_EVAL_E2E_TESTS"] });
   const completionBodies: unknown[] = [];
   const providerBaseUrl = await startProviderMock(completionBodies);
   await using den = await server({
@@ -528,7 +528,7 @@ test("a Desktop Automation recovers across restart before execution and while wo
     instructions: `Return one concise synthetic recovery result for marker ${stamp}.`,
     providerId,
   });
-  const profileDir = await mkdtemp(join(tmpdir(), "openwork-automation-recovery-"));
+  const profileDir = await mkdtemp(join(tmpdir(), "sofia-automation-recovery-"));
   onTestFinished(() => rm(profileDir, { recursive: true, force: true }));
   let desktop: Awaited<ReturnType<typeof app>> | null = null;
 
@@ -606,7 +606,7 @@ test("a Desktop Automation recovers across restart before execution and while wo
 });
 
 test("a Desktop Automation records a provider outage and succeeds after recovery", { timeout: 10 * 60_000 }, async ({ evidence, place }) => {
-  needs({ optIn: ["OPENWORK_EVAL_E2E_TESTS"] });
+  needs({ optIn: ["SOFIA_EVAL_E2E_TESTS"] });
   const completionBodies: unknown[] = [];
   const providerControl = { unavailable: true };
   const providerBaseUrl = await startProviderMock(completionBodies, providerControl);
@@ -658,7 +658,7 @@ test("a Desktop Automation records a provider outage and succeeds after recovery
 });
 
 test("Desktop runner claims are idempotent and expired leases recover safely", { timeout: 5 * 60_000 }, async ({ evidence, place }) => {
-  needs({ optIn: ["OPENWORK_EVAL_E2E_TESTS"] });
+  needs({ optIn: ["SOFIA_EVAL_E2E_TESTS"] });
   const completionBodies: unknown[] = [];
   const providerBaseUrl = await startProviderMock(completionBodies);
   await using den = await server({

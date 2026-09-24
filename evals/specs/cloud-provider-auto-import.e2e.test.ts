@@ -1,8 +1,8 @@
 import { expect, onTestFinished } from "vitest";
-import { screenshot, validate } from "@openwork/test-evidence";
-import { denFetch, evalIn, go, readAvailableModels, waitFor } from "@openwork/behaviors";
-import type { DenSession } from "@openwork/behaviors";
-import { app, needs, server, test } from "@openwork/testkit";
+import { screenshot, validate } from "@sofia/test-evidence";
+import { denFetch, evalIn, go, readAvailableModels, waitFor } from "@sofia/behaviors";
+import type { DenSession } from "@sofia/behaviors";
+import { app, needs, server, test } from "@sofia/testkit";
 
 const ORGANIZATION_NAME = "Cloud Provider Auto Import";
 const PROVIDER_NAME = "Automatic Team Models";
@@ -39,7 +39,7 @@ async function createProvider(admin: DenSession, orgId: string): Promise<string>
     method: "POST",
     headers: {
       ...auth(admin),
-      "x-openwork-org-id": orgId,
+      "x-sofia-org-id": orgId,
     },
     body: JSON.stringify({
       name: PROVIDER_NAME,
@@ -51,7 +51,7 @@ async function createProvider(admin: DenSession, orgId: string): Promise<string>
         env: ["AUTO_IMPORT_PROVIDER_API_KEY"],
         models: [{ id: MODEL_ID, name: "Automatic Proof Model" }],
       },
-      apiKey: "sk-openwork-auto-import-eval-only",
+      apiKey: "sk-sofia-auto-import-eval-only",
       allMembers: true,
       memberIds: [],
       teamIds: [],
@@ -73,14 +73,14 @@ async function deleteProvider(admin: DenSession, orgId: string, providerId: stri
     method: "DELETE",
     headers: {
       ...auth(admin),
-      "x-openwork-org-id": orgId,
+      "x-sofia-org-id": orgId,
     },
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
 }
 
 test("granted cloud providers appear automatically in settings and the model picker", async ({ evidence, place }) => {
-  needs({ optIn: ["OPENWORK_EVAL_E2E_TESTS"] });
+  needs({ optIn: ["SOFIA_EVAL_E2E_TESTS"] });
   await using den = await server({
     place,
     org: {

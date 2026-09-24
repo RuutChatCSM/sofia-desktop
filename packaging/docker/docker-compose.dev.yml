@@ -6,19 +6,19 @@
 # Then open the printed Web UI URL — already wired to headless, no config needed.
 #
 # Env overrides (optional, via .env or export):
-#   OPENWORK_TOKEN        — shared client token (auto-generated if unset)
-#   OPENWORK_HOST_TOKEN   — host/admin token (auto-generated if unset)
-#   OPENWORK_WORKSPACE    — host path to mount as workspace (default: ./workspace)
-#   OPENWORK_PORT         — host port to map to container :8787 (default: 8787)
+#   SOFIA_TOKEN        — shared client token (auto-generated if unset)
+#   SOFIA_HOST_TOKEN   — host/admin token (auto-generated if unset)
+#   SOFIA_WORKSPACE    — host path to mount as workspace (default: ./workspace)
+#   SOFIA_PORT         — host port to map to container :8787 (default: 8787)
 #   WEB_PORT              — host port to map to container :5173 (default: 5173)
-#   OPENWORK_DEV_ID       — unique ID for this stack (default: default)
-#   OPENWORK_DEV_MODE     — enables isolated OpenCode dev state
-#   OPENWORK_PUBLIC_HOST  — browser-facing host/IP for LAN-accessible URLs
-#   OPENWORK_DOCKER_DEV_MOUNT_HOST_OPENCODE=1 — import host OpenCode config/auth into the isolated dev state
-#   OPENWORK_OPENCODE_CONFIG_DIR      — host OpenCode config dir detection override
-#   OPENWORK_OPENCODE_DATA_DIR        — host OpenCode data dir detection override
-#   OPENWORK_HOST_OPENCODE_CONFIG_DIR — import source for OpenCode config
-#   OPENWORK_HOST_OPENCODE_DATA_DIR   — import source for OpenCode auth/data
+#   SOFIA_DEV_ID       — unique ID for this stack (default: default)
+#   SOFIA_DEV_MODE     — enables isolated Sofia dev state
+#   SOFIA_PUBLIC_HOST  — browser-facing host/IP for LAN-accessible URLs
+#   SOFIA_DOCKER_DEV_MOUNT_HOST_SOFIA_ENGINE=1 — import host Sofia config/auth into the isolated dev state
+#   SOFIA_SOFIA_ENGINE_CONFIG_DIR      — host Sofia config dir detection override
+#   SOFIA_SOFIA_ENGINE_DATA_DIR        — host Sofia data dir detection override
+#   SOFIA_HOST_SOFIA_ENGINE_CONFIG_DIR — import source for Sofia config
+#   SOFIA_HOST_SOFIA_ENGINE_DATA_DIR   — import source for Sofia auth/data
 
 x-shared: &shared
   image: node:22-bookworm-slim
@@ -28,12 +28,12 @@ x-shared: &shared
     - ../../:/app
     - pnpm-store:/root/.local/share/pnpm/store
     - bun-install:/root/.bun
-    - ${OPENWORK_WORKSPACE:-./workspace}:/workspace
-    - ${OPENWORK_HOST_OPENCODE_CONFIG_DIR:-./workspace/.openwork-host-opencode-config}:/persist/.config/opencode:ro
-    - ${OPENWORK_HOST_OPENCODE_DATA_DIR:-./workspace/.openwork-host-opencode-data}:/persist/.openwork-host-opencode-data:ro
+    - ${SOFIA_WORKSPACE:-./workspace}:/workspace
+    - ${SOFIA_HOST_SOFIA_ENGINE_CONFIG_DIR:-./workspace/.sofia-host-engine-config}:/persist/.config/engine:ro
+    - ${SOFIA_HOST_SOFIA_ENGINE_DATA_DIR:-./workspace/.sofia-host-engine-data}:/persist/.sofia-host-engine-data:ro
 
 services:
-  openwork-server:
+  sofia-server:
     <<: *shared
     entrypoint: ["/bin/sh", "-c"]
     command:
@@ -51,7 +51,7 @@ services:
         export BUN_INSTALL="/root/.bun"
         export PATH="$$BUN_INSTALL/bin:$$PATH"
         if ! command -v bun >/dev/null 2>&1; then
-          echo "[openwork-server] Installing bun..."
+          echo "[sofia-server] Installing bun..."
           curl -fsSL https://bun.sh/install | bash
         fi
 
@@ -59,58 +59,58 @@ services:
         corepack enable && corepack prepare pnpm@10.27.0 --activate
 
         # --- Install deps ---
-        echo "[openwork-server] Installing dependencies..."
+        echo "[sofia-server] Installing dependencies..."
         pnpm install --no-frozen-lockfile --network-concurrency 1 --child-concurrency 1
 
-        # --- Build the server plugins and install the pinned OpenCode binary ---
-        pnpm --filter openwork-server build
-        OPENCODE_VERSION=$$(node -e 'const fs=require("fs"); const parsed=JSON.parse(fs.readFileSync("/app/constants.json", "utf8")); process.stdout.write(String(parsed.opencodeVersion || "").trim().replace(/^v/, ""));')
-        export OPENCODE_INSTALL_DIR="/root/.opencode/bin"
-        mkdir -p "$$OPENCODE_INSTALL_DIR"
-        if ! command -v opencode >/dev/null 2>&1; then
-          curl -fsSL https://opencode.ai/install | bash -s -- --version "$$OPENCODE_VERSION" --no-modify-path
+        # --- Build the server plugins and install the pinned Sofia binary ---
+        pnpm --filter sofia-server build
+        SOFIA_ENGINE_VERSION=$$(node -e 'const fs=require("fs"); const parsed=JSON.parse(fs.readFileSync("/app/constants.json", "utf8")); process.stdout.write(String(parsed.engineVersion || "").trim().replace(/^v/, ""));')
+        export SOFIA_ENGINE_INSTALL_DIR="/root/.sofia/bin"
+        mkdir -p "$$SOFIA_ENGINE_INSTALL_DIR"
+        if ! command -v engine >/dev/null 2>&1; then
+          curl -fsSL https://github.com/RuutChatCSM/sofia/install | bash -s -- --version "$$SOFIA_ENGINE_VERSION" --no-modify-path
         fi
-        export PATH="$$OPENCODE_INSTALL_DIR:$$PATH"
-        export OPENWORK_MANAGE_OPENCODE=1
-        export OPENWORK_OPENCODE_BIN="$$(command -v opencode)"
-        export OPENWORK_EXTENSIONS_PLUGIN_DIR="/app/apps/server/dist/opencode-plugins"
+        export PATH="$$SOFIA_ENGINE_INSTALL_DIR:$$PATH"
+        export SOFIA_MANAGE_SOFIA_ENGINE=1
+        export SOFIA_SOFIA_ENGINE_BIN="$$(command -v engine)"
+        export SOFIA_EXTENSIONS_PLUGIN_DIR="/app/apps/server/dist/engine-plugins"
 
         # --- Resolve tokens ---
-        if [ -z "$$OPENWORK_TOKEN" ]; then
-          OPENWORK_TOKEN=$$(cat /proc/sys/kernel/random/uuid)
-          export OPENWORK_TOKEN
+        if [ -z "$$SOFIA_TOKEN" ]; then
+          SOFIA_TOKEN=$$(cat /proc/sys/kernel/random/uuid)
+          export SOFIA_TOKEN
         fi
-        if [ -z "$$OPENWORK_HOST_TOKEN" ]; then
-          OPENWORK_HOST_TOKEN=$$(cat /proc/sys/kernel/random/uuid)
-          export OPENWORK_HOST_TOKEN
+        if [ -z "$$SOFIA_HOST_TOKEN" ]; then
+          SOFIA_HOST_TOKEN=$$(cat /proc/sys/kernel/random/uuid)
+          export SOFIA_HOST_TOKEN
         fi
 
         # Write tokens so the web service can source them
         mkdir -p /app/tmp
-        printf 'OPENWORK_TOKEN=%s\nOPENWORK_HOST_TOKEN=%s\n' \
-          "$$OPENWORK_TOKEN" "$$OPENWORK_HOST_TOKEN" > "/app/tmp/.dev-env-${OPENWORK_DEV_ID:-default}"
+        printf 'SOFIA_TOKEN=%s\nSOFIA_HOST_TOKEN=%s\n' \
+          "$$SOFIA_TOKEN" "$$SOFIA_HOST_TOKEN" > "/app/tmp/.dev-env-${SOFIA_DEV_ID:-default}"
 
         echo ""
         echo "============================================"
-        echo "  OpenWork server"
-        echo "  Server:     http://localhost:${OPENWORK_PORT:-8787}"
-        echo "  Health:     http://localhost:${OPENWORK_PORT:-8787}/health"
-        echo "  Token:      $$OPENWORK_TOKEN"
-        echo "  Host token: $$OPENWORK_HOST_TOKEN"
+        echo "  Sofia server"
+        echo "  Server:     http://localhost:${SOFIA_PORT:-8787}"
+        echo "  Health:     http://localhost:${SOFIA_PORT:-8787}/health"
+        echo "  Token:      $$SOFIA_TOKEN"
+        echo "  Host token: $$SOFIA_HOST_TOKEN"
         echo "============================================"
         echo ""
 
-        exec pnpm --filter openwork-server exec bun dist/cli.js \
+        exec pnpm --filter sofia-server exec bun dist/cli.js \
           --workspace /workspace \
           --host 0.0.0.0 \
           --port 8787 \
-          --token "$$OPENWORK_TOKEN" \
-          --host-token "$$OPENWORK_HOST_TOKEN" \
+          --token "$$SOFIA_TOKEN" \
+          --host-token "$$SOFIA_HOST_TOKEN" \
           --approval auto \
           --cors "*" \
           --verbose
     ports:
-      - "${OPENWORK_PORT:-8787}:8787"
+      - "${SOFIA_PORT:-8787}:8787"
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8787/health || exit 1"]
       interval: 5s
@@ -119,17 +119,17 @@ services:
       start_period: 90s
     environment:
       CI: "true"
-      OPENWORK_TOKEN: ${OPENWORK_TOKEN:-}
-      OPENWORK_HOST_TOKEN: ${OPENWORK_HOST_TOKEN:-}
-      OPENWORK_DEV_ID: ${OPENWORK_DEV_ID:-default}
-      OPENWORK_DEV_MODE: ${OPENWORK_DEV_MODE:-1}
-      OPENWORK_DEV_OPENCODE_IMPORT_CONFIG_DIR: /persist/.config/opencode
-      OPENWORK_DEV_OPENCODE_IMPORT_DATA_DIR: /persist/.openwork-host-opencode-data
+      SOFIA_TOKEN: ${SOFIA_TOKEN:-}
+      SOFIA_HOST_TOKEN: ${SOFIA_HOST_TOKEN:-}
+      SOFIA_DEV_ID: ${SOFIA_DEV_ID:-default}
+      SOFIA_DEV_MODE: ${SOFIA_DEV_MODE:-1}
+      SOFIA_DEV_SOFIA_ENGINE_IMPORT_CONFIG_DIR: /persist/.config/engine
+      SOFIA_DEV_SOFIA_ENGINE_IMPORT_DATA_DIR: /persist/.sofia-host-engine-data
 
   web:
     <<: *shared
     depends_on:
-      openwork-server:
+      sofia-server:
         condition: service_healthy
     entrypoint: ["/bin/sh", "-c"]
     command:
@@ -148,37 +148,37 @@ services:
         fi
         corepack enable && corepack prepare pnpm@10.27.0 --activate
 
-        # --- Read token written by openwork-server ---
-        if [ -f "/app/tmp/.dev-env-${OPENWORK_DEV_ID:-default}" ]; then
-          . "/app/tmp/.dev-env-${OPENWORK_DEV_ID:-default}"
-          export VITE_OPENWORK_TOKEN="$$OPENWORK_TOKEN"
+        # --- Read token written by sofia-server ---
+        if [ -f "/app/tmp/.dev-env-${SOFIA_DEV_ID:-default}" ]; then
+          . "/app/tmp/.dev-env-${SOFIA_DEV_ID:-default}"
+          export VITE_SOFIA_TOKEN="$$SOFIA_TOKEN"
         fi
 
         echo ""
         echo "============================================"
-        echo "  OpenWork web UI"
+        echo "  Sofia web UI"
         echo "  URL:   http://localhost:${WEB_PORT:-5173}"
-          echo "  Token: $${VITE_OPENWORK_TOKEN:-<see openwork-server logs>}"
+          echo "  Token: $${VITE_SOFIA_TOKEN:-<see sofia-server logs>}"
         echo "============================================"
         echo ""
 
-        export VITE_OPENWORK_URL="http://${OPENWORK_PUBLIC_HOST:-localhost}:${OPENWORK_PORT:-8787}"
-        export VITE_OPENWORK_PORT="${OPENWORK_PORT:-8787}"
+        export VITE_SOFIA_URL="http://${SOFIA_PUBLIC_HOST:-localhost}:${SOFIA_PORT:-8787}"
+        export VITE_SOFIA_PORT="${SOFIA_PORT:-8787}"
         export VITE_ALLOWED_HOSTS="all"
         export HOST="0.0.0.0"
         export PORT="5173"
 
-        exec pnpm --filter @openwork/app exec vite \
+        exec pnpm --filter @sofia/app exec vite \
           --host 0.0.0.0 \
           --port 5173 \
           --strictPort
     ports:
       - "${WEB_PORT:-5173}:5173"
     environment:
-      OPENWORK_DEV_ID: ${OPENWORK_DEV_ID:-default}
+      SOFIA_DEV_ID: ${SOFIA_DEV_ID:-default}
 
 volumes:
   pnpm-store:
-    name: openwork-dev-pnpm-store
+    name: sofia-dev-pnpm-store
   bun-install:
-    name: openwork-dev-bun-install
+    name: sofia-dev-bun-install

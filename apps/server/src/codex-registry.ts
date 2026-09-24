@@ -1,8 +1,9 @@
 // Codex session registry: owns one CodexSessionManager per workspace and
 // resolves the codex binary. The desktop runtime injects the resolved binary
 // via setCodexBinaryForConfig (or falls back to `codex` on PATH). Additive to
-// the opencode engine lifecycle.
-import { writeFile, mkdir, readFile } from "node:fs/promises";
+// the engine engine lifecycle.
+import { writeFile, mkdir, readFile, rename, rm } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -16,7 +17,7 @@ import {
 } from "./codex-runtime-mcp.js";
 import { readCodexAccessMode, sandboxModeFor } from "./codex-access.js";
 import { createCodexSessionManager, type CodexEngineHandle, type CodexSessionManager } from "./codex-sessions.js";
-import { ENGINE_GLOBAL_RUNTIME_CONFIG_ID, readRuntimeOpencodeConfig } from "./runtime-opencode-config-store.js";
+import { ENGINE_GLOBAL_RUNTIME_CONFIG_ID, readRuntimeWorkspaceEngineConfig } from "./runtime-engine-config-store.js";
 import type { ServerConfig } from "./types.js";
 import { ApiError } from "./errors.js";
 
@@ -54,16 +55,16 @@ function workspaceCwd(config: ServerConfig, workspaceId: string): string {
 
 /**
  * Resolve the codex engine's home dir. The bundled Sofia engine uses a DEDICATED
- * OpenWork-managed home (never the user's `~/.codex`) so the app fully controls
+ * Sofia-managed home (never the user's `~/.codex`) so the app fully controls
  * its config.toml/auth/sessions without clobbering the user's real codex setup
- * or picking up its ChatGPT/OpenAI config. `OPENWORK_CODEX_HOME` (desktop pin),
+ * or picking up its ChatGPT/OpenAI config. `SOFIA_CODEX_HOME` (desktop pin),
  * then `CODEX_HOME`, then a stable per-profile dir.
  */
 function codexHomeFor(cwd: string): string {
-  const pinned = process.env.OPENWORK_CODEX_HOME?.trim();
+  const pinned = process.env.SOFIA_HOME?.trim() || process.env.SOFIA_CODEX_HOME?.trim();
   if (pinned) return pinned;
   if (process.env.CODEX_HOME?.trim()) return process.env.CODEX_HOME.trim();
-  // OpenWork-managed default: ~/.config/openwork/sofia (shared across dev/prod,
+  // Sofia-managed default: ~/.config/sofia/sofia (shared across dev/prod,
   // stable under the real home, distinct from ~/.codex).
   const home = process.env.HOME?.trim() || homedir();
   if (home) return join(home, ".sofia");
@@ -77,6 +78,8 @@ export async function codexEngineHandleForConfig(config: ServerConfig, workspace
   const home = codexHomeFor(cwd);
   await prepareCodexConfigToml(config, workspaceId, home);
   await prepareSofiaAuthInHome(home);
+  // thread/start and thread/resume reload config from disk. Keep managers alive:
+  // replacing them drops active turns, fresh threads and SSE subscriptions.
   return { bin: resolver.path, cwd, codexHome: home };
 }
 
@@ -108,23 +111,24 @@ export async function prepareSofiaAuthInHome(codexHome: string): Promise<void> {
       }
     }
     await mkdir(codexHome, { recursive: true });
-    await writeFile(join(codexHome, "sofia-auth.json"), `${JSON.stringify(store, null, 2)}\n`, {
-      encoding: "utf8",
-      mode: 0o600,
-    });
+    await writeEngineFile(join(codexHome, "sofia-auth.json"), `${JSON.stringify(store, null, 2)}\n`);
   } catch (error) {
     throw new Error("Unable to synchronize Sofia provider credentials", { cause: error });
   }
 }
 
-/**
- * Write `config.toml` into the codex home dir so the bundled codex engine sees
- * the same providers/models the opencode engine does (the UI model picker data).
- * Global + workspace provider maps are merged, workspace winning, exactly like
- * the opencode runtime config merge. The app-owned `codexengine.json` wins when
- * present (it is what the app model configuration writes). Best-effort:
- * failures never block the codex engine from starting.
- */
+/** Atomically replace engine files so concurrent requests never read a truncated file. */
+async function writeEngineFile(path: string, content: string): Promise<void> {
+  const temporary = `${path}.${randomUUID()}.tmp`;
+  try {
+    await writeFile(temporary, content, { encoding: "utf8", mode: 0o600 });
+    await rename(temporary, path);
+  } finally {
+    await rm(temporary, { force: true });
+  }
+}
+
+/** Materialize the provider catalog and runtime capabilities before engine requests. */
 export async function prepareCodexConfigToml(
   config: ServerConfig,
   workspaceId: string,
@@ -137,8 +141,8 @@ export async function prepareCodexConfigToml(
     if (engineConfig.providers.length > 0) {
       toml = codexConfigTomlFromEngineConfig(engineConfig);
     } else {
-      const globalConfig = await readRuntimeOpencodeConfig(config, ENGINE_GLOBAL_RUNTIME_CONFIG_ID);
-      const workspaceConfig = await readRuntimeOpencodeConfig(config, workspaceId);
+      const globalConfig = await readRuntimeWorkspaceEngineConfig(config, ENGINE_GLOBAL_RUNTIME_CONFIG_ID);
+      const workspaceConfig = await readRuntimeWorkspaceEngineConfig(config, workspaceId);
       const merged = {
         provider: { ...(globalConfig.provider ?? {}), ...(workspaceConfig.provider ?? {}) },
       };
@@ -163,8 +167,7 @@ export async function prepareCodexConfigToml(
         ? `sandbox_mode = "workspace-write"\n[sandbox_workspace_write]\nnetwork_access = true\n`
         : `sandbox_mode = ${JSON.stringify(sandboxMode)}\n`;
     if (sandboxBlock) toml = insertTomlTopLevelBlock(toml, sandboxBlock);
-    if (!toml) return;
-    await writeFile(join(codexHome, "config.toml"), toml, "utf8");
+    await writeEngineFile(join(codexHome, "config.toml"), toml);
     await codexRuntimeSkillsFor(codexHome);
   } catch (error) {
     throw new Error("Unable to prepare Sofia engine configuration", { cause: error });
@@ -198,8 +201,7 @@ export async function getOrCreateCodexSessionManager(config: ServerConfig, works
   if (!manager) {
     // Legacy ~/.codex import only in the desktop runtime (bundled binary
     // present), never in isolated tests.
-    const enableLegacyImport = Boolean(handle) && process.env.OPENWORK_CODEX_IMPORT_LEGACY === "1";
-    console.log("[codex-registry] enableLegacyImport =", enableLegacyImport, "env =", process.env.OPENWORK_CODEX_IMPORT_LEGACY);
+    const enableLegacyImport = Boolean(handle) && process.env.SOFIA_CODEX_IMPORT_LEGACY === "1";
     manager = createCodexSessionManager(handle, workspaceId, enableLegacyImport);
     perWorkspace.set(workspaceId, manager);
   }

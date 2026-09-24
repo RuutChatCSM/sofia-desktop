@@ -4,8 +4,7 @@ productName: Sofia App
 protocols:
   - name: Sofia App
     schemes:
-      - openwork
       - sofia
 linux:
   executableName: sofia-app
-artifactName: sofia-app-${os}-${arch}-${version}.${ext}
+artifactName: sofia-${os}-${arch}-${version}.${ext}

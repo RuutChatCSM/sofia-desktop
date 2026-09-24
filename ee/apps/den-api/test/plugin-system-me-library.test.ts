@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, mock, test } from "bun:test"
-import { eq, inArray } from "@openwork-ee/den-db/drizzle"
+import { eq, inArray } from "@sofia-ee/den-db/drizzle"
 import {
   AuthUserTable,
   ConfigObjectTable,
@@ -12,15 +12,15 @@ import {
   PluginConfigObjectTable,
   PluginTable,
   RemoteMcpAppTable,
-} from "@openwork-ee/den-db/schema"
-import { createDenTypeId } from "@openwork-ee/utils/typeid"
+} from "@sofia-ee/den-db/schema"
+import { createDenTypeId } from "@sofia-ee/utils/typeid"
 import { Hono, type MiddlewareHandler } from "hono"
 import type { PluginArchActorContext } from "../src/routes/org/plugin-system/access.js"
 import type { OrgRouteVariables } from "../src/routes/org/shared.js"
 
 const API_ORIGIN = "http://127.0.0.1:8790"
 
-process.env.DATABASE_URL = process.env.DATABASE_URL ?? "mysql://root:password@127.0.0.1:3306/openwork_test_melibrary"
+process.env.DATABASE_URL = process.env.DATABASE_URL ?? "mysql://root:password@127.0.0.1:3306/sofia_test_melibrary"
 process.env.DB_MODE ??= "mysql"
 process.env.DEN_DB_ENCRYPTION_KEY ??= "me-library-test-encryption-key-1234567890"
 process.env.BETTER_AUTH_SECRET ??= "me-library-test-secret-123456789012"
@@ -90,7 +90,7 @@ async function cleanup() {
 
 beforeAll(async () => {
   mock.restore()
-  const realDb = (await import("@openwork-ee/den-db")).createDenDb({
+  const realDb = (await import("@sofia-ee/den-db")).createDenDb({
     databaseUrl: process.env.DATABASE_URL,
     mode: "mysql",
   }).db

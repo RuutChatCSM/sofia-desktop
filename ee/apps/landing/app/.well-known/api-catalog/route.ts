@@ -3,33 +3,33 @@ export const dynamic = "force-static"
 const linkset = {
   linkset: [
     {
-      anchor: "https://api.openworklabs.com",
+      anchor: "https://sofia-api.ruut.chat",
       "service-desc": [
         {
-          href: "https://api.openworklabs.com/openapi.json",
+          href: "https://sofia-api.ruut.chat/openapi.json",
           type: "application/vnd.oai.openapi+json;version=3.1",
-          title: "OpenWork Den API — OpenAPI 3.1 document",
+          title: "Sofia Den API — OpenAPI 3.1 document",
         },
       ],
       "service-doc": [
         {
-          href: "https://openworklabs.com/docs/api-reference",
+          href: "https://sofia.ruut.chat/docs/api-reference",
           type: "text/html",
-          title: "OpenWork Den API — human documentation",
+          title: "Sofia Den API — human documentation",
         },
       ],
       status: [
         {
-          href: "https://api.openworklabs.com/health",
+          href: "https://sofia-api.ruut.chat/health",
           type: "application/json",
-          title: "OpenWork Den API — health endpoint",
+          title: "Sofia Den API — health endpoint",
         },
       ],
       "service-meta": [
         {
-          href: "https://openworklabs.com/llms.txt",
+          href: "https://sofia.ruut.chat/llms.txt",
           type: "text/plain",
-          title: "OpenWork llms.txt — agent-facing site guide",
+          title: "Sofia llms.txt — agent-facing site guide",
         },
       ],
     },

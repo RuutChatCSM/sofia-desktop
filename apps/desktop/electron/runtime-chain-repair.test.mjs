@@ -113,7 +113,7 @@ function hangingSocket() {
 
 test("repairs a leaf-only TLS chain from an AIA intermediate", async () => {
   await withTlsServer({ cert: leafPem, key: leafKey }, async (port) => {
-    const userDataDir = await mkdtemp(path.join(tmpdir(), "openwork-chain-repair-"));
+    const userDataDir = await mkdtemp(path.join(tmpdir(), "sofia-chain-repair-"));
     const bundlePath = path.join(userDataDir, "system-ca-bundle.pem");
     const logs = [];
 
@@ -144,7 +144,7 @@ test("repairs a leaf-only TLS chain from an AIA intermediate", async () => {
 
 test("refuses repair when the failure is not leaf-only", async () => {
   await withTlsServer({ cert: `${leafPem}\n${intermediatePem}`, key: leafKey }, async (port) => {
-    const userDataDir = await mkdtemp(path.join(tmpdir(), "openwork-chain-repair-"));
+    const userDataDir = await mkdtemp(path.join(tmpdir(), "sofia-chain-repair-"));
     const logs = [];
     let fetchCalled = false;
 
@@ -174,7 +174,7 @@ test("refuses repair when the failure is not leaf-only", async () => {
 
 test("refuses repair when the fetched certificate did not issue the leaf", async () => {
   await withTlsServer({ cert: leafPem, key: leafKey }, async (port) => {
-    const userDataDir = await mkdtemp(path.join(tmpdir(), "openwork-chain-repair-"));
+    const userDataDir = await mkdtemp(path.join(tmpdir(), "sofia-chain-repair-"));
     const logs = [];
 
     const env = await resolveSystemCaEnv({
@@ -198,7 +198,7 @@ test("refuses repair when the fetched certificate did not issue the leaf", async
 });
 
 test("chain repair kill switch preserves system CA export", async () => {
-  const userDataDir = await mkdtemp(path.join(tmpdir(), "openwork-chain-repair-"));
+  const userDataDir = await mkdtemp(path.join(tmpdir(), "sofia-chain-repair-"));
   const bundlePath = path.join(userDataDir, "system-ca-bundle.pem");
   let fetchCalled = false;
   let probeCalled = false;
@@ -206,7 +206,7 @@ test("chain repair kill switch preserves system CA export", async () => {
   const env = await resolveSystemCaEnv({
     tlsModule: { getCACertificates: () => [systemCert] },
     userDataDir,
-    parentEnv: { OPENWORK_DISABLE_CHAIN_REPAIR: " 1 " },
+    parentEnv: { SOFIA_DISABLE_CHAIN_REPAIR: " 1 " },
     logInfo: () => {},
     loadPlatformCertificates: async () => [],
     chainRepair: {
@@ -230,7 +230,7 @@ test("chain repair kill switch preserves system CA export", async () => {
 });
 
 test("user NODE_EXTRA_CA_CERTS disables repair", async () => {
-  const userDataDir = await mkdtemp(path.join(tmpdir(), "openwork-chain-repair-"));
+  const userDataDir = await mkdtemp(path.join(tmpdir(), "sofia-chain-repair-"));
   let fetchCalled = false;
   let probeCalled = false;
   let logged = false;
@@ -263,27 +263,36 @@ test("user NODE_EXTRA_CA_CERTS disables repair", async () => {
 });
 
 test("chain repair total timeout can be shortened by env", async () => {
-  const userDataDir = await mkdtemp(path.join(tmpdir(), "openwork-chain-repair-"));
+  const userDataDir = await mkdtemp(path.join(tmpdir(), "sofia-chain-repair-"));
   const logs = [];
   const startTime = Date.now();
 
-  const env = await resolveSystemCaEnv({
-    tlsModule: { getCACertificates: () => [] },
-    userDataDir,
-    parentEnv: { OPENWORK_CHAIN_REPAIR_TIMEOUT_MS: "1500" },
-    logInfo(message) {
-      logs.push(String(message));
-    },
-    loadPlatformCertificates: async () => [],
-    chainRepair: {
-      origins: ["https://localhost:443"],
-      fetchImpl: async () => {
-        throw new Error("timed-out chain repair should not fetch");
+  // The repair deadline is deliberately unref'd so it can never hold the app open, and the stub
+  // socket holds no handle the way a really-pending socket would. Keep one ref'd timer alive for
+  // the call so the deadline, not the drained event loop, is what ends the race.
+  const keepAlive = setTimeout(() => {}, 10_000);
+  let env;
+  try {
+    env = await resolveSystemCaEnv({
+      tlsModule: { getCACertificates: () => [] },
+      userDataDir,
+      parentEnv: { SOFIA_CHAIN_REPAIR_TIMEOUT_MS: "1500" },
+      logInfo(message) {
+        logs.push(String(message));
       },
-      tlsConnectImpl: hangingSocket,
-      rootsProvider: () => [rootPem],
-    },
-  });
+      loadPlatformCertificates: async () => [],
+      chainRepair: {
+        origins: ["https://localhost:443"],
+        fetchImpl: async () => {
+          throw new Error("timed-out chain repair should not fetch");
+        },
+        tlsConnectImpl: hangingSocket,
+        rootsProvider: () => [rootPem],
+      },
+    });
+  } finally {
+    clearTimeout(keepAlive);
+  }
 
   assert.deepEqual(env, {});
   assert.ok(Date.now() - startTime < 5000);
@@ -301,7 +310,7 @@ test("activation bootstrap origin parsing is strict", async () => {
   ];
 
   for (const testCase of cases) {
-    const userDataDir = await mkdtemp(path.join(tmpdir(), "openwork-chain-repair-"));
+    const userDataDir = await mkdtemp(path.join(tmpdir(), "sofia-chain-repair-"));
     const calls = [];
     const env = await resolveSystemCaEnv({
       tlsModule: { getCACertificates: () => [] },

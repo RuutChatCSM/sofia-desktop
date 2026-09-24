@@ -5,7 +5,7 @@ import {
   connectionActionAppSchemaVersion,
   connectionActionPayloadSchema,
   connectionActionToolName,
-} from "@openwork/types/connection-action-app";
+} from "@sofia/types/connection-action-app";
 
 import { safeStringify } from "@/app/utils";
 import { normalizeErrorText } from "@/lib/error-text";
@@ -56,7 +56,7 @@ function connectionActionMcpResultFromError(error: string): JSONValue | null {
     content: [{ type: "text", text: error }],
     structuredContent: payload.data,
     _meta: {
-      "openwork/mcpApp": {
+      "sofia/mcpApp": {
         toolName: connectionActionToolName,
         resourceUri: connectionActionAppResourceUri,
         arguments: { connectionId: payload.data.connectionId },
@@ -67,16 +67,16 @@ function connectionActionMcpResultFromError(error: string): JSONValue | null {
 
 function toolCallProviderMetadata(part: ToolPart): ProviderMetadata {
   const stateMetadata = "metadata" in part.state && isRecord(part.state.metadata) ? part.state.metadata : {};
-  const persistedMcpResult = isJsonValue(stateMetadata.openworkMcpResult)
-    ? stateMetadata.openworkMcpResult
-    : isJsonValue(stateMetadata.openworkMcpApp)
-      ? stateMetadata.openworkMcpApp
+  const persistedMcpResult = isJsonValue(stateMetadata.sofiaMcpResult)
+    ? stateMetadata.sofiaMcpResult
+    : isJsonValue(stateMetadata.sofiaMcpApp)
+      ? stateMetadata.sofiaMcpApp
       : null;
   const mcpResult = persistedMcpResult
     ?? (part.state.status === "error" ? connectionActionMcpResultFromError(part.state.error) : null);
   return {
-    opencode: { partId: part.id },
-    ...(mcpResult ? { openwork: { mcpResult } } : {}),
+    engine: { partId: part.id },
+    ...(mcpResult ? { sofia: { mcpResult } } : {}),
   };
 }
 
@@ -103,7 +103,7 @@ export function parseStructuredOutputUIPart(part: ToolPart): TextUIPart | null {
     type: "text",
     text,
     state: part.state.status === "completed" ? "done" : "streaming",
-    providerMetadata: { opencode: { partId: `structured-output-${part.callID}`, toolPartId: part.id } },
+    providerMetadata: { engine: { partId: `structured-output-${part.callID}`, toolPartId: part.id } },
   };
 }
 
@@ -136,7 +136,7 @@ export function parseDynamicToolUIPart(part: ToolPart): DynamicToolUIPart | null
     };
   }
 
-  // OpenCode emits pending/running tool parts with `{}` input before args
+  // Sofia emits pending/running tool parts with `{}` input before args
   // (e.g. filePath) are filled in. Skip UI until the next part.updated.
   if (shouldDeferInProgressTool(part)) {
     return null;

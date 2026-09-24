@@ -3,7 +3,7 @@ import type { McpServerEntry, McpStatusMap } from "../../../app/types";
 /**
  * Silent re-auth for remote OAuth MCP connectors.
  *
- * The OpenCode engine only refreshes an expired MCP access token reactively,
+ * The Sofia engine only refreshes an expired MCP access token reactively,
  * and at most once per transport lifetime. After the token expires (~1h for
  * Google) or after a transient refresh failure at engine startup, the entry
  * lands in `needs_auth` / `failed` and nothing retries it — users had to

@@ -1,19 +1,19 @@
 /**
  * Cloud providers are runtime-managed: importing an org LLM provider from
- * Settings -> Cloud writes it into the OpenWork server's runtime config
- * (per-key provider merge), NOT into the user's opencode.jsonc — and a
+ * Settings -> Cloud writes it into the Sofia server's runtime config
+ * (per-key provider merge), NOT into the user's engine.jsonc — and a
  * legacy jsonc block left by pre-runtime builds is migrated (stripped).
  *
  * Flow (real app + real Den):
  *   1. Sign in via desktop handoff.
  *   2. Create a custom LLM provider on Den via API; pre-seed a legacy-style
- *      opencode.jsonc block for its id (migration proof).
+ *      engine.jsonc block for its id (migration proof).
  *   3. Settings -> Cloud providers: click "Import". The engine serves the
- *      provider while opencode.jsonc contains NO block for it — including
+ *      provider while engine.jsonc contains NO block for it — including
  *      the seeded legacy block, which the import stripped.
  *   4. PATCH the provider on Den to add a second model; the row shows
  *      "Out of sync"; click "Sync" — the engine reports the new model and
- *      opencode.jsonc stays clean (reimport upserts the runtime entry).
+ *      engine.jsonc stays clean (reimport upserts the runtime entry).
  *   5. Cleanup: delete the provider on Den; per-key runtime null-delete
  *      removes it from the engine.
  *
@@ -21,8 +21,8 @@
  * assertions lived in the reverted #2414 and return with its re-land.)
  *
  * Required env:
- * - OPENWORK_EVAL_DEN_API_URL  Den API base
- * - OPENWORK_EVAL_DEN_TOKEN    Bearer session token for a seeded org owner
+ * - SOFIA_EVAL_DEN_API_URL  Den API base
+ * - SOFIA_EVAL_DEN_TOKEN    Bearer session token for a seeded org owner
  */
 
 const PROVIDER_NAME = "Runtime Config Eval";
@@ -38,13 +38,13 @@ const providerConfig = (modelIds) => ({
   models: modelIds.map((id) => ({ id, name: id })),
 });
 
-// Reads the engine-reported provider list through the OpenWork server proxy,
+// Reads the engine-reported provider list through the Sofia server proxy,
 // using the app's own token/port from inside the page. The workspace id is
 // injected (settings routes do not carry it in the hash). Returns the models
 // of the imported cloud provider matched by its lpr_* id, or null when absent.
 const engineProviderModelsExpr = (workspaceId, cloudProviderId) => `(async () => {
-  const port = localStorage.getItem("openwork.server.port");
-  const token = localStorage.getItem("openwork.server.token");
+  const port = localStorage.getItem("sofia.server.port");
+  const token = localStorage.getItem("sofia.server.token");
   const workspaceId = ${JSON.stringify(workspaceId)};
   if (!port || !token || !workspaceId) return null;
   const base = "http://127.0.0.1:" + port;
@@ -55,7 +55,7 @@ const engineProviderModelsExpr = (workspaceId, cloudProviderId) => `(async () =>
   const workspaceList = Array.isArray(wsPayload) ? wsPayload : wsPayload.items ?? [];
   const workspace = workspaceList.find((entry) => entry.id === workspaceId);
   const directory = workspace?.path ?? "";
-  const url = base + "/workspace/" + workspaceId + "/opencode/provider" +
+  const url = base + "/workspace/" + workspaceId + "/engine/provider" +
     (directory ? "?directory=" + encodeURIComponent(directory) : "");
   const response = await fetch(url, { headers });
   if (!response.ok) return null;
@@ -66,11 +66,11 @@ const engineProviderModelsExpr = (workspaceId, cloudProviderId) => `(async () =>
 })()`;
 
 async function denRequest(ctx, path, init = {}) {
-  const apiBase = ctx.env.OPENWORK_EVAL_DEN_API_URL.trim().replace(/\/+$/, "");
+  const apiBase = ctx.env.SOFIA_EVAL_DEN_API_URL.trim().replace(/\/+$/, "");
   const response = await fetch(`${apiBase}${path}`, {
     ...init,
     headers: {
-      authorization: `Bearer ${ctx.env.OPENWORK_EVAL_DEN_TOKEN.trim()}`,
+      authorization: `Bearer ${ctx.env.SOFIA_EVAL_DEN_TOKEN.trim()}`,
       "content-type": "application/json",
       ...(init.headers ?? {}),
     },
@@ -93,20 +93,20 @@ async function pollEngineModels(ctx, predicate, timeoutMs, label) {
   throw new Error(`Timed out after ${timeoutMs}ms waiting for: ${label}`);
 }
 
-// Read/write the workspace project opencode.jsonc via the OpenWork server
+// Read/write the workspace project engine.jsonc via the Sofia server
 // config-file API, from inside the page (uses the app's own token/port).
 const configFileExpr = (workspaceId, method, contentJson) => `(async () => {
-  const port = localStorage.getItem("openwork.server.port");
-  const token = localStorage.getItem("openwork.server.token");
+  const port = localStorage.getItem("sofia.server.port");
+  const token = localStorage.getItem("sofia.server.token");
   const workspaceId = ${JSON.stringify(workspaceId)};
   if (!port || !token || !workspaceId) return null;
   const base = "http://127.0.0.1:" + port;
   const headers = { Authorization: "Bearer " + token, "Content-Type": "application/json" };
   if (${JSON.stringify(method)} === "GET") {
-    const file = await (await fetch(base + "/workspace/" + workspaceId + "/opencode-config?scope=project", { headers })).json();
+    const file = await (await fetch(base + "/workspace/" + workspaceId + "/engine-config?scope=project", { headers })).json();
     return file.content ?? "";
   }
-  const response = await fetch(base + "/workspace/" + workspaceId + "/opencode-config", {
+  const response = await fetch(base + "/workspace/" + workspaceId + "/engine-config", {
     method: "POST", headers,
     body: JSON.stringify({ scope: "project", content: ${contentJson} }),
   });
@@ -121,7 +121,7 @@ async function assertNoJsoncFootprint(ctx, context) {
   const raw = await readProjectConfig(ctx);
   ctx.assert(
     typeof raw === "string" && !raw.includes(ctx.providerId),
-    `opencode.jsonc contains a block for the imported provider ${context}`,
+    `engine.jsonc contains a block for the imported provider ${context}`,
   );
 }
 
@@ -163,26 +163,26 @@ async function clickProviderRowButton(ctx, label) {
 
 export default {
   id: "cloud-runtime-provider-config",
-  title: "Cloud provider import/sync lives in runtime config, not opencode.jsonc",
+  title: "Cloud provider import/sync lives in runtime config, not engine.jsonc",
   spec: "evals/cloud-provider-sync-flows.md",
-  requiredEnv: ["OPENWORK_EVAL_DEN_API_URL", "OPENWORK_EVAL_DEN_TOKEN"],
+  requiredEnv: ["SOFIA_EVAL_DEN_API_URL", "SOFIA_EVAL_DEN_TOKEN"],
   steps: [
     {
       name: "App booted",
       run: async (ctx) => {
-        await ctx.waitFor("Boolean(window.__openworkControl)", { timeoutMs: 60_000 });
+        await ctx.waitFor("Boolean(window.__sofiaControl)", { timeoutMs: 60_000 });
         const workspaceId = await ctx.eval(
-          "localStorage.getItem('openwork.react.activeWorkspace') ?? ''",
+          "localStorage.getItem('sofia.react.activeWorkspace') ?? ''",
         );
         ctx.assert(Boolean(workspaceId), "No active workspace recorded.");
         ctx.workspaceId = workspaceId;
       },
     },
     {
-      name: "Sign in to OpenWork Cloud via desktop handoff",
+      name: "Sign in to Sofia Cloud via desktop handoff",
       run: async (ctx) => {
         const signedIn = await ctx.eval(
-          "Boolean((localStorage.getItem('openwork.den.authToken') ?? '').trim())",
+          "Boolean((localStorage.getItem('sofia.den.authToken') ?? '').trim())",
         );
         if (signedIn) {
           ctx.log("Already signed in; reusing session.");
@@ -190,15 +190,15 @@ export default {
         }
         const payload = await denRequest(ctx, "/v1/auth/desktop-handoff", {
           method: "POST",
-          body: JSON.stringify({ desktopScheme: "openwork" }),
+          body: JSON.stringify({ desktopScheme: "sofia" }),
         });
-        ctx.assert(typeof payload.openworkUrl === "string" && payload.openworkUrl.length > 0, "No openworkUrl in handoff response.");
+        ctx.assert(typeof payload.sofiaUrl === "string" && payload.sofiaUrl.length > 0, "No sofiaUrl in handoff response.");
         await ctx.navigateHash("/settings/cloud-account");
         await ctx.clickText("Paste sign-in code", { timeoutMs: 30_000 });
-        await ctx.fill("#den-signin-link", payload.openworkUrl);
+        await ctx.fill("#den-signin-link", payload.sofiaUrl);
         await ctx.clickText("Finish sign-in");
         await ctx.waitFor(
-          "Boolean((localStorage.getItem('openwork.den.authToken') ?? '').trim())",
+          "Boolean((localStorage.getItem('sofia.den.authToken') ?? '').trim())",
           { timeoutMs: 45_000, label: "persisted den auth token" },
         );
       },
@@ -261,10 +261,10 @@ export default {
         // canonical file (regex insertion into arbitrary JSONC is how you
         // manufacture trailing commas).
         const raw = await readProjectConfig(ctx);
-        ctx.assert(raw !== null, "Could not reach the project opencode.jsonc API.");
+        ctx.assert(raw !== null, "Could not reach the project engine.jsonc API.");
         const nextContent = `${JSON.stringify(
           {
-            $schema: "https://opencode.ai/config.json",
+            $schema: "https://github.com/RuutChatCSM/sofia/config.json",
             provider: {
               [ctx.providerId]: {
                 npm: "@ai-sdk/openai-compatible",
@@ -286,7 +286,7 @@ export default {
       name: "Settings -> Cloud 'Import' injects the provider via runtime config",
       run: async (ctx) => {
         await openCloudProvidersView(ctx);
-        await ctx.prove("Importing a cloud provider leaves opencode.jsonc untouched (and migrates the legacy block)", {
+        await ctx.prove("Importing a cloud provider leaves engine.jsonc untouched (and migrates the legacy block)", {
           action: async () => {
             await clickProviderRowButton(ctx, "Import");
             // The store returns "Connected <name>"; the view toasts it verbatim.
@@ -300,13 +300,13 @@ export default {
               "engine reports the imported provider with its model",
             );
             // Runtime injection proof: the provider is served by the engine
-            // while the workspace opencode.jsonc contains no block for it —
+            // while the workspace engine.jsonc contains no block for it —
             // including the legacy block we seeded, which must be migrated.
             await assertNoJsoncFootprint(ctx, "(runtime injection failed or migration did not strip the legacy block)");
             ctx.recordEvidence({
               type: "assertion",
               status: "passed",
-              assertion: "Imported provider is engine-visible with zero opencode.jsonc footprint (runtime config injection; legacy block migrated)",
+              assertion: "Imported provider is engine-visible with zero engine.jsonc footprint (runtime config injection; legacy block migrated)",
             });
           },
           screenshot: {
@@ -352,7 +352,7 @@ export default {
           },
           screenshot: {
             name: "sync-upserts-runtime",
-            claim: "Sync pulled the Den model change into the engine; opencode.jsonc still has no provider block.",
+            claim: "Sync pulled the Den model change into the engine; engine.jsonc still has no provider block.",
             requireText: ["Synced", PROVIDER_NAME],
             rejectText: ["Something went wrong"],
             hashIncludes: "/settings/cloud-providers",
@@ -368,15 +368,15 @@ export default {
         // tracked separately). Clean deterministically via the same per-key
         // runtime merge the store uses: null deletes.
         const status = await ctx.eval(`(async () => {
-          const port = localStorage.getItem("openwork.server.port");
-          const token = localStorage.getItem("openwork.server.token");
+          const port = localStorage.getItem("sofia.server.port");
+          const token = localStorage.getItem("sofia.server.token");
           const workspaceId = ${JSON.stringify(ctx.workspaceId)};
           if (!port || !token || !workspaceId) return null;
           const base = "http://127.0.0.1:" + port;
           const headers = { Authorization: "Bearer " + token, "Content-Type": "application/json" };
           const response = await fetch(base + "/workspace/" + workspaceId + "/config", {
             method: "PATCH", headers,
-            body: JSON.stringify({ opencode: { provider: { [${JSON.stringify(ctx.providerId)}]: null } } }),
+            body: JSON.stringify({ engine: { provider: { [${JSON.stringify(ctx.providerId)}]: null } } }),
           });
           return response.status;
         })()`, { awaitPromise: true });
@@ -384,8 +384,8 @@ export default {
         // The store's removal path reloads the engine itself; this direct
         // cleanup needs an explicit reload for the engine to drop the entry.
         await ctx.eval(`(async () => {
-          const port = localStorage.getItem("openwork.server.port");
-          const token = localStorage.getItem("openwork.server.token");
+          const port = localStorage.getItem("sofia.server.port");
+          const token = localStorage.getItem("sofia.server.token");
           const response = await fetch("http://127.0.0.1:" + port + "/workspace/" + ${JSON.stringify(ctx.workspaceId)} + "/engine/reload", {
             method: "POST", headers: { Authorization: "Bearer " + token },
           });

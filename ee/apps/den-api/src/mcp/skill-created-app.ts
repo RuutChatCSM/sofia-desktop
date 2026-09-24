@@ -5,17 +5,17 @@ import {
 } from "@modelcontextprotocol/ext-apps/server"
 import type { McpUiResourceMeta } from "@modelcontextprotocol/ext-apps"
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
-import { skillCreatedAppHtml } from "@openwork/mcp-apps/skill-created"
+import { skillCreatedAppHtml } from "@sofia/mcp-apps/skill-created"
 import {
   skillCreatedAppSchemaVersion,
   skillCreatedPayloadSchema,
   type SkillCreatedPayload,
-} from "@openwork/types/skill-created-app"
+} from "@sofia/types/skill-created-app"
 import { z } from "zod"
 
-export { skillCreatedPayloadSchema } from "@openwork/types/skill-created-app"
+export { skillCreatedPayloadSchema } from "@sofia/types/skill-created-app"
 
-export const SKILL_CREATED_APP_RESOURCE_URI = "ui://openwork/skill-created/v1/view.html"
+export const SKILL_CREATED_APP_RESOURCE_URI = "ui://sofia/skill-created/v1/view.html"
 export const CREATE_SKILL_TOOL_NAME = "create_skill"
 export const UPDATE_SKILL_TOOL_NAME = "update_skill"
 export const SKILL_CREATED_APP_HTML = skillCreatedAppHtml
@@ -79,7 +79,7 @@ export function registerAgentSkillCreatedApp(input: {
     {
       title: "Create skill",
       description: [
-        "Create one private OpenWork Cloud skill in a new Plugin.",
+        "Create one private Sofia Cloud skill in a new Plugin.",
         "Pass a complete SKILL.md with valid frontmatter and instructions.",
         "The skill is immediately available to its creator; this does not publish it to a Marketplace or share it.",
         "Clients without MCP Apps support receive a text confirmation.",
@@ -112,7 +112,7 @@ export function registerAgentSkillCreatedApp(input: {
     {
       title: "Update skill",
       description: [
-        "Update one existing OpenWork Cloud skill by creating a new immutable version, without creating a duplicate Plugin.",
+        "Update one existing Sofia Cloud skill by creating a new immutable version, without creating a duplicate Plugin.",
         "Pass the skill's config object id and the complete replacement SKILL.md.",
         "Clients without MCP Apps support receive a text confirmation.",
       ].join(" "),
@@ -142,10 +142,10 @@ export function registerAgentSkillCreatedApp(input: {
 export function registerAgentSkillCreatedResource(server: McpServer) {
   registerAppResource(
     server,
-    "OpenWork Skill Created",
+    "Sofia Skill Created",
     SKILL_CREATED_APP_RESOURCE_URI,
     {
-      description: "A compact confirmation for a newly created or updated OpenWork Cloud skill.",
+      description: "A compact confirmation for a newly created or updated Sofia Cloud skill.",
       _meta: skillCreatedAppResourceMeta,
     },
     async () => ({

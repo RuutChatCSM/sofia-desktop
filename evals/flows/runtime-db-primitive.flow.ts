@@ -42,17 +42,17 @@ function moduleUrl(name: string): string {
 function harnessSource(): string {
   return `import { join } from "node:path";
 import { installCloudPlugin, readInstalledCloudPlugins } from ${JSON.stringify(moduleUrl("cloud-plugins.ts"))};
-import { readOpenworkWorkspaceConfig, writeOpenworkWorkspaceConfig } from ${JSON.stringify(moduleUrl("openwork-workspace-config-store.ts"))};
+import { readSofiaWorkspaceConfig, writeSofiaWorkspaceConfig } from ${JSON.stringify(moduleUrl("sofia-workspace-config-store.ts"))};
 import { openRuntimeSqliteDatabase, runtimeDbPath, runtimeStorageDir } from ${JSON.stringify(moduleUrl("runtime-db.ts"))};
-import { readRuntimeOpencodeConfig, writeRuntimeOpencodeConfig } from ${JSON.stringify(moduleUrl("runtime-opencode-config-store.ts"))};
+import { readRuntimeWorkspaceEngineConfig, writeRuntimeWorkspaceEngineConfig } from ${JSON.stringify(moduleUrl("runtime-engine-config-store.ts"))};
 import { readSessionGroupState, writeSessionGroupState } from ${JSON.stringify(moduleUrl("session-groups.ts"))};
 
 const mode = process.argv[2] ?? "";
 const root = process.env.RUNTIME_DB_PRIMITIVE_ROOT;
-const dbPath = process.env.OPENWORK_RUNTIME_DB;
+const dbPath = process.env.SOFIA_RUNTIME_DB;
 const workspaceId = ${JSON.stringify(WORKSPACE_ID)};
 
-if (!root || !dbPath) throw new Error("runtime DB primitive harness needs RUNTIME_DB_PRIMITIVE_ROOT and OPENWORK_RUNTIME_DB");
+if (!root || !dbPath) throw new Error("runtime DB primitive harness needs RUNTIME_DB_PRIMITIVE_ROOT and SOFIA_RUNTIME_DB");
 
 function serverConfig(configPath = join(root, "server.json")) {
   return {
@@ -79,14 +79,14 @@ async function writeSessionAndWorkspace(config) {
     groups: [{ id: "grp_flow", label: "Flow group" }],
     assignments: { ses_flow: "grp_flow" },
   });
-  await writeOpenworkWorkspaceConfig(config, workspaceId, (current) => ({
+  await writeSofiaWorkspaceConfig(config, workspaceId, (current) => ({
     ...current,
     workspace: { label: "Flow workspace config" },
   }));
 }
 
 async function writeRuntimeAndCloud(config) {
-  await writeRuntimeOpencodeConfig(config, workspaceId, (current) => ({
+  await writeRuntimeWorkspaceEngineConfig(config, workspaceId, (current) => ({
     ...current,
     plugin: ["flow-runtime-plugin"],
     mcp: { flow: { type: "remote", url: "https://runtime-db-primitive.example/mcp" } },
@@ -106,7 +106,7 @@ async function writeRuntimeAndCloud(config) {
 
 async function readSessionAndWorkspace(config) {
   const session = await readSessionGroupState(config, workspaceId);
-  const workspace = await readOpenworkWorkspaceConfig(config, workspaceId);
+  const workspace = await readSofiaWorkspaceConfig(config, workspaceId);
   return {
     groupLabel: session.state.groups[0]?.label ?? null,
     assignment: session.state.assignments.ses_flow ?? null,
@@ -115,7 +115,7 @@ async function readSessionAndWorkspace(config) {
 }
 
 async function readRuntimeAndCloud(config) {
-  const runtime = await readRuntimeOpencodeConfig(config, workspaceId);
+  const runtime = await readRuntimeWorkspaceEngineConfig(config, workspaceId);
   const cloud = await readInstalledCloudPlugins(config, workspaceId);
   return {
     runtimePlugin: runtime.plugin?.[0] ?? null,
@@ -132,9 +132,9 @@ function print(value) {
 const config = serverConfig();
 
 if (mode === "paths") {
-  delete process.env.OPENWORK_RUNTIME_DB;
+  delete process.env.SOFIA_RUNTIME_DB;
   const defaultPath = runtimeDbPath(config);
-  process.env.OPENWORK_RUNTIME_DB = ` + "` ${dbPath} `" + `;
+  process.env.SOFIA_RUNTIME_DB = ` + "` ${dbPath} `" + `;
   const overridePath = runtimeDbPath(config);
   const storageDir = runtimeStorageDir(config);
   const connection = await openRuntimeSqliteDatabase(overridePath);
@@ -144,12 +144,12 @@ if (mode === "paths") {
   print({ mode, defaultPath, overridePath, storageDir, driver: connection.kind });
 } else if (mode === "write-session-workspace") {
   await writeSessionAndWorkspace(config);
-  print({ mode, wrote: ["session_group_states", "openwork_workspace_configs"] });
+  print({ mode, wrote: ["session_group_states", "sofia_workspace_configs"] });
 } else if (mode === "read-session-workspace") {
   print({ mode, ...(await readSessionAndWorkspace(config)) });
 } else if (mode === "write-runtime-cloud") {
   await writeRuntimeAndCloud(config);
-  print({ mode, wrote: ["runtime_opencode_configs", "cloud_plugin_install_configs"] });
+  print({ mode, wrote: ["runtime_engine_configs", "cloud_plugin_install_configs"] });
 } else if (mode === "read-runtime-cloud") {
   print({ mode, ...(await readRuntimeAndCloud(config)) });
 } else if (mode === "write-all") {
@@ -165,7 +165,7 @@ if (mode === "paths") {
 }
 
 async function createHarness(): Promise<HarnessPaths> {
-  const root = await mkdtemp(join(tmpdir(), "openwork-runtime-db-primitive-flow-"));
+  const root = await mkdtemp(join(tmpdir(), "sofia-runtime-db-primitive-flow-"));
   const harnessPath = join(root, "runtime-db-primitive-harness.mjs");
   await writeFile(harnessPath, harnessSource(), "utf8");
   return { root, dbPath: join(root, "runtime.sqlite"), harnessPath };
@@ -177,7 +177,7 @@ function runHarness(paths: HarnessPaths, mode: string): SpawnSyncReturns<string>
     encoding: "utf8",
     env: {
       ...process.env,
-      OPENWORK_RUNTIME_DB: paths.dbPath,
+      SOFIA_RUNTIME_DB: paths.dbPath,
       RUNTIME_DB_PRIMITIVE_ROOT: paths.root,
     },
     timeout: RUN_TIMEOUT_MS,
@@ -254,7 +254,7 @@ export default defineFlow({
               witness(ctx, run.status === 0, "Path harness exits 0", commandOutput(run));
               const output = parseHarnessJson(run);
               witness(ctx, output.defaultPath === join(paths.root, "runtime.sqlite"), "Default path resolves next to server.json", String(output.defaultPath));
-              witness(ctx, output.overridePath === paths.dbPath, "OPENWORK_RUNTIME_DB override wins after trimming", String(output.overridePath));
+              witness(ctx, output.overridePath === paths.dbPath, "SOFIA_RUNTIME_DB override wins after trimming", String(output.overridePath));
               witness(ctx, output.storageDir === paths.root, "runtimeStorageDir points at the runtime DB directory", String(output.storageDir));
               witness(ctx, output.driver === "bun", "Harness opened the active Bun SQLite driver through the primitive", String(output.driver));
               witness(ctx, (await stat(paths.dbPath)).isFile(), "Opening the primitive created the runtime.sqlite file", paths.dbPath);
@@ -286,9 +286,9 @@ export default defineFlow({
               const output = parseHarnessJson(readRun);
               const tables = readTableNames(paths.dbPath);
               const sessionRow = readJsonCell(paths.dbPath, "SELECT state_json AS value FROM session_group_states WHERE workspace_id = 'ws_runtime_db_primitive_flow'");
-              const workspaceRow = readJsonCell(paths.dbPath, "SELECT config_json AS value FROM openwork_workspace_configs WHERE workspace_id = 'ws_runtime_db_primitive_flow'");
+              const workspaceRow = readJsonCell(paths.dbPath, "SELECT config_json AS value FROM sofia_workspace_configs WHERE workspace_id = 'ws_runtime_db_primitive_flow'");
               witness(ctx, tables.includes("session_group_states"), "session_group_states table exists", tables.join(", "));
-              witness(ctx, tables.includes("openwork_workspace_configs"), "openwork_workspace_configs table exists", tables.join(", "));
+              witness(ctx, tables.includes("sofia_workspace_configs"), "sofia_workspace_configs table exists", tables.join(", "));
               witness(ctx, output.groupLabel === "Flow group" && output.assignment === "grp_flow", "Session group state reads back through the store", JSON.stringify(output));
               witness(ctx, output.workspaceLabel === "Flow workspace config", "Workspace config reads back through its store", JSON.stringify(output));
               witness(ctx, Array.isArray(sessionRow.groups) && isRecord(workspaceRow.workspace), "Raw DB rows keep domain JSON in separate schemas", JSON.stringify({ sessionRow, workspaceRow }));
@@ -309,7 +309,7 @@ export default defineFlow({
         try {
           let writeRun: SpawnSyncReturns<string> | null = null;
           let readRun: SpawnSyncReturns<string> | null = null;
-          await ctx.prove("Runtime OpenCode configuration and cloud plugin installs use the primitive without sharing rows", {
+          await ctx.prove("Runtime Sofia configuration and cloud plugin installs use the primitive without sharing rows", {
             voiceover: vo[2],
             action: async () => {
               writeRun = runHarness(paths, "write-runtime-cloud");
@@ -320,12 +320,12 @@ export default defineFlow({
               witness(ctx, writeRun.status === 0 && readRun.status === 0, "Runtime/cloud write and read harnesses exit 0", [commandOutput(writeRun), commandOutput(readRun)].join("\n"));
               const output = parseHarnessJson(readRun);
               const tables = readTableNames(paths.dbPath);
-              const runtimeRow = readJsonCell(paths.dbPath, "SELECT config_json AS value FROM runtime_opencode_configs WHERE workspace_id = 'ws_runtime_db_primitive_flow'");
+              const runtimeRow = readJsonCell(paths.dbPath, "SELECT config_json AS value FROM runtime_engine_configs WHERE workspace_id = 'ws_runtime_db_primitive_flow'");
               const cloudRow = readJsonCell(paths.dbPath, "SELECT config_json AS value FROM cloud_plugin_install_configs WHERE workspace_id = 'ws_runtime_db_primitive_flow'");
-              witness(ctx, tables.includes("runtime_opencode_configs"), "runtime_opencode_configs table exists", tables.join(", "));
+              witness(ctx, tables.includes("runtime_engine_configs"), "runtime_engine_configs table exists", tables.join(", "));
               witness(ctx, tables.includes("cloud_plugin_install_configs"), "cloud_plugin_install_configs table exists", tables.join(", "));
-              witness(ctx, output.runtimePlugin === "flow-runtime-plugin", "Runtime OpenCode plugin reads back through its store", JSON.stringify(output));
-              witness(ctx, output.runtimeMcpUrl === "https://runtime-db-primitive.example/mcp", "Runtime OpenCode MCP reads back through its store", JSON.stringify(output));
+              witness(ctx, output.runtimePlugin === "flow-runtime-plugin", "Runtime Sofia plugin reads back through its store", JSON.stringify(output));
+              witness(ctx, output.runtimeMcpUrl === "https://runtime-db-primitive.example/mcp", "Runtime Sofia MCP reads back through its store", JSON.stringify(output));
               witness(ctx, output.cloudPluginName === "Flow Runtime Plugin", "Cloud plugin install state reads back through its store", JSON.stringify(output));
               witness(ctx, Array.isArray(runtimeRow.plugin) && isRecord(cloudRow.plugins), "Raw DB rows keep runtime config and cloud imports in separate JSON documents", JSON.stringify({ runtimeRow, cloudRow }));
               ctx.output("$ bun runtime-db-primitive-harness.mjs write-runtime-cloud", commandOutput(writeRun));
@@ -358,7 +358,7 @@ export default defineFlow({
               const tables = readTableNames(paths.dbPath);
               witness(ctx, output.groupLabel === "Flow group", "Fresh process reads session groups", JSON.stringify(output));
               witness(ctx, output.workspaceLabel === "Flow workspace config", "Fresh process reads workspace config", JSON.stringify(output));
-              witness(ctx, output.runtimePlugin === "flow-runtime-plugin", "Fresh process reads runtime OpenCode config", JSON.stringify(output));
+              witness(ctx, output.runtimePlugin === "flow-runtime-plugin", "Fresh process reads runtime Sofia config", JSON.stringify(output));
               witness(ctx, output.cloudPluginName === "Flow Runtime Plugin", "Fresh process reads cloud plugin install state", JSON.stringify(output));
               witness(ctx, tables.length === 4, "The reopened DB contains exactly the four migrated domain tables", tables.join(", "));
               ctx.output("$ bun runtime-db-primitive-harness.mjs write-all", commandOutput(writeRun));

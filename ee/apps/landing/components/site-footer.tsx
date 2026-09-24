@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { OpenCodeLogo } from "./opencode-logo";
+import { SofiaLogo } from "./engine-logo";
 
 export function SiteFooter() {
   return (
@@ -8,12 +8,12 @@ export function SiteFooter() {
         <div className="flex flex-col gap-2">
           <div className="font-medium text-gray-800">Powered by</div>
           <a
-            href="https://opencode.ai"
+            href="https://github.com/RuutChatCSM/sofia"
             target="_blank"
             rel="noreferrer"
             className="inline-flex items-center gap-3 text-gray-500 transition-colors hover:text-gray-800"
           >
-            <OpenCodeLogo className="h-3 w-auto" />
+            <SofiaLogo className="h-3 w-auto" />
           </a>
         </div>
 
@@ -31,7 +31,7 @@ export function SiteFooter() {
             Desktop
           </Link>
           <a
-            href="https://app.openworklabs.com"
+            href="https://sofia-app.ruut.chat"
             target="_blank"
             rel="noreferrer"
             className="whitespace-nowrap transition-colors hover:text-gray-800"

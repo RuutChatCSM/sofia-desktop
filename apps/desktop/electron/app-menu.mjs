@@ -5,10 +5,10 @@
 // consumed by the preload bridge.
 import { BrowserWindow, Menu, shell } from "electron";
 
-const NATIVE_MENU_OPEN_SETTINGS_EVENT = "openwork:native-menu:open-settings";
-const NATIVE_MENU_TOGGLE_SIDEBAR_EVENT = "openwork:native-menu:toggle-sidebar";
-const NATIVE_MENU_CHECK_UPDATES_EVENT = "openwork:native-menu:check-updates";
-const NATIVE_MENU_ZOOM_EVENT = "openwork:native-menu:zoom";
+const NATIVE_MENU_OPEN_SETTINGS_EVENT = "sofia:native-menu:open-settings";
+const NATIVE_MENU_TOGGLE_SIDEBAR_EVENT = "sofia:native-menu:toggle-sidebar";
+const NATIVE_MENU_CHECK_UPDATES_EVENT = "sofia:native-menu:check-updates";
+const NATIVE_MENU_ZOOM_EVENT = "sofia:native-menu:zoom";
 
 export function createApplicationMenu({ appName, docsUrl, getWindow }) {
   let applicationMenuVisible = process.platform === "darwin";

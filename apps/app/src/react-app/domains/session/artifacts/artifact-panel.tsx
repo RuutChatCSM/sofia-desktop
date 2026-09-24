@@ -3,7 +3,7 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download, ExternalLink, FolderOpen, X } from "lucide-react";
 
-import type { OpenworkServerClient } from "@/app/lib/openwork-server";
+import type { SofiaServerClient } from "@/app/lib/sofia-server";
 import { getDesktopFileIcon, openDesktopPath, revealDesktopItemInDir } from "@/app/lib/desktop";
 import { isElectronRuntime } from "@/app/utils";
 import { Button } from "@/components/ui/button";
@@ -36,7 +36,7 @@ function isMarkdownPrimitiveEvalArtifact(target: OpenTarget) {
 type ArtifactPanelProps = {
   sessionId: string;
   tab: ArtifactPanelTab;
-  client: OpenworkServerClient | null;
+  client: SofiaServerClient | null;
   workspaceId: string | null;
   workspaceRoot: string;
   isRemoteWorkspace?: boolean;
@@ -44,7 +44,7 @@ type ArtifactPanelProps = {
 };
 
 type ArtifactPanelViewProps = {
-  client: OpenworkServerClient;
+  client: SofiaServerClient;
   workspaceId: string;
   workspaceRoot: string;
   isRemoteWorkspace?: boolean;
@@ -278,8 +278,8 @@ function ArtifactPanelView({ client, workspaceId, workspaceRoot, isRemoteWorkspa
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-background">
-      <div className="shrink-0 border-b border-border bg-background mac:bg-background/80 mac:backdrop-blur-2xl mac:backdrop-saturate-150">
+    <div className="flex h-full min-h-0 flex-col bg-dls-canvas">
+      <div className="shrink-0 border-b border-border bg-dls-canvas mac:bg-dls-canvas/80 mac:backdrop-blur-2xl mac:backdrop-saturate-150">
         <div className="flex h-10 items-center gap-2 pe-2 ps-4">
           <div className="min-w-0 flex-1 flex items-center gap-1.5">
             {fileIcon ? (

@@ -1,24 +1,21 @@
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
 
 import type { EnvService } from "./env-file.js";
 import { syncManagedProviderAuth } from "./managed-provider-auth.js";
-import { writeOpenworkRuntimeConfigFile } from "./openwork-runtime-config.js";
 import {
-  hasOpenworkWorkspaceConfig,
-  readOpenworkWorkspaceConfig,
-  writeOpenworkWorkspaceConfig,
-} from "./openwork-workspace-config-store.js";
+  hasSofiaWorkspaceConfig,
+  readSofiaWorkspaceConfig,
+  writeSofiaWorkspaceConfig,
+} from "./sofia-workspace-config-store.js";
 import {
   mergeRuntimeProviderUpdate,
-  readGlobalRuntimeOpencodeConfig,
-  readRuntimeOpencodeConfig,
+  readGlobalRuntimeWorkspaceEngineConfig,
+  readRuntimeWorkspaceEngineConfig,
   runtimeProviderMap,
-  writeGlobalRuntimeOpencodeConfig,
-  writeRuntimeOpencodeConfig,
-} from "./runtime-opencode-config-store.js";
+  writeGlobalRuntimeWorkspaceEngineConfig,
+  writeRuntimeWorkspaceEngineConfig,
+} from "./runtime-engine-config-store.js";
 import type { ServerConfig } from "./types.js";
-import { openworkConfigPath } from "./workspace-files.js";
 import { findManagedEngineWorkspace } from "./workspaces.js";
 
 type JsonRecord = Record<string, unknown>;
@@ -67,7 +64,6 @@ export type CloudProviderSyncRunDetail = {
   envDeletes: number;
   cleanupChanged: boolean;
   cleanupRuntimeChanged: boolean;
-  fileChanged: boolean;
   reloadDeferred: boolean;
 };
 
@@ -317,7 +313,7 @@ async function requestJson(
       headers: {
         Accept: "application/json",
         Authorization: `Bearer ${session.token}`,
-        "x-openwork-legacy-org-id": session.orgId,
+        "x-sofia-legacy-org-id": session.orgId,
       },
       signal: AbortSignal.timeout(requestTimeoutMs),
     });
@@ -366,11 +362,11 @@ function hashString(value: string): string {
 }
 
 function runtimeProviderId(provider: DenProvider): string {
-  return provider.source === "openwork" ? "openwork" : provider.id;
+  return provider.source === "sofia" ? "sofia" : provider.id;
 }
 
 function isCloudManagedProviderKey(providerId: string): boolean {
-  return /^lpr_/i.test(providerId) || providerId.trim() === "openwork";
+  return /^lpr_/i.test(providerId) || providerId.trim() === "sofia";
 }
 
 function readProviderEnvNames(providerConfig: JsonRecord): string[] {
@@ -386,7 +382,7 @@ function upsertEnvEntry(entries: EnvEntry[], key: string, value: string): void {
   else entries.push({ key: trimmedKey, value: trimmedValue });
 }
 
-function readOpenWorkInferenceBaseUrl(providerConfig: JsonRecord): string | null {
+function readSofiaInferenceBaseUrl(providerConfig: JsonRecord): string | null {
   const options = providerConfig.options;
   if (isRecord(options)) {
     const baseUrl = readRequiredString(options.baseURL);
@@ -412,10 +408,10 @@ function providerEnvEntries(provider: DenProviderConnection): EnvEntry[] {
   if (provider.apiKey && envNames[0]) upsertEnvEntry(entries, envNames[0], provider.apiKey);
 
   const primaryCredential = provider.apiKey?.trim() || entries[0]?.value || "";
-  if (provider.source === "openwork" && primaryCredential) {
-    upsertEnvEntry(entries, "OPENWORK_API_KEY", primaryCredential);
-    const baseUrl = readOpenWorkInferenceBaseUrl(provider.providerConfig);
-    if (baseUrl) upsertEnvEntry(entries, "OPENWORK_INFERENCE_BASE_URL", baseUrl);
+  if (provider.source === "sofia" && primaryCredential) {
+    upsertEnvEntry(entries, "SOFIA_API_KEY", primaryCredential);
+    const baseUrl = readSofiaInferenceBaseUrl(provider.providerConfig);
+    if (baseUrl) upsertEnvEntry(entries, "SOFIA_INFERENCE_BASE_URL", baseUrl);
   }
   return entries;
 }
@@ -439,7 +435,7 @@ function buildProviderConfig(provider: DenProviderConnection): JsonRecord {
     name: provider.name,
     env: readProviderEnvNames(provider.providerConfig),
   };
-  if (Object.keys(models).length > 0 || provider.source !== "openwork") config.models = models;
+  if (Object.keys(models).length > 0 || provider.source !== "sofia") config.models = models;
 
   const npm = readRequiredString(provider.providerConfig.npm);
   if (npm) config.npm = npm;
@@ -513,34 +509,25 @@ function managedProviderMap(providers: Record<string, Record<string, unknown>>):
   return Object.fromEntries(Object.entries(providers).filter(([providerId]) => isCloudManagedProviderKey(providerId)));
 }
 
-function removeCloudProviderImportBaselines(openwork: JsonRecord): JsonRecord | null {
-  if (!isRecord(openwork.cloudImports) || !isRecord(openwork.cloudImports.providers)) return null;
-  if (Object.keys(openwork.cloudImports.providers).length === 0) return null;
+function removeCloudProviderImportBaselines(sofia: JsonRecord): JsonRecord | null {
+  if (!isRecord(sofia.cloudImports) || !isRecord(sofia.cloudImports.providers)) return null;
+  if (Object.keys(sofia.cloudImports.providers).length === 0) return null;
   return {
-    ...openwork,
+    ...sofia,
     cloudImports: {
-      ...openwork.cloudImports,
+      ...sofia.cloudImports,
       providers: {},
     },
   };
 }
 
-async function readLegacyOpenworkConfig(path: string): Promise<JsonRecord | null> {
-  try {
-    const parsed: unknown = JSON.parse(await readFile(path, "utf8"));
-    return isRecord(parsed) ? parsed : null;
-  } catch {
-    return null;
-  }
-}
-
 function configuredIntervalMs(): number {
-  const configured = Number(process.env.OPENWORK_CLOUD_PROVIDER_SYNC_INTERVAL_MS ?? "");
+  const configured = Number(process.env.SOFIA_CLOUD_PROVIDER_SYNC_INTERVAL_MS ?? "");
   return Number.isFinite(configured) && configured > 0 ? configured : defaultIntervalMs;
 }
 
 function configuredReloadRetryMs(): number {
-  const configured = Number(process.env.OPENWORK_ENGINE_RELOAD_RETRY_MS ?? "");
+  const configured = Number(process.env.SOFIA_ENGINE_RELOAD_RETRY_MS ?? "");
   return Number.isFinite(configured) && configured > 0 ? configured : 15_000;
 }
 
@@ -561,6 +548,9 @@ export class CloudProviderSync {
   private managedProviderIds = new Set<string>();
   private importedAtByCloudProviderId = new Map<string, number>();
   private reloadPending = false;
+  /** Engine workspace the last successful pass targeted. A new/changed engine
+   * workspace needs a pass so the engine writes its config from the runtime DB. */
+  private lastEngineWorkspaceId: string | null = null;
   private queue: Promise<void> = Promise.resolve();
   private activeRun: CloudProviderSyncRun | null = null;
   private trailingRun: CloudProviderSyncTrailingRun | null = null;
@@ -823,7 +813,7 @@ export class CloudProviderSync {
     prepared: PreparedMaterialization,
   ): Promise<{ changed: boolean; detail: CloudProviderSyncRunDetail; reloadError?: unknown }> {
     const desiredProviders = desiredProviderMap(prepared);
-    const globalRuntime = await readGlobalRuntimeOpencodeConfig(this.config);
+    const globalRuntime = await readGlobalRuntimeWorkspaceEngineConfig(this.config);
     const currentManagedProviders = managedProviderMap(runtimeProviderMap(globalRuntime));
     const providerStateChanged = stableJson(currentManagedProviders) !== stableJson(desiredProviders);
 
@@ -833,7 +823,7 @@ export class CloudProviderSync {
         if (!(providerId in desiredProviders)) patch[providerId] = null;
       }
       for (const [providerId, providerConfig] of Object.entries(desiredProviders)) patch[providerId] = providerConfig;
-      await writeGlobalRuntimeOpencodeConfig(this.config, (current) => ({
+      await writeGlobalRuntimeWorkspaceEngineConfig(this.config, (current) => ({
         ...current,
         provider: mergeRuntimeProviderUpdate(current.provider, patch),
       }));
@@ -860,22 +850,20 @@ export class CloudProviderSync {
 
     const workspaceCleanup = await this.cleanupWorkspaceTakeovers();
     const engineWorkspace = findManagedEngineWorkspace(this.config.workspaces) ?? this.config.workspaces[0];
-    const runtimeFileChanged = engineWorkspace
-      ? (await writeOpenworkRuntimeConfigFile(this.config, engineWorkspace.id)).changed
-      : false;
+    const engineWorkspaceId = engineWorkspace?.id ?? null;
+    const engineWorkspaceChanged = engineWorkspaceId !== null && engineWorkspaceId !== this.lastEngineWorkspaceId;
+    this.lastEngineWorkspaceId = engineWorkspaceId;
     // Credentials reach a live engine through PUT /auth/{providerID} below, so
     // a key rotation never needs a reload. Provider *config* (models, npm,
-    // options.baseURL) has no live path: the engine reads it from
-    // OPENCODE_CONFIG when it builds an instance, and the only write endpoint
-    // that accepts it, PATCH /config, performs the same instance dispose as
-    // POST /instance/dispose (verified against opencode 1.18.15 — both drop an
-    // open /event stream, GET /config and PUT /auth do not). So a config delta
-    // still reloads. Without a rollover-capable engine pool it is deferred
-    // while sessions are live; with one, reloadEngine flips generations.
+    // options.baseURL) is written to the runtime DB and materialized into the
+    // engine's `config.toml` when the engine handle is resolved, so a config
+    // delta reloads only to pick up a newly tracked engine workspace. Without a
+    // rollover-capable engine pool it is deferred while sessions are live; with
+    // one, reloadEngine flips generations.
     this.reloadPending = this.reloadPending
       || providerStateChanged
       || workspaceCleanup.runtimeChanged
-      || runtimeFileChanged;
+      || engineWorkspaceChanged;
     let reloadError: unknown;
     let reloadDeferred = false;
     if (engineWorkspace && this.reloadPending) {
@@ -910,7 +898,6 @@ export class CloudProviderSync {
       envDeletes: envDeletes.length,
       cleanupChanged: workspaceCleanup.changed,
       cleanupRuntimeChanged: workspaceCleanup.runtimeChanged,
-      fileChanged: runtimeFileChanged,
       reloadDeferred,
     };
     const changed = detail.fingerprintChanged
@@ -918,7 +905,7 @@ export class CloudProviderSync {
       || envUpserts.length > 0
       || envDeletes.length > 0
       || workspaceCleanup.changed
-      || runtimeFileChanged;
+      || engineWorkspaceChanged;
     return { changed, detail, reloadError };
   }
 
@@ -926,13 +913,13 @@ export class CloudProviderSync {
     let changed = false;
     let runtimeChanged = false;
     for (const workspace of this.config.workspaces) {
-      const runtime = await readRuntimeOpencodeConfig(this.config, workspace.id);
+      const runtime = await readRuntimeWorkspaceEngineConfig(this.config, workspace.id);
       const providerPatch: JsonRecord = {};
       for (const providerId of Object.keys(runtimeProviderMap(runtime))) {
         if (isCloudManagedProviderKey(providerId)) providerPatch[providerId] = null;
       }
       if (Object.keys(providerPatch).length > 0) {
-        const result = await writeRuntimeOpencodeConfig(this.config, workspace.id, (current) => ({
+        const result = await writeRuntimeWorkspaceEngineConfig(this.config, workspace.id, (current) => ({
           ...current,
           provider: mergeRuntimeProviderUpdate(current.provider, providerPatch),
         }));
@@ -940,16 +927,14 @@ export class CloudProviderSync {
         runtimeChanged = runtimeChanged || result.changed;
       }
 
-      const hasStoredConfig = await hasOpenworkWorkspaceConfig(this.config, workspace.id);
-      const openwork = hasStoredConfig
-        ? await readOpenworkWorkspaceConfig(this.config, workspace.id)
-        : workspace.workspaceType !== "remote" && workspace.path.trim().length > 0
-          ? await readLegacyOpenworkConfig(openworkConfigPath(workspace.path))
-          : null;
-      if (!openwork) continue;
-      const next = removeCloudProviderImportBaselines(openwork);
+      const hasStoredConfig = await hasSofiaWorkspaceConfig(this.config, workspace.id);
+      const sofia = hasStoredConfig
+        ? await readSofiaWorkspaceConfig(this.config, workspace.id)
+        : null;
+      if (!sofia) continue;
+      const next = removeCloudProviderImportBaselines(sofia);
       if (!next) continue;
-      await writeOpenworkWorkspaceConfig(this.config, workspace.id, () => next);
+      await writeSofiaWorkspaceConfig(this.config, workspace.id, () => next);
       changed = true;
     }
     return { changed, runtimeChanged };
@@ -981,7 +966,7 @@ export class CloudProviderSync {
     const providerPatch = Object.fromEntries([...this.managedProviderIds].map((providerId) => [providerId, null]));
     let providerChanged = false;
     if (Object.keys(providerPatch).length > 0) {
-      const result = await writeGlobalRuntimeOpencodeConfig(this.config, (current) => ({
+      const result = await writeGlobalRuntimeWorkspaceEngineConfig(this.config, (current) => ({
         ...current,
         provider: mergeRuntimeProviderUpdate(current.provider, providerPatch),
       }));
@@ -990,10 +975,7 @@ export class CloudProviderSync {
     for (const key of this.ownedEnvKeys) await this.env.delete(key);
 
     const engineWorkspace = findManagedEngineWorkspace(this.config.workspaces) ?? this.config.workspaces[0];
-    if (engineWorkspace) {
-      const fileResult = await writeOpenworkRuntimeConfigFile(this.config, engineWorkspace.id);
-      this.reloadPending = this.reloadPending || providerChanged || fileResult.changed;
-    }
+    this.reloadPending = this.reloadPending || providerChanged;
     let reloadError: unknown;
     if (this.reloadPending && (await this.reloadDeferredByActivity())) {
       this.scheduleReloadRetry();

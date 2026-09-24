@@ -1,10 +1,10 @@
-import { and, eq, isNull } from "@openwork-ee/den-db/drizzle"
+import { and, eq, isNull } from "@sofia-ee/den-db/drizzle"
 import {
   ConnectedAccountTable,
   MemberTable,
   OrgOAuthClientTable,
-} from "@openwork-ee/den-db/schema"
-import { createDenTypeId, type DenTypeId } from "@openwork-ee/utils/typeid"
+} from "@sofia-ee/den-db/schema"
+import { createDenTypeId, type DenTypeId } from "@sofia-ee/utils/typeid"
 import { db } from "../db.js"
 
 /**

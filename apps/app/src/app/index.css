@@ -19,22 +19,22 @@
 
 @custom-variant dark (&:is(.dark, .dark *, [data-theme="dark"], [data-theme="dark"] *));
 @custom-variant electron {
-  html.openwork-electron & {
+  html.sofia-electron & {
     @slot;
   }
 }
 @custom-variant windows {
-  html.openwork-electron.openwork-platform-windows & {
+  html.sofia-electron.sofia-platform-windows & {
     @slot;
   }
 }
 @custom-variant mac {
-  html.openwork-electron.openwork-platform-mac & {
+  html.sofia-electron.sofia-platform-mac & {
     @slot;
   }
 }
 @custom-variant linux {
-  html.openwork-electron.openwork-platform-linux & {
+  html.sofia-electron.sofia-platform-linux & {
     @slot;
   }
 }
@@ -89,9 +89,6 @@
     transform: none;
   }
 }
-
-.sofia-brand-mark { filter: brightness(0); }
-:is(.dark, [data-theme="dark"]) .sofia-brand-mark { filter: brightness(0) invert(1); }
 
 :root {
   color-scheme: light;
@@ -185,7 +182,7 @@ body {
 }
 
 html {
-  font-size: var(--openwork-font-size, 16px);
+  font-size: var(--sofia-font-size, 16px);
 }
 
 body {
@@ -209,21 +206,21 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-.markdown-content [data-openwork-code-block] pre {
+.markdown-content [data-sofia-code-block] pre {
   margin: 0;
   background: transparent !important;
 }
 
-.markdown-content [data-openwork-code-block] .shiki {
+.markdown-content [data-sofia-code-block] .shiki {
   background: transparent !important;
 }
 
-:is(.dark, [data-theme="dark"]) .markdown-content [data-openwork-code-block] .shiki,
-:is(.dark, [data-theme="dark"]) .markdown-content [data-openwork-code-block] .shiki span {
+:is(.dark, [data-theme="dark"]) .markdown-content [data-sofia-code-block] .shiki,
+:is(.dark, [data-theme="dark"]) .markdown-content [data-sofia-code-block] .shiki span {
   color: var(--shiki-dark) !important;
 }
 
-:is(.dark, [data-theme="dark"]) .markdown-content [data-openwork-code-block] .shiki span {
+:is(.dark, [data-theme="dark"]) .markdown-content [data-sofia-code-block] .shiki span {
   font-style: var(--shiki-dark-font-style) !important;
   font-weight: var(--shiki-dark-font-weight) !important;
   text-decoration: var(--shiki-dark-text-decoration) !important;
@@ -244,7 +241,7 @@ body {
   padding: 0.25rem 0;
 }
 
-.markdown-content [data-openwork-math-error] {
+.markdown-content [data-sofia-math-error] {
   color: var(--color-red-11, inherit);
 }
 
@@ -656,4 +653,39 @@ select:disabled {
     min-height: 100%;
     min-height: 100dvh;
   }
+}
+
+/* Sofia workspace accents. The surface/sidebar palette stays the app theme so the
+   macOS vibrancy (transparent, ChatGPT-style shell) shows through. */
+:root {
+  --sofia-blue: #315fd3;
+  --sofia-blue-soft: #edf2ff;
+  --sofia-outline: #dce2eb;
+}
+[data-theme="dark"] {
+  --sofia-blue: #a6bbff;
+  --sofia-blue-soft: #202b43;
+  --sofia-outline: #303946;
+}
+.sofia-task-header { min-height: 44px; }
+.sofia-working-dot, .sofia-ready-dot {
+  display: inline-block; width: 7px; height: 7px; flex-shrink: 0; border-radius: 50%; background: var(--sofia-blue);
+}
+.sofia-ready-dot { background: #598873; }
+.sofia-followup-button {
+  min-height: 36px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--sofia-outline);
+  font-size: 12px; font-weight: 600; transition: background-color .15s;
+}
+.sofia-followup-button:hover { background: var(--dls-hover); }
+.sofia-followup-button:focus-visible { outline: 2px solid var(--dls-accent); outline-offset: 2px; }
+.sofia-followup-button:disabled { opacity: .5; }
+.sofia-steer-button { background: var(--sofia-blue-soft); color: var(--sofia-blue); }
+@media (prefers-reduced-motion: no-preference) {
+  .sofia-working-dot { animation: sofia-work-pulse 1.8s ease-in-out infinite; }
+  @keyframes sofia-work-pulse { 50% { box-shadow: 0 0 0 4px rgb(var(--dls-accent-rgb) / .12); } }
+}
+@media (max-width: 640px) {
+  .sofia-composer-panel > div:last-child { padding-inline: 12px; }
+  .sofia-composer-panel button { min-height: 44px; }
+  .sofia-followup-button { padding-inline: 10px; }
 }

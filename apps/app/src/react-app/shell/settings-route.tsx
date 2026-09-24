@@ -2,25 +2,26 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, useLocation, useNavigate, useParams } from "react-router";
 import { toast } from "@/components/ui/sonner";
+import { SOFIA_CLOUD_AVAILABLE } from "@/app/cloud-availability";
 
 import {
   SUGGESTED_PLUGINS,
-  filterOpenWorkExtensionCatalogForPlatform,
-  resolveOpenWorkExtensionCatalogPlatform,
+  filterSofiaExtensionCatalogForPlatform,
+  resolveSofiaExtensionCatalogPlatform,
 } from "@/app/constants";
 import type { EnablementContext } from "@/app/enablement";
-import { createClient, unwrap } from "@/app/lib/opencode";
+import { createClient, unwrap } from "@/app/lib/engine";
 import {
-  createOpenworkServerClient,
-  isLoopbackOpenworkServerUrl,
-  readOpenworkServerSettings,
-  type OpenworkCloudMcpHealth,
-  type OpenworkCloudMcpProviderModelContext,
-  type OpenworkServerCapabilities,
-  type OpenworkServerClient,
-  type OpenworkWorkspaceInfo,
-} from "@/app/lib/openwork-server";
-import { buildOpenworkEnvRuntimeKey } from "@/app/lib/openwork-env-runtime";
+  createSofiaServerClient,
+  isLoopbackSofiaServerUrl,
+  readSofiaServerSettings,
+  type SofiaCloudMcpHealth,
+  type SofiaCloudMcpProviderModelContext,
+  type SofiaServerCapabilities,
+  type SofiaServerClient,
+  type SofiaWorkspaceInfo,
+} from "@/app/lib/sofia-server";
+import { buildSofiaEnvRuntimeKey } from "@/app/lib/sofia-env-runtime";
 import {
   collectAgentContextDiagnosticObservations,
   isAgentContextDiagnosticsWorkspaceAllowed,
@@ -58,9 +59,9 @@ import {
   workspaceLabel,
 } from "@/react-app/shell/route-workspaces";
 import { createConnectionsStore, useConnectionsStoreSnapshot } from "@/react-app/domains/connections/store";
-import { cleanupOpenworkCloudMcpAfterSignOut } from "@/react-app/domains/connections/cloud-mcp-reconciler";
+import { cleanupSofiaCloudMcpAfterSignOut } from "@/react-app/domains/connections/cloud-mcp-reconciler";
 import { useOrgMcpConnections } from "@/react-app/domains/connections/use-org-mcp-connections";
-import { createOpenworkServerStore, useOpenworkServerStoreSnapshot } from "@/react-app/domains/connections/openwork-server-store";
+import { createSofiaServerStore, useSofiaServerStoreSnapshot } from "@/react-app/domains/connections/sofia-server-store";
 import { createProviderAuthStore, useProviderAuthStoreSnapshot } from "@/react-app/domains/connections/provider-auth/store";
 import ProviderAuthModal from "@/react-app/domains/connections/provider-auth/provider-auth-modal";
 import ConnectionsModals from "@/react-app/domains/connections/modals";
@@ -69,10 +70,10 @@ import { AiSettingsView } from "@/react-app/domains/settings/pages/ai-view";
 import "@/react-app/domains/settings/ollama-config";
 import "@/react-app/domains/settings/computer-use-config";
 import "@/react-app/domains/settings/browser-extension-config";
-import "@/react-app/domains/settings/openwork-voice-config";
+import "@/react-app/domains/settings/sofia-voice-config";
 import { useSettingsExtensionController } from "@/react-app/domains/settings/settings-extension-controller";
 import { buildExtensionItems } from "@/react-app/domains/settings/extension-items";
-import { isOpenWorkExtensionEnabled, OPENWORK_EXTENSION_STATE_CHANGED } from "@/react-app/domains/settings/extension-state";
+import { isSofiaExtensionEnabled, SOFIA_EXTENSION_STATE_CHANGED } from "@/react-app/domains/settings/extension-state";
 import { PreferencesView } from "@/react-app/domains/settings/pages/preferences-view";
 import { GeneralSettingsView } from "@/react-app/domains/settings/pages/general-view";
 import { AuthorizedFoldersPanel } from "@/react-app/domains/settings/panels/authorized-folders-panel";
@@ -103,7 +104,7 @@ import { useDebugViewModel } from "@/react-app/domains/settings/state/debug-view
 import { useElectronUpdaterState } from "@/react-app/domains/settings/state/electron-updater-state";
 import { CloudSessionProvider, useCloudSession } from "@/react-app/domains/settings/cloud/cloud-session-provider";
 import { useDenSession } from "@/react-app/domains/settings/cloud/use-den-session";
-import { useControlAction, type OpenworkControlAction } from "./control/control-provider";
+import { useControlAction, type SofiaControlAction } from "./control/control-provider";
 import { useBootState } from "./boot-state";
 import { SettingsShell } from "@/react-app/domains/settings/shell/settings-shell";
 import { SettingsContent } from "@/react-app/domains/settings/shell/panel";
@@ -111,8 +112,8 @@ import { createExtensionsStore, useExtensionsStoreSnapshot } from "@/react-app/d
 import { usePlatform } from "@/react-app/kernel/platform";
 import { useLocal } from "@/react-app/kernel/local-provider";
 import {
-  openworkServerInfo,
-  openworkServerRestart,
+  sofiaServerInfo,
+  sofiaServerRestart,
   engineStart,
   engineRestart,
   codexEngineStatus,
@@ -133,13 +134,13 @@ import { useCheckDesktopRestriction, useDesktopConfig } from "@/react-app/domain
 import { useRestrictionNotice } from "@/react-app/domains/cloud/restriction-notice-provider";
 import { useCloudProviderAutoSync } from "@/react-app/domains/cloud/use-cloud-provider-auto-sync";
 import {
-  hasOpenWorkModelsAvailable,
-  hideOpenWorkModelsPromo,
-  useOpenWorkModelsPromoEligibility,
-  isOpenWorkModelsPromoHidden,
-  openWorkModelsPromoChangedEvent,
-  shouldShowOpenWorkModelsSyncing,
-} from "@/react-app/domains/cloud/openwork-models-promo";
+  hasSofiaModelsAvailable,
+  hideSofiaModelsPromo,
+  useSofiaModelsPromoEligibility,
+  isSofiaModelsPromoHidden,
+  sofiaModelsPromoChangedEvent,
+  shouldShowSofiaModelsSyncing,
+} from "@/react-app/domains/cloud/sofia-models-promo";
 import {
   isDesktopRuntime,
   isElectronRuntime,
@@ -164,13 +165,13 @@ import type { ModelRef } from "@/app/types";
 import { workspaceSwatchColor } from "@/react-app/domains/session/sidebar/utils";
 import { recordInspectorEvent } from "../../app/lib/app-inspector";
 import {
-  ensureDesktopLocalOpenworkConnection,
+  ensureDesktopLocalSofiaConnection,
   shouldAttemptDesktopLocalReconnect,
-} from "./desktop-local-openwork";
+} from "./desktop-local-sofia";
 import { reloadEngineWithDesktopFallback } from "./engine-reload-escalation";
-import { resolveOpenworkConnection } from "./openwork-connection";
-import { abortSessionSafe, listCommands } from "@/app/lib/opencode-session";
-import { notifyAlert } from "./notifications";
+import { resolveSofiaConnection } from "./sofia-connection";
+import { abortSessionSafe, listCommands } from "@/app/lib/engine-session";
+import { notifyAlert, notifyEvent } from "./notifications";
 import { useReloadCoordinator } from "./reload-coordinator";
 import { CommandPalette } from "./command-palette";
 import { buildCommandPaletteSessions } from "./command-palette-sessions";
@@ -197,14 +198,14 @@ import {
   type LocalProviderInstallInput,
 } from "@/react-app/domains/settings/openai-image-extension";
 import {
-  libraryAgentsFromOpencode,
+  libraryAgentsFromWorkspaceEngine,
   libraryCommandsFromSlashOptions,
   type LibraryAgentItem,
   type LibraryCommandItem,
 } from "@/react-app/domains/settings/library";
 
-const ROUTE_OPENWORK_CAPABILITIES: OpenworkServerCapabilities = {
-  skills: { read: true, write: true, source: "openwork" },
+const ROUTE_SOFIA_CAPABILITIES: SofiaServerCapabilities = {
+  skills: { read: true, write: true, source: "sofia" },
   plugins: { read: true, write: true },
   mcp: { read: true, write: true },
   commands: { read: true, write: true },
@@ -212,7 +213,7 @@ const ROUTE_OPENWORK_CAPABILITIES: OpenworkServerCapabilities = {
 };
 
 async function reloadEngineOrRestartDesktop(
-  client: Pick<OpenworkServerClient, "reloadEngine">,
+  client: Pick<SofiaServerClient, "reloadEngine">,
   workspaceId: string,
   afterRestart?: () => Promise<void>,
 ): Promise<void> {
@@ -222,13 +223,13 @@ async function reloadEngineOrRestartDesktop(
   }
 }
 
-function isOpenWorkCloudProvider(provider: {
+function isSofiaCloudProvider(provider: {
   providerId?: string | null;
   source?: string | null;
   sourceProviderId?: string | null;
 }) {
   return [provider.providerId, provider.source, provider.sourceProviderId].some(
-    (value) => value?.trim().toLowerCase() === "openwork",
+    (value) => value?.trim().toLowerCase() === "sofia",
   );
 }
 
@@ -269,9 +270,9 @@ function reconcileSelectedWorkspaceId(
   return serverList.activeId?.trim() || desktopSelectedId || workspaces[0]?.id || "";
 }
 
-const SETTINGS_HIDE_TITLEBAR_KEY = "openwork.react.settings.hide-titlebar";
-const SETTINGS_UPDATE_AUTO_CHECK_KEY = "openwork.react.settings.update-auto-check";
-const SETTINGS_UPDATE_AUTO_DOWNLOAD_KEY = "openwork.react.settings.update-auto-download";
+const SETTINGS_HIDE_TITLEBAR_KEY = "sofia.react.settings.hide-titlebar";
+const SETTINGS_UPDATE_AUTO_CHECK_KEY = "sofia.react.settings.update-auto-check";
+const SETTINGS_UPDATE_AUTO_DOWNLOAD_KEY = "sofia.react.settings.update-auto-download";
 
 export function parseSettingsPath(pathname: string): {
   tab: SettingsTab;
@@ -302,6 +303,11 @@ export function parseSettingsPath(pathname: string): {
       return { tab: head, redirectPath: null };
     case "cloud-account":
     case "cloud-providers":
+      // Hosted-cloud settings only exist once the cloud ships.
+      if (!SOFIA_CLOUD_AVAILABLE) {
+        return { tab: head === "cloud-providers" ? "ai" : "general", redirectPath: null };
+      }
+      return { tab: head, redirectPath: null };
     case "memory":
       return { tab: head, redirectPath: null };
     case "connect":
@@ -314,7 +320,9 @@ export function parseSettingsPath(pathname: string): {
       return { tab: "extensions", redirectPath: "extensions", extensionsSection: "all" };
     case "den":
     case "cloud-workers":
-      return { tab: "cloud-account", redirectPath: "cloud-account" };
+      return SOFIA_CLOUD_AVAILABLE
+        ? { tab: "cloud-account", redirectPath: "cloud-account" }
+        : { tab: "general", redirectPath: null };
     case "extensions":
       if (tail === "mcp") return { tab: "extensions", redirectPath: "extensions/mcps", extensionsSection: "mcps" };
       if (
@@ -493,7 +501,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
   }, [navigate, props.embedded, props.standaloneExtensions, selectedWorkspaceId]);
   const [baseUrl, setBaseUrl] = useState("");
   const [token, setToken] = useState("");
-  const [openworkClient, setOpenworkClient] = useState<OpenworkServerClient | null>(null);
+  const [sofiaClient, setSofiaClient] = useState<SofiaServerClient | null>(null);
   const [activeClient, setActiveClient] = useState<Client | null>(null);
   const [busy, setBusy] = useState(false);
   const [busyLabel, setBusyLabel] = useState<string | null>(null);
@@ -512,7 +520,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
   const [disabledProviders, setDisabledProviders] = useState<string[]>([]);
   const [developerMode, setDeveloperMode] = useState(() => {
     if (typeof window === "undefined") return false;
-    return window.localStorage.getItem("openwork.developerMode") === "1";
+    return window.localStorage.getItem("sofia.developerMode") === "1";
   });
   const [themeMode, setThemeModeState] = useState<ThemeMode>(getInitialThemeMode);
   const [hideTitlebar, setHideTitlebar] = useState(() => readStoredBoolean(SETTINGS_HIDE_TITLEBAR_KEY, false));
@@ -547,7 +555,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
   const [voiceStatus, setVoiceStatus] = useState<string | null>(null);
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [userEnvKeys, setUserEnvKeys] = useState<string[]>([]);
-  const [cloudMcpHealth, setCloudMcpHealth] = useState<OpenworkCloudMcpHealth | null>(null);
+  const [cloudMcpHealth, setCloudMcpHealth] = useState<SofiaCloudMcpHealth | null>(null);
   const emptyWorkspaceDisplay = useMemo<WorkspaceDisplay>(
     () => ({
       id: "",
@@ -566,10 +574,10 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
     selectedWorkspaceRoot: "",
     selectedWorkspaceType: "local" as "local" | "remote",
     runtimeWorkspaceId: null as string | null,
-    openworkServerClient: null as OpenworkServerClient | null,
-    selectedWorkspaceOpenworkClient: null as OpenworkServerClient | null,
-    openworkServerStatus: "disconnected" as "connected" | "disconnected",
-    openworkServerCapabilities: null as OpenworkServerCapabilities | null,
+    sofiaServerClient: null as SofiaServerClient | null,
+    selectedWorkspaceSofiaClient: null as SofiaServerClient | null,
+    sofiaServerStatus: "disconnected" as "connected" | "disconnected",
+    sofiaServerCapabilities: null as SofiaServerCapabilities | null,
     selectedWorkspaceDisplay: emptyWorkspaceDisplay as WorkspaceDisplay,
     providerItems: [] as ProviderListItem[],
     providerDefaults: {} as Record<string, string>,
@@ -607,7 +615,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
             preset: "starter",
             workspaceType: selectedWorkspace.workspaceType ?? "local",
             displayName: selectedWorkspace.displayNameResolved,
-            openworkWorkspaceName: selectedWorkspace.openworkWorkspaceName,
+            sofiaWorkspaceName: selectedWorkspace.sofiaWorkspaceName,
           }
         : emptyWorkspaceDisplay,
     [emptyWorkspaceDisplay, selectedWorkspace],
@@ -617,19 +625,19 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
     [baseUrl, token],
   );
   const selectedWorkspaceEndpoint = useWorkspaceServerClient(selectedWorkspace, { baseUrl, token });
-  const opencodeBaseUrl = selectedWorkspaceEndpoint?.opencodeBaseUrl ?? "";
+  const engineBaseUrl = selectedWorkspaceEndpoint?.engineBaseUrl ?? "";
 
   routeStateRef.current = {
     activeClient,
-    providerBaseUrl: opencodeBaseUrl,
+    providerBaseUrl: engineBaseUrl,
     selectedWorkspaceId,
     selectedWorkspaceRoot,
     selectedWorkspaceType: selectedWorkspace?.workspaceType ?? "local",
     runtimeWorkspaceId: selectedWorkspace?.id ?? null,
-    openworkServerClient: openworkClient,
-    selectedWorkspaceOpenworkClient: openworkClient,
-    openworkServerStatus: openworkClient ? "connected" : "disconnected",
-    openworkServerCapabilities: openworkClient ? ROUTE_OPENWORK_CAPABILITIES : null,
+    sofiaServerClient: sofiaClient,
+    selectedWorkspaceSofiaClient: sofiaClient,
+    sofiaServerStatus: sofiaClient ? "connected" : "disconnected",
+    sofiaServerCapabilities: sofiaClient ? ROUTE_SOFIA_CAPABILITIES : null,
     selectedWorkspaceDisplay,
     providerItems: providers,
     providerDefaults,
@@ -656,17 +664,17 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
     [sessionsByWorkspaceId],
   );
 
-  const openworkServerStore = useMemo(
+  const sofiaServerStore = useMemo(
     () =>
-      createOpenworkServerStore({
+      createSofiaServerStore({
         startupPreference: () => {
           // In desktop mode, loopback URLs are ephemeral local runtime details.
           // Only non-loopback stored URLs indicate an explicit remote/manual
           // server connection preference.
           if (!isDesktopRuntime()) return "server";
-          const stored = readOpenworkServerSettings();
+          const stored = readSofiaServerSettings();
           const storedUrl = stored.urlOverride?.trim() ?? "";
-          return storedUrl && !isLoopbackOpenworkServerUrl(storedUrl) ? "server" : "local";
+          return storedUrl && !isLoopbackSofiaServerUrl(storedUrl) ? "server" : "local";
         },
         documentVisible: () => typeof document === "undefined" || document.visibilityState === "visible",
         developerMode: () => routeStateRef.current.developerMode,
@@ -676,9 +684,9 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
         restartLocalServer: async () => {
           if (!isDesktopRuntime()) return false;
           try {
-            await openworkServerRestart({
+            await sofiaServerRestart({
               remoteAccessEnabled:
-                readOpenworkServerSettings().remoteAccessEnabled === true,
+                readSofiaServerSettings().remoteAccessEnabled === true,
             });
             return true;
           } catch {
@@ -698,7 +706,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
         selectedWorkspaceId: () => routeStateRef.current.selectedWorkspaceId,
         selectedWorkspaceRoot: () => routeStateRef.current.selectedWorkspaceRoot,
         workspaceType: () => routeStateRef.current.selectedWorkspaceType,
-        openworkServer: openworkServerStore,
+        sofiaServer: sofiaServerStore,
         runtimeWorkspaceId: () => routeStateRef.current.runtimeWorkspaceId,
         ensureRuntimeWorkspaceId: async () =>
           routeStateRef.current.runtimeWorkspaceId?.trim() ||
@@ -707,7 +715,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
         developerMode: () => routeStateRef.current.developerMode,
         markReloadRequired: reloadCoordinator.markReloadRequired,
       }),
-    [openworkServerStore, reloadCoordinator.markReloadRequired],
+    [sofiaServerStore, reloadCoordinator.markReloadRequired],
   );
   refreshMcpServersRef.current = connectionsStore.refreshMcpServers;
   notifyMcpReloadingRef.current = connectionsStore.notifyMcpReloading;
@@ -729,21 +737,21 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
           routeStateRef.current.runtimeWorkspaceId?.trim() ||
           routeStateRef.current.selectedWorkspaceId.trim() ||
           null,
-        openworkServer: openworkServerStore,
+        sofiaServer: sofiaServerStore,
         setProviders,
         setProviderDefaults,
         setProviderConnectedIds,
         setDisabledProviders,
-        markOpencodeConfigReloadRequired: () => {
+        markWorkspaceEngineConfigReloadRequired: () => {
           setConfigActionStatus(t("settings.config_updated"));
           reloadCoordinator.markReloadRequired("config", {
             type: "config",
-            name: "opencode.json",
+            name: "engine.json",
             action: "updated",
           });
         },
       }),
-    [checkDesktopRestriction, openworkServerStore, reloadCoordinator.markReloadRequired],
+    [checkDesktopRestriction, sofiaServerStore, reloadCoordinator.markReloadRequired],
   );
   const extensionsStore = useMemo(
     () =>
@@ -753,11 +761,11 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
         selectedWorkspaceId: () => routeStateRef.current.selectedWorkspaceId,
         selectedWorkspaceRoot: () => routeStateRef.current.selectedWorkspaceRoot,
         workspaceType: () => routeStateRef.current.selectedWorkspaceType,
-        openworkServer: openworkServerStore,
-        openworkServerConnection: () => ({
-          openworkServerClient: routeStateRef.current.openworkServerClient,
-          openworkServerStatus: routeStateRef.current.openworkServerStatus,
-          openworkServerCapabilities: routeStateRef.current.openworkServerCapabilities,
+        sofiaServer: sofiaServerStore,
+        sofiaServerConnection: () => ({
+          sofiaServerClient: routeStateRef.current.sofiaServerClient,
+          sofiaServerStatus: routeStateRef.current.sofiaServerStatus,
+          sofiaServerCapabilities: routeStateRef.current.sofiaServerCapabilities,
         }),
         runtimeWorkspaceId: () => routeStateRef.current.runtimeWorkspaceId,
         ensureRuntimeWorkspaceId: async () =>
@@ -774,53 +782,53 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
         },
         markReloadRequired: reloadCoordinator.markReloadRequired,
       }),
-    [openworkServerStore, reloadCoordinator.markReloadRequired],
+    [sofiaServerStore, reloadCoordinator.markReloadRequired],
   );
-  const openworkServerSnapshot = useOpenworkServerStoreSnapshot(openworkServerStore);
+  const sofiaServerSnapshot = useSofiaServerStoreSnapshot(sofiaServerStore);
   const connectionsSnapshot = useConnectionsStoreSnapshot(connectionsStore);
   const providerAuthSnapshot = useProviderAuthStoreSnapshot(providerAuthStore);
   const extensionsSnapshot = useExtensionsStoreSnapshot(extensionsStore);
   const orgMcpConnections = useOrgMcpConnections();
 
-  const openworkServerStatusForMcp = openworkServerSnapshot.openworkServerStatus;
+  const sofiaServerStatusForMcp = sofiaServerSnapshot.sofiaServerStatus;
   useEffect(() => {
-    if (openworkServerStatusForMcp !== "connected") return;
-    // The first MCP read races the openwork-server store's initial health
+    if (sofiaServerStatusForMcp !== "connected") return;
+    // The first MCP read races the sofia-server store's initial health
     // check (a fresh store always starts "disconnected"), so it falls back
     // to config files where server-runtime (config.remote) entries — notably
     // the cloud control MCP — don't exist. Without this re-read the built-in
     // cards show "Tap to connect" until the next full remount even though
     // the entries are configured and healthy.
     void connectionsStore.refreshMcpServers();
-  }, [connectionsStore, openworkServerStatusForMcp]);
+  }, [connectionsStore, sofiaServerStatusForMcp]);
 
   useEffect(() => {
-    if (openworkServerStatusForMcp !== "connected") return;
+    if (sofiaServerStatusForMcp !== "connected") return;
     // Same race for the Cloud Providers rows: the provider-auth store's
     // start() read fires while this store still reports "disconnected", so
     // it takes the legacy (empty) config read and the rows sit on "Syncing"
     // even though the server's /cloud-provider-sync/status already lists the
     // providers as synced. Re-derive from the server once it is reachable.
     void providerAuthStore.refreshImportedCloudProviders();
-  }, [openworkServerStatusForMcp, providerAuthStore]);
+  }, [sofiaServerStatusForMcp, providerAuthStore]);
 
   const cleanupCloudMcpForSignOut = useCallback(async (settings: DenSettings) => {
-    const client = routeStateRef.current.selectedWorkspaceOpenworkClient;
+    const client = routeStateRef.current.selectedWorkspaceSofiaClient;
     const workspaceId = routeStateRef.current.runtimeWorkspaceId?.trim() ?? "";
     const orgId = settings.activeOrgId?.trim() ?? "";
     if (!client || !workspaceId || !orgId) return;
-    // Settings only has a safe, exact OpenCode client/directory for the active
+    // Settings only has a safe, exact Sofia client/directory for the active
     // workspace here, so sign-out cleanup is intentionally scoped to that
     // workspace instead of guessing across every configured worker.
-    await cleanupOpenworkCloudMcpAfterSignOut({
+    await cleanupSofiaCloudMcpAfterSignOut({
       context: {
         denBaseUrl: settings.baseUrl,
         serverBaseUrl: client.baseUrl,
         workspaceId,
         orgId,
       },
-      openworkClient: client,
-      opencodeClient: routeStateRef.current.activeClient,
+      sofiaClient: client,
+      engineClient: routeStateRef.current.activeClient,
       directory: routeStateRef.current.selectedWorkspaceRoot,
     });
     setCloudMcpHealth(null);
@@ -880,50 +888,51 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
     void refreshConnectCapabilities({ force: true });
   }, [refreshConnectCapabilities]);
 
-  const hasOpenWorkCloudProvider = useMemo(
+  const hasSofiaCloudProvider = useMemo(
     () =>
-      providerAuthSnapshot.cloudOrgProviders.some(isOpenWorkCloudProvider) ||
-      Object.values(providerAuthSnapshot.importedCloudProviders ?? {}).some(isOpenWorkCloudProvider),
+      providerAuthSnapshot.cloudOrgProviders.some(isSofiaCloudProvider) ||
+      Object.values(providerAuthSnapshot.importedCloudProviders ?? {}).some(isSofiaCloudProvider),
     [providerAuthSnapshot.cloudOrgProviders, providerAuthSnapshot.importedCloudProviders],
   );
-  const [openWorkModelsPromoHidden, setOpenWorkModelsPromoHidden] = useState(isOpenWorkModelsPromoHidden);
-  const openWorkModelsPromoEligible = useOpenWorkModelsPromoEligibility();
+  const [sofiaModelsPromoHidden, setSofiaModelsPromoHidden] = useState(isSofiaModelsPromoHidden);
+  const sofiaModelsPromoEligible =
+    useSofiaModelsPromoEligibility() && SOFIA_CLOUD_AVAILABLE;
   // Entitled = Den/import says Hosted models is included. Available = local
-  // engine actually exposes selectable openwork models.
-  const openWorkModelsEntitled = cloudSession.isSignedIn && hasOpenWorkCloudProvider;
-  const openWorkModelsAvailable = hasOpenWorkModelsAvailable({
+  // engine actually exposes selectable sofia models.
+  const sofiaModelsEntitled = cloudSession.isSignedIn && hasSofiaCloudProvider;
+  const sofiaModelsAvailable = hasSofiaModelsAvailable({
     providerConnectedIds,
     providers,
   });
-  const showOpenWorkModelsSyncing = shouldShowOpenWorkModelsSyncing({
-    entitled: openWorkModelsEntitled,
-    available: openWorkModelsAvailable,
+  const showSofiaModelsSyncing = shouldShowSofiaModelsSyncing({
+    entitled: sofiaModelsEntitled,
+    available: sofiaModelsAvailable,
     workspaceReady: Boolean(selectedWorkspaceId && activeClient),
     reloadPending: providerAuthSnapshot.cloudProviderServerSync?.reloadPending === true,
   });
-  const showOpenWorkModelsSubscribe =
-    openWorkModelsPromoEligible &&
-    !openWorkModelsEntitled &&
-    !openWorkModelsAvailable &&
-    !openWorkModelsPromoHidden;
-  const showOpenWorkModelsConnect =
-    openWorkModelsPromoEligible &&
-    !openWorkModelsEntitled &&
-    !openWorkModelsAvailable &&
-    openWorkModelsPromoHidden;
+  const showSofiaModelsSubscribe =
+    sofiaModelsPromoEligible &&
+    !sofiaModelsEntitled &&
+    !sofiaModelsAvailable &&
+    !sofiaModelsPromoHidden;
+  const showSofiaModelsConnect =
+    sofiaModelsPromoEligible &&
+    !sofiaModelsEntitled &&
+    !sofiaModelsAvailable &&
+    sofiaModelsPromoHidden;
 
   useEffect(() => {
-    const handlePromoChanged = () => setOpenWorkModelsPromoHidden(isOpenWorkModelsPromoHidden());
-    window.addEventListener(openWorkModelsPromoChangedEvent, handlePromoChanged);
-    return () => window.removeEventListener(openWorkModelsPromoChangedEvent, handlePromoChanged);
+    const handlePromoChanged = () => setSofiaModelsPromoHidden(isSofiaModelsPromoHidden());
+    window.addEventListener(sofiaModelsPromoChangedEvent, handlePromoChanged);
+    return () => window.removeEventListener(sofiaModelsPromoChangedEvent, handlePromoChanged);
   }, []);
 
-  const dismissOpenWorkModelsPromo = useCallback(() => {
-    hideOpenWorkModelsPromo();
-    setOpenWorkModelsPromoHidden(true);
+  const dismissSofiaModelsPromo = useCallback(() => {
+    hideSofiaModelsPromo();
+    setSofiaModelsPromoHidden(true);
   }, []);
 
-  const subscribeToOpenWorkModels = useCallback(() => {
+  const subscribeToSofiaModels = useCallback(() => {
     providerAuthStore.closeProviderAuthModal();
     const accountPath = selectedWorkspaceId
       ? workspaceSettingsRoute(selectedWorkspaceId, "cloud-account")
@@ -952,7 +961,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
     if (!checkDesktopRestriction({ restriction: "allowZenModel" })) return;
 
     void providerAuthStore
-      .ensureProjectProviderDisabledState("opencode", true)
+      .ensureProjectProviderDisabledState("engine", true)
       .catch((error) => {
         console.warn("[desktop-app-restrictions] failed to sync Zen restriction", error);
       });
@@ -960,8 +969,8 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
 
   const shareWorkspaceState = useShareWorkspaceState({
     workspaces,
-    openworkServerHostInfo: openworkServerSnapshot.openworkServerHostInfo,
-    openworkServerSettings: openworkServerSnapshot.openworkServerSettings,
+    sofiaServerHostInfo: sofiaServerSnapshot.sofiaServerHostInfo,
+    sofiaServerSettings: sofiaServerSnapshot.sofiaServerSettings,
     engineInfo: null,
     exportWorkspaceBusy,
     openLink: (url) => platform.openLink(url),
@@ -970,8 +979,8 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
 
   const debugViewProps = useDebugViewModel({
     developerMode,
-    openworkServerStore,
-    openworkServerSnapshot,
+    sofiaServerStore,
+    sofiaServerSnapshot,
     runtimeWorkspaceId: selectedWorkspace?.id ?? null,
     selectedWorkspaceRoot,
     setRouteError: (message) => {
@@ -1016,37 +1025,37 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
 
   const runtimeWorkspaceId = selectedWorkspaceEndpoint?.workspaceId ?? selectedWorkspace?.id ?? null;
   routeStateRef.current.runtimeWorkspaceId = runtimeWorkspaceId;
-  routeStateRef.current.selectedWorkspaceOpenworkClient = selectedWorkspaceEndpoint?.client ?? openworkClient;
+  routeStateRef.current.selectedWorkspaceSofiaClient = selectedWorkspaceEndpoint?.client ?? sofiaClient;
 
-  const opencodeClient = useMemo(() => {
+  const engineClient = useMemo(() => {
     if (!selectedWorkspaceEndpoint || !selectedWorkspaceEndpoint.token) return null;
     return createClient(
-      selectedWorkspaceEndpoint.opencodeBaseUrl,
+      selectedWorkspaceEndpoint.engineBaseUrl,
       selectedWorkspaceRoot || undefined,
       {
         token: selectedWorkspaceEndpoint.token,
-        mode: "openwork",
+        mode: "sofia",
       },
     );
   }, [selectedWorkspaceEndpoint, selectedWorkspaceRoot]);
 
   useEffect(() => {
-    setActiveClient(opencodeClient);
-  }, [opencodeClient]);
+    setActiveClient(engineClient);
+  }, [engineClient]);
 
   const [libraryCommands, setLibraryCommands] = useState<LibraryCommandItem[]>([]);
   const [libraryAgents, setLibraryAgents] = useState<LibraryAgentItem[]>([]);
   const loadLibraryLists = useCallback(async () => {
-    if (opencodeClient) {
+    if (engineClient) {
       try {
         const [commands, agents] = await Promise.all([
-          listCommands(opencodeClient, selectedWorkspaceRoot || undefined),
-          opencodeClient.app.agents()
+          listCommands(engineClient, selectedWorkspaceRoot || undefined),
+          engineClient.app.agents()
             .then((result) => unwrap(result))
             .catch(() => []),
         ]);
         setLibraryCommands(libraryCommandsFromSlashOptions(commands));
-        setLibraryAgents(libraryAgentsFromOpencode(Array.isArray(agents) ? agents : []));
+        setLibraryAgents(libraryAgentsFromWorkspaceEngine(Array.isArray(agents) ? agents : []));
       } catch {
         setLibraryCommands([]);
         setLibraryAgents([]);
@@ -1056,7 +1065,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
       setLibraryAgents([]);
     }
     await refreshConnectCapabilities({ force: true });
-  }, [opencodeClient, refreshConnectCapabilities, selectedWorkspaceRoot]);
+  }, [engineClient, refreshConnectCapabilities, selectedWorkspaceRoot]);
   useEffect(() => {
     void loadLibraryLists();
   }, [loadLibraryLists]);
@@ -1069,22 +1078,22 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
   }, [providerAuthStore]);
   const selectedEngine = useSelectedEngine();
   const modelPicker = useModelPicker({
-    client: opencodeClient,
-    baseUrl: opencodeBaseUrl,
+    client: engineClient,
+    baseUrl: engineBaseUrl,
     workspaceRoot: selectedWorkspaceRoot,
     onOpen: handleModelPickerOpen,
     onLoadError: handleModelPickerLoadError,
     cloudProvidersEnabled: cloudSession.isSignedIn,
-    // Engine-aware: hide the built-in opencode (Zen) provider on the codex engine.
+    // Engine-aware: hide the built-in engine (Zen) provider on the codex engine.
     engine: selectedEngine,
   });
-  const currentCloudMcpModel = useMemo<OpenworkCloudMcpProviderModelContext | null>(() => {
+  const currentCloudMcpModel = useMemo<SofiaCloudMcpProviderModelContext | null>(() => {
     const provider = local.prefs.defaultModel?.providerID.trim() ?? "";
     const model = local.prefs.defaultModel?.modelID.trim() ?? "";
     return provider && model ? { provider, model } : null;
   }, [local.prefs.defaultModel]);
   const refreshCloudMcpHealth = useCallback(async () => {
-    const client = selectedWorkspaceEndpoint?.client ?? openworkClient;
+    const client = selectedWorkspaceEndpoint?.client ?? sofiaClient;
     const workspaceId = runtimeWorkspaceId?.trim() ?? "";
     if (!client || !workspaceId) {
       setCloudMcpHealth(null);
@@ -1092,29 +1101,29 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
     }
     // probe: the Advanced page refresh should verify the Cloud endpoint
     // directly (outside the engine), not just report the engine's cached state.
-    const health = await client.getOpenworkCloudMcpHealth(workspaceId, currentCloudMcpModel ?? undefined, { probe: true });
+    const health = await client.getSofiaCloudMcpHealth(workspaceId, currentCloudMcpModel ?? undefined, { probe: true });
     setCloudMcpHealth(health);
     return health;
-  }, [currentCloudMcpModel, openworkClient, runtimeWorkspaceId, selectedWorkspaceEndpoint]);
+  }, [currentCloudMcpModel, sofiaClient, runtimeWorkspaceId, selectedWorkspaceEndpoint]);
   const { commandPaletteOpen, setCommandPaletteOpen } = useCommandPaletteShortcut(!props.embedded);
   const paletteSessionOptions = useMemo(
     () => buildCommandPaletteSessions(workspaces, sessionsByWorkspaceId, selectedWorkspaceId),
     [sessionsByWorkspaceId, selectedWorkspaceId, workspaces],
   );
   const handleCreatePaletteSession = useCallback(async () => {
-    if (!opencodeClient || !selectedWorkspaceId) {
+    if (!engineClient || !selectedWorkspaceId) {
       navigate(selectedWorkspaceId ? workspaceSessionRoute(selectedWorkspaceId) : "/session");
       return;
     }
     try {
       const session = unwrap(
-        await opencodeClient.session.create({ directory: selectedWorkspaceRoot || undefined }),
+        await engineClient.session.create({ directory: selectedWorkspaceRoot || undefined }),
       );
       navigate(workspaceSessionRoute(selectedWorkspaceId, session.id));
     } catch (error) {
       toast.error(describeRouteError(error));
     }
-  }, [navigate, opencodeClient, selectedWorkspaceId, selectedWorkspaceRoot]);
+  }, [navigate, engineClient, selectedWorkspaceId, selectedWorkspaceRoot]);
   // Settings refreshes provider auth whenever the picker opens (the session
   // route does not need this; its provider state is kept fresh elsewhere).
   useEffect(() => {
@@ -1124,10 +1133,10 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
 
   useEffect(() => {
     const refresh = () => setExtensionStateVersion((value) => value + 1);
-    window.addEventListener(OPENWORK_EXTENSION_STATE_CHANGED, refresh);
+    window.addEventListener(SOFIA_EXTENSION_STATE_CHANGED, refresh);
     window.addEventListener("storage", refresh);
     return () => {
-      window.removeEventListener(OPENWORK_EXTENSION_STATE_CHANGED, refresh);
+      window.removeEventListener(SOFIA_EXTENSION_STATE_CHANGED, refresh);
       window.removeEventListener("storage", refresh);
     };
   }, []);
@@ -1148,20 +1157,20 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
   }, []);
 
   useEffect(() => {
-    if (!openworkClient) {
+    if (!sofiaClient) {
       setUserEnvKeys([]);
       return;
     }
     let cancelled = false;
-    void openworkClient.listUserEnvKeys()
+    void sofiaClient.listUserEnvKeys()
       .then((response) => { if (!cancelled) setUserEnvKeys(response.keys); })
       .catch(() => { if (!cancelled) setUserEnvKeys([]); });
     return () => { cancelled = true; };
-  }, [openworkClient]);
+  }, [sofiaClient]);
 
   const installOpenAiImageExtension = useCallback(async (apiKey: string) => {
     const resolvedApiKey = apiKey.trim();
-    if (!openworkClient) {
+    if (!sofiaClient) {
       setImageExtensionError("Sofia App server is not connected.");
       return;
     }
@@ -1174,7 +1183,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
     setImageExtensionStatus(null);
     setImageExtensionError(null);
     try {
-      await openworkClient.upsertUserEnv([{ key: "OPENAI_API_KEY", value: resolvedApiKey }]);
+      await sofiaClient.upsertUserEnv([{ key: "OPENAI_API_KEY", value: resolvedApiKey }]);
       setUserEnvKeys((current) => Array.from(new Set([...current, "OPENAI_API_KEY"])));
       setImageExtensionStatus("Saved OPENAI_API_KEY. Agents can use Sofia App extension actions for image generation.");
     } catch (error) {
@@ -1182,10 +1191,10 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
     } finally {
       setImageExtensionBusy(false);
     }
-  }, [openworkClient]);
+  }, [sofiaClient]);
 
   const generateOpenAiTestImage = useCallback(async (input: { apiKey: string; prompt: string }) => {
-    const client = selectedWorkspaceEndpoint?.client ?? openworkClient;
+    const client = selectedWorkspaceEndpoint?.client ?? sofiaClient;
     const workspaceId = runtimeWorkspaceId?.trim() ?? "";
     const apiKey = input.apiKey.trim();
     const prompt = input.prompt.trim();
@@ -1206,8 +1215,8 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
     setImageGenerationStatus(null);
     setImageGenerationError(null);
     try {
-      if (openworkClient) {
-        await openworkClient.upsertUserEnv([{ key: "OPENAI_API_KEY", value: apiKey }]);
+      if (sofiaClient) {
+        await sofiaClient.upsertUserEnv([{ key: "OPENAI_API_KEY", value: apiKey }]);
         setUserEnvKeys((current) => Array.from(new Set([...current, "OPENAI_API_KEY"])));
       }
       const response = await client.callExtensionAction({
@@ -1230,11 +1239,11 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
     } finally {
       setImageGenerationBusy(false);
     }
-  }, [openworkClient, runtimeWorkspaceId, selectedWorkspaceEndpoint, selectedWorkspaceRoot]);
+  }, [sofiaClient, runtimeWorkspaceId, selectedWorkspaceEndpoint, selectedWorkspaceRoot]);
 
   const saveVoiceApiKey = useCallback(async (apiKey: string) => {
     const resolvedApiKey = apiKey.trim();
-    if (!openworkClient || !resolvedApiKey) {
+    if (!sofiaClient || !resolvedApiKey) {
       setVoiceError("OpenAI API key is required.");
       return;
     }
@@ -1242,7 +1251,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
     setVoiceStatus(null);
     setVoiceError(null);
     try {
-      await openworkClient.upsertUserEnv([{ key: "OPENAI_API_KEY", value: resolvedApiKey }]);
+      await sofiaClient.upsertUserEnv([{ key: "OPENAI_API_KEY", value: resolvedApiKey }]);
       setUserEnvKeys((current) => Array.from(new Set([...current, "OPENAI_API_KEY"])));
       setVoiceStatus("Saved OPENAI_API_KEY for Voice Mode.");
     } catch (error) {
@@ -1250,10 +1259,10 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
     } finally {
       setVoiceBusy(false);
     }
-  }, [openworkClient]);
+  }, [sofiaClient]);
 
   const testVoiceSession = useCallback(async () => {
-    if (!openworkClient) {
+    if (!sofiaClient) {
       setVoiceError("Sofia App server is not connected.");
       return;
     }
@@ -1261,17 +1270,17 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
     setVoiceStatus(null);
     setVoiceError(null);
     try {
-      const session = await openworkClient.createVoiceRealtimeSession();
+      const session = await sofiaClient.createVoiceRealtimeSession();
       setVoiceStatus(`Realtime ready with ${session.model} (${session.tools.length} Sofia App tools).`);
     } catch (error) {
       setVoiceError(describeRouteError(error));
     } finally {
       setVoiceBusy(false);
     }
-  }, [openworkClient]);
+  }, [sofiaClient]);
 
   const installLocalProvider = useCallback(async (input: LocalProviderInstallInput) => {
-    const client = selectedWorkspaceEndpoint?.client ?? openworkClient;
+    const client = selectedWorkspaceEndpoint?.client ?? sofiaClient;
     const workspaceId = runtimeWorkspaceId?.trim() ?? "";
     const modelId = input.modelId.trim();
     if (!client || !workspaceId) {
@@ -1288,7 +1297,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
     setLocalProviderError(null);
     try {
       await client.patchConfig(workspaceId, {
-        opencode: {
+        engine: {
           provider: {
             [input.providerId]: buildLocalProviderConfig({ ...input, modelId }),
           },
@@ -1301,7 +1310,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
           modelVariant: null,
         }));
       }
-      reloadCoordinator.markReloadRequired("config", { type: "config", name: "opencode.json", action: "updated" });
+      reloadCoordinator.markReloadRequired("config", { type: "config", name: "engine.json", action: "updated" });
       try {
         await reloadEngineOrRestartDesktop(client, workspaceId);
       } catch {
@@ -1309,7 +1318,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
       }
       await refreshProviderListQueries(getReactQueryClient());
       try {
-        window.dispatchEvent(new CustomEvent("openwork-server-settings-changed"));
+        window.dispatchEvent(new CustomEvent("sofia-server-settings-changed"));
       } catch {
         // ignore browser event dispatch failures
       }
@@ -1319,7 +1328,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
     } finally {
       setLocalProviderBusy(false);
     }
-  }, [local, openworkClient, reloadCoordinator, runtimeWorkspaceId, selectedWorkspaceEndpoint]);
+  }, [local, sofiaClient, reloadCoordinator, runtimeWorkspaceId, selectedWorkspaceEndpoint]);
 
   useEffect(() => {
     local.setUi((previous) => ({ ...previous, view: "settings", tab: route.tab }));
@@ -1369,10 +1378,10 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
           desktopWorkspaces = workspacesRef.current;
         }
       }
-      const { normalizedBaseUrl, resolvedToken, resolvedHostToken } = await resolveOpenworkConnection();
+      const { normalizedBaseUrl, resolvedToken, resolvedHostToken } = await resolveSofiaConnection();
 
       if (!normalizedBaseUrl || !resolvedToken) {
-        setOpenworkClient(null);
+        setSofiaClient(null);
         setBaseUrl("");
         setToken("");
         setWorkspaces(desktopWorkspaces);
@@ -1386,7 +1395,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
         return;
       }
 
-      const client = createOpenworkServerClient({
+      const client = createSofiaServerClient({
         baseUrl: normalizedBaseUrl,
         token: resolvedToken,
         hostToken: resolvedHostToken || undefined,
@@ -1442,7 +1451,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
         }),
       );
 
-      setOpenworkClient(client);
+      setSofiaClient(client);
       setBaseUrl(normalizedBaseUrl);
       setToken(resolvedToken);
       setWorkspaces(nextWorkspaces);
@@ -1474,9 +1483,12 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
         message,
         preservedWorkspaceCount: desktopWorkspaces.length,
       });
-      // Fires on mount/auto-refresh too, not just user actions.
-      notifyAlert({
+      // Fires on mount/auto-refresh too, not just user actions, and the app
+      // keeps working from the cached workspace list — so this is a notice in
+      // the notification center, not an error toast.
+      notifyEvent({
         kind: "system",
+        severity: "warning",
         title: t("notifications.refresh_failed"),
         body: message,
         dedupeKey: "settings-route-refresh",
@@ -1510,7 +1522,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
     setContinuousEngine(next);
     try {
       await engineRestart({ engineRollover: next });
-      await openworkServerStore.reconnectOpenworkServer();
+      await sofiaServerStore.reconnectSofiaServer();
       await refreshRouteState();
     } catch (error) {
       setContinuousEngine(!next);
@@ -1523,37 +1535,37 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
   }, [
     activeReloadBlockingSessions.length,
     continuousEngineEnabled,
-    openworkServerStore,
+    sofiaServerStore,
     refreshRouteState,
     setContinuousEngine,
   ]);
 
   const reloadWorkspaceEngineFromUi = useCallback(async () => {
     const workspaceId = routeStateRef.current.runtimeWorkspaceId?.trim() || selectedWorkspaceId.trim();
-    if (!openworkClient || !workspaceId) {
+    if (!sofiaClient || !workspaceId) {
       toast.error(t("app.error_connect_first"));
       return false;
     }
 
-    await reloadEngineOrRestartDesktop(openworkClient, workspaceId, refreshRouteState);
+    await reloadEngineOrRestartDesktop(sofiaClient, workspaceId, refreshRouteState);
     await refreshProviderListQueries(getReactQueryClient());
 
     try {
-      window.dispatchEvent(new CustomEvent("openwork-server-settings-changed"));
+      window.dispatchEvent(new CustomEvent("sofia-server-settings-changed"));
     } catch {
       // ignore browser event dispatch failures
     }
 
-    // OpenCode reconnects MCPs async after dispose — the store polls until
+    // Sofia reconnects MCPs async after dispose — the store polls until
     // statuses settle so users don't have to collapse/expand the card.
     void pollMcpServersAfterReloadRef.current?.();
 
     return true;
-  }, [openworkClient, refreshRouteState, selectedWorkspaceId]);
+  }, [sofiaClient, refreshRouteState, selectedWorkspaceId]);
 
   useEffect(() => {
     return reloadCoordinator.registerWorkspaceReloadControls({
-      canReloadWorkspaceEngine: () => Boolean(openworkClient && (selectedWorkspace?.id || selectedWorkspaceId)),
+      canReloadWorkspaceEngine: () => Boolean(sofiaClient && (selectedWorkspace?.id || selectedWorkspaceId)),
       reloadWorkspaceEngine: reloadWorkspaceEngineFromUi,
       activeSessions: () => activeReloadBlockingSessions,
       stopSession: async (sessionId) => {
@@ -1568,7 +1580,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
   }, [
     activeClient,
     activeReloadBlockingSessions,
-    openworkClient,
+    sofiaClient,
     reloadCoordinator,
     reloadWorkspaceEngineFromUi,
     selectedWorkspace?.id,
@@ -1611,7 +1623,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
 
   const remoteWorkspaceConnectionEditor = useRemoteWorkspaceConnectionEditor({
     workspaces,
-    client: openworkClient,
+    client: sofiaClient,
     onSaved: handleRemoteWorkspaceConnectionSaved,
   });
 
@@ -1674,7 +1686,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
   );
 
   useEffect(() => {
-    if (openworkClient) {
+    if (sofiaClient) {
       reconnectAttemptedWorkspaceIdRef.current = "";
     }
     // Same gate as the session route: reconnect must not probe the local
@@ -1685,7 +1697,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
         bootPhase,
         bootRouteReady,
         routeLoading: loading,
-        hasClient: Boolean(openworkClient),
+        hasClient: Boolean(sofiaClient),
         connectionPending: false,
         workspaceType: selectedWorkspace?.workspaceType ?? null,
       })
@@ -1697,7 +1709,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
     if (!workspaceId || reconnectAttemptedWorkspaceIdRef.current === workspaceId) return;
     reconnectAttemptedWorkspaceIdRef.current = workspaceId;
 
-    void ensureDesktopLocalOpenworkConnection({
+    void ensureDesktopLocalSofiaConnection({
       route: "settings",
       workspace: selectedWorkspace,
       allWorkspaces: workspaces,
@@ -1711,29 +1723,29 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
         dedupeKey: "server-reconnect",
       });
     });
-  }, [bootPhase, bootRouteReady, loading, openworkClient, selectedWorkspace, workspaces]);
+  }, [bootPhase, bootRouteReady, loading, sofiaClient, selectedWorkspace, workspaces]);
 
   useEffect(() => {
     void refreshRouteState();
     const handleSettingsChange = () => {
       void refreshRouteState();
     };
-    window.addEventListener("openwork-server-settings-changed", handleSettingsChange);
+    window.addEventListener("sofia-server-settings-changed", handleSettingsChange);
     return () => {
-      window.removeEventListener("openwork-server-settings-changed", handleSettingsChange);
+      window.removeEventListener("sofia-server-settings-changed", handleSettingsChange);
     };
   }, [refreshRouteState]);
 
-  // Load auto-compaction state from OpenCode config on workspace change.
+  // Load auto-compaction state from Sofia config on workspace change.
   useEffect(() => {
-    if (!openworkClient || !selectedWorkspaceId) return;
+    if (!sofiaClient || !selectedWorkspaceId) return;
     const workspaceId = routeStateRef.current.runtimeWorkspaceId?.trim() || selectedWorkspaceId;
     let cancelled = false;
     (async () => {
       try {
-        const config = await openworkClient.getConfig(workspaceId);
+        const config = await sofiaClient.getConfig(workspaceId);
         if (cancelled) return;
-        const compaction = config.opencode?.compaction;
+        const compaction = config.engine?.compaction;
         const auto = compaction && typeof compaction === "object" && "auto" in compaction
           ? (compaction as { auto?: boolean }).auto
           : undefined;
@@ -1744,22 +1756,22 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
       }
     })();
     return () => { cancelled = true; };
-  }, [openworkClient, selectedWorkspaceId]);
+  }, [sofiaClient, selectedWorkspaceId]);
 
   const toggleAutoCompactContext = useCallback(async () => {
     if (autoCompactContextBusy) return;
     const workspaceId = routeStateRef.current.runtimeWorkspaceId?.trim() || selectedWorkspaceId;
-    if (!openworkClient || !workspaceId) return;
+    if (!sofiaClient || !workspaceId) return;
     const next = !autoCompactContext;
     setAutoCompactContext(next);
     setAutoCompactContextBusy(true);
     try {
-      await openworkClient.patchConfig(workspaceId, {
-        opencode: { compaction: { auto: next } },
+      await sofiaClient.patchConfig(workspaceId, {
+        engine: { compaction: { auto: next } },
       });
       reloadCoordinator.markReloadRequired("config", {
         type: "config",
-        name: "opencode.json",
+        name: "engine.json",
         action: "updated",
       });
     } catch {
@@ -1767,10 +1779,10 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
     } finally {
       setAutoCompactContextBusy(false);
     }
-  }, [autoCompactContext, autoCompactContextBusy, openworkClient, reloadCoordinator, selectedWorkspaceId]);
+  }, [autoCompactContext, autoCompactContextBusy, sofiaClient, reloadCoordinator, selectedWorkspaceId]);
 
   useEffect(() => {
-    openworkServerStore.start();
+    sofiaServerStore.start();
     connectionsStore.start();
     providerAuthStore.start();
     extensionsStore.start();
@@ -1779,11 +1791,11 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
       extensionsStore.dispose();
       providerAuthStore.dispose();
       connectionsStore.dispose();
-      openworkServerStore.dispose();
+      sofiaServerStore.dispose();
     };
-  }, [connectionsStore, extensionsStore, openworkServerStore, providerAuthStore]);
+  }, [connectionsStore, extensionsStore, sofiaServerStore, providerAuthStore]);
 
-  const refreshMarketplaceAction = useMemo<OpenworkControlAction>(() => ({
+  const refreshMarketplaceAction = useMemo<SofiaControlAction>(() => ({
     id: "extensions.refresh-marketplace",
     label: "Refresh marketplace extensions",
     description: "Force a fresh sync of organization marketplace plugins from the cloud.",
@@ -1810,7 +1822,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
   }, [providerAuthStore, route.tab]);
 
   useEffect(() => {
-    openworkServerStore.syncFromOptions();
+    sofiaServerStore.syncFromOptions();
     connectionsStore.syncFromOptions();
     providerAuthStore.syncFromOptions();
     extensionsStore.syncFromOptions();
@@ -1818,7 +1830,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
     activeClient,
     connectionsStore,
     extensionsStore,
-    openworkServerStore,
+    sofiaServerStore,
     providerAuthStore,
     selectedWorkspace?.id,
     selectedWorkspace?.workspaceType,
@@ -1847,7 +1859,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
   const workspaceType = selectedWorkspace?.workspaceType ?? "local";
   const isRemoteWorkspace = workspaceType === "remote";
   const canWriteWorkspacePlugins =
-    !isRemoteWorkspace || openworkServerSnapshot.openworkServerCanWritePlugins;
+    !isRemoteWorkspace || sofiaServerSnapshot.sofiaServerCanWritePlugins;
   const pluginsAccessHint =
     isRemoteWorkspace && !canWriteWorkspacePlugins ? t("app.plugins_hint_readonly") : null;
   const defaultModelLabel = local.prefs.defaultModel
@@ -1884,8 +1896,8 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
         }]
       : [],
   );
-  const openworkCloudMcpUrl = connectionsSnapshot.mcpServers.find(
-    (server) => server.name === "openwork-cloud",
+  const sofiaCloudMcpUrl = connectionsSnapshot.mcpServers.find(
+    (server) => server.name === "sofia-cloud",
   )?.config.url ?? null;
 
   // Build enablement context from all available runtime state.
@@ -1898,10 +1910,10 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
     // chrome-devtools browser surface (either the legacy plugin name or the
     // chrome-devtools MCP server, matched by name or command).
     const browserPluginConfigured = connectionsSnapshot.mcpServers.some(
-      (s) => s.name === "chrome-devtools" || s.name === "opencode-chrome-devtools" ||
+      (s) => s.name === "chrome-devtools" || s.name === "engine-chrome-devtools" ||
         s.config.command?.some((c: string) => c.includes("chrome-devtools")),
     );
-    if (browserPluginConfigured) loadedPlugins.add("opencode-chrome-devtools");
+    if (browserPluginConfigured) loadedPlugins.add("engine-chrome-devtools");
 
     return {
       mcpStatuses: connectionsSnapshot.mcpStatuses,
@@ -1914,7 +1926,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
       isToggleEnabled: (ref: string) => {
         const catalog = connectionsStore.quickConnect;
         const match = catalog.find((e: { id?: string; serverName?: string }) => (e.id ?? e.serverName) === ref);
-        return match ? isOpenWorkExtensionEnabled(match) : false;
+        return match ? isSofiaExtensionEnabled(match) : false;
       },
     };
   }, [computerUsePermissions, connectionsSnapshot, extensionStateVersion, providerConnectedIds, userEnvKeys]);
@@ -1922,20 +1934,20 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
   const restartExtensionLocalServer = useCallback(async () => {
     if (!isDesktopRuntime()) return false;
     try {
-      await openworkServerRestart({
+      await sofiaServerRestart({
         remoteAccessEnabled:
-          readOpenworkServerSettings().remoteAccessEnabled === true,
+          readSofiaServerSettings().remoteAccessEnabled === true,
       });
-      await openworkServerStore.reconnectOpenworkServer();
+      await sofiaServerStore.reconnectSofiaServer();
       await refreshRouteState();
       return true;
     } catch {
       return false;
     }
-  }, [openworkServerStore, refreshRouteState]);
+  }, [sofiaServerStore, refreshRouteState]);
   const extensionController = useSettingsExtensionController({
-    openworkServerClient: selectedWorkspaceEndpoint?.client ?? openworkClient,
-    hostOpenworkServerClient: openworkClient,
+    sofiaServerClient: selectedWorkspaceEndpoint?.client ?? sofiaClient,
+    hostSofiaServerClient: sofiaClient,
     enablementContext,
     mcpServers: connectionsSnapshot.mcpServers,
     mcpConnectingName: connectionsSnapshot.mcpConnectingName,
@@ -1969,9 +1981,9 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
       onInstall: installLocalProvider,
     },
   });
-  const extensionCatalogPlatform = resolveOpenWorkExtensionCatalogPlatform(platform.platform, platform.os);
+  const extensionCatalogPlatform = resolveSofiaExtensionCatalogPlatform(platform.platform, platform.os);
   const quickConnectCatalog = useMemo(
-    () => filterOpenWorkExtensionCatalogForPlatform(connectionsStore.quickConnect, extensionCatalogPlatform),
+    () => filterSofiaExtensionCatalogForPlatform(connectionsStore.quickConnect, extensionCatalogPlatform),
     [connectionsStore.quickConnect, extensionCatalogPlatform],
   );
   const extensionItems = useMemo(
@@ -1999,7 +2011,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
     loaded: orgMcpConnections.loaded,
     error: orgMcpConnections.error,
   });
-  const diagnosticsClient = selectedWorkspaceEndpoint?.client ?? openworkClient;
+  const diagnosticsClient = selectedWorkspaceEndpoint?.client ?? sofiaClient;
   const diagnosticsWorkspaceAllowed = isAgentContextDiagnosticsWorkspaceAllowed(selectedWorkspace);
   const diagnosticsAvailable = Boolean(
     diagnosticsClient
@@ -2007,11 +2019,11 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
     && diagnosticsWorkspaceAllowed,
   );
   const diagnosticsUnavailableReason = selectedWorkspace?.workspaceType === "remote"
-    && selectedWorkspace.remoteType !== "openwork"
-    ? "direct-remote-opencode" as const
+    && selectedWorkspace.remoteType !== "sofia"
+    ? "direct-remote-engine" as const
     : null;
   const diagnosticsWorkspaceType = selectedWorkspace?.workspaceType === "remote"
-    ? selectedWorkspace.remoteType ?? "legacy-opencode"
+    ? selectedWorkspace.remoteType ?? "legacy-engine"
     : "local";
   const diagnosticsScopeKey = useMemo(() => createOpaqueDiagnosticsScopeKey({
     client: diagnosticsClient,
@@ -2036,7 +2048,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
     token,
   ]);
   const runAgentContextDiagnostics = useCallback(async () => {
-    const client = selectedWorkspaceEndpoint?.client ?? openworkClient;
+    const client = selectedWorkspaceEndpoint?.client ?? sofiaClient;
     const workspaceId = runtimeWorkspaceId?.trim() ?? "";
     if (
       !client
@@ -2053,14 +2065,14 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
     });
     return client.runAgentContextDiagnostics(workspaceId, observations);
   }, [
-    openworkClient,
+    sofiaClient,
     organizationConnectionsProbe,
     orgMcpConnections.connections,
     runtimeWorkspaceId,
     selectedWorkspace,
     selectedWorkspaceEndpoint,
   ]);
-  const routeOpenworkStatus = openworkClient ? "connected" : "disconnected";
+  const routeSofiaStatus = sofiaClient ? "connected" : "disconnected";
   const notFoundRouteError = !loading && routeWorkspaceId && !selectedWorkspace
     ? "Workspace was not found. Select a new workspace from the sidebar."
     : null;
@@ -2073,13 +2085,13 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
       });
     }
   }, [notFoundRouteError]);
-  const routeOpenworkCapabilities: OpenworkServerCapabilities | null = openworkClient
-    ? ROUTE_OPENWORK_CAPABILITIES
+  const routeSofiaCapabilities: SofiaServerCapabilities | null = sofiaClient
+    ? ROUTE_SOFIA_CAPABILITIES
     : null;
-  const environmentRuntimeKey = buildOpenworkEnvRuntimeKey({
-    baseUrl: openworkServerSnapshot.openworkServerBaseUrl || openworkServerSnapshot.openworkServerUrl,
-    pid: openworkServerSnapshot.openworkServerHostInfo?.pid ?? null,
-    port: openworkServerSnapshot.openworkServerHostInfo?.port ?? null,
+  const environmentRuntimeKey = buildSofiaEnvRuntimeKey({
+    baseUrl: sofiaServerSnapshot.sofiaServerBaseUrl || sofiaServerSnapshot.sofiaServerUrl,
+    pid: sofiaServerSnapshot.sofiaServerHostInfo?.pid ?? null,
+    port: sofiaServerSnapshot.sofiaServerHostInfo?.port ?? null,
   });
 
   const handleApplyEnvironmentChanges = async () => {
@@ -2108,9 +2120,9 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
       preferSidecar: true,
       runtime: "direct",
       workspacePaths,
-      openworkRemoteAccess: openworkServerSnapshot.openworkServerSettings.remoteAccessEnabled === true,
+      sofiaRemoteAccess: sofiaServerSnapshot.sofiaServerSettings.remoteAccessEnabled === true,
     });
-    const reconnected = await openworkServerStore.reconnectOpenworkServer();
+    const reconnected = await sofiaServerStore.reconnectSofiaServer();
     if (!reconnected) {
       await refreshRouteState().catch(() => {});
       return { statusMessage: t("settings.environment.apply_refresh_failed") };
@@ -2152,11 +2164,11 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
     if (!trimmed) return;
     setRenameWorkspaceBusy(true);
     try {
-      if (!openworkClient) {
+      if (!sofiaClient) {
         toast.error("Sofia App server is unavailable. Reconnect the server before renaming workspaces.");
         return;
       }
-      await openworkClient.updateWorkspaceDisplayName(renameWorkspaceId, trimmed);
+      await sofiaClient.updateWorkspaceDisplayName(renameWorkspaceId, trimmed);
       setRenameWorkspaceId(null);
       setRenameWorkspaceTitle("");
       await refreshRouteState();
@@ -2167,7 +2179,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
     } finally {
       setRenameWorkspaceBusy(false);
     }
-  }, [openworkClient, refreshRouteState, renameWorkspaceId, renameWorkspaceTitle]);
+  }, [sofiaClient, refreshRouteState, renameWorkspaceId, renameWorkspaceTitle]);
 
   const handleRevealWorkspace = useCallback(async (workspaceId: string) => {
     const workspace = workspaces.find((item) => item.id === workspaceId);
@@ -2198,8 +2210,8 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
       const message = t("workspace_list.remove_confirm") || "Remove this workspace from the sidebar?";
       if (!window.confirm(message)) return;
     }
-    if (openworkClient) {
-      await openworkClient.deleteWorkspace(workspaceId).catch(() => undefined);
+    if (sofiaClient) {
+      await sofiaClient.deleteWorkspace(workspaceId).catch(() => undefined);
     }
     if (isDesktopRuntime()) {
       await workspaceForget(workspaceId).catch(() => undefined);
@@ -2213,7 +2225,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
       }
     }
     await refreshRouteState();
-  }, [openworkClient, refreshRouteState, selectedWorkspaceId, workspaces]);
+  }, [sofiaClient, refreshRouteState, selectedWorkspaceId, workspaces]);
 
   if (route.redirectPath && !props.embedded) {
     const target = props.standaloneExtensions
@@ -2246,16 +2258,16 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
             developerMode={developerMode}
             onSendFeedback={() => platform.openLink(buildFeedbackUrl({ entrypoint: "settings" }))}
             onJoinDiscord={() => platform.openLink("https://discord.gg/VEhNQXxYMB")}
-            onReportIssue={() => platform.openLink("https://github.com/different-ai/openwork/issues/new?template=bug.yml")}
+            onReportIssue={() => platform.openLink("https://github.com/RuutChatCSM/sofia-desktop/issues/new?template=bug.yml")}
           />
         );
       case "permissions":
         return (
           <SettingsStack>
             <AuthorizedFoldersPanel
-              openworkServerClient={openworkClient}
-              openworkServerStatus={routeOpenworkStatus}
-              openworkServerCapabilities={routeOpenworkCapabilities}
+              sofiaServerClient={sofiaClient}
+              sofiaServerStatus={routeSofiaStatus}
+              sofiaServerCapabilities={routeSofiaCapabilities}
               runtimeWorkspaceId={runtimeWorkspaceId}
               selectedWorkspaceRoot={selectedWorkspaceRoot}
               activeWorkspaceType={workspaceType}
@@ -2288,19 +2300,19 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
               }
             }}
             canDisconnectProvider={(provider) =>
-              provider.id.trim().toLowerCase() === "opencode" || provider.source !== "env"
+              provider.id.trim().toLowerCase() === "engine" || provider.source !== "env"
             }
             canAddProviders={!providerAuthStore.isProviderAddRestricted()}
             organizationName={cloudSession.activeOrgName}
             cloudProviderIds={new Set([
               ...Object.values(providerAuthSnapshot.importedCloudProviders ?? {}).map((p) => p.providerId),
-              ...(openWorkModelsEntitled || openWorkModelsAvailable ? ["openwork"] : []),
+              ...(sofiaModelsEntitled || sofiaModelsAvailable ? ["sofia"] : []),
             ])}
-            showOpenWorkModelsSubscribe={showOpenWorkModelsSubscribe}
-            showOpenWorkModelsConnect={showOpenWorkModelsConnect}
-            showOpenWorkModelsSyncing={showOpenWorkModelsSyncing}
-            onSubscribeOpenWorkModels={subscribeToOpenWorkModels}
-            onDismissOpenWorkModels={dismissOpenWorkModelsPromo}
+            showSofiaModelsSubscribe={showSofiaModelsSubscribe}
+            showSofiaModelsConnect={showSofiaModelsConnect}
+            showSofiaModelsSyncing={showSofiaModelsSyncing}
+            onSubscribeSofiaModels={subscribeToSofiaModels}
+            onDismissSofiaModels={dismissSofiaModelsPromo}
             cloudProvidersView={
               <CloudProvidersView
                 embedded
@@ -2309,11 +2321,11 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
                 connectCloudProvider={providerAuthStore.connectCloudProvider}
                 importedCloudProviders={providerAuthSnapshot.importedCloudProviders}
                 importsUnavailable={
-                  openworkServerSnapshot.openworkServerCapabilities?.config?.read === false ||
-                  openworkServerSnapshot.openworkServerCapabilities?.config?.write === false
+                  sofiaServerSnapshot.sofiaServerCapabilities?.config?.read === false ||
+                  sofiaServerSnapshot.sofiaServerCapabilities?.config?.write === false
                 }
                 lastSyncError={providerAuthSnapshot.lastSyncError}
-                openworkServerAvailable={Boolean(openworkServerSnapshot.openworkServerClient)}
+                sofiaServerAvailable={Boolean(sofiaServerSnapshot.sofiaServerClient)}
                 onOpenAccount={openCloudAccountSettings}
                 refreshCloudOrgProviders={providerAuthStore.refreshCloudOrgProviders}
                 runCloudProviderSync={providerAuthStore.runCloudProviderSync}
@@ -2411,11 +2423,10 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
                   void connectionsStore.removeMcp(name);
                 }}
                 setMcpEnabled={
-                  routeOpenworkStatus === "connected" && routeOpenworkCapabilities?.mcp?.write
+                  routeSofiaStatus === "connected" && routeSofiaCapabilities?.mcp?.write
                     ? (name, enabled) => connectionsStore.setMcpEnabled(name, enabled)
                     : undefined
                 }
-                readConfigFile={(scope) => connectionsStore.readMcpConfigFile(scope)}
                 installedSkills={[
                   ...extensionItems.installedSkills,
                   ...connectCapabilities.skills.filter(
@@ -2478,11 +2489,11 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
             connectCloudProvider={providerAuthStore.connectCloudProvider}
             importedCloudProviders={providerAuthSnapshot.importedCloudProviders}
             importsUnavailable={
-              openworkServerSnapshot.openworkServerCapabilities?.config?.read === false ||
-              openworkServerSnapshot.openworkServerCapabilities?.config?.write === false
+              sofiaServerSnapshot.sofiaServerCapabilities?.config?.read === false ||
+              sofiaServerSnapshot.sofiaServerCapabilities?.config?.write === false
             }
             lastSyncError={providerAuthSnapshot.lastSyncError}
-            openworkServerAvailable={Boolean(openworkServerSnapshot.openworkServerClient)}
+            sofiaServerAvailable={Boolean(sofiaServerSnapshot.sofiaServerClient)}
             onOpenAccount={openCloudAccountSettings}
             refreshCloudOrgProviders={providerAuthStore.refreshCloudOrgProviders}
             runCloudProviderSync={providerAuthStore.runCloudProviderSync}
@@ -2493,24 +2504,24 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
         return (
           <AdvancedView
             busy={busy}
-            clientConnected={Boolean(opencodeClient)}
-            opencodeConnectStatus={null}
-            openworkServerStatus={openworkServerSnapshot.openworkServerStatus}
+            clientConnected={Boolean(engineClient)}
+            engineConnectStatus={null}
+            sofiaServerStatus={sofiaServerSnapshot.sofiaServerStatus}
             developerMode={developerMode}
             toggleDeveloperMode={() => setDeveloperMode((current) => {
               const next = !current;
-              try { window.localStorage.setItem("openwork.developerMode", next ? "1" : "0"); } catch {}
+              try { window.localStorage.setItem("sofia.developerMode", next ? "1" : "0"); } catch {}
               return next;
             })}
-            opencodeDevModeEnabled={false}
+            engineDevModeEnabled={false}
             openDebugDeepLink={async () => ({ ok: false, message: "Debug deep links are not wired into the React settings route yet." })}
-            cloudMcpUrl={openworkCloudMcpUrl}
-            canMigrateRuntimeConfig={Boolean(openworkClient && selectedWorkspaceId)}
+            cloudMcpUrl={sofiaCloudMcpUrl}
+            canMigrateRuntimeConfig={Boolean(sofiaClient && selectedWorkspaceId)}
             migrateRuntimeConfig={async () => {
-              if (!openworkClient || !selectedWorkspaceId) {
+              if (!sofiaClient || !selectedWorkspaceId) {
                 throw new Error("Select a workspace before migrating legacy runtime config.");
               }
-              const result = await openworkClient.migrateRuntimeConfig(selectedWorkspaceId);
+              const result = await sofiaClient.migrateRuntimeConfig(selectedWorkspaceId);
               if (result.migrated) {
                 void connectionsStore.refreshMcpServers();
                 void extensionsStore.refreshPlugins();
@@ -2518,10 +2529,10 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
               return { migrated: result.migrated, keys: result.keys };
             }}
             getRuntimeConfigStatus={async () => {
-              if (!openworkClient || !selectedWorkspaceId) {
+              if (!sofiaClient || !selectedWorkspaceId) {
                 throw new Error("Select a workspace to inspect runtime config.");
               }
-              return openworkClient.getRuntimeConfigStatus(selectedWorkspaceId);
+              return sofiaClient.getRuntimeConfigStatus(selectedWorkspaceId);
             }}
             cloudMcpHealth={cloudMcpHealth}
             refreshCloudMcpHealth={refreshCloudMcpHealth}
@@ -2571,22 +2582,22 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
         return (
           <RecoveryView
             anyActiveRuns={false}
-            workspaceConfigPath={selectedWorkspaceRoot ? `${selectedWorkspaceRoot}/.opencode/openwork.json` : ""}
+            workspaceConfigPath={selectedWorkspaceRoot ? `${selectedWorkspaceRoot}/.sofia/sofia.json` : ""}
             resetConfigBusy={resetConfigBusy}
             onResetAppConfigDefaults={() => {}}
             configActionStatus={configActionStatus}
             cacheRepairBusy={false}
             cacheRepairResult={null}
-            onRepairOpencodeCache={() => {}}
+            onRepairWorkspaceEngineCache={() => {}}
             dockerCleanupBusy={false}
             dockerCleanupResult={null}
-            onCleanupOpenworkDockerContainers={() => {}}
+            onCleanupSofiaDockerContainers={() => {}}
           />
         );
       case "environment":
         return (
           <EnvironmentView
-            client={openworkServerSnapshot.openworkServerClient}
+            client={sofiaServerSnapshot.sofiaServerClient}
             isRemoteWorkspace={isRemoteWorkspace}
             onApplyChanges={isDesktopRuntime() && !isRemoteWorkspace ? handleApplyEnvironmentChanges : undefined}
             applyBlocked={activeReloadBlockingSessions.length > 0}
@@ -2603,7 +2614,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
           <DebugView
             {...debugViewProps}
             agentAccess={{
-              client: selectedWorkspaceEndpoint?.client ?? openworkClient,
+              client: selectedWorkspaceEndpoint?.client ?? sofiaClient,
               workspaceId: runtimeWorkspaceId,
               currentModel: currentCloudMcpModel,
               onHealthChange: setCloudMcpHealth,
@@ -2637,7 +2648,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
           selectedWorkspaceColor={selectedWorkspaceColor}
           workspaces={workspaceOptions}
           onSelectWorkspace={handleSelectSettingsWorkspace}
-          headerStatus={routeOpenworkStatus}
+          headerStatus={routeSofiaStatus}
           busyHint={loading ? t("session.loading_detail") : busyLabel}
           onClose={props.onClose ?? (() => navigate(selectedWorkspaceId ? workspaceSessionRoute(selectedWorkspaceId) : "/session"))}
           compact={props.embedded}
@@ -2689,7 +2700,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
         workerType={providerAuthSnapshot.providerAuthWorkerType}
         // Hide any provider the org blocks at the desktop layer so users
         // can't connect a forbidden one (dev #1505). Same helper covers
-        // opencode-provider gating via the `allowZenModel` restriction.
+        // engine-provider gating via the `allowZenModel` restriction.
         // We also strip the matching key from `authMethods` because the
         // modal builds its entry list from `Object.keys(authMethods)`,
         // not from `providers`.
@@ -2714,8 +2725,8 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
         onSubmitApiKey={providerAuthStore.submitProviderApiKey}
         onSubmitOAuth={providerAuthStore.completeProviderAuthOAuth}
         onRefreshProviders={providerAuthStore.refreshProviders}
-        showOpenWorkModelsSubscribe={showOpenWorkModelsSubscribe}
-        onSubscribeOpenWorkModels={subscribeToOpenWorkModels}
+        showSofiaModelsSubscribe={showSofiaModelsSubscribe}
+        onSubscribeSofiaModels={subscribeToSofiaModels}
         onClose={() => providerAuthStore.closeProviderAuthModal()}
       />
       <RenameWorkspaceModal

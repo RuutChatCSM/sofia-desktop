@@ -4,24 +4,24 @@
 // it is the last resort — only for server-reported states that a reload
 // cannot recover from, and only after re-verifying that an "unreachable"
 // engine is not a transient hiccup (mid-teardown, briefly overloaded, an
-// aborted loopback fetch). opencode_reload_timeout deliberately never lands
+// aborted loopback fetch). engine_reload_timeout deliberately never lands
 // here: the server reports it while a dispose is still tearing down, and
 // restarting mid-teardown would kill the very sessions being drained.
 import { engineRestart } from "@/app/lib/desktop";
-import { OpenworkServerError, type OpenworkServerClient } from "@/app/lib/openwork-server";
+import { SofiaServerError, type SofiaServerClient } from "@/app/lib/sofia-server";
 import { isDesktopRuntime } from "@/app/lib/runtime-env";
 
 const UNREACHABLE_RETRY_DELAY_MS = 1500;
 
 export function canRestartDesktopForReloadError(error: unknown) {
   return (
-    error instanceof OpenworkServerError &&
-    (error.code === "opencode_engine_unreachable" || error.code === "opencode_unconfigured")
+    error instanceof SofiaServerError &&
+    (error.code === "engine_engine_unreachable" || error.code === "engine_unconfigured")
   );
 }
 
 function isEngineUnreachableError(error: unknown) {
-  return error instanceof OpenworkServerError && error.code === "opencode_engine_unreachable";
+  return error instanceof SofiaServerError && error.code === "engine_engine_unreachable";
 }
 
 /**
@@ -56,11 +56,11 @@ export type ReloadEngineFallbackOptions = {
 /**
  * Reload the workspace engine; escalate to a full desktop engine restart only
  * when the reload keeps failing with a restartable server-reported code.
- * `opencode_engine_unreachable` gets one delayed retry first — if the engine
+ * `engine_engine_unreachable` gets one delayed retry first — if the engine
  * answers the second attempt, no session is disturbed.
  */
 export async function reloadEngineWithDesktopFallback(
-  client: Pick<OpenworkServerClient, "reloadEngine">,
+  client: Pick<SofiaServerClient, "reloadEngine">,
   workspaceId: string,
   options?: ReloadEngineFallbackOptions,
 ): Promise<ReloadEngineFallbackResult> {

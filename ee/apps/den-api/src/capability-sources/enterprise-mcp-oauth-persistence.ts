@@ -5,17 +5,17 @@ import {
   type EnterpriseMcpOAuthClientRegistration,
   type EnterpriseMcpOAuthPersistence,
   type EnterpriseMcpPersistenceContext,
-} from "@openwork/enterprise-mcp-client"
+} from "@sofia/enterprise-mcp-client"
 import type { OAuthDiscoveryState } from "@modelcontextprotocol/sdk/client/auth.js"
-import { and, eq } from "@openwork-ee/den-db/drizzle"
+import { and, eq } from "@sofia-ee/den-db/drizzle"
 import {
   ConnectedAccountTable,
   ExternalMcpConnectionTable,
   OrgOAuthClientTable,
   type ExternalMcpCredentialHealth,
   type ExternalMcpOAuthConfiguration,
-} from "@openwork-ee/den-db/schema"
-import { createDenTypeId } from "@openwork-ee/utils/typeid"
+} from "@sofia-ee/den-db/schema"
+import { createDenTypeId } from "@sofia-ee/utils/typeid"
 import {
   OAuthClientInformationFullSchema,
   OAuthClientInformationSchema,

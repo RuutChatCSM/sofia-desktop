@@ -1,4 +1,4 @@
-import type { AutomationSchedule } from "@openwork/types/automations";
+import type { AutomationSchedule } from "@sofia/types/automations";
 
 const SUNDAY_UTC = Date.UTC(2024, 0, 7);
 

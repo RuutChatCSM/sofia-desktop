@@ -1,5 +1,5 @@
 import { expect, onTestFinished } from "vitest";
-import type { Surface } from "@openwork/cdp";
+import type { Surface } from "@sofia/cdp";
 import {
   assignPluginToMarketplace,
   control,
@@ -17,9 +17,9 @@ import {
   waitFor,
   waitForAssistantReply,
   waitForButtonGone,
-} from "@openwork/behaviors";
-import type { DenSession } from "@openwork/behaviors";
-import { screenshot, validate } from "@openwork/test-evidence";
+} from "@sofia/behaviors";
+import type { DenSession } from "@sofia/behaviors";
+import { screenshot, validate } from "@sofia/test-evidence";
 import {
   app,
   eventually,
@@ -30,8 +30,8 @@ import {
   server,
   test,
   unmetNeeds,
-} from "@openwork/testkit";
-import type { TestNeeds } from "@openwork/testkit";
+} from "@sofia/testkit";
+import type { TestNeeds } from "@sofia/testkit";
 
 /**
  * CRITICAL-PATH E2E JOURNEY: a new organization invites a second person, publishes a real
@@ -39,11 +39,11 @@ import type { TestNeeds } from "@openwork/testkit";
  * shares that skill through a person-scoped marketplace, and proves from a
  * sequential teammate desktop that the real model runs and the shared skill
  * uses the organization connector.
- * It also claims each desktop's openwork-cloud MCP health and direct tool probe.
+ * It also claims each desktop's sofia-cloud MCP health and direct tool probe.
  *
  * Step-0 research (2026-08-09): the preferred path exists today. The signed-in
  * app reconciler requires an active org, mints a fresh token, and repairs the
- * `openwork-cloud` entry (apps/app/src/react-app/domains/connections/store.ts:
+ * `sofia-cloud` entry (apps/app/src/react-app/domains/connections/store.ts:
  * 883-927). The desktop server persists and dynamically registers that remote
  * MCP with the engine (apps/server/src/cloud-mcp-health.ts:2112-2123). The server
  * reads Den's remote skill index (apps/server/src/connect-skill-catalog.ts:45-78,
@@ -71,7 +71,7 @@ import type { TestNeeds } from "@openwork/testkit";
 const requirements: TestNeeds = {
   model: "tool-capable",
   env: ["OPENAI_API_KEY"],
-  optIn: ["OPENWORK_EVAL_E2E_TESTS", "OPENWORK_EVAL_CRITICAL_PATH_E2E_JOURNEY"],
+  optIn: ["SOFIA_EVAL_E2E_TESTS", "SOFIA_EVAL_CRITICAL_PATH_E2E_JOURNEY"],
 };
 const missingRequirements = unmetNeeds(requirements, process.env);
 const title = missingRequirements.length > 0
@@ -131,9 +131,9 @@ function errorText(error: unknown): string {
 }
 
 function resolveProviderTarget(): ProviderTarget {
-  const requestedModelId = process.env.OPENWORK_EVAL_MODEL?.trim() ?? "";
+  const requestedModelId = process.env.SOFIA_EVAL_MODEL?.trim() ?? "";
   if (!requestedModelId || requestedModelId.includes("/")) {
-    throw new Error(`OPENWORK_EVAL_MODEL must be the bare OpenAI model id; received ${requestedModelId}.`);
+    throw new Error(`SOFIA_EVAL_MODEL must be the bare OpenAI model id; received ${requestedModelId}.`);
   }
   const apiKey = process.env.OPENAI_API_KEY?.trim() ?? "";
   if (!apiKey) throw new Error(`${requestedModelId} requires OPENAI_API_KEY.`);
@@ -163,7 +163,7 @@ async function organizationMembership(session: DenSession, organizationName: str
 
 async function readProviders(session: DenSession, orgId: string): Promise<ProviderFacts[]> {
   const result = await denFetch(session, "/v1/llm-providers", {
-    headers: { ...auth(session), "x-openwork-org-id": orgId },
+    headers: { ...auth(session), "x-sofia-org-id": orgId },
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
   if (!result.response.ok) {
@@ -186,7 +186,7 @@ async function createProvider(
 ): Promise<string> {
   const result = await denFetch(admin, "/v1/llm-providers", {
     method: "POST",
-    headers: { ...auth(admin), "x-openwork-org-id": orgId },
+    headers: { ...auth(admin), "x-sofia-org-id": orgId },
     body: JSON.stringify({
       name,
       source: "custom",
@@ -216,7 +216,7 @@ async function createProvider(
 async function deleteProvider(admin: DenSession, orgId: string, providerId: string): Promise<void> {
   const result = await denFetch(admin, `/v1/llm-providers/${encodeURIComponent(providerId)}`, {
     method: "DELETE",
-    headers: { ...auth(admin), "x-openwork-org-id": orgId },
+    headers: { ...auth(admin), "x-sofia-org-id": orgId },
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
   if (!result.response.ok && result.response.status !== 404) {
@@ -226,8 +226,8 @@ async function deleteProvider(admin: DenSession, orgId: string, providerId: stri
 
 async function configureWorkspaceOpenAi(appSurface: Surface, workspaceId: string, apiKey: string): Promise<void> {
   const providerConfigured = await evalIn(appSurface, `(async () => {
-    const port = localStorage.getItem("openwork.server.port");
-    const token = localStorage.getItem("openwork.server.token");
+    const port = localStorage.getItem("sofia.server.port");
+    const token = localStorage.getItem("sofia.server.token");
     if (!port || !token) return "missing local server credentials";
     const request = async (path, init) => {
       const response = await fetch("http://127.0.0.1:" + port + path, {
@@ -240,7 +240,7 @@ async function configureWorkspaceOpenAi(appSurface: Surface, workspaceId: string
     const workspaceId = ${JSON.stringify(workspaceId)};
     const patched = await request("/workspace/" + encodeURIComponent(workspaceId) + "/config", {
       method: "PATCH",
-      body: JSON.stringify({ opencode: { provider: { openai: { options: { apiKey: ${JSON.stringify(apiKey)} } } } } }),
+      body: JSON.stringify({ engine: { provider: { openai: { options: { apiKey: ${JSON.stringify(apiKey)} } } } } }),
     });
     if (patched !== "ok") return patched;
     return request("/workspace/" + encodeURIComponent(workspaceId) + "/engine/reload", { method: "POST" });
@@ -304,7 +304,7 @@ async function readAuthoredPlugin(
 async function mintGatewayToken(session: DenSession, orgId: string): Promise<string> {
   const result = await denFetch(session, "/v1/mcp/token", {
     method: "POST",
-    headers: { ...auth(session), "x-openwork-org-id": orgId },
+    headers: { ...auth(session), "x-sofia-org-id": orgId },
     body: JSON.stringify({}),
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
@@ -368,7 +368,7 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 45 * 60_000 }, asy
   const providerName = `Mega OpenAI Models ${stamp}`;
   const teammateEmail = `taylor.critical-path.${stamp}@acme.test`;
   const outsiderEmail = `riley.critical-path.${stamp}@acme.test`;
-  const password = "OpenWorkEval123!";
+  const password = "SofiaEval123!";
   // The authored skill's marker must survive verbatim model reproduction, so keep it short (base36), like llmNonce below.
   const skillNonce = `critical-path-${stamp.toString(36)}`;
   const skillName = `critical-path-echo-${stamp}`;
@@ -470,7 +470,7 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 45 * 60_000 }, asy
       {
         within: 180_000,
         intervalMs: 5_000,
-        label: "admin openwork-cloud MCP ready",
+        label: "admin sofia-cloud MCP ready",
         until: (h) => h.ok && h.phase === "ready" && h.direct.checked && h.direct.missing.length === 0,
       },
     );
@@ -494,7 +494,7 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 45 * 60_000 }, asy
       && adminCloudMcp.direct.missing.length === 0
       && adminCloudMcp.tools.missing.length === 0;
     evidence.recordAssertionEvidence(
-      "The admin desktop's OpenWork Connect MCP connector is registered and live-probed ready",
+      "The admin desktop's Sofia App Connect MCP connector is registered and live-probed ready",
       `Health phase=${adminCloudMcp.phase}, engine=${adminCloudMcp.engineStatus}, probed tools=${JSON.stringify(adminCloudMcp.direct.present)}.`,
       adminCloudMcpReady,
     );
@@ -507,7 +507,7 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 45 * 60_000 }, asy
     );
 
     await sendComposerMessage(appAdmin, [
-      "Create exactly one OpenWork Cloud skill, not a local skill.",
+      "Create exactly one Sofia Cloud skill, not a local skill.",
       "Load and follow the remote create-skill capability `skill:create-skill`, then verify the created plugin.",
       `Use skill name ${skillName} and plugin title ${pluginName}.`,
       `The complete SKILL.md must contain nonce ${skillNonce}.`,
@@ -620,7 +620,7 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 45 * 60_000 }, asy
     await waitForButtonGone(appAdmin, "Stop", { timeoutMs: 240_000 });
     const shot = await screenshot(appAdmin);
     const seen = await validate(shot, [
-      "An OpenWork chat surface shows the admin's completed Cloud skill creation task",
+      "An Sofia App chat surface shows the admin's completed Cloud skill creation task",
       "No 'Something went wrong', blank screen, or crash message is visible",
     ]);
     expect(seen.ok, seen.why).toBe(true);
@@ -701,7 +701,7 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 45 * 60_000 }, asy
       {
         within: 180_000,
         intervalMs: 5_000,
-        label: "teammate openwork-cloud MCP ready",
+        label: "teammate sofia-cloud MCP ready",
         until: (h) => h.ok && h.phase === "ready" && h.direct.checked && h.direct.missing.length === 0,
       },
     );
@@ -725,7 +725,7 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 45 * 60_000 }, asy
       && teammateCloudMcp.direct.missing.length === 0
       && teammateCloudMcp.tools.missing.length === 0;
     evidence.recordAssertionEvidence(
-      "The plain-member desktop's OpenWork Connect MCP connector is registered and live-probed ready",
+      "The plain-member desktop's Sofia App Connect MCP connector is registered and live-probed ready",
       `Health phase=${teammateCloudMcp.phase}, engine=${teammateCloudMcp.engineStatus}, probed tools=${JSON.stringify(teammateCloudMcp.direct.present)}.`,
       teammateCloudMcpReady,
     );

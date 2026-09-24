@@ -67,7 +67,7 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..",
 const DESKTOP_UPDATER_PATH = path.join(ROOT, "apps", "desktop", "electron", "updater.mjs");
 const PRODUCT_ENV: NodeJS.ProcessEnv = {
   ...process.env,
-  DATABASE_URL: process.env.DATABASE_URL ?? "mysql://root:password@127.0.0.1:3306/openwork_den",
+  DATABASE_URL: process.env.DATABASE_URL ?? "mysql://root:password@127.0.0.1:3306/sofia_den",
   DEN_DB_ENCRYPTION_KEY: process.env.DEN_DB_ENCRYPTION_KEY ?? "local-dev-db-encryption-key-please-change-1234567890",
   BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET ?? "local-dev-secret-not-for-production-use!!",
   BETTER_AUTH_URL: process.env.BETTER_AUTH_URL ?? "http://localhost:3005",
@@ -199,7 +199,7 @@ const fileName = input.distribution === "cloud"
   : input.distribution === "public"
     ? module.desktopReleaseAssetName(input.platform, releaseTag)
     : module.enterpriseDesktopReleaseAssetName(input.platform, releaseTag);
-const githubUrl = module.installerReleaseAssetUrl(fileName, { releaseTag, releaseRepo: "different-ai/openwork" });
+const githubUrl = module.installerReleaseAssetUrl(fileName, { releaseTag, releaseRepo: "RuutChatCSM/sofia-desktop" });
 console.log(JSON.stringify({ fileName, githubUrl }));
 `;
   return productDownloadUrlResultFromUnknown(await execBunJson(script, input, "ee/apps/den-api/src/utils/installer-artifacts.ts"));

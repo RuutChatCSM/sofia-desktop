@@ -10,7 +10,7 @@ describe("extension item grouping", () => {
         {
           name: "brief-builder",
           description: "Use for creative briefs",
-          path: "/workspace/project/.opencode/skills/creative-brief-plugin/brief-builder/SKILL.md",
+          path: "/workspace/project/.sofia/skills/creative-brief-plugin/brief-builder/SKILL.md",
         },
       ],
       importedCloudPlugins: {
@@ -27,7 +27,7 @@ describe("extension item grouping", () => {
               versionId: "version_skill_1",
               objectType: "skill",
               title: "Brief Builder",
-              path: ".opencode/skills/creative-brief-plugin/brief-builder/SKILL.md",
+              path: ".sofia/skills/creative-brief-plugin/brief-builder/SKILL.md",
               updatedAt: "2026-06-02T00:00:00.000Z",
             },
           ],
@@ -44,7 +44,7 @@ describe("extension item grouping", () => {
         id: "config_skill_1",
         type: "skill",
         title: "Brief Builder",
-        path: ".opencode/skills/creative-brief-plugin/brief-builder/SKILL.md",
+        path: ".sofia/skills/creative-brief-plugin/brief-builder/SKILL.md",
       },
     ]);
   });

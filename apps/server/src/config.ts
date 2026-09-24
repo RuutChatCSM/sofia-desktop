@@ -1,5 +1,5 @@
 import { dirname, resolve } from "node:path";
-import { openworkServerConfigPath } from "@openwork/paths";
+import { sofiaServerConfigPath } from "@sofia/paths";
 import type { ApprovalMode, ApprovalConfig, ServerConfig, WorkspaceConfig, LogFormat } from "./types.js";
 import { buildWorkspaceInfos } from "./workspaces.js";
 import { parseList, readJsonFile, shortId } from "./utils.js";
@@ -12,10 +12,10 @@ export interface CliArgs {
   hostToken?: string;
   approvalMode?: ApprovalMode;
   approvalTimeoutMs?: number;
-  opencodeBaseUrl?: string;
-  opencodeDirectory?: string;
-  opencodeUsername?: string;
-  opencodePassword?: string;
+  engineBaseUrl?: string;
+  engineDirectory?: string;
+  engineUsername?: string;
+  enginePassword?: string;
   workspaces: string[];
   corsOrigins?: string[];
   readOnly?: boolean;
@@ -37,10 +37,10 @@ interface FileConfig {
   corsOrigins?: string[];
   authorizedRoots?: string[];
   readOnly?: boolean;
-  opencodeBaseUrl?: string;
-  opencodeDirectory?: string;
-  opencodeUsername?: string;
-  opencodePassword?: string;
+  engineBaseUrl?: string;
+  engineDirectory?: string;
+  engineUsername?: string;
+  enginePassword?: string;
   logFormat?: LogFormat;
   logRequests?: boolean;
   engineRollover?: boolean;
@@ -136,23 +136,23 @@ export function parseCliArgs(argv: string[]): CliArgs {
       index += 1;
       continue;
     }
-    if (value === "--opencode-base-url") {
-      args.opencodeBaseUrl = argv[index + 1];
+    if (value === "--engine-base-url") {
+      args.engineBaseUrl = argv[index + 1];
       index += 1;
       continue;
     }
-    if (value === "--opencode-directory") {
-      args.opencodeDirectory = argv[index + 1];
+    if (value === "--engine-directory") {
+      args.engineDirectory = argv[index + 1];
       index += 1;
       continue;
     }
-    if (value === "--opencode-username") {
-      args.opencodeUsername = argv[index + 1];
+    if (value === "--engine-username") {
+      args.engineUsername = argv[index + 1];
       index += 1;
       continue;
     }
-    if (value === "--opencode-password") {
-      args.opencodePassword = argv[index + 1];
+    if (value === "--engine-password") {
+      args.enginePassword = argv[index + 1];
       index += 1;
       continue;
     }
@@ -177,7 +177,7 @@ export function parseCliArgs(argv: string[]): CliArgs {
 
 export function printHelp(): void {
   const message = [
-    "openwork-server",
+    "sofia-server",
     "",
     "Options:",
     "  --config <path>          Path to server.json",
@@ -187,10 +187,10 @@ export function printHelp(): void {
     "  --host-token <token>     Host approval token",
     "  --approval <mode>        manual | auto",
     "  --approval-timeout <ms>  Approval timeout",
-    "  --opencode-base-url <url> OpenCode base URL to share",
-    "  --opencode-directory <path> OpenCode workspace directory to share",
-    "  --opencode-username <user> OpenCode server username",
-    "  --opencode-password <pass> OpenCode server password",
+    "  --engine-base-url <url> Sofia engine base URL to share",
+    "  --engine-directory <path> Sofia engine workspace directory to share",
+    "  --engine-username <user> Sofia engine server username",
+    "  --engine-password <pass> Sofia engine server password",
     "  --workspace <path>       Workspace root (repeatable)",
     "  --cors <origins>          Comma-separated origins or *",
     "  --read-only              Disable writes",
@@ -209,11 +209,11 @@ async function loadFileConfig(configPath: string): Promise<FileConfig> {
 }
 
 export async function resolveServerConfig(cli: CliArgs): Promise<ServerConfig> {
-  const configPath = cli.configPath ?? openworkServerConfigPath();
+  const configPath = cli.configPath ?? sofiaServerConfigPath();
   const fileConfig = await loadFileConfig(configPath);
   const configDir = dirname(configPath);
 
-  const envWorkspaces = parseList(process.env.OPENWORK_WORKSPACES);
+  const envWorkspaces = parseList(process.env.SOFIA_WORKSPACES);
   let workspaceConfigs: WorkspaceConfig[] =
     cli.workspaces.length > 0
       ? cli.workspaces.map((path) => ({ path }))
@@ -221,34 +221,34 @@ export async function resolveServerConfig(cli: CliArgs): Promise<ServerConfig> {
         ? envWorkspaces.map((path) => ({ path }))
         : fileConfig.workspaces ?? [];
 
-  const envOpencodeBaseUrl = process.env.OPENWORK_OPENCODE_BASE_URL;
-  const envOpencodeDirectory = process.env.OPENWORK_OPENCODE_DIRECTORY;
-  const envOpencodeUsername = process.env.OPENWORK_OPENCODE_USERNAME;
-  const envOpencodePassword = process.env.OPENWORK_OPENCODE_PASSWORD;
-  const opencodeBaseUrl = cli.opencodeBaseUrl ?? envOpencodeBaseUrl ?? fileConfig.opencodeBaseUrl;
-  const opencodeDirectory = cli.opencodeDirectory ?? envOpencodeDirectory ?? fileConfig.opencodeDirectory;
-  const opencodeUsername = cli.opencodeUsername ?? envOpencodeUsername ?? fileConfig.opencodeUsername;
-  const opencodePassword = cli.opencodePassword ?? envOpencodePassword ?? fileConfig.opencodePassword;
+  const envWorkspaceEngineBaseUrl = process.env.SOFIA_SOFIA_ENGINE_BASE_URL;
+  const envWorkspaceEngineDirectory = process.env.SOFIA_SOFIA_ENGINE_DIRECTORY;
+  const envWorkspaceEngineUsername = process.env.SOFIA_SOFIA_ENGINE_USERNAME;
+  const envWorkspaceEnginePassword = process.env.SOFIA_SOFIA_ENGINE_PASSWORD;
+  const engineBaseUrl = cli.engineBaseUrl ?? envWorkspaceEngineBaseUrl ?? fileConfig.engineBaseUrl;
+  const engineDirectory = cli.engineDirectory ?? envWorkspaceEngineDirectory ?? fileConfig.engineDirectory;
+  const engineUsername = cli.engineUsername ?? envWorkspaceEngineUsername ?? fileConfig.engineUsername;
+  const enginePassword = cli.enginePassword ?? envWorkspaceEnginePassword ?? fileConfig.enginePassword;
 
-  if (workspaceConfigs.length > 0 && (opencodeBaseUrl || opencodeDirectory || opencodeUsername || opencodePassword)) {
-    const allowDirectoryOverride = workspaceConfigs.length === 1 && opencodeDirectory;
+  if (workspaceConfigs.length > 0 && (engineBaseUrl || engineDirectory || engineUsername || enginePassword)) {
+    const allowDirectoryOverride = workspaceConfigs.length === 1 && engineDirectory;
     workspaceConfigs = workspaceConfigs.map((workspace, index) => {
       const nextDirectory =
-        workspace.directory ?? (allowDirectoryOverride && index === 0 ? opencodeDirectory : undefined);
+        workspace.directory ?? (allowDirectoryOverride && index === 0 ? engineDirectory : undefined);
       return {
         ...workspace,
-        baseUrl: workspace.baseUrl ?? opencodeBaseUrl,
+        baseUrl: workspace.baseUrl ?? engineBaseUrl,
         directory: nextDirectory,
-        opencodeUsername: workspace.opencodeUsername ?? opencodeUsername,
-        opencodePassword: workspace.opencodePassword ?? opencodePassword,
+        engineUsername: workspace.engineUsername ?? engineUsername,
+        enginePassword: workspace.enginePassword ?? enginePassword,
       };
     });
   }
 
   const workspaces = buildWorkspaceInfos(workspaceConfigs, configDir);
 
-  const tokenFromEnv = process.env.OPENWORK_TOKEN;
-  const hostTokenFromEnv = process.env.OPENWORK_HOST_TOKEN;
+  const tokenFromEnv = process.env.SOFIA_TOKEN;
+  const hostTokenFromEnv = process.env.SOFIA_HOST_TOKEN;
 
   const token = cli.token ?? tokenFromEnv ?? fileConfig.token ?? shortId();
   const hostToken = cli.hostToken ?? hostTokenFromEnv ?? fileConfig.hostToken ?? shortId();
@@ -271,13 +271,13 @@ export async function resolveServerConfig(cli: CliArgs): Promise<ServerConfig> {
 
   const approvalMode =
     cli.approvalMode ??
-    (process.env.OPENWORK_APPROVAL_MODE as ApprovalMode | undefined) ??
+    (process.env.SOFIA_APPROVAL_MODE as ApprovalMode | undefined) ??
     fileConfig.approval?.mode ??
     "manual";
 
   const approvalTimeoutMs =
     cli.approvalTimeoutMs ??
-    (process.env.OPENWORK_APPROVAL_TIMEOUT_MS ? Number(process.env.OPENWORK_APPROVAL_TIMEOUT_MS) : undefined) ??
+    (process.env.SOFIA_APPROVAL_TIMEOUT_MS ? Number(process.env.SOFIA_APPROVAL_TIMEOUT_MS) : undefined) ??
     fileConfig.approval?.timeoutMs ??
     DEFAULT_TIMEOUT_MS;
 
@@ -286,27 +286,27 @@ export async function resolveServerConfig(cli: CliArgs): Promise<ServerConfig> {
     timeoutMs: Number.isNaN(approvalTimeoutMs) ? DEFAULT_TIMEOUT_MS : approvalTimeoutMs,
   };
 
-  const envCorsOrigins = process.env.OPENWORK_CORS_ORIGINS;
+  const envCorsOrigins = process.env.SOFIA_CORS_ORIGINS;
   const parsedEnvCors = envCorsOrigins ? parseList(envCorsOrigins) : null;
   const corsOrigins = cli.corsOrigins ?? parsedEnvCors ?? fileConfig.corsOrigins ?? ["*"];
 
-  const envReadOnly = process.env.OPENWORK_READONLY;
+  const envReadOnly = process.env.SOFIA_READONLY;
   const parsedReadOnly = envReadOnly
     ? ["true", "1", "yes"].includes(envReadOnly.toLowerCase())
     : undefined;
   const readOnly = cli.readOnly ?? parsedReadOnly ?? fileConfig.readOnly ?? false;
 
-  const envLogFormat = process.env.OPENWORK_LOG_FORMAT;
+  const envLogFormat = process.env.SOFIA_LOG_FORMAT;
   const logFormat =
     cli.logFormat ??
     normalizeLogFormat(envLogFormat) ??
     normalizeLogFormat(fileConfig.logFormat) ??
     DEFAULT_LOG_FORMAT;
 
-  const envLogRequests = parseBoolean(process.env.OPENWORK_LOG_REQUESTS);
+  const envLogRequests = parseBoolean(process.env.SOFIA_LOG_REQUESTS);
   const logRequests = cli.logRequests ?? envLogRequests ?? fileConfig.logRequests ?? DEFAULT_LOG_REQUESTS;
 
-  const envEngineRollover = parseBoolean(process.env.OPENWORK_ENGINE_ROLLOVER);
+  const envEngineRollover = parseBoolean(process.env.SOFIA_ENGINE_ROLLOVER);
   const engineRollover = cli.engineRollover ?? envEngineRollover ?? fileConfig.engineRollover ?? false;
 
   const authorizedRoots =
@@ -314,8 +314,8 @@ export async function resolveServerConfig(cli: CliArgs): Promise<ServerConfig> {
       ? fileConfig.authorizedRoots.map((root) => resolve(configDir, root))
       : workspaces.map((workspace) => workspace.path);
 
-  const host = cli.host ?? process.env.OPENWORK_HOST ?? fileConfig.host ?? DEFAULT_HOST;
-  const port = cli.port ?? (process.env.OPENWORK_PORT ? Number(process.env.OPENWORK_PORT) : undefined) ?? fileConfig.port ?? DEFAULT_PORT;
+  const host = cli.host ?? process.env.SOFIA_HOST ?? fileConfig.host ?? DEFAULT_HOST;
+  const port = cli.port ?? (process.env.SOFIA_PORT ? Number(process.env.SOFIA_PORT) : undefined) ?? fileConfig.port ?? DEFAULT_PORT;
 
   return {
     host,
@@ -323,10 +323,10 @@ export async function resolveServerConfig(cli: CliArgs): Promise<ServerConfig> {
     token,
     hostToken,
     configPath,
-    opencodeBaseUrl,
-    opencodeDirectory,
-    opencodeUsername,
-    opencodePassword,
+    engineBaseUrl,
+    engineDirectory,
+    engineUsername,
+    enginePassword,
     approval,
     corsOrigins,
     workspaces,

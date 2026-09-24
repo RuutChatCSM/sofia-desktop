@@ -1,8 +1,8 @@
 // Sofia session client: the app-side surface for the bundled Sofia (codex)
-// engine. Mirrors the opencode SDK's session surface but talks to the
+// engine. Mirrors the engine SDK's session surface but talks to the
 // Sofia App server's /codex/* routes (which drive the engine's JSON-RPC over
 // stdio). Used when the selected engine is codex.
-import { OpenworkServerError } from "./openwork-server";
+import { SofiaServerError } from "./sofia-server";
 
 export type CodexSessionStatus = "idle" | "running" | "error";
 
@@ -32,6 +32,7 @@ export type CodexEvent =
   | { type: "turn.completed"; sessionId: string; threadId: string }
   | { type: "approval.requested"; sessionId: string; threadId: string; params: unknown }
   | { type: "thread.status"; sessionId: string; threadId: string; status: unknown }
+  | { type: "warning"; sessionId: string; threadId: string; message: string }
   | { type: "error"; sessionId: string; threadId: string; turnId?: string; message: string }
   | { type: "stream.ready"; streamId: string };
 
@@ -70,6 +71,16 @@ export type CodexSessionClientOptions = {
   hostToken?: string;
   workspaceId: string;
 };
+
+/**
+ * True when the server refused the request because a live Sofia process
+ * elsewhere holds this task's exclusive writer lock. The engine allows a
+ * single writer per thread, so the task can be read here but not driven until
+ * that process finishes or exits.
+ */
+export function isThreadWriterConflictError(error: unknown): boolean {
+  return error instanceof SofiaServerError && error.code === "thread_writer_conflict";
+}
 
 /** A pending codex engine approval surfaced by the host ApprovalService. */
 export type CodexApprovalRequest = {
@@ -115,7 +126,7 @@ async function requestJson<T>(
   if (!response.ok) {
     const code = typeof json?.code === "string" ? json.code : "request_failed";
     const message = typeof json?.message === "string" ? json.message : response.statusText;
-    throw new OpenworkServerError(response.status, code, message, json?.details);
+    throw new SofiaServerError(response.status, code, message, json?.details);
   }
   return json as T;
 }
@@ -208,7 +219,7 @@ export function createCodexSessionClient(options: CodexSessionClientOptions) {
         );
         return { outcome: "steered", session: result.session };
       } catch (error) {
-        if (error instanceof OpenworkServerError) {
+        if (error instanceof SofiaServerError) {
           if (error.code === "codex_no_active_turn") return { outcome: "no_active_turn" };
           if (error.code === "codex_not_steerable") return { outcome: "not_steerable" };
           if (error.code === "codex_turn_mismatch") {
@@ -316,7 +327,7 @@ export function createCodexSessionClient(options: CodexSessionClientOptions) {
         });
         if (!response.ok || !response.body) {
           const text = await response.text().catch(() => "");
-          throw new OpenworkServerError(response.status, "stream_failed", text || response.statusText);
+          throw new SofiaServerError(response.status, "stream_failed", text || response.statusText);
         }
         const reader = response.body.getReader();
         const decoder = new TextDecoder();

@@ -1,18 +1,18 @@
 import { createServer } from "node:http";
 import { expect, onTestFinished } from "vitest";
-import { control, createAndSelectWorkspace, evalIn, waitFor, waitForText } from "@openwork/behaviors";
-import { screenshot, validate } from "@openwork/test-evidence";
-import { desktop } from "@openwork/hosts";
-import { needs, test } from "@openwork/testkit";
+import { control, createAndSelectWorkspace, evalIn, waitFor, waitForText } from "@sofia/behaviors";
+import { screenshot, validate } from "@sofia/test-evidence";
+import { desktop } from "@sofia/hosts";
+import { needs, test } from "@sofia/testkit";
 
 const providerId = "session-loading-idle-mock";
 const modelId = "session-loading-idle-model";
 const reply = "session loading idle proof";
 const renamedTitle = "Session loading stays idle";
-const e2eTestsEnabled = process.env.OPENWORK_EVAL_E2E_TESTS === "1";
+const e2eTestsEnabled = process.env.SOFIA_EVAL_E2E_TESTS === "1";
 const title = e2eTestsEnabled
   ? "completed session loading stays idle after snapshot refetch and rename"
-  : "session loading idle skipped — needs: set OPENWORK_EVAL_E2E_TESTS=1";
+  : "session loading idle skipped — needs: set SOFIA_EVAL_E2E_TESTS=1";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -34,14 +34,14 @@ function indicatorExpression(sessionId: string, present: boolean): string {
 }
 
 const stopDisabledExpression = `(() => {
-  const stop = window.__openworkControl.listActions().find((action) => action.id === "composer.stop");
+  const stop = window.__sofiaControl.listActions().find((action) => action.id === "composer.stop");
   return Boolean(stop?.disabled);
 })()`;
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 test.skipIf(!e2eTestsEnabled)(title, async ({ evidence }) => {
-  needs({ optIn: ["OPENWORK_EVAL_E2E_TESTS"] });
+  needs({ optIn: ["SOFIA_EVAL_E2E_TESTS"] });
 
   const mock = createServer((request, response) => {
     const url = request.url ?? "";
@@ -92,12 +92,12 @@ test.skipIf(!e2eTestsEnabled)(title, async ({ evidence }) => {
 
   await using app = await desktop({ name: "session-loading-idle" });
   const workspace = await createAndSelectWorkspace(app, {
-    path: `/tmp/openwork-session-loading-idle-${Date.now()}`,
+    path: `/tmp/sofia-session-loading-idle-${Date.now()}`,
   });
 
   const configured = await evalIn(app, `(async () => {
-    const port = localStorage.getItem("openwork.server.port");
-    const token = localStorage.getItem("openwork.server.token");
+    const port = localStorage.getItem("sofia.server.port");
+    const token = localStorage.getItem("sofia.server.token");
     if (!port || !token) return "missing local server credentials";
     const request = async (path, init) => {
       const response = await fetch("http://127.0.0.1:" + port + path, {
@@ -111,7 +111,7 @@ test.skipIf(!e2eTestsEnabled)(title, async ({ evidence }) => {
     const patched = await request("/workspace/" + encodeURIComponent(workspaceId) + "/config", {
       method: "PATCH",
       body: JSON.stringify({
-        opencode: {
+        engine: {
           provider: {
             [${JSON.stringify(providerId)}]: {
               npm: "@ai-sdk/openai-compatible",
@@ -128,18 +128,18 @@ test.skipIf(!e2eTestsEnabled)(title, async ({ evidence }) => {
     if (patched !== "ok") return patched;
     const reloaded = await request("/workspace/" + encodeURIComponent(workspaceId) + "/engine/reload", { method: "POST" });
     if (reloaded !== "ok") return reloaded;
-    const raw = localStorage.getItem("openwork.preferences");
+    const raw = localStorage.getItem("sofia.preferences");
     let preferences = {};
     try { preferences = raw ? JSON.parse(raw) : {}; } catch { preferences = {}; }
     if (!preferences || typeof preferences !== "object" || Array.isArray(preferences)) preferences = {};
-    localStorage.setItem("openwork.preferences", JSON.stringify({
+    localStorage.setItem("sofia.preferences", JSON.stringify({
       ...preferences,
       defaultModel: { providerID: ${JSON.stringify(providerId)}, modelID: ${JSON.stringify(modelId)} },
       modelVariant: null,
       providerStepCompleted: true,
     }));
-    localStorage.setItem("openwork.defaultModel", ${JSON.stringify(`${providerId}/${modelId}`)});
-    localStorage.removeItem("openwork.sessionModels." + workspaceId);
+    localStorage.setItem("sofia.defaultModel", ${JSON.stringify(`${providerId}/${modelId}`)});
+    localStorage.removeItem("sofia.sessionModels." + workspaceId);
     return "ok";
   })()`, { awaitPromise: true, timeoutMs: 30_000 });
   expect(configured).toBe("ok");
@@ -150,12 +150,12 @@ test.skipIf(!e2eTestsEnabled)(title, async ({ evidence }) => {
   const mainSessionId = newestSessionId(await control(app, "session.list_sessions"));
   expect(mainSessionId).not.toBe(parkingSessionId);
 
-  await waitFor(app, `window.__openworkControl.listActions().some((action) => action.id === "composer.set_text" && !action.disabled)`, {
+  await waitFor(app, `window.__sofiaControl.listActions().some((action) => action.id === "composer.set_text" && !action.disabled)`, {
     timeoutMs: 30_000,
     label: "main session composer text action enabled",
   });
   await control(app, "composer.set_text", { text: `Reply with exactly: ${reply}` });
-  await waitFor(app, `window.__openworkControl.listActions().some((action) => action.id === "composer.send" && !action.disabled)`, {
+  await waitFor(app, `window.__sofiaControl.listActions().some((action) => action.id === "composer.send" && !action.disabled)`, {
     timeoutMs: 30_000,
     label: "main session composer send action enabled",
   });

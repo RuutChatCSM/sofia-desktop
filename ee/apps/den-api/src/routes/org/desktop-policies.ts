@@ -1,18 +1,18 @@
-import { and, asc, desc, eq, inArray, isNull } from "@openwork-ee/den-db/drizzle"
+import { and, asc, desc, eq, inArray, isNull } from "@sofia-ee/den-db/drizzle"
 import {
   DesktopPolicyMemberTable,
   DesktopPolicyTable,
   MemberTable,
   TeamTable,
-} from "@openwork-ee/den-db/schema"
-import { createDenTypeId, normalizeDenTypeId } from "@openwork-ee/utils/typeid"
+} from "@sofia-ee/den-db/schema"
+import { createDenTypeId, normalizeDenTypeId } from "@sofia-ee/utils/typeid"
 import {
   desktopPolicyDefinitions,
   desktopPolicyDocumentWriteSchema,
   normalizeDefaultDesktopPolicyDocument,
   normalizeDesktopPolicyDocument,
   resolveDesktopPolicyDocumentWrite,
-} from "@openwork/types/den/desktop-policies"
+} from "@sofia/types/den/desktop-policies"
 import type { Hono } from "hono"
 import { describeRoute } from "hono-openapi"
 import { z } from "zod"

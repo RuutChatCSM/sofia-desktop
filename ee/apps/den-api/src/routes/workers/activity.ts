@@ -1,5 +1,5 @@
-import { and, eq, isNull } from "@openwork-ee/den-db/drizzle"
-import { WorkerTable, WorkerTokenTable } from "@openwork-ee/den-db/schema"
+import { and, eq, isNull } from "@sofia-ee/den-db/drizzle"
+import { WorkerTable, WorkerTokenTable } from "@sofia-ee/den-db/schema"
 import type { Hono } from "hono"
 import { describeRoute } from "hono-openapi"
 import { z } from "zod"

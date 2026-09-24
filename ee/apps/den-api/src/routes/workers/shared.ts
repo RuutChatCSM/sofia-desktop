@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto"
-import { and, asc, desc, eq, inArray, isNull } from "@openwork-ee/den-db/drizzle"
+import { and, asc, desc, eq, inArray, isNull } from "@sofia-ee/den-db/drizzle"
 import {
   AuditEventTable,
   AuthUserTable,
@@ -9,8 +9,8 @@ import {
   WorkerInstanceTable,
   WorkerTable,
   WorkerTokenTable,
-} from "@openwork-ee/den-db/schema"
-import { createDenTypeId, normalizeDenTypeId } from "@openwork-ee/utils/typeid"
+} from "@sofia-ee/den-db/schema"
+import { createDenTypeId, normalizeDenTypeId } from "@sofia-ee/utils/typeid"
 import { z } from "zod"
 import { requireCloudWorkerAccess } from "../../billing/polar.js"
 import { db } from "../../db.js"
@@ -132,7 +132,7 @@ function normalizeUrl(value: string): string {
   return value.trim().replace(/\/+$/, "")
 }
 
-function parseWorkspaceSelection(payload: unknown): { workspaceId: string; openworkUrl: string } | null {
+function parseWorkspaceSelection(payload: unknown): { workspaceId: string; sofiaUrl: string } | null {
   if (!isRecord(payload) || !Array.isArray(payload.items)) {
     return null
   }
@@ -156,7 +156,7 @@ function parseWorkspaceSelection(payload: unknown): { workspaceId: string; openw
 
   return {
     workspaceId,
-    openworkUrl: `${baseUrl}/w/${encodeURIComponent(workspaceId)}`,
+    sofiaUrl: `${baseUrl}/w/${encodeURIComponent(workspaceId)}`,
   }
 }
 
@@ -500,7 +500,7 @@ export async function getWorkerTokensAndConnect(worker: WorkerRow) {
       host: hostToken,
       client: clientToken,
     },
-    connect: connect ?? (instance?.url ? { openworkUrl: instance.url, workspaceId: null } : null),
+    connect: connect ?? (instance?.url ? { sofiaUrl: instance.url, workspaceId: null } : null),
   }
 }
 

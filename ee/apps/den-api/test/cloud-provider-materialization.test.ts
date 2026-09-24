@@ -1,4 +1,4 @@
-import { createDenTypeId } from "@openwork-ee/utils/typeid"
+import { createDenTypeId } from "@sofia-ee/utils/typeid"
 import { beforeAll, describe, expect, test } from "bun:test"
 import type { CloudProviderMaterializationProvider } from "../src/llm/cloud-provider-materialization.js"
 
@@ -20,7 +20,7 @@ let materializeCloudWorkerProviders: MaterializerModule["materializeCloudWorkerP
 let computeCloudProviderMaterializationFingerprint: MaterializerModule["computeCloudProviderMaterializationFingerprint"]
 
 function seedRequiredEnv() {
-  process.env.DATABASE_URL = process.env.DATABASE_URL ?? "mysql://root:password@127.0.0.1:3306/openwork_test"
+  process.env.DATABASE_URL = process.env.DATABASE_URL ?? "mysql://root:password@127.0.0.1:3306/sofia_test"
   process.env.DEN_DB_ENCRYPTION_KEY = process.env.DEN_DB_ENCRYPTION_KEY ?? "x".repeat(32)
   process.env.BETTER_AUTH_SECRET = process.env.BETTER_AUTH_SECRET ?? "y".repeat(32)
   process.env.BETTER_AUTH_URL = process.env.BETTER_AUTH_URL ?? "http://127.0.0.1:8790"
@@ -152,7 +152,7 @@ function makeInstance(input: {
   providerRouteServesSpa?: boolean
   runtimeVersion?: string | null
   runtimeProviders?: Record<string, unknown>
-  opencodeConfigProviders?: Record<string, unknown>
+  engineConfigProviders?: Record<string, unknown>
   missingEngineReadbacks?: number
 } = {}) {
   const calls: FetchCall[] = []
@@ -161,7 +161,7 @@ function makeInstance(input: {
   let failConfigPatches = input.failConfigPatches ?? 0
   let missingEngineReadbacks = input.missingEngineReadbacks ?? 0
   const runtimeProviders: Record<string, unknown> = { ...(input.runtimeProviders ?? {}) }
-  const engineProviders = input.opencodeConfigProviders ? { ...input.opencodeConfigProviders } : null
+  const engineProviders = input.engineConfigProviders ? { ...input.engineConfigProviders } : null
   const fetchImpl: FetchImpl = async (url, init) => {
     const parsed = new URL(url)
     const method = init?.method ?? "GET"
@@ -181,7 +181,7 @@ function makeInstance(input: {
         : jsonResponse({ error: "env_not_found" }, 404)
     }
 
-    if (method === "GET" && parsed.pathname === "/opencode/config") {
+    if (method === "GET" && parsed.pathname === "/engine/config") {
       if (missingEngineReadbacks > 0) {
         missingEngineReadbacks -= 1
         return jsonResponse({ provider: {} })
@@ -193,7 +193,7 @@ function makeInstance(input: {
       return jsonResponse({
         services: [
           {
-            name: "openwork-server",
+            name: "sofia-server",
             actualVersion: input.runtimeVersion ?? null,
           },
         ],
@@ -209,14 +209,14 @@ function makeInstance(input: {
         return jsonResponse({ error: "env_write_failed" }, 500)
       }
       const persistableInternalKeys = new Set([
-        "OPENWORK_API_KEY",
-        "OPENWORK_MODELS_API_KEY",
-        "OPENWORK_INFERENCE_BASE_URL",
-        "OPENWORK_MODELS_BASE_URL",
+        "SOFIA_API_KEY",
+        "SOFIA_MODELS_API_KEY",
+        "SOFIA_INFERENCE_BASE_URL",
+        "SOFIA_MODELS_BASE_URL",
       ])
       const hasReservedEntry = bodyEntries(body).some((entry) => (
         typeof entry.key === "string"
-        && /^(OPENWORK_|OPENCODE_)/.test(entry.key)
+        && /^(SOFIA_|SOFIA_ENGINE_)/.test(entry.key)
         && !persistableInternalKeys.has(entry.key)
       ))
       if (hasReservedEntry) {
@@ -243,7 +243,7 @@ function makeInstance(input: {
       if (input.providerRouteServesSpa) {
         // Instances older than this route fall through to the SPA catch-all and
         // answer 200 with index.html (seen on a real worker on 0.18.3).
-        return new Response("<!doctype html>\n<html lang=\"en\"><head><title>OpenWork</title></head></html>", {
+        return new Response("<!doctype html>\n<html lang=\"en\"><head><title>Sofia</title></head></html>", {
           status: 200,
           headers: { "content-type": "text/html" },
         })
@@ -366,7 +366,7 @@ describe("Cloud provider materialization", () => {
     })
   })
 
-  test("writes a models.dev provider block, credential env, and reloads OpenCode", async () => {
+  test("writes a models.dev provider block, credential env, and reloads Sofia", async () => {
     const provider = makeAnthropicProvider({ apiKey: "sk-anthropic" })
     const instance = makeInstance()
 
@@ -379,11 +379,11 @@ describe("Cloud provider materialization", () => {
     expect(result.ok).toBe(true)
     expect(result.status).toBe("applied")
     expect(callMethods(instance.calls)).toEqual([
-      "GET /opencode/config",
+      "GET /engine/config",
       "GET /env/ANTHROPIC_API_KEY",
       "PUT /env",
       "PATCH /runtime-config/providers",
-      "GET /opencode/config",
+      "GET /engine/config",
     ])
     expect(instance.calls[2]?.headers["x-sofia-host-token"]).toBe("host-token")
     expect(instance.calls[2]?.body).toEqual({
@@ -428,7 +428,7 @@ describe("Cloud provider materialization", () => {
 
     expect(result).toEqual({ ok: true, status: "noop", fingerprint, providers: 1 })
     expect(callMethods(instance.calls)).toEqual([
-      "GET /opencode/config",
+      "GET /engine/config",
       "GET /env/ANTHROPIC_API_KEY",
     ])
     expect(writeCalls(instance.calls)).toHaveLength(0)
@@ -450,17 +450,17 @@ describe("Cloud provider materialization", () => {
     expect(result.ok).toBe(true)
     expect(result.status).toBe("applied")
     expect(callMethods(instance.calls)).toEqual([
-      "GET /opencode/config",
+      "GET /engine/config",
       "GET /env/ANTHROPIC_API_KEY",
       "PUT /env",
       "PATCH /runtime-config/providers",
-      "GET /opencode/config",
+      "GET /engine/config",
     ])
   })
 
   test("treats missing provider read-back as materialization failure", async () => {
     const provider = makeAnthropicProvider({ apiKey: "sk-anthropic" })
-    const instance = makeInstance({ opencodeConfigProviders: {} })
+    const instance = makeInstance({ engineConfigProviders: {} })
 
     const result = await materialize({
       providers: () => [provider],
@@ -473,11 +473,11 @@ describe("Cloud provider materialization", () => {
       expect(result.reason).toBe(`provider_readback_missing_${provider.id}`)
     }
     expect(callMethods(instance.calls)).toEqual([
-      "GET /opencode/config",
+      "GET /engine/config",
       "GET /env/ANTHROPIC_API_KEY",
       "PUT /env",
       "PATCH /runtime-config/providers",
-      "GET /opencode/config",
+      "GET /engine/config",
       "PATCH /runtime-config/providers",
       "DELETE /env/ANTHROPIC_API_KEY",
     ])
@@ -486,7 +486,7 @@ describe("Cloud provider materialization", () => {
 
   test("fails when the provider is absent from engine-visible config", async () => {
     const provider = makeAnthropicProvider({ apiKey: "sk-anthropic" })
-    const instance = makeInstance({ opencodeConfigProviders: {} })
+    const instance = makeInstance({ engineConfigProviders: {} })
 
     const result = await materialize({
       providers: () => [provider],
@@ -647,7 +647,7 @@ describe("Cloud provider materialization", () => {
 
     expect(failed.ok).toBe(false)
     expect(callMethods(instance.calls)).toEqual([
-      "GET /opencode/config",
+      "GET /engine/config",
       "GET /env/ANTHROPIC_API_KEY",
       "PUT /env",
     ])
@@ -678,7 +678,7 @@ describe("Cloud provider materialization", () => {
       expect(failed.reason).toBe("runtime_provider_patch_failed_500")
     }
     expect(callMethods(instance.calls)).toEqual([
-      "GET /opencode/config",
+      "GET /engine/config",
       "GET /env/ANTHROPIC_API_KEY",
       "PUT /env",
       "PATCH /runtime-config/providers",
@@ -699,7 +699,7 @@ describe("Cloud provider materialization", () => {
   })
 
   test("treats an instance that serves the SPA on the provider route as unsupported", async () => {
-    // A real worker still running openwork-server 0.18.3 answered PATCH
+    // A real worker still running sofia-server 0.18.3 answered PATCH
     // /runtime-config/providers with 200 + index.html, so the patch looked like
     // a success while the engine ended up with zero providers. The org then saw
     // an opaque failure instead of "this workspace needs an update", and every
@@ -721,7 +721,7 @@ describe("Cloud provider materialization", () => {
   test("preserves credential env when the global provider route is unsupported", async () => {
     const workerId = createDenTypeId("worker")
     let provider = makeAnthropicProvider({ apiKey: "sk-anthropic" })
-    const instance = makeInstance({ providerRouteStatus: 404, runtimeVersion: "openwork-0.18.8" })
+    const instance = makeInstance({ providerRouteStatus: 404, runtimeVersion: "sofia-0.18.8" })
     const logs: Array<{ message: string; metadata?: Record<string, unknown> }> = []
     const logger: Logger = {
       warn(message, metadata) {
@@ -742,7 +742,7 @@ describe("Cloud provider materialization", () => {
     expect(unsupported.ok).toBe(false)
     expect(unsupported.status).toBe("unsupported")
     expect(callMethods(instance.calls)).toEqual([
-      "GET /opencode/config",
+      "GET /engine/config",
       "GET /env/ANTHROPIC_API_KEY",
       "PUT /env",
       "PATCH /runtime-config/providers",
@@ -754,7 +754,7 @@ describe("Cloud provider materialization", () => {
     expect(logs[0]).toMatchObject({
       message: "cloud provider materialization unsupported by worker version",
       metadata: {
-        instance_version: "openwork-0.18.8",
+        instance_version: "sofia-0.18.8",
         reason: "runtime_provider_patch_failed_404",
       },
     })

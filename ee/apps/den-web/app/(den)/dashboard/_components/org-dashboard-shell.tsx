@@ -63,7 +63,7 @@ import { buildDenFeedbackUrl } from "../../_lib/feedback";
 import { OrgSelectionScreen } from "./org-selection-screen";
 import { UserProfileDialog } from "./user-profile-dialog";
 
-const OPENWORK_DOCS_URL = "/docs";
+const SOFIA_DOCS_URL = "/docs";
 
 type DashboardNavChild = {
   href: string;
@@ -102,41 +102,8 @@ function OrgMark({ name }: { name: string }) {
   );
 }
 
-function OpenWorkMark({ className = "h-9 w-auto" }: { className?: string }) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 834 649"
-      fill="none"
-      className={className}
-      aria-label="OpenWork"
-    >
-      <path
-        fill="#011627"
-        d="M445.095 7.09371C465.376 6.15629 479.12 14.7057 495.962 24.2006L526.535 41.3366L562.91 61.6421C572.209 66.8088 584.43 72.9805 592.216 79.7283C605.112 90.9218 613.007 107.518 613.57 124.621C613.997 137.564 613.785 151.186 613.771 164.285L613.743 233.167L613.724 302.115C613.724 328.043 615.147 351.097 609.112 376.5C602.601 403.733 589.274 428.855 570.372 449.495C549.311 472.84 531.218 480.587 504.269 495.433L435.717 533.297L369.268 570.017C349.148 581.007 338.445 590.166 314.978 591.343C295.336 592.765 280.624 583.434 264.332 574.332L231.209 555.796L197.159 536.707C188.064 531.606 176.78 525.84 169.138 519.247C155.537 507.509 147.236 489.12 146.689 471.221C146.261 457.224 146.479 442.102 146.479 427.951L146.495 345.546L146.52 273.548C146.53 254.27 145.49 230.956 149.51 212.464C154.532 189.864 165.167 168.888 180.427 151.489C188.245 142.605 197.223 134.814 207.121 128.324C220.854 119.307 239.559 109.953 254.414 101.931L324.032 63.8708L377.708 34.3028C389.942 27.4909 403.011 19.8636 415.79 14.2429C424.983 10.1982 434.435 8.96958 445.095 7.09371Z"
-      />
-      <path
-        fill="#FFFFFF"
-        d="M551.317 90.4398C557.678 89.5674 565.764 91.1466 571.495 93.8628C579.57 97.6845 585.756 104.611 588.643 113.063C593.053 125.734 591.473 156.67 591.443 171.112L591.314 249.733L591.238 310.947C591.227 325.186 591.691 340.89 590.054 354.92C588.069 370.594 583.473 385.826 576.46 399.982C555.363 442.986 527.973 455.45 488.286 477.122L422.355 513.332L365.248 544.928C353.229 551.61 337.931 561.062 325.256 565.404C303.927 570.03 288.668 560.584 286.41 537.983C285.155 525.413 285.813 512.071 285.819 499.363L285.877 428.201L285.838 335.271C285.834 319.126 284.849 293.286 287.551 278.43C291.03 259.848 299.063 242.413 310.931 227.699C318.408 218.335 327.295 210.186 337.275 203.548C346.99 197.101 362.755 189.212 373.491 183.383L431.093 151.71L500.183 113.742C508.673 109.063 517.232 104.321 525.662 99.5446C534.307 94.6455 540.968 91.4752 551.317 90.4398Z"
-      />
-      <path
-        fill="#011627"
-        d="M500.082 178.001C526.778 177.772 523.894 205.211 523.884 223.719L523.898 262.499L523.914 317.09C523.91 328.358 524.422 343.13 522.698 354.018C520.708 366.296 516.186 378.028 509.412 388.459C503.656 397.432 496.335 405.297 487.795 411.689C481.432 416.447 474.925 419.72 467.987 423.536L442.835 437.398L405.739 457.871C398 462.106 386.024 469.486 377.74 471.261L377.429 471.295C371.837 471.855 366.369 470.989 361.995 467.199C353.196 459.977 353.708 447.985 353.675 437.935C353.658 432.922 353.668 427.909 353.67 422.896L353.695 376.464L353.657 326.944C353.647 313.866 353.091 297.438 355.615 284.836C358.159 272.209 363.878 260.447 372.266 250.342C376.745 244.958 381.997 240.295 387.801 236.377C393.985 232.272 401.996 228.073 408.612 224.459L440.329 207.201L468.44 191.684C477.65 186.588 489.038 179.021 500.082 178.001Z"
-      />
-      <path
-        fill="#FFFFFF"
-        d="M500.225 291.464L500.59 291.556C501.213 292.643 501.002 340.865 500.638 345.536C500.306 350.339 499.443 355.09 498.065 359.703C494.788 370.842 488.588 380.902 480.112 388.834C472.165 396.184 462.79 400.931 453.37 406.067L431.052 418.227L377.328 447.628L376.894 447.414C376.568 445.467 376.757 441.034 376.763 438.896L376.794 421.911C376.893 401.013 376.885 380.115 376.77 359.217C382.142 355.849 390.96 351.452 396.691 348.372L427.925 331.276L469.656 308.362C479.711 302.761 490.055 296.768 500.225 291.464Z"
-      />
-      <path
-        fill="#FFFFFF"
-        d="M497.337 201.62C500.344 201.36 500.962 203.237 501.131 205.91C501.599 213.274 501.389 220.747 501.367 228.135L501.431 265.103C460.969 287.74 420.329 310.058 379.523 332.068L376.452 333.794C376.365 312.962 373.253 285.726 386.024 268.182C393.365 258.104 404.145 253.143 414.788 247.296L441.211 232.769L476.823 212.874C483.353 209.216 490.623 204.921 497.337 201.62Z"
-      />
-      <path
-        fill="#FFFFFF"
-        d="M443.216 29.48C452.02 29.0815 460.018 30.0261 467.903 34.1434C489.625 45.4892 510.693 58.4477 532.373 69.8693C514.905 78.2946 493.564 90.995 476.372 100.542L386.895 149.628C376.357 155.498 365.774 161.287 355.148 166.992C337.373 176.588 322.776 183.695 307.595 197.464C287.772 215.608 273.675 239.14 267.014 265.17C262.116 284.284 262.909 298.302 262.917 317.836L262.939 357.47L262.926 471.524L262.961 530.447C262.98 532.198 263.562 543.941 263.164 544.751L262.58 544.549L215.582 518.061C189.232 503.261 169.189 495.747 169.845 460.795C170.068 448.934 169.804 435.617 169.812 423.605L169.831 344.391L169.818 269.769C169.814 254.383 168.977 231.859 171.873 217.311C175.825 198.048 184.641 180.127 197.478 165.236C204.056 157.596 211.686 150.929 220.143 145.432C231.916 137.708 249.246 128.979 262.061 121.995L328.787 85.3185L391.28 50.97C401.594 45.3095 412 39.3027 422.528 34.3441C428.812 31.3849 436.148 30.2484 443.216 29.48Z"
-      />
-    </svg>
-  );
+function SofiaMark({ className = "h-9 w-auto" }: { className?: string }) {
+  return <img src="/sofia-mark.svg" alt="Sofia" className={className} />;
 }
 
 export function SidebarBrandMark({
@@ -163,7 +130,7 @@ export function SidebarBrandMark({
   if (!iconUrl || failedUrl === iconUrl) {
     return (
       <div data-sidebar-brand-icon="fallback">
-        <OpenWorkMark />
+        <SofiaMark />
       </div>
     );
   }
@@ -184,7 +151,7 @@ export function SidebarBrandMark({
   );
 }
 
-const DEFAULT_WORKSPACE_FAVICON_HREF = "/openwork-mark.svg";
+const DEFAULT_WORKSPACE_FAVICON_HREF = "/sofia-mark.svg";
 
 export function WorkspaceFavicon({
   metadata,
@@ -279,10 +246,10 @@ function getDashboardPageTitle(pathname: string, orgSlug: string | null) {
     return "Diagnostics";
   }
   if (pathname.startsWith(getInferenceRoute(orgSlug))) {
-    return "OpenWork Models";
+    return "Sofia Models";
   }
   if (pathname.startsWith(getWebRoute(orgSlug))) {
-    return "OpenWork Web";
+    return "Sofia Web";
   }
   if (pathname.startsWith(getLibraryRoute(orgSlug))) {
     return "My Library";
@@ -437,27 +404,27 @@ export function OrgDashboardShell({ children }: { children: React.ReactNode }) {
     ...(showWeb
       ? [{
           href: activeOrg ? getWebRoute(activeOrg.slug) : "#",
-          label: "OpenWork Web",
+          label: "Sofia Web",
           icon: Globe,
           badge: "Alpha",
         }]
       : []),
   ];
-  // OpenWork Models are a hosted OpenWork Cloud offering; self-hosted
+  // Sofia Models are a hosted Sofia Cloud offering; self-hosted
   // (single-org) deployments only manage their own LLM providers. Default
   // hidden until the runtime config confirms a hosted (multi-org) deployment.
-  const showOpenWorkModels = runtimeConfigLoaded && runtimeConfig.orgMode === "multi_org";
+  const showSofiaModels = runtimeConfigLoaded && runtimeConfig.orgMode === "multi_org";
   const modelsGroup: DashboardNavItem | null = access.isAdmin && activeOrg
     ? {
-        href: showOpenWorkModels
+        href: showSofiaModels
           ? getInferenceRoute(activeOrg.slug)
           : getCustomLlmProvidersRoute(activeOrg.slug),
         label: "Models",
         icon: Sparkles,
         badge: "Providers",
         children: [
-          ...(showOpenWorkModels
-            ? [{ href: getInferenceRoute(activeOrg.slug), label: "OpenWork Models" }]
+          ...(showSofiaModels
+            ? [{ href: getInferenceRoute(activeOrg.slug), label: "Sofia Models" }]
             : []),
           { href: getCustomLlmProvidersRoute(activeOrg.slug), label: "Bring your Own Keys" },
         ],
@@ -577,7 +544,7 @@ export function OrgDashboardShell({ children }: { children: React.ReactNode }) {
         aria-haspopup="dialog"
       >
         <div className="flex min-w-0 items-center gap-3">
-          <OrgMark name={activeOrg?.name ?? "OpenWork"} />
+          <OrgMark name={activeOrg?.name ?? "Sofia"} />
           <div className="min-w-0">
             <p className="truncate text-[14px] font-medium text-gray-900">
               {activeOrg?.name ?? "Loading..."}
@@ -604,7 +571,7 @@ export function OrgDashboardShell({ children }: { children: React.ReactNode }) {
         >
           <div className="min-w-0 px-3 py-1.5">
             <p className="truncate text-[13px] font-medium text-gray-900">
-              {user?.email ?? "OpenWork user"}
+              {user?.email ?? "Sofia user"}
             </p>
           </div>
           
@@ -874,7 +841,7 @@ export function OrgDashboardShell({ children }: { children: React.ReactNode }) {
               </a>
             ) : null}
             <a
-              href={OPENWORK_DOCS_URL}
+              href={SOFIA_DOCS_URL}
               target="_blank"
               rel="noreferrer"
               className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700"

@@ -1,6 +1,6 @@
 import { expect, onTestFinished } from "vitest";
-import { screenshot, validate } from "@openwork/test-evidence";
-import { chrome } from "@openwork/hosts";
+import { screenshot, validate } from "@sofia/test-evidence";
+import { chrome } from "@sofia/hosts";
 import {
   assignPluginToMarketplace,
   clickButton,
@@ -13,10 +13,10 @@ import {
   readResolvedMarketplace,
   signIn,
   waitFor,
-} from "@openwork/behaviors";
-import type { DenRef, DenSession } from "@openwork/behaviors";
-import { localMysqlIsRunning, needs, selfHostServer, test, unmetNeeds } from "@openwork/testkit";
-import type { TestNeeds } from "@openwork/testkit";
+} from "@sofia/behaviors";
+import type { DenRef, DenSession } from "@sofia/behaviors";
+import { localMysqlIsRunning, needs, selfHostServer, test, unmetNeeds } from "@sofia/testkit";
+import type { TestNeeds } from "@sofia/testkit";
 
 /**
  * CORE JOURNEY: a truly empty, self-hosted-shaped Den is claimed by its configured
@@ -30,21 +30,21 @@ import type { TestNeeds } from "@openwork/testkit";
  * authorized after it.
  */
 
-const requirements: TestNeeds = { optIn: ["OPENWORK_EVAL_E2E_TESTS"] };
+const requirements: TestNeeds = { optIn: ["SOFIA_EVAL_E2E_TESTS"] };
 const missingRequirements = unmetNeeds(requirements, process.env);
-const daytonaPlacement = process.env.OPENWORK_EVAL_DAYTONA === "1";
+const daytonaPlacement = process.env.SOFIA_EVAL_DAYTONA === "1";
 const mysqlOpen = await localMysqlIsRunning();
 const title = missingRequirements.length > 0
   ? `self-host onboarding skipped — needs: ${missingRequirements.join(", ")}`
   : daytonaPlacement
-    ? "self-host onboarding skipped — needs: local placement (unset OPENWORK_EVAL_DAYTONA)"
+    ? "self-host onboarding skipped — needs: local placement (unset SOFIA_EVAL_DAYTONA)"
     : !mysqlOpen
       ? "self-host onboarding skipped — needs: MySQL on 127.0.0.1:3306"
       : "a fresh self-hosted Den onboards its first owner, constrains the org, and serves the skill-sharing journey";
 
 const OWNER_EMAIL = "morgan.owner@selfhost.test";
 const MEMBER_EMAIL = "riley.member@selfhost.test";
-const PASSWORD = "OpenWorkEval123!";
+const PASSWORD = "SofiaEval123!";
 const ORGANIZATION_NAME = "Bluefin Robotics";
 const ORGANIZATION_SLUG = "bluefin";
 const MODEL_ID = "selfhost-proof-model";
@@ -96,7 +96,7 @@ function matchNamed(result: unknown, capabilityName: string): Record<string, unk
 async function mintMcpToken(session: DenSession, organizationId: string): Promise<string> {
   const result = await denFetch(session, "/v1/mcp/token", {
     method: "POST",
-    headers: { ...auth(session), "x-openwork-org-id": organizationId },
+    headers: { ...auth(session), "x-sofia-org-id": organizationId },
     body: JSON.stringify({}),
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
@@ -140,7 +140,7 @@ async function callTool(
 
 async function organizationMemberIdByEmail(owner: DenSession, organizationId: string, email: string): Promise<string> {
   const result = await denFetch(owner, "/v1/org", {
-    headers: { ...auth(owner), "x-openwork-org-id": organizationId },
+    headers: { ...auth(owner), "x-sofia-org-id": organizationId },
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
   const member = recordList(result.body, "members", "organization context")
@@ -224,11 +224,11 @@ test.skipIf(missingRequirements.length > 0 || daytonaPlacement || !mysqlOpen)(ti
   const landingText = await evalIn(browser, "document.body.innerText");
   const landingShot = await screenshot(browser);
   expect(landingText).toEqual(expect.any(String));
-  expect(landingText).toContain("Start using OpenWork");
+  expect(landingText).toContain("Start using Sofia App");
   expect(landingText).toContain("Enter your email and we'll send you to the right sign-in step.");
   {
     const seen = await validate(landingShot, [
-      "The self-hosted account landing says Start using OpenWork",
+      "The self-hosted account landing says Start using Sofia App",
       "An email entry action is visible",
       "No error or crash message is visible",
     ]);
@@ -318,7 +318,7 @@ test.skipIf(missingRequirements.length > 0 || daytonaPlacement || !mysqlOpen)(ti
 
   const providerResult = await denFetch(owner, "/v1/llm-providers", {
     method: "POST",
-    headers: { ...auth(owner), "x-openwork-org-id": organizationId },
+    headers: { ...auth(owner), "x-sofia-org-id": organizationId },
     body: JSON.stringify({
       name: "Self-host Proof Provider",
       source: "custom",
@@ -344,7 +344,7 @@ test.skipIf(missingRequirements.length > 0 || daytonaPlacement || !mysqlOpen)(ti
   expect(providerId).toMatch(/^lpr_/);
 
   const memberProviders = await denFetch(member, "/v1/llm-providers", {
-    headers: { ...auth(member), "x-openwork-org-id": organizationId },
+    headers: { ...auth(member), "x-sofia-org-id": organizationId },
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
   expect(memberProviders.response.status).toBe(200);

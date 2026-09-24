@@ -1,5 +1,5 @@
 import { expect } from "vitest";
-import { screenshot, validate } from "@openwork/test-evidence";
+import { screenshot, validate } from "@sofia/test-evidence";
 import {
   denFetch,
   evalIn,
@@ -10,10 +10,10 @@ import {
   visibleText,
   waitFor,
   waitForText,
-} from "@openwork/behaviors";
-import type { DenSession } from "@openwork/behaviors";
-import type { Surface } from "@openwork/cdp";
-import { app, needs, server, test } from "@openwork/testkit";
+} from "@sofia/behaviors";
+import type { DenSession } from "@sofia/behaviors";
+import type { Surface } from "@sofia/cdp";
+import { app, needs, server, test } from "@sofia/testkit";
 
 const REQUEST_TIMEOUT_MS = 10_000;
 const MODEL_TURN_TIMEOUT_MS = 5 * 60_000;
@@ -66,7 +66,7 @@ async function createProvider(admin: DenSession, orgId: string): Promise<string>
     method: "POST",
     headers: {
       ...auth(admin),
-      "x-openwork-org-id": orgId,
+      "x-sofia-org-id": orgId,
     },
     body: JSON.stringify({
       name: PROVIDER_NAME,
@@ -105,7 +105,7 @@ async function waitForProposalCard(
   created: boolean,
 ): Promise<ProposalCardState> {
   await waitFor(desktop, `(() => {
-    const card = [...document.querySelectorAll('[data-openwork-automation-proposal]')]
+    const card = [...document.querySelectorAll('[data-sofia-automation-proposal]')]
       .find((candidate) => (candidate.textContent ?? '').includes(${JSON.stringify(name)}));
     if (!card || card.getAttribute('data-automation-model-resolution') !== ${JSON.stringify(resolution)}) return false;
     const createdId = card.getAttribute('data-automation-created') ?? '';
@@ -115,7 +115,7 @@ async function waitForProposalCard(
     label: `${resolution} Automation proposal card ${created ? "created" : "ready"}`,
   });
   const value = await evalIn(desktop, `(() => {
-    const card = [...document.querySelectorAll('[data-openwork-automation-proposal]')]
+    const card = [...document.querySelectorAll('[data-sofia-automation-proposal]')]
       .find((candidate) => (candidate.textContent ?? '').includes(${JSON.stringify(name)}));
     if (!card) return null;
     card.scrollIntoView({ block: 'center' });
@@ -135,13 +135,13 @@ async function waitForProposalCard(
 
 async function clickCreateAutomation(desktop: Surface, name: string): Promise<void> {
   await waitFor(desktop, `(() => {
-    const card = [...document.querySelectorAll('[data-openwork-automation-proposal]')]
+    const card = [...document.querySelectorAll('[data-sofia-automation-proposal]')]
       .find((candidate) => (candidate.textContent ?? '').includes(${JSON.stringify(name)}));
     const button = card?.querySelector('[data-create-automation]');
     return button instanceof HTMLButtonElement && !button.disabled;
   })()`, { timeoutMs: 60_000, label: `enabled create button for ${name}` });
   const clicked = await evalIn(desktop, `(() => {
-    const card = [...document.querySelectorAll('[data-openwork-automation-proposal]')]
+    const card = [...document.querySelectorAll('[data-sofia-automation-proposal]')]
       .find((candidate) => (candidate.textContent ?? '').includes(${JSON.stringify(name)}));
     const button = card?.querySelector('[data-create-automation]');
     if (!(button instanceof HTMLButtonElement) || button.disabled) return false;
@@ -164,7 +164,7 @@ async function storedAutomationModel(
   const result = await denFetch(admin, "/v1/automations", {
     headers: {
       ...auth(admin),
-      "x-openwork-org-id": orgId,
+      "x-sofia-org-id": orgId,
     },
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
@@ -198,7 +198,7 @@ async function recordProposalScreenshot(desktop: Surface, claims: string[]): Pro
 }
 
 test("chat Automation proposals map Den providers and disclose a safe fallback", async ({ evidence, place }) => {
-  needs({ model: "tool-capable", optIn: ["OPENWORK_EVAL_E2E_TESTS"] });
+  needs({ model: "tool-capable", optIn: ["SOFIA_EVAL_E2E_TESTS"] });
 
   await using den = await server({ place });
   const orgId = await activeOrganizationId(den.admin);
@@ -214,7 +214,7 @@ test("chat Automation proposals map Den providers and disclose a safe fallback",
     timeoutMs: 120_000,
     label: "session composer",
   });
-  const evalModel = process.env.OPENWORK_EVAL_MODEL?.trim() ?? "";
+  const evalModel = process.env.SOFIA_EVAL_MODEL?.trim() ?? "";
   const models = await readAvailableModels(desktop);
   const evalModelOption = models.find((model) =>
     model.selectable && (model.id === evalModel || model.id.endsWith(`/${evalModel}`))
@@ -234,7 +234,7 @@ test("chat Automation proposals map Den providers and disclose a safe fallback",
     return true;
   })()`);
 
-  const mappedPrompt = `Use the openwork_execute tool exactly once with arguments: {"id":"automation.propose","args":{"name":${JSON.stringify(mappedName)},"instructions":"Summarize new OpenWork feedback and post one short digest.","schedule":{"kind":"weekly","timezone":"UTC","daysOfWeek":[1],"hour":9,"minute":0},"model":{"providerId":"deepseek","modelId":"deepseek-v4-flash"}}}. This is a tool-call test; do not ask questions, do not call any other tool, and reply only after the tool call.`;
+  const mappedPrompt = `Use the sofia_execute tool exactly once with arguments: {"id":"automation.propose","args":{"name":${JSON.stringify(mappedName)},"instructions":"Summarize new Sofia App feedback and post one short digest.","schedule":{"kind":"weekly","timezone":"UTC","daysOfWeek":[1],"hour":9,"minute":0},"model":{"providerId":"deepseek","modelId":"deepseek-v4-flash"}}}. This is a tool-call test; do not ask questions, do not call any other tool, and reply only after the tool call.`;
   expect(mappedPrompt).not.toContain(providerRecordId);
   await sendComposerMessage(desktop, mappedPrompt);
   const mappedCard = await waitForProposalCard(desktop, mappedName, "mapped", false);
@@ -270,17 +270,17 @@ test("chat Automation proposals map Den providers and disclose a safe fallback",
     "No provider-unavailable error or failed creation message is visible",
   ]);
 
-  const fallbackPrompt = `Use the openwork_execute tool exactly once with arguments: {"id":"automation.propose","args":{"name":${JSON.stringify(fallbackName)},"instructions":"Summarize new OpenWork feedback and post one short digest.","schedule":{"kind":"weekly","timezone":"UTC","daysOfWeek":[1],"hour":9,"minute":0},"model":{"providerId":"local-only-provider","modelId":"mystery-model"}}}. This is a tool-call test; do not ask questions, do not call any other tool, and reply only after the tool call.`;
+  const fallbackPrompt = `Use the sofia_execute tool exactly once with arguments: {"id":"automation.propose","args":{"name":${JSON.stringify(fallbackName)},"instructions":"Summarize new Sofia App feedback and post one short digest.","schedule":{"kind":"weekly","timezone":"UTC","daysOfWeek":[1],"hour":9,"minute":0},"model":{"providerId":"local-only-provider","modelId":"mystery-model"}}}. This is a tool-call test; do not ask questions, do not call any other tool, and reply only after the tool call.`;
   expect(fallbackPrompt).not.toContain(providerRecordId);
   await sendComposerMessage(desktop, fallbackPrompt);
   const fallbackCard = await waitForProposalCard(desktop, fallbackName, "fallback", false);
   expect(fallbackCard.resolution).toBe("fallback");
   expect(fallbackCard.text).toContain("free starter model");
-  expect(fallbackCard.text).toContain("Runs with OpenCode Zen");
+  expect(fallbackCard.text).toContain("Runs with Sofia Zen");
   await recordProposalScreenshot(desktop, [
     `A Suggested Automation named ${fallbackName} is visible in the chat`,
     "An amber notice discloses that the unavailable proposed model will use the free starter model",
-    "The proposal says Runs with OpenCode Zen and no provider-unavailable failure is visible",
+    "The proposal says Runs with Sofia Zen and no provider-unavailable failure is visible",
   ]);
 
   await clickCreateAutomation(desktop, fallbackName);
@@ -289,19 +289,19 @@ test("chat Automation proposals map Den providers and disclose a safe fallback",
   expect(fallbackPageText).not.toMatch(/no longer available/i);
   expect(fallbackPageText).toContain("Automation created and active");
   const fallbackModel = await storedAutomationModel(den.admin, orgId, fallbackName);
-  expect(fallbackModel).toEqual({ providerId: "opencode", modelId: "big-pickle" });
+  expect(fallbackModel).toEqual({ providerId: "engine", modelId: "big-pickle" });
   evidence.recordAssertionEvidence(
     "The fallback was disclosed and created with the free starter model",
     `${fallbackName} showed the fallback notice and was created as ${fallbackModel.providerId}/${fallbackModel.modelId}.`,
     fallbackCard.text.includes("free starter model")
-      && fallbackCard.text.includes("Runs with OpenCode Zen")
+      && fallbackCard.text.includes("Runs with Sofia Zen")
       && fallbackCreatedCard.createdId.length > 0
-      && fallbackModel.providerId === "opencode"
+      && fallbackModel.providerId === "engine"
       && fallbackModel.modelId === "big-pickle",
   );
   await recordProposalScreenshot(desktop, [
     `The ${fallbackName} proposal visibly says Automation created and active`,
-    "The created Automation says it runs with OpenCode Zen · Big Pickle",
+    "The created Automation says it runs with Sofia Zen · Big Pickle",
     "No provider-unavailable error or failed creation message is visible",
   ]);
 

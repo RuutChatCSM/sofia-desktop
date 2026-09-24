@@ -5,19 +5,19 @@ import path from "node:path";
 
 import {
   desktopBootstrapPath,
-  globalOpencodeConfigDir,
+  globalWorkspaceEngineConfigDir,
   legacyDesktopBootstrapPath,
   MAX_CONFIG_ROOT_LENGTH,
   normalizeWorkspaceRootPath,
-  openworkEnvStorePath,
-  openworkServerConfigPath,
-  resolveGlobalOpencodeConfigPath,
-  resolveWorkspaceOpencodeConfigPath,
-  workspaceOpencodeConfigCandidates,
+  sofiaEnvStorePath,
+  sofiaServerConfigPath,
+  resolveGlobalWorkspaceEngineConfigPath,
+  resolveWorkspaceWorkspaceEngineConfigPath,
+  workspaceWorkspaceEngineConfigCandidates,
 } from "../index.mjs";
 
 async function withTempDir(callback) {
-  const root = await mkdtemp(path.join(tmpdir(), "openwork-paths-"));
+  const root = await mkdtemp(path.join(tmpdir(), "sofia-paths-"));
   try {
     await callback(root);
   } finally {
@@ -50,10 +50,10 @@ describe("workspace root paths", () => {
   test("rejects Win32 device namespace roots", () => {
     const opts = { platform: "win32" };
     for (const value of [
-      "\\\\.\\pipe\\openwork",
-      "//./PIPE/openwork",
+      "\\\\.\\pipe\\sofia",
+      "//./PIPE/sofia",
       "\\\\.\\PhysicalDrive0",
-      "\\\\?\\UNC\\.\\pipe\\openwork",
+      "\\\\?\\UNC\\.\\pipe\\sofia",
       "\\\\?\\UNC\\?\\PhysicalDrive0",
     ]) {
       expect(() => normalizeWorkspaceRootPath(value, opts)).toThrow("Invalid Windows workspace root");
@@ -80,57 +80,57 @@ describe("workspace root paths", () => {
   });
 });
 
-describe("openwork server config paths", () => {
+describe("sofia server config paths", () => {
   test("uses APPDATA on Windows", () => {
-    expect(openworkServerConfigPath({
+    expect(sofiaServerConfigPath({
       env: { APPDATA: "C:\\Users\\Ada\\AppData\\Roaming" },
       homeDir: "C:\\Users\\Ada",
       platform: "win32",
-    })).toBe("C:\\Users\\Ada\\AppData\\Roaming\\openwork\\server.json");
+    })).toBe("C:\\Users\\Ada\\AppData\\Roaming\\sofia\\server.json");
   });
 
   test("uses XDG_CONFIG_HOME on Unix", () => {
-    expect(openworkServerConfigPath({
+    expect(sofiaServerConfigPath({
       env: { XDG_CONFIG_HOME: "/tmp/xdg" },
       homeDir: "/home/ada",
       platform: "linux",
-    })).toBe("/tmp/xdg/openwork/server.json");
+    })).toBe("/tmp/xdg/sofia/server.json");
   });
 
   test("falls back to ~/.config", () => {
-    expect(openworkServerConfigPath({ env: {}, homeDir: "/home/ada", platform: "linux" }))
-      .toBe("/home/ada/.config/openwork/server.json");
+    expect(sofiaServerConfigPath({ env: {}, homeDir: "/home/ada", platform: "linux" }))
+      .toBe("/home/ada/.config/sofia/server.json");
   });
 
-  test("honors OPENWORK_SERVER_CONFIG", () => {
-    expect(openworkServerConfigPath({
-      env: { OPENWORK_SERVER_CONFIG: "/tmp/openwork/server.json" },
+  test("honors SOFIA_SERVER_CONFIG", () => {
+    expect(sofiaServerConfigPath({
+      env: { SOFIA_SERVER_CONFIG: "/tmp/sofia/server.json" },
       homeDir: "/home/ada",
       platform: "linux",
-    })).toBe("/tmp/openwork/server.json");
+    })).toBe("/tmp/sofia/server.json");
   });
 });
 
-describe("openwork env store and desktop bootstrap paths", () => {
-  test("honors OPENWORK_ENV_STORE", () => {
-    expect(openworkEnvStorePath({
-      env: { OPENWORK_ENV_STORE: "/tmp/openwork/env.json" },
+describe("sofia env store and desktop bootstrap paths", () => {
+  test("honors SOFIA_ENV_STORE", () => {
+    expect(sofiaEnvStorePath({
+      env: { SOFIA_ENV_STORE: "/tmp/sofia/env.json" },
       homeDir: "/home/ada",
       platform: "linux",
-    })).toBe("/tmp/openwork/env.json");
+    })).toBe("/tmp/sofia/env.json");
   });
 
-  test("uses the same openwork config layout for env.json", () => {
-    expect(openworkEnvStorePath({
+  test("uses the same sofia config layout for env.json", () => {
+    expect(sofiaEnvStorePath({
       env: { XDG_CONFIG_HOME: "/tmp/xdg" },
       homeDir: "/home/ada",
       platform: "linux",
-    })).toBe("/tmp/xdg/openwork/env.json");
+    })).toBe("/tmp/xdg/sofia/env.json");
   });
 
-  test("honors OPENWORK_DESKTOP_BOOTSTRAP_PATH", () => {
+  test("honors SOFIA_DESKTOP_BOOTSTRAP_PATH", () => {
     expect(desktopBootstrapPath({
-      env: { OPENWORK_DESKTOP_BOOTSTRAP_PATH: "/tmp/bootstrap.json" },
+      env: { SOFIA_DESKTOP_BOOTSTRAP_PATH: "/tmp/bootstrap.json" },
       homeDir: "/home/ada",
       platform: "linux",
     })).toBe("/tmp/bootstrap.json");
@@ -138,100 +138,100 @@ describe("openwork env store and desktop bootstrap paths", () => {
 
   test("preserves dev-data desktop bootstrap path when userDataDir is injected", () => {
     expect(desktopBootstrapPath({
-      env: { OPENWORK_DEV_MODE: "1" },
+      env: { SOFIA_DEV_MODE: "1" },
       homeDir: "/Users/ada",
       platform: "darwin",
-      userDataDir: "/tmp/openwork-userdata",
-    })).toBe("/tmp/openwork-userdata/openwork-dev-data/home/.config/openwork/desktop-bootstrap.json");
+      userDataDir: "/tmp/sofia-userdata",
+    })).toBe("/tmp/sofia-userdata/sofia-dev-data/home/.config/sofia/desktop-bootstrap.json");
   });
 
   test("resolves the legacy desktop bootstrap path from the chosen home", () => {
     expect(legacyDesktopBootstrapPath({ env: {}, homeDir: "/Users/ada", platform: "darwin" }))
-      .toBe("/Users/ada/.config/openwork/desktop-bootstrap.json");
+      .toBe("/Users/ada/.config/sofia/desktop-bootstrap.json");
   });
 });
 
-describe("global OpenCode config paths", () => {
-  test("accepts safe OPENCODE_CONFIG_DIR as the config directory", async () => {
+describe("global Sofia config paths", () => {
+  test("accepts safe SOFIA_ENGINE_CONFIG_DIR as the config directory", async () => {
     await withTempDir(async (root) => {
-      const opencodeConfigDir = path.join(root, "explicit-opencode");
-      await mkdir(opencodeConfigDir, { recursive: true });
-      const json = path.join(opencodeConfigDir, "opencode.json");
+      const engineConfigDir = path.join(root, "explicit-engine");
+      await mkdir(engineConfigDir, { recursive: true });
+      const json = path.join(engineConfigDir, "engine.json");
       await writeFile(json, "{}", "utf8");
 
       const opts = {
-        env: { OPENCODE_CONFIG_DIR: opencodeConfigDir, XDG_CONFIG_HOME: path.join(root, "xdg") },
+        env: { SOFIA_ENGINE_CONFIG_DIR: engineConfigDir, XDG_CONFIG_HOME: path.join(root, "xdg") },
         homeDir: path.join(root, "home"),
         platform: "linux",
       };
-      expect(globalOpencodeConfigDir(opts)).toBe(opencodeConfigDir);
-      expect(resolveGlobalOpencodeConfigPath(opts)).toBe(json);
+      expect(globalWorkspaceEngineConfigDir(opts)).toBe(engineConfigDir);
+      expect(resolveGlobalWorkspaceEngineConfigPath(opts)).toBe(json);
     });
   });
 
-  test("prefers opencode.jsonc over opencode.json and falls back to jsonc", async () => {
+  test("prefers engine.jsonc over engine.json and falls back to jsonc", async () => {
     await withTempDir(async (root) => {
-      const dir = path.join(root, "xdg", "opencode");
+      const dir = path.join(root, "xdg", "engine");
       await mkdir(dir, { recursive: true });
       const opts = { env: { XDG_CONFIG_HOME: path.join(root, "xdg") }, homeDir: path.join(root, "home"), platform: "linux" };
-      const jsonc = path.join(dir, "opencode.jsonc");
-      const json = path.join(dir, "opencode.json");
+      const jsonc = path.join(dir, "engine.jsonc");
+      const json = path.join(dir, "engine.json");
 
-      expect(resolveGlobalOpencodeConfigPath(opts)).toBe(jsonc);
+      expect(resolveGlobalWorkspaceEngineConfigPath(opts)).toBe(jsonc);
       await writeFile(json, "{}", "utf8");
-      expect(resolveGlobalOpencodeConfigPath(opts)).toBe(json);
+      expect(resolveGlobalWorkspaceEngineConfigPath(opts)).toBe(json);
       await writeFile(jsonc, "{}", "utf8");
-      expect(resolveGlobalOpencodeConfigPath(opts)).toBe(jsonc);
+      expect(resolveGlobalWorkspaceEngineConfigPath(opts)).toBe(jsonc);
     });
   });
 
-  test("rejects relative OPENCODE_CONFIG_DIR", () => {
+  test("rejects relative SOFIA_ENGINE_CONFIG_DIR", () => {
     const opts = {
-      env: { OPENCODE_CONFIG_DIR: "relative/opencode", XDG_CONFIG_HOME: "/tmp/xdg" },
+      env: { SOFIA_ENGINE_CONFIG_DIR: "relative/engine", XDG_CONFIG_HOME: "/tmp/xdg" },
       homeDir: "/home/ada",
       platform: "linux",
     };
-    expect(globalOpencodeConfigDir(opts)).toBe("/tmp/xdg/opencode");
+    expect(globalWorkspaceEngineConfigDir(opts)).toBe("/tmp/xdg/engine");
   });
 
-  test("rejects over-long OPENCODE_CONFIG_DIR", () => {
+  test("rejects over-long SOFIA_ENGINE_CONFIG_DIR", () => {
     const opts = {
-      env: { OPENCODE_CONFIG_DIR: `/${"a".repeat(MAX_CONFIG_ROOT_LENGTH)}`, XDG_CONFIG_HOME: "/tmp/xdg" },
+      env: { SOFIA_ENGINE_CONFIG_DIR: `/${"a".repeat(MAX_CONFIG_ROOT_LENGTH)}`, XDG_CONFIG_HOME: "/tmp/xdg" },
       homeDir: "/home/ada",
       platform: "linux",
     };
-    expect(globalOpencodeConfigDir(opts)).toBe("/tmp/xdg/opencode");
+    expect(globalWorkspaceEngineConfigDir(opts)).toBe("/tmp/xdg/engine");
   });
 
-  test("rejects forbidden control characters in OPENCODE_CONFIG_DIR", () => {
+  test("rejects forbidden control characters in SOFIA_ENGINE_CONFIG_DIR", () => {
     const opts = {
-      env: { OPENCODE_CONFIG_DIR: "/tmp/opencode\n", XDG_CONFIG_HOME: "/tmp/xdg" },
+      env: { SOFIA_ENGINE_CONFIG_DIR: "/tmp/engine\n", XDG_CONFIG_HOME: "/tmp/xdg" },
       homeDir: "/home/ada",
       platform: "linux",
     };
-    expect(globalOpencodeConfigDir(opts)).toBe("/tmp/xdg/opencode");
+    expect(globalWorkspaceEngineConfigDir(opts)).toBe("/tmp/xdg/engine");
   });
 });
 
-describe("workspace OpenCode config paths", () => {
+describe("workspace Sofia config paths", () => {
   test("returns the four server candidates in order", () => {
-    expect(workspaceOpencodeConfigCandidates("/repo/workspace")).toEqual([
-      "/repo/workspace/opencode.jsonc",
-      "/repo/workspace/opencode.json",
-      "/repo/workspace/.opencode/opencode.jsonc",
-      "/repo/workspace/.opencode/opencode.json",
+    expect(workspaceWorkspaceEngineConfigCandidates("/repo/workspace")).toEqual([
+      "/repo/workspace/engine.jsonc",
+      "/repo/workspace/engine.json",
+      "/repo/workspace/.sofia/engine.jsonc",
+      "/repo/workspace/.sofia/engine.json",
     ]);
   });
 
   test("resolves the first existing workspace candidate", async () => {
     await withTempDir(async (root) => {
-      await mkdir(path.join(root, ".opencode"), { recursive: true });
-      const hiddenJsonc = path.join(root, ".opencode", "opencode.jsonc");
-      const hiddenJson = path.join(root, ".opencode", "opencode.json");
+      await mkdir(path.join(root, ".sofia"), { recursive: true });
+      const hiddenJsonc = path.join(root, ".sofia", "engine.jsonc");
+      const hiddenJson = path.join(root, ".sofia", "engine.json");
       await writeFile(hiddenJson, "{}", "utf8");
-      expect(resolveWorkspaceOpencodeConfigPath(root)).toBe(hiddenJson);
+      expect(resolveWorkspaceWorkspaceEngineConfigPath(root)).toBe(hiddenJson);
       await writeFile(hiddenJsonc, "{}", "utf8");
-      expect(resolveWorkspaceOpencodeConfigPath(root)).toBe(hiddenJsonc);
+      expect(resolveWorkspaceWorkspaceEngineConfigPath(root)).toBe(hiddenJsonc);
     });
   });
 });

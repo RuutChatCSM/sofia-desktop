@@ -4,11 +4,11 @@ import {
   diagnoseEgressLabProduct,
   productDiagnosticsPrecondition,
   readBunTls12PinningFinding,
-} from "@openwork/behaviors";
-import { matchVerdictExpectations } from "@openwork/matchers";
-import type { DiagnosticVerdict } from "@openwork/behaviors";
-import type { DiagnosticVerdictExpectation } from "@openwork/matchers";
-import type { EgressLabHandle } from "@openwork/labs";
+} from "@sofia/behaviors";
+import { matchVerdictExpectations } from "@sofia/matchers";
+import type { DiagnosticVerdict } from "@sofia/behaviors";
+import type { DiagnosticVerdictExpectation } from "@sofia/matchers";
+import type { EgressLabHandle } from "@sofia/labs";
 import type { FlowContext } from "../flow.ts";
 
 export {
@@ -44,12 +44,12 @@ export async function expectVerdictNames(
   const verdict = await diagnoseEgressLabProduct(options.lab);
   const corroboration = await diagnoseEgressLabCorroboration(options.lab);
   const matched = matchVerdictExpectations(verdict.text, options.expect);
-  ctx.output(`${options.lab.profile} OpenWork product diagnostics verdict`, `${verdict.text}\n\n${verdict.evidence}`);
+  ctx.output(`${options.lab.profile} Sofia product diagnostics verdict`, `${verdict.text}\n\n${verdict.evidence}`);
   ctx.output(`${options.lab.profile} lab-local corroborating probes`, `${corroboration.text}\n\n${corroboration.evidence}`);
   evidence(
     ctx,
     verdict.available && matched.ok,
-    `OpenWork product diagnostics verdict did not name expected fault(s): ${matched.missing.join(", ")}. Verdict: ${verdict.text}`,
+    `Sofia product diagnostics verdict did not name expected fault(s): ${matched.missing.join(", ")}. Verdict: ${verdict.text}`,
     verdict.text,
   );
   return verdict;
@@ -69,7 +69,7 @@ const { X509Certificate } = require("node:crypto");
 const fs = require("node:fs");
 let tls;
 try { tls = require("node:tls"); } catch { tls = {}; }
-const needle = (process.env.OPENWORK_TLS_REPRO_CA_MATCH || "OpenWork Egress Lab").toLowerCase();
+const needle = (process.env.SOFIA_TLS_REPRO_CA_MATCH || "Sofia Egress Lab").toLowerCase();
 function countMatching(certs) {
   let count = 0;
   for (const pem of certs || []) {
@@ -131,7 +131,7 @@ export async function expectRuntimeTrust(ctx: FlowContext, options: { caPath: st
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     NODE_EXTRA_CA_CERTS: options.caPath,
-    OPENWORK_TLS_REPRO_CA_MATCH: "OpenWork Egress Lab",
+    SOFIA_TLS_REPRO_CA_MATCH: "Sofia Egress Lab",
   };
   for (const runtime of [
     { name: "node", command: process.execPath },
@@ -143,10 +143,10 @@ export async function expectRuntimeTrust(ctx: FlowContext, options: { caPath: st
     ctx.output(`${runtime.name} CA visibility`, JSON.stringify({ status: result.status, error: result.error?.message ?? null, payload, stderr: result.stderr }, null, 2));
     evidence(ctx, ok, `${runtime.name} did not see the lab CA through NODE_EXTRA_CA_CERTS.`, payload ?? result.stderr);
   }
-  const opencode = spawnSync("opencode", ["--version"], { env, encoding: "utf8", timeout: 10_000 });
-  if (opencode.error) {
-    ctx.output("opencode CA visibility", `opencode sidecar not reachable: ${opencode.error.message}`);
+  const engine = spawnSync("engine", ["--version"], { env, encoding: "utf8", timeout: 10_000 });
+  if (engine.error) {
+    ctx.output("engine CA visibility", `engine sidecar not reachable: ${engine.error.message}`);
     return;
   }
-  evidence(ctx, opencode.status === 0, "opencode sidecar was reachable but did not start with the CA environment.", opencode.stdout || opencode.stderr);
+  evidence(ctx, engine.status === 0, "engine sidecar was reachable but did not start with the CA environment.", engine.stdout || engine.stderr);
 }

@@ -1,38 +1,38 @@
 import { expect } from "vitest";
-import { clickButton, evalIn, visibleText } from "@openwork/behaviors";
-import { desktop } from "@openwork/hosts";
-import { eventually, needs, test } from "@openwork/testkit";
+import { clickButton, evalIn, visibleText } from "@sofia/behaviors";
+import { desktop } from "@sofia/hosts";
+import { eventually, needs, test } from "@sofia/testkit";
 
-const e2eTestsEnabled = process.env.OPENWORK_EVAL_E2E_TESTS === "1";
+const e2eTestsEnabled = process.env.SOFIA_EVAL_E2E_TESTS === "1";
 const title = e2eTestsEnabled
   ? "recovery offers only recent stable releases with exact compatible artifacts"
-  : "compatible release picker skipped — needs: set OPENWORK_EVAL_E2E_TESTS=1";
-const currentArtifact = "https://releases.openwork.test/v2.4.0/OpenWork-darwin-arm64.dmg";
-const previousArtifact = "https://releases.openwork.test/v2.3.1/OpenWork-darwin-arm64.dmg";
+  : "compatible release picker skipped — needs: set SOFIA_EVAL_E2E_TESTS=1";
+const currentArtifact = "https://releases.sofia.test/v2.4.0/Sofia-darwin-arm64.dmg";
+const previousArtifact = "https://releases.sofia.test/v2.3.1/Sofia-darwin-arm64.dmg";
 
 test.skipIf(!e2eTestsEnabled)(title, async ({ evidence, place }) => {
-  needs({ optIn: ["OPENWORK_EVAL_E2E_TESTS"] });
+  needs({ optIn: ["SOFIA_EVAL_E2E_TESTS"] });
   await using recoveryApp = await desktop({
     name: "compatible-release-picker",
     host: place.host(),
     timeoutMs: 30_000,
     env: {
-      OPENWORK_EVAL_FATAL_DESKTOP_BOOTSTRAP_FAILURE: "EVAL_FATAL_DESKTOP_BOOTSTRAP_FAILURE",
-      OPENWORK_EVAL_RECOVERY_TARGET: "darwin-arm64-public",
-      OPENWORK_EVAL_RECOVERY_RELEASES: JSON.stringify([
+      SOFIA_EVAL_FATAL_DESKTOP_BOOTSTRAP_FAILURE: "EVAL_FATAL_DESKTOP_BOOTSTRAP_FAILURE",
+      SOFIA_EVAL_RECOVERY_TARGET: "darwin-arm64-public",
+      SOFIA_EVAL_RECOVERY_RELEASES: JSON.stringify([
         { version: "2.4.0", channel: "stable", artifact: { platform: "darwin", arch: "arm64", distribution: "public", url: currentArtifact } },
         { version: "2.3.1", channel: "stable", artifact: { platform: "darwin", arch: "arm64", distribution: "public", url: previousArtifact } },
-        { version: "2.3.0", channel: "stable", artifact: { platform: "linux", arch: "x64", distribution: "public", url: "https://incompatible.invalid/OpenWork.AppImage" } },
-        { version: "2.2.9", channel: "stable", artifact: { platform: "darwin", arch: "arm64", distribution: "enterprise", url: "https://wrong-flavor.invalid/OpenWork.dmg" } },
-        { version: "2.2.8-beta.1", channel: "prerelease", artifact: { platform: "darwin", arch: "arm64", distribution: "public", url: "https://prerelease.invalid/OpenWork.dmg" } },
+        { version: "2.3.0", channel: "stable", artifact: { platform: "linux", arch: "x64", distribution: "public", url: "https://incompatible.invalid/Sofia App.AppImage" } },
+        { version: "2.2.9", channel: "stable", artifact: { platform: "darwin", arch: "arm64", distribution: "enterprise", url: "https://wrong-flavor.invalid/Sofia App.dmg" } },
+        { version: "2.2.8-beta.1", channel: "prerelease", artifact: { platform: "darwin", arch: "arm64", distribution: "public", url: "https://prerelease.invalid/Sofia App.dmg" } },
       ]),
     },
   });
 
   const releaseObserverAvailable = await evalIn(
     recoveryApp,
-    `typeof window.__openworkRecoveryControl?.snapshot === "function"
-      && typeof window.__openworkRecoveryControl?.select === "function"`,
+    `typeof window.__sofiaRecoveryControl?.snapshot === "function"
+      && typeof window.__sofiaRecoveryControl?.select === "function"`,
   );
   expect(
     releaseObserverAvailable,
@@ -55,7 +55,7 @@ test.skipIf(!e2eTestsEnabled)(title, async ({ evidence, place }) => {
 
   const offeredReleases = await evalIn(
     recoveryApp,
-    `window.__openworkRecoveryControl.snapshot().then((snapshot) => snapshot.releases.map((release) => ({
+    `window.__sofiaRecoveryControl.snapshot().then((snapshot) => snapshot.releases.map((release) => ({
       version: release.version,
       marking: release.marking,
       platform: release.artifact.platform,
@@ -70,13 +70,13 @@ test.skipIf(!e2eTestsEnabled)(title, async ({ evidence, place }) => {
     { version: "2.3.1", marking: "previous", platform: "darwin", arch: "arm64", distribution: "public", url: previousArtifact },
   ]);
 
-  await evalIn(recoveryApp, `window.__openworkRecoveryControl.select("2.3.0")`, { awaitPromise: true });
-  await evalIn(recoveryApp, `window.__openworkRecoveryControl.select("9.9.9")`, { awaitPromise: true });
-  expect(await evalIn(recoveryApp, `window.__openworkRecoveryControl.snapshot().then((snapshot) => snapshot.openedArtifactUrls)`, { awaitPromise: true })).toEqual([]);
+  await evalIn(recoveryApp, `window.__sofiaRecoveryControl.select("2.3.0")`, { awaitPromise: true });
+  await evalIn(recoveryApp, `window.__sofiaRecoveryControl.select("9.9.9")`, { awaitPromise: true });
+  expect(await evalIn(recoveryApp, `window.__sofiaRecoveryControl.snapshot().then((snapshot) => snapshot.openedArtifactUrls)`, { awaitPromise: true })).toEqual([]);
 
   await clickButton(recoveryApp, "Use 2.3.1", { timeoutMs: 5_000 });
   const openedArtifactUrls = await eventually(
-    () => evalIn(recoveryApp, `window.__openworkRecoveryControl.snapshot().then((snapshot) => snapshot.openedArtifactUrls)`, { awaitPromise: true }),
+    () => evalIn(recoveryApp, `window.__sofiaRecoveryControl.snapshot().then((snapshot) => snapshot.openedArtifactUrls)`, { awaitPromise: true }),
     {
       within: 5_000,
       label: "exact compatible release artifact",
@@ -85,9 +85,9 @@ test.skipIf(!e2eTestsEnabled)(title, async ({ evidence, place }) => {
   );
   expect(openedArtifactUrls).toEqual([previousArtifact]);
   expect(openedArtifactUrls).not.toContain(currentArtifact);
-  expect(openedArtifactUrls).not.toContain("https://incompatible.invalid/OpenWork.AppImage");
-  expect(openedArtifactUrls).not.toContain("https://wrong-flavor.invalid/OpenWork.dmg");
-  expect(openedArtifactUrls).not.toContain("https://prerelease.invalid/OpenWork.dmg");
+  expect(openedArtifactUrls).not.toContain("https://incompatible.invalid/Sofia App.AppImage");
+  expect(openedArtifactUrls).not.toContain("https://wrong-flavor.invalid/Sofia App.dmg");
+  expect(openedArtifactUrls).not.toContain("https://prerelease.invalid/Sofia App.dmg");
   evidence.recordAssertionEvidence(
     "The picker opened only the exact compatible previous stable artifact",
     "Current and previous were marked, incompatible and prerelease targets were absent, and arbitrary selection opened nothing.",

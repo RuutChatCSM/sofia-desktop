@@ -1,8 +1,8 @@
 import type {
-  OpenworkCloudMcpFailure,
-  OpenworkCloudMcpHealth,
-  OpenworkCloudMcpProviderModelContext,
-} from "../../../app/lib/openwork-server";
+  SofiaCloudMcpFailure,
+  SofiaCloudMcpHealth,
+  SofiaCloudMcpProviderModelContext,
+} from "../../../app/lib/sofia-server";
 import type { CloudMcpUserState } from "./cloud-mcp-user-state";
 
 export const CLOUD_MCP_SUBMISSION_RETRY_DELAYS_MS = [1_000, 3_000];
@@ -11,12 +11,12 @@ export const CLOUD_MCP_AUTH_RESOLUTION_TIMEOUT_MS = 12_000;
 
 const REQUIRED_DIRECT_TOOL_IDS = ["search_capabilities", "execute_capability"];
 const REQUIRED_PROJECTED_TOOL_IDS = [
-  "openwork-cloud_search_capabilities",
-  "openwork-cloud_execute_capability",
+  "sofia-cloud_search_capabilities",
+  "sofia-cloud_execute_capability",
 ];
 
 export type CloudMcpSubmissionIssue = Pick<
-  OpenworkCloudMcpFailure,
+  SofiaCloudMcpFailure,
   "code" | "stage" | "retryable" | "recommendedAction" | "message"
 >;
 
@@ -27,7 +27,7 @@ export type CloudMcpSubmissionGateContext = {
   serverBaseUrl: string;
   orgId: string | null;
   workspaceId: string;
-  providerModel?: OpenworkCloudMcpProviderModelContext;
+  providerModel?: SofiaCloudMcpProviderModelContext;
   userState: CloudMcpUserState | null;
 };
 
@@ -41,13 +41,13 @@ export type CloudMcpSubmissionGateDecision =
     };
 
 export type CloudMcpSubmissionReadinessAssessment =
-  | { ready: true; health: OpenworkCloudMcpHealth }
-  | { ready: false; health: OpenworkCloudMcpHealth | null; issue: CloudMcpSubmissionIssue };
+  | { ready: true; health: SofiaCloudMcpHealth }
+  | { ready: false; health: SofiaCloudMcpHealth | null; issue: CloudMcpSubmissionIssue };
 
 export type CloudMcpSubmissionReadinessResult =
-  | { outcome: "ready"; health: OpenworkCloudMcpHealth; attempts: number }
-  | { outcome: "bypass"; health: OpenworkCloudMcpHealth; attempts: number; reason: "disabled" }
-  | { outcome: "failed"; health: OpenworkCloudMcpHealth | null; issue: CloudMcpSubmissionIssue; attempts: number };
+  | { outcome: "ready"; health: SofiaCloudMcpHealth; attempts: number }
+  | { outcome: "bypass"; health: SofiaCloudMcpHealth; attempts: number; reason: "disabled" }
+  | { outcome: "failed"; health: SofiaCloudMcpHealth | null; issue: CloudMcpSubmissionIssue; attempts: number };
 
 export type CloudMcpSubmissionAttempt = {
   phase: "readiness" | "repair";
@@ -117,7 +117,7 @@ function genericSubmissionIssue(input?: {
   };
 }
 
-function failureIssue(health: OpenworkCloudMcpHealth): CloudMcpSubmissionIssue {
+function failureIssue(health: SofiaCloudMcpHealth): CloudMcpSubmissionIssue {
   const failure = health.firstFailure;
   if (!failure) return genericSubmissionIssue();
   return {
@@ -129,7 +129,7 @@ function failureIssue(health: OpenworkCloudMcpHealth): CloudMcpSubmissionIssue {
   };
 }
 
-function healthShowsExplicitDisable(health: OpenworkCloudMcpHealth): boolean {
+function healthShowsExplicitDisable(health: SofiaCloudMcpHealth): boolean {
   const code = health.firstFailure?.code.trim().toLowerCase().replace(/[-.]/g, "_") ?? "";
   return health.desired.config?.enabled === false || code === "cloud_mcp_disabled" || code === "cloud_disabled";
 }
@@ -211,12 +211,12 @@ export async function resolveCloudMcpSubmissionAuth(
 
 /**
  * Direct tools/list proves the Cloud tools are registered and reachable. The
- * selected model must then either expose those exact tools through OpenCode's
+ * selected model must then either expose those exact tools through Sofia's
  * experimental listing or be verified as tool-capable by its provider.
  */
 export function assessCloudMcpSubmissionReadiness(input: {
-  health: OpenworkCloudMcpHealth | null;
-  providerModel: OpenworkCloudMcpProviderModelContext;
+  health: SofiaCloudMcpHealth | null;
+  providerModel: SofiaCloudMcpProviderModelContext;
 }): CloudMcpSubmissionReadinessAssessment {
   const health = input.health;
   if (!health) {
@@ -359,9 +359,9 @@ function errorAssessment(error: unknown): CloudMcpSubmissionReadinessAssessment 
 }
 
 export async function ensureCloudMcpSubmissionReadiness(input: {
-  providerModel: OpenworkCloudMcpProviderModelContext;
-  check: () => Promise<OpenworkCloudMcpHealth | null>;
-  repair: () => Promise<OpenworkCloudMcpHealth | null>;
+  providerModel: SofiaCloudMcpProviderModelContext;
+  check: () => Promise<SofiaCloudMcpHealth | null>;
+  repair: () => Promise<SofiaCloudMcpHealth | null>;
   retryDelaysMs?: number[];
   attemptTimeoutMs?: number;
   wait?: (delayMs: number) => Promise<void>;

@@ -39,7 +39,7 @@ describe("dashboard home layouts", () => {
     expect(member).toContain('router.push("/install")');
     expect(member).not.toContain("member-copy-install-link");
     expect(member).not.toContain("createOrganizationInstallLink");
-    expect(member).toContain('"openwork://open"');
+    expect(member).toContain('"sofia://open"');
     expect(member).not.toContain("useOrgLlmProviders");
     expect(member).not.toContain("useMarketplaces");
     expect(member).not.toContain("usePlugins");

@@ -1,6 +1,6 @@
 "use client";
 
-import { detectPlatform } from "@openwork/ui/react";
+import { detectPlatform } from "@sofia/ui/react";
 import { useEffect, useState } from "react";
 
 const BACKDROP: Record<"macos" | "windows", string> = {

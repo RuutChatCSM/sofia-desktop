@@ -12,7 +12,7 @@ let emptyRequests = 0
 let successRequestUrl: string | null = null
 
 beforeAll(async () => {
-  process.env.DATABASE_URL ??= "mysql://root:password@127.0.0.1:3306/openwork_test"
+  process.env.DATABASE_URL ??= "mysql://root:password@127.0.0.1:3306/sofia_test"
   process.env.DEN_DB_ENCRYPTION_KEY ??= "x".repeat(32)
   process.env.BETTER_AUTH_SECRET ??= "y".repeat(32)
   process.env.BETTER_AUTH_URL ??= "http://127.0.0.1:8790"
@@ -54,7 +54,7 @@ beforeEach(() => {
   successRequestUrl = null
   envModule.env.desktopReleasesMode = "github"
   envModule.env.desktopReleasesBaseUrl = server.url.origin
-  envModule.env.installerReleaseRepo = "different-ai/openwork"
+  envModule.env.installerReleaseRepo = "RuutChatCSM/sofia-desktop"
   envModule.env.installerReleaseTag = `v${PUBLISHED_DESKTOP_VERSIONS[0]}`
   envModule.env.installerReleaseTagExplicit = false
 })
@@ -73,7 +73,7 @@ describe("desktop release discovery", () => {
       latestAppVersion: "1.0.0",
       publishedDesktopVersions: ["1.0.0", "0.18.10", "0.18.9", MIN_SUPPORTED_DESKTOP_VERSION],
     })
-    expect(successRequestUrl).toBe(`${server.url.origin}/repos/different-ai/openwork/releases?per_page=100`)
+    expect(successRequestUrl).toBe(`${server.url.origin}/repos/RuutChatCSM/sofia-desktop/releases?per_page=100`)
   })
 
   test("excludes draft and prerelease rollback releases", async () => {

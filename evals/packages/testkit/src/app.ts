@@ -1,7 +1,7 @@
-import { createAndSelectWorkspace, signInDesktopAs } from "@openwork/behaviors";
-import type { Surface } from "@openwork/cdp";
-import { desktop } from "@openwork/hosts";
-import type { DesktopHandle, Host } from "@openwork/hosts";
+import { createAndSelectWorkspace, signInDesktopAs } from "@sofia/behaviors";
+import type { Surface } from "@sofia/cdp";
+import { desktop } from "@sofia/hosts";
+import type { DesktopHandle, Host } from "@sofia/hosts";
 import type { Den } from "./server.ts";
 import type { Place } from "./place.ts";
 
@@ -14,7 +14,7 @@ export interface AppOptions {
   workspacePath?: string;
   /** Reuse this caller-owned local Electron profile root instead of creating one. */
   profileDir?: string;
-  /** Eval-only delay before the desktop starts its embedded OpenWork server. */
+  /** Eval-only delay before the desktop starts its embedded Sofia server. */
   localServerDelayMs?: number;
   /** Observe a fresh profile after workspace setup but before Cloud sign-in. */
   beforeSignIn?: (surface: Surface) => Promise<void>;
@@ -32,9 +32,9 @@ export async function app(options: AppOptions): Promise<App> {
     throw new Error(`Unknown Den member ${JSON.stringify(options.as)}. Available: ${available}`);
   }
   const env: Record<string, string> = {};
-  if (options.model) env.OPENWORK_EVAL_MODEL = options.model;
+  if (options.model) env.SOFIA_EVAL_MODEL = options.model;
   if (options.localServerDelayMs !== undefined) {
-    env.OPENWORK_EVAL_LOCAL_SERVER_DELAY_MS = String(options.localServerDelayMs);
+    env.SOFIA_EVAL_LOCAL_SERVER_DELAY_MS = String(options.localServerDelayMs);
   }
   const surface = await desktop({
     name: `testkit-${options.as}`,
@@ -50,7 +50,7 @@ export async function app(options: AppOptions): Promise<App> {
   try {
     // Workspace first, then the org sign-in: the signed-in org shell offers no
     // Add workspace entry, so a member's workspace exists before they connect.
-    const path = options.workspacePath ?? `/tmp/openwork-${options.as}-${Date.now()}`;
+    const path = options.workspacePath ?? `/tmp/sofia-${options.as}-${Date.now()}`;
     await createAndSelectWorkspace(surface, { path });
     await options.beforeSignIn?.(surface);
     await signInDesktopAs(surface, options.den.ref, member);

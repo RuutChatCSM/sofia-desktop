@@ -1,7 +1,7 @@
 import { createHash, createHmac } from "node:crypto"
-import { eq } from "@openwork-ee/den-db/drizzle"
-import { RateLimitTable } from "@openwork-ee/den-db/schema"
-import { createDenTypeId } from "@openwork-ee/utils/typeid"
+import { eq } from "@sofia-ee/den-db/drizzle"
+import { RateLimitTable } from "@sofia-ee/den-db/schema"
+import { createDenTypeId } from "@sofia-ee/utils/typeid"
 import { ZxcvbnFactory } from "@zxcvbn-ts/core"
 import { adjacencyGraphs, dictionary as commonPasswordDictionary } from "@zxcvbn-ts/language-common"
 import { dictionary as englishPasswordDictionary, translations as englishPasswordTranslations } from "@zxcvbn-ts/language-en"
@@ -300,7 +300,7 @@ export async function isPasswordCompromised(password: string, fetchPasswordRange
   const response = await fetchPasswordRange(`https://api.pwnedpasswords.com/range/${prefix}`, {
     headers: {
       "add-padding": "true",
-      "user-agent": "OpenWork den-api password screening",
+      "user-agent": "Sofia den-api password screening",
     },
   })
 

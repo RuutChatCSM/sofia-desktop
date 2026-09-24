@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { expect } from "vitest";
-import { test } from "@openwork/testkit";
+import { test } from "@sofia/testkit";
 import {
   parseInviteLinkInput,
   parseServerUrlInput,
@@ -29,11 +29,11 @@ test("the welcome screen folds the server-URL door into the join-organization fi
     host: "den.acme.test",
   });
   expect(parseInviteLinkInput("https://den.acme.test/install?token=abc")).toBeNull();
-  expect(parseServerUrlInput("https://openwork.acme.test/")).toEqual({
-    url: "https://openwork.acme.test",
-    host: "openwork.acme.test",
+  expect(parseServerUrlInput("https://sofia.acme.test/")).toEqual({
+    url: "https://sofia.acme.test",
+    host: "sofia.acme.test",
   });
-  expect(parseServerUrlInput("openwork://den-auth?grant=abcdefghijkl")).toBeNull();
+  expect(parseServerUrlInput("sofia://den-auth?grant=abcdefghijkl")).toBeNull();
   expect(parseServerUrlInput("raw-sign-in-grant-value")).toBeNull();
 
   expect(welcomeSource).not.toContain("OrganizationServerAffordance");
@@ -51,7 +51,7 @@ test("the welcome screen folds the server-URL door into the join-organization fi
 
   evidence.recordAssertionEvidence(
     "The welcome screen has one paste field for invite links, install links, server URLs, and sign-in codes",
-    "The separate Using OpenWork on-premises affordance is gone from Welcome; the join dialog classifies install link, then invite link, then server URL, then sign-in code, and requires explicit host confirmation before opening web invites.",
+    "The separate Using Sofia App on-premises affordance is gone from Welcome; the join dialog classifies install link, then invite link, then server URL, then sign-in code, and requires explicit host confirmation before opening web invites.",
     true,
   );
 });

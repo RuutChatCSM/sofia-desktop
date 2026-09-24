@@ -11,25 +11,9 @@ const electronSidecarDir = resolve(desktopRoot, "resources", "sidecars");
 const electronHelperDir = resolve(desktopRoot, "resources", "helpers");
 const defaultDevDataDir = resolve(
   process.env.HOME ?? process.env.USERPROFILE ?? repoRoot,
-  ".openwork",
-  "openwork-server-dev",
+  ".sofia",
+  "sofia-server-dev",
 );
-
-// Prefer the sibling Sofia source checkout's debug build so local dev exercises
-// codex changes without rebuilding/shipping the sidecar. An explicit
-// OPENWORK_CODEX_BIN always wins; falls back to the bundled sidecar otherwise.
-const debugCodexBinary = (() => {
-  const candidate = resolve(
-    repoRoot,
-    "..",
-    "codex",
-    "codex-rs",
-    "target",
-    "debug",
-    process.platform === "win32" ? "codex.exe" : "codex",
-  );
-  return existsSync(candidate) ? candidate : null;
-})();
 
 const pnpmCmd = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
 const nodeCmd = process.execPath;
@@ -59,7 +43,7 @@ const devPort = rawPort === "0"
 if (rawPort === "0") {
   console.log(`[electron-dev] Vite dev server will use free port ${devPort}`);
 }
-const explicitStartUrl = process.env.OPENWORK_ELECTRON_START_URL?.trim() || "";
+const explicitStartUrl = process.env.SOFIA_ELECTRON_START_URL?.trim() || "";
 const startUrl = explicitStartUrl || `http://localhost:${devPort}`;
 const viteProbeUrls = explicitStartUrl
   ? [explicitStartUrl]
@@ -237,14 +221,14 @@ async function stopAll(exitCode = 0) {
 process.once("SIGINT", () => void stopAll(130));
 process.once("SIGTERM", () => void stopAll(143));
 
-if (process.env.OPENWORK_ELECTRON_SKIP_SHARED_PREPARE !== "1") {
+if (process.env.SOFIA_ELECTRON_SKIP_SHARED_PREPARE !== "1") {
   runSync(nodeCmd, [resolve(__dirname, "prepare-sidecar.mjs"), "--force", "--outdir", electronSidecarDir], { cwd: desktopRoot });
   runSync(nodeCmd, [resolve(__dirname, "prepare-computer-use-helper.mjs"), "--force", "--outdir", electronHelperDir], { cwd: desktopRoot });
 }
 
 // Build the server TS → JS so Electron can import it in-process
-console.log("[electron-dev] Building openwork-server (tsc)...");
-runSync(pnpmCmd, ["--filter", "openwork-server", "build"], { cwd: repoRoot });
+console.log("[electron-dev] Building sofia-server (tsc)...");
+runSync(pnpmCmd, ["--filter", "sofia-server", "build"], { cwd: repoRoot });
 
 const initialProbeUrls = [startUrl, ...viteProbeUrls].filter(Boolean);
 let viteReady = false;
@@ -270,8 +254,8 @@ if (!viteReady) {
     env: {
       ...process.env,
       PORT: String(devPort),
-      OPENWORK_DEV_MODE: process.env.OPENWORK_DEV_MODE ?? "1",
-      OPENWORK_DATA_DIR: process.env.OPENWORK_DATA_DIR ?? defaultDevDataDir,
+      SOFIA_DEV_MODE: process.env.SOFIA_DEV_MODE ?? "1",
+      SOFIA_DATA_DIR: process.env.SOFIA_DATA_DIR ?? defaultDevDataDir,
     },
   });
 }
@@ -280,17 +264,17 @@ const resolvedStartUrl = await waitForVite(startUrl);
 
 // Native dependencies installed for the host Node ABI must be rebuilt before
 // Electron loads the embedded server and terminal runtime.
-if (process.env.OPENWORK_ELECTRON_SKIP_NATIVE_REBUILD === "1") {
+if (process.env.SOFIA_ELECTRON_SKIP_NATIVE_REBUILD === "1") {
   console.log("[electron-dev] Using prebuilt Electron native dependencies.");
 } else {
   console.log("[electron-dev] Rebuilding native dependencies for Electron...");
-  runSync(pnpmCmd, ["--filter", "@openwork/desktop", "run", "rebuild:electron-native"], { cwd: repoRoot });
+  runSync(pnpmCmd, ["--filter", "@sofia/desktop", "run", "rebuild:electron-native"], { cwd: repoRoot });
 }
 
 // Optional Electron CDP for external debugging / raw CDP clients.
 // NOT required for the built-in browser (uses native webContents APIs).
-// Set OPENWORK_ELECTRON_REMOTE_DEBUG_PORT=9823 to enable.
-const cdpPortRaw = process.env.OPENWORK_ELECTRON_REMOTE_DEBUG_PORT?.trim() ?? "";
+// Set SOFIA_ELECTRON_REMOTE_DEBUG_PORT=9823 to enable.
+const cdpPortRaw = process.env.SOFIA_ELECTRON_REMOTE_DEBUG_PORT?.trim() ?? "";
 const cdpPort = cdpPortRaw === "" || cdpPortRaw === "0" ? "" : cdpPortRaw;
 
 const blankSlateArgs = process.argv.includes("--blank-slate") ? ["--blank-slate"] : [];
@@ -298,18 +282,15 @@ electronChild = run(pnpmCmd, ["exec", "electron", "./electron/main.mjs", ...blan
   cwd: desktopRoot,
     env: {
       ...process.env,
-      OPENWORK_DEV_MODE: process.env.OPENWORK_DEV_MODE ?? "1",
-      OPENWORK_DATA_DIR: process.env.OPENWORK_DATA_DIR ?? defaultDevDataDir,
-      OPENWORK_ELECTRON_START_URL: resolvedStartUrl,
-      ...(process.env.OPENWORK_CODEX_BIN || debugCodexBinary
-        ? { OPENWORK_CODEX_BIN: process.env.OPENWORK_CODEX_BIN || debugCodexBinary }
-        : {}),
-      ...(cdpPort ? { OPENWORK_ELECTRON_REMOTE_DEBUG_PORT: cdpPort } : {}),
+      SOFIA_DEV_MODE: process.env.SOFIA_DEV_MODE ?? "1",
+      SOFIA_DATA_DIR: process.env.SOFIA_DATA_DIR ?? defaultDevDataDir,
+      SOFIA_ELECTRON_START_URL: resolvedStartUrl,
+      ...(cdpPort ? { SOFIA_ELECTRON_REMOTE_DEBUG_PORT: cdpPort } : {}),
     },
 });
 
 if (cdpPort) {
-  console.log(`[openwork] Electron CDP exposed at http://127.0.0.1:${cdpPort}`);
+  console.log(`[sofia] Electron CDP exposed at http://127.0.0.1:${cdpPort}`);
 }
 
 electronChild.on("exit", (code) => {

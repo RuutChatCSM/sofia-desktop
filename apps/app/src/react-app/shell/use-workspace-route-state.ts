@@ -1,5 +1,5 @@
 // The session route's data + navigation core: workspace/session loading
-// (refreshRouteState + background session fetch), endpoint and opencode
+// (refreshRouteState + background session fetch), endpoint and engine
 // client resolution, URL-derived selection, redirects (fallback workspace,
 // welcome), desktop local-server reconnect, remote
 // connection checks, and the route inspector slice. Extracted verbatim from
@@ -10,7 +10,7 @@ import { useLocation, useNavigate, useParams } from "react-router";
 import type { Session } from "@/app/lib/engine-types";
 
 import {
-  publishInspectorOpencodeClient,
+  publishInspectorWorkspaceEngineClient,
   publishInspectorSlice,
   recordInspectorEvent,
 } from "@/app/lib/app-inspector";
@@ -19,11 +19,11 @@ import {
   workspaceBootstrap,
   workspaceSetRuntimeActive,
   workspaceSetSelected,
-  type OpenworkServerInfo,
+  type SofiaServerInfo,
   type WorkspaceList,
 } from "@/app/lib/desktop";
-import { createClient } from "@/app/lib/opencode";
-import { createOpenworkServerClient, type OpenworkServerClient } from "@/app/lib/openwork-server";
+import { createClient } from "@/app/lib/engine";
+import { createSofiaServerClient, type SofiaServerClient } from "@/app/lib/sofia-server";
 import { readDenBootstrapConfig } from "@/app/lib/den";
 import { isDesktopRuntime } from "@/app/lib/runtime-env";
 import type { ResolvedWorkspaceEndpoint } from "@/app/lib/workspace-endpoint";
@@ -43,10 +43,10 @@ import { useLocal } from "@/react-app/kernel/local-provider";
 import { useDenAuth } from "@/react-app/domains/cloud/den-auth-provider";
 import { useBootState } from "./boot-state";
 import {
-  ensureDesktopLocalOpenworkConnection,
+  ensureDesktopLocalSofiaConnection,
   shouldAttemptDesktopLocalReconnect,
-} from "./desktop-local-openwork";
-import { resolveOpenworkConnection } from "./openwork-connection";
+} from "./desktop-local-sofia";
+import { resolveSofiaConnection } from "./sofia-connection";
 import {
   createLatestWorkspaceCommitter,
   createRouteRefreshLifecycle,
@@ -82,10 +82,10 @@ import {
 export type UseWorkspaceRouteStateInput = {
   developerMode: boolean;
   workspaceRoute?: "session" | "automations";
-  /** Invoked when the openwork-server settings-changed event fires (the route bumps its settings version). */
+  /** Invoked when the sofia-server settings-changed event fires (the route bumps its settings version). */
   onServerSettingsChanged: () => void;
-  /** Receives the local openwork-server host info discovered during refresh. */
-  onHostInfo: (info: OpenworkServerInfo | null) => void;
+  /** Receives the local sofia-server host info discovered during refresh. */
+  onHostInfo: (info: SofiaServerInfo | null) => void;
 };
 
 type ModernRouteSessionResolution =
@@ -166,7 +166,7 @@ export function useWorkspaceRouteState(input: UseWorkspaceRouteStateInput) {
     routeReady: bootRouteReady,
   } = useBootState();
   const [loading, setLoading] = useState(true);
-  const [client, setClient] = useState<OpenworkServerClient | null>(null);
+  const [client, setClient] = useState<SofiaServerClient | null>(null);
   const [baseUrl, setBaseUrl] = useState("");
   const [token, setToken] = useState("");
   const [workspaces, setWorkspaces] = useState<RouteWorkspace[]>([]);
@@ -187,7 +187,7 @@ export function useWorkspaceRouteState(input: UseWorkspaceRouteStateInput) {
     () => workspaces.find((workspace) => workspace.id === selectedWorkspaceId) ?? (selectedWorkspaceId ? null : workspaces[0] ?? null),
     [selectedWorkspaceId, workspaces],
   );
-  // Workspace-scoped API calls (sessions, events, activate, opencode/*) must
+  // Workspace-scoped API calls (sessions, events, activate, engine/*) must
   // hit the worker that owns the workspace, not the user's local server. The
   // single source of truth for that routing is `resolveWorkspaceEndpoint`.
   //
@@ -285,7 +285,7 @@ export function useWorkspaceRouteState(input: UseWorkspaceRouteStateInput) {
       const backoffMs = (attempt: number) => Math.min(500 * Math.pow(2, attempt), 4_000);
 
       const fetchOnce = async (workspace: RouteWorkspace, attempt: number): Promise<void> => {
-        const isRemoteOpenworkWorkspace = workspace.workspaceType === "remote" && workspace.remoteType !== "opencode";
+        const isRemoteSofiaWorkspace = workspace.workspaceType === "remote" && workspace.remoteType !== "engine";
         const endpoint = endpointForWorkspace(workspace);
         if (!endpoint) {
           if (workspace.workspaceType === "remote") {
@@ -309,7 +309,7 @@ export function useWorkspaceRouteState(input: UseWorkspaceRouteStateInput) {
         if (startedAt && Date.now() - startedAt < 5_000) return;
         const requestStartedAt = Date.now();
         backgroundSessionLoadInFlight.current.set(workspace.id, requestStartedAt);
-        if (isRemoteOpenworkWorkspace) {
+        if (isRemoteSofiaWorkspace) {
           setWorkspaceConnectionOverrides((current) => ({
             ...current,
             [workspace.id]: {
@@ -323,10 +323,14 @@ export function useWorkspaceRouteState(input: UseWorkspaceRouteStateInput) {
           const response = await endpoint.client.listSessions(endpoint.workspaceId, { limit: 200 });
           const fetchedItems = response.items ?? [];
           const workspaceRoot = normalizeDirectoryPath(workspace.path ?? "");
-          const items = workspaceRoot && !isRemoteOpenworkWorkspace
-            ? fetchedItems.filter((session) =>
-                normalizeDirectoryPath(session?.directory ?? "") === workspaceRoot,
-              )
+          const items = workspaceRoot && !isRemoteSofiaWorkspace
+            ? fetchedItems.filter((session) => {
+                const sessionDirectory = normalizeDirectoryPath(session?.directory ?? "");
+                // Sessions with no recorded directory (imported from another
+                // engine home) belong to the selected workspace: keeping them
+                // here is what makes them resolvable instead of "not found".
+                return !sessionDirectory || sessionDirectory === workspaceRoot;
+              })
             : fetchedItems;
           setSessionsByWorkspaceId((current) => {
             const nextItems = mergeFetchedSessionsWithPending(workspace.id, items, current[workspace.id] ?? []);
@@ -337,7 +341,7 @@ export function useWorkspaceRouteState(input: UseWorkspaceRouteStateInput) {
           loadedWorkspaceIdsRef.current.add(workspace.id);
           setErrorsByWorkspaceId((current) => ({ ...current, [workspace.id]: null }));
           setWorkspaceConnectionOverrides((current) => {
-            if (isRemoteOpenworkWorkspace) {
+            if (isRemoteSofiaWorkspace) {
               return {
                 ...current,
                 [workspace.id]: {
@@ -358,7 +362,7 @@ export function useWorkspaceRouteState(input: UseWorkspaceRouteStateInput) {
             current.includes(workspace.id) ? current.filter((id) => id !== workspace.id) : current,
           );
           // When a workspace returns zero sessions during the initial batch
-          // load, OpenCode may still be warming up its index.  Schedule a
+          // load, Sofia may still be warming up its index.  Schedule a
           // single delayed retry so the sidebar doesn't stay permanently
           // empty while the managed engine finishes starting.
           if (items.length === 0 && attempt === 0) {
@@ -370,7 +374,7 @@ export function useWorkspaceRouteState(input: UseWorkspaceRouteStateInput) {
           }
         } catch (error) {
           const message = error instanceof Error ? error.message : t("app.unknown_error");
-          // The first cold call to OpenCode's /session endpoint often hits
+          // The first cold call to Sofia's /session endpoint often hits
           // the 12s server timeout while the daemon finishes warming up
           // its index. Retry silently with backoff until we get a response
           // or run out of attempts — the sidebar keeps its "loading" state
@@ -467,7 +471,7 @@ export function useWorkspaceRouteState(input: UseWorkspaceRouteStateInput) {
       if (!attempt.isCurrent()) return;
 
       const { normalizedBaseUrl, resolvedToken, resolvedHostToken, hostInfo } = await withRouteRefreshTimeout(
-        resolveOpenworkConnection(),
+        resolveSofiaConnection(),
         "Sofia App server connection",
       );
       if (!attempt.isCurrent()) return;
@@ -526,13 +530,13 @@ export function useWorkspaceRouteState(input: UseWorkspaceRouteStateInput) {
       // local workspaces => sidebar gets stuck in "loading" forever.
       updateLocalServer({ baseUrl: normalizedBaseUrl, token: resolvedToken });
 
-      const openworkClient = createOpenworkServerClient({
+      const sofiaClient = createSofiaServerClient({
         baseUrl: normalizedBaseUrl,
         token: resolvedToken,
         hostToken: resolvedHostToken || undefined,
       });
       const workspaceListState = await refreshRouteWorkspaceListState({
-        load: () => withRouteRefreshTimeout(openworkClient.listWorkspaces(), "Workspace list"),
+        load: () => withRouteRefreshTimeout(sofiaClient.listWorkspaces(), "Workspace list"),
         desktopWorkspaces,
         previousWorkspaces: workspacesRef.current,
         orderIds: workspaceOrderIdsRef.current,
@@ -591,7 +595,7 @@ export function useWorkspaceRouteState(input: UseWorkspaceRouteStateInput) {
       updateLocalServer({ baseUrl: normalizedBaseUrl, token: resolvedToken });
 
       setConnectionPending(false);
-      setClient(openworkClient);
+      setClient(sofiaClient);
       setBaseUrl(normalizedBaseUrl);
       setToken(resolvedToken);
       setWorkspaces(nextWorkspaces);
@@ -614,7 +618,7 @@ export function useWorkspaceRouteState(input: UseWorkspaceRouteStateInput) {
         errors: {},
       });
 
-      // Session list comes from OpenCode's index and can be slow on cold
+      // Session list comes from Sofia's index and can be slow on cold
       // boot. Kick it off in the background instead of blocking the route
       // so the UI is interactive immediately; the sidebar shows a
       // loading state per-workspace until the list arrives.
@@ -795,7 +799,7 @@ export function useWorkspaceRouteState(input: UseWorkspaceRouteStateInput) {
       // so its stale resolution cannot overwrite the new connection state.
       void refreshRouteState({ supersede: true });
     };
-    window.addEventListener("openwork-server-settings-changed", handleSettingsChange);
+    window.addEventListener("sofia-server-settings-changed", handleSettingsChange);
 
     // Also retry on visibility flip independently — even when nobody else
     // dispatches the settings event.
@@ -814,7 +818,7 @@ export function useWorkspaceRouteState(input: UseWorkspaceRouteStateInput) {
         window.clearTimeout(startupRetryTimerRef.current);
         startupRetryTimerRef.current = null;
       }
-      window.removeEventListener("openwork-server-settings-changed", handleSettingsChange);
+      window.removeEventListener("sofia-server-settings-changed", handleSettingsChange);
       if (typeof document !== "undefined") {
         document.removeEventListener("visibilitychange", handleVisibility);
       }
@@ -823,7 +827,7 @@ export function useWorkspaceRouteState(input: UseWorkspaceRouteStateInput) {
 
   // Inspector wiring: publish the route's current state so an external
   // operator (or an AI driver using browser tools) can call
-  // `window.__openwork.snapshot()` or `window.__openwork.slice("route")` and
+  // `window.__sofia.snapshot()` or `window.__sofia.slice("route")` and
   // see workspaces / sessions / connection info without walking the DOM.
   useEffect(() => {
     const dispose = publishInspectorSlice("route", () => ({
@@ -947,7 +951,7 @@ export function useWorkspaceRouteState(input: UseWorkspaceRouteStateInput) {
     if (!workspaceId || reconnectAttemptedWorkspaceIdRef.current === workspaceId) return;
     reconnectAttemptedWorkspaceIdRef.current = workspaceId;
 
-    void ensureDesktopLocalOpenworkConnection({
+    void ensureDesktopLocalSofiaConnection({
       route: "session",
       workspace: selectedWorkspace,
       allWorkspaces: workspaces,
@@ -967,7 +971,7 @@ export function useWorkspaceRouteState(input: UseWorkspaceRouteStateInput) {
   // local workspaces it's the user's local Sofia App server.
   const selectedWorkspaceEndpoint = useWorkspaceServerClient(selectedWorkspace, { baseUrl, token });
   const selectedWorkspaceServerToken = selectedWorkspaceEndpoint?.token ?? "";
-  const opencodeBaseUrl = selectedWorkspaceEndpoint?.opencodeBaseUrl ?? "";
+  const engineBaseUrl = selectedWorkspaceEndpoint?.engineBaseUrl ?? "";
   const selectedWorkspaceError = errorsByWorkspaceId[selectedWorkspaceId] ?? null;
   const selectedSessionKnown = Boolean(
     selectedSessionId &&
@@ -1097,20 +1101,20 @@ export function useWorkspaceRouteState(input: UseWorkspaceRouteStateInput) {
   // sidebar; they must not gate the composer/New task.
   const effectiveLoading = loading;
 
-  const opencodeClient = useMemo(
+  const engineClient = useMemo(
     () =>
-      opencodeBaseUrl && selectedWorkspaceServerToken && !selectedWorkspaceError
-        ? createClient(opencodeBaseUrl, selectedWorkspaceRoot || undefined, {
+      engineBaseUrl && selectedWorkspaceServerToken && !selectedWorkspaceError
+        ? createClient(engineBaseUrl, selectedWorkspaceRoot || undefined, {
             token: selectedWorkspaceServerToken,
-            mode: "openwork",
+            mode: "sofia",
           })
         : null,
-    [opencodeBaseUrl, selectedWorkspaceError, selectedWorkspaceRoot, selectedWorkspaceServerToken],
+    [engineBaseUrl, selectedWorkspaceError, selectedWorkspaceRoot, selectedWorkspaceServerToken],
   );
   useEffect(() => {
-    if (!developerMode || !opencodeClient) return;
-    return publishInspectorOpencodeClient(opencodeClient);
-  }, [developerMode, opencodeClient]);
+    if (!developerMode || !engineClient) return;
+    return publishInspectorWorkspaceEngineClient(engineClient);
+  }, [developerMode, engineClient]);
   const runRemoteWorkspaceConnectionCheck = useCallback(
     async (workspaceId: string, mode: "test" | "recover") => {
       const workspace = workspacesRef.current.find((item) => item.id === workspaceId);
@@ -1203,8 +1207,8 @@ export function useWorkspaceRouteState(input: UseWorkspaceRouteStateInput) {
     selectedWorkspaceRoot,
     selectedWorkspaceEndpoint,
     selectedWorkspaceServerToken,
-    opencodeBaseUrl,
-    opencodeClient,
+    engineBaseUrl,
+    engineClient,
     selectedWorkspaceIsLoading,
     selectedWorkspaceError,
     routeNotFoundMessage,

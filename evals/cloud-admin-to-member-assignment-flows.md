@@ -40,13 +40,13 @@ sandboxes when validating owner and member UI simultaneously.
 - If Electron was already started with stale Den preview URLs, restart Electron
   with the current Den URLs before member sign-in checks:
   ```bash
-  daytona exec <electron-sandbox> -- 'bash -lc "kill <electron/opencode-pids> 2>/dev/null || true"'
+  daytona exec <electron-sandbox> -- 'bash -lc "kill <electron/engine-pids> 2>/dev/null || true"'
   daytona exec <electron-sandbox> -- \
     "bash -lc 'cd /workspace && \
-      OPENWORK_DEN_BASE_URL=DEN_WEB_URL \
-      OPENWORK_DEN_API_BASE_URL=DEN_API_URL \
+      SOFIA_DEN_BASE_URL=DEN_WEB_URL \
+      SOFIA_DEN_API_BASE_URL=DEN_API_URL \
       DAYTONA_SECRETS_ENV=/tmp/no-daytona-secrets \
-      bash /opt/openwork-daytona/start-daytona-electron.sh --detach'"
+      bash /opt/sofia-daytona/start-daytona-electron.sh --detach'"
   ```
 - Do not chain `pkill -f electron` with restart in one `daytona exec`; it can
   terminate the exec wrapper and leave CDP half-hung. Use direct PIDs or split
@@ -55,14 +55,14 @@ sandboxes when validating owner and member UI simultaneously.
   create an invitation as owner, sign up the member, mark the test email verified
   in the local Den DB when email delivery is not available, then accept the invite.
 - The desktop member state can be bootstrapped for CDP-driven evals by setting:
-  `openwork.den.baseUrl`, `openwork.den.apiBaseUrl`, `openwork.den.authToken`,
-  `openwork.den.activeOrgId`, `openwork.den.activeOrgSlug`, and
-  `openwork.den.activeOrgName` in localStorage, then reloading the renderer.
+  `sofia.den.baseUrl`, `sofia.den.apiBaseUrl`, `sofia.den.authToken`,
+  `sofia.den.activeOrgId`, `sofia.den.activeOrgSlug`, and
+  `sofia.den.activeOrgName` in localStorage, then reloading the renderer.
 
 ## Verified run: 2026-06-02
 
-- Server sandbox: `openwork-server-20260602-154721`
-- Electron sandbox: `openwork-test-20260602-155000`
+- Server sandbox: `sofia-server-20260602-154721`
+- Electron sandbox: `sofia-test-20260602-155000`
 - Org: `Acme Robotics`, `org_01kt58ejd1extvd0p7nqagxaky`
 - Member email: `eval-member-1780444561@acme.test`
 - Member org membership id: `om_01kt5c8w72fk4skf8bs9qywk9v`
@@ -100,7 +100,7 @@ sandboxes when validating owner and member UI simultaneously.
   ```
 - After admin deleted the provider, Settings -> AI Providers showed:
   - `1 provider connected`.
-  - only `OpenCode Zen` connected.
+  - only `Sofia Zen` connected.
   - `No cloud providers are available for this org yet.`
 
 ## Flow 1: Admin assigns LLM provider, member uses it
@@ -143,7 +143,7 @@ assigned member without manual workspace-file editing.
 
 ### Expected outcome
 
-- Member does not need to edit `opencode.jsonc` manually.
+- Member does not need to edit `engine.jsonc` manually.
 - Member sees a clear cloud-managed provider state and can select the model.
 - Real task execution succeeds with the assigned provider.
 - Permission boundaries remain clear: member can consume the provider but cannot

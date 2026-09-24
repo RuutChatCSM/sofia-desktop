@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { createClient } from "../src/app/lib/opencode";
+import { createClient } from "../src/app/lib/engine";
 import type { ProviderListItem, WorkspaceDisplay } from "../src/app/types";
 import { createProviderAuthStore } from "../src/react-app/domains/connections/provider-auth/store";
 
 const originalWindow = globalThis.window;
 const originalFetch = globalThis.fetch;
-const opencodeClient = createClient("https://engine.example", "/tmp/workspace_test", undefined, (input, init) =>
+const engineClient = createClient("https://engine.example", "/tmp/workspace_test", undefined, (input, init) =>
   globalThis.fetch(input, init),
 );
 
@@ -24,7 +24,7 @@ function installWindow(options: {
       removeEventListener: () => undefined,
       dispatchEvent: () => true,
       location: { origin: options.origin },
-      __OPENWORK_ELECTRON__: options.electronInfo
+      __SOFIA_ELECTRON__: options.electronInfo
         ? {
             invokeDesktop: async () => ({
               running: true,
@@ -72,7 +72,7 @@ function createTestStore(workerType: "local" | "remote") {
   } satisfies WorkspaceDisplay;
 
   return createProviderAuthStore({
-    client: () => opencodeClient,
+    client: () => engineClient,
     providers: () => providers,
     providerDefaults: () => ({}),
     providerConnectedIds: () => [],
@@ -82,18 +82,18 @@ function createTestStore(workerType: "local" | "remote") {
     providerBaseUrl: () => "https://engine.example",
     selectedWorkspaceRoot: () => workspace.path,
     runtimeWorkspaceId: () => workspace.id,
-    openworkServer: {
+    sofiaServer: {
       getSnapshot: () => ({
-        openworkServerStatus: "disconnected",
-        openworkServerClient: null,
-        openworkServerCapabilities: null,
+        sofiaServerStatus: "disconnected",
+        sofiaServerClient: null,
+        sofiaServerCapabilities: null,
       }),
     },
     setProviders: () => undefined,
     setProviderDefaults: () => undefined,
     setProviderConnectedIds: () => undefined,
     setDisabledProviders: () => undefined,
-    markOpencodeConfigReloadRequired: () => undefined,
+    markWorkspaceEngineConfigReloadRequired: () => undefined,
   });
 }
 

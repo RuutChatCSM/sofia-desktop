@@ -1,10 +1,10 @@
-import { and, eq, inArray } from "@openwork-ee/den-db/drizzle"
+import { and, eq, inArray } from "@sofia-ee/den-db/drizzle"
 import {
   ExternalMcpConnectionAccessGrantTable,
   type ExternalMcpAuthType,
   PluginMcpRequirementBindingTable,
-} from "@openwork-ee/den-db/schema"
-import { createDenTypeId, type DenTypeId } from "@openwork-ee/utils/typeid"
+} from "@sofia-ee/den-db/schema"
+import { createDenTypeId, type DenTypeId } from "@sofia-ee/utils/typeid"
 import { db } from "../db.js"
 
 type OrganizationId = DenTypeId<"organization">

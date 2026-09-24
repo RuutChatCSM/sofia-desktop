@@ -3,7 +3,7 @@
  * group mirror + expanded state). Persisted to localStorage via
  * zustand/middleware/persist.
  *
- * Archive is server-side (OpenCode session.time.archived). Session groups are
+ * Archive is server-side (Sofia session.time.archived). Session groups are
  * synced server-side; this store keeps a local optimistic mirror plus UI-only
  * collapsed state. Components import it directly with selectors, avoiding
  * context/prop drilling.
@@ -309,7 +309,7 @@ export const useSessionManagementStore = create<SessionManagementStore>()(
           const ws = state.groupsByWorkspace[workspaceId] ?? EMPTY_GROUP_STATE;
           const knownGroupIds = new Set(serverState.groups.map((group) => group.id));
           const collapsedGroupIds = (ws.collapsedGroupIds ?? []).filter(
-            (id) => id === "__openwork_ungrouped" || knownGroupIds.has(id),
+            (id) => id === "__sofia_ungrouped" || knownGroupIds.has(id),
           );
           return {
             groupsByWorkspace: {
@@ -368,7 +368,7 @@ export const useSessionManagementStore = create<SessionManagementStore>()(
         }),
     }),
     {
-      name: "openwork.react.sessionManagement",
+      name: "sofia.react.sessionManagement",
       storage: createJSONStorage(() => localStorage),
     },
   ),

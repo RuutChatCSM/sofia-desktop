@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { startServer } from "./server.js";
-import { writeRuntimeOpencodeConfig } from "./runtime-opencode-config-store.js";
+import { writeRuntimeWorkspaceEngineConfig } from "./runtime-engine-config-store.js";
 import type { ServerConfig } from "./types.js";
 
 type Served = {
@@ -25,8 +25,8 @@ afterEach(async () => {
 });
 
 async function createWorkspaceRoot() {
-  const root = await mkdtemp(join(tmpdir(), "openwork-activate-"));
-  await mkdir(join(root, ".opencode"), { recursive: true });
+  const root = await mkdtemp(join(tmpdir(), "sofia-activate-"));
+  await mkdir(join(root, ".sofia"), { recursive: true });
   roots.push(root);
   return root;
 }
@@ -72,7 +72,7 @@ async function readPersistedConfig(configPath: string): Promise<unknown> {
   return JSON.parse(await readFile(configPath, "utf8"));
 }
 
-function startMockOpencode() {
+function startMockWorkspaceEngine() {
   const requests: Array<{ method: string; pathname: string; search: string; directory: string | null }> = [];
   const busyDirectories = new Set<string>();
   const abortedDirectories = new Set<string>();
@@ -87,7 +87,7 @@ function startMockOpencode() {
     port: 0,
     async fetch(request) {
       const url = new URL(request.url);
-      const directory = request.headers.get("x-opencode-directory");
+      const directory = request.headers.get("x-engine-directory");
       requests.push({ method: request.method, pathname: url.pathname, search: url.search, directory });
 
       if (url.pathname === "/session/status") {
@@ -181,7 +181,7 @@ function startMockOpencode() {
   };
 }
 
-function startMockRemoteOpenwork() {
+function startMockRemoteSofia() {
   const requests: Array<{ pathname: string; authorization: string | null }> = [];
   const server = Bun.serve({
     hostname: "127.0.0.1",
@@ -207,13 +207,13 @@ function startMockRemoteOpenwork() {
   return { server, requests };
 }
 
-async function startOpenworkServerWithWorkspaces(input: {
+async function startSofiaServerWithWorkspaces(input: {
   configPath: string;
   workspaces: ServerConfig["workspaces"];
   authorizedRoots: string[];
-  opencodeBaseUrl?: string;
-  opencodeUsername?: string;
-  opencodePassword?: string;
+  engineBaseUrl?: string;
+  engineUsername?: string;
+  enginePassword?: string;
 }) {
   const config: ServerConfig = {
     host: "127.0.0.1",
@@ -225,9 +225,9 @@ async function startOpenworkServerWithWorkspaces(input: {
     corsOrigins: ["*"],
     workspaces: input.workspaces,
     authorizedRoots: input.authorizedRoots,
-    opencodeBaseUrl: input.opencodeBaseUrl,
-    opencodeUsername: input.opencodeUsername,
-    opencodePassword: input.opencodePassword,
+    engineBaseUrl: input.engineBaseUrl,
+    engineUsername: input.engineUsername,
+    enginePassword: input.enginePassword,
     readOnly: false,
     startedAt: Date.now(),
     tokenSource: "cli",
@@ -242,11 +242,11 @@ async function startOpenworkServerWithWorkspaces(input: {
 }
 
 describe("workspace activation", () => {
-  test("reloads the bound OpenCode engine on workspace switch only", async () => {
+  test("reloads the bound Sofia engine on workspace switch only", async () => {
     const firstRoot = await createWorkspaceRoot();
     const secondRoot = await createWorkspaceRoot();
-    const mock = startMockOpencode();
-    const opencodeBaseUrl = `http://127.0.0.1:${mock.server.port}`;
+    const mock = startMockWorkspaceEngine();
+    const engineBaseUrl = `http://127.0.0.1:${mock.server.port}`;
     const workspaces: ServerConfig["workspaces"] = [
       {
         id: "ws_1",
@@ -254,7 +254,7 @@ describe("workspace activation", () => {
         path: firstRoot,
         preset: "starter",
         workspaceType: "local",
-        baseUrl: opencodeBaseUrl,
+        baseUrl: engineBaseUrl,
       },
       {
         id: "ws_2",
@@ -262,23 +262,23 @@ describe("workspace activation", () => {
         path: secondRoot,
         preset: "starter",
         workspaceType: "local",
-        baseUrl: opencodeBaseUrl,
+        baseUrl: engineBaseUrl,
       },
     ];
-    const openwork = await startOpenworkServerWithWorkspaces({
+    const sofia = await startSofiaServerWithWorkspaces({
       configPath: join(firstRoot, "server.json"),
       workspaces,
       authorizedRoots: [firstRoot, secondRoot],
     });
 
-    const base = `http://127.0.0.1:${openwork.server.port}`;
+    const base = `http://127.0.0.1:${sofia.server.port}`;
     const disposeCount = () => mock.requests.filter(
       (request) => request.method === "POST" && request.pathname === "/instance/dispose",
     ).length;
 
     const response = await fetch(`${base}/workspaces/ws_2/activate`, {
       method: "POST",
-      headers: hostAuth(openwork.hostToken),
+      headers: hostAuth(sofia.hostToken),
     });
 
     expect(response.status).toBe(200);
@@ -296,7 +296,7 @@ describe("workspace activation", () => {
 
     const sameWorkspaceResponse = await fetch(`${base}/workspaces/ws_2/activate`, {
       method: "POST",
-      headers: hostAuth(openwork.hostToken),
+      headers: hostAuth(sofia.hostToken),
     });
 
     expect(sameWorkspaceResponse.status).toBe(200);
@@ -306,31 +306,31 @@ describe("workspace activation", () => {
   test("returns after dispose without waiting for post-refresh MCP registration", async () => {
     const firstRoot = await createWorkspaceRoot();
     const secondRoot = await createWorkspaceRoot();
-    const previousDb = process.env.OPENWORK_RUNTIME_DB;
-    process.env.OPENWORK_RUNTIME_DB = join(firstRoot, "runtime.sqlite");
-    const mock = startMockOpencode();
-    const opencodeBaseUrl = `http://127.0.0.1:${mock.server.port}`;
+    const previousDb = process.env.SOFIA_RUNTIME_DB;
+    process.env.SOFIA_RUNTIME_DB = join(firstRoot, "runtime.sqlite");
+    const mock = startMockWorkspaceEngine();
+    const engineBaseUrl = `http://127.0.0.1:${mock.server.port}`;
     const workspaces: ServerConfig["workspaces"] = [
-      { id: "ws_1", name: "One", path: firstRoot, preset: "starter", workspaceType: "local", baseUrl: opencodeBaseUrl },
-      { id: "ws_2", name: "Two", path: secondRoot, preset: "starter", workspaceType: "local", baseUrl: opencodeBaseUrl },
+      { id: "ws_1", name: "One", path: firstRoot, preset: "starter", workspaceType: "local", baseUrl: engineBaseUrl },
+      { id: "ws_2", name: "Two", path: secondRoot, preset: "starter", workspaceType: "local", baseUrl: engineBaseUrl },
     ];
     const heldRegistration = mock.holdNextMcpRegistration();
     try {
-      const openwork = await startOpenworkServerWithWorkspaces({
+      const sofia = await startSofiaServerWithWorkspaces({
         configPath: join(firstRoot, "server.json"),
         workspaces,
         authorizedRoots: [firstRoot, secondRoot],
       });
-      await writeRuntimeOpencodeConfig(openwork.config, "ws_2", (current) => ({
+      await writeRuntimeWorkspaceEngineConfig(sofia.config, "ws_2", (current) => ({
         ...current,
         mcp: {
           posthog: { type: "remote", url: "https://mcp.posthog.com/mcp", enabled: true },
         },
       }));
 
-      const activation = fetch(`http://127.0.0.1:${openwork.server.port}/workspaces/ws_2/activate`, {
+      const activation = fetch(`http://127.0.0.1:${sofia.server.port}/workspaces/ws_2/activate`, {
         method: "POST",
-        headers: hostAuth(openwork.hostToken),
+        headers: hostAuth(sofia.hostToken),
       });
       expect(await Promise.race([
         heldRegistration.reached.then(() => true),
@@ -356,30 +356,30 @@ describe("workspace activation", () => {
       expect((await activation).status).toBe(200);
     } finally {
       heldRegistration.release();
-      if (previousDb === undefined) delete process.env.OPENWORK_RUNTIME_DB;
-      else process.env.OPENWORK_RUNTIME_DB = previousDb;
+      if (previousDb === undefined) delete process.env.SOFIA_RUNTIME_DB;
+      else process.env.SOFIA_RUNTIME_DB = previousDb;
     }
   });
 
   test("does not let a busy task in another directory block an idle target reload", async () => {
     const firstRoot = await createWorkspaceRoot();
     const secondRoot = await createWorkspaceRoot();
-    const mock = startMockOpencode();
-    const opencodeBaseUrl = `http://127.0.0.1:${mock.server.port}`;
+    const mock = startMockWorkspaceEngine();
+    const engineBaseUrl = `http://127.0.0.1:${mock.server.port}`;
     const workspaces: ServerConfig["workspaces"] = [
-      { id: "ws_1", name: "One", path: firstRoot, preset: "starter", workspaceType: "local", baseUrl: opencodeBaseUrl },
-      { id: "ws_2", name: "Two", path: secondRoot, preset: "starter", workspaceType: "local", baseUrl: opencodeBaseUrl },
+      { id: "ws_1", name: "One", path: firstRoot, preset: "starter", workspaceType: "local", baseUrl: engineBaseUrl },
+      { id: "ws_2", name: "Two", path: secondRoot, preset: "starter", workspaceType: "local", baseUrl: engineBaseUrl },
     ];
-    const openwork = await startOpenworkServerWithWorkspaces({
+    const sofia = await startSofiaServerWithWorkspaces({
       configPath: join(firstRoot, "server.json"),
       workspaces,
       authorizedRoots: [firstRoot, secondRoot],
     });
     mock.setBusy(firstRoot, true);
 
-    const response = await fetch(`http://127.0.0.1:${openwork.server.port}/workspaces/ws_2/activate`, {
+    const response = await fetch(`http://127.0.0.1:${sofia.server.port}/workspaces/ws_2/activate`, {
       method: "POST",
-      headers: hostAuth(openwork.hostToken),
+      headers: hostAuth(sofia.hostToken),
     });
 
     expect(response.status).toBe(200);
@@ -417,16 +417,16 @@ describe("workspace activation", () => {
       `${JSON.stringify({ workspaces, authorizedRoots: [firstRoot, secondRoot] }, null, 2)}\n`,
       "utf8",
     );
-    const openwork = await startOpenworkServerWithWorkspaces({
+    const sofia = await startSofiaServerWithWorkspaces({
       configPath,
       workspaces,
       authorizedRoots: [firstRoot, secondRoot],
     });
 
-    const base = `http://127.0.0.1:${openwork.server.port}`;
+    const base = `http://127.0.0.1:${sofia.server.port}`;
     const persistedResponse = await fetch(`${base}/workspaces/ws_2/activate?persist=true`, {
       method: "POST",
-      headers: hostAuth(openwork.hostToken),
+      headers: hostAuth(sofia.hostToken),
     });
     expect(persistedResponse.status).toBe(200);
     const persistedBody = await persistedResponse.json();
@@ -436,7 +436,7 @@ describe("workspace activation", () => {
 
     const volatileResponse = await fetch(`${base}/workspaces/ws_1/activate`, {
       method: "POST",
-      headers: hostAuth(openwork.hostToken),
+      headers: hostAuth(sofia.hostToken),
     });
     expect(volatileResponse.status).toBe(200);
     const volatileBody = await volatileResponse.json();
@@ -446,7 +446,7 @@ describe("workspace activation", () => {
 
     const bodyPersistedResponse = await fetch(`${base}/workspaces/ws_1/activate`, {
       method: "POST",
-      headers: { ...hostAuth(openwork.hostToken), "Content-Type": "application/json" },
+      headers: { ...hostAuth(sofia.hostToken), "Content-Type": "application/json" },
       body: JSON.stringify({ persist: true }),
     });
     expect(bodyPersistedResponse.status).toBe(200);
@@ -462,16 +462,16 @@ describe("workspace lifecycle registry", () => {
     const configRoot = await createWorkspaceRoot();
     const workspaceRoot = await createWorkspaceRoot();
     const configPath = join(configRoot, "server.json");
-    const openwork = await startOpenworkServerWithWorkspaces({
+    const sofia = await startSofiaServerWithWorkspaces({
       configPath,
       workspaces: [],
       authorizedRoots: [],
     });
 
-    const base = `http://127.0.0.1:${openwork.server.port}`;
+    const base = `http://127.0.0.1:${sofia.server.port}`;
     const response = await fetch(`${base}/workspaces/local`, {
       method: "POST",
-      headers: { ...hostAuth(openwork.hostToken), "Content-Type": "application/json" },
+      headers: { ...hostAuth(sofia.hostToken), "Content-Type": "application/json" },
       body: JSON.stringify({ folderPath: workspaceRoot, name: "Persisted Local", preset: "starter" }),
     });
 
@@ -486,23 +486,23 @@ describe("workspace lifecycle registry", () => {
     expect(authorizedRootsFromConfig(persisted)).toEqual([workspaceRoot]);
   });
 
-  test("does not persist transient local OpenCode runtime fields", async () => {
+  test("does not persist transient local Sofia engine runtime fields", async () => {
     const configRoot = await createWorkspaceRoot();
     const workspaceRoot = await createWorkspaceRoot();
     const configPath = join(configRoot, "server.json");
-    const openwork = await startOpenworkServerWithWorkspaces({
+    const sofia = await startSofiaServerWithWorkspaces({
       configPath,
       workspaces: [],
       authorizedRoots: [],
-      opencodeBaseUrl: "http://127.0.0.1:49999",
-      opencodeUsername: "runtime-user",
-      opencodePassword: "runtime-pass",
+      engineBaseUrl: "http://127.0.0.1:49999",
+      engineUsername: "runtime-user",
+      enginePassword: "runtime-pass",
     });
 
-    const base = `http://127.0.0.1:${openwork.server.port}`;
+    const base = `http://127.0.0.1:${sofia.server.port}`;
     const response = await fetch(`${base}/workspaces/local`, {
       method: "POST",
-      headers: { ...hostAuth(openwork.hostToken), "Content-Type": "application/json" },
+      headers: { ...hostAuth(sofia.hostToken), "Content-Type": "application/json" },
       body: JSON.stringify({ folderPath: workspaceRoot, name: "Runtime Local", preset: "starter" }),
     });
     expect(response.status).toBe(201);
@@ -512,31 +512,31 @@ describe("workspace lifecycle registry", () => {
     expect(workspace?.path).toBe(workspaceRoot);
     expect(workspace?.baseUrl).toBeUndefined();
     expect(workspace?.directory).toBeUndefined();
-    expect(workspace?.opencodeUsername).toBeUndefined();
-    expect(workspace?.opencodePassword).toBeUndefined();
+    expect(workspace?.engineUsername).toBeUndefined();
+    expect(workspace?.enginePassword).toBeUndefined();
   });
 
-  test("creates and persists remote OpenWork workspace records", async () => {
+  test("creates and persists remote Sofia App workspace records", async () => {
     const workspaceRoot = await createWorkspaceRoot();
     const configPath = join(workspaceRoot, "server.json");
     await writeFile(configPath, `${JSON.stringify({ workspaces: [], authorizedRoots: [] }, null, 2)}\n`, "utf8");
-    const remote = startMockRemoteOpenwork();
-    const openwork = await startOpenworkServerWithWorkspaces({
+    const remote = startMockRemoteSofia();
+    const sofia = await startSofiaServerWithWorkspaces({
       configPath,
       workspaces: [],
       authorizedRoots: [],
     });
 
-    const base = `http://127.0.0.1:${openwork.server.port}`;
+    const base = `http://127.0.0.1:${sofia.server.port}`;
     const response = await fetch(`${base}/workspaces/remote`, {
       method: "POST",
-      headers: { ...hostAuth(openwork.hostToken), "Content-Type": "application/json" },
+      headers: { ...hostAuth(sofia.hostToken), "Content-Type": "application/json" },
       body: JSON.stringify({
         baseUrl: `http://127.0.0.1:${remote.server.port}`,
-        openworkHostUrl: `http://127.0.0.1:${remote.server.port}`,
-        openworkToken: "remote_token",
+        sofiaHostUrl: `http://127.0.0.1:${remote.server.port}`,
+        sofiaToken: "remote_token",
         directory: "/remote/project",
-        remoteType: "openwork",
+        remoteType: "sofia",
         sandboxRunId: "run_1",
       }),
     });
@@ -544,15 +544,15 @@ describe("workspace lifecycle registry", () => {
     expect(response.status).toBe(201);
     const body = await response.json();
     expect(body.activeId).toBe("rem_ws_remote");
-    expect(body.workspaces[0].openworkWorkspaceId).toBe("ws_remote");
-    expect(body.workspaces[0].openworkWorkspaceName).toBe("Remote Project");
+    expect(body.workspaces[0].sofiaWorkspaceId).toBe("ws_remote");
+    expect(body.workspaces[0].sofiaWorkspaceName).toBe("Remote Project");
     expect(remote.requests[0]).toEqual({ pathname: "/workspaces", authorization: "Bearer remote_token" });
 
     const persisted = await readPersistedConfig(configPath);
     const workspaces = workspacesFromConfig(persisted);
     expect(workspaces[0]?.id).toBe("rem_ws_remote");
     expect(workspaces[0]?.workspaceType).toBe("remote");
-    expect(workspaces[0]?.remoteType).toBe("openwork");
+    expect(workspaces[0]?.remoteType).toBe("sofia");
     expect(workspaces[0]?.sandboxRunId).toBe("run_1");
     expect(authorizedRootsFromConfig(persisted)).toEqual([]);
   });
@@ -567,9 +567,9 @@ describe("workspace lifecycle registry", () => {
         path: "/remote/one",
         preset: "remote",
         workspaceType: "remote",
-        remoteType: "openwork",
+        remoteType: "sofia",
         baseUrl: "http://127.0.0.1:9",
-        openworkWorkspaceId: "ws_one",
+        sofiaWorkspaceId: "ws_one",
       },
       {
         id: "rem_ws_two",
@@ -577,22 +577,22 @@ describe("workspace lifecycle registry", () => {
         path: "/remote/two",
         preset: "remote",
         workspaceType: "remote",
-        remoteType: "openwork",
+        remoteType: "sofia",
         baseUrl: "http://127.0.0.1:9",
-        openworkWorkspaceId: "ws_two",
+        sofiaWorkspaceId: "ws_two",
       },
     ];
     await writeFile(configPath, `${JSON.stringify({ workspaces, authorizedRoots: [] }, null, 2)}\n`, "utf8");
-    const openwork = await startOpenworkServerWithWorkspaces({
+    const sofia = await startSofiaServerWithWorkspaces({
       configPath,
       workspaces,
       authorizedRoots: [],
     });
-    const base = `http://127.0.0.1:${openwork.server.port}`;
+    const base = `http://127.0.0.1:${sofia.server.port}`;
 
     const renameResponse = await fetch(`${base}/workspaces/rem_ws_one/display-name`, {
       method: "PATCH",
-      headers: { ...hostAuth(openwork.hostToken), "Content-Type": "application/json" },
+      headers: { ...hostAuth(sofia.hostToken), "Content-Type": "application/json" },
       body: JSON.stringify({ displayName: "Renamed One" }),
     });
     expect(renameResponse.status).toBe(200);
@@ -601,14 +601,14 @@ describe("workspace lifecycle registry", () => {
 
     const activateResponse = await fetch(`${base}/workspaces/rem_ws_two/activate?persist=true`, {
       method: "POST",
-      headers: hostAuth(openwork.hostToken),
+      headers: hostAuth(sofia.hostToken),
     });
     expect(activateResponse.status).toBe(200);
     expect(await readPersistedWorkspaceIds(configPath)).toEqual(["rem_ws_two", "rem_ws_one"]);
 
     const deleteResponse = await fetch(`${base}/workspaces/rem_ws_one`, {
       method: "DELETE",
-      headers: hostAuth(openwork.hostToken),
+      headers: hostAuth(sofia.hostToken),
     });
     expect(deleteResponse.status).toBe(200);
     persisted = await readPersistedConfig(configPath);

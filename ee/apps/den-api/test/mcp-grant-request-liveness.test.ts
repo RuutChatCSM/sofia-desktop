@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, expect, mock, test } from "bun:test"
-import { createDenTypeId } from "@openwork-ee/utils/typeid"
+import { createDenTypeId } from "@sofia-ee/utils/typeid"
 import type { McpAuthResourceContext } from "../src/mcp/auth.js"
 
-const GRANT_CLAIM = "https://openworklabs.com/grant_id"
+const GRANT_CLAIM = "https://sofia.ruut.chat/grant_id"
 const AGENT_RESOURCE = "http://127.0.0.1:8790/mcp/agent"
 let jwtPayload: Record<string, unknown> = {}
 let mcpAuth: typeof import("../src/mcp/auth.js")
@@ -19,7 +19,7 @@ const OAuthRefreshTokenTable = { sessionId: "refresh.sessionId" }
 const OrganizationTable = { id: "organization.id" }
 
 function seedRequiredEnv() {
-  process.env.DATABASE_URL = process.env.DATABASE_URL ?? "mysql://root:password@127.0.0.1:3306/openwork_test"
+  process.env.DATABASE_URL = process.env.DATABASE_URL ?? "mysql://root:password@127.0.0.1:3306/sofia_test"
   process.env.DEN_DB_ENCRYPTION_KEY = process.env.DEN_DB_ENCRYPTION_KEY ?? "x".repeat(32)
   process.env.BETTER_AUTH_SECRET = process.env.BETTER_AUTH_SECRET ?? "y".repeat(32)
   process.env.BETTER_AUTH_URL = process.env.BETTER_AUTH_URL ?? "http://127.0.0.1:8790"
@@ -42,9 +42,9 @@ function validMcpJwtPayload(includeGrant: boolean) {
     aud: AGENT_RESOURCE,
     scope: "mcp:read mcp:write",
     sid: createDenTypeId("session"),
-    "https://openworklabs.com/token_use": "mcp",
-    "https://openworklabs.com/resource": AGENT_RESOURCE,
-    "https://openworklabs.com/org_id": createDenTypeId("organization"),
+    "https://sofia.ruut.chat/token_use": "mcp",
+    "https://sofia.ruut.chat/resource": AGENT_RESOURCE,
+    "https://sofia.ruut.chat/org_id": createDenTypeId("organization"),
   }
   if (includeGrant) {
     payload[GRANT_CLAIM] = createDenTypeId("oauthConsent")
@@ -60,7 +60,7 @@ async function verify(requestId: string) {
 
 beforeAll(async () => {
   seedRequiredEnv()
-  mock.module("@openwork-ee/den-db/schema", () => ({
+  mock.module("@sofia-ee/den-db/schema", () => ({
     AuthSessionTable,
     AuthUserTable,
     InvitationTable,
@@ -70,7 +70,7 @@ beforeAll(async () => {
     OAuthRefreshTokenTable,
     OrganizationTable,
   }))
-  mock.module("@openwork-ee/den-db/drizzle", () => ({
+  mock.module("@sofia-ee/den-db/drizzle", () => ({
     and: (...conditions: unknown[]) => ({ conditions }),
     asc: (field: unknown) => field,
     eq: (field: unknown, value: unknown) => ({ field, value }),
@@ -84,14 +84,14 @@ beforeAll(async () => {
       handler: () => Promise.resolve(Response.json({ keys: [] })),
     },
     DEN_MCP_OPAQUE_ACCESS_TOKEN_PREFIX: "ow_mcp_at_",
-    DEN_MCP_FIRST_PARTY_CLIENT_ID: "openwork-desktop",
+    DEN_MCP_FIRST_PARTY_CLIENT_ID: "sofia-desktop",
     DEN_MCP_FIRST_PARTY_RESOURCES: ["http://127.0.0.1:8790/mcp", AGENT_RESOURCE],
     DEN_MCP_GRANT_ID_CLAIM: GRANT_CLAIM,
-    DEN_MCP_ORG_ID_CLAIM: "https://openworklabs.com/org_id",
+    DEN_MCP_ORG_ID_CLAIM: "https://sofia.ruut.chat/org_id",
     DEN_MCP_OAUTH_RESOURCE: AGENT_RESOURCE,
     DEN_MCP_RESOURCE: "http://127.0.0.1:8790/mcp",
-    DEN_MCP_RESOURCE_CLAIM: "https://openworklabs.com/resource",
-    DEN_MCP_TOKEN_USE_CLAIM: "https://openworklabs.com/token_use",
+    DEN_MCP_RESOURCE_CLAIM: "https://sofia.ruut.chat/resource",
+    DEN_MCP_TOKEN_USE_CLAIM: "https://sofia.ruut.chat/token_use",
   }))
   mock.module("../src/db.js", () => ({
     db: {
@@ -143,7 +143,7 @@ test("grant-claim tokens stay valid without consulting their dead login session"
     const principal = await verify("req_live_grant")
     expect(principal).not.toBeInstanceOf(Response)
     if (!(principal instanceof Response)) {
-      expect(principal.organizationId).toBe(jwtPayload["https://openworklabs.com/org_id"])
+      expect(principal.organizationId).toBe(jwtPayload["https://sofia.ruut.chat/org_id"])
     }
     expect(grantChecks).toBe(1)
     expect(sessionChecks).toBe(0)

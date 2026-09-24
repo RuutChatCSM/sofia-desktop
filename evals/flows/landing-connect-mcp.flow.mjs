@@ -1,28 +1,28 @@
 import { loadVoiceoverParagraphs } from "../runner/voiceover.mjs";
 
 const FLOW_ID = "landing-connect-mcp";
-const MCP_SERVER_URL = "https://api.openworklabs.com/mcp/agent";
-const DOCS_URL = "https://openworklabs.com/docs/cloud/run-in-the-cloud/cloud-mcp#connect-mcp-install-opencode";
+const MCP_SERVER_URL = "https://sofia-api.ruut.chat/mcp/agent";
+const DOCS_URL = "https://sofia.ruut.chat/docs/cloud/run-in-the-cloud/cloud-mcp#connect-mcp-install-engine";
 const SECTION_SELECTOR = "#connect-mcp";
 const BRING_SELECTOR = '[data-testid="connect-mcp-bring"]';
 const EXAMPLE_SELECTOR = '[data-testid="connect-mcp-example"]';
 const INSTALL_SELECTOR = '[data-testid="connect-mcp-install"]';
-const CODEX_COMMAND = `codex mcp add openwork --url ${MCP_SERVER_URL}`;
-const CODEX_LOGIN_COMMAND = "codex mcp login openwork";
-const CODEX_RECONNECT_COMMAND = `codex mcp logout openwork
-codex mcp login openwork`;
+const CODEX_COMMAND = `codex mcp add sofia --url ${MCP_SERVER_URL}`;
+const CODEX_LOGIN_COMMAND = "codex mcp login sofia";
+const CODEX_RECONNECT_COMMAND = `codex mcp logout sofia
+codex mcp login sofia`;
 const CODEX_CONNECTIONS_DEEPLINK = "codex://settings/connections";
 const CHATGPT_SETTINGS_URL = "https://chatgpt.com/#settings/Connectors";
-const OPENCODE_AUTH_COMMAND = "opencode mcp auth openwork";
-const OPENCODE_RECONNECT_COMMAND = `opencode mcp logout openwork
-opencode mcp auth openwork`;
-const INSTALL_COPY_BUTTON_SELECTOR = `${SECTION_SELECTOR} [role="tabpanel"]:not([hidden]) button[aria-label="Copy the OpenWork MCP install command"]`;
+const SOFIA_ENGINE_AUTH_COMMAND = "engine mcp auth sofia";
+const SOFIA_ENGINE_RECONNECT_COMMAND = `engine mcp logout sofia
+engine mcp auth sofia`;
+const INSTALL_COPY_BUTTON_SELECTOR = `${SECTION_SELECTOR} [role="tabpanel"]:not([hidden]) button[aria-label="Copy the Sofia MCP install command"]`;
 const CLIENT_STATUS_EXPECTATIONS = [
   { label: "Cursor", status: "Setup only", explanationNeedles: ["cursor://anysphere.cursor-mcp/oauth/callback", "PKCE S256"] },
   { label: "Codex", status: "Setup only", explanationNeedles: ["Native proof must be rerun on this exact branch"] },
   { label: "ChatGPT Desktop", status: "Setup only", explanationNeedles: ["Settings > MCP servers", "Native proof is not complete"] },
   { label: "Claude Code", status: "Setup only", explanationNeedles: ["use /mcp in Claude Code"] },
-  { label: "OpenCode", status: "Verified", explanationNeedles: ["OpenCode native remote MCP OAuth"] },
+  { label: "Sofia", status: "Verified", explanationNeedles: ["Sofia native remote MCP OAuth"] },
   { label: "VS Code", status: "Setup only", explanationNeedles: ["VS Code's MCP server prompt"] },
   { label: "Any client", status: "Setup only", explanationNeedles: ["remote Streamable HTTP MCP servers and OAuth"] },
 ];
@@ -34,7 +34,7 @@ const vo = await loadVoiceoverParagraphs(FLOW_ID);
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function routeUrl(ctx, path) {
-  return new URL(path, ctx.env.OPENWORK_EVAL_LANDING_URL).toString();
+  return new URL(path, ctx.env.SOFIA_EVAL_LANDING_URL).toString();
 }
 
 function recordAssertion(ctx, assertion, passed, actual) {
@@ -53,7 +53,7 @@ async function grantClipboardPermissions(ctx) {
     return;
   }
 
-  const origin = new URL(ctx.env.OPENWORK_EVAL_LANDING_URL).origin;
+  const origin = new URL(ctx.env.SOFIA_EVAL_LANDING_URL).origin;
   await ctx.client.send("Browser.grantPermissions", {
     origin,
     permissions: ["clipboardReadWrite", "clipboardSanitizedWrite"],
@@ -108,7 +108,7 @@ async function ensureConnectSection(ctx, { forceReload = false } = {}) {
       const text = section ? section.innerText : "";
       return Boolean(section)
         && text.includes("Already doing it in your agent?")
-        && text.includes("Add it to OpenWork")
+        && text.includes("Add it to Sofia")
         && text.includes(${JSON.stringify(MCP_SERVER_URL)});
     })()`,
     { timeoutMs: 30_000, label: "Connect section with new sharing headline" },
@@ -179,16 +179,16 @@ async function scrollExampleTextIntoView(ctx, text) {
 
 export default {
   id: FLOW_ID,
-  title: "Add existing agent work to OpenWork and share it with your team",
+  title: "Add existing agent work to Sofia and share it with your team",
   kind: "user-facing",
   spec: "evals/README.md",
   preserveTheme: true,
-  requiredEnv: ["OPENWORK_EVAL_LANDING_URL"],
+  requiredEnv: ["SOFIA_EVAL_LANDING_URL"],
   steps: [
     {
       name: "Frame 1",
       run: async (ctx) => {
-        await ctx.prove("The landing page leads with adding existing agent work to OpenWork and sharing it with the team.", {
+        await ctx.prove("The landing page leads with adding existing agent work to Sofia and sharing it with the team.", {
           voiceover: vo[0],
           action: async () => {
             await ensureConnectSection(ctx, { forceReload: true });
@@ -200,14 +200,14 @@ export default {
               return {
                 sectionExists: Boolean(section),
                 hasAlreadyDoingHeading: text.includes("Already doing it in your agent?"),
-                hasAddItHeading: text.includes("Add it to OpenWork"),
+                hasAddItHeading: text.includes("Add it to Sofia"),
                 hasServerUrl: text.includes(${JSON.stringify(MCP_SERVER_URL)}),
                 hasProtocolJargon: text.includes("search_capabilities"),
               };
             })()`);
             recordAssertion(
               ctx,
-              "The Connect section includes the new heading and OpenWork MCP server URL without tool-name jargon",
+              "The Connect section includes the new heading and Sofia MCP server URL without tool-name jargon",
               actual.sectionExists === true
                 && actual.hasAlreadyDoingHeading === true
                 && actual.hasAddItHeading === true
@@ -216,14 +216,14 @@ export default {
               actual,
             );
           },
-          screenshot: { name: "frame-1", requireText: ["Add it to OpenWork"] },
+          screenshot: { name: "frame-1", requireText: ["Add it to Sofia"] },
         });
       },
     },
     {
       name: "Frame 2",
       run: async (ctx) => {
-        await ctx.prove("The agent terminal shows existing skills, MCPs, and commands shared to OpenWork in one link.", {
+        await ctx.prove("The agent terminal shows existing skills, MCPs, and commands shared to Sofia in one link.", {
           voiceover: vo[1],
           action: async () => {
             await ensureConnectSection(ctx);
@@ -233,7 +233,7 @@ export default {
                 const card = document.querySelector(${JSON.stringify(BRING_SELECTOR)});
                 const text = card ? card.innerText : "";
                 return text.includes("agent — terminal")
-                  && text.includes("share my skills and MCPs with my OpenWork org")
+                  && text.includes("share my skills and MCPs with my Sofia org")
                   && text.includes("granola")
                   && text.includes("meeting-brief")
                   && text.includes("review-pr")
@@ -250,7 +250,7 @@ export default {
               return {
                 exists: Boolean(card),
                 hasTerminalTitle: text.includes("agent — terminal"),
-                hasSharePrompt: text.includes("share my skills and MCPs with my OpenWork org"),
+                hasSharePrompt: text.includes("share my skills and MCPs with my Sofia org"),
                 hasGranola: text.includes("granola"),
                 hasMeetingBrief: text.includes("meeting-brief"),
                 hasReviewPr: text.includes("review-pr"),
@@ -279,7 +279,7 @@ export default {
     {
       name: "Frame 3",
       run: async (ctx) => {
-        await ctx.prove("The mini OpenWork app shows a teammate using the shared Granola connection and meeting-brief skill.", {
+        await ctx.prove("The mini Sofia app shows a teammate using the shared Granola connection and meeting-brief skill.", {
           voiceover: vo[2],
           action: async () => {
             await ensureConnectSection(ctx);
@@ -296,7 +296,7 @@ export default {
                   && text.includes("Queried the shared Granola MCP")
                   && text.includes("Your teammate's view");
               })()`,
-              { timeoutMs: 10_000, label: "mini OpenWork teammate view" },
+              { timeoutMs: 10_000, label: "mini Sofia teammate view" },
             );
           },
           assert: async () => {
@@ -312,7 +312,7 @@ export default {
             })()`);
             recordAssertion(
               ctx,
-              "The mini OpenWork UI shows a teammate prompt and shared Granola execution",
+              "The mini Sofia UI shows a teammate prompt and shared Granola execution",
               actual.exists === true
                 && actual.hasPrompt === true
                 && actual.hasGranolaExecution === true
@@ -340,7 +340,7 @@ export default {
                   && text.includes("3 talking points")
                   && text.includes("Run Task");
               })()`,
-              { timeoutMs: 10_000, label: "mini OpenWork run result" },
+              { timeoutMs: 10_000, label: "mini Sofia run result" },
             );
           },
           assert: async () => {
@@ -356,7 +356,7 @@ export default {
             })()`);
             recordAssertion(
               ctx,
-              "The mini OpenWork UI shows the shared meeting-brief run, talking points, and Run Task input",
+              "The mini Sofia UI shows the shared meeting-brief run, talking points, and Run Task input",
               actual.exists === true
                 && actual.hasMeetingBriefRun === true
                 && actual.hasTalkingPoints === true
@@ -373,7 +373,7 @@ export default {
       run: async (ctx) => {
         let codexClipboardRead = { text: "", error: "not read" };
         const visibleStatusEvidence = {};
-        let opencodePanelText = "";
+        let enginePanelText = "";
         let codexPanelText = "";
 
         await ctx.prove("The client matrix shows evidence labels and exact verified auth commands without running native client auth.", {
@@ -406,7 +406,7 @@ export default {
               };
             }
 
-            await realMouseClick(ctx, tabByLabelExpression("OpenCode"), "OpenCode tab");
+            await realMouseClick(ctx, tabByLabelExpression("Sofia"), "Sofia tab");
             await ctx.waitFor(
               `(() => {
                 const panel = document.querySelector(${JSON.stringify(`${SECTION_SELECTOR} [role="tabpanel"]:not([hidden])`)});
@@ -415,12 +415,12 @@ export default {
                   && text.includes("Verified")
                   && text.includes(${JSON.stringify(MCP_SERVER_URL)})
                   && text.includes('"oauth": {}')
-                  && text.includes(${JSON.stringify(OPENCODE_AUTH_COMMAND)})
-                  && text.includes(${JSON.stringify(OPENCODE_RECONNECT_COMMAND)});
+                  && text.includes(${JSON.stringify(SOFIA_ENGINE_AUTH_COMMAND)})
+                  && text.includes(${JSON.stringify(SOFIA_ENGINE_RECONNECT_COMMAND)});
               })()`,
-              { timeoutMs: 10_000, label: "OpenCode verified config, auth, and reconnect commands visible" },
+              { timeoutMs: 10_000, label: "Sofia verified config, auth, and reconnect commands visible" },
             );
-            opencodePanelText = await ctx.eval(`(() => {
+            enginePanelText = await ctx.eval(`(() => {
               const panel = document.querySelector(${JSON.stringify(`${SECTION_SELECTOR} [role="tabpanel"]:not([hidden])`)});
               return panel ? panel.innerText : "";
             })()`);
@@ -454,7 +454,7 @@ export default {
             await realMouseClick(
               ctx,
               `document.querySelector(${JSON.stringify(INSTALL_COPY_BUTTON_SELECTOR)})`,
-              "visible OpenWork MCP install copy button",
+              "visible Sofia MCP install copy button",
             );
             await ctx.waitFor(
               `(() => {
@@ -544,21 +544,21 @@ export default {
             );
             recordAssertion(
               ctx,
-              "OpenCode shows the JSON config, opencode auth command, and logout-then-auth reconnect sequence",
-              opencodePanelText.includes(MCP_SERVER_URL)
-                && opencodePanelText.includes('"oauth": {}')
-                && opencodePanelText.includes(OPENCODE_AUTH_COMMAND)
-                && opencodePanelText.indexOf("opencode mcp logout openwork") >= 0
-                && opencodePanelText.indexOf(OPENCODE_AUTH_COMMAND, opencodePanelText.indexOf("opencode mcp logout openwork")) > opencodePanelText.indexOf("opencode mcp logout openwork"),
-              opencodePanelText,
+              "Sofia shows the JSON config, engine auth command, and logout-then-auth reconnect sequence",
+              enginePanelText.includes(MCP_SERVER_URL)
+                && enginePanelText.includes('"oauth": {}')
+                && enginePanelText.includes(SOFIA_ENGINE_AUTH_COMMAND)
+                && enginePanelText.indexOf("engine mcp logout sofia") >= 0
+                && enginePanelText.indexOf(SOFIA_ENGINE_AUTH_COMMAND, enginePanelText.indexOf("engine mcp logout sofia")) > enginePanelText.indexOf("engine mcp logout sofia"),
+              enginePanelText,
             );
             recordAssertion(
               ctx,
               "Codex shows the add command, login command, and logout-then-login reconnect sequence",
               codexPanelText.includes(CODEX_COMMAND)
                 && codexPanelText.includes(CODEX_LOGIN_COMMAND)
-                && codexPanelText.indexOf("codex mcp logout openwork") >= 0
-                && codexPanelText.indexOf(CODEX_LOGIN_COMMAND, codexPanelText.indexOf("codex mcp logout openwork")) > codexPanelText.indexOf("codex mcp logout openwork"),
+                && codexPanelText.indexOf("codex mcp logout sofia") >= 0
+                && codexPanelText.indexOf(CODEX_LOGIN_COMMAND, codexPanelText.indexOf("codex mcp logout sofia")) > codexPanelText.indexOf("codex mcp logout sofia"),
               codexPanelText,
             );
             recordAssertion(
@@ -620,7 +620,7 @@ export default {
             })()`);
             recordAssertion(
               ctx,
-              "Read the docs points exactly to the OpenWork Cloud MCP guide",
+              "Read the docs points exactly to the Sofia Cloud MCP guide",
               actual.exists === true && actual.href === DOCS_URL,
               actual,
             );

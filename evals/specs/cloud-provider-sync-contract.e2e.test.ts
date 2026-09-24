@@ -1,9 +1,9 @@
 import { expect, onTestFinished } from "vitest";
-import { denFetch, evalIn, go, readAvailableModels, waitFor } from "@openwork/behaviors";
-import type { DenSession, ModelFacts } from "@openwork/behaviors";
-import { screenshot, validate } from "@openwork/test-evidence";
-import { app, eventually, needs, server, sleep, test, unmetNeeds } from "@openwork/testkit";
-import type { TestNeeds } from "@openwork/testkit";
+import { denFetch, evalIn, go, readAvailableModels, waitFor } from "@sofia/behaviors";
+import type { DenSession, ModelFacts } from "@sofia/behaviors";
+import { screenshot, validate } from "@sofia/test-evidence";
+import { app, eventually, needs, server, sleep, test, unmetNeeds } from "@sofia/testkit";
+import type { TestNeeds } from "@sofia/testkit";
 
 /**
  * ACCEPTANCE TEST for #3671: org-published LLM providers never finish syncing
@@ -49,7 +49,7 @@ const QUIET_DELAY_MS = 30_000;
 const OBSERVATION_WINDOW_MS = 60_000;
 // Intended poll cadence: one sync pass per 5 minutes (defaultIntervalMs =
 // 5 * 60 * 1_000, apps/server/src/cloud-provider-sync.ts:132; the testkit
-// desktop sets no OPENWORK_CLOUD_PROVIDER_SYNC_INTERVAL_MS override, so the
+// desktop sets no SOFIA_CLOUD_PROVIDER_SYNC_INTERVAL_MS override, so the
 // env branch at cloud-provider-sync.ts:481-484 stays on the default). Each
 // pass issues exactly ONE GET /v1/llm-providers/:llmProviderId/connect per
 // provider (fetchProviders, cloud-provider-sync.ts:294-306), so a 60s window
@@ -61,7 +61,7 @@ const CONNECT_BOUND_PER_PROVIDER = 3;
 // which makes per-provider rate = total / provider count.
 const CONNECT_ROUTE = "/v1/llm-providers/:llmProviderId/connect";
 
-const requirements: TestNeeds = { optIn: ["OPENWORK_EVAL_E2E_TESTS"] };
+const requirements: TestNeeds = { optIn: ["SOFIA_EVAL_E2E_TESTS"] };
 const missingRequirements = unmetNeeds(requirements, process.env);
 const title = missingRequirements.length > 0
   ? `cloud provider sync contract skipped — needs: ${missingRequirements.join(", ")}`
@@ -123,7 +123,7 @@ async function organizationId(session: DenSession): Promise<string> {
 async function createProvider(admin: DenSession, orgId: string, body: Record<string, unknown>): Promise<string> {
   const result = await denFetch(admin, "/v1/llm-providers", {
     method: "POST",
-    headers: { ...auth(admin), "x-openwork-org-id": orgId },
+    headers: { ...auth(admin), "x-sofia-org-id": orgId },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
@@ -138,14 +138,14 @@ async function createProvider(admin: DenSession, orgId: string, body: Record<str
 async function deleteProvider(admin: DenSession, orgId: string, providerId: string): Promise<void> {
   await denFetch(admin, `/v1/llm-providers/${encodeURIComponent(providerId)}`, {
     method: "DELETE",
-    headers: { ...auth(admin), "x-openwork-org-id": orgId },
+    headers: { ...auth(admin), "x-sofia-org-id": orgId },
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
 }
 
 async function memberVisibleProviderIds(member: DenSession, orgId: string): Promise<string[]> {
   const result = await denFetch(member, "/v1/llm-providers", {
-    headers: { ...auth(member), "x-openwork-org-id": orgId },
+    headers: { ...auth(member), "x-sofia-org-id": orgId },
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
   if (!result.response.ok) {
@@ -186,13 +186,13 @@ function parseSyncStatus(payload: Record<string, unknown>): SyncStatusFacts {
 
 // The desktop local server's GET /cloud-provider-sync/status is registered
 // with "client" auth (apps/server/src/server.ts:2108), so the renderer's own
-// persisted credentials (localStorage openwork.server.port/openwork.server.token)
+// persisted credentials (localStorage sofia.server.port/sofia.server.token)
 // reach it with a plain Bearer fetch to 127.0.0.1 — the same access pattern
 // subagent-run-survives-provider-sync-storm.e2e.test.ts uses.
 async function readSyncStatusPayload(surface: Parameters<typeof evalIn>[0]): Promise<Record<string, unknown>> {
   const value = await evalIn(surface, `(async () => {
-    const port = localStorage.getItem("openwork.server.port");
-    const token = localStorage.getItem("openwork.server.token");
+    const port = localStorage.getItem("sofia.server.port");
+    const token = localStorage.getItem("sofia.server.token");
     if (!port || !token) return { specProbeError: "missing local server credentials" };
     const response = await fetch("http://127.0.0.1:" + port + "/cloud-provider-sync/status", {
       headers: { Authorization: "Bearer " + token },
@@ -255,7 +255,7 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 30 * 60_000 }, asy
       env: ["SYNC_CONTRACT_PROVIDER_API_KEY"],
       models: [{ id: CUSTOM_MODEL_ID, name: "Sync Contract Custom Model" }],
     },
-    apiKey: "sk-openwork-sync-contract-eval-only",
+    apiKey: "sk-sofia-sync-contract-eval-only",
     allMembers: true,
     memberIds: [],
     teamIds: [],
@@ -268,7 +268,7 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 30 * 60_000 }, asy
     source: "models_dev",
     providerId: "openai",
     modelIds: [CATALOG_MODEL_ID],
-    apiKey: "sk-openwork-sync-contract-eval-only",
+    apiKey: "sk-sofia-sync-contract-eval-only",
     allMembers: true,
     memberIds: [],
     teamIds: [],

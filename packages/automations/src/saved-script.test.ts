@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { createAutomationSchema, createCloudAutomationSchema, updateAutomationSchema } from "@openwork/types/automations"
+import { createAutomationSchema, createCloudAutomationSchema, updateAutomationSchema } from "@sofia/types/automations"
 import { automationRevisionDigest } from "./contracts"
 
 const schedule = { kind: "daily" as const, timezone: "UTC", hour: 9, minute: 0 }
@@ -62,13 +62,13 @@ describe("saved Script Automations", () => {
       name: "Legacy",
       instructions: "Prepare a briefing",
       schedule,
-      model: { providerId: "openwork", modelId: "model" },
+      model: { providerId: "sofia", modelId: "model" },
     }).success).toBe(true)
 
     const common = {
       instructions: "Execute the pinned saved Code Mode script.",
       schedule,
-      model: { providerId: "opencode", modelId: "big-pickle" },
+      model: { providerId: "engine", modelId: "big-pickle" },
       maximumRuntimeMs: 60_000,
       executionTarget: "cloud" as const,
     }

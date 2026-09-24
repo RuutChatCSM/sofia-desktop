@@ -15,7 +15,7 @@ import {
 } from "./den-sign-in-intent";
 
 type DenClient = ReturnType<typeof createDenClient>;
-export const DEN_HANDOFF_AUTO_CONTINUE_KEY = "openwork.den.handoffAutoContinueAt";
+export const DEN_HANDOFF_AUTO_CONTINUE_KEY = "sofia.den.handoffAutoContinueAt";
 
 export type HandoffActiveOrg = {
   id: string;

@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 
-import { unwrap } from "../../../app/lib/opencode";
+import { unwrap } from "../../../app/lib/engine";
 import type { Client, McpStatusMap } from "../../../app/types";
 
 const REFRESH_INTERVAL_MS = 60_000;
 
 /**
  * Live count of connected MCP servers for the active workspace, polled from
- * opencode's mcp.status. Used by the session status bar so it reflects real
+ * engine's mcp.status. Used by the session status bar so it reflects real
  * connectivity instead of a hardcoded value.
  */
 export function useMcpConnectedCount(client: Client | null, directory: string): number {

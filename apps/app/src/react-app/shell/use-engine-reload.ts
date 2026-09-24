@@ -1,14 +1,14 @@
 // Engine reload wiring for the session route: UI-triggered engine reload,
 // reload-coordinator registration, the post-org-onboarding reload latch,
 // server reload-event polling, and desktop engine info. Extracted verbatim
-// from session-route.tsx; reload events are now typed (OpenworkReloadEvent)
+// from session-route.tsx; reload events are now typed (SofiaReloadEvent)
 // instead of `any`.
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { engineInfo } from "@/app/lib/desktop";
 import type { EngineInfo } from "@/app/lib/desktop-types";
 import { isDesktopRuntime } from "@/app/lib/runtime-env";
-import type { OpenworkServerClient } from "@/app/lib/openwork-server";
+import type { SofiaServerClient } from "@/app/lib/sofia-server";
 import type { ResolvedWorkspaceEndpoint } from "@/app/lib/workspace-endpoint";
 import { t } from "@/i18n";
 import { reloadEngineWithDesktopFallback } from "./engine-reload-escalation";
@@ -18,14 +18,14 @@ import { getReactQueryClient } from "@/react-app/infra/query-client";
 import type { RouteWorkspace } from "./route-workspaces";
 import { toast } from "@/components/ui/sonner";
 
-const reloadAfterOrgOnboardingKey = "openwork.reloadAfterOrgOnboarding";
+const reloadAfterOrgOnboardingKey = "sofia.reloadAfterOrgOnboarding";
 
 function taskCreateUnavailableToastId(workspaceId: string) {
-  return `opencode-unavailable:${workspaceId}`;
+  return `engine-unavailable:${workspaceId}`;
 }
 
 export type UseEngineReloadInput = {
-  client: OpenworkServerClient | null;
+  client: SofiaServerClient | null;
   workspaceId: string;
   workspace: RouteWorkspace | null | undefined;
   endpointForWorkspace: (
@@ -93,7 +93,7 @@ export function useEngineReload(input: UseEngineReloadInput) {
     }
     setEngineReloadVersion((v) => v + 1);
     try {
-      window.dispatchEvent(new CustomEvent("openwork-server-settings-changed"));
+      window.dispatchEvent(new CustomEvent("sofia-server-settings-changed"));
     } catch {
       // ignore browser event dispatch failures
     }
@@ -125,7 +125,7 @@ export function useEngineReload(input: UseEngineReloadInput) {
     // Marking is enough: the reload coordinator auto-reloads once idle.
     reloadCoordinator.markReloadRequired("config", {
       type: "config",
-      name: "opencode.json",
+      name: "engine.json",
       action: "updated",
     });
   }, [reloadCoordinator, reloadCoordinator.canReloadWorkspaceEngine]);

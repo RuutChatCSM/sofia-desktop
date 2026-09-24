@@ -3,14 +3,14 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 /**
- * The packaged builds bundle this app's OpenCode plugins with `--target node`,
+ * The packaged builds bundle this app's Sofia engine plugins with `--target node`,
  * so every workspace import resolves through the exporting package's own
  * conditions. A subpath that points at `dist/` only resolves after that package
  * has been built, which the Docker and alpha pipelines do not guarantee — and
  * neither typechecks nor bun tests take that route, so nothing catches it
  * before merge. Keep every subpath resolvable from source.
  */
-describe("@openwork/types package exports", () => {
+describe("@sofia/types package exports", () => {
   const manifest = JSON.parse(
     readFileSync(resolve(import.meta.dir, "../../../packages/types/package.json"), "utf8"),
   ) as { exports: Record<string, Record<string, string> | string> };

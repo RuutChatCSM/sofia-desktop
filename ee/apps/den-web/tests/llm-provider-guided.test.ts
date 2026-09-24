@@ -206,7 +206,7 @@ describe("readGuidedCustomProviderFieldsFromText", () => {
         expect(readGuidedCustomProviderFieldsFromText(text)?.providerId).toBe("gateway");
     });
 
-    test("parses an opencode-style wrapper", () => {
+    test("parses an engine-style wrapper", () => {
         const text = JSON.stringify({
             provider: {
                 gateway: {
@@ -244,7 +244,7 @@ describe("readEnvNamesFromCustomProviderText", () => {
         ]);
     });
 
-    test("reads env names through an opencode-style wrapper", () => {
+    test("reads env names through an engine-style wrapper", () => {
         const text = JSON.stringify({
             provider: { bedrock: { env: ["AWS_BEARER_TOKEN_BEDROCK"] } },
         });

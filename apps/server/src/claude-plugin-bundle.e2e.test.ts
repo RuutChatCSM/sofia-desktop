@@ -95,7 +95,7 @@ function startMockGithub(options?: { branch?: string }) {
   return server;
 }
 
-function startMockOpencode() {
+function startMockWorkspaceEngine() {
   const requests: Array<{ method: string; pathname: string }> = [];
   const server = Bun.serve({
     hostname: "127.0.0.1",
@@ -115,16 +115,16 @@ function startMockOpencode() {
   return { server, requests };
 }
 
-async function startOpenwork(options?: { branch?: string }) {
-  const workspaceRoot = await mkdtemp(join(tmpdir(), "openwork-claude-plugin-"));
+async function startSofia(options?: { branch?: string }) {
+  const workspaceRoot = await mkdtemp(join(tmpdir(), "sofia-claude-plugin-"));
   roots.push(workspaceRoot);
-  setEnv("OPENWORK_RUNTIME_DB", join(workspaceRoot, "runtime.sqlite"));
+  setEnv("SOFIA_RUNTIME_DB", join(workspaceRoot, "runtime.sqlite"));
 
   const github = startMockGithub(options);
-  setEnv("OPENWORK_GITHUB_API_BASE", `http://127.0.0.1:${github.port}`);
-  setEnv("OPENWORK_GITHUB_RAW_BASE", `http://127.0.0.1:${github.port}`);
+  setEnv("SOFIA_GITHUB_API_BASE", `http://127.0.0.1:${github.port}`);
+  setEnv("SOFIA_GITHUB_RAW_BASE", `http://127.0.0.1:${github.port}`);
 
-  const engine = startMockOpencode();
+  const engine = startMockWorkspaceEngine();
   const config: ServerConfig = {
     host: "127.0.0.1",
     port: 0,
@@ -205,11 +205,11 @@ describe("parseClaudePluginSource", () => {
 
 describe("claude plugin bundles", () => {
   test("dryRun returns the Will-install preview with warnings", async () => {
-    const openwork = await startOpenwork();
+    const sofia = await startSofia();
 
-    const response = await fetch(`${openwork.base}/workspace/ws_1/claude-plugins`, {
+    const response = await fetch(`${sofia.base}/workspace/ws_1/claude-plugins`, {
       method: "POST",
-      headers: openwork.headers,
+      headers: sofia.headers,
       body: JSON.stringify({ url: "https://github.com/slackapi/slack-mcp-plugin", dryRun: true }),
     });
     expect(response.status).toBe(200);
@@ -224,15 +224,15 @@ describe("claude plugin bundles", () => {
     // local-helper uses ${CLAUDE_PLUGIN_ROOT} and must be skipped with a warning.
     expect(body.preview.warnings.some((warning) => warning.includes("local-helper"))).toBe(true);
     // Nothing installed on dryRun.
-    expect(existsSync(join(openwork.workspaceRoot, ".opencode/skills/slack-plugin"))).toBe(false);
+    expect(existsSync(join(sofia.workspaceRoot, ".sofia/skills/slack-plugin"))).toBe(false);
   });
 
   test("resolves branch names containing slashes in /tree/ URLs", async () => {
-    const openwork = await startOpenwork({ branch: "release/v1" });
+    const sofia = await startSofia({ branch: "release/v1" });
 
-    const response = await fetch(`${openwork.base}/workspace/ws_1/claude-plugins`, {
+    const response = await fetch(`${sofia.base}/workspace/ws_1/claude-plugins`, {
       method: "POST",
-      headers: openwork.headers,
+      headers: sofia.headers,
       body: JSON.stringify({
         url: "https://github.com/slackapi/slack-mcp-plugin/tree/release/v1",
         dryRun: true,
@@ -247,40 +247,40 @@ describe("claude plugin bundles", () => {
   });
 
   test("installs skills, commands, and MCP servers; uninstall cleans up", async () => {
-    const openwork = await startOpenwork();
+    const sofia = await startSofia();
 
-    const installResponse = await fetch(`${openwork.base}/workspace/ws_1/claude-plugins`, {
+    const installResponse = await fetch(`${sofia.base}/workspace/ws_1/claude-plugins`, {
       method: "POST",
-      headers: openwork.headers,
+      headers: sofia.headers,
       body: JSON.stringify({ url: "https://github.com/slackapi/slack-mcp-plugin" }),
     });
     expect(installResponse.status).toBe(200);
     const installBody = await installResponse.json() as { item: { pluginId: string; files: Array<{ objectType: string; path: string }> } };
     expect(installBody.item.pluginId).toBe("github:slackapi/slack-mcp-plugin");
 
-    // Skill and command land namespaced under .opencode/.
-    const skillPath = join(openwork.workspaceRoot, ".opencode/skills/slack-plugin/slack-search/SKILL.md");
-    const commandPath = join(openwork.workspaceRoot, ".opencode/commands/slack-plugin/standup.md");
+    // Skill and command land namespaced under .sofia/.
+    const skillPath = join(sofia.workspaceRoot, ".sofia/skills/slack-plugin/slack-search/SKILL.md");
+    const commandPath = join(sofia.workspaceRoot, ".sofia/commands/slack-plugin/standup.md");
     expect(existsSync(skillPath)).toBe(true);
     expect(existsSync(commandPath)).toBe(true);
     expect(await readFile(skillPath, "utf8")).toContain("Search Slack messages effectively");
 
     // MCP registered in the runtime DB and pushed to the engine.
-    const listResponse = await fetch(`${openwork.base}/workspace/ws_1/mcp`, { headers: openwork.headers });
+    const listResponse = await fetch(`${sofia.base}/workspace/ws_1/mcp`, { headers: sofia.headers });
     const listBody = await listResponse.json() as { items: Array<{ name: string; source: string }> };
     const slackEntry = listBody.items.find((entry) => entry.name === "slack");
     expect(slackEntry?.source).toBe("config.remote");
-    expect(openwork.engine.requests.some((entry) => entry.method === "POST" && entry.pathname === "/mcp")).toBe(true);
+    expect(sofia.engine.requests.some((entry) => entry.method === "POST" && entry.pathname === "/mcp")).toBe(true);
 
     // Uninstall through the shared cloud-plugins route.
     const removeResponse = await fetch(
-      `${openwork.base}/workspace/ws_1/cloud-plugins/${encodeURIComponent(installBody.item.pluginId)}`,
-      { method: "DELETE", headers: openwork.headers },
+      `${sofia.base}/workspace/ws_1/cloud-plugins/${encodeURIComponent(installBody.item.pluginId)}`,
+      { method: "DELETE", headers: sofia.headers },
     );
     expect(removeResponse.status).toBe(200);
     expect(existsSync(skillPath)).toBe(false);
     expect(existsSync(commandPath)).toBe(false);
-    const afterRemove = await fetch(`${openwork.base}/workspace/ws_1/mcp`, { headers: openwork.headers });
+    const afterRemove = await fetch(`${sofia.base}/workspace/ws_1/mcp`, { headers: sofia.headers });
     const afterRemoveBody = await afterRemove.json() as { items: Array<{ name: string }> };
     expect(afterRemoveBody.items.some((entry) => entry.name === "slack")).toBe(false);
   });

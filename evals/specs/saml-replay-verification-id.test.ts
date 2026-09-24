@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto"
 import { expect } from "vitest"
-import { test } from "@openwork/testkit"
+import { test } from "@sofia/testkit"
 import { AuthVerificationTable } from "../../ee/packages/den-db/src/schema/auth.js"
 
 test(

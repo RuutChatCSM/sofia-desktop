@@ -60,7 +60,7 @@ function fakeUpdaterHarness({ version }) {
 }
 
 async function registerFakeUpdaterIpc({ version }) {
-  const tempDir = mkdtempSync(path.join(os.tmpdir(), "openwork-updater-test-"));
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "sofia-updater-test-"));
   const handlers = new Map();
   const harness = fakeUpdaterHarness({ version });
   isolatedUpdaterImportId += 1;
@@ -87,7 +87,7 @@ async function registerFakeUpdaterIpc({ version }) {
 describe("staleUpdaterStatePaths", () => {
   it("targets the ShipIt cache on macOS", { skip: process.platform !== "darwin" }, () => {
     assert.deepEqual(staleUpdaterStatePaths(fakeApp), [
-      "/Users/test/Library/Caches/com.differentai.openwork.ShipIt",
+      "/Users/test/Library/Caches/app.sofia.desktop.ShipIt",
     ]);
   });
 
@@ -100,7 +100,7 @@ describe("targetedStableUpdaterFeed", () => {
   it("builds a fixed GitHub release feed from a strict stable version", () => {
     assert.equal(
       targetedStableUpdaterFeed("0.17.22", "0.17.23"),
-      "https://github.com/different-ai/openwork/releases/download/v0.17.23",
+      "https://github.com/RuutChatCSM/sofia-desktop/releases/download/v0.17.23",
     );
   });
 
@@ -129,7 +129,7 @@ describe("targetedStableUpdaterFeed", () => {
   it("allows only an explicit exact recovery downgrade", () => {
     assert.equal(
       targetedStableUpdaterFeed("0.17.23", "0.17.22", true),
-      "https://github.com/different-ai/openwork/releases/download/v0.17.22",
+      "https://github.com/RuutChatCSM/sofia-desktop/releases/download/v0.17.22",
     );
     assert.throws(
       () => targetedStableUpdaterFeed("0.17.23", "0.17.23", true),
@@ -167,7 +167,7 @@ describe("recovery metadata and candidates", () => {
   });
 
   it("atomically preserves the immediately prior healthy version", async () => {
-    const userData = await mkdtemp(path.join(os.tmpdir(), "openwork-recovery-state-"));
+    const userData = await mkdtemp(path.join(os.tmpdir(), "sofia-recovery-state-"));
     const app = { getPath: () => userData };
     try {
       await recordHealthyVersion(app, "public", "1.2.3");
@@ -182,6 +182,28 @@ describe("recovery metadata and candidates", () => {
         currentVersion: null,
         previousVersion: null,
       });
+    } finally {
+      await rm(userData, { recursive: true, force: true });
+    }
+  });
+
+  it("skips recording a healthy version for an unpackaged dev build", async () => {
+    const userData = await mkdtemp(path.join(os.tmpdir(), "sofia-recovery-dev-"));
+    const handlers = new Map();
+    isolatedUpdaterImportId += 1;
+    const isolated = await import(`./updater.mjs?dev-recovery=${isolatedUpdaterImportId}`);
+    try {
+      isolated.registerUpdaterIpc({
+        app: { isPackaged: false, getVersion: () => "0.0.0-dev", getPath: () => userData },
+        ipcMain: { handle: (name, handler) => handlers.set(name, handler) },
+        getMainWindow: () => null,
+      });
+
+      assert.equal(await handlers.get("sofia:recovery:recordHealthy")(), null);
+      await assert.rejects(
+        readFile(path.join(userData, "app-recovery.v1.json"), "utf8"),
+        { code: "ENOENT" },
+      );
     } finally {
       await rm(userData, { recursive: true, force: true });
     }
@@ -204,9 +226,9 @@ describe("recovery metadata and candidates", () => {
 
   it("accepts only the exact platform, architecture, distribution release artifact", () => {
     const files = [
-      { url: "openwork-mac-x64-1.2.3.dmg", sha512: "wrong-arch" },
-      { url: "https://tampered.invalid/openwork-mac-arm64-1.2.3.dmg", sha512: "tampered" },
-      { url: "openwork-mac-arm64-1.2.3.dmg", sha512: "verified" },
+      { url: "sofia-mac-x64-1.2.3.dmg", sha512: "wrong-arch" },
+      { url: "https://tampered.invalid/sofia-mac-arm64-1.2.3.dmg", sha512: "tampered" },
+      { url: "sofia-mac-arm64-1.2.3.dmg", sha512: "verified" },
     ];
     assert.deepEqual(selectRecoveryArtifact(files, {
       version: "1.2.3",
@@ -218,7 +240,7 @@ describe("recovery metadata and candidates", () => {
       platform: "darwin",
       arch: "arm64",
       distribution: "public",
-      url: "https://github.com/different-ai/openwork/releases/download/v1.2.3/openwork-mac-arm64-1.2.3.dmg",
+      url: "https://github.com/RuutChatCSM/sofia-desktop/releases/download/v1.2.3/sofia-mac-arm64-1.2.3.dmg",
       sha512: "verified",
     });
     assert.equal(selectRecoveryArtifact(files, {
@@ -231,15 +253,15 @@ describe("recovery metadata and candidates", () => {
 
   it("accepts each artifact flavor only for its matching distribution", () => {
     const artifacts = {
-      public: "openwork-mac-arm64-1.2.3.dmg",
-      cloud: "openwork-cloud-mac-arm64-1.2.3.dmg",
-      enterprise: "openwork-enterprise-mac-arm64-1.2.3.dmg",
+      public: "sofia-mac-arm64-1.2.3.dmg",
+      cloud: "sofia-cloud-mac-arm64-1.2.3.dmg",
+      enterprise: "sofia-enterprise-mac-arm64-1.2.3.dmg",
     };
     for (const [distribution, fileName] of Object.entries(artifacts)) {
       const files = [{ url: fileName, sha512: `${distribution}-checksum` }];
       assert.equal(selectRecoveryArtifact(files, {
         version: "1.2.3", platform: "darwin", arch: "arm64", distribution,
-      })?.url, `https://github.com/different-ai/openwork/releases/download/v1.2.3/${fileName}`);
+      })?.url, `https://github.com/RuutChatCSM/sofia-desktop/releases/download/v1.2.3/${fileName}`);
       for (const otherDistribution of Object.keys(artifacts).filter((flavor) => flavor !== distribution)) {
         assert.equal(selectRecoveryArtifact(files, {
           version: "1.2.3", platform: "darwin", arch: "arm64", distribution: otherDistribution,
@@ -251,14 +273,14 @@ describe("recovery metadata and candidates", () => {
   it("parses representative builder manifests and selects published installer extensions", () => {
     const files = parseRecoveryManifest(`version: 1.2.3
 files:
-  - url: openwork-mac-arm64-1.2.3.dmg
+  - url: sofia-mac-arm64-1.2.3.dmg
     sha512: mac-checksum
     size: 100
-  - url: openwork-cloud-win-x64-1.2.3.exe
+  - url: sofia-cloud-win-x64-1.2.3.exe
     sha512: win-checksum
-  - url: openwork-enterprise-linux-x86_64-1.2.3.AppImage
+  - url: sofia-enterprise-linux-x86_64-1.2.3.AppImage
     sha512: linux-checksum
-path: openwork-mac-arm64-1.2.3.zip
+path: sofia-mac-arm64-1.2.3.zip
 sha512: updater-zip-checksum
 releaseDate: '2026-08-11T00:00:00.000Z'
 `);
@@ -277,12 +299,12 @@ releaseDate: '2026-08-11T00:00:00.000Z'
   });
 
   it("rejects a checksum mismatch without producing a cached installer", async () => {
-    const userData = await mkdtemp(path.join(os.tmpdir(), "openwork-recovery-checksum-"));
+    const userData = await mkdtemp(path.join(os.tmpdir(), "sofia-recovery-checksum-"));
     try {
       await assert.rejects(
         cacheVerifiedRecoveryArtifact({
           app: { getPath: () => userData },
-          artifact: { url: "https://github.com/different-ai/openwork/releases/download/v1.2.3/openwork.dmg", sha512: "invalid" },
+          artifact: { url: "https://github.com/RuutChatCSM/sofia-desktop/releases/download/v1.2.3/sofia.dmg", sha512: "invalid" },
           fetchArtifact: async () => new Response("tampered"),
         }),
         /checksum did not match/,
@@ -293,7 +315,7 @@ releaseDate: '2026-08-11T00:00:00.000Z'
   });
 
   it("preserves a valid rollback cache across network and checksum replacement failures", async () => {
-    const userData = await mkdtemp(path.join(os.tmpdir(), "openwork-recovery-cache-preserve-"));
+    const userData = await mkdtemp(path.join(os.tmpdir(), "sofia-recovery-cache-preserve-"));
     const app = { getPath: () => userData };
     const bytes = Buffer.from("known-good");
     const artifact = {
@@ -301,7 +323,7 @@ releaseDate: '2026-08-11T00:00:00.000Z'
       platform: "darwin",
       arch: "arm64",
       distribution: "public",
-      url: "https://github.com/different-ai/openwork/releases/download/v1.2.3/openwork-mac-arm64-1.2.3.dmg",
+      url: "https://github.com/RuutChatCSM/sofia-desktop/releases/download/v1.2.3/sofia-mac-arm64-1.2.3.dmg",
       sha512: createHash("sha512").update(bytes).digest("base64"),
     };
     try {
@@ -329,7 +351,7 @@ releaseDate: '2026-08-11T00:00:00.000Z'
   });
 
   it("rejects cached metadata with a modified URL or wrong installer filename", async () => {
-    const userData = await mkdtemp(path.join(os.tmpdir(), "openwork-recovery-cache-identity-"));
+    const userData = await mkdtemp(path.join(os.tmpdir(), "sofia-recovery-cache-identity-"));
     const app = { getPath: () => userData };
     const bytes = Buffer.from("known-good-identity");
     const artifact = {
@@ -337,7 +359,7 @@ releaseDate: '2026-08-11T00:00:00.000Z'
       platform: "darwin",
       arch: "arm64",
       distribution: "public",
-      url: "https://github.com/different-ai/openwork/releases/download/v0.18.18/openwork-mac-arm64-0.18.18.dmg",
+      url: "https://github.com/RuutChatCSM/sofia-desktop/releases/download/v0.18.18/sofia-mac-arm64-0.18.18.dmg",
       sha512: createHash("sha512").update(bytes).digest("base64"),
     };
     const expected = { platform: "darwin", arch: "arm64", distribution: "public" };
@@ -345,9 +367,9 @@ releaseDate: '2026-08-11T00:00:00.000Z'
       await cacheVerifiedRecoveryArtifact({ app, artifact, fetchArtifact: async () => new Response(bytes) });
       const metadataPath = path.join(userData, "app-recovery-cache", "metadata.json");
       const metadata = JSON.parse(await readFile(metadataPath, "utf8"));
-      await writeFile(metadataPath, JSON.stringify({ ...metadata, url: "https://tampered.invalid/OpenWork.dmg" }), "utf8");
+      await writeFile(metadataPath, JSON.stringify({ ...metadata, url: "https://tampered.invalid/Sofia App.dmg" }), "utf8");
       assert.equal(await readCachedRecoveryArtifact(app, expected), null);
-      await writeFile(metadataPath, JSON.stringify({ ...metadata, fileName: "OpenWork.dmg" }), "utf8");
+      await writeFile(metadataPath, JSON.stringify({ ...metadata, fileName: "Sofia App.dmg" }), "utf8");
       assert.equal(await readCachedRecoveryArtifact(app, expected), null);
     } finally {
       await rm(userData, { recursive: true, force: true });
@@ -355,7 +377,7 @@ releaseDate: '2026-08-11T00:00:00.000Z'
   });
 
   it("discovers and opens a reverified cached healthy installer while offline", async () => {
-    const userData = await mkdtemp(path.join(os.tmpdir(), "openwork-recovery-offline-"));
+    const userData = await mkdtemp(path.join(os.tmpdir(), "sofia-recovery-offline-"));
     const quitCalls = [];
     const app = {
       isPackaged: true,
@@ -369,7 +391,7 @@ releaseDate: '2026-08-11T00:00:00.000Z'
       platform: "darwin",
       arch: "arm64",
       distribution: "public",
-      url: "https://github.com/different-ai/openwork/releases/download/v1.9.0/openwork-mac-arm64-1.9.0.dmg",
+      url: "https://github.com/RuutChatCSM/sofia-desktop/releases/download/v1.9.0/sofia-mac-arm64-1.9.0.dmg",
       sha512: createHash("sha512").update(bytes).digest("base64"),
     };
     const handlers = new Map();
@@ -391,18 +413,18 @@ releaseDate: '2026-08-11T00:00:00.000Z'
         arch: "arm64",
         distribution: "public",
       });
-      const listed = await handlers.get("openwork:recovery:list")(null, {
+      const listed = await handlers.get("sofia:recovery:list")(null, {
         versions: [], minimumVersion: "0.0.0",
       });
       assert.deepEqual(listed.releases, [{ id: "1.9.0", version: "1.9.0", marking: "previous" }]);
       assert.deepEqual(networkCalls, []);
-      assert.deepEqual(await handlers.get("openwork:recovery:use")(null, "1.9.0"), {
+      assert.deepEqual(await handlers.get("sofia:recovery:use")(null, "1.9.0"), {
         ok: false,
         reason: "installer blocked",
       });
       assert.deepEqual(quitCalls, []);
       openError = "";
-      assert.deepEqual(await handlers.get("openwork:recovery:use")(null, "1.9.0"), {
+      assert.deepEqual(await handlers.get("sofia:recovery:use")(null, "1.9.0"), {
         ok: true,
         action: "installer",
         message: "The verified installer is open. Follow the operating system steps to finish.",
@@ -414,11 +436,11 @@ releaseDate: '2026-08-11T00:00:00.000Z'
   });
 
   it("rejects a candidate whose fresh manifest changes without any destructive action", async () => {
-    const userData = await mkdtemp(path.join(os.tmpdir(), "openwork-recovery-fresh-mismatch-"));
+    const userData = await mkdtemp(path.join(os.tmpdir(), "sofia-recovery-fresh-mismatch-"));
     const handlers = new Map();
     const destructiveCalls = [];
     let candidateFetches = 0;
-    const manifest = (checksum) => `version: 1.9.0\nfiles:\n  - url: openwork-mac-arm64-1.9.0.dmg\n    sha512: ${checksum}\n`;
+    const manifest = (checksum) => `version: 1.9.0\nfiles:\n  - url: sofia-mac-arm64-1.9.0.dmg\n    sha512: ${checksum}\n`;
     try {
       isolatedUpdaterImportId += 1;
       const isolated = await import(`./updater.mjs?fresh-mismatch=${isolatedUpdaterImportId}`);
@@ -441,11 +463,11 @@ releaseDate: '2026-08-11T00:00:00.000Z'
         arch: "arm64",
         distribution: "public",
       });
-      const listed = await handlers.get("openwork:recovery:list")(null, {
+      const listed = await handlers.get("sofia:recovery:list")(null, {
         versions: ["1.9.0"], minimumVersion: "0.0.0",
       });
       assert.deepEqual(listed.releases, [{ id: "1.9.0", version: "1.9.0", marking: null }]);
-      const result = await handlers.get("openwork:recovery:use")(null, "1.9.0");
+      const result = await handlers.get("sofia:recovery:use")(null, "1.9.0");
       assert.equal(result.ok, false);
       assert.match(result.reason, /could not be verified/);
       assert.deepEqual(destructiveCalls, []);
@@ -475,13 +497,13 @@ releaseDate: '2026-08-11T00:00:00.000Z'
         return "";
       } },
       env: {
-        OPENWORK_EVAL_RECOVERY_CANDIDATES: JSON.stringify([
-          { version: "1.2.2", verified: false, artifactUrl: "https://tampered.invalid/openwork.dmg" },
+        SOFIA_EVAL_RECOVERY_CANDIDATES: JSON.stringify([
+          { version: "1.2.2", verified: false, artifactUrl: "https://tampered.invalid/sofia.dmg" },
         ]),
       },
     });
-    await handlers.get("openwork:recovery:list")(null, {});
-    assert.equal((await handlers.get("openwork:recovery:use")(null, "1.2.2")).ok, false);
+    await handlers.get("sofia:recovery:list")(null, {});
+    assert.equal((await handlers.get("sofia:recovery:use")(null, "1.2.2")).ok, false);
     assert.deepEqual(destructiveCalls, []);
   });
 });
@@ -495,7 +517,7 @@ describe("installAndRestart", () => {
       getMainWindow: () => null,
     });
 
-    const install = handlers.get("openwork:updater:installAndRestart");
+    const install = handlers.get("sofia:updater:installAndRestart");
     assert.equal(typeof install, "function");
     assert.deepEqual(await install(), {
       ok: false,
@@ -510,9 +532,9 @@ describe("downloaded update lifecycle", () => {
       version: "0.17.1",
     });
     try {
-      const check = handlers.get("openwork:updater:check");
-      const download = handlers.get("openwork:updater:download");
-      const install = handlers.get("openwork:updater:installAndRestart");
+      const check = handlers.get("sofia:updater:check");
+      const download = handlers.get("sofia:updater:download");
+      const install = handlers.get("sofia:updater:installAndRestart");
       assert.equal(typeof check, "function");
       assert.equal(typeof download, "function");
       assert.equal(typeof install, "function");
@@ -537,9 +559,9 @@ describe("downloaded update lifecycle", () => {
       version: "0.17.1",
     });
     try {
-      const check = handlers.get("openwork:updater:check");
-      const download = handlers.get("openwork:updater:download");
-      const install = handlers.get("openwork:updater:installAndRestart");
+      const check = handlers.get("sofia:updater:check");
+      const download = handlers.get("sofia:updater:download");
+      const install = handlers.get("sofia:updater:installAndRestart");
       assert.equal(typeof check, "function");
       assert.equal(typeof download, "function");
       assert.equal(typeof install, "function");
@@ -561,9 +583,9 @@ describe("downloaded update lifecycle", () => {
       version: "0.17.1",
     });
     try {
-      const check = handlers.get("openwork:updater:check");
-      const download = handlers.get("openwork:updater:download");
-      const install = handlers.get("openwork:updater:installAndRestart");
+      const check = handlers.get("sofia:updater:check");
+      const download = handlers.get("sofia:updater:download");
+      const install = handlers.get("sofia:updater:installAndRestart");
       assert.equal(typeof check, "function");
       assert.equal(typeof download, "function");
       assert.equal(typeof install, "function");
@@ -595,7 +617,7 @@ describe("release channel changes", () => {
 
   it("pins enterprise builds to their parallel stable manifest channel", async () => {
     const handlers = new Map();
-    const userData = await mkdtemp(path.join(os.tmpdir(), "openwork-enterprise-updater-"));
+    const userData = await mkdtemp(path.join(os.tmpdir(), "sofia-enterprise-updater-"));
     try {
       registerUpdaterIpc({
         app: {
@@ -608,11 +630,11 @@ describe("release channel changes", () => {
         manifestChannel: "enterprise",
       });
 
-      const setChannel = handlers.get("openwork:updater:setChannel");
+      const setChannel = handlers.get("sofia:updater:setChannel");
       assert.equal(typeof setChannel, "function");
       assert.deepEqual(await setChannel(null, "alpha"), {
         channel: "stable",
-        feedUrl: "https://github.com/different-ai/openwork/releases/latest/download",
+        feedUrl: "https://github.com/RuutChatCSM/sofia-desktop/releases/latest/download",
         currentVersion: desktopVersion,
       });
     } finally {
@@ -627,9 +649,9 @@ describe("release channel changes", () => {
       version: "0.18.0",
     });
     try {
-      const check = handlers.get("openwork:updater:check");
-      const setChannel = handlers.get("openwork:updater:setChannel");
-      const getChannel = handlers.get("openwork:updater:getChannel");
+      const check = handlers.get("sofia:updater:check");
+      const setChannel = handlers.get("sofia:updater:setChannel");
+      const getChannel = handlers.get("sofia:updater:getChannel");
 
       assert.equal((await setChannel(null, "alpha")).channel, "alpha");
       assert.equal((await check(null, "stable")).channel, "stable");
@@ -646,14 +668,14 @@ describe("release channel changes", () => {
       version: "0.18.0-alpha.1",
     });
     try {
-      const check = handlers.get("openwork:updater:check");
-      const download = handlers.get("openwork:updater:download");
+      const check = handlers.get("sofia:updater:check");
+      const download = handlers.get("sofia:updater:download");
 
       assert.equal((await check(null, "alpha")).channel, "alpha");
       assert.deepEqual(await download(), { ok: true });
       assert.equal(
         downloadFeeds.at(-1)?.url,
-        "https://github.com/different-ai/openwork/releases/download/alpha-macos-latest",
+        "https://github.com/RuutChatCSM/sofia-desktop/releases/download/alpha-macos-latest",
       );
     } finally {
       await rm(tempDir, { recursive: true, force: true });
@@ -676,9 +698,9 @@ describe("release channel changes", () => {
       });
     });
     try {
-      const check = handlers.get("openwork:updater:check");
-      const setChannel = handlers.get("openwork:updater:setChannel");
-      const getChannel = handlers.get("openwork:updater:getChannel");
+      const check = handlers.get("sofia:updater:check");
+      const setChannel = handlers.get("sofia:updater:setChannel");
+      const getChannel = handlers.get("sofia:updater:getChannel");
 
       const stableCheck = check(null, "stable");
       await stableCheckStarted;
@@ -701,7 +723,7 @@ describe("release channel changes", () => {
       );
       assert.equal(
         feeds.at(-1)?.url,
-        "https://github.com/different-ai/openwork/releases/download/alpha-macos-latest",
+        "https://github.com/RuutChatCSM/sofia-desktop/releases/download/alpha-macos-latest",
       );
     } finally {
       await rm(tempDir, { recursive: true, force: true });

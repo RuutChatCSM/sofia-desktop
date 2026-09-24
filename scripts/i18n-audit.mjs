@@ -529,7 +529,7 @@ if (shouldRun("--hardcoded")) {
     /\bt\(/, /translate\(/, /"connected"/, /"allow"/, /"local"/, /"remote"/,
     /"object"/, /"string"/, /"user"/, /"assistant"/, /"Escape"/, /"Arrow/,
     /"Enter"/, /"prompt"/, /"session"/, /"automation"/, /"minimal"/, /"starter"/,
-    /"docker"/, /"opencode"/, /"simple"/, /"Started"/, /"Progress"/,
+    /"docker"/, /"engine"/, /"simple"/, /"Started"/, /"Progress"/,
     /^\s*\/\//, /^\s*\/\*/,
   ];
 

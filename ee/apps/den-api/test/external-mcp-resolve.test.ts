@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import type { EnterpriseMcpConnectionRequirements } from "@openwork/enterprise-mcp-client"
+import type { EnterpriseMcpConnectionRequirements } from "@sofia/enterprise-mcp-client"
 import {
   classifyResolveQuery,
   discoveryQualifiesAsMcp,

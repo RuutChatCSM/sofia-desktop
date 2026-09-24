@@ -1,4 +1,4 @@
-import type { WorkflowVersion } from "@openwork/types/workflows"
+import type { WorkflowVersion } from "@sofia/types/workflows"
 
 export function redactWorkflowNormalizedPayloadAuthoringDetails(
   payload: Record<string, unknown> | null,

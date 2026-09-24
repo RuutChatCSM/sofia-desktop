@@ -83,11 +83,11 @@ describe("exchangeHandoffAndSignIn", () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error(result.error);
-    expect(window.localStorage.getItem("openwork.den.activeOrgId")).toBe("org_invited");
-    expect(window.localStorage.getItem("openwork.den.activeOrgSlug")).toBe("invited-org");
-    expect(window.localStorage.getItem("openwork.den.activeOrgName")).toBe("Invited Org");
+    expect(window.localStorage.getItem("sofia.den.activeOrgId")).toBe("org_invited");
+    expect(window.localStorage.getItem("sofia.den.activeOrgSlug")).toBe("invited-org");
+    expect(window.localStorage.getItem("sofia.den.activeOrgName")).toBe("Invited Org");
     expect(result.exchange.connectEnabled).toBe(false);
-    expect(window.localStorage.getItem("openwork.den.desktopConfig:https://den.test::org_invited"))
+    expect(window.localStorage.getItem("sofia.den.desktopConfig:https://den.test::org_invited"))
       .toBe(JSON.stringify({ connectEnabled: false }));
   });
 
@@ -105,26 +105,26 @@ describe("exchangeHandoffAndSignIn", () => {
     });
 
     expect(result.ok).toBe(true);
-    expect(window.localStorage.getItem("openwork.den.activeOrgId")).toBe("org_bootstrap");
-    expect(window.localStorage.getItem("openwork.den.desktopConfig:https://den.test::org_bootstrap")).toBeNull();
+    expect(window.localStorage.getItem("sofia.den.activeOrgId")).toBe("org_bootstrap");
+    expect(window.localStorage.getItem("sofia.den.desktopConfig:https://den.test::org_bootstrap")).toBeNull();
   });
 
   test("preserves the stored organization when the exchange has none", async () => {
     stubWindow();
-    window.localStorage.setItem("openwork.den.activeOrgId", "org_stored");
-    window.localStorage.setItem("openwork.den.activeOrgSlug", "stored-org");
-    window.localStorage.setItem("openwork.den.activeOrgName", "Stored Org");
+    window.localStorage.setItem("sofia.den.activeOrgId", "org_stored");
+    window.localStorage.setItem("sofia.den.activeOrgSlug", "stored-org");
+    window.localStorage.setItem("sofia.den.activeOrgName", "Stored Org");
     stubExchangeResponse({ token: "tok_handoff", user: exchangeUser });
 
     const result = await exchangeHandoffAndSignIn("grant_test", { baseUrl: "https://den.test" });
 
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error(result.error);
-    expect(window.localStorage.getItem("openwork.den.activeOrgId")).toBe("org_stored");
-    expect(window.localStorage.getItem("openwork.den.activeOrgSlug")).toBe("stored-org");
-    expect(window.localStorage.getItem("openwork.den.activeOrgName")).toBe("Stored Org");
+    expect(window.localStorage.getItem("sofia.den.activeOrgId")).toBe("org_stored");
+    expect(window.localStorage.getItem("sofia.den.activeOrgSlug")).toBe("stored-org");
+    expect(window.localStorage.getItem("sofia.den.activeOrgName")).toBe("Stored Org");
     expect(result.exchange.connectEnabled).toBeNull();
-    expect(window.localStorage.getItem("openwork.den.desktopConfig:https://den.test::org_stored"))
+    expect(window.localStorage.getItem("sofia.den.desktopConfig:https://den.test::org_stored"))
       .toBeNull();
   });
 
@@ -143,8 +143,8 @@ describe("exchangeHandoffAndSignIn", () => {
 
     expect(result.ok).toBe(true);
     // Token persists, but no organization is committed…
-    expect(window.localStorage.getItem("openwork.den.authToken")).toBe("tok_handoff");
-    expect(window.localStorage.getItem("openwork.den.activeOrgId")).toBeNull();
+    expect(window.localStorage.getItem("sofia.den.authToken")).toBe("tok_handoff");
+    expect(window.localStorage.getItem("sofia.den.activeOrgId")).toBeNull();
     // …and the chooser sees the pending state with the exchange org suggested.
     expect(readOrgSelectionPending()).toEqual({
       pending: true,
@@ -164,7 +164,7 @@ describe("exchangeHandoffAndSignIn", () => {
     const result = await exchangeHandoffAndSignIn("grant_test", { baseUrl: "https://den.test" });
 
     expect(result.ok).toBe(true);
-    expect(window.localStorage.getItem("openwork.den.activeOrgId")).toBeNull();
+    expect(window.localStorage.getItem("sofia.den.activeOrgId")).toBeNull();
     expect(readOrgSelectionPending().pending).toBe(true);
     // The marker is consumed: a later remote handoff is not reclassified.
     expect(hasActiveDesktopSignInIntent()).toBe(false);
@@ -186,7 +186,7 @@ describe("exchangeHandoffAndSignIn", () => {
     });
 
     expect(result.ok).toBe(true);
-    expect(window.localStorage.getItem("openwork.den.activeOrgId")).toBe("org_invite");
+    expect(window.localStorage.getItem("sofia.den.activeOrgId")).toBe("org_invite");
     expect(readOrgSelectionPending().pending).toBe(false);
   });
 
@@ -205,7 +205,7 @@ describe("exchangeHandoffAndSignIn", () => {
     });
 
     expect(result.ok).toBe(true);
-    expect(window.localStorage.getItem("openwork.den.activeOrgId")).toBe("org_remote");
+    expect(window.localStorage.getItem("sofia.den.activeOrgId")).toBe("org_remote");
     expect(readOrgSelectionPending()).toEqual({ pending: false, suggestion: null });
   });
 });

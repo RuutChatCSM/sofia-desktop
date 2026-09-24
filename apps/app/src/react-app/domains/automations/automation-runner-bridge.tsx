@@ -1,6 +1,6 @@
 /** @jsxImportSource react */
 import { useEffect } from "react"
-import { AUTOMATION_MODEL_ATTENTION_CAPABILITY } from "@openwork/types/automations"
+import { AUTOMATION_MODEL_ATTENTION_CAPABILITY } from "@sofia/types/automations"
 
 import { createDenClient, DenApiError, readDenSettings } from "@/app/lib/den"
 import { denSettingsChangedEvent } from "@/app/lib/den-session-events"
@@ -10,7 +10,7 @@ import { useAutomationDeploymentEnabled } from "./automation-availability"
 import { createAutomationRunnerConnectCoordinator } from "./automation-runner-connect-coordinator"
 
 const RUNNER_TOKEN_REFRESH_MS = 30 * 60_000
-const RUNNER_ID_KEY = "openwork.automations.desktop-runner-id"
+const RUNNER_ID_KEY = "sofia.automations.desktop-runner-id"
 
 function desktopRunnerId() {
   const existing = localStorage.getItem(RUNNER_ID_KEY)?.trim()
@@ -31,9 +31,9 @@ export function AutomationRunnerBridge() {
   const deploymentEnabled = useAutomationDeploymentEnabled()
 
   useEffect(() => {
-    if (!isDesktopRuntime() || !window.__OPENWORK_ELECTRON__?.invokeDesktop) return
+    if (!isDesktopRuntime() || !window.__SOFIA_ELECTRON__?.invokeDesktop) return
 
-    const disconnect = () => window.__OPENWORK_ELECTRON__?.invokeDesktop?.("automationRunnerConfigure", null)
+    const disconnect = () => window.__SOFIA_ELECTRON__?.invokeDesktop?.("automationRunnerConfigure", null)
       .catch(() => undefined)
     const coordinator = createAutomationRunnerConnectCoordinator({
       refreshMs: RUNNER_TOKEN_REFRESH_MS,
@@ -52,7 +52,7 @@ export function AutomationRunnerBridge() {
         try {
           const client = createDenClient({ baseUrl: settings.baseUrl, token: authToken })
           let runnerId = desktopRunnerId()
-          const build = await window.__OPENWORK_ELECTRON__?.invokeDesktop?.("appBuildInfo")
+          const build = await window.__SOFIA_ELECTRON__?.invokeDesktop?.("appBuildInfo")
           if (!isCurrent()) return
           const agent = navigator.userAgent
           const platform = /Mac/i.test(agent) ? "darwin" : /Win/i.test(agent) ? "win32" : "linux"
@@ -84,7 +84,7 @@ export function AutomationRunnerBridge() {
             })
           }
           if (!isCurrent()) return
-          await window.__OPENWORK_ELECTRON__?.invokeDesktop?.("automationRunnerConfigure", {
+          await window.__SOFIA_ELECTRON__?.invokeDesktop?.("automationRunnerConfigure", {
             baseUrl: client.baseUrls.apiBaseUrl,
             token: runner.token,
             runnerId,
@@ -102,7 +102,7 @@ export function AutomationRunnerBridge() {
     // leaving this desktop unreachable until the next refresh, which is long
     // enough for a scheduled occurrence to come due and be missed.
     window.addEventListener("online", handleSettingsChanged)
-    const unsubscribeCredentialRejected = window.__OPENWORK_ELECTRON__.automationRunner
+    const unsubscribeCredentialRejected = window.__SOFIA_ELECTRON__.automationRunner
       ?.onCredentialRejected?.(() => coordinator.credentialRejected())
     requestConnect()
     return () => {

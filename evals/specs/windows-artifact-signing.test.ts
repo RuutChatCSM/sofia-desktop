@@ -4,19 +4,19 @@ import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { expect, onTestFinished } from "vitest";
-import { test } from "@openwork/testkit";
+import { test } from "@sofia/testkit";
 
 const repoRoot = resolve(import.meta.dirname, "../..");
 const workflowPath = join(repoRoot, ".github", "workflows", "release-macos-aarch64.yml");
 const refreshScriptPath = join(repoRoot, "scripts", "release", "refresh-signed-windows-artifacts.mjs");
 
 const installers = [
-  ["openwork-win-x64-1.2.3.exe", "latest.yml"],
-  ["openwork-win-arm64-1.2.3.exe", "latest.yml"],
-  ["openwork-cloud-win-x64-1.2.3.exe", "cloud.yml"],
-  ["openwork-cloud-win-arm64-1.2.3.exe", "cloud.yml"],
-  ["openwork-enterprise-win-x64-1.2.3.exe", "enterprise.yml"],
-  ["openwork-enterprise-win-arm64-1.2.3.exe", "enterprise.yml"],
+  ["sofia-win-x64-1.2.3.exe", "latest.yml"],
+  ["sofia-win-arm64-1.2.3.exe", "latest.yml"],
+  ["sofia-cloud-win-x64-1.2.3.exe", "cloud.yml"],
+  ["sofia-cloud-win-arm64-1.2.3.exe", "cloud.yml"],
+  ["sofia-enterprise-win-x64-1.2.3.exe", "enterprise.yml"],
+  ["sofia-enterprise-win-arm64-1.2.3.exe", "enterprise.yml"],
 ] as const;
 
 const windowsMatrixArtifacts = [
@@ -76,7 +76,7 @@ test("public, cloud, and enterprise Windows targets avoid an unsigned artifact t
 });
 
 test("signed Windows metadata is regenerated for every distribution and architecture", async ({ evidence }) => {
-  const fixtureRoot = await mkdtemp(join(tmpdir(), "openwork-windows-signing-"));
+  const fixtureRoot = await mkdtemp(join(tmpdir(), "sofia-windows-signing-"));
   onTestFinished(() => rm(fixtureRoot, { recursive: true, force: true }));
 
   for (const [index, [installerName, manifestName]] of installers.entries()) {

@@ -1,4 +1,4 @@
-import { ObservabilityConfigError } from "@openwork-ee/utils/observability";
+import { ObservabilityConfigError } from "@sofia-ee/utils/observability";
 
 export type BrowserObservabilityConfig =
   | { backend: "none"; disabledReason?: string }

@@ -1,6 +1,6 @@
 import type { ProviderListResponse } from "@/app/lib/engine-types";
 
-const PINNED_PROVIDER_ORDER = ["opencode", "openai", "anthropic"] as const;
+const PINNED_PROVIDER_ORDER = ["engine", "openai", "anthropic"] as const;
 
 export const providerPriorityRank = (id: string) => {
   const normalized = id.trim().toLowerCase();

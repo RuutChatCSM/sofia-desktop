@@ -4,27 +4,24 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   appBuildInfo as appBuildInfoCmd,
   engineInfo as engineInfoCmd,
-  engineStart as engineStartCmd,
   codexEngineStatus as codexEngineStatusCmd,
   codexEngineInstall as codexEngineInstallCmd,
   getDesktopBootstrapConfig,
   debugDesktopBootstrapConfig,
-  nukeOpenworkAndOpencodeConfigPreview,
-  nukeOpenworkAndOpencodeConfigAndExit,
+  nukeSofiaAndWorkspaceEngineConfigPreview,
+  nukeSofiaAndWorkspaceEngineConfigAndExit,
   openDesktopUrl,
-  openworkServerInfo as openworkServerInfoCmd,
-  openworkServerRestart as openworkServerRestartCmd,
-  pickFile,
+  sofiaServerInfo as sofiaServerInfoCmd,
+  sofiaServerRestart as sofiaServerRestartCmd,
   revealDesktopItemInDir,
-  resetOpenworkState,
+  resetSofiaState,
   updaterEnvironment as updaterEnvironmentCmd,
-  workspaceBootstrap as workspaceBootstrapCmd,
   type AppBuildInfo,
   type CodexEngineStatus,
   type DesktopBootstrapConfig,
   type EngineInfo,
   type NukeManifestPreview,
-  type OpenworkServerInfo,
+  type SofiaServerInfo,
 } from "../../../../app/lib/desktop";
 import { createDenClient, readDenSettings } from "../../../../app/lib/den";
 import {
@@ -34,9 +31,9 @@ import {
 import { downloadTextAsFile } from "../../../../app/lib/download";
 
 import {
-  writeOpenworkServerSettings,
-  type OpenworkRuntimeConfigStatus,
-} from "../../../../app/lib/openwork-server";
+  writeSofiaServerSettings,
+  type SofiaRuntimeConfigStatus,
+} from "../../../../app/lib/sofia-server";
 import {
   clearStartupPreference,
   isDesktopRuntime,
@@ -47,63 +44,33 @@ import {
 import { t } from "../../../../i18n";
 import type { DebugViewProps } from "../pages/debug-view";
 import type { ReleaseChannel } from "../../../../app/types";
-import type { OpenworkServerStore, OpenworkServerStoreSnapshot } from "../../connections/openwork-server-store";
+import type { SofiaServerStore, SofiaServerStoreSnapshot } from "../../connections/sofia-server-store";
 
 type DebugViewModelProps = Omit<DebugViewProps, "agentContextDiagnostics">;
 
-const STARTUP_PREFERENCE_KEY = "openwork.startupPreference";
-const ENGINE_SOURCE_KEY = "openwork.engineSource";
-const ENGINE_CUSTOM_BIN_KEY = "openwork.engineCustomBinPath";
-const OPENCODE_ENABLE_EXA_KEY = "openwork.opencodeEnableExa";
+const STARTUP_PREFERENCE_KEY = "sofia.startupPreference";
 const NUKE_CONFIRMATION_WORD = "NUKE";
 const NUKE_SIGN_OUT_TIMEOUT_MS = 5000;
 
 type ResetModalMode = "onboarding" | "all";
 
 const ONBOARDING_LOCAL_STORAGE_KEYS = [
-  "openwork.acknowledgedProviders",
-  "openwork.orgOnboardingSeen",
-  "openwork.reloadAfterOrgOnboarding",
-  "openwork.seenProviderIds",
+  "sofia.acknowledgedProviders",
+  "sofia.orgOnboardingSeen",
+  "sofia.reloadAfterOrgOnboarding",
+  "sofia.seenProviderIds",
 ];
 
 type UseDebugViewModelOptions = {
   developerMode: boolean;
-  openworkServerStore: OpenworkServerStore;
-  openworkServerSnapshot: OpenworkServerStoreSnapshot;
+  sofiaServerStore: SofiaServerStore;
+  sofiaServerSnapshot: SofiaServerStoreSnapshot;
   runtimeWorkspaceId: string | null;
   selectedWorkspaceRoot: string;
   setRouteError: (value: string | null) => void;
 };
 
-function readStoredString(key: string, fallback: string): string {
-  if (typeof window === "undefined") return fallback;
-  try {
-    return window.localStorage.getItem(key) ?? fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function writeStoredString(key: string, value: string): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(key, value);
-  } catch {
-    // ignore persistence failures
-  }
-}
-
-function clearStoredString(key: string): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.removeItem(key);
-  } catch {
-    // ignore persistence failures
-  }
-}
-
-function clearOpenworkLocalStorageForReset(mode: ResetModalMode): void {
+function clearSofiaLocalStorageForReset(mode: ResetModalMode): void {
   if (typeof window === "undefined") return;
   try {
     if (mode === "all") {
@@ -113,11 +80,11 @@ function clearOpenworkLocalStorageForReset(mode: ResetModalMode): void {
     for (const key of ONBOARDING_LOCAL_STORAGE_KEYS) {
       window.localStorage.removeItem(key);
     }
-    const raw = window.localStorage.getItem("openwork.preferences");
+    const raw = window.localStorage.getItem("sofia.preferences");
     if (raw) {
       const prefs = JSON.parse(raw);
       prefs.hasCompletedOnboarding = false;
-      window.localStorage.setItem("openwork.preferences", JSON.stringify(prefs));
+      window.localStorage.setItem("sofia.preferences", JSON.stringify(prefs));
     }
   } catch {
     // ignore persistence failures
@@ -136,15 +103,6 @@ async function revokeDenSessionBeforeNuke(): Promise<void> {
       globalThis.setTimeout(resolve, NUKE_SIGN_OUT_TIMEOUT_MS);
     }),
   ]);
-}
-
-function readEngineSource(): "path" | "sidecar" | "custom" {
-  const raw = readStoredString(ENGINE_SOURCE_KEY, "sidecar");
-  return raw === "path" || raw === "sidecar" || raw === "custom" ? raw : "sidecar";
-}
-
-function readOpencodeEnableExa(): boolean {
-  return readStoredString(OPENCODE_ENABLE_EXA_KEY, "1") === "1";
 }
 
 function statusPill(
@@ -185,29 +143,6 @@ function auditStatusPill(status: "idle" | "loading" | "error"): {
   };
 }
 
-function describeEngine(info: EngineInfo | null) {
-  const running = Boolean(info?.running);
-  return {
-    ...statusPill(running),
-    lines: [
-      t("settings.debug_base_url", { url: info?.baseUrl ?? "—" }),
-      t("settings.debug_runtime", { runtime: info?.runtime ?? "—" }),
-      t("settings.diag_opencode_binary", { binary: formatOpencodeBinary(info) }),
-      t("settings.debug_pid", { pid: info?.pid ? String(info.pid) : "—" }),
-      t("settings.debug_hostname", { hostname: info?.hostname ?? "—" }),
-      t("settings.debug_port", { port: info?.port ? String(info.port) : "—" }),
-    ],
-    stdout: info?.lastStdout ?? null,
-    stderr: info?.lastStderr ?? null,
-    execution: info?.execution ?? null,
-    error: null as string | null,
-  };
-}
-
-function formatOpencodeBinary(info: EngineInfo | null) {
-  return formatBinaryWithSource(info?.opencodeBinPath, info?.opencodeBinSource);
-}
-
 function describeCodexEngine(info: CodexEngineStatus | null) {
   const available = Boolean(info?.available);
   return {
@@ -222,10 +157,10 @@ function describeCodexEngine(info: CodexEngineStatus | null) {
   };
 }
 
-function formatManagedOpencodeBinary(info: OpenworkServerInfo | null) {
+function formatManagedWorkspaceEngineBinary(info: SofiaServerInfo | null) {
   return formatBinaryWithSource(
-    info?.managedOpencodeBinPath,
-    info?.managedOpencodeBinSource,
+    info?.managedWorkspaceEngineBinPath,
+    info?.managedWorkspaceEngineBinSource,
   );
 }
 
@@ -236,13 +171,13 @@ function formatBinaryWithSource(path: string | null | undefined, source: string 
   return sourceLabel ? `${binary} (${sourceLabel})` : binary;
 }
 
-function describeOpenworkServer(info: OpenworkServerInfo | null) {
+function describeSofiaServer(info: SofiaServerInfo | null) {
   const running = Boolean(info?.running);
   return {
     ...statusPill(running),
     lines: [
       t("settings.debug_base_url", { url: info?.baseUrl ?? "—" }),
-      t("settings.diag_opencode_binary", { binary: formatManagedOpencodeBinary(info) }),
+      t("settings.diag_engine_binary", { binary: formatManagedWorkspaceEngineBinary(info) }),
       t("settings.debug_connect_url", { url: info?.connectUrl ?? "—" }),
       t("settings.debug_lan_url", { url: info?.lanUrl ?? "—" }),
       t("settings.debug_mdns_url", { url: info?.mdnsUrl ?? "—" }),
@@ -253,12 +188,12 @@ function describeOpenworkServer(info: OpenworkServerInfo | null) {
     ],
     stdout: info?.lastStdout ?? null,
     stderr: info?.lastStderr ?? null,
-    execution: info?.managedOpencodeExecution ?? null,
+    execution: info?.managedWorkspaceEngineExecution ?? null,
     error: null as string | null,
   };
 }
 
-function describeOpencodeConnect(engine: EngineInfo | null) {
+function describeWorkspaceEngineConnect(engine: EngineInfo | null) {
   const running = Boolean(engine?.baseUrl);
   return {
     ...statusPill(running),
@@ -275,8 +210,8 @@ function describeOpencodeConnect(engine: EngineInfo | null) {
 export function useDebugViewModel(options: UseDebugViewModelOptions) {
   const {
     developerMode,
-    openworkServerStore,
-    openworkServerSnapshot,
+    sofiaServerStore,
+    sofiaServerSnapshot,
     runtimeWorkspaceId,
     selectedWorkspaceRoot,
     setRouteError,
@@ -292,21 +227,15 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
   const [appBuild, setAppBuild] = useState<AppBuildInfo | null>(null);
   const [bootstrapPrepared, setBootstrapPrepared] = useState<DesktopBootstrapConfig["prepared"]>(null);
   const [bootstrapConfigDebug, setBootstrapConfigDebug] = useState<unknown>(null);
-  const [runtimeConfigStatus, setRuntimeConfigStatus] = useState<OpenworkRuntimeConfigStatus | null>(null);
+  const [runtimeConfigStatus, setRuntimeConfigStatus] = useState<SofiaRuntimeConfigStatus | null>(null);
   const [runtimeConfigStatusError, setRuntimeConfigStatusError] = useState<string | null>(null);
   const [runtimeDebugStatus, setRuntimeDebugStatus] = useState<string | null>(null);
-  const [opencodeRestarting, setOpencodeRestarting] = useState(false);
-  const [openworkServerRestarting, setOpenworkServerRestarting] = useState(false);
-  const [opencodeServiceStatus, setOpencodeServiceStatus] = useState<{
+  const [sofiaServerRestarting, setSofiaServerRestarting] = useState(false);
+  const [sofiaServiceStatus, setSofiaServiceStatus] = useState<{
     tone: "success" | "error";
     message: string;
   } | null>(null);
-  const [openworkServiceStatus, setOpenworkServiceStatus] = useState<{
-    tone: "success" | "error";
-    message: string;
-  } | null>(null);
-  const [opencodeLogStatus, setOpencodeLogStatus] = useState<string | null>(null);
-  const [openworkLogStatus, setOpenworkLogStatus] = useState<string | null>(null);
+  const [sofiaLogStatus, setSofiaLogStatus] = useState<string | null>(null);
   const [serviceRestartError, setServiceRestartError] = useState<string | null>(null);
   const [resetModalBusy, setResetModalBusy] = useState(false);
   const [nukeConfigBusy, setNukeConfigBusy] = useState(false);
@@ -318,10 +247,6 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
   // user explicitly asks for it. The IPC contract still speaks "preserve".
   const [nukeDeleteBootstrap, setNukeDeleteBootstrap] = useState(false);
   const [nukeManifestPreview, setNukeManifestPreview] = useState<NukeManifestPreview | null>(null);
-  const [engineSource, setEngineSourceState] = useState<"path" | "sidecar" | "custom">(readEngineSource);
-  const [engineCustomBinPath, setEngineCustomBinPath] = useState<string>(() =>
-    readStoredString(ENGINE_CUSTOM_BIN_KEY, ""),
-  );
   const [developerLog, setDeveloperLog] = useState<string[]>([]);
   const [developerLogStatus, setDeveloperLogStatus] = useState<string | null>(null);
   const [electronMigrationUrl, setElectronMigrationUrl] = useState("");
@@ -390,7 +315,7 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
 
   useEffect(() => {
     if (!developerMode) return;
-    const client = openworkServerSnapshot.openworkServerClient;
+    const client = sofiaServerSnapshot.sofiaServerClient;
     const workspaceId = runtimeWorkspaceId?.trim();
     if (!client || !workspaceId) {
       setRuntimeConfigStatus(null);
@@ -414,7 +339,7 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
     return () => {
       cancelled = true;
     };
-  }, [developerMode, openworkServerSnapshot.openworkServerClient, runtimeWorkspaceId]);
+  }, [developerMode, sofiaServerSnapshot.sofiaServerClient, runtimeWorkspaceId]);
 
   useEffect(() => {
     if (!developerMode || !isDesktopRuntime()) return;
@@ -447,14 +372,14 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
     () => ({
       appVersionLabel: appBuild?.version ?? "—",
       appCommitLabel: appBuild?.gitSha ?? "—",
-      opencodeVersionLabel: engineInfoState?.baseUrl ? "managed" : "—",
-      openworkServerVersionLabel: openworkServerSnapshot.openworkServerDiagnostics?.version ?? "—",
+      engineVersionLabel: engineInfoState?.baseUrl ? "managed" : "—",
+      sofiaServerVersionLabel: sofiaServerSnapshot.sofiaServerDiagnostics?.version ?? "—",
     }),
     [
       appBuild?.gitSha,
       appBuild?.version,
       engineInfoState?.baseUrl,
-      openworkServerSnapshot.openworkServerDiagnostics?.version,
+      sofiaServerSnapshot.sofiaServerDiagnostics?.version,
     ],
   );
 
@@ -463,13 +388,13 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
       collectedAt: new Date().toISOString(),
       app: appBuild ?? null,
       engine: engineInfoState,
-      openworkServer: {
-        hostInfo: openworkServerSnapshot.openworkServerHostInfo,
-        diagnostics: openworkServerSnapshot.openworkServerDiagnostics,
-        capabilities: openworkServerSnapshot.openworkServerCapabilities,
-        settings: openworkServerSnapshot.openworkServerSettings,
-        status: openworkServerSnapshot.openworkServerStatus,
-        url: openworkServerSnapshot.openworkServerUrl,
+      sofiaServer: {
+        hostInfo: sofiaServerSnapshot.sofiaServerHostInfo,
+        diagnostics: sofiaServerSnapshot.sofiaServerDiagnostics,
+        capabilities: sofiaServerSnapshot.sofiaServerCapabilities,
+        settings: sofiaServerSnapshot.sofiaServerSettings,
+        status: sofiaServerSnapshot.sofiaServerStatus,
+        url: sofiaServerSnapshot.sofiaServerUrl,
       },
       runtimeWorkspaceId,
       selectedWorkspaceRoot,
@@ -479,12 +404,12 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
     appBuild,
     bootstrapPrepared,
     engineInfoState,
-    openworkServerSnapshot.openworkServerCapabilities,
-    openworkServerSnapshot.openworkServerDiagnostics,
-    openworkServerSnapshot.openworkServerHostInfo,
-    openworkServerSnapshot.openworkServerSettings,
-    openworkServerSnapshot.openworkServerStatus,
-    openworkServerSnapshot.openworkServerUrl,
+    sofiaServerSnapshot.sofiaServerCapabilities,
+    sofiaServerSnapshot.sofiaServerDiagnostics,
+    sofiaServerSnapshot.sofiaServerHostInfo,
+    sofiaServerSnapshot.sofiaServerSettings,
+    sofiaServerSnapshot.sofiaServerStatus,
+    sofiaServerSnapshot.sofiaServerUrl,
     runtimeWorkspaceId,
     selectedWorkspaceRoot,
   ]);
@@ -498,14 +423,13 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
     [bootstrapConfigDebug],
   );
 
-  const engineCard = useMemo(() => describeEngine(engineInfoState), [engineInfoState]);
   const codexEngineCard = useMemo(() => describeCodexEngine(codexEngineState), [codexEngineState]);
-  const openworkCard = useMemo(
-    () => describeOpenworkServer(openworkServerSnapshot.openworkServerHostInfo),
-    [openworkServerSnapshot.openworkServerHostInfo],
+  const sofiaCard = useMemo(
+    () => describeSofiaServer(sofiaServerSnapshot.sofiaServerHostInfo),
+    [sofiaServerSnapshot.sofiaServerHostInfo],
   );
-  const opencodeConnectCard = useMemo(
-    () => describeOpencodeConnect(engineInfoState),
+  const engineConnectCard = useMemo(
+    () => describeWorkspaceEngineConnect(engineInfoState),
     [engineInfoState],
   );
 
@@ -521,7 +445,7 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
   const onExportRuntimeDebugReport = useCallback(async () => {
     try {
       downloadTextAsFile(
-        `openwork-runtime-${new Date().toISOString().replace(/[:.]/g, "-")}.json`,
+        `sofia-runtime-${new Date().toISOString().replace(/[:.]/g, "-")}.json`,
         runtimeDebugReportJson,
         "application/json",
       );
@@ -548,7 +472,7 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
   const onExportDeveloperLog = useCallback(async () => {
     try {
       downloadTextAsFile(
-        `openwork-developer-${new Date().toISOString().replace(/[:.]/g, "-")}.log`,
+        `sofia-developer-${new Date().toISOString().replace(/[:.]/g, "-")}.log`,
         developerLog.join("\n"),
         "text/plain",
       );
@@ -615,7 +539,7 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
 
   useEffect(() => {
     if (!developerMode || !isElectronRuntime()) return;
-    const bridge = window.__OPENWORK_ELECTRON__?.updater;
+    const bridge = window.__SOFIA_ELECTRON__?.updater;
     if (!bridge?.getChannel) return;
     let cancelled = false;
     void bridge.getChannel()
@@ -638,7 +562,7 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
       setElectronAlphaUpdaterStatus("Electron alpha updates are macOS-only for now.");
       return;
     }
-    const bridge = window.__OPENWORK_ELECTRON__?.updater;
+    const bridge = window.__SOFIA_ELECTRON__?.updater;
     if (!bridge?.setChannel) {
       setElectronAlphaUpdaterStatus("Electron updater bridge is unavailable.");
       return;
@@ -664,7 +588,7 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
       setElectronAlphaUpdaterStatus("Electron update checks are available only in the Electron desktop app.");
       return;
     }
-    const bridge = window.__OPENWORK_ELECTRON__?.updater;
+    const bridge = window.__SOFIA_ELECTRON__?.updater;
     if (!bridge?.check) {
       setElectronAlphaUpdaterStatus("Electron updater bridge is unavailable.");
       return;
@@ -706,126 +630,6 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
     setStartupStatus(t("settings.startup_reset_hint"));
   }, []);
 
-  const onSetEngineSource = useCallback((value: "path" | "sidecar" | "custom") => {
-    setEngineSourceState(value);
-    writeStoredString(ENGINE_SOURCE_KEY, value);
-  }, []);
-
-  const onPickEngineBinary = useCallback(async () => {
-    if (!isDesktopRuntime()) {
-      setServiceRestartError(t("settings.sandbox_requires_desktop"));
-      return;
-    }
-    try {
-      const target = await pickFile({ title: t("settings.custom_binary_label"), multiple: false });
-      if (typeof target === "string" && target.trim()) {
-        setEngineCustomBinPath(target);
-        writeStoredString(ENGINE_CUSTOM_BIN_KEY, target);
-      }
-    } catch (error) {
-      setServiceRestartError(error instanceof Error ? error.message : safeStringify(error));
-    }
-  }, []);
-
-  const onClearEngineCustomBinPath = useCallback(() => {
-    setEngineCustomBinPath("");
-    clearStoredString(ENGINE_CUSTOM_BIN_KEY);
-  }, []);
-
-  const bootFullEngineStack = useCallback(async () => {
-    const workspacePath = optionsRef.current.selectedWorkspaceRoot.trim();
-    if (!workspacePath) {
-      throw new Error(
-        "Select a local workspace before starting the local server/engine.",
-      );
-    }
-
-    // Collect ALL local workspace paths so openwork-server is started with
-    // --workspace <path> for every registered local workspace. Mirrors the
-    // Solid reference (context/workspace.ts::resolveWorkspacePaths) so that
-    // `client.listWorkspaces()` later returns the full set, not just the
-    // active one.
-    const workspacePaths = [workspacePath];
-    const workspacePathSet = new Set(workspacePaths);
-    try {
-      const list = (await workspaceBootstrapCmd()) as { workspaces?: Array<{ workspaceType?: string; path?: string }> } | null;
-      for (const entry of list?.workspaces ?? []) {
-        if (entry.workspaceType === "remote") continue;
-        const path = entry.path?.trim() ?? "";
-        if (path && !workspacePathSet.has(path)) {
-          workspacePaths.push(path);
-          workspacePathSet.add(path);
-        }
-      }
-    } catch {
-      // best-effort: fall back to just the active workspace path
-    }
-
-    const info = await engineStartCmd(workspacePath, {
-      runtime: "direct",
-      workspacePaths,
-      opencodeEnableExa: readOpencodeEnableExa(),
-      openworkRemoteAccess:
-        optionsRef.current.openworkServerSnapshot.openworkServerSettings
-          .remoteAccessEnabled === true,
-    });
-
-    // engine_start restarts openwork-server on a NEW port and lets that server
-    // manage OpenCode. Re-read host info and persist the fresh URL/token.
-    try {
-      const hostInfo = (await openworkServerInfoCmd()) as {
-        baseUrl?: string;
-        ownerToken?: string;
-        clientToken?: string;
-        hostToken?: string;
-        port?: number;
-        remoteAccessEnabled?: boolean;
-      } | null;
-      if (hostInfo?.baseUrl) {
-        writeOpenworkServerSettings({
-          urlOverride: hostInfo.baseUrl,
-          token: hostInfo.ownerToken?.trim() || hostInfo.clientToken?.trim() || undefined,
-          hostToken: hostInfo.hostToken?.trim() || undefined,
-          portOverride: hostInfo.port ?? undefined,
-          remoteAccessEnabled: hostInfo.remoteAccessEnabled === true,
-        });
-        if (typeof window !== "undefined") {
-          window.dispatchEvent(new CustomEvent("openwork-server-settings-changed"));
-        }
-      }
-    } catch {
-      // best-effort: if this fails, the host-info poller will catch up in ~10s.
-    }
-
-    await openworkServerStore.reconnectOpenworkServer();
-    await refreshEngineInfo();
-    return info;
-  }, [openworkServerStore, refreshEngineInfo]);
-
-  const onRestartOpencode = useCallback(async () => {
-    if (!isDesktopRuntime()) return;
-    setOpencodeRestarting(true);
-    setOpencodeServiceStatus(null);
-    setServiceRestartError(null);
-    try {
-      await bootFullEngineStack();
-      setOpencodeServiceStatus({
-        tone: "success",
-        message: t("settings.restart_succeeded_template", { service: "OpenCode" }),
-      });
-      pushDeveloperLog("Restarted OpenCode via engine_start");
-    } catch (error) {
-      const message = error instanceof Error ? error.message : safeStringify(error);
-      setOpencodeServiceStatus({
-        tone: "error",
-        message: `${t("settings.restart_failed_template", { service: "OpenCode" })} ${message}`,
-      });
-      setServiceRestartError(message);
-    } finally {
-      setOpencodeRestarting(false);
-    }
-  }, [bootFullEngineStack, pushDeveloperLog]);
-
   const onInstallCodexEngine = useCallback(async () => {
     if (!isDesktopRuntime()) return;
     setCodexInstallBusy(true);
@@ -853,34 +657,34 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
     }
   }, [refreshEngineInfo]);
 
-  const onRestartOpenworkServer = useCallback(async () => {
+  const onRestartSofiaServer = useCallback(async () => {
     if (!isDesktopRuntime()) return;
-    setOpenworkServerRestarting(true);
-    setOpenworkServiceStatus(null);
+    setSofiaServerRestarting(true);
+    setSofiaServiceStatus(null);
     setServiceRestartError(null);
     try {
-      await openworkServerRestartCmd({
-        remoteAccessEnabled: openworkServerSnapshot.openworkServerSettings.remoteAccessEnabled === true,
+      await sofiaServerRestartCmd({
+        remoteAccessEnabled: sofiaServerSnapshot.sofiaServerSettings.remoteAccessEnabled === true,
       });
-      setOpenworkServiceStatus({
+      setSofiaServiceStatus({
         tone: "success",
         message: t("settings.restart_succeeded_template", { service: "Sofia App server" }),
       });
-      pushDeveloperLog("Restarted openwork-server");
-      await openworkServerStore.reconnectOpenworkServer();
+      pushDeveloperLog("Restarted sofia-server");
+      await sofiaServerStore.reconnectSofiaServer();
     } catch (error) {
       const message = error instanceof Error ? error.message : safeStringify(error);
-      setOpenworkServiceStatus({
+      setSofiaServiceStatus({
         tone: "error",
         message: `${t("settings.restart_failed_template", { service: "Sofia App server" })} ${message}`,
       });
       setServiceRestartError(message);
     } finally {
-      setOpenworkServerRestarting(false);
+      setSofiaServerRestarting(false);
     }
   }, [
-    openworkServerSnapshot.openworkServerSettings.remoteAccessEnabled,
-    openworkServerStore,
+    sofiaServerSnapshot.sofiaServerSettings.remoteAccessEnabled,
+    sofiaServerStore,
     pushDeveloperLog,
   ]);
 
@@ -896,71 +700,39 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
     [],
   );
 
-  const onCopyOpencodeLogs = useCallback(async () => {
-    const text = formatServiceLogs(engineInfoState?.lastStdout, engineInfoState?.lastStderr);
+  const onCopySofiaLogs = useCallback(async () => {
+    const info = sofiaServerSnapshot.sofiaServerHostInfo;
+    const text = formatServiceLogs(info?.lastStdout, info?.lastStderr);
     if (!text) {
-      setOpencodeLogStatus(t("settings.no_logs_captured"));
+      setSofiaLogStatus(t("settings.no_logs_captured"));
       return;
     }
     try {
       await navigator.clipboard.writeText(text);
-      setOpencodeLogStatus(t("settings.copied_service_logs", { service: "OpenCode" }));
+      setSofiaLogStatus(t("settings.copied_service_logs", { service: "Sofia App server" }));
     } catch (error) {
-      setOpencodeLogStatus(error instanceof Error ? error.message : safeStringify(error));
+      setSofiaLogStatus(error instanceof Error ? error.message : safeStringify(error));
     }
-  }, [engineInfoState?.lastStderr, engineInfoState?.lastStdout, formatServiceLogs]);
+  }, [formatServiceLogs, sofiaServerSnapshot.sofiaServerHostInfo]);
 
-  const onExportOpencodeLogs = useCallback(async () => {
-    const text = formatServiceLogs(engineInfoState?.lastStdout, engineInfoState?.lastStderr);
+  const onExportSofiaLogs = useCallback(async () => {
+    const info = sofiaServerSnapshot.sofiaServerHostInfo;
+    const text = formatServiceLogs(info?.lastStdout, info?.lastStderr);
     if (!text) {
-      setOpencodeLogStatus(t("settings.no_logs_captured"));
+      setSofiaLogStatus(t("settings.no_logs_captured"));
       return;
     }
     try {
       downloadTextAsFile(
-        `openwork-opencode-${new Date().toISOString().replace(/[:.]/g, "-")}.log`,
+        `sofia-server-${new Date().toISOString().replace(/[:.]/g, "-")}.log`,
         text,
         "text/plain",
       );
-      setOpencodeLogStatus(t("settings.exported_developer_log"));
+      setSofiaLogStatus(t("settings.exported_developer_log"));
     } catch (error) {
-      setOpencodeLogStatus(error instanceof Error ? error.message : safeStringify(error));
+      setSofiaLogStatus(error instanceof Error ? error.message : safeStringify(error));
     }
-  }, [engineInfoState?.lastStderr, engineInfoState?.lastStdout, formatServiceLogs]);
-
-  const onCopyOpenworkLogs = useCallback(async () => {
-    const info = openworkServerSnapshot.openworkServerHostInfo;
-    const text = formatServiceLogs(info?.lastStdout, info?.lastStderr);
-    if (!text) {
-      setOpenworkLogStatus(t("settings.no_logs_captured"));
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(text);
-      setOpenworkLogStatus(t("settings.copied_service_logs", { service: "Sofia App server" }));
-    } catch (error) {
-      setOpenworkLogStatus(error instanceof Error ? error.message : safeStringify(error));
-    }
-  }, [formatServiceLogs, openworkServerSnapshot.openworkServerHostInfo]);
-
-  const onExportOpenworkLogs = useCallback(async () => {
-    const info = openworkServerSnapshot.openworkServerHostInfo;
-    const text = formatServiceLogs(info?.lastStdout, info?.lastStderr);
-    if (!text) {
-      setOpenworkLogStatus(t("settings.no_logs_captured"));
-      return;
-    }
-    try {
-      downloadTextAsFile(
-        `openwork-server-${new Date().toISOString().replace(/[:.]/g, "-")}.log`,
-        text,
-        "text/plain",
-      );
-      setOpenworkLogStatus(t("settings.exported_developer_log"));
-    } catch (error) {
-      setOpenworkLogStatus(error instanceof Error ? error.message : safeStringify(error));
-    }
-  }, [formatServiceLogs, openworkServerSnapshot.openworkServerHostInfo]);
+  }, [formatServiceLogs, sofiaServerSnapshot.sofiaServerHostInfo]);
 
   const [resetStatus, setResetStatus] = useState<string | null>(null);
 
@@ -969,22 +741,22 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
       if (!isDesktopRuntime()) return;
       const message =
         mode === "all"
-          ? "Reset ALL Sofia App app data? Open sessions and workspaces will be removed."
+          ? "Reset ALL Sofia App data? Open sessions and workspaces will be removed."
           : "Reset onboarding state only?";
       if (typeof window !== "undefined" && !window.confirm(message)) {
         return;
       }
       setResetModalBusy(true);
       setResetStatus(null);
-      void resetOpenworkState(mode)
+      void resetSofiaState(mode)
         .then(async () => {
-          clearOpenworkLocalStorageForReset(mode);
+          clearSofiaLocalStorageForReset(mode);
           setResetStatus(
             mode === "all"
               ? "Reset Sofia App state. Restart the app to see changes."
               : "Reset onboarding state. Restart the app to see changes.",
           );
-          pushDeveloperLog(`reset_openwork_state mode=${mode}`);
+          pushDeveloperLog(`reset_sofia_state mode=${mode}`);
         })
         .catch((error) => {
           setRouteError(error instanceof Error ? error.message : safeStringify(error));
@@ -1001,7 +773,7 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
     setNukePreviewBusy(true);
     setNukeConfigStatus(null);
     try {
-      const preview = await nukeOpenworkAndOpencodeConfigPreview({ preserveBootstrap: true });
+      const preview = await nukeSofiaAndWorkspaceEngineConfigPreview({ preserveBootstrap: true });
       setNukeManifestPreview(preview);
       setNukeConfirmationText("");
       setNukeDeleteBootstrap(false);
@@ -1019,7 +791,7 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
     setNukePreviewBusy(true);
     setNukeConfigStatus(null);
     try {
-      const preview = await nukeOpenworkAndOpencodeConfigPreview({ preserveBootstrap: !deleteBootstrap });
+      const preview = await nukeSofiaAndWorkspaceEngineConfigPreview({ preserveBootstrap: !deleteBootstrap });
       setNukeManifestPreview(preview);
     } catch (error) {
       setNukeDeleteBootstrap(!deleteBootstrap);
@@ -1034,13 +806,13 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
     setNukeDialogOpen(false);
   }, [nukeConfigBusy]);
 
-  const onConfirmNukeOpenworkAndOpencodeConfig = useCallback(async () => {
+  const onConfirmNukeSofiaAndWorkspaceEngineConfig = useCallback(async () => {
     if (!isDesktopRuntime() || nukeConfirmationText.trim().toUpperCase() !== NUKE_CONFIRMATION_WORD) return;
     setNukeConfigBusy(true);
     setNukeConfigStatus(null);
     try {
       await revokeDenSessionBeforeNuke();
-      await nukeOpenworkAndOpencodeConfigAndExit({ preserveBootstrap: !nukeDeleteBootstrap });
+      await nukeSofiaAndWorkspaceEngineConfigAndExit({ preserveBootstrap: !nukeDeleteBootstrap });
     } catch (error) {
       setNukeConfigStatus(error instanceof Error ? error.message : safeStringify(error));
       setNukeConfigBusy(false);
@@ -1062,8 +834,8 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
       anyActiveRuns: false,
       startupPreference: "server",
       startupLabel:
-        openworkServerSnapshot.openworkServerStatus === "connected"
-          ? t("settings.openwork_server_label")
+        sofiaServerSnapshot.sofiaServerStatus === "connected"
+          ? t("settings.sofia_server_label")
           : t("status.disconnected_label"),
       runtimeSummary,
       runtimeDebugReportJson,
@@ -1103,50 +875,37 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
       onCheckElectronAlphaUpdates,
       onStopHost,
       onResetStartupPreference,
-      engineSource,
-      onSetEngineSource,
-      engineCustomBinPath,
-      engineCustomBinPathLabel: engineCustomBinPath.trim() || t("settings.no_custom_path_set"),
-      onPickEngineBinary,
-      onClearEngineCustomBinPath,
       onOpenResetModal,
       resetModalBusy,
       resetStatus,
       startupStatus,
       workspaceDebugEventsStatus,
-      opencodeRestarting,
-      openworkServerRestarting,
-      opencodeServiceStatus,
-      openworkServiceStatus,
-      opencodeLogStatus,
-      openworkLogStatus,
-      onCopyOpencodeLogs,
-      onExportOpencodeLogs,
-      onCopyOpenworkLogs,
-      onExportOpenworkLogs,
+      sofiaServerRestarting,
+      sofiaServiceStatus,
+      sofiaLogStatus,
+      onCopySofiaLogs,
+      onExportSofiaLogs,
       serviceRestartError,
-      onRestartOpencode,
-      onRestartOpenworkServer,
+      onRestartSofiaServer,
       onInstallCodexEngine,
       codexInstallBusy,
       codexInstallStatus,
-      engineCard,
       codexEngineCard,
-      opencodeConnectCard,
-      openworkCard,
-      openworkServerDiagnostics: openworkServerSnapshot.openworkServerDiagnostics,
+      engineConnectCard,
+      sofiaCard,
+      sofiaServerDiagnostics: sofiaServerSnapshot.sofiaServerDiagnostics,
       runtimeWorkspaceId,
-      openworkServerCapabilities: openworkServerSnapshot.openworkServerCapabilities,
+      sofiaServerCapabilities: sofiaServerSnapshot.sofiaServerCapabilities,
       pendingPermissions: {},
       events: [],
       workspaceDebugEvents: [],
       safeStringify,
       onClearWorkspaceDebugEvents,
-      openworkAuditEntries: openworkServerSnapshot.openworkAuditEntries,
-      openworkAuditStatus: auditStatusPill(openworkServerSnapshot.openworkAuditStatus),
-      openworkAuditError: openworkServerSnapshot.openworkAuditError,
-      opencodeConnectStatus: null,
-      opencodeDevModeEnabled: appBuild?.openworkDevMode === true,
+      sofiaAuditEntries: sofiaServerSnapshot.sofiaAuditEntries,
+      sofiaAuditStatus: auditStatusPill(sofiaServerSnapshot.sofiaAuditStatus),
+      sofiaAuditError: sofiaServerSnapshot.sofiaAuditError,
+      engineConnectStatus: null,
+      engineDevModeEnabled: appBuild?.sofiaDevMode === true,
       nukeConfigBusy,
       nukeConfigStatus,
       nukePreviewBusy,
@@ -1158,10 +917,10 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
       onCloseNukeDialog,
       onSetNukeConfirmationText: setNukeConfirmationText,
       onSetNukeDeleteBootstrap,
-      onConfirmNukeOpenworkAndOpencodeConfig,
+      onConfirmNukeSofiaAndWorkspaceEngineConfig,
     }),
     [
-      appBuild?.openworkDevMode,
+      appBuild?.sofiaDevMode,
       developerLog,
       developerLogStatus,
       developerMode,
@@ -1175,9 +934,6 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
       electronAlphaUpdaterBusy,
       electronAlphaUpdaterChannel,
       electronAlphaUpdaterStatus,
-      engineCard,
-      engineCustomBinPath,
-      engineSource,
       nukeConfigBusy,
       nukeConfigStatus,
       nukeConfirmationText,
@@ -1186,7 +942,6 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
       nukeDeleteBootstrap,
       nukePreviewBusy,
       onClearDeveloperLog,
-      onClearEngineCustomBinPath,
       onClearWorkspaceDebugEvents,
       onCloseNukeDialog,
       onSetNukeDeleteBootstrap,
@@ -1196,43 +951,35 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
       onExportRuntimeDebugReport,
       onInstallElectronPreviewFromTauri,
       onCheckElectronAlphaUpdates,
-      onConfirmNukeOpenworkAndOpencodeConfig,
+      onConfirmNukeSofiaAndWorkspaceEngineConfig,
       onOpenElectronPreviewRelease,
       onOpenNukeDialog,
       onOpenResetModal,
       onPrepareElectronMigrationSnapshot,
-      onPickEngineBinary,
       onResolveElectronAlphaArtifact,
       onRevealElectronMigrationBackup,
       onResetStartupPreference,
-      onRestartOpencode,
-      onRestartOpenworkServer,
+      onRestartSofiaServer,
       onSetElectronAlphaUpdaterChannel,
       onSetElectronMigrationSha512,
       onSetElectronMigrationUrl,
-      onSetEngineSource,
       onStopHost,
-      onCopyOpencodeLogs,
-      onCopyOpenworkLogs,
-      onExportOpencodeLogs,
-      onExportOpenworkLogs,
-      opencodeConnectCard,
-      opencodeLogStatus,
-      opencodeRestarting,
-      opencodeServiceStatus,
-      openworkCard,
-      openworkLogStatus,
-      openworkServiceStatus,
-      openworkServerRestarting,
+      onCopySofiaLogs,
+      onExportSofiaLogs,
+      engineConnectCard,
+      sofiaCard,
+      sofiaLogStatus,
+      sofiaServiceStatus,
+      sofiaServerRestarting,
       resetStatus,
       startupStatus,
       workspaceDebugEventsStatus,
-      openworkServerSnapshot.openworkAuditEntries,
-      openworkServerSnapshot.openworkAuditError,
-      openworkServerSnapshot.openworkAuditStatus,
-      openworkServerSnapshot.openworkServerCapabilities,
-      openworkServerSnapshot.openworkServerDiagnostics,
-      openworkServerSnapshot.openworkServerStatus,
+      sofiaServerSnapshot.sofiaAuditEntries,
+      sofiaServerSnapshot.sofiaAuditError,
+      sofiaServerSnapshot.sofiaAuditStatus,
+      sofiaServerSnapshot.sofiaServerCapabilities,
+      sofiaServerSnapshot.sofiaServerDiagnostics,
+      sofiaServerSnapshot.sofiaServerStatus,
       resetModalBusy,
       runtimeConfigStatus,
       runtimeConfigStatusError,

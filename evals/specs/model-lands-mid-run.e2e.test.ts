@@ -8,21 +8,21 @@ import {
   selectModel,
   sendComposerMessage,
   waitFor,
-} from "@openwork/behaviors";
-import type { DenSession } from "@openwork/behaviors";
-import { screenshot, validate } from "@openwork/test-evidence";
-import { app, eventually, needs, server, test, unmetNeeds } from "@openwork/testkit";
-import type { TestNeeds } from "@openwork/testkit";
+} from "@sofia/behaviors";
+import type { DenSession } from "@sofia/behaviors";
+import { screenshot, validate } from "@sofia/test-evidence";
+import { app, eventually, needs, server, test, unmetNeeds } from "@sofia/testkit";
+import type { TestNeeds } from "@sofia/testkit";
 
 /**
  * VOICEOVER SPEC — "New models arrive without breaking your flow."
  *
- * 1. Maya has OpenWork deep in a real task — subagents fanned out — signed in
+ * 1. Maya has Sofia App deep in a real task — subagents fanned out — signed in
  *    to her company's org.
  * 2. While her task runs, her admin grants the team a new model. Nothing
  *    happens on Maya's screen: no flash, no "The message was interrupted",
  *    no retry countdown.
- * 3. Under the hood OpenWork notices the new model but refuses to restart the
+ * 3. Under the hood Sofia App notices the new model but refuses to restart the
  *    engine while her sessions are live — it parks the update
  *    (lastRun.detail.reloadDeferred).
  * 4. Her task finishes intact. She touches nothing — within moments the
@@ -39,7 +39,7 @@ import type { TestNeeds } from "@openwork/testkit";
 
 const requirements: TestNeeds = {
   env: ["ANTHROPIC_API_KEY", "OPENAI_API_KEY"],
-  optIn: ["OPENWORK_EVAL_E2E_TESTS"],
+  optIn: ["SOFIA_EVAL_E2E_TESTS"],
 };
 const missingRequirements = unmetNeeds(requirements, process.env);
 const title = missingRequirements.length > 0
@@ -94,12 +94,12 @@ const assistantHasText = (text: string): string => `(() => {
 })()`;
 
 const stopEnabledExpression = `(() => {
-  const stop = window.__openworkControl?.listActions().find((action) => action.id === "composer.stop");
+  const stop = window.__sofiaControl?.listActions().find((action) => action.id === "composer.stop");
   return Boolean(stop && !stop.disabled);
 })()`;
 
 const stopDisabledExpression = `(() => {
-  const stop = window.__openworkControl?.listActions().find((action) => action.id === "composer.stop");
+  const stop = window.__sofiaControl?.listActions().find((action) => action.id === "composer.stop");
   return Boolean(stop?.disabled);
 })()`;
 
@@ -132,7 +132,7 @@ async function grantOrgModel(
   for (const modelId of candidates) {
     const result = await denFetch(admin, "/v1/llm-providers", {
       method: "POST",
-      headers: { authorization: `Bearer ${admin.token}`, "x-openwork-org-id": orgId },
+      headers: { authorization: `Bearer ${admin.token}`, "x-sofia-org-id": orgId },
       body: JSON.stringify({
         name: GRANT_PROVIDER_NAME,
         source: "models_dev",
@@ -167,8 +167,8 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 2_700_000 }, async
   const anthropicKey = process.env.ANTHROPIC_API_KEY?.trim() ?? "";
   const openaiKey = process.env.OPENAI_API_KEY?.trim() ?? "";
   const providerConfigured = await evalIn(desktopApp, `(async () => {
-    const port = localStorage.getItem("openwork.server.port");
-    const token = localStorage.getItem("openwork.server.token");
+    const port = localStorage.getItem("sofia.server.port");
+    const token = localStorage.getItem("sofia.server.token");
     if (!port || !token) return "missing local server credentials";
     const request = async (path, init) => {
       const response = await fetch("http://127.0.0.1:" + port + path, {
@@ -181,7 +181,7 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 2_700_000 }, async
     const workspaceId = ${JSON.stringify(workspaceId)};
     const patched = await request("/workspace/" + encodeURIComponent(workspaceId) + "/config", {
       method: "PATCH",
-      body: JSON.stringify({ opencode: { provider: { anthropic: { options: { apiKey: ${JSON.stringify(anthropicKey)} } } } } }),
+      body: JSON.stringify({ engine: { provider: { anthropic: { options: { apiKey: ${JSON.stringify(anthropicKey)} } } } } }),
     });
     if (patched !== "ok") return patched;
     return request("/workspace/" + encodeURIComponent(workspaceId) + "/engine/reload", { method: "POST" });
@@ -200,8 +200,8 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 2_700_000 }, async
   // ── Engine event tail: disposes, retries and session errors are the
   // witnesses for "nothing interrupted her" ────────────────────────────────
   const tailStarted = await evalIn(desktopApp, `(() => {
-    const port = localStorage.getItem("openwork.server.port");
-    const token = localStorage.getItem("openwork.server.token");
+    const port = localStorage.getItem("sofia.server.port");
+    const token = localStorage.getItem("sofia.server.token");
     if (!port || !token) return "missing local server credentials";
     window.__owStorm = { active: true, reconnects: -1, disposes: [], retries: [], errors: [] };
     const record = (event) => {
@@ -218,7 +218,7 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 2_700_000 }, async
       }
     };
     (async () => {
-      const url = "http://127.0.0.1:" + port + "/workspace/" + encodeURIComponent(${JSON.stringify(workspaceId)}) + "/opencode/event";
+      const url = "http://127.0.0.1:" + port + "/workspace/" + encodeURIComponent(${JSON.stringify(workspaceId)}) + "/engine/event";
       while (window.__owStorm.active) {
         window.__owStorm.reconnects += 1;
         try {
@@ -249,8 +249,8 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 2_700_000 }, async
 
   // ── Arm the server-side provider sync with the signed-in Den session ────
   const readSyncStatusExpression = `(async () => {
-    const port = localStorage.getItem("openwork.server.port");
-    const token = localStorage.getItem("openwork.server.token");
+    const port = localStorage.getItem("sofia.server.port");
+    const token = localStorage.getItem("sofia.server.token");
     const response = await fetch("http://127.0.0.1:" + port + "/cloud-provider-sync/status", {
       headers: { Authorization: "Bearer " + token },
     });
@@ -258,14 +258,14 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 2_700_000 }, async
     return await response.json();
   })()`;
   const armProbe = String(await evalIn(desktopApp, `(async () => {
-    const port = localStorage.getItem("openwork.server.port");
-    const hostToken = localStorage.getItem("openwork.server.hostToken");
-    const denToken = (localStorage.getItem("openwork.den.authToken") ?? "").trim();
-    const orgId = (localStorage.getItem("openwork.den.activeOrgId") ?? "").trim();
+    const port = localStorage.getItem("sofia.server.port");
+    const hostToken = localStorage.getItem("sofia.server.hostToken");
+    const denToken = (localStorage.getItem("sofia.den.authToken") ?? "").trim();
+    const orgId = (localStorage.getItem("sofia.den.activeOrgId") ?? "").trim();
     if (!port || !hostToken || !denToken || !orgId) return "missing:" + [port, hostToken, denToken, orgId].map(Boolean).join(",");
     const response = await fetch("http://127.0.0.1:" + port + "/den-session", {
       method: "PUT",
-      headers: { "x-openwork-host-token": hostToken, "Content-Type": "application/json" },
+      headers: { "x-sofia-host-token": hostToken, "Content-Type": "application/json" },
       body: JSON.stringify({ baseUrl: ${JSON.stringify(den.ref.apiUrl)}, token: denToken, orgId }),
     });
     return "PUT /den-session -> " + response.status + "; orgId=" + orgId;
@@ -306,11 +306,11 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 2_700_000 }, async
 
   // ── Frame 3: the sync sees it and PARKS the engine reload (busy) ────────
   const syncRun = await evalIn(desktopApp, `(async () => {
-    const port = localStorage.getItem("openwork.server.port");
-    const hostToken = localStorage.getItem("openwork.server.hostToken");
+    const port = localStorage.getItem("sofia.server.port");
+    const hostToken = localStorage.getItem("sofia.server.hostToken");
     const response = await fetch("http://127.0.0.1:" + port + "/cloud-provider-sync/run", {
       method: "POST",
-      headers: { "x-openwork-host-token": hostToken, "Content-Type": "application/json" },
+      headers: { "x-sofia-host-token": hostToken, "Content-Type": "application/json" },
       body: JSON.stringify({ reason: "mid_run_grant" }),
     });
     return response.status + ":" + (await response.text()).slice(0, 120);
@@ -346,9 +346,9 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 2_700_000 }, async
   // idle-retry may land the parked reload now.
   const freshnessStartedAt = Date.now();
   const engineHasProvider = `(async () => {
-    const port = localStorage.getItem("openwork.server.port");
-    const token = localStorage.getItem("openwork.server.token");
-    for (const path of ["/opencode/config/providers", "/opencode/config"]) {
+    const port = localStorage.getItem("sofia.server.port");
+    const token = localStorage.getItem("sofia.server.token");
+    for (const path of ["/engine/config/providers", "/engine/config"]) {
       const response = await fetch("http://127.0.0.1:" + port + "/workspace/" + encodeURIComponent(${JSON.stringify(workspaceId)}) + path, {
         headers: { Authorization: "Bearer " + token },
       });
@@ -409,10 +409,10 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 2_700_000 }, async
   if (!grantedRow) {
     // Name the layer that lost the model: engine catalog vs. app picker.
     const engineView = await evalIn(desktopApp, `(async () => {
-      const port = localStorage.getItem("openwork.server.port");
-      const token = localStorage.getItem("openwork.server.token");
+      const port = localStorage.getItem("sofia.server.port");
+      const token = localStorage.getItem("sofia.server.token");
       const out = {};
-      for (const path of ["/opencode/config/providers", "/opencode/config"]) {
+      for (const path of ["/engine/config/providers", "/engine/config"]) {
         const response = await fetch("http://127.0.0.1:" + port + "/workspace/" + encodeURIComponent(${JSON.stringify(workspaceId)}) + path, {
           headers: { Authorization: "Bearer " + token },
         });
@@ -472,7 +472,7 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 2_700_000 }, async
   // Keep the reused Den clean for later runs (best-effort).
   await denFetch(den.admin, `/v1/llm-providers/${encodeURIComponent(grant.providerId)}`, {
     method: "DELETE",
-    headers: { authorization: `Bearer ${den.admin.token}`, "x-openwork-org-id": activeOrgId },
+    headers: { authorization: `Bearer ${den.admin.token}`, "x-sofia-org-id": activeOrgId },
   }).catch(() => undefined);
   await sleep(250);
 });

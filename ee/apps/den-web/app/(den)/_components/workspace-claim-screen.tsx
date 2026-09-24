@@ -16,7 +16,7 @@ function LoadingCard({ title, body }: { title: string; body: string }) {
   return (
     <section className="den-page py-4 lg:py-6">
       <div className="den-frame grid max-w-[44rem] gap-4 p-6 md:p-7">
-        <p className="den-eyebrow">OpenWork Cloud</p>
+        <p className="den-eyebrow">Sofia Cloud</p>
         <div className="grid gap-2">
           <h1 className="den-title-lg">{title}</h1>
           <p className="den-copy">{body}</p>
@@ -34,7 +34,7 @@ type AcceptedClaim = {
   organizationSlug: string;
 };
 
-const AUTO_ACCEPT_WORKSPACE_CLAIM_STORAGE_KEY = "openwork:web:auto-accept-workspace-claim";
+const AUTO_ACCEPT_WORKSPACE_CLAIM_STORAGE_KEY = "sofia:web:auto-accept-workspace-claim";
 
 function parseAcceptedClaim(payload: unknown): AcceptedClaim | null {
   if (typeof payload !== "object" || payload === null) {
@@ -55,12 +55,12 @@ function parseAcceptedClaim(payload: unknown): AcceptedClaim | null {
   };
 }
 
-function getOpenworkUrl(payload: unknown): string | null {
+function getSofiaUrl(payload: unknown): string | null {
   if (typeof payload !== "object" || payload === null) {
     return null;
   }
 
-  const url = (payload as { openworkUrl?: unknown }).openworkUrl;
+  const url = (payload as { sofiaUrl?: unknown }).sofiaUrl;
   return typeof url === "string" && url.trim() ? url : null;
 }
 
@@ -202,21 +202,21 @@ export function WorkspaceClaimScreen({
       "/v1/auth/desktop-handoff",
       {
         method: "POST",
-        body: JSON.stringify({ desktopScheme: "openwork" }),
+        body: JSON.stringify({ desktopScheme: "sofia" }),
       },
       12000,
     );
 
     if (!response.ok) {
-      throw new Error(getErrorMessage(payload, `Could not prepare an OpenWork link (${response.status}).`));
+      throw new Error(getErrorMessage(payload, `Could not prepare an Sofia link (${response.status}).`));
     }
 
-    const openworkUrl = getOpenworkUrl(payload);
-    if (!openworkUrl) {
-      throw new Error("No OpenWork link was returned.");
+    const sofiaUrl = getSofiaUrl(payload);
+    if (!sofiaUrl) {
+      throw new Error("No Sofia link was returned.");
     }
 
-    return openworkUrl;
+    return sofiaUrl;
   }
 
   async function handleOpenDesktop() {
@@ -227,13 +227,13 @@ export function WorkspaceClaimScreen({
     try {
       window.location.assign(await createDesktopHandoff());
     } catch (error) {
-      setHandoffError(error instanceof Error ? error.message : "Could not open OpenWork.");
+      setHandoffError(error instanceof Error ? error.message : "Could not open Sofia.");
     } finally {
       setHandoffBusy(false);
     }
   }
 
-  async function handleCopyOpenWorkLink() {
+  async function handleCopySofiaLink() {
     setCopyBusy(true);
     setLinkCopied(false);
     setHandoffError(null);
@@ -243,12 +243,12 @@ export function WorkspaceClaimScreen({
         throw new Error("Clipboard is not available in this browser.");
       }
 
-      const openworkUrl = await createDesktopHandoff();
-      await navigator.clipboard.writeText(openworkUrl);
+      const sofiaUrl = await createDesktopHandoff();
+      await navigator.clipboard.writeText(sofiaUrl);
       setLinkCopied(true);
       window.setTimeout(() => setLinkCopied(false), 1800);
     } catch (error) {
-      setHandoffError(error instanceof Error ? error.message : "Could not copy the OpenWork link.");
+      setHandoffError(error instanceof Error ? error.message : "Could not copy the Sofia link.");
     } finally {
       setCopyBusy(false);
     }
@@ -263,13 +263,13 @@ export function WorkspaceClaimScreen({
       <section className="den-page py-4 lg:py-6">
         <div className="den-frame grid max-w-[44rem] gap-6 p-6 md:p-8">
           <div className="grid gap-2">
-            <p className="den-eyebrow">OpenWork Cloud</p>
+            <p className="den-eyebrow">Sofia Cloud</p>
             <h1 className="den-title-lg">This claim link can&apos;t be opened.</h1>
             <p className="den-copy">The link is missing its claim token. Re-open the link from your setup, or ask for a new one.</p>
           </div>
           <div className="flex flex-wrap gap-3">
             <Link href="/" className="den-button-primary w-full sm:w-auto">
-              Back to OpenWork Cloud
+              Back to Sofia Cloud
             </Link>
           </div>
         </div>
@@ -287,7 +287,7 @@ export function WorkspaceClaimScreen({
       <section className="den-page py-6 lg:py-10">
         <div className="mx-auto grid w-full max-w-[32rem] gap-5">
           <div className="grid gap-2 text-center">
-            <p className="den-eyebrow">OpenWork Cloud</p>
+            <p className="den-eyebrow">Sofia Cloud</p>
             <h1 className="den-title-lg">Claim your workspace</h1>
             <p className="den-copy">
               Sign in or create an account to become the owner. Your workspace is already set up.
@@ -334,7 +334,7 @@ export function WorkspaceClaimScreen({
             <p className={`den-eyebrow ${isLoopback ? "text-blue-700" : ""}`}>{isLoopback ? "Demo workspace ready" : "Workspace ready"}</p>
             <h1 className="den-title-lg max-w-[22ch]">{claimedOrg.organizationName} is yours.</h1>
             <p className="den-copy max-w-[46ch]">
-              Copy the OpenWork link, open OpenWork Enterprise, and paste it to connect. You will not need to enter your password again.
+              Copy the Sofia link, open Sofia Enterprise, and paste it to connect. You will not need to enter your password again.
             </p>
           </div>
 
@@ -342,11 +342,11 @@ export function WorkspaceClaimScreen({
             <button
               type="button"
               className={`den-button-primary w-full sm:w-auto ${isLoopback ? "bg-blue-600 shadow-[0_16px_34px_-18px_rgba(37,99,235,0.75)] hover:!bg-blue-700" : ""}`}
-              onClick={() => void handleCopyOpenWorkLink()}
+              onClick={() => void handleCopySofiaLink()}
               disabled={handoffBusy || copyBusy}
             >
               <Copy className="size-4" aria-hidden />
-              {copyBusy ? "Copying..." : linkCopied ? "Link copied" : "Copy OpenWork link"}
+              {copyBusy ? "Copying..." : linkCopied ? "Link copied" : "Copy Sofia link"}
             </button>
 
             <div className="flex flex-col items-center justify-center gap-2 text-sm sm:flex-row sm:gap-5">
@@ -357,7 +357,7 @@ export function WorkspaceClaimScreen({
                 disabled={handoffBusy || copyBusy}
               >
                 <ExternalLink className="size-3.5" aria-hidden />
-                {handoffBusy ? "Opening OpenWork..." : "Open OpenWork"}
+                {handoffBusy ? "Opening Sofia..." : "Open Sofia"}
               </button>
               <span className="hidden text-[var(--dls-border)] sm:inline" aria-hidden>•</span>
               <button
@@ -373,13 +373,13 @@ export function WorkspaceClaimScreen({
 
           {linkCopied ? (
             <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-800">
-              Open OpenWork Enterprise and paste the OpenWork link to connect.
+              Open Sofia Enterprise and paste the Sofia link to connect.
             </div>
           ) : null}
 
           {handoffAttempted && !handoffError ? (
             <p className="den-copy text-sm">
-              Opening OpenWork now. If nothing happens (for example, the app isn&apos;t installed on this machine), use &quot;Continue in browser instead&quot;.
+              Opening Sofia now. If nothing happens (for example, the app isn&apos;t installed on this machine), use &quot;Continue in browser instead&quot;.
             </p>
           ) : null}
           {handoffError ? <div className="den-notice is-error">{handoffError}</div> : null}
@@ -393,7 +393,7 @@ export function WorkspaceClaimScreen({
     <section className="den-page py-6 lg:py-10">
       <div className="den-frame mx-auto grid max-w-[34rem] gap-6 p-6 md:p-8">
         <div className="grid gap-2">
-          <p className="den-eyebrow">OpenWork Cloud</p>
+          <p className="den-eyebrow">Sofia Cloud</p>
           <h1 className="den-title-lg">Claim your workspace</h1>
           <p className="den-copy">Confirm this account to become the owner.</p>
         </div>

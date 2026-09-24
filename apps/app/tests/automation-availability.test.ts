@@ -50,18 +50,18 @@ describe("Automations availability", () => {
   test("credential rejection crosses only the Automation runner Electron bridge", () => {
     const main = read("../desktop/electron/main.mjs")
     const preload = read("../desktop/electron/preload.mjs")
-    expect(main).toContain('"openwork:automation-runner:credential-rejected"')
+    expect(main).toContain('"sofia:automation-runner:credential-rejected"')
     expect(main).toContain("onCredentialRejected: () =>")
     expect(preload).toContain("onCredentialRejected(callback)")
     expect(preload).toContain("ipcRenderer.on(AUTOMATION_RUNNER_CREDENTIAL_REJECTED_EVENT, handler)")
   })
 
   test("the in-chat proposal tool blocks creation when the deployment disables Automations", () => {
-    const proposal = read("src/components/tools/openwork-automation-proposal.tsx")
+    const proposal = read("src/components/tools/sofia-automation-proposal.tsx")
     expect(proposal).toContain("useAutomationDeploymentEnabled()")
     expect(proposal).toContain("Automations are disabled for this deployment.")
     expect(proposal).toContain("if (!automationsEnabled) return")
-    expect(proposal).toContain("Sign in to OpenWork Cloud")
+    expect(proposal).toContain("Sign in to Organization cloud")
     expect(proposal).toContain("resolveProposalModel")
     expect(proposal).toContain("data-automation-model-resolution")
   })

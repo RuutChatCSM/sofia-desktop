@@ -1,4 +1,4 @@
-import { isBuiltInOpenWorkExtension, type McpDirectoryInfo } from "../../../app/constants";
+import { isBuiltInSofiaExtension, type McpDirectoryInfo } from "../../../app/constants";
 import { t } from "../../../i18n";
 
 /**
@@ -30,7 +30,7 @@ export const extensionInventoryFilters: ExtensionInventoryFilter[] = [
 
 /** Built-ins ship with Sofia App and run here, so they are apps. Accounts arrive as org connections. */
 export function taxonomyForDirectoryEntry(entry: McpDirectoryInfo): ExtensionTaxonomy {
-  if (isBuiltInOpenWorkExtension(entry) || entry.kind === "ui-control") return "app";
+  if (isBuiltInSofiaExtension(entry) || entry.kind === "ui-control") return "app";
   return "mcp";
 }
 

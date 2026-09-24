@@ -22,25 +22,25 @@ function provider(input: Partial<DenOrgLlmProvider> & Pick<DenOrgLlmProvider, "i
 describe("Automation model options", () => {
   test("always offers the normalized free starter model", () => {
     expect(automationModelOptions([])).toEqual([{
-      providerId: "opencode",
+      providerId: "engine",
       modelId: "big-pickle",
-      providerName: "OpenCode Zen",
+      providerName: "Sofia Zen",
       modelName: "Big Pickle",
       accessKind: "free",
     }])
   })
 
-  test("removes the free starter model when desktop policy disables OpenCode Zen", () => {
+  test("removes the free starter model when desktop policy disables Sofia Zen", () => {
     expect(automationModelOptions([], { includeFreeStarter: false })).toEqual([])
   })
 
-  test("expands the member's managed OpenWork aliases even when Den stores no model rows", () => {
+  test("expands the member's managed Sofia App aliases even when Den stores no model rows", () => {
     const options = automationModelOptions([
-      provider({ id: "lpr_member_openwork", source: "openwork", name: "OpenWork Models" }),
+      provider({ id: "lpr_member_sofia", source: "sofia", name: "Sofia App Models" }),
     ])
 
-    expect(options.some((option) => option.providerId === "openwork" && option.modelId === "z-ai/glm-5.2")).toBe(true)
-    expect(options.some((option) => option.providerId === "lpr_member_openwork")).toBe(false)
+    expect(options.some((option) => option.providerId === "sofia" && option.modelId === "z-ai/glm-5.2")).toBe(true)
+    expect(options.some((option) => option.providerId === "lpr_member_sofia")).toBe(false)
   })
 
   test("keeps authorized custom providers on their concrete Den provider IDs", () => {
@@ -129,7 +129,7 @@ describe("Automation proposal model resolution", () => {
 
   test("defaults an omitted model to the free starter model", () => {
     expect(resolveProposalModel(undefined, [])).toEqual({
-      model: { providerId: "opencode", modelId: "big-pickle", variant: null },
+      model: { providerId: "engine", modelId: "big-pickle", variant: null },
       resolution: "default",
     })
   })
@@ -138,13 +138,13 @@ describe("Automation proposal model resolution", () => {
     const custom = { providerId: "lpr_abc", modelId: "deepseek-v4-flash", variant: "high" }
     expect(resolveProposalModel(custom, [customProvider])).toEqual({ model: custom, resolution: "exact" })
 
-    const free = { providerId: "opencode", modelId: "big-pickle", variant: "low" }
+    const free = { providerId: "engine", modelId: "big-pickle", variant: "low" }
     expect(resolveProposalModel(free, [])).toEqual({ model: free, resolution: "exact" })
 
-    const managedProvider = provider({ id: "lpr_managed", source: "openwork", name: "OpenWork Models" })
-    const managedOption = automationModelOptions([managedProvider]).find((option) => option.accessKind === "openwork_managed")
+    const managedProvider = provider({ id: "lpr_managed", source: "sofia", name: "Sofia App Models" })
+    const managedOption = automationModelOptions([managedProvider]).find((option) => option.accessKind === "sofia_managed")
     expect(managedOption).toBeDefined()
-    if (!managedOption) throw new Error("Expected an enabled OpenWork managed model")
+    if (!managedOption) throw new Error("Expected an enabled Sofia App managed model")
     const managed = { providerId: managedOption.providerId, modelId: managedOption.modelId, variant: "high" }
     expect(resolveProposalModel(managed, [managedProvider])).toEqual({ model: managed, resolution: "exact" })
   })
@@ -161,24 +161,24 @@ describe("Automation proposal model resolution", () => {
     })
   })
 
-  test("does not map through OpenWork provider records", () => {
+  test("does not map through Sofia App provider records", () => {
     const managed = provider({
       ...customProvider,
       id: "lpr_managed",
-      source: "openwork",
+      source: "sofia",
     })
     expect(resolveProposalModel(
       { providerId: "deepseek", modelId: "deepseek-v4-flash" },
       [managed],
     )).toEqual({
-      model: { providerId: "opencode", modelId: "big-pickle", variant: null },
+      model: { providerId: "engine", modelId: "big-pickle", variant: null },
       resolution: "fallback",
     })
   })
 
   test("falls back when the provider or model is unavailable", () => {
     const fallback = {
-      model: { providerId: "opencode", modelId: "big-pickle", variant: null },
+      model: { providerId: "engine", modelId: "big-pickle", variant: null },
       resolution: "fallback",
     }
     expect(resolveProposalModel({ providerId: "unknown", modelId: "missing", variant: "high" }, [customProvider]))

@@ -1,5 +1,5 @@
 /**
- * The wire boundary: schemas for what the OpenWork server already returns on
+ * The wire boundary: schemas for what the Sofia server already returns on
  * its session routes, plus the mapping into the headless thread types.
  *
  * Every schema is permissive about fields it does not name, so an engine or

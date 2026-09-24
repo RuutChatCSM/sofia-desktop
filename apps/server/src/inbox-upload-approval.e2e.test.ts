@@ -14,13 +14,13 @@ const stops: Array<() => void | Promise<void>> = [];
 const roots: string[] = [];
 
 afterEach(async () => {
-  globalThis.__openworkDesktopTelemetry = undefined;
+  globalThis.__sofiaDesktopTelemetry = undefined;
   while (stops.length) await stops.pop()?.();
   while (roots.length) await rm(roots.pop()!, { recursive: true, force: true });
 });
 
 async function startManualApprovalServer() {
-  const root = await mkdtemp(join(tmpdir(), "openwork-inbox-approval-"));
+  const root = await mkdtemp(join(tmpdir(), "sofia-inbox-approval-"));
   roots.push(root);
   const config: ServerConfig = {
     host: "127.0.0.1",
@@ -51,7 +51,7 @@ describe("inbox uploads under manual approval mode", () => {
   test("malformed multipart is a stable client error without unexpected telemetry", async () => {
     const { base, token } = await startManualApprovalServer();
     const captured: unknown[] = [];
-    globalThis.__openworkDesktopTelemetry = {
+    globalThis.__sofiaDesktopTelemetry = {
       captureException: (error) => {
         captured.push(error);
         return true;
@@ -62,7 +62,7 @@ describe("inbox uploads under manual approval mode", () => {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
-        "Content-Type": "multipart/form-data; boundary=openwork-test",
+        "Content-Type": "multipart/form-data; boundary=sofia-test",
       },
       body: "not a multipart body",
     });
@@ -109,7 +109,7 @@ describe("inbox uploads under manual approval mode", () => {
     expect(new TextEncoder().encode(basename).byteLength).toBe(255);
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ ok: true, path: inboxPath, bytes: bytes.length });
-    const dest = join(root, ".opencode", "openwork", "inbox", inboxPath);
+    const dest = join(root, ".sofia", "sofia", "inbox", inboxPath);
     expect(Array.from(new Uint8Array(await readFile(dest)))).toEqual(Array.from(bytes));
   });
 
@@ -133,7 +133,7 @@ describe("inbox uploads under manual approval mode", () => {
 
       expect(response.status).toBe(400);
       expect(await response.json()).toMatchObject({ code: "invalid_path" });
-      await expect(stat(join(root, ".opencode", "openwork", "inbox", inboxPath))).rejects.toThrow();
+      await expect(stat(join(root, ".sofia", "sofia", "inbox", inboxPath))).rejects.toThrow();
     }
   });
 
@@ -161,7 +161,7 @@ describe("inbox uploads under manual approval mode", () => {
     expect(elapsedMs).toBeLessThan(APPROVAL_TIMEOUT_MS);
 
     // The bytes are intact and confined to the inbox drop area.
-    const dest = join(root, ".opencode", "openwork", "inbox", inboxPath);
+    const dest = join(root, ".sofia", "sofia", "inbox", inboxPath);
     expect(Array.from(new Uint8Array(await readFile(dest)))).toEqual(Array.from(bytes));
   });
 

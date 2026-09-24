@@ -2,10 +2,10 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { liteLlm, liteLlmSandboxName } from "../src/litellm.ts";
-import type { DaytonaExec } from "@openwork/hosts";
+import type { DaytonaExec } from "@sofia/hosts";
 import type { LiteLlmUpstreamRequest, Place } from "../src/index.ts";
 
-const MODEL_ID = "openwork-litellm-unit-model";
+const MODEL_ID = "sofia-litellm-unit-model";
 const PINNED_IMAGE = "ghcr.io/berriai/litellm:v1.97.0@sha256:468c25f35f3e5ec4e414974f00deab93337b1b4d9953cabcfd3722e59415f834";
 
 interface ExecCall {
@@ -109,12 +109,12 @@ function makeFake(options: FakeOptions = {}): {
   };
   const fetchImpl: typeof fetch = async (input, init) => {
     const url = new URL(String(input));
-    if (url.pathname === "/__openwork_litellm/health") {
+    if (url.pathname === "/__sofia_litellm/health") {
       const authorization = new Headers(init?.headers).get("authorization") ?? "";
       controlKey = authorization.startsWith("Bearer ") ? authorization.slice("Bearer ".length) : "";
       return Response.json(options.invalidHealth ? { ok: false, sequence: 0 } : { ok: true, sequence: 3 });
     }
-    if (url.pathname === "/__openwork_litellm/requests") {
+    if (url.pathname === "/__sofia_litellm/requests") {
       return Response.json({ sequence: 3, requests: options.requests?.() ?? [] });
     }
     if (url.pathname === "/v1/models") {
@@ -137,7 +137,7 @@ test("LiteLLM Daytona sandbox names are safe and unique", () => {
   const first = liteLlmSandboxName();
   const second = liteLlmSandboxName();
 
-  assert.match(first, /^openwork-litellm-eval-[0-9]+-[a-z0-9]+-[0-9a-f]{8}$/);
+  assert.match(first, /^sofia-litellm-eval-[0-9]+-[a-z0-9]+-[0-9a-f]{8}$/);
   assert.notEqual(first, second);
 });
 

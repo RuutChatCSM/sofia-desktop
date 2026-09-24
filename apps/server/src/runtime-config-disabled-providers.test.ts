@@ -5,9 +5,9 @@ import { join } from "node:path";
 
 import { startServer } from "./server.js";
 import {
-  readRuntimeOpencodeConfig,
-  writeRuntimeOpencodeConfig,
-} from "./runtime-opencode-config-store.js";
+  readRuntimeWorkspaceEngineConfig,
+  writeRuntimeWorkspaceEngineConfig,
+} from "./runtime-engine-config-store.js";
 import type { ServerConfig } from "./types.js";
 
 const CLIENT_TOKEN = "owt_runtime_disabled_client";
@@ -24,12 +24,12 @@ function clientAuth() {
 }
 
 async function createTempRoot() {
-  const root = await mkdtemp(join(tmpdir(), "openwork-runtime-disabled-providers-"));
+  const root = await mkdtemp(join(tmpdir(), "sofia-runtime-disabled-providers-"));
   roots.push(root);
   return root;
 }
 
-async function startOpenworkServer(workspaceRoot: string) {
+async function startSofiaServer(workspaceRoot: string) {
   const config: ServerConfig = {
     host: "127.0.0.1",
     port: 0,
@@ -63,7 +63,7 @@ afterEach(async () => {
 describe("runtime-config disabled providers route", () => {
   test("writes disabled providers into the runtime store", async () => {
     const root = await createTempRoot();
-    const { base, config } = await startOpenworkServer(root);
+    const { base, config } = await startSofiaServer(root);
 
     const response = await fetch(`${base}/workspace/ws_1/runtime-config/disabled-providers`, {
       method: "POST",
@@ -74,13 +74,13 @@ describe("runtime-config disabled providers route", () => {
     expect(response.status).toBe(200);
     const body: unknown = await response.json();
     expect(isRecord(body) ? body.disabledProviders : null).toEqual(["anthropic", "openai"]);
-    expect((await readRuntimeOpencodeConfig(config, "ws_1")).disabled_providers).toEqual(["anthropic", "openai"]);
+    expect((await readRuntimeWorkspaceEngineConfig(config, "ws_1")).disabled_providers).toEqual(["anthropic", "openai"]);
   });
 
   test("preserves other runtime keys while updating disabled providers", async () => {
     const root = await createTempRoot();
-    const { base, config } = await startOpenworkServer(root);
-    await writeRuntimeOpencodeConfig(config, "ws_1", () => ({
+    const { base, config } = await startSofiaServer(root);
+    await writeRuntimeWorkspaceEngineConfig(config, "ws_1", () => ({
       mcp: { notion: { type: "remote", url: "https://notion.example/mcp" } },
       provider: { local: { npm: "@ai-sdk/openai-compatible" } },
     }));
@@ -92,7 +92,7 @@ describe("runtime-config disabled providers route", () => {
     });
 
     expect(response.status).toBe(200);
-    const runtime = await readRuntimeOpencodeConfig(config, "ws_1");
+    const runtime = await readRuntimeWorkspaceEngineConfig(config, "ws_1");
     expect(runtime.disabled_providers).toEqual(["openai"]);
     expect(runtime.mcp?.notion?.url).toBe("https://notion.example/mcp");
     expect(runtime.provider?.local).toEqual({ npm: "@ai-sdk/openai-compatible" });
@@ -100,7 +100,7 @@ describe("runtime-config disabled providers route", () => {
 
   test("rejects invalid payloads", async () => {
     const root = await createTempRoot();
-    const { base } = await startOpenworkServer(root);
+    const { base } = await startSofiaServer(root);
 
     const response = await fetch(`${base}/workspace/ws_1/runtime-config/disabled-providers`, {
       method: "POST",

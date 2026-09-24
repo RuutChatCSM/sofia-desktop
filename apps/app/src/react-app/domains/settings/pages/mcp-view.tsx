@@ -1,5 +1,5 @@
 /** @jsxImportSource react */
-import { useEffect, useReducer, useRef, useState, type ReactNode, type SetStateAction } from "react";
+import { useEffect, useReducer, useState, type ReactNode, type SetStateAction } from "react";
 import {
   BookOpen,
   ArrowUpRight,
@@ -26,7 +26,7 @@ import {
   Zap,
 } from "lucide-react";
 
-import { isBuiltInOpenWorkExtension, getMcpServerName, type McpDirectoryInfo } from "../../../../app/constants";
+import { isBuiltInSofiaExtension, getMcpServerName, type McpDirectoryInfo } from "../../../../app/constants";
 import { evaluateEnablement } from "../../../../app/enablement";
 import type { EnablementResult } from "../../../../app/extensions";
 import type { CloudImportedPlugin, CloudImportedPluginFile } from "../../../../app/cloud/import-state";
@@ -53,10 +53,7 @@ import { SettingsGroupHeader, RefreshButton } from "../settings-section";
 import { SettingsListSearchInput } from "../settings-list";
 import {
   openDesktopUrl,
-  openDesktopPath,
-  readOpencodeConfig,
   revealDesktopItemInDir,
-  type OpencodeConfigFile,
 } from "../../../../app/lib/desktop";
 import { readDenSettings } from "../../../../app/lib/den";
 import {
@@ -64,7 +61,7 @@ import {
   normalizeMcpSlug,
 } from "../../../../app/mcp";
 import type { McpServerEntry, McpStatusMap } from "../../../../app/types";
-import { formatRelativeTime, isDesktopRuntime, isWindowsPlatform } from "../../../../app/utils";
+import { formatRelativeTime, isDesktopRuntime } from "../../../../app/utils";
 import { t } from "../../../../i18n";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -77,20 +74,19 @@ import {
   canDisconnectNativeProviderAccount,
   canMemberAuthorizeConnection,
 } from "../../connections/native-provider-connections";
-import type { OpenworkClaudePluginPreview } from "../../../../app/lib/openwork-server";
+import type { SofiaClaudePluginPreview } from "../../../../app/lib/sofia-server";
 import {
-  isOpenWorkExtensionEnabled,
-  isOpenWorkExtensionHidden,
-  OPENWORK_EXTENSION_STATE_CHANGED,
+  isSofiaExtensionEnabled,
+  isSofiaExtensionHidden,
+  SOFIA_EXTENSION_STATE_CHANGED,
   readExtensionLayout,
-  setOpenWorkExtensionEnabled,
-  setOpenWorkExtensionHidden,
+  setSofiaExtensionEnabled,
+  setSofiaExtensionHidden,
   writeExtensionLayout,
 } from "../extension-state";
 import {
   initialMcpViewLocalState,
   mcpViewLocalReducer,
-  type ConfigScope,
   type McpViewLocalState,
 } from "./mcp-view-state";
 import { useCloudSession } from "../cloud/cloud-session-provider";
@@ -139,7 +135,7 @@ export type SkillItem = {
   trigger?: string;
   path: string;
   content?: string;
-  origin?: "local" | "openwork-connect";
+  origin?: "local" | "sofia-connect";
   marketplaceName?: string;
   pluginName?: string;
 };
@@ -169,7 +165,6 @@ export type McpViewProps = {
   removeCloudPlugin?: (pluginId: string) => void | Promise<unknown>;
   /** Read skill content by name. */
   readSkill?: (name: string) => Promise<{ content: string } | null>;
-  readConfigFile?: (scope: "project" | "global") => Promise<OpencodeConfigFile | null>;
   mcpServers: McpServerEntry[];
   mcpStatus: string | null;
   mcpLastUpdatedAt: number | null;
@@ -194,7 +189,7 @@ export type McpViewProps = {
   /** Organization policy restriction for Sofia App-provided built-in extensions. */
   builtInExtensionsDisabled?: boolean;
   /** Preview a Claude Code plugin bundle from a GitHub URL ("Will install" disclosure). */
-  previewClaudePlugin?: (url: string) => Promise<OpenworkClaudePluginPreview>;
+  previewClaudePlugin?: (url: string) => Promise<SofiaClaudePluginPreview>;
   /** Install a Claude Code plugin bundle from a GitHub URL. */
   installClaudePlugin?: (url: string) => Promise<{ ok: boolean; message: string }>;
   /** Connected org-level External MCP Connections rendered in My Extensions. */
@@ -287,8 +282,8 @@ const serviceIcon = (name: string) => {
   if (lower.includes("devtools")) {
     return MonitorSmartphone;
   }
-  if (lower.includes("openwork") && lower.includes("cloud")) return Cloud;
-  if (lower.includes("openwork") && lower.includes("ui")) return MonitorSmartphone;
+  if (lower.includes("sofia") && lower.includes("cloud")) return Cloud;
+  if (lower.includes("sofia") && lower.includes("ui")) return MonitorSmartphone;
   return Plug2;
 };
 
@@ -302,7 +297,7 @@ const serviceColor = (name: string) => {
   if (lower.includes("devtools")) {
     return "text-amber-11";
   }
-  if (lower.includes("openwork")) return "text-gray-12";
+  if (lower.includes("sofia")) return "text-gray-12";
   return "text-dls-secondary";
 };
 
@@ -316,7 +311,7 @@ const serviceIconBg = (name: string) => {
   if (lower.includes("devtools")) {
     return "bg-amber-3 border-amber-6";
   }
-  if (lower.includes("openwork")) return "bg-gray-3 border-gray-6";
+  if (lower.includes("sofia")) return "bg-gray-3 border-gray-6";
   return "bg-dls-hover border-dls-border";
 };
 
@@ -439,8 +434,8 @@ export function McpView(props: McpViewProps) {
   const [mcpConnectFailure, setMcpConnectFailure] = useState<{ id: string; message: string } | null>(null);
   const [pendingPlugin, setPendingPlugin] = useState<CloudImportedPlugin | null>(null);
   const [detailSkillContent, setDetailSkillContent] = useState<string | null>(null);
-  const [openworkUiMcpCommand, setOpenworkUiMcpCommand] = useState<string[] | null>(null);
-  const [openworkUiMcpEnvironment, setOpenworkUiMcpEnvironment] = useState<Record<string, string> | null>(null);
+  const [sofiaUiMcpCommand, setSofiaUiMcpCommand] = useState<string[] | null>(null);
+  const [sofiaUiMcpEnvironment, setSofiaUiMcpEnvironment] = useState<Record<string, string> | null>(null);
   const [computerUseMcpCommand, setComputerUseMcpCommand] = useState<string[] | null>(null);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<ExtensionInventoryFilter>(props.initialFilter ?? "all");
@@ -466,12 +461,6 @@ export function McpView(props: McpViewProps) {
     logoutBusy,
     removeOpen,
     removeTarget,
-    configScope,
-    projectConfig,
-    globalConfig,
-    configError,
-    revealBusy,
-    showAdvanced,
     addMcpModalOpen,
     togglingMcp,
   } = localState;
@@ -484,13 +473,8 @@ export function McpView(props: McpViewProps) {
   const setLogoutBusy = (value: SetStateAction<boolean>) => setLocal("logoutBusy", value);
   const setRemoveOpen = (value: SetStateAction<boolean>) => setLocal("removeOpen", value);
   const setRemoveTarget = (value: SetStateAction<string | null>) => setLocal("removeTarget", value);
-  const setConfigScope = (value: SetStateAction<ConfigScope>) => setLocal("configScope", value);
-  const setConfigError = (value: SetStateAction<string | null>) => setLocal("configError", value);
-  const setRevealBusy = (value: SetStateAction<boolean>) => setLocal("revealBusy", value);
-  const setShowAdvanced = (value: SetStateAction<boolean>) => setLocal("showAdvanced", value);
   const setAddMcpModalOpen = (value: SetStateAction<boolean>) => setLocal("addMcpModalOpen", value);
   const setTogglingMcp = (value: SetStateAction<string | null>) => setLocal("togglingMcp", value);
-  const configRequestId = useRef(0);
 
   const quickConnectList = props.quickConnect;
   const installedSkills = props.installedSkills ?? [];
@@ -620,7 +604,7 @@ export function McpView(props: McpViewProps) {
     setMcpConnectFailure(null);
     if (target.kind === "skill") {
       setDetailSkillContent(target.skill.content ?? null);
-      if (!target.skill.content && target.skill.origin !== "openwork-connect" && props.readSkill) {
+      if (!target.skill.content && target.skill.origin !== "sofia-connect" && props.readSkill) {
         void props.readSkill(target.skill.name).then((result) => {
           if (result?.content) {
             setDetailSkillContent(result.content);
@@ -665,7 +649,7 @@ export function McpView(props: McpViewProps) {
     setDetailTarget(resolved);
     if (resolved?.kind === "skill") {
       setDetailSkillContent(resolved.skill.content ?? null);
-      if (!resolved.skill.content && resolved.skill.origin !== "openwork-connect" && props.readSkill) {
+      if (!resolved.skill.content && resolved.skill.origin !== "sofia-connect" && props.readSkill) {
         void props.readSkill(resolved.skill.name).then((result) => {
           if (result?.content) {
             setDetailSkillContent(result.content);
@@ -711,10 +695,10 @@ export function McpView(props: McpViewProps) {
 
   useEffect(() => {
     const refresh = () => setExtensionStateVersion((value) => value + 1);
-    window.addEventListener(OPENWORK_EXTENSION_STATE_CHANGED, refresh);
+    window.addEventListener(SOFIA_EXTENSION_STATE_CHANGED, refresh);
     window.addEventListener("storage", refresh);
     return () => {
-      window.removeEventListener(OPENWORK_EXTENSION_STATE_CHANGED, refresh);
+      window.removeEventListener(SOFIA_EXTENSION_STATE_CHANGED, refresh);
       window.removeEventListener("storage", refresh);
     };
   }, []);
@@ -723,87 +707,29 @@ export function McpView(props: McpViewProps) {
     if (!isDesktopRuntime()) return;
     void (async () => {
       try {
-        const command = await window.__OPENWORK_ELECTRON__?.invokeDesktop?.("getOpenworkUiMcpCommand");
+        const command = await window.__SOFIA_ELECTRON__?.invokeDesktop?.("getSofiaUiMcpCommand");
         if (Array.isArray(command) && command.every((part) => typeof part === "string")) {
-          setOpenworkUiMcpCommand(command);
+          setSofiaUiMcpCommand(command);
         }
-        const environment = await window.__OPENWORK_ELECTRON__?.invokeDesktop?.("getOpenworkUiMcpEnvironment");
+        const environment = await window.__SOFIA_ELECTRON__?.invokeDesktop?.("getSofiaUiMcpEnvironment");
         if (environment && typeof environment === "object" && !Array.isArray(environment)) {
-          setOpenworkUiMcpEnvironment(Object.fromEntries(
+          setSofiaUiMcpEnvironment(Object.fromEntries(
             Object.entries(environment).filter((entry): entry is [string, string] =>
               typeof entry[0] === "string" && typeof entry[1] === "string"
             ),
           ));
         }
-        const computerUseCommand = await window.__OPENWORK_ELECTRON__?.invokeDesktop?.("getComputerUseMcpCommand");
+        const computerUseCommand = await window.__SOFIA_ELECTRON__?.invokeDesktop?.("getComputerUseMcpCommand");
         if (Array.isArray(computerUseCommand) && computerUseCommand.every((part) => typeof part === "string")) {
           setComputerUseMcpCommand(computerUseCommand);
         }
       } catch {
-        setOpenworkUiMcpCommand(null);
-        setOpenworkUiMcpEnvironment(null);
+        setSofiaUiMcpCommand(null);
+        setSofiaUiMcpEnvironment(null);
         setComputerUseMcpCommand(null);
       }
     })();
   }, []);
-
-  useEffect(() => {
-    const root = props.selectedWorkspaceRoot.trim();
-    const nextId = configRequestId.current + 1;
-    configRequestId.current = nextId;
-    const readConfig = props.readConfigFile;
-    const canReadDesktopConfig = !props.isRemoteWorkspace && isDesktopRuntime();
-
-    if (!readConfig && !canReadDesktopConfig) {
-      dispatchLocal({ type: "configUnavailable" });
-      return;
-    }
-
-    void (async () => {
-      try {
-        setConfigError(null);
-        const [project, global] = await Promise.all([
-          root
-            ? readConfig
-              ? readConfig("project")
-              : canReadDesktopConfig
-              ? readOpencodeConfig("project", root)
-              : Promise.resolve(null)
-            : Promise.resolve(null),
-          readConfig
-            ? readConfig("global")
-            : canReadDesktopConfig
-            ? readOpencodeConfig("global", root)
-            : Promise.resolve(null),
-        ]);
-        if (nextId !== configRequestId.current) return;
-        dispatchLocal({
-          type: "configLoaded",
-          project: project as OpencodeConfigFile | null,
-          global: global as OpencodeConfigFile | null,
-        });
-      } catch (error) {
-        if (nextId !== configRequestId.current) return;
-        dispatchLocal({
-          type: "configLoadError",
-          error: error instanceof Error ? error.message : t("mcp.config_load_failed"),
-        });
-      }
-    })();
-  }, [props.isRemoteWorkspace, props.readConfigFile, props.selectedWorkspaceRoot]);
-
-  const activeConfig = configScope === "project" ? projectConfig : globalConfig;
-
-  const revealLabel = isWindowsPlatform()
-    ? t("mcp.open_file")
-    : t("mcp.reveal_in_finder");
-
-  const canRevealConfig =
-    isDesktopRuntime() &&
-    !props.isRemoteWorkspace &&
-    !revealBusy &&
-    !(configScope === "project" && !props.selectedWorkspaceRoot.trim()) &&
-    Boolean(activeConfig?.exists);
 
   const resolveQuickConnectMatch = (name: string) =>
     quickConnectList.find((candidate) => {
@@ -815,14 +741,14 @@ export function McpView(props: McpViewProps) {
       );
     });
 
-  // Auto-configured built-ins like openwork-cloud remain active but hidden from
+  // Auto-configured built-ins like sofia-cloud remain active but hidden from
   // Your apps until Show hidden reveals the row for disable/remove.
   const visibleMcpServers = inventoryState === "all" && (filter === "all" || filter === "mcp")
     ? showHidden
       ? props.mcpServers
       : props.mcpServers.filter((entry) => {
           const match = resolveQuickConnectMatch(entry.name);
-          return !match || !isOpenWorkExtensionHidden(match);
+          return !match || !isSofiaExtensionHidden(match);
         })
     : [];
 
@@ -846,17 +772,17 @@ export function McpView(props: McpViewProps) {
   };
 
   const isEntryConfigured = (entry: McpDirectoryInfo) => {
-    if (props.builtInExtensionsDisabled && isBuiltInOpenWorkExtension(entry)) return false;
+    if (props.builtInExtensionsDisabled && isBuiltInSofiaExtension(entry)) return false;
     const result = enablementForEntry(entry);
     if (result) return result.active;
     // Fallback for entries without enablement context.
-    if (isToggleOnlyExtension(entry)) return isOpenWorkExtensionEnabled(entry);
+    if (isToggleOnlyExtension(entry)) return isSofiaExtensionEnabled(entry);
     if (entry.kind === "extension" && !isMcpBackedExtension(entry)) return props.isExtensionConnected?.(entry) ?? false;
     return isQuickConnectConfigured(entry);
   };
 
   const launchCommandForEntry = (entry: McpDirectoryInfo) => {
-    if (entry.serverName === "openwork-ui") return openworkUiMcpCommand ?? undefined;
+    if (entry.serverName === "sofia-ui") return sofiaUiMcpCommand ?? undefined;
     if (entry.serverName === "computer-use") return computerUseMcpCommand ?? entry.command;
     return entry.command;
   };
@@ -870,11 +796,11 @@ export function McpView(props: McpViewProps) {
     return resolved?.status ?? "disconnected";
   };
 
-  const hiddenCount = quickConnectList.filter((entry) => isOpenWorkExtensionHidden(entry)).length +
-    (props.installedSkills ?? []).filter((skill) => isOpenWorkExtensionHidden(getSkillHiddenId(skill))).length +
-    (props.installedPlugins ?? []).filter((plugin) => isOpenWorkExtensionHidden(`plugin:${plugin.pluginId}`)).length;
+  const hiddenCount = quickConnectList.filter((entry) => isSofiaExtensionHidden(entry)).length +
+    (props.installedSkills ?? []).filter((skill) => isSofiaExtensionHidden(getSkillHiddenId(skill))).length +
+    (props.installedPlugins ?? []).filter((plugin) => isSofiaExtensionHidden(`plugin:${plugin.pluginId}`)).length;
   const policyHiddenBuiltInCount = props.builtInExtensionsDisabled
-    ? quickConnectList.filter((entry) => isBuiltInOpenWorkExtension(entry) && !isOpenWorkExtensionHidden(entry)).length
+    ? quickConnectList.filter((entry) => isBuiltInSofiaExtension(entry) && !isSofiaExtensionHidden(entry)).length
     : 0;
   const hiddenOrPolicyCount = hiddenCount + policyHiddenBuiltInCount;
 
@@ -897,54 +823,19 @@ export function McpView(props: McpViewProps) {
     }
   };
 
-  const revealConfig = async () => {
-    if (!isDesktopRuntime() || revealBusy) return;
-    const root = props.selectedWorkspaceRoot.trim();
-
-    if (configScope === "project" && !root) {
-      setConfigError(t("mcp.pick_workspace_error"));
-      return;
-    }
-
-    setRevealBusy(true);
-    setConfigError(null);
-    try {
-      const resolved = props.readConfigFile
-        ? await props.readConfigFile(configScope)
-        : !props.isRemoteWorkspace
-        ? await readOpencodeConfig(configScope, root)
-        : null;
-      const configFile = resolved as OpencodeConfigFile | null;
-      if (!configFile) {
-        throw new Error(t("mcp.config_load_failed"));
-      }
-      if (isWindowsPlatform()) {
-        await openDesktopPath(configFile.path);
-      } else {
-        await revealDesktopItemInDir(configFile.path);
-      }
-    } catch (error) {
-      setConfigError(
-        error instanceof Error ? error.message : t("mcp.reveal_config_failed"),
-      );
-    } finally {
-      setRevealBusy(false);
-    }
-  };
-
   const detailPanels = (
     <>
       {detailEntry ? (() => {
         const extensionConfigSlot = props.configSlotForEntry?.(detailEntry) ?? null;
         const hasConfigSlot = extensionConfigSlot !== null;
-        const hidden = isOpenWorkExtensionHidden(detailEntry);
-        const disabledReason = props.builtInExtensionsDisabled && isBuiltInOpenWorkExtension(detailEntry)
+        const hidden = isSofiaExtensionHidden(detailEntry);
+        const disabledReason = props.builtInExtensionsDisabled && isBuiltInSofiaExtension(detailEntry)
           ? builtInExtensionDisabledReason()
           : null;
         const isConnected = disabledReason
           ? false
           : isToggleOnlyExtension(detailEntry)
-          ? isOpenWorkExtensionEnabled(detailEntry)
+          ? isSofiaExtensionEnabled(detailEntry)
           : detailEntry.kind === "extension" && !isMcpBackedExtension(detailEntry)
           ? props.isExtensionConnected?.(detailEntry) ?? false
           : isQuickConnectConfigured(detailEntry);
@@ -970,13 +861,13 @@ export function McpView(props: McpViewProps) {
             resourceLabels={extensionResourceLabels(detailEntry)}
             contributionLabels={extensionContributionLabels(detailEntry)}
             launchCommand={launchCommandForEntry(detailEntry)}
-            environment={detailEntry.serverName === "openwork-ui" ? openworkUiMcpEnvironment ?? undefined : undefined}
+            environment={detailEntry.serverName === "sofia-ui" ? sofiaUiMcpEnvironment ?? undefined : undefined}
             url={typeof detailEntry.url === "string" ? detailEntry.url : undefined}
             oauth={detailEntry.oauth}
             configSlot={disabledReason ? null : extensionConfigSlot}
             showEnablementCard
             onConnect={disabledReason ? undefined : isToggleOnlyExtension(detailEntry) ? () => {
-              setOpenWorkExtensionEnabled(detailEntry, true);
+              setSofiaExtensionEnabled(detailEntry, true);
               closeDetail();
             } : hasConfigSlot ? undefined : async () => {
               setMcpConnectFailure(null);
@@ -991,20 +882,20 @@ export function McpView(props: McpViewProps) {
               });
             }}
             onUninstall={disabledReason ? undefined : isToggleOnlyExtension(detailEntry) && isConnected ? () => {
-              setOpenWorkExtensionEnabled(detailEntry, false);
+              setSofiaExtensionEnabled(detailEntry, false);
             } : isQuickConnectConfigured(detailEntry) ? () => {
               const slug = getMcpIdentityKey(detailEntry);
               props.removeMcp(slug);
               closeDetail();
             } : undefined}
-            onHide={() => setOpenWorkExtensionHidden(detailEntry, true)}
-            onShow={() => setOpenWorkExtensionHidden(detailEntry, false)}
+            onHide={() => setSofiaExtensionHidden(detailEntry, true)}
+            onShow={() => setSofiaExtensionHidden(detailEntry, false)}
           />
         );
       })() : null}
 
       {detailSkill ? (() => {
-        const hidden = isOpenWorkExtensionHidden(getSkillHiddenId(detailSkill));
+        const hidden = isSofiaExtensionHidden(getSkillHiddenId(detailSkill));
         return (
           <ExtensionDetailModal
             open={!!detailSkill}
@@ -1015,11 +906,11 @@ export function McpView(props: McpViewProps) {
             description={detailSkill.description ?? "Installed skill"}
             taxonomy="skill"
             connected={true}
-            connectedLabel={detailSkill.origin === "openwork-connect" ? "Available through Connections" : undefined}
+            connectedLabel={detailSkill.origin === "sofia-connect" ? "Available through Connections" : undefined}
             hidden={hidden}
-            path={detailSkill.origin === "openwork-connect" ? undefined : detailSkill.path}
+            path={detailSkill.origin === "sofia-connect" ? undefined : detailSkill.path}
             sourceLabel={
-              detailSkill.origin === "openwork-connect"
+              detailSkill.origin === "sofia-connect"
                 ? [detailSkill.pluginName, detailSkill.marketplaceName].filter(Boolean).join(" · ") || t("extensions.surface_cloud")
                 : detailSkill.path
             }
@@ -1029,15 +920,15 @@ export function McpView(props: McpViewProps) {
             openFileLabel={t("extensions.detail_open_skill")}
             contentPreview={detailSkillContent ?? undefined}
             configSlot={openInDenAction({ id: detailSkill.path })}
-            onReveal={detailSkill.path && detailSkill.origin !== "openwork-connect" ? () => {
+            onReveal={detailSkill.path && detailSkill.origin !== "sofia-connect" ? () => {
               void revealDesktopItemInDir(detailSkill.path);
             } : undefined}
-            onUninstall={props.uninstallSkill && detailSkill.origin !== "openwork-connect" ? () => {
+            onUninstall={props.uninstallSkill && detailSkill.origin !== "sofia-connect" ? () => {
               props.uninstallSkill?.(detailSkill.name);
               closeDetail();
             } : undefined}
-            onHide={() => setOpenWorkExtensionHidden(getSkillHiddenId(detailSkill), true)}
-            onShow={() => setOpenWorkExtensionHidden(getSkillHiddenId(detailSkill), false)}
+            onHide={() => setSofiaExtensionHidden(getSkillHiddenId(detailSkill), true)}
+            onShow={() => setSofiaExtensionHidden(getSkillHiddenId(detailSkill), false)}
           />
         );
       })() : null}
@@ -1124,7 +1015,7 @@ export function McpView(props: McpViewProps) {
       ) : null}
 
       {detailPlugin ? (() => {
-        const hidden = isOpenWorkExtensionHidden(`plugin:${detailPlugin.pluginId}`);
+        const hidden = isSofiaExtensionHidden(`plugin:${detailPlugin.pluginId}`);
         const marketplaceName = detailPlugin.files.find((file) => file.marketplaceName)?.marketplaceName;
         return (
           <ExtensionDetailModal
@@ -1160,8 +1051,8 @@ export function McpView(props: McpViewProps) {
               void props.removeCloudPlugin?.(detailPlugin.pluginId);
               closeDetail();
             } : undefined}
-            onHide={() => setOpenWorkExtensionHidden(`plugin:${detailPlugin.pluginId}`, true)}
-            onShow={() => setOpenWorkExtensionHidden(`plugin:${detailPlugin.pluginId}`, false)}
+            onHide={() => setSofiaExtensionHidden(`plugin:${detailPlugin.pluginId}`, true)}
+            onShow={() => setSofiaExtensionHidden(`plugin:${detailPlugin.pluginId}`, false)}
           />
         );
       })() : null}
@@ -1360,6 +1251,14 @@ export function McpView(props: McpViewProps) {
               {t("common.refresh")}
             </RefreshButton>
           ) : null}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setAddMcpModalOpen(true)}
+          >
+            {t("mcp.add_server_button")}
+          </Button>
         </div>
       </div>
 
@@ -1367,7 +1266,7 @@ export function McpView(props: McpViewProps) {
         skillCount={skillCount}
         entries={
           quickConnectList.filter((entry) => {
-            if (!showHidden && (isOpenWorkExtensionHidden(entry) || (props.builtInExtensionsDisabled && isBuiltInOpenWorkExtension(entry)))) return false;
+            if (!showHidden && (isSofiaExtensionHidden(entry) || (props.builtInExtensionsDisabled && isBuiltInSofiaExtension(entry)))) return false;
             if (!matchesExtensionFilter(
               filter,
               taxonomyForDirectoryEntry(entry),
@@ -1380,7 +1279,7 @@ export function McpView(props: McpViewProps) {
         }
         installedSkills={
           installedSkills.filter((skill) => {
-            if (!showHidden && isOpenWorkExtensionHidden(getSkillHiddenId(skill))) return false;
+            if (!showHidden && isSofiaExtensionHidden(getSkillHiddenId(skill))) return false;
             if (!matchesExtensionFilter(filter, "skill")) return false;
             if (!search.trim()) return true;
             const q = search.toLowerCase();
@@ -1423,7 +1322,7 @@ export function McpView(props: McpViewProps) {
         onStateCountsChange={setInventoryStateCounts}
         installedPlugins={
           installedPlugins.filter((plugin) => {
-            if (!showHidden && isOpenWorkExtensionHidden(`plugin:${plugin.pluginId}`)) return false;
+            if (!showHidden && isSofiaExtensionHidden(`plugin:${plugin.pluginId}`)) return false;
             if (!matchesExtensionFilter(filter, "plugin")) return false;
             if (!search.trim()) return true;
             const q = search.toLowerCase();
@@ -1449,11 +1348,11 @@ export function McpView(props: McpViewProps) {
         organizationName={props.organizationName}
         busy={props.busy}
         connectingName={props.mcpConnectingName}
-        isEntryHidden={(entry) => isOpenWorkExtensionHidden(entry)}
-        isSkillHidden={(skill) => isOpenWorkExtensionHidden(getSkillHiddenId(skill))}
-        isPluginHidden={(plugin) => isOpenWorkExtensionHidden(`plugin:${plugin.pluginId}`)}
+        isEntryHidden={(entry) => isSofiaExtensionHidden(entry)}
+        isSkillHidden={(skill) => isSofiaExtensionHidden(getSkillHiddenId(skill))}
+        isPluginHidden={(plugin) => isSofiaExtensionHidden(`plugin:${plugin.pluginId}`)}
         disabledReasonForEntry={(entry) =>
-          props.builtInExtensionsDisabled && isBuiltInOpenWorkExtension(entry)
+          props.builtInExtensionsDisabled && isBuiltInSofiaExtension(entry)
             ? builtInExtensionDisabledReason()
             : null
         }
@@ -1541,25 +1440,6 @@ export function McpView(props: McpViewProps) {
           setRemoveOpen(false);
           setRemoveTarget(null);
         }}
-      />
-
-      <McpAdvancedConfigSection
-        open={showAdvanced}
-        configScope={configScope}
-        activeConfig={activeConfig}
-        canRevealConfig={canRevealConfig}
-        revealBusy={revealBusy}
-        revealLabel={revealLabel}
-        configError={configError}
-        onToggle={() => setShowAdvanced((current) => !current)}
-        onScopeChange={setConfigScope}
-        onReveal={revealConfig}
-        onAddMcp={() => setAddMcpModalOpen(true)}
-        onImportFromGithub={
-          props.previewClaudePlugin && props.installClaudePlugin
-            ? () => setClaudeImportOpen(true)
-            : undefined
-        }
       />
 
       <AddMcpModal
@@ -1832,7 +1712,7 @@ function McpQuickConnectSection(props: {
 
   for (const skill of props.installedSkills ?? []) {
     const hidden = props.isSkillHidden(skill);
-    const fromOrg = skill.origin === "openwork-connect";
+    const fromOrg = skill.origin === "sofia-connect";
     cards.push({
       key: `skill:${skill.path}`,
       group: "ready",
@@ -2289,110 +2169,6 @@ function McpConfiguredServerAuthActions(props: Parameters<typeof McpConfiguredSe
       </div>
       <div className="text-[11px] text-dls-secondary/70">{t("mcp.logout_hint")}</div>
     </>
-  );
-}
-
-function McpAdvancedConfigSection(props: {
-  open: boolean;
-  configScope: ConfigScope;
-  activeConfig: OpencodeConfigFile | null;
-  canRevealConfig: boolean;
-  revealBusy: boolean;
-  revealLabel: string;
-  configError: string | null;
-  onToggle: () => void;
-  onScopeChange: (scope: ConfigScope) => void;
-  onReveal: () => Promise<void>;
-  onAddMcp: () => void;
-  onImportFromGithub?: () => void;
-}) {
-  return (
-    <div className="overflow-hidden rounded-xl border border-dls-border bg-dls-surface">
-      <button type="button" className="flex w-full items-center justify-between px-5 py-4 transition-colors hover:bg-dls-hover" onClick={props.onToggle}>
-        <div className="flex items-center gap-3">
-          <Settings2 size={16} className="text-dls-secondary" />
-          <div className="text-left">
-            <div className="text-sm font-medium text-dls-text">{t("mcp.advanced_settings")}</div>
-            <div className="text-xs text-dls-secondary">{t("mcp.advanced_settings_hint")}</div>
-          </div>
-        </div>
-        <div className={`transition-transform ${props.open ? "rotate-180" : ""}`}>
-          <ChevronDown size={16} className="text-dls-secondary" />
-        </div>
-      </button>
-      {props.open ? (
-        <div className="animate-in fade-in slide-in-from-top-1 space-y-4 border-t border-dls-border px-5 py-4 duration-200">
-          <div className="flex flex-col gap-2">
-            <div className="text-xs text-dls-secondary">{t("mcp.custom_app_cta_hint")}</div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Button variant="outline" onClick={props.onAddMcp}>
-                <Plus size={14} />
-                {t("mcp.add_modal_title")}
-              </Button>
-              {props.onImportFromGithub ? (
-                <Button variant="outline" onClick={props.onImportFromGithub}>
-                  <Download size={14} />
-                  From GitHub
-                </Button>
-              ) : null}
-            </div>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <McpConfigScopeButton scope="project" activeScope={props.configScope} onScopeChange={props.onScopeChange} />
-            <McpConfigScopeButton scope="global" activeScope={props.configScope} onScopeChange={props.onScopeChange} />
-          </div>
-          <div className="flex flex-col gap-1 text-xs">
-            <div className="text-dls-secondary">{t("mcp.config_file")}</div>
-            <div className="truncate font-mono text-[11px] text-dls-secondary/80">
-              {props.activeConfig?.path ?? t("mcp.config_not_loaded")}
-            </div>
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <Button variant="outline" onClick={() => void props.onReveal()} disabled={!props.canRevealConfig}>
-                {props.revealBusy ? (
-                  <>
-                    <Loader2 size={14} className="animate-spin" />
-                    {t("mcp.opening_label")}
-                  </>
-                ) : (
-                  <>
-                    <FolderOpen size={14} />
-                    {props.revealLabel}
-                  </>
-                )}
-              </Button>
-              <a href="https://opencode.ai/docs/mcp-servers/" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-dls-secondary transition-colors hover:text-dls-text">
-                {t("mcp.docs_link")}
-                <ExternalLink size={11} />
-              </a>
-            </div>
-            {props.activeConfig && props.activeConfig.exists === false ? <div className="text-[11px] text-dls-secondary">{t("mcp.file_not_found")}</div> : null}
-          </div>
-          {props.configError ? <div className="text-xs text-red-11">{props.configError}</div> : null}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function McpConfigScopeButton(props: {
-  scope: ConfigScope;
-  activeScope: ConfigScope;
-  onScopeChange: (scope: ConfigScope) => void;
-}) {
-  return (
-    <button
-      type="button"
-      className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
-        props.activeScope === props.scope
-          ? "bg-dls-active text-dls-text"
-          : "text-dls-secondary hover:bg-dls-hover hover:text-dls-text"
-      }`}
-      onClick={() => props.onScopeChange(props.scope)}
-    >
-      {props.scope === "project" ? t("mcp.scope_project") : t("mcp.scope_global")}
-    </button>
   );
 }
 

@@ -1,4 +1,5 @@
 import { realpath } from "node:fs/promises";
+import { threadBelongsToWorkspace } from "../codex-sessions.js";
 import type { EngineResult, WorkspaceEngineClient } from "../engine/workspace-engine-client.js";
 import { ApiError } from "../errors.js";
 import { buildSession, buildSessionList, buildSessionMessages, buildSessionSnapshot } from "../session-read-model.js";
@@ -14,18 +15,13 @@ import {
 import type { ServerConfig, TokenScope, WorkspaceInfo } from "../types.js";
 import { addRoute, type RequestContext, type Route } from "./registry.js";
 
-/** Codex sessions are owned by the Sofia engine and never exist in opencode. */
-function isCodexSessionId(sessionId: string): boolean {
-  return sessionId.startsWith("codex-");
-}
-
 type JsonResponse = (data: unknown, status?: number) => Response;
 type ParseOptionalBoolean = (value: string | null, name: string) => boolean | undefined;
 type ParseOptionalPositiveInteger = (value: string | null, name: string) => number | undefined;
 type ParseOptionalNonNegativeInteger = (value: string | null, name: string) => number | undefined;
 type ReadJsonBody = (request: Request) => Promise<Record<string, unknown>>;
-type WorkspaceOpencodeClient = WorkspaceEngineClient;
-type UnwrapOpencodeResult = <T>(result: EngineResult<T>, path: string) => NonNullable<T>;
+type WorkspaceWorkspaceEngineClient = WorkspaceEngineClient;
+type UnwrapWorkspaceEngineResult = <T>(result: EngineResult<T>, path: string) => NonNullable<T>;
 
 interface RegisterSessionRoutesOptions {
   routes: Route[];
@@ -39,13 +35,13 @@ interface RegisterSessionRoutesOptions {
   requireClientScope: (ctx: RequestContext, required: TokenScope) => void;
   resolveWorkspace: (config: ServerConfig, id: string) => Promise<WorkspaceInfo>;
   resolveWorkspaceWithoutBootstrap: (config: ServerConfig, id: string) => Promise<WorkspaceInfo>;
-  resolveOpencodeDirectory: (workspace: WorkspaceInfo) => string | null;
-  createWorkspaceOpencodeClient: (
+  resolveWorkspaceEngineDirectory: (workspace: WorkspaceInfo) => string | null;
+  createWorkspaceWorkspaceEngineClient: (
     config: ServerConfig,
     workspace: WorkspaceInfo,
     options?: { boundedDiagnosticsReads?: boolean; sessionId?: string },
-  ) => WorkspaceOpencodeClient;
-  unwrapOpencodeResult: UnwrapOpencodeResult;
+  ) => WorkspaceWorkspaceEngineClient;
+  unwrapWorkspaceEngineResult: UnwrapWorkspaceEngineResult;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -65,34 +61,38 @@ export function registerSessionRoutes(options: RegisterSessionRoutesOptions): vo
     requireClientScope,
     resolveWorkspace,
     resolveWorkspaceWithoutBootstrap,
-    resolveOpencodeDirectory,
-    createWorkspaceOpencodeClient,
-    unwrapOpencodeResult,
+    resolveWorkspaceEngineDirectory,
+    createWorkspaceWorkspaceEngineClient,
+    unwrapWorkspaceEngineResult,
   } = options;
   const sessionGroupEvents = new SessionGroupEventStore();
 
   async function requireWorkspaceSession(workspace: WorkspaceInfo, value: Parameters<typeof buildSession>[0]) {
     const session = buildSession(value);
-    const directory = resolveOpencodeDirectory(workspace);
+    const directory = resolveWorkspaceEngineDirectory(workspace);
     const [expectedDirectory, sessionDirectory] = workspace.workspaceType === "local" && directory && session.directory
       ? await Promise.all([
           realpath(directory).catch(() => directory),
           realpath(session.directory).catch(() => session.directory),
         ])
       : [directory, session.directory];
-    if (expectedDirectory && sessionDirectory !== expectedDirectory) {
+    // Same membership rule the session list uses (see threadBelongsToWorkspace):
+    // subdirectory sessions and sessions with no recorded directory — legacy
+    // imports — belong to this workspace. A stricter check here listed sessions
+    // the app then could not fetch, so they never resolved on open.
+    if (expectedDirectory && !threadBelongsToWorkspace(expectedDirectory, sessionDirectory)) {
       throw new ApiError(404, "session_not_found", "Session not found");
     }
     return session;
   }
 
   function remapSessionReadError(error: unknown): never {
-    if (error instanceof ApiError && error.code === "opencode_request_failed") {
+    if (error instanceof ApiError && error.code === "engine_request_failed") {
       const details = error.details;
       const upstreamStatus =
         isRecord(details) && "status" in details ? Number(details.status) : NaN;
       if (upstreamStatus === 400) {
-        throw new ApiError(400, "invalid_query", "OpenCode rejected the session read request", details);
+        throw new ApiError(400, "invalid_query", "Sofia engine rejected the session read request", details);
       }
       if (upstreamStatus === 404) {
         throw new ApiError(404, "session_not_found", "Session not found", details);
@@ -106,10 +106,10 @@ export function registerSessionRoutes(options: RegisterSessionRoutesOptions): vo
     input: { roots?: boolean; start?: number; search?: string; limit?: number },
   ) {
     try {
-      const opencode = createWorkspaceOpencodeClient(config, workspace);
+      const engine = createWorkspaceWorkspaceEngineClient(config, workspace);
       return buildSessionList(
-        unwrapOpencodeResult(
-          await opencode.session.list({
+        unwrapWorkspaceEngineResult(
+          await engine.session.list({
             roots: input.roots,
             start: input.start,
             search: input.search,
@@ -127,16 +127,16 @@ export function registerSessionRoutes(options: RegisterSessionRoutesOptions): vo
     workspace: WorkspaceInfo,
     input: { title: string; prompt?: string; providerId?: string; modelId?: string; variant?: string },
   ) {
-    const opencode = createWorkspaceOpencodeClient(config, workspace);
+    const engine = createWorkspaceWorkspaceEngineClient(config, workspace);
     const session = buildSession(
-      unwrapOpencodeResult(
-        await opencode.session.create({ title: input.title }),
+      unwrapWorkspaceEngineResult(
+        await engine.session.create({ title: input.title }),
         "/session",
       ),
     );
 
     if (input.prompt) {
-      const result = await opencode.session.promptAsync({
+      const result = await engine.session.promptAsync({
         sessionID: session.id,
         ...(input.providerId && input.modelId
           ? { model: { providerID: input.providerId, modelID: input.modelId } }
@@ -146,7 +146,7 @@ export function registerSessionRoutes(options: RegisterSessionRoutesOptions): vo
       });
       if (result.error !== undefined) {
         const upstreamStatus = result.response?.status;
-        throw new ApiError(502, "opencode_request_failed", "OpenCode request failed", {
+        throw new ApiError(502, "engine_request_failed", "Sofia engine request failed", {
           ...(upstreamStatus === undefined ? {} : { status: upstreamStatus }),
           body: result.error,
           path: `/session/${encodeURIComponent(session.id)}/prompt_async`,
@@ -158,16 +158,12 @@ export function registerSessionRoutes(options: RegisterSessionRoutesOptions): vo
   }
 
   async function readWorkspaceSession(workspace: WorkspaceInfo, sessionId: string) {
-    // Codex sessions are owned by the Sofia engine; never proxy opencode.
-    if (isCodexSessionId(sessionId)) {
-      throw new ApiError(404, "session_not_found", "Session not found");
-    }
     try {
-      const opencode = createWorkspaceOpencodeClient(config, workspace);
+      const engine = createWorkspaceWorkspaceEngineClient(config, workspace);
       return await requireWorkspaceSession(
         workspace,
-        unwrapOpencodeResult(
-          await opencode.session.get({ sessionID: sessionId }),
+        unwrapWorkspaceEngineResult(
+          await engine.session.get({ sessionID: sessionId }),
           `/session/${encodeURIComponent(sessionId)}`,
         ),
       );
@@ -181,19 +177,15 @@ export function registerSessionRoutes(options: RegisterSessionRoutesOptions): vo
     sessionId: string,
     input: { limit?: number },
   ) {
-    // Codex sessions are owned by the Sofia engine; never proxy opencode.
-    if (isCodexSessionId(sessionId)) {
-      throw new ApiError(404, "session_not_found", "Session not found");
-    }
     try {
-      const opencode = createWorkspaceOpencodeClient(config, workspace);
+      const engine = createWorkspaceWorkspaceEngineClient(config, workspace);
       const [session, messages] = await Promise.all([
-        opencode.session
+        engine.session
           .get({ sessionID: sessionId })
-          .then((result) => unwrapOpencodeResult(result, `/session/${encodeURIComponent(sessionId)}`)),
-        opencode.session
+          .then((result) => unwrapWorkspaceEngineResult(result, `/session/${encodeURIComponent(sessionId)}`)),
+        engine.session
           .messages({ sessionID: sessionId, limit: input.limit })
-          .then((result) => unwrapOpencodeResult(result, `/session/${encodeURIComponent(sessionId)}/message`)),
+          .then((result) => unwrapWorkspaceEngineResult(result, `/session/${encodeURIComponent(sessionId)}/message`)),
       ]);
       await requireWorkspaceSession(workspace, session);
       return buildSessionMessages(messages);
@@ -207,23 +199,19 @@ export function registerSessionRoutes(options: RegisterSessionRoutesOptions): vo
     sessionId: string,
     input: { limit?: number },
   ) {
-    // Codex sessions are owned by the Sofia engine; never proxy opencode.
-    if (isCodexSessionId(sessionId)) {
-      throw new ApiError(404, "session_not_found", "Session not found");
-    }
     try {
-      const opencode = createWorkspaceOpencodeClient(config, workspace);
+      const engine = createWorkspaceWorkspaceEngineClient(config, workspace);
       const [session, messages, todos, statuses] = await Promise.all([
-        opencode.session
+        engine.session
           .get({ sessionID: sessionId })
-          .then((result) => unwrapOpencodeResult(result, `/session/${encodeURIComponent(sessionId)}`)),
-        opencode.session
+          .then((result) => unwrapWorkspaceEngineResult(result, `/session/${encodeURIComponent(sessionId)}`)),
+        engine.session
           .messages({ sessionID: sessionId, limit: input.limit })
-          .then((result) => unwrapOpencodeResult(result, `/session/${encodeURIComponent(sessionId)}/message`)),
-        opencode.session
+          .then((result) => unwrapWorkspaceEngineResult(result, `/session/${encodeURIComponent(sessionId)}/message`)),
+        engine.session
           .todo({ sessionID: sessionId })
-          .then((result) => unwrapOpencodeResult(result, `/session/${encodeURIComponent(sessionId)}/todo`)),
-        opencode.session.status().then((result) => unwrapOpencodeResult(result, "/session/status")),
+          .then((result) => unwrapWorkspaceEngineResult(result, `/session/${encodeURIComponent(sessionId)}/todo`)),
+        engine.session.status().then((result) => unwrapWorkspaceEngineResult(result, "/session/status")),
       ]);
       await requireWorkspaceSession(workspace, session);
       return buildSessionSnapshot({ session, messages, todos, statuses });
@@ -291,18 +279,18 @@ export function registerSessionRoutes(options: RegisterSessionRoutesOptions): vo
     const sessionId = ctx.params.sessionId?.trim();
     if (!sessionId) throw new ApiError(400, "invalid_payload", "sessionId is required");
     await readWorkspaceSession(workspace, sessionId);
-    console.info("[openwork-server] abort", {
+    console.info("[sofia-server] abort", {
       phase: "start",
       source: "workspace.sessions.abort_route",
       initiator: "user",
-      reason: "client requested session abort through OpenWork server route",
+      reason: "client requested session abort through Sofia App server route",
       workspaceId: workspace.id,
       sessionID: sessionId,
       actorType: ctx.actor?.type ?? "unknown",
     });
-    const result = await createWorkspaceOpencodeClient(config, workspace, { sessionId }).session.abort({ sessionID: sessionId });
+    const result = await createWorkspaceWorkspaceEngineClient(config, workspace, { sessionId }).session.abort({ sessionID: sessionId });
     if (result.error !== undefined) {
-      console.info("[openwork-server] abort", {
+      console.info("[sofia-server] abort", {
         phase: "error",
         source: "workspace.sessions.abort_route",
         initiator: "user",
@@ -310,9 +298,9 @@ export function registerSessionRoutes(options: RegisterSessionRoutesOptions): vo
         sessionID: sessionId,
         actorType: ctx.actor?.type ?? "unknown",
       });
-      throw new ApiError(502, "opencode_request_failed", "OpenCode abort failed");
+      throw new ApiError(502, "engine_request_failed", "Sofia engine abort failed");
     }
-    console.info("[openwork-server] abort", {
+    console.info("[sofia-server] abort", {
       phase: "done",
       source: "workspace.sessions.abort_route",
       initiator: "user",
@@ -513,9 +501,9 @@ export function registerSessionRoutes(options: RegisterSessionRoutesOptions): vo
     }
 
     await readWorkspaceSession(workspace, sessionId);
-    const opencode = createWorkspaceOpencodeClient(config, workspace);
-    unwrapOpencodeResult(
-      await opencode.session.delete({ sessionID: sessionId }),
+    const engine = createWorkspaceWorkspaceEngineClient(config, workspace);
+    unwrapWorkspaceEngineResult(
+      await engine.session.delete({ sessionID: sessionId }),
       `/session/${encodeURIComponent(sessionId)}`,
     );
 

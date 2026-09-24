@@ -9,7 +9,7 @@ import type { CloudImportedProvider } from "../../../../app/cloud/import-state";
 
 /**
  * Pure helpers that build and reconcile the cloud-managed ("lpr_*") provider
- * block inside a workspace `opencode.jsonc`. Extracted from the provider-auth
+ * block inside a workspace `engine.jsonc`. Extracted from the provider-auth
  * store so the diff/update behaviour can be unit tested directly (#2346).
  */
 
@@ -40,7 +40,7 @@ export const getCloudProviderEnv = (config: Record<string, unknown>) =>
   getStringList(config.env);
 
 /**
- * Split a connect payload's credential into the opencode auth.json entry and
+ * Split a connect payload's credential into the engine auth.json entry and
  * the env vars to upsert. Multi-env providers (`apiKeys`) set every value as
  * an env var and use the first env-ordered value as the auth entry, following
  * the models.dev convention that `env[0]` is the primary credential. Legacy
@@ -68,17 +68,17 @@ export const resolveCloudProviderCredentials = (
 
 export const getCloudManagedProviderId = (
   provider: Pick<DenOrgLlmProvider, "id" | "providerId" | "source">,
-) => (provider.source === "openwork" ? "openwork" : provider.id.trim());
+) => (provider.source === "sofia" ? "sofia" : provider.id.trim());
 
 /**
- * A provider key in `opencode.jsonc` that is owned by the cloud-import system:
- * `lpr_*` keys (org-managed providers) and the `openwork` hosted provider.
+ * A provider key in `engine.jsonc` that is owned by the cloud-import system:
+ * `lpr_*` keys (org-managed providers) and the `sofia` hosted provider.
  * These keys are never hand-authored, so re-importing over an existing block
  * with one of these ids is a safe reconcile (recovers a lost import baseline)
  * rather than a clobber of a user's manual provider (#2346).
  */
 export const isCloudManagedProviderKey = (providerId: string) =>
-  /^lpr_/i.test(providerId) || providerId.trim() === "openwork";
+  /^lpr_/i.test(providerId) || providerId.trim() === "sofia";
 
 
 export const getProviderModelIds = (
@@ -148,10 +148,10 @@ export const buildCloudProviderConfig = (
     env: getCloudProviderEnv(provider.providerConfig),
   };
 
-  // Hosted models are catalog-backed via OPENCODE_MODELS_URL. Den provisions
+  // Hosted models are catalog-backed via SOFIA_ENGINE_MODELS_URL. Den provisions
   // the provider + key with zero model rows — writing `models: {}` can prevent
-  // the engine from keeping catalog models, so omit an empty map for openwork.
-  if (Object.keys(models).length > 0 || provider.source !== "openwork") {
+  // the engine from keeping catalog models, so omit an empty map for sofia.
+  if (Object.keys(models).length > 0 || provider.source !== "sofia") {
     next.models = models;
   }
 
@@ -187,7 +187,7 @@ export const buildCloudProviderConfig = (
  * Build the per-key runtime provider patch for a cloud import/reconcile.
  * Sent to `PATCH /workspace/:id/config` where record values upsert and
  * explicit `null` deletes (`mergeRuntimeProviderUpdate`) — no client-side
- * read-modify-write of the user's `opencode.jsonc` at all.
+ * read-modify-write of the user's `engine.jsonc` at all.
  */
 export const buildRuntimeProviderPatch = (
   provider: DenOrgLlmProviderConnection,
@@ -209,7 +209,7 @@ export const formatConfigWithoutCloudProvider = (
 ) => {
   let updated = raw.trim()
     ? raw
-    : '{\n  "$schema": "https://opencode.ai/config.json"\n}\n';
+    : '{\n  "$schema": "https://github.com/RuutChatCSM/sofia/config.json"\n}\n';
   updated = removeCloudProviderComment(updated, providerId);
   const providerEdits = modify(updated, ["provider", providerId], undefined, {
     formattingOptions: { insertSpaces: true, tabSize: 2 },

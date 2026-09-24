@@ -13,7 +13,7 @@ const managedModelsPolicy: DesktopAppRestrictionChecker = (input) =>
 
 const options = [
   { providerID: "openai", modelID: "gpt-5.5" },
-  { providerID: "opencode", modelID: "big-pickle" },
+  { providerID: "engine", modelID: "big-pickle" },
   { providerID: "lpr_acme", modelID: "gpt-5.4" },
   { providerID: "lpr_acme", modelID: "gpt-5.5" },
 ];
@@ -21,7 +21,7 @@ const options = [
 describe("resolveEntitledOrgDefaultModel", () => {
   test("selects the first entitled organization model when the current default is blocked", () => {
     expect(resolveEntitledOrgDefaultModel(options, {
-      currentDefault: { providerID: "opencode", modelID: "big-pickle" },
+      currentDefault: { providerID: "engine", modelID: "big-pickle" },
       restrictToCloud: true,
       checkRestriction: managedModelsPolicy,
     })).toEqual({ providerID: "lpr_acme", modelID: "gpt-5.4" });

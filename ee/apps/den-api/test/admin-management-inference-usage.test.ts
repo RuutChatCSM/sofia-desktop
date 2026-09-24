@@ -1,4 +1,4 @@
-import { createDenTypeId } from "@openwork-ee/utils/typeid"
+import { createDenTypeId } from "@sofia-ee/utils/typeid"
 import { afterAll, beforeAll, expect, test } from "bun:test"
 import { Hono } from "hono"
 import { connect } from "node:net"
@@ -27,7 +27,7 @@ const targetEmail = `admin-management-target+${targetUserId}@test.local`
 const addedAdminEmail = `added-admin+${adminUserId}@test.local`
 
 function seedRequiredEnv() {
-  process.env.DATABASE_URL = "mysql://root:password@127.0.0.1:3306/openwork_test"
+  process.env.DATABASE_URL = "mysql://root:password@127.0.0.1:3306/sofia_test"
   process.env.DEN_DB_ENCRYPTION_KEY = "x".repeat(32)
   process.env.BETTER_AUTH_SECRET = "y".repeat(32)
   process.env.BETTER_AUTH_URL = "http://127.0.0.1:8790"
@@ -68,8 +68,8 @@ async function databaseIsAvailable() {
 
 let app: Hono<{ Variables: AuthContextVariables }> | null = null
 let db: typeof import("../src/db.js").db | null = null
-let schema: typeof import("@openwork-ee/den-db/schema") | null = null
-let drizzle: typeof import("@openwork-ee/den-db/drizzle") | null = null
+let schema: typeof import("@sofia-ee/den-db/schema") | null = null
+let drizzle: typeof import("@sofia-ee/den-db/drizzle") | null = null
 let routeTestUnavailable: string | null = null
 
 function testDatabase() {
@@ -120,13 +120,13 @@ beforeAll(async () => {
   }
   let adminRoutesModule: typeof import("../src/routes/admin/index.js")
   let dbModule: typeof import("../src/db.js")
-  let schemaModule: typeof import("@openwork-ee/den-db/schema")
-  let drizzleModule: typeof import("@openwork-ee/den-db/drizzle")
+  let schemaModule: typeof import("@sofia-ee/den-db/schema")
+  let drizzleModule: typeof import("@sofia-ee/den-db/drizzle")
   try {
     [dbModule, schemaModule, drizzleModule] = await Promise.all([
       import("../src/db.js"),
-      import("@openwork-ee/den-db/schema"),
-      import("@openwork-ee/den-db/drizzle"),
+      import("@sofia-ee/den-db/schema"),
+      import("@sofia-ee/den-db/drizzle"),
     ])
     if (!isRouteDatabase(dbModule.db)) {
       routeTestUnavailable = "aggregate suite run; db module is mocked by another route test"

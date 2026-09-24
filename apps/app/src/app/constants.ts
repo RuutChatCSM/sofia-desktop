@@ -2,24 +2,24 @@ import type { ModelRef, SuggestedPlugin } from "./types";
 import { t } from "../i18n";
 import { getDenMcpUrl } from "./lib/den";
 import {
-  BUILT_IN_OPENWORK_EXTENSION_MANIFESTS,
+  BUILT_IN_SOFIA_EXTENSION_MANIFESTS,
   extensionContribution,
   extensionResource,
   isTrustedBuiltInExtension,
-  type OpenWorkExtensionManifest,
-  type OpenWorkExtensionPlatform,
+  type SofiaExtensionManifest,
+  type SofiaExtensionPlatform,
 } from "./extensions";
 
-export const MODEL_PREF_KEY = "openwork.defaultModel";
-export const SESSION_MODEL_PREF_KEY = "openwork.sessionModels";
-export const THINKING_PREF_KEY = "openwork.showThinking";
-export const VARIANT_PREF_KEY = "openwork.modelVariant";
+export const MODEL_PREF_KEY = "sofia.defaultModel";
+export const SESSION_MODEL_PREF_KEY = "sofia.sessionModels";
+export const THINKING_PREF_KEY = "sofia.showThinking";
+export const VARIANT_PREF_KEY = "sofia.modelVariant";
 export { LANGUAGE_PREF_KEY } from "../i18n";
-export const HIDE_TITLEBAR_PREF_KEY = "openwork.hideTitlebar";
+export const HIDE_TITLEBAR_PREF_KEY = "sofia.hideTitlebar";
 
 export const DEFAULT_MODEL: ModelRef = {
-  providerID: "opencode",
-  modelID: "big-pickle",
+  providerID: "",
+  modelID: "",
 };
 
 export const SUGGESTED_PLUGINS: SuggestedPlugin[] = [];
@@ -30,17 +30,17 @@ export type McpDirectoryInfo = {
   id?: string;
   /** Display name shown in the UI. */
   name: string;
-  /** Safe server name for opencode.jsonc (alphanumeric, - and _ only). Auto-derived from name if omitted. */
+  /** Safe server name for engine.jsonc (alphanumeric, - and _ only). Auto-derived from name if omitted. */
   serverName?: string;
   description: string;
   url?: string;
   type?: "remote" | "local";
   command?: string[];
   oauth: boolean;
-  /** Route OAuth through the local Sofia App gateway instead of delegating it to OpenCode. */
+  /** Route OAuth through the local Sofia App gateway instead of delegating it to Sofia. */
   managedOAuth?: boolean;
   /** Identifies MCP entries owned by Connections instead of workspace configuration. */
-  managedBy?: "openwork-connect";
+  managedBy?: "sofia-connect";
   oauthConfig?: {
     clientId?: string;
     clientSecret?: string;
@@ -61,10 +61,10 @@ export type McpDirectoryInfo = {
   /** Whether this extension is still in preview. */
   preview?: boolean;
   /** Normalized extension manifest backing this catalog entry. */
-  extensionManifest?: OpenWorkExtensionManifest;
+  extensionManifest?: SofiaExtensionManifest;
 };
 
-function extensionManifestToDirectoryInfo(manifest: OpenWorkExtensionManifest): McpDirectoryInfo {
+function extensionManifestToDirectoryInfo(manifest: SofiaExtensionManifest): McpDirectoryInfo {
   const mcpResource = extensionResource(manifest, "mcp");
   return {
     id: manifest.id,
@@ -85,7 +85,7 @@ function extensionManifestToDirectoryInfo(manifest: OpenWorkExtensionManifest): 
   };
 }
 
-export function isBuiltInOpenWorkExtension(entry: Pick<McpDirectoryInfo, "kind" | "extensionManifest">): boolean {
+export function isBuiltInSofiaExtension(entry: Pick<McpDirectoryInfo, "kind" | "extensionManifest">): boolean {
   return entry.kind === "extension" && isTrustedBuiltInExtension(entry.extensionManifest);
 }
 
@@ -156,9 +156,9 @@ export const MCP_QUICK_CONNECT: McpDirectoryInfo[] = [
     iconSrc: "/ext-context7.svg",
   },
   {
-    get name() { return t("mcp.quick_connect_openwork_cloud_title"); },
-    serverName: "openwork-cloud",
-    get description() { return t("mcp.quick_connect_openwork_cloud_desc"); },
+    get name() { return t("mcp.quick_connect_sofia_cloud_title"); },
+    serverName: "sofia-cloud",
+    get description() { return t("mcp.quick_connect_sofia_cloud_desc"); },
     get url() {
       // The desktop app connects to the minimal, harness-facing surface
       // (/mcp/agent: search_capabilities + execute_capability only), not the
@@ -168,51 +168,51 @@ export const MCP_QUICK_CONNECT: McpDirectoryInfo[] = [
       try {
         return `${getDenMcpUrl()}/agent`;
       } catch {
-        return "https://app.openworklabs.com/api/den/mcp/agent";
+        return "https://sofia-app.ruut.chat/api/den/mcp/agent";
       }
     },
     type: "remote",
     oauth: true,
-    managedBy: "openwork-connect",
+    managedBy: "sofia-connect",
     kind: "mcp",
-    iconSrc: "/openwork-mark.svg",
+    iconSrc: "/sofia-mark.png",
     // Auto-managed by the signed-in cloud reconciler (syncCloudControlMcp):
     // configured + enabled while signed in to Organization cloud. Hidden from the
     // default catalog; "Show hidden" reveals it.
     defaultHidden: true,
   },
   {
-    get name() { return t("mcp.quick_connect_openwork_ui_title"); },
-    serverName: "openwork-ui",
-    get description() { return t("mcp.quick_connect_openwork_ui_desc"); },
+    get name() { return t("mcp.quick_connect_sofia_ui_title"); },
+    serverName: "sofia-ui",
+    get description() { return t("mcp.quick_connect_sofia_ui_desc"); },
     type: "local",
     // Dev builds replace this with the local checkout path before writing config.
-    command: ["npx", "-y", "openwork-ui-mcp"],
+    command: ["npx", "-y", "sofia-ui-mcp"],
     oauth: false,
     kind: "ui-control",
-    iconSrc: "/openwork-mark.svg",
+    iconSrc: "/sofia-mark.png",
     // Internal UI-control surface for agents driving the desktop app. Hidden
     // from the default catalog; "Show hidden" reveals it.
     defaultHidden: true,
   },
-  ...BUILT_IN_OPENWORK_EXTENSION_MANIFESTS.map(extensionManifestToDirectoryInfo),
+  ...BUILT_IN_SOFIA_EXTENSION_MANIFESTS.map(extensionManifestToDirectoryInfo),
 ];
 
-export const OPENWORK_EXTENSION_CATALOG = MCP_QUICK_CONNECT.filter((entry) => entry.kind === "extension");
+export const SOFIA_EXTENSION_CATALOG = MCP_QUICK_CONNECT.filter((entry) => entry.kind === "extension");
 
-export function resolveOpenWorkExtensionCatalogPlatform(
+export function resolveSofiaExtensionCatalogPlatform(
   platform: "web" | "desktop",
   os?: "macos" | "windows" | "linux",
-): OpenWorkExtensionPlatform {
+): SofiaExtensionPlatform {
   if (platform === "web") return "web";
   if (os === "macos") return "darwin";
   if (os === "windows") return "windows";
   return "linux";
 }
 
-export function filterOpenWorkExtensionCatalogForPlatform<TEntry extends Pick<McpDirectoryInfo, "extensionManifest">>(
+export function filterSofiaExtensionCatalogForPlatform<TEntry extends Pick<McpDirectoryInfo, "extensionManifest">>(
   entries: TEntry[],
-  platform: OpenWorkExtensionPlatform,
+  platform: SofiaExtensionPlatform,
 ): TEntry[] {
   return entries.filter((entry) => {
     const platforms = entry.extensionManifest?.platform;

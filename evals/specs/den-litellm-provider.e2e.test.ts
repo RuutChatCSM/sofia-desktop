@@ -10,10 +10,10 @@ import {
   sendComposerMessage,
   waitFor,
   waitForAssistantReply,
-} from "@openwork/behaviors";
-import type { DenSession, ModelFacts } from "@openwork/behaviors";
-import { screenshot, validate } from "@openwork/test-evidence";
-import { desktop as launchDesktop } from "@openwork/hosts";
+} from "@sofia/behaviors";
+import type { DenSession, ModelFacts } from "@sofia/behaviors";
+import { screenshot, validate } from "@sofia/test-evidence";
+import { desktop as launchDesktop } from "@sofia/hosts";
 import {
   eventually,
   liteLlm,
@@ -22,20 +22,20 @@ import {
   SkipError,
   test,
   unmetNeeds,
-} from "@openwork/testkit";
-import type { TestNeeds } from "@openwork/testkit";
+} from "@sofia/testkit";
+import type { TestNeeds } from "@sofia/testkit";
 
 const ORGANIZATION_NAME = "Den Lab";
 const PROVIDER_NAME = "LiteLLM Gateway";
-const PROVIDER_KEY = "openwork-litellm-witness";
-const MODEL_ID = "openwork-litellm-witness-model";
+const PROVIDER_KEY = "sofia-litellm-witness";
+const MODEL_ID = "sofia-litellm-witness-model";
 const MODEL_NAME = "Witness Model";
 const PROVIDER_ENV = "LITELLM_WITNESS_API_KEY";
 const REPLY = "The deterministic LiteLLM route is working.";
 const REQUEST_TIMEOUT_MS = 10_000;
 const TEST_CONNECTION_TIMEOUT_MS = 60_000;
-const placementCommand = process.env.OPENWORK_EVAL_DAYTONA?.trim() === "1" ? "daytona" : "docker";
-const requirements: TestNeeds = { optIn: ["OPENWORK_EVAL_E2E_TESTS"], commands: [placementCommand] };
+const placementCommand = process.env.SOFIA_EVAL_DAYTONA?.trim() === "1" ? "daytona" : "docker";
+const requirements: TestNeeds = { optIn: ["SOFIA_EVAL_E2E_TESTS"], commands: [placementCommand] };
 const missingRequirements = unmetNeeds(requirements, process.env);
 const title = missingRequirements.length > 0
   ? `Den LiteLLM provider route skipped — needs: ${missingRequirements.join(", ")}`
@@ -68,7 +68,7 @@ async function organizationId(session: DenSession): Promise<string> {
 async function testConnection(admin: DenSession, orgId: string, baseUrl: string, apiKey: string): Promise<Record<string, unknown>> {
   const response = await denFetch(admin, "/v1/llm-providers/test-connection", {
     method: "POST",
-    headers: { ...auth(admin), "x-openwork-org-id": orgId },
+    headers: { ...auth(admin), "x-sofia-org-id": orgId },
     body: JSON.stringify({ api: baseUrl, apiKey, modelIds: [MODEL_ID] }),
     signal: AbortSignal.timeout(TEST_CONNECTION_TIMEOUT_MS),
   });
@@ -81,7 +81,7 @@ async function testConnection(admin: DenSession, orgId: string, baseUrl: string,
 async function createProvider(admin: DenSession, orgId: string, baseUrl: string, apiKey: string): Promise<string> {
   const result = await denFetch(admin, "/v1/llm-providers", {
     method: "POST",
-    headers: { ...auth(admin), "x-openwork-org-id": orgId },
+    headers: { ...auth(admin), "x-sofia-org-id": orgId },
     body: JSON.stringify({
       name: PROVIDER_NAME,
       source: "custom",
@@ -111,7 +111,7 @@ async function createProvider(admin: DenSession, orgId: string, baseUrl: string,
 async function deleteProvider(admin: DenSession, orgId: string, providerId: string): Promise<void> {
   await denFetch(admin, `/v1/llm-providers/${encodeURIComponent(providerId)}`, {
     method: "DELETE",
-    headers: { ...auth(admin), "x-openwork-org-id": orgId },
+    headers: { ...auth(admin), "x-sofia-org-id": orgId },
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
 }
@@ -126,8 +126,8 @@ interface SyncFacts {
 
 async function readSyncStatus(desktop: Parameters<typeof evalIn>[0]): Promise<SyncFacts> {
   const value = await evalIn(desktop, `(async () => {
-    const port = localStorage.getItem("openwork.server.port");
-    const token = localStorage.getItem("openwork.server.token");
+    const port = localStorage.getItem("sofia.server.port");
+    const token = localStorage.getItem("sofia.server.token");
     if (!port || !token) return { error: "missing local server credentials" };
     const response = await fetch("http://127.0.0.1:" + port + "/cloud-provider-sync/status", {
       headers: { Authorization: "Bearer " + token },
@@ -155,7 +155,7 @@ async function runDirectProviderSync(
   input: { baseUrl: string; token: string; orgId: string },
 ): Promise<Record<string, unknown>> {
   const value = await evalIn(desktop, `(async () => {
-    const info = await window.__OPENWORK_ELECTRON__?.invokeDesktop?.("openworkServerInfo");
+    const info = await window.__SOFIA_ELECTRON__?.invokeDesktop?.("sofiaServerInfo");
     if (!info?.running || !info.baseUrl || !info.hostToken) return { error: "local_server_unavailable" };
     const request = async (path, method, body) => {
       const response = await fetch(String(info.baseUrl).replace(/\\/+$/, "") + path, {
@@ -163,7 +163,7 @@ async function runDirectProviderSync(
         headers: {
           Authorization: "Bearer " + String(info.hostToken),
           "Content-Type": "application/json",
-          "x-openwork-host-token": String(info.hostToken),
+          "x-sofia-host-token": String(info.hostToken),
         },
         body: JSON.stringify(body),
       });
@@ -214,7 +214,7 @@ async function seedRendererDenSession(
   if (!isRecord(value) || value.ok !== true) {
     throw new Error(`Seeding the renderer Den session failed: ${JSON.stringify(value)}`);
   }
-  await waitFor(desktop, "Boolean((localStorage.getItem('openwork.den.authToken') ?? '').trim())", {
+  await waitFor(desktop, "Boolean((localStorage.getItem('sofia.den.authToken') ?? '').trim())", {
     timeoutMs: 45_000,
     label: "persisted Den auth token after session seed",
   });
@@ -222,7 +222,7 @@ async function seedRendererDenSession(
 
 test.skipIf(missingRequirements.length > 0)(title, { timeout: 30 * 60_000 }, async ({ evidence, place }) => {
   needs(requirements);
-  if (process.env.OPENWORK_EVAL_DEN_API_URL?.trim()) {
+  if (process.env.SOFIA_EVAL_DEN_API_URL?.trim()) {
     throw new SkipError("The LiteLLM provider proof requires a cold managed Den");
   }
 
@@ -316,7 +316,7 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 30 * 60_000 }, asy
     mobile: false,
   });
   await go(desktop, `/workspace/${workspaceId}/session`);
-  await waitFor(desktop, "Boolean(window.__openworkControl)", {
+  await waitFor(desktop, "Boolean(window.__sofiaControl)", {
     timeoutMs: 120_000,
     label: "desktop session control",
   });

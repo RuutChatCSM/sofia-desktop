@@ -21,7 +21,7 @@ import {
 
 function statusDescription(status: DesktopIntegrationStatus) {
   if (status.state === "integrated") {
-    return "Sofia App is in your application launcher and handles openwork:// browser callbacks.";
+    return "Sofia App is in your application launcher and handles sofia:// browser callbacks.";
   }
   if (status.state === "managed_externally") {
     return "This AppImage is integrated by another app. Sofia App will leave its launcher untouched.";
@@ -79,14 +79,14 @@ export function DesktopIntegrationSection() {
   if (!status?.supported) return null;
 
   const externallyManaged = status.ownership === "external";
-  const openworkManaged = status.ownership === "openwork";
+  const sofiaManaged = status.ownership === "sofia";
 
   return (
     <LayoutSection>
       <LayoutSectionHeader>
         <LayoutSectionTitle>AppImage desktop integration</LayoutSectionTitle>
         <LayoutSectionDescription>
-          Control the launcher, icon, and openwork:// callback for this AppImage.
+          Control the launcher, icon, and sofia:// callback for this AppImage.
         </LayoutSectionDescription>
       </LayoutSectionHeader>
 
@@ -104,7 +104,7 @@ export function DesktopIntegrationSection() {
                 Integrate
               </Button>
             ) : null}
-            {openworkManaged ? (
+            {sofiaManaged ? (
               <>
                 <Button
                   size="sm"

@@ -1,4 +1,4 @@
-import { currentTestEvidence } from "@openwork/test-evidence";
+import { currentTestEvidence } from "@sofia/test-evidence";
 import { getBriefTestRegistrar } from "./brief-internal.ts";
 import type { TestContext } from "./brief-internal.ts";
 

@@ -12,13 +12,13 @@ function workspaceDirectoryCandidates(workspace) {
   return [
     workspace.directory,
     workspace.path,
-    workspace.opencode?.directory,
+    workspace.engine?.directory,
   ]
     .map(normalizeRemoteDirectory)
     .filter(Boolean);
 }
 
-export function selectOpenworkWorkspaceForConnection(list, directory) {
+export function selectSofiaWorkspaceForConnection(list, directory) {
   const items = Array.isArray(list?.items)
     ? list.items
     : Array.isArray(list?.workspaces)
@@ -35,10 +35,10 @@ export function selectOpenworkWorkspaceForConnection(list, directory) {
   return (activeId ? items.find((item) => trim(item?.id) === activeId) : null) ?? items[0] ?? null;
 }
 
-export function openworkWorkspaceDisplayName(workspace) {
+export function sofiaWorkspaceDisplayName(workspace) {
   return (
     trim(workspace?.displayName) ||
-    trim(workspace?.openworkWorkspaceName) ||
+    trim(workspace?.sofiaWorkspaceName) ||
     trim(workspace?.name) ||
     trim(workspace?.id) ||
     null

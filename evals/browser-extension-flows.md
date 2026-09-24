@@ -1,7 +1,7 @@
 # Browser extension flows
 
 End-to-end scenarios that verify the browser extension system: the
-`opencode-chrome-devtools` plugin integration, composer extension chips,
+`engine-chrome-devtools` plugin integration, composer extension chips,
 Extensions panel, and the stale MCP migration path.
 
 Run these before shipping changes that touch:
@@ -20,37 +20,37 @@ Run these before shipping changes that touch:
 
 1. Start the dev app (CDP auto-exposes on port 9223):
    ```bash
-   pnpm --filter @openwork/desktop dev
+   pnpm --filter @sofia/desktop dev
    ```
 2. Wait ~20s, then verify CDP:
    ```
    browser_list({ browser_url: "http://127.0.0.1:9223" })
    ```
-   You should see the OpenWork target.
+   You should see the Sofia target.
 3. Enable control mode:
    ```
    browser_eval({ browser_url: CDP_URL, target_id: APP_TARGET,
-     expression: "window.__openworkControl.setEnabled(true); 'ok'" })
+     expression: "window.__sofiaControl.setEnabled(true); 'ok'" })
    ```
 
 ## Flow 1 — Plugin is loaded and browser tools exist
 
-**Why**: Without the `opencode-chrome-devtools` plugin in the workspace
-`opencode.jsonc`, browser tools don't exist and the agent falls back to
+**Why**: Without the `engine-chrome-devtools` plugin in the workspace
+`engine.jsonc`, browser tools don't exist and the agent falls back to
 `curl`/`webfetch`.
 
 Steps:
-1. Read the workspace `opencode.jsonc`:
+1. Read the workspace `engine.jsonc`:
    ```
    browser_eval({ browser_url: CDP_URL, target_id: APP_TARGET,
-     expression: "fetch('/workspace/' + location.hash.split('/')[2] + '/opencode-config').then(r => r.text())" })
+     expression: "fetch('/workspace/' + location.hash.split('/')[2] + '/engine-config').then(r => r.text())" })
    ```
    Or check the file directly on disk.
-2. Confirm `"plugin"` array contains `"opencode-chrome-devtools"`.
+2. Confirm `"plugin"` array contains `"engine-chrome-devtools"`.
 
 Pass criteria:
-- `opencode.jsonc` has `"plugin": ["opencode-chrome-devtools"]`.
-- No stale MCP keys (`openwork-browser`, `chrome`, `chrome-devtools`,
+- `engine.jsonc` has `"plugin": ["engine-chrome-devtools"]`.
+- No stale MCP keys (`sofia-browser`, `chrome`, `chrome-devtools`,
   `control-chrome`) exist in the `mcp` section.
 
 Known regressions this catches:
@@ -67,14 +67,14 @@ Steps:
 1. Create a new session:
    ```
    browser_eval({ browser_url: CDP_URL, target_id: APP_TARGET,
-     expression: "window.__openworkControl.execute('session.create_task')" })
+     expression: "window.__sofiaControl.execute('session.create_task')" })
    ```
 2. Type and send the prompt:
    ```
    browser_eval({ browser_url: CDP_URL, target_id: APP_TARGET,
      expression: `(async () => {
-       const ctrl = window.__openworkControl;
-       await ctrl.execute('composer.set_text', { text: 'Use the OpenWork Browser extension to navigate to https://example.com and tell me the page title' });
+       const ctrl = window.__sofiaControl;
+       await ctrl.execute('composer.set_text', { text: 'Use the Sofia Browser extension to navigate to https://example.com and tell me the page title' });
        await new Promise(r => setTimeout(r, 500));
        return JSON.stringify(await ctrl.execute('composer.send'));
      })()` })
@@ -102,8 +102,8 @@ read results.
 
 Steps:
 1. Create a new session.
-2. Send: "Use the OpenWork Browser extension to go to https://www.google.com,
-   search for 'opencode ai', and tell me the first result title"
+2. Send: "Use the Sofia Browser extension to go to https://www.google.com,
+   search for 'engine ai', and tell me the first result title"
 3. Wait 60s for the multi-step task.
 4. Check the transcript for tool calls.
 
@@ -146,12 +146,12 @@ Steps:
 3. Count visible extensions.
 
 Pass criteria:
-- "OpenWork Browser" is visible with a name and description.
-- "Chrome" is not visible as an OpenWork extension.
+- "Sofia Browser" is visible with a name and description.
+- "Chrome" is not visible as an Sofia extension.
 
 Known regressions this catches:
 - Extension catalog not loaded.
-- `isOpenWorkExtensionEnabled` filtering incorrectly.
+- `isSofiaExtensionEnabled` filtering incorrectly.
 
 ## Flow 5 — Extension chip inserts composerPrompt
 
@@ -159,11 +159,11 @@ Known regressions this catches:
 into the composer text.
 
 Steps:
-1. With the Extensions menu open, click the "OpenWork Browser" entry.
+1. With the Extensions menu open, click the "Sofia Browser" entry.
 2. Check the composer text.
 
 Pass criteria:
-- Composer contains "Use the OpenWork Browser extension to".
+- Composer contains "Use the Sofia Browser extension to".
 - The tool menu closed.
 
 Known regressions this catches:
@@ -176,13 +176,13 @@ Known regressions this catches:
 the composer menu.
 
 Steps:
-1. Disable OpenWork Browser:
+1. Disable Sofia Browser:
    ```
    browser_eval({ browser_url: CDP_URL, target_id: APP_TARGET,
      expression: `(() => {
-       localStorage.setItem('openwork.extension.disabled.openwork-browser', '1');
-       window.dispatchEvent(new CustomEvent('openwork:extension-state-changed', {
-         detail: { id: 'openwork-browser', enabled: false }
+       localStorage.setItem('sofia.extension.disabled.sofia-browser', '1');
+       window.dispatchEvent(new CustomEvent('sofia:extension-state-changed', {
+         detail: { id: 'sofia-browser', enabled: false }
        }));
        return 'disabled';
      })()` })
@@ -192,9 +192,9 @@ Steps:
    ```
    browser_eval({ browser_url: CDP_URL, target_id: APP_TARGET,
      expression: `(() => {
-       localStorage.removeItem('openwork.extension.disabled.openwork-browser');
-       window.dispatchEvent(new CustomEvent('openwork:extension-state-changed', {
-         detail: { id: 'openwork-browser', enabled: true }
+       localStorage.removeItem('sofia.extension.disabled.sofia-browser');
+       window.dispatchEvent(new CustomEvent('sofia:extension-state-changed', {
+         detail: { id: 'sofia-browser', enabled: true }
        }));
        return 'enabled';
      })()` })
@@ -202,9 +202,9 @@ Steps:
 4. Re-open Extensions menu and count.
 
 Pass criteria:
-- After disabling: OpenWork Browser is NOT in the Extensions menu.
-- After re-enabling: OpenWork Browser IS in the Extensions menu.
-- `localStorage` key `openwork.extension.disabled.openwork-browser` is `"1"`
+- After disabling: Sofia Browser is NOT in the Extensions menu.
+- After re-enabling: Sofia Browser IS in the Extensions menu.
+- `localStorage` key `sofia.extension.disabled.sofia-browser` is `"1"`
   when disabled, absent when enabled.
 
 Known regressions this catches:
@@ -214,30 +214,30 @@ Known regressions this catches:
 ## Flow 7 — Stale MCP migration
 
 **Why**: Workspaces from the pre-extension architecture have dead MCP entries
-(`openwork-browser`, `chrome`) that must be cleaned up on activation.
+(`sofia-browser`, `chrome`) that must be cleaned up on activation.
 
 Steps:
-1. Write a stale config to the workspace `opencode.jsonc`:
+1. Write a stale config to the workspace `engine.jsonc`:
    ```json
    {
-     "$schema": "https://opencode.ai/config.json",
-     "default_agent": "openwork",
+     "$schema": "https://github.com/RuutChatCSM/sofia/config.json",
+     "default_agent": "sofia",
      "mcp": {
-       "openwork-browser": { "type": "remote", "url": "http://127.0.0.1:59674/mcp" },
+       "sofia-browser": { "type": "remote", "url": "http://127.0.0.1:59674/mcp" },
        "chrome": { "type": "remote", "url": "http://127.0.0.1:59675/mcp" },
-       "openwork-ui": { "type": "remote", "url": "http://127.0.0.1:59673/mcp" }
+       "sofia-ui": { "type": "remote", "url": "http://127.0.0.1:59673/mcp" }
      }
    }
    ```
 2. Restart the dev instance.
-3. Read the migrated `opencode.jsonc`.
+3. Read the migrated `engine.jsonc`.
 
 Pass criteria:
-- `openwork-browser` MCP entry removed.
+- `sofia-browser` MCP entry removed.
 - `chrome` MCP entry removed.
-- `openwork-ui` MCP entry preserved (not a legacy browser MCP).
-- `default_agent: "openwork"` preserved.
-- `plugin: ["opencode-chrome-devtools"]` added.
+- `sofia-ui` MCP entry preserved (not a legacy browser MCP).
+- `default_agent: "sofia"` preserved.
+- `plugin: ["engine-chrome-devtools"]` added.
 
 Known regressions this catches:
 - Stale MCPs causing connection errors on startup.
@@ -252,17 +252,17 @@ when `Show hidden` is enabled.
 
 Steps:
 1. Open Settings -> Extensions.
-2. Open the "OpenWork Browser" detail modal and click `Hide`.
-3. Confirm "OpenWork Browser" disappears from the normal Extensions catalog.
+2. Open the "Sofia Browser" detail modal and click `Hide`.
+3. Confirm "Sofia Browser" disappears from the normal Extensions catalog.
 4. Open the composer tool menu -> Extensions.
-5. Confirm "OpenWork Browser" is not listed.
+5. Confirm "Sofia Browser" is not listed.
 6. Return to Settings -> Extensions and click `Show hidden`.
-7. Confirm "OpenWork Browser" reappears with a hidden badge.
+7. Confirm "Sofia Browser" reappears with a hidden badge.
 8. Open its detail modal and click `Show`.
 
 Pass criteria:
 - Hidden state is persisted in localStorage under
-  `openwork.extension.hidden.openwork-browser`.
+  `sofia.extension.hidden.sofia-browser`.
 - Normal Extensions catalog excludes the hidden card.
 - Composer Extensions excludes the hidden card.
 - `Show hidden` reveals the card and allows restoring visibility.
@@ -274,12 +274,12 @@ Known regressions this catches:
 
 ## Flow 9 — Organization marketplace is Connect-only
 
-**Why**: Organization marketplace extensions now run through OpenWork Connect,
+**Why**: Organization marketplace extensions now run through Sofia Connect,
 not local marketplace installs. This flow verifies cloud delivery stays visible
 without exposing the retired Add/import path.
 
 Steps:
-1. Sign in to OpenWork Cloud with an org that has a marketplace plugin.
+1. Sign in to Sofia Cloud with an org that has a marketplace plugin.
 2. Open Settings -> Connect and verify the org extension appears under From your organization.
 3. Open Settings -> Marketplace and verify the same package says `Runs in cloud`.
 4. Confirm no `Add`, `Install`, or `Update` action is shown for the org package.

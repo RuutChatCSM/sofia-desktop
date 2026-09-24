@@ -9,8 +9,8 @@ export type FeedbackEmailProps = {
   entrypoint: string
   deployment: string
   appVersion: string
-  openworkServerVersion: string
-  opencodeVersion: string
+  sofiaServerVersion: string
+  engineVersion: string
   osName: string
   osVersion: string
   platform: string
@@ -27,8 +27,8 @@ export function FeedbackEmail({
   entrypoint,
   deployment,
   appVersion,
-  openworkServerVersion,
-  opencodeVersion,
+  sofiaServerVersion,
+  engineVersion,
   osName,
   osVersion,
   platform,
@@ -43,8 +43,8 @@ export function FeedbackEmail({
     ["Entrypoint", entrypoint],
     ["Deployment", deployment],
     ["App version", appVersion],
-    ["OpenWork server", openworkServerVersion],
-    ["OpenCode", opencodeVersion],
+    ["Sofia server", sofiaServerVersion],
+    ["Sofia", engineVersion],
     ["OS", osLabel],
     ["Platform", platform],
     ["Submitted", submittedAt],
@@ -53,10 +53,10 @@ export function FeedbackEmail({
   return (
     <Html>
       <Head />
-      <Preview>{name} sent an OpenWork {label} from {entrypoint || source || "unknown"}</Preview>
+      <Preview>{name} sent an Sofia {label} from {entrypoint || source || "unknown"}</Preview>
       <Body style={styles.body}>
         <Container style={styles.container}>
-          <Text style={styles.eyebrow}>{isContact ? "OpenWork contact" : "OpenWork feedback"}</Text>
+          <Text style={styles.eyebrow}>{isContact ? "Sofia contact" : "Sofia feedback"}</Text>
           <Heading style={styles.heading}>{isContact ? "Contact message" : "Feedback"} from {name}</Heading>
           <Text style={styles.contact}>{email}</Text>
 

@@ -27,7 +27,7 @@ export function orgMcpConnectionToComposerEntry(connection: DenExternalMcpConnec
     id: `org-mcp:${connection.id}`,
     name: connection.name,
     config: { type: "remote", url: connection.url },
-    origin: "openwork-connect",
+    origin: "sofia-connect",
     marketplaceName: provider ?? "Organization cloud",
     orgMcpConnectionId: connection.id,
   };

@@ -1,9 +1,9 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { expect, onTestFinished } from "vitest";
-import { clickButton, control, createAndSelectWorkspace, evalIn, waitFor } from "@openwork/behaviors";
-import { screenshot, validate } from "@openwork/test-evidence";
-import { desktop } from "@openwork/hosts";
-import { needs, test } from "@openwork/testkit";
+import { clickButton, control, createAndSelectWorkspace, evalIn, waitFor } from "@sofia/behaviors";
+import { screenshot, validate } from "@sofia/test-evidence";
+import { desktop } from "@sofia/hosts";
+import { needs, test } from "@sofia/testkit";
 
 const providerId = "clamp-html-errors-mock";
 const modelId = "clamp-html-errors-model";
@@ -11,10 +11,10 @@ const mcpToolName = "explode_html";
 const closingReply = "The session recovered after the failed upstream call.";
 const htmlSummary = "Upstream returned an HTML error page (502 Bad Gateway)";
 const htmlError = `<!DOCTYPE html><html><head><title>502 Bad Gateway</title></head><body><h1>502 Bad Gateway</h1>${"Z".repeat(1_024 * 1_024)}</body></html>`;
-const e2eTestsEnabled = process.env.OPENWORK_EVAL_E2E_TESTS === "1";
+const e2eTestsEnabled = process.env.SOFIA_EVAL_E2E_TESTS === "1";
 const title = e2eTestsEnabled
   ? "large HTML tool errors are summarized once without breaking the session"
-  : "large HTML tool errors skipped — needs: set OPENWORK_EVAL_E2E_TESTS=1";
+  : "large HTML tool errors skipped — needs: set SOFIA_EVAL_E2E_TESTS=1";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -148,7 +148,7 @@ function sendStream(response: ServerResponse, chunks: Record<string, unknown>[])
 }
 
 test.skipIf(!e2eTestsEnabled)(title, async ({ evidence }) => {
-  needs({ optIn: ["OPENWORK_EVAL_E2E_TESTS"] });
+  needs({ optIn: ["SOFIA_EVAL_E2E_TESTS"] });
 
   let toolsListed = 0;
   let toolCalls = 0;
@@ -257,7 +257,7 @@ test.skipIf(!e2eTestsEnabled)(title, async ({ evidence }) => {
 
   await using app = await desktop({
     name: "clamp-html-errors",
-    mode: process.env.OPENWORK_EVAL_CDP_URL?.trim() ? "attach" : "spawn",
+    mode: process.env.SOFIA_EVAL_CDP_URL?.trim() ? "attach" : "spawn",
     // Provider keys in the runner env (e.g. via infisical) would make the
     // engine register real providers and out-default the deterministic mock.
     env: {
@@ -265,16 +265,16 @@ test.skipIf(!e2eTestsEnabled)(title, async ({ evidence }) => {
       OPENAI_API_KEY: "",
       OPENROUTER_API_KEY: "",
       GOOGLE_GENERATIVE_AI_API_KEY: "",
-      OPENWORK_API_KEY: "",
-      OPENWORK_INFERENCE_BASE_URL: "",
+      SOFIA_API_KEY: "",
+      SOFIA_INFERENCE_BASE_URL: "",
     },
   });
   const workspace = await createAndSelectWorkspace(app, {
-    path: `/tmp/openwork-clamp-html-errors-${Date.now()}`,
+    path: `/tmp/sofia-clamp-html-errors-${Date.now()}`,
   });
   const configured = await evalIn(app, `(async () => {
-    const port = localStorage.getItem("openwork.server.port");
-    const token = localStorage.getItem("openwork.server.token");
+    const port = localStorage.getItem("sofia.server.port");
+    const token = localStorage.getItem("sofia.server.token");
     if (!port || !token) return "missing local server credentials";
     const request = async (path, init) => {
       const response = await fetch("http://127.0.0.1:" + port + path, {
@@ -288,7 +288,7 @@ test.skipIf(!e2eTestsEnabled)(title, async ({ evidence }) => {
     const patched = await request("/workspace/" + encodeURIComponent(workspaceId) + "/config", {
       method: "PATCH",
       body: JSON.stringify({
-        opencode: {
+        engine: {
           provider: {
             [${JSON.stringify(providerId)}]: {
               npm: "@ai-sdk/openai-compatible",
@@ -307,21 +307,21 @@ test.skipIf(!e2eTestsEnabled)(title, async ({ evidence }) => {
     });
     if (patched !== "ok") return patched;
     const reloaded = await request("/workspace/" + encodeURIComponent(workspaceId) + "/engine/reload", { method: "POST" });
-    // A slow dispose reports 504 opencode_reload_timeout while the reload
+    // A slow dispose reports 504 engine_reload_timeout while the reload
     // keeps going; readiness is owned by the polling below.
-    if (reloaded !== "ok" && !reloaded.includes("opencode_reload_timeout")) return reloaded;
-    const raw = localStorage.getItem("openwork.preferences");
+    if (reloaded !== "ok" && !reloaded.includes("engine_reload_timeout")) return reloaded;
+    const raw = localStorage.getItem("sofia.preferences");
     let preferences = {};
     try { preferences = raw ? JSON.parse(raw) : {}; } catch { preferences = {}; }
     if (!preferences || typeof preferences !== "object" || Array.isArray(preferences)) preferences = {};
-    localStorage.setItem("openwork.preferences", JSON.stringify({
+    localStorage.setItem("sofia.preferences", JSON.stringify({
       ...preferences,
       defaultModel: { providerID: ${JSON.stringify(providerId)}, modelID: ${JSON.stringify(modelId)} },
       modelVariant: null,
       providerStepCompleted: true,
     }));
-    localStorage.setItem("openwork.defaultModel", ${JSON.stringify(`${providerId}/${modelId}`)});
-    localStorage.removeItem("openwork.sessionModels." + workspaceId);
+    localStorage.setItem("sofia.defaultModel", ${JSON.stringify(`${providerId}/${modelId}`)});
+    localStorage.removeItem("sofia.sessionModels." + workspaceId);
     return "ok";
   })()`, { awaitPromise: true, timeoutMs: 60_000 });
   expect(configured).toBe("ok");
@@ -330,21 +330,21 @@ test.skipIf(!e2eTestsEnabled)(title, async ({ evidence }) => {
   // Preferences hydrate at boot, so reload unconditionally: without this the
   // engine's built-in free model stays the default and out-competes the mock.
   await evalIn(app, "location.reload(); true");
-  await waitFor(app, "Boolean(window.__openworkControl)", {
+  await waitFor(app, "Boolean(window.__sofiaControl)", {
     timeoutMs: 30_000,
     label: "app reloaded with the HTML error mock preferences",
   });
   // The engine restarts after /engine/reload; sending into that window races
-  // the swap and strands the run behind an "OpenCode unavailable" banner.
+  // the swap and strands the run behind an "Sofia engine unavailable" banner.
   const engineReady = await evalIn(app, `(async () => {
-    const port = localStorage.getItem("openwork.server.port");
-    const token = localStorage.getItem("openwork.server.token");
+    const port = localStorage.getItem("sofia.server.port");
+    const token = localStorage.getItem("sofia.server.token");
     if (!port || !token) return "missing local server credentials";
     const deadline = Date.now() + 60_000;
     let last = "";
     while (Date.now() < deadline) {
       try {
-        const response = await fetch("http://127.0.0.1:" + port + "/workspace/" + encodeURIComponent(${JSON.stringify(workspace.workspaceId)}) + "/opencode/session", {
+        const response = await fetch("http://127.0.0.1:" + port + "/workspace/" + encodeURIComponent(${JSON.stringify(workspace.workspaceId)}) + "/engine/session", {
           headers: { Authorization: "Bearer " + token },
         });
         if (response.ok) return "ready";
@@ -357,7 +357,7 @@ test.skipIf(!e2eTestsEnabled)(title, async ({ evidence }) => {
     return "engine not ready: " + last;
   })()`, { awaitPromise: true, timeoutMs: 70_000 });
   expect(engineReady).toBe("ready");
-  await waitFor(app, `window.__openworkControl.listActions().some((action) => action.id === "session.create_task" && !action.disabled)`, {
+  await waitFor(app, `window.__sofiaControl.listActions().some((action) => action.id === "session.create_task" && !action.disabled)`, {
     timeoutMs: 30_000,
     label: "new task action enabled",
   });

@@ -1,4 +1,4 @@
-# web.openworklabs.com engine channel:
+# sofia-web.ruut.chat engine channel:
 # Per-push snapshot builds from dev HEAD stay; the production pin moves only on
 # the nightly backstop, manual dispatch, or releases after the 2026-08-15
 # merge-burst update treadmill recycled every running cloud workspace 3 times.
@@ -32,7 +32,7 @@ concurrency:
 jobs:
   publish-daytona-snapshot:
     name: Build and Push Dev Daytona Snapshot
-    if: github.repository == 'different-ai/openwork'
+    if: github.repository == 'RuutChatCSM/sofia-desktop'
     runs-on: ubuntu-24.04
     steps:
       - name: Check channel
@@ -69,7 +69,7 @@ jobs:
           set -euo pipefail
 
           short_sha="$(git rev-parse --short=7 HEAD)"
-          snapshot_name="${DAYTONA_SNAPSHOT_NAME_BASE:-openwork}-dev-${short_sha}"
+          snapshot_name="${DAYTONA_SNAPSHOT_NAME_BASE:-sofia}-dev-${short_sha}"
           snapshot_region="${DEFAULT_SNAPSHOT_REGION:-}"
           {
             echo "snapshot_name=$snapshot_name"
@@ -157,7 +157,7 @@ jobs:
           daytona login --api-key "$DAYTONA_API_KEY"
 
           echo "Publishing Daytona snapshot: ${DAYTONA_SNAPSHOT_NAME}"
-          ./scripts/create-daytona-openwork-snapshot.sh "${DAYTONA_SNAPSHOT_NAME}"
+          ./scripts/create-daytona-sofia-snapshot.sh "${DAYTONA_SNAPSHOT_NAME}"
 
       - name: Checkout snapshot pin automation
         if: steps.channel.outputs.enabled == 'true' && vars.DAYTONA_CLOUD_ENV_GROUP_ID != ''
@@ -280,7 +280,7 @@ jobs:
 
           result="$(node scripts/prune-daytona-dev-snapshots.mjs \
             ${DAYTONA_API_URL:+--api-url "$DAYTONA_API_URL"} \
-            --name-base "${DAYTONA_SNAPSHOT_NAME_BASE:-openwork}" \
+            --name-base "${DAYTONA_SNAPSHOT_NAME_BASE:-sofia}" \
             --keep "$DAYTONA_SNAPSHOT_NAME" \
             --keep "$current_pin" \
             --keep-count 5)"

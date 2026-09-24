@@ -1017,7 +1017,7 @@ function MarketplacePluginRow({
   const fallbackCaption =
     plugin.memberCount > 0
       ? `${plugin.memberCount} imported object${plugin.memberCount === 1 ? "" : "s"}`
-      : plugin.sourceFormat === "openwork-builtin"
+      : plugin.sourceFormat === "sofia-builtin"
         ? "Built into the desktop app"
         : "Not imported yet";
 

@@ -30,7 +30,7 @@ const MICROSOFT_MESSAGES = [
       content: "The launch checklist is complete. The only remaining item is the final support handoff.",
     },
     from: { emailAddress: { name: "Ada Lovelace", address: "ada@example.test" } },
-    toRecipients: [{ emailAddress: { name: "OpenWork Tester", address: "tester@example.test" } }],
+    toRecipients: [{ emailAddress: { name: "Sofia Tester", address: "tester@example.test" } }],
     webLink: "https://outlook.office.test/mail/message-launch-readiness",
   },
   {
@@ -40,7 +40,7 @@ const MICROSOFT_MESSAGES = [
     bodyPreview: "Finance approved the Q3 budget with no changes.",
     body: { contentType: "text", content: "Finance approved the Q3 budget with no changes." },
     from: { emailAddress: { name: "Grace Hopper", address: "grace@example.test" } },
-    toRecipients: [{ emailAddress: { name: "OpenWork Tester", address: "tester@example.test" } }],
+    toRecipients: [{ emailAddress: { name: "Sofia Tester", address: "tester@example.test" } }],
     webLink: "https://outlook.office.test/mail/message-q3-budget",
   },
   {
@@ -53,7 +53,7 @@ const MICROSOFT_MESSAGES = [
       content: "Pilot customers highlighted faster setup and asked for clearer connection health.",
     },
     from: { emailAddress: { name: "Katherine Johnson", address: "katherine@example.test" } },
-    toRecipients: [{ emailAddress: { name: "OpenWork Tester", address: "tester@example.test" } }],
+    toRecipients: [{ emailAddress: { name: "Sofia Tester", address: "tester@example.test" } }],
     webLink: "https://outlook.office.test/mail/message-customer-feedback",
   },
 ];
@@ -67,7 +67,7 @@ const MICROSOFT_EVENTS = [
     end: { dateTime: "2026-07-10T09:30:00", timeZone: "America/Los_Angeles" },
     organizer: { emailAddress: { name: "Ada Lovelace", address: "ada@example.test" } },
     attendees: [],
-    location: { displayName: "OpenWork Room" },
+    location: { displayName: "Sofia Room" },
     isCancelled: false,
     webLink: "https://outlook.office.test/calendar/event-launch-review",
   },
@@ -92,7 +92,7 @@ const MICROSOFT_Q3_FILE = {
   lastModifiedDateTime: "2026-07-09T13:00:00Z",
   webUrl: "https://onedrive.office.test/files/file-q3-plan",
   file: { mimeType: "text/plain", hashes: { quickXorHash: "mock-hash" } },
-  parentReference: { driveId: "drive-openwork-test", path: "/drive/root:" },
+  parentReference: { driveId: "drive-sofia-test", path: "/drive/root:" },
 };
 
 const Q3_FILE_CONTENT = [
@@ -107,7 +107,7 @@ function sendJson(response, status, body, headers = {}) {
   response.writeHead(status, {
     "access-control-allow-origin": "*",
     "access-control-allow-methods": "GET,POST,DELETE,OPTIONS",
-    "access-control-allow-headers": "authorization,content-type,x-openwork-host-token",
+    "access-control-allow-headers": "authorization,content-type,x-sofia-host-token",
     "content-type": "application/json; charset=utf-8",
     ...headers,
   });
@@ -267,9 +267,9 @@ function handleMicrosoftGraph(request, response, url) {
 
   if (url.pathname === "/graph/v1.0/me" && request.method === "GET") {
     sendJson(response, 200, {
-      id: "microsoft-user-openwork-test",
-      displayName: "OpenWork Tester",
-      givenName: "OpenWork",
+      id: "microsoft-user-sofia-test",
+      displayName: "Sofia Tester",
+      givenName: "Sofia",
       surname: "Tester",
       mail: "tester@example.test",
       userPrincipalName: "tester@example.test",
@@ -285,10 +285,10 @@ function handleMicrosoftGraph(request, response, url) {
 
   if (url.pathname === "/graph/v1.0/me/messages" && request.method === "POST") {
     sendJson(response, 201, {
-      id: "draft-openwork-test",
-      subject: "OpenWork permission parity draft",
+      id: "draft-sofia-test",
+      subject: "Sofia permission parity draft",
       bodyPreview: "Drafted by the deterministic Microsoft Graph mock.",
-      webLink: "https://outlook.office.test/mail/draft-openwork-test",
+      webLink: "https://outlook.office.test/mail/draft-sofia-test",
       isDraft: true,
     });
     return true;
@@ -315,11 +315,11 @@ function handleMicrosoftGraph(request, response, url) {
 
   if (url.pathname === "/graph/v1.0/me/events" && request.method === "POST") {
     sendJson(response, 201, {
-      id: "event-openwork-test",
-      subject: "OpenWork permission parity review",
+      id: "event-sofia-test",
+      subject: "Sofia permission parity review",
       start: { dateTime: "2026-07-13T10:00:00Z", timeZone: "UTC" },
       end: { dateTime: "2026-07-13T10:30:00Z", timeZone: "UTC" },
-      webLink: "https://outlook.office.test/calendar/event-openwork-test",
+      webLink: "https://outlook.office.test/calendar/event-sofia-test",
     });
     return true;
   }
@@ -342,7 +342,7 @@ function handleMicrosoftGraph(request, response, url) {
     return true;
   }
 
-  if (url.pathname === "/graph/v1.0/me/drive/root:/OpenWork/permission-parity.txt:/content" && request.method === "PUT") {
+  if (url.pathname === "/graph/v1.0/me/drive/root:/Sofia/permission-parity.txt:/content" && request.method === "PUT") {
     sendJson(response, 201, {
       id: "file-permission-parity",
       name: "permission-parity.txt",
@@ -355,32 +355,32 @@ function handleMicrosoftGraph(request, response, url) {
 
   if (url.pathname === "/graph/v1.0/me/chats" && request.method === "GET") {
     sendJson(response, 200, graphEnvelope([{
-      id: "chat-openwork-test",
-      topic: "OpenWork launch",
+      id: "chat-sofia-test",
+      topic: "Sofia launch",
       chatType: "group",
-      webUrl: "https://teams.office.test/chats/chat-openwork-test",
+      webUrl: "https://teams.office.test/chats/chat-sofia-test",
       lastUpdatedDateTime: "2026-07-13T09:00:00Z",
     }]));
     return true;
   }
 
-  if (url.pathname === "/graph/v1.0/chats/chat-openwork-test/messages" && request.method === "GET") {
+  if (url.pathname === "/graph/v1.0/chats/chat-sofia-test/messages" && request.method === "GET") {
     sendJson(response, 200, graphEnvelope([{
       id: "teams-message-existing",
       createdDateTime: "2026-07-13T09:05:00Z",
       body: { contentType: "text", content: "Ready for the permission review." },
-      from: { user: { id: "microsoft-user-openwork-test", displayName: "OpenWork Tester" } },
+      from: { user: { id: "microsoft-user-sofia-test", displayName: "Sofia Tester" } },
       webUrl: "https://teams.office.test/messages/teams-message-existing",
     }]));
     return true;
   }
 
-  if (url.pathname === "/graph/v1.0/chats/chat-openwork-test/messages" && request.method === "POST") {
+  if (url.pathname === "/graph/v1.0/chats/chat-sofia-test/messages" && request.method === "POST") {
     sendJson(response, 201, {
       id: "teams-message-sent",
       createdDateTime: "2026-07-13T09:10:00Z",
       body: { contentType: "text", content: "Permission parity verified." },
-      from: { user: { id: "microsoft-user-openwork-test", displayName: "OpenWork Tester" } },
+      from: { user: { id: "microsoft-user-sofia-test", displayName: "Sofia Tester" } },
       webUrl: "https://teams.office.test/messages/teams-message-sent",
     });
     return true;
@@ -391,14 +391,14 @@ function handleMicrosoftGraph(request, response, url) {
 }
 
 function hasWorkerDualAuth(request) {
-  return request.headers["x-openwork-host-token"] === MOCK_WORKER_HOST_TOKEN
+  return request.headers["x-sofia-host-token"] === MOCK_WORKER_HOST_TOKEN
     && request.headers.authorization === `Bearer ${MOCK_WORKER_CLIENT_TOKEN}`;
 }
 
 function workerUnauthorized(response) {
   sendJson(response, 401, {
     error: "worker_mock_unauthorized",
-    message: "Both the OpenWork host token and client bearer token are required.",
+    message: "Both the Sofia host token and client bearer token are required.",
   });
 }
 
@@ -415,7 +415,7 @@ function workerSnapshot(session, status) {
     messages.push(workerMessage(session, "user", session.messageId, session.prompt));
   }
   if (status === "idle" && session.prompt) {
-    messages.push(workerMessage(session, "assistant", `${session.messageId}-assistant`, `OpenWork worker reply: ${session.prompt}`, session.messageId));
+    messages.push(workerMessage(session, "assistant", `${session.messageId}-assistant`, `Sofia worker reply: ${session.prompt}`, session.messageId));
   }
   return {
     item: {
@@ -447,7 +447,7 @@ function handleWorker(state, request, response, url, rawBody) {
     return true;
   }
 
-  if (url.pathname === "/worker/workspace/ws_mock_cloud/opencode/session" && request.method === "POST") {
+  if (url.pathname === "/worker/workspace/ws_mock_cloud/engine/session" && request.method === "POST") {
     let body;
     try {
       body = parseJson(rawBody);
@@ -463,7 +463,7 @@ function handleWorker(state, request, response, url, rawBody) {
   }
 
   const promptMatch = url.pathname.match(
-    /^\/worker\/workspace\/ws_mock_cloud\/opencode\/session\/([^/]+)\/prompt_async$/,
+    /^\/worker\/workspace\/ws_mock_cloud\/engine\/session\/([^/]+)\/prompt_async$/,
   );
   if (promptMatch && request.method === "POST") {
     const session = state.worker.sessions.get(decodeURIComponent(promptMatch[1]));

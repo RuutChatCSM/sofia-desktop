@@ -1,9 +1,9 @@
 import { beforeAll, describe, expect, test } from "bun:test"
-import { AUTOMATION_MODEL_ATTENTION_CAPABILITY } from "@openwork/types/automations"
+import { AUTOMATION_MODEL_ATTENTION_CAPABILITY } from "@sofia/types/automations"
 import { createHmac } from "node:crypto"
 
 function seedRequiredEnv() {
-  process.env.DATABASE_URL ??= "mysql://root:password@127.0.0.1:3306/openwork_test"
+  process.env.DATABASE_URL ??= "mysql://root:password@127.0.0.1:3306/sofia_test"
   process.env.DEN_DB_ENCRYPTION_KEY ??= "x".repeat(32)
   process.env.BETTER_AUTH_SECRET ??= "y".repeat(32)
   process.env.BETTER_AUTH_URL ??= "http://127.0.0.1:8790"
@@ -51,17 +51,17 @@ describe("Automation runner credentials", () => {
   })
 
   test("binds a Den Web proxied credential to its trusted public route", () => {
-    const request = new Request("http://api.openworklabs.com/v1/automation-runners/token", {
+    const request = new Request("http://sofia-api.ruut.chat/v1/automation-runners/token", {
       headers: {
-        "x-forwarded-host": "app.openworklabs.com",
+        "x-forwarded-host": "sofia-app.ruut.chat",
         "x-forwarded-proto": "https",
         "x-forwarded-prefix": "/api/den",
       },
     })
 
     expect(automationRunnerAudienceFromRequest(request, {
-      trustedOrigins: ["https://app.openworklabs.com"],
-    })).toBe("https://app.openworklabs.com/api/den")
+      trustedOrigins: ["https://sofia-app.ruut.chat"],
+    })).toBe("https://sofia-app.ruut.chat/api/den")
   })
 
   test("binds a rotated preview hostname covered by a trusted wildcard", () => {
@@ -110,7 +110,7 @@ describe("Automation runner credentials", () => {
   })
 
   test("ignores an untrusted forwarded runner destination", () => {
-    const request = new Request("https://api.openworklabs.com/v1/automation-runners/token", {
+    const request = new Request("https://sofia-api.ruut.chat/v1/automation-runners/token", {
       headers: {
         "x-forwarded-host": "attacker.example.com",
         "x-forwarded-proto": "https",
@@ -119,8 +119,8 @@ describe("Automation runner credentials", () => {
     })
 
     expect(automationRunnerAudienceFromRequest(request, {
-      trustedOrigins: ["https://app.openworklabs.com"],
-    })).toBe("https://api.openworklabs.com")
+      trustedOrigins: ["https://sofia-app.ruut.chat"],
+    })).toBe("https://sofia-api.ruut.chat")
   })
 
   test("keeps legacy v1 credentials capability-free", () => {
@@ -134,7 +134,7 @@ describe("Automation runner credentials", () => {
       e: expiresAt,
     })).toString("base64url")
     const signature = createHmac("sha256", secret)
-      .update(`openwork-automation-runner-v1.${payload}`)
+      .update(`sofia-automation-runner-v1.${payload}`)
       .digest("base64url")
 
     expect(new AutomationRunnerAuth(secret).authenticate(`Bearer ${payload}.${signature}`)).toEqual({

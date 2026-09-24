@@ -28,13 +28,13 @@ export type SettingsUpdateStatus = {
   failedAction?: "check" | "download" | "install";
 } | null;
 
-type ElectronUpdaterBridge = NonNullable<Window["__OPENWORK_ELECTRON__"]>["updater"] & {
+type ElectronUpdaterBridge = NonNullable<Window["__SOFIA_ELECTRON__"]>["updater"] & {
   onDownloadProgress?: (callback: (data: { transferred: number; total: number; percent: number; bytesPerSecond: number }) => void) => (() => void);
 };
 
 declare global {
   interface Window {
-    __openworkUpdaterEvalBridge?: ElectronUpdaterBridge;
+    __sofiaUpdaterEvalBridge?: ElectronUpdaterBridge;
   }
 }
 
@@ -94,10 +94,10 @@ function electronUpdaterEnvReducer(
 
 function electronUpdaterBridge(): ElectronUpdaterBridge | null {
   if (typeof window === "undefined") return null;
-  if (import.meta.env.DEV && window.__openworkUpdaterEvalBridge) {
-    return window.__openworkUpdaterEvalBridge;
+  if (import.meta.env.DEV && window.__sofiaUpdaterEvalBridge) {
+    return window.__sofiaUpdaterEvalBridge;
   }
-  return window.__OPENWORK_ELECTRON__?.updater ?? null;
+  return window.__SOFIA_ELECTRON__?.updater ?? null;
 }
 
 function describeError(error: unknown) {

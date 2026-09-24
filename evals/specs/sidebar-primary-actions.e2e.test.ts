@@ -1,13 +1,13 @@
 import { expect } from "vitest";
-import { control, createAndSelectWorkspace, evalIn, waitFor } from "@openwork/behaviors";
-import { screenshot, validate } from "@openwork/test-evidence";
-import { desktop } from "@openwork/hosts";
-import { needs, test } from "@openwork/testkit";
+import { control, createAndSelectWorkspace, evalIn, waitFor } from "@sofia/behaviors";
+import { screenshot, validate } from "@sofia/test-evidence";
+import { desktop } from "@sofia/hosts";
+import { needs, test } from "@sofia/testkit";
 
-const e2eTestsEnabled = process.env.OPENWORK_EVAL_E2E_TESTS === "1";
+const e2eTestsEnabled = process.env.SOFIA_EVAL_E2E_TESTS === "1";
 const title = e2eTestsEnabled
   ? "the sidebar offers New task and Notifications as primary actions, and the bell is not duplicated in the session header"
-  : "sidebar primary actions skipped — needs: set OPENWORK_EVAL_E2E_TESTS=1";
+  : "sidebar primary actions skipped — needs: set SOFIA_EVAL_E2E_TESTS=1";
 
 /** Labels of the top-level rows, which all live in the sidebar header block. */
 const primaryActionLabels = `(() => {
@@ -55,11 +55,11 @@ function sessionCount(value: unknown): number {
 }
 
 test.skipIf(!e2eTestsEnabled)(title, async ({ evidence }) => {
-  needs({ optIn: ["OPENWORK_EVAL_E2E_TESTS"] });
+  needs({ optIn: ["SOFIA_EVAL_E2E_TESTS"] });
 
   await using app = await desktop({ name: "sidebar-primary-actions" });
   await createAndSelectWorkspace(app, {
-    path: `/tmp/openwork-sidebar-primary-actions-${Date.now()}`,
+    path: `/tmp/sofia-sidebar-primary-actions-${Date.now()}`,
   });
 
   await waitFor(app, `Boolean(document.querySelector('[data-slot="sidebar-header"] [data-sidebar-new-chat]'))`, {

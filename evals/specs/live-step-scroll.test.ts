@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { expect } from "vitest";
-import { test } from "@openwork/testkit";
+import { test } from "@sofia/testkit";
 import {
   isLiveStepAtBottom,
   pinnedAfterUserScroll,

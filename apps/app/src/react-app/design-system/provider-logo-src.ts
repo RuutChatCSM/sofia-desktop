@@ -4,7 +4,7 @@
  * monogram in `ProviderIcon` is the last resort rather than the default look.
  */
 
-/** Providers whose Simple Icons slug differs from their OpenCode provider id. */
+/** Providers whose Simple Icons slug differs from their Sofia provider id. */
 const SIMPLE_ICON_SLUGS: Record<string, string> = {
   google: "googlegemini",
   "google-vertex": "googlegemini",
@@ -34,8 +34,8 @@ const SIMPLE_ICON_MISSES = new Set([
   "amazon-bedrock",
   "amazonwebservices",
   "fireworks",
-  "opencode",
-  "openwork",
+  "engine",
+  "sofia",
 ]);
 
 /** Apex domains for providers whose id does not resolve to their own domain. */
@@ -60,8 +60,8 @@ const PROVIDER_DOMAINS: Record<string, string> = {
   huggingface: "huggingface.co",
   ollama: "ollama.com",
   xai: "x.ai",
-  opencode: "opencode.ai",
-  openwork: "openworklabs.com",
+  engine: "engine.ai",
+  sofia: "sofia.ruut.chat",
   abacus: "abacus.ai",
 };
 

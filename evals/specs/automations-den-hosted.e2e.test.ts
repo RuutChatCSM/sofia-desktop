@@ -1,5 +1,5 @@
 import { expect } from "vitest";
-import { screenshot, validate } from "@openwork/test-evidence";
+import { screenshot, validate } from "@sofia/test-evidence";
 import {
   clickButton,
   createOrgConnection,
@@ -8,15 +8,15 @@ import {
   visibleText,
   waitFor,
   waitForText,
-} from "@openwork/behaviors";
-import { app, mcpMock, needs, server, test } from "@openwork/testkit";
-import type { Surface } from "@openwork/cdp";
+} from "@sofia/behaviors";
+import { app, mcpMock, needs, server, test } from "@sofia/testkit";
+import type { Surface } from "@sofia/cdp";
 
 /**
- * CORE JOURNEY: a person creates an active Automation in the main OpenWork
+ * CORE JOURNEY: a person creates an active Automation in the main Sofia App
  * app, keeps its authenticated desktop runner connected, and Den wakes that
  * runner to claim the scheduled occurrence exactly once. The desktop executes
- * it with the selected model and a current OpenWork Connect integration.
+ * it with the selected model and a current Sofia App Connect integration.
  * The app reveals the durable receipt and execution thread. Deactivation
  * stops future claims without becoming a cancellation control; reactivation
  * computes a new future occurrence.
@@ -30,7 +30,7 @@ import type { Surface } from "@openwork/cdp";
 
 const requirements = {
   model: "tool-capable" as const,
-  optIn: ["OPENWORK_EVAL_E2E_TESTS", "OPENWORK_EVAL_AUTOMATIONS_E2E_TEST"],
+  optIn: ["SOFIA_EVAL_E2E_TESTS", "SOFIA_EVAL_AUTOMATIONS_E2E_TEST"],
 };
 
 async function setField(surface: Surface, label: string, value: string): Promise<void> {
@@ -88,7 +88,7 @@ test("Den schedules and a connected desktop runner executes an Automation", { ti
   const createScreen = await visibleText(desktop);
   expect(createScreen).not.toMatch(/draft|permission picker|review automation|approve/i);
   expect(createScreen).toContain("Den keeps the schedule and run history");
-  expect(createScreen).toContain("local OpenCode runtime");
+  expect(createScreen).toContain("local Sofia engine runtime");
   await clickButton(desktop, "Create and activate");
   await waitForText(desktop, "Active", { timeoutMs: 60_000 });
   evidence.recordAssertionEvidence(

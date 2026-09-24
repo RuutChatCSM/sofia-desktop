@@ -6,29 +6,29 @@ import { readActivatedEnterpriseDenOrigin } from "./enterprise-den-origin.js";
 import {
   readRuntimeMcpConfig,
   runtimeMcpMap,
-  writeRuntimeOpencodeConfig,
-} from "./runtime-opencode-config-store.js";
+  writeRuntimeWorkspaceEngineConfig,
+} from "./runtime-engine-config-store.js";
 import { externalFetch } from "./server-fetch.js";
 import type { ServerConfig, WorkspaceInfo } from "./types.js";
 import { createWorkspaceKvStore } from "./workspace-kv-store.js";
 
-export const CONNECT_MCP_SERVER_INDEX_URI = "openwork://connect/mcp-servers/index.json";
-export const CONNECT_MCP_SERVER_INDEX_SCHEMA_VERSION = "openwork.connect/mcp-servers/1";
-export const CONNECT_MCP_APP_HOST_NAME_PREFIX = "openwork-app-host-connect-";
-export const CONNECT_MCP_SERVER_NAME_PREFIX = "openwork-connect-";
-export const CONNECT_MCP_APP_HOST_CAPABILITY_HEADER = "x-openwork-mcp-client-capabilities";
+export const CONNECT_MCP_SERVER_INDEX_URI = "sofia://connect/mcp-servers/index.json";
+export const CONNECT_MCP_SERVER_INDEX_SCHEMA_VERSION = "sofia.connect/mcp-servers/1";
+export const CONNECT_MCP_APP_HOST_NAME_PREFIX = "sofia-app-host-connect-";
+export const CONNECT_MCP_SERVER_NAME_PREFIX = "sofia-connect-";
+export const CONNECT_MCP_APP_HOST_CAPABILITY_HEADER = "x-sofia-mcp-client-capabilities";
 export const CONNECT_MCP_APP_HOST_CAPABILITY = "mcp-app-host-v1";
 
 const BUILTIN_APP_HOST_CLOUD_ORIGINS = new Set([
-  "https://api.openworklabs.com",
-  "https://app.openworklabs.com",
-  "https://api.openwork.software",
-  "https://app.openwork.software",
+  "https://sofia-api.ruut.chat",
+  "https://sofia-app.ruut.chat",
+  "https://api.sofia.software",
+  "https://app.sofia.software",
 ]);
 
 const BUILTIN_APP_HOST_GATEWAY_PROXY_ORIGINS = new Map([
-  ["https://app.openworklabs.com", "https://api.openworklabs.com"],
-  ["https://app.openwork.software", "https://api.openwork.software"],
+  ["https://sofia-app.ruut.chat", "https://sofia-api.ruut.chat"],
+  ["https://app.sofia.software", "https://api.sofia.software"],
 ]);
 
 const indexSchema = z.object({
@@ -46,14 +46,14 @@ const appHostCredentialSchema = z.object({
   origin: z.string().url(),
 });
 
-export type OpenWorkConnectMcpServerIndex = z.infer<typeof indexSchema>;
+export type SofiaConnectMcpServerIndex = z.infer<typeof indexSchema>;
 
-const emptyIndex = (): OpenWorkConnectMcpServerIndex => ({
+const emptyIndex = (): SofiaConnectMcpServerIndex => ({
   schemaVersion: CONNECT_MCP_SERVER_INDEX_SCHEMA_VERSION,
   servers: [],
 });
 
-const appHostCatalogStore = createWorkspaceKvStore<OpenWorkConnectMcpServerIndex>({
+const appHostCatalogStore = createWorkspaceKvStore<SofiaConnectMcpServerIndex>({
   tableName: "connect_mcp_app_host_catalogs",
   valueColumn: "catalog_json",
   parse: (json) => {
@@ -67,9 +67,9 @@ const appHostCatalogStore = createWorkspaceKvStore<OpenWorkConnectMcpServerIndex
   serialize: (value) => JSON.stringify(value),
 });
 
-type OpenWorkConnectMcpAppHostCredential = z.infer<typeof appHostCredentialSchema>;
+type SofiaConnectMcpAppHostCredential = z.infer<typeof appHostCredentialSchema>;
 
-const appHostAuthorizationStore = createWorkspaceKvStore<OpenWorkConnectMcpAppHostCredential | null>({
+const appHostAuthorizationStore = createWorkspaceKvStore<SofiaConnectMcpAppHostCredential | null>({
   tableName: "connect_mcp_app_host_authorizations",
   valueColumn: "authorization_json",
   parse: (json) => {
@@ -101,7 +101,7 @@ function endpointOrigin(value: unknown): string | null {
 
 function normalizeAppHostProxyUrl(
   cloudMcpUrl: unknown,
-  server: OpenWorkConnectMcpServerIndex["servers"][number],
+  server: SofiaConnectMcpServerIndex["servers"][number],
 ): string | null {
   if (typeof cloudMcpUrl !== "string") return null;
   let cloudEndpoint: URL;
@@ -147,34 +147,34 @@ async function trustedAppHostCloudEndpoint(cloudMcp: Record<string, unknown>): P
   }
   if (endpoint.username || endpoint.password || endpoint.search || endpoint.hash) return false;
   if (BUILTIN_APP_HOST_CLOUD_ORIGINS.has(endpoint.origin)) return true;
-  if (process.env.OPENWORK_DEV_MODE === "1" && isLoopbackHostname(endpoint.hostname)) return true;
+  if (process.env.SOFIA_DEV_MODE === "1" && isLoopbackHostname(endpoint.hostname)) return true;
   const activatedEnterpriseOrigin = await readActivatedEnterpriseDenOrigin();
   return activatedEnterpriseOrigin !== null && endpoint.origin === activatedEnterpriseOrigin;
 }
 
-/** Stable private App-host identifier. This must never become an OpenCode MCP key. */
+/** Stable private App-host identifier. This must never become an Sofia engine MCP key. */
 export function connectMcpAppHostName(connectionId: string): string {
   const digest = createHash("sha256").update(connectionId).digest("hex").slice(0, 12);
   return `${CONNECT_MCP_APP_HOST_NAME_PREFIX}${digest}`;
 }
 
-export async function readOpenWorkConnectMcpAppHostCatalog(
+export async function readSofiaConnectMcpAppHostCatalog(
   config: ServerConfig,
   workspaceId: string,
-): Promise<OpenWorkConnectMcpServerIndex> {
+): Promise<SofiaConnectMcpServerIndex> {
   return await appHostCatalogStore.get(config, workspaceId) ?? emptyIndex();
 }
 
-export async function writeOpenWorkConnectMcpAppHostCatalog(
+export async function writeSofiaConnectMcpAppHostCatalog(
   config: ServerConfig,
   workspaceId: string,
-  catalog: OpenWorkConnectMcpServerIndex,
+  catalog: SofiaConnectMcpServerIndex,
 ): Promise<void> {
   const parsed = indexSchema.safeParse(catalog);
   await appHostCatalogStore.set(config, workspaceId, parsed.success ? parsed.data : emptyIndex());
 }
 
-export async function readOpenWorkConnectMcpAppHostAuthorization(
+export async function readSofiaConnectMcpAppHostAuthorization(
   config: ServerConfig,
   workspaceId: string,
   endpointUrl: string,
@@ -185,7 +185,7 @@ export async function readOpenWorkConnectMcpAppHostAuthorization(
   return privateAppHostAuthorization(credential.authorization);
 }
 
-export async function writeOpenWorkConnectMcpAppHostAuthorization(
+export async function writeSofiaConnectMcpAppHostAuthorization(
   config: ServerConfig,
   workspaceId: string,
   value: string,
@@ -200,23 +200,23 @@ export async function writeOpenWorkConnectMcpAppHostAuthorization(
   );
 }
 
-export async function findOpenWorkConnectMcpAppHostServer(
+export async function findSofiaConnectMcpAppHostServer(
   config: ServerConfig,
   workspaceId: string,
   reference: { connectionId?: string; serverName?: string },
-): Promise<OpenWorkConnectMcpServerIndex["servers"][number] | null> {
-  const catalog = await readOpenWorkConnectMcpAppHostCatalog(config, workspaceId);
+): Promise<SofiaConnectMcpServerIndex["servers"][number] | null> {
+  const catalog = await readSofiaConnectMcpAppHostCatalog(config, workspaceId);
   return catalog.servers.find((server) => (
     (reference.connectionId !== undefined && server.connectionId === reference.connectionId)
     || (reference.serverName !== undefined && connectMcpAppHostName(server.connectionId) === reference.serverName)
   )) ?? null;
 }
 
-export async function readOpenWorkConnectMcpServerIndex(
+export async function readSofiaConnectMcpServerIndex(
   cloudMcp: Record<string, unknown>,
   appHostAuthorization: string,
   fetcher: McpFetch = externalFetch,
-): Promise<OpenWorkConnectMcpServerIndex | null> {
+): Promise<SofiaConnectMcpServerIndex | null> {
   if (!await trustedAppHostCloudEndpoint(cloudMcp)) return null;
   const text = await readMcpResourceText({
     config: {
@@ -228,12 +228,12 @@ export async function readOpenWorkConnectMcpServerIndex(
     },
     uri: CONNECT_MCP_SERVER_INDEX_URI,
     fetcher,
-    clientName: "openwork-server-connect-mcp-catalog",
+    clientName: "sofia-server-connect-mcp-catalog",
   });
   if (text === null) return null;
   const parsed = indexSchema.safeParse(JSON.parse(text));
   if (!parsed.success) return null;
-  const servers: OpenWorkConnectMcpServerIndex["servers"] = [];
+  const servers: SofiaConnectMcpServerIndex["servers"] = [];
   for (const server of parsed.data.servers) {
     const url = normalizeAppHostProxyUrl(cloudMcp.url, server);
     if (!url) return null;
@@ -247,26 +247,26 @@ export async function readOpenWorkConnectMcpServerIndex(
  * cached catalog may be stale. Unlike startup reconciliation, an unavailable
  * opportunistic refresh preserves the last known-good catalog.
  */
-export async function refreshOpenWorkConnectMcpAppHostCatalog(
+export async function refreshSofiaConnectMcpAppHostCatalog(
   config: ServerConfig,
   workspaceId: string,
   fetcher?: McpFetch,
 ): Promise<{ status: "synced" | "unavailable"; appHostNames: string[] }> {
-  const cloudMcp = await readRuntimeMcpConfig(config, workspaceId, "openwork-cloud");
+  const cloudMcp = await readRuntimeMcpConfig(config, workspaceId, "sofia-cloud");
   if (!cloudMcp || !await trustedAppHostCloudEndpoint(cloudMcp)) {
     return { status: "unavailable", appHostNames: [] };
   }
-  const appHostAuthorization = await readOpenWorkConnectMcpAppHostAuthorization(
+  const appHostAuthorization = await readSofiaConnectMcpAppHostAuthorization(
     config,
     workspaceId,
     String(cloudMcp.url),
   );
   if (!appHostAuthorization) return { status: "unavailable", appHostNames: [] };
 
-  const index = await readOpenWorkConnectMcpServerIndex(cloudMcp, appHostAuthorization, fetcher).catch(() => null);
+  const index = await readSofiaConnectMcpServerIndex(cloudMcp, appHostAuthorization, fetcher).catch(() => null);
   if (!index) return { status: "unavailable", appHostNames: [] };
 
-  await writeOpenWorkConnectMcpAppHostCatalog(config, workspaceId, index);
+  await writeSofiaConnectMcpAppHostCatalog(config, workspaceId, index);
   return {
     status: "synced",
     appHostNames: index.servers.map((server) => connectMcpAppHostName(server.connectionId)).sort(),
@@ -275,10 +275,10 @@ export async function refreshOpenWorkConnectMcpAppHostCatalog(
 
 /**
  * Keeps provider descriptors private to the Desktop App host and removes any
- * legacy OpenWork-owned provider endpoints from the model-facing runtime.
+ * legacy Sofia-owned provider endpoints from the model-facing runtime.
  * User-authored MCP configurations and durable provider records are untouched.
  */
-export async function reconcileOpenWorkConnectMcpServers(input: {
+export async function reconcileSofiaConnectMcpServers(input: {
   config: ServerConfig;
   workspace: WorkspaceInfo;
   cloudMcp: Record<string, unknown>;
@@ -287,7 +287,7 @@ export async function reconcileOpenWorkConnectMcpServers(input: {
 }): Promise<{ status: "synced" | "unavailable"; appHostNames: string[]; removedNames: string[] }> {
   const trustedCloudEndpoint = await trustedAppHostCloudEndpoint(input.cloudMcp);
   if (trustedCloudEndpoint && input.appHostAuthorization !== undefined) {
-    await writeOpenWorkConnectMcpAppHostAuthorization(
+    await writeSofiaConnectMcpAppHostAuthorization(
       input.config,
       input.workspace.id,
       input.appHostAuthorization,
@@ -295,20 +295,20 @@ export async function reconcileOpenWorkConnectMcpServers(input: {
     );
   }
   const appHostAuthorization = trustedCloudEndpoint
-    ? await readOpenWorkConnectMcpAppHostAuthorization(
+    ? await readSofiaConnectMcpAppHostAuthorization(
       input.config,
       input.workspace.id,
       String(input.cloudMcp.url),
     )
     : null;
   const index = trustedCloudEndpoint && appHostAuthorization
-    ? await readOpenWorkConnectMcpServerIndex(input.cloudMcp, appHostAuthorization, input.fetcher).catch(() => null)
+    ? await readSofiaConnectMcpServerIndex(input.cloudMcp, appHostAuthorization, input.fetcher).catch(() => null)
     : null;
   const privateCatalog = index ?? emptyIndex();
-  await writeOpenWorkConnectMcpAppHostCatalog(input.config, input.workspace.id, privateCatalog);
+  await writeSofiaConnectMcpAppHostCatalog(input.config, input.workspace.id, privateCatalog);
 
   let removedNames: string[] = [];
-  await writeRuntimeOpencodeConfig(input.config, input.workspace.id, (current) => {
+  await writeRuntimeWorkspaceEngineConfig(input.config, input.workspace.id, (current) => {
     const currentMcp = runtimeMcpMap(current);
     removedNames = Object.keys(currentMcp)
       .filter((name) => name.startsWith(CONNECT_MCP_SERVER_NAME_PREFIX))

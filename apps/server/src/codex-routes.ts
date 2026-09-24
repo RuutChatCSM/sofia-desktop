@@ -1,5 +1,5 @@
 // Codex engine routes: an additive HTTP surface for the codex runtime that
-// lives alongside the opencode routes. Exposes:
+// lives alongside the engine routes. Exposes:
 //   GET  /workspace/:id/codex/engine          -> engine info + session list
 //   POST /workspace/:id/codex/sessions        -> create a codex thread/session
 //   POST /workspace/:id/codex/sessions/:sid/prompt
@@ -17,7 +17,7 @@ import {
   writeCodexEngineConfigFromProviders,
 } from "./codex-providers.js";
 import type { CodexEvent, CodexSession } from "./codex-sessions.js";
-import { CodexSteerError, isCodexSessionId } from "./codex-sessions.js";
+import { CodexSteerError, CodexThreadBusyError, MAX_TRANSCRIPT_ITEMS, isCodexSessionId } from "./codex-sessions.js";
 import { ApiError } from "./errors.js";
 import { addRoute, type RequestContext, type Route } from "./routes/registry.js";
 import type { ServerConfig, TokenScope } from "./types.js";
@@ -74,14 +74,20 @@ export function registerCodexRoutes(options: RegisterCodexRoutesOptions): void {
   const workspaceManager = async (workspaceId: string) => registry.getOrCreate(workspaceId);
 
   // Wrap codex session operations so any engine failure surfaces as a
-  // "Sofia request failed" ApiError instead of a bare 500 or an opencode
+  // "Sofia request failed" ApiError instead of a bare 500 or an engine
   // error code (the codex runtime is the Sofia engine).
   const sofiaRequest = async <T>(operation: () => Promise<T>): Promise<T> => {
     try {
       return await operation();
     } catch (error) {
       if (error instanceof ApiError) throw error;
-      console.error("[openwork-server] Sofia request failed:", error instanceof Error ? error.message : String(error));
+      // A live writer elsewhere is not a server fault: report it as a conflict
+      // the client can explain ("open elsewhere") instead of a generic 502 with
+      // the reason buried in details.
+      if (error instanceof CodexThreadBusyError) {
+        throw new ApiError(409, "thread_writer_conflict", error.message, { threadId: error.threadId });
+      }
+      console.error("[sofia-server] Sofia request failed:", error instanceof Error ? error.message : String(error));
       throw new ApiError(502, "sofia_request_failed", "Sofia request failed", {
         cause: error instanceof Error ? error.message : String(error),
       });
@@ -205,7 +211,9 @@ export function registerCodexRoutes(options: RegisterCodexRoutesOptions): void {
   addRoute(routes, "GET", "/workspace/:id/codex/sessions/:sessionId/items", "client", async (ctx) => {
     const manager = await workspaceManager(ctx.params.id);
     if (!isCodexSessionId(ctx.params.sessionId)) throw notFound("unknown codex session");
-    const items = await sofiaRequest(() => manager.getSessionItems(ctx.params.sessionId, { limit: 200 }));
+    // The engine pages ~100 items at a time; the manager follows the cursors so
+    // opening a task shows its whole transcript, not just the beginning.
+    const items = await sofiaRequest(() => manager.getSessionItems(ctx.params.sessionId, { limit: MAX_TRANSCRIPT_ITEMS }));
     return jsonResponse({ ok: true, items });
   });
 
@@ -246,7 +254,7 @@ export function registerCodexRoutes(options: RegisterCodexRoutesOptions): void {
   }
 
   // Codex auth store: the app writes the same provider API key the user enters
-  // in the UI here (mirroring opencode's auth API), and the codex engine reads
+  // in the UI here (mirroring engine's auth API), and the codex engine reads
   // it at spawn to inject into its child env. Stored server-side in the global
   // user config dir (codex-auth.json).
   addRoute(routes, "PUT", "/workspace/:id/codex/auth/:providerId", "client", async (ctx) => {

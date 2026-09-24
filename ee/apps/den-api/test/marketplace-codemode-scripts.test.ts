@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeAll, describe, expect, mock, test } from "bun:test"
-import { Tool } from "@openwork/codemode"
-import { and, eq, inArray } from "@openwork-ee/den-db/drizzle"
+import { Tool } from "@sofia/codemode"
+import { and, eq, inArray } from "@sofia-ee/den-db/drizzle"
 import {
   AuthUserTable,
   WorkflowRunTable,
@@ -15,14 +15,14 @@ import {
   PluginConfigObjectTable,
   PluginTable,
   OrganizationTable,
-} from "@openwork-ee/den-db/schema"
-import { createDenTypeId, type DenTypeId } from "@openwork-ee/utils/typeid"
+} from "@sofia-ee/den-db/schema"
+import { createDenTypeId, type DenTypeId } from "@sofia-ee/utils/typeid"
 import { Effect } from "effect"
 import { Hono } from "hono"
 import type { PluginArchActorContext } from "../src/routes/org/plugin-system/access.js"
 
 function seedRequiredEnv() {
-  process.env.DATABASE_URL = process.env.DATABASE_URL ?? "mysql://root:password@127.0.0.1:3306/openwork_test_codemode_scripts"
+  process.env.DATABASE_URL = process.env.DATABASE_URL ?? "mysql://root:password@127.0.0.1:3306/sofia_test_codemode_scripts"
   process.env.DEN_DB_ENCRYPTION_KEY = process.env.DEN_DB_ENCRYPTION_KEY ?? "x".repeat(32)
   process.env.BETTER_AUTH_SECRET = process.env.BETTER_AUTH_SECRET ?? "y".repeat(32)
   process.env.BETTER_AUTH_URL = process.env.BETTER_AUTH_URL ?? "http://127.0.0.1:8790"
@@ -57,7 +57,7 @@ const createdUserIds: DenTypeId<"user">[] = []
 beforeAll(async () => {
   seedRequiredEnv()
   mock.restore()
-  db = (await import("@openwork-ee/den-db")).createDenDb({
+  db = (await import("@sofia-ee/den-db")).createDenDb({
     databaseUrl: process.env.DATABASE_URL,
     mode: "mysql",
   }).db

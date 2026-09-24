@@ -44,13 +44,13 @@ export type AiSettingsViewProps = {
   organizationName?: string;
   /** Set of local provider IDs that were imported from cloud. */
   cloudProviderIds?: Set<string>;
-  showOpenWorkModelsSubscribe?: boolean;
+  showSofiaModelsSubscribe?: boolean;
   /** Subtle fallback row when Hosted models is not connected and the banner was dismissed. */
-  showOpenWorkModelsConnect?: boolean;
-  /** Den entitlement is present but local engine has no selectable openwork models yet. */
-  showOpenWorkModelsSyncing?: boolean;
-  onSubscribeOpenWorkModels?: () => void | Promise<void>;
-  onDismissOpenWorkModels?: () => void | Promise<void>;
+  showSofiaModelsConnect?: boolean;
+  /** Den entitlement is present but local engine has no selectable sofia models yet. */
+  showSofiaModelsSyncing?: boolean;
+  onSubscribeSofiaModels?: () => void | Promise<void>;
+  onDismissSofiaModels?: () => void | Promise<void>;
   cloudProvidersView?: ReactNode;
 };
 
@@ -114,19 +114,19 @@ export function AiSettingsView(props: AiSettingsViewProps) {
           </LayoutSectionItemHeader>
         </LayoutSectionItem>
 
-        {props.showOpenWorkModelsSubscribe ? (
+        {props.showSofiaModelsSubscribe ? (
           <LayoutSectionItem className="relative overflow-hidden rounded-2xl border border-blue-6 bg-blue-2/30 px-4 py-4">
             <button
               type="button"
               className="absolute right-3 top-3 flex size-7 items-center justify-center rounded-full text-blue-11 transition-colors hover:bg-blue-3/70"
-              onClick={() => void props.onDismissOpenWorkModels?.()}
+              onClick={() => void props.onDismissSofiaModels?.()}
               aria-label="Dismiss Hosted models banner"
             >
               <X className="size-3.5" />
             </button>
             <div className="flex flex-col gap-4 pr-8 sm:flex-row sm:items-start sm:justify-between">
               <div className="flex min-w-0 gap-3">
-                <ProviderIcon providerId="openwork" size={22} className="mt-0.5 shrink-0 text-blue-11" />
+                <ProviderIcon providerId="sofia" size={22} className="mt-0.5 shrink-0 text-blue-11" />
                 <div className="min-w-0 space-y-2">
                   <div>
                     <div className="text-sm font-medium text-dls-text">Hosted models</div>
@@ -143,13 +143,13 @@ export function AiSettingsView(props: AiSettingsViewProps) {
                     </span>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Pricing is handled through Organization cloud. You can continue using OpenCode Zen or your own providers.
+                    Pricing is handled through Organization cloud. You can continue using Sofia Zen or your own providers.
                   </p>
                 </div>
               </div>
               <Button
                 className="shrink-0"
-                onClick={() => void props.onSubscribeOpenWorkModels?.()}
+                onClick={() => void props.onSubscribeSofiaModels?.()}
                 disabled={props.busy || props.providerAuthBusy}
               >
                 Subscribe
@@ -210,10 +210,10 @@ export function AiSettingsView(props: AiSettingsViewProps) {
           </div>
         ) : null}
 
-        {props.showOpenWorkModelsConnect ? (
+        {props.showSofiaModelsConnect ? (
           <LayoutSectionItem className="flex-row flex-wrap items-center justify-between gap-3 rounded-2xl border border-dashed border-dls-border px-4 py-3">
             <div className="flex min-w-0 items-center gap-3">
-              <ProviderIcon providerId="openwork" size={20} className="text-muted-foreground" />
+              <ProviderIcon providerId="sofia" size={20} className="text-muted-foreground" />
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="truncate text-sm font-medium text-dls-text">Hosted models</span>
@@ -228,7 +228,7 @@ export function AiSettingsView(props: AiSettingsViewProps) {
             </div>
             <Button
               variant="outline"
-              onClick={() => void props.onSubscribeOpenWorkModels?.()}
+              onClick={() => void props.onSubscribeSofiaModels?.()}
               disabled={props.busy || props.providerAuthBusy}
             >
               Connect
@@ -237,10 +237,10 @@ export function AiSettingsView(props: AiSettingsViewProps) {
           </LayoutSectionItem>
         ) : null}
 
-        {props.showOpenWorkModelsSyncing ? (
+        {props.showSofiaModelsSyncing ? (
           <LayoutSectionItem className="flex-row flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-6/50 bg-amber-2/20 px-4 py-3">
             <div className="flex min-w-0 items-center gap-3">
-              <ProviderIcon providerId="openwork" size={20} className="text-amber-11" />
+              <ProviderIcon providerId="sofia" size={20} className="text-amber-11" />
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="truncate text-sm font-medium text-dls-text">Hosted models</span>

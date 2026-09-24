@@ -43,7 +43,7 @@ describe("message-list loading feedback", () => {
   test("acknowledges a submitted message before streaming starts", () => {
     const markup = renderList([userMessage], "submitted");
 
-    expect(markup).toContain("Thinking…");
+    expect(markup).toContain("Sofia is working…");
     expect(markup).not.toContain("Loading…");
   });
 
@@ -54,7 +54,7 @@ describe("message-list loading feedback", () => {
   test("keeps the same loading treatment when streaming begins", () => {
     const markup = renderList([userMessage], "streaming");
 
-    expect(markup).toContain("Thinking…");
+    expect(markup).toContain("Sofia is working…");
     expect(markup).not.toContain("Loading…");
   });
 });

@@ -6,12 +6,12 @@ import { AppFeedbackForm } from "../components/app-feedback-form";
 import { SiteFooter } from "../components/site-footer";
 
 const contactPrefill = {
-  source: "openwork-contact-page",
+  source: "sofia-contact-page",
   entrypoint: "/contact",
   deployment: "landing",
   appVersion: "",
-  openworkServerVersion: "",
-  opencodeVersion: "",
+  sofiaServerVersion: "",
+  engineVersion: "",
   osName: "",
   osVersion: "",
   platform: "web",
@@ -24,9 +24,9 @@ describe("Contact page affordances", () => {
       mode: "contact",
     }));
 
-    expect(html).toContain("Have questions about OpenWork?");
+    expect(html).toContain("Have questions about Sofia?");
     expect(html).toContain("Prefer to email us instead?");
-    expect(html).toContain("team@openworklabs.com");
+    expect(html).toContain("team@ruut.chat");
     expect(html).toContain("Send question");
   });
 

@@ -1,7 +1,7 @@
 // Codex item translator: converts codex/sofia `ThreadItem` objects into the
-// opencode `Part` shapes the existing transcript UI renders. Codex emits rich
+// engine `Part` shapes the existing transcript UI renders. Codex emits rich
 // discriminated-union items (CommandExecution, McpToolCall, Reasoning,
-// AgentMessage, FileChange); opencode's UI consumes text/reasoning/tool/
+// AgentMessage, FileChange); engine's UI consumes text/reasoning/tool/
 // step-start parts. This is the harmonization layer between the two engines.
 import type { DynamicToolUIPart } from "ai";
 import type { Part } from "@/app/lib/engine-types";
@@ -19,9 +19,9 @@ function safeJson(value: unknown): unknown {
 }
 
 /** Map a codex CommandExecution/McpToolCall/DynamicToolCall item to a
- * dynamic-tool part with a canonical toolName so opencode's aggregator renders
+ * dynamic-tool part with a canonical toolName so engine's aggregator renders
  * inline "Used X, edited Y" markers (matching the codex app). */
-export function codexItemToToolPart(item: Record<string, unknown>, sessionId: string, messageId: string): DynamicToolUIPart | null {
+export function codexItemToToolPart(item: Record<string, unknown>, sessionId: string, messageId: string, itemCompleted = false): DynamicToolUIPart | null {
   const type = item.type;
   const id = str(item.id);
   const tool = type === "commandExecution"
@@ -31,7 +31,7 @@ export function codexItemToToolPart(item: Record<string, unknown>, sessionId: st
       : "";
   if (!id || !tool) return null;
 
-  // Canonical opencode toolName so getToolFamily classifies it (bash/edit/
+  // Canonical engine toolName so getToolFamily classifies it (bash/edit/
   // write/read/grep/glob). Codex "shell" commands -> bash; codex edits ->
   // apply_patch (which collapses into "edited"). Everything else keeps a label.
   const isCommand = type === "commandExecution";
@@ -40,9 +40,9 @@ export function codexItemToToolPart(item: Record<string, unknown>, sessionId: st
   const isRead = /\b(read|cat|view|ls|list|find|glob|grep|search)\b/.test(lower);
   const toolName = isCommand ? "bash" : isEdit ? "apply_patch" : isRead ? "read" : tool;
 
-  const status = type === "commandExecution" ? str(item.status) : "";
-  const completed = status === "completed";
-  const failed = status === "failed" || status === "declined";
+  const status = str(item.status);
+  const completed = itemCompleted || status === "completed";
+  const failed = status === "failed" || status === "declined" || item.success === false || Boolean(item.error);
   const start = Date.now();
 
   const input: Record<string, unknown> = isCommand
@@ -51,7 +51,7 @@ export function codexItemToToolPart(item: Record<string, unknown>, sessionId: st
       ? { filePath: str(item.path) }
       : { arguments: safeJson(item.arguments) };
 
-  const output = str(item.aggregatedOutput) || str(item.result) || "";
+  const output = str(item.aggregatedOutput) || (typeof item.result === "string" ? item.result : item.result != null ? JSON.stringify(item.result) : "");
   const state: "output-available" | "input-streaming" | "output-error" =
     failed ? "output-error" : completed ? "output-available" : "input-streaming";
 
@@ -61,15 +61,15 @@ export function codexItemToToolPart(item: Record<string, unknown>, sessionId: st
     toolCallId: id,
     state,
     input,
-    callProviderMetadata: { opencode: { partId: id, codexItemType: type } },
+    callProviderMetadata: { engine: { partId: id, codexItemType: type } },
   };
-  if (completed) part.output = output;
+  if (completed && !failed) part.output = output;
   if (failed) part.errorText = str(item.error) || "tool failed";
   return part as DynamicToolUIPart;
 }
 
 /**
- * Convert a codex ThreadItem into opencode Part(s). Returns an array because a
+ * Convert a codex ThreadItem into engine Part(s). Returns an array because a
  * command item may map to a step-start + tool part for the UI.
  */
 export function codexItemToParts(
@@ -122,7 +122,7 @@ export function codexItemToParts(
   if (type === "commandExecution" || type === "mcpToolCall" || type === "dynamicToolCall" || type === "webSearch") {
     const toolPart = codexItemToToolPart(item, sessionId, messageId);
     // Emit a single inline dynamic-tool marker per call (no step-start wrappers —
-    // those make opencode auto-collapse the whole turn into "N steps").
+    // those make engine auto-collapse the whole turn into "N steps").
     return toolPart ? [toolPart as unknown as Part] : [];
   }
 

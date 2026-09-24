@@ -14,16 +14,14 @@ import {
   type DenOrgLlmProvider,
   type DenOrgLlmProviderConnection,
 } from "../../../../app/lib/den";
-import { getOpenworkGatewayOrigin } from "../../../../app/lib/gateway-runtime";
-import { unwrap, waitForHealthy } from "../../../../app/lib/opencode";
+import { getSofiaGatewayOrigin } from "../../../../app/lib/gateway-runtime";
+import { unwrap, waitForHealthy } from "../../../../app/lib/engine";
 import {
-  readOpencodeConfig,
-  writeOpencodeConfig,
   engineRestart,
-  workspaceOpenworkRead,
-  workspaceOpenworkWrite,
+  workspaceSofiaRead,
+  workspaceSofiaWrite,
 } from "../../../../app/lib/desktop";
-import { OpenworkServerError } from "../../../../app/lib/openwork-server";
+import { SofiaServerError } from "../../../../app/lib/sofia-server";
 import type {
   Client,
   ProviderListItem,
@@ -41,23 +39,23 @@ import {
   getConnectedProviderItems,
 } from "../../../infra/provider-list-query";
 import type {
-  OpenworkCloudProviderSyncRun,
-  OpenworkCloudProviderSyncSkippedProvider,
-} from "../../../../app/lib/openwork-server";
-import type { OpenworkServerStoreSnapshot } from "../openwork-server-store";
+  SofiaCloudProviderSyncRun,
+  SofiaCloudProviderSyncSkippedProvider,
+} from "../../../../app/lib/sofia-server";
+import type { SofiaServerStoreSnapshot } from "../sofia-server-store";
 
 /**
- * The slice of the openwork-server store this store actually consumes.
+ * The slice of the sofia-server store this store actually consumes.
  * The settings route passes the full store; the session route passes a
  * lightweight endpoint-backed adapter (previously forced through `as never`).
  */
-export type ProviderAuthOpenworkServer = {
+export type ProviderAuthSofiaServer = {
   getSnapshot: () => Pick<
-    OpenworkServerStoreSnapshot,
-    "openworkServerStatus" | "openworkServerClient"
+    SofiaServerStoreSnapshot,
+    "sofiaServerStatus" | "sofiaServerClient"
   > & {
-    openworkServerAuth?: { token?: string; hostToken?: string };
-    openworkServerCapabilities: { config?: { read?: boolean; write?: boolean }; providerSync?: boolean } | null;
+    sofiaServerAuth?: { token?: string; hostToken?: string };
+    sofiaServerCapabilities: { config?: { read?: boolean; write?: boolean }; providerSync?: boolean } | null;
   };
 };
 import {
@@ -83,7 +81,7 @@ import {
 import { dispatchNewProviders } from "../../../../app/lib/provider-events";
 import { updateManagedDisabledProviders } from "../managed-engine-config";
 import {
-  DESKTOP_RESTRICTION_OPENCODE_PROVIDER_ID,
+  DESKTOP_RESTRICTION_SOFIA_ENGINE_PROVIDER_ID,
   isDesktopProviderBlocked,
   type DesktopAppRestrictionChecker,
 } from "../../../../app/cloud/desktop-app-restrictions";
@@ -109,7 +107,7 @@ type CloudProviderSyncReason =
   | "settings_cloud_opened"
   | "manual";
 
-type CloudProviderSyncWorkResult = void | OpenworkCloudProviderSyncRun;
+type CloudProviderSyncWorkResult = void | SofiaCloudProviderSyncRun;
 
 type GlobalCloudProviderSyncBatch = {
   contextKey: string;
@@ -250,7 +248,7 @@ export type ProviderOAuthStartResult = {
  */
 export type CloudProviderServerSyncState = {
   reloadPending: boolean;
-  skippedProviders: Record<string, OpenworkCloudProviderSyncSkippedProvider>;
+  skippedProviders: Record<string, SofiaCloudProviderSyncSkippedProvider>;
 };
 
 export type ProviderAuthStoreSnapshot = {
@@ -279,12 +277,12 @@ type CreateProviderAuthStoreOptions = {
   selectedWorkspaceRoot: () => string;
   runtimeWorkspaceId: () => string | null;
   ensureRuntimeWorkspaceId?: () => Promise<string | null | undefined>;
-  openworkServer: ProviderAuthOpenworkServer;
+  sofiaServer: ProviderAuthSofiaServer;
   setProviders: (value: ProviderListItem[]) => void;
   setProviderDefaults: (value: Record<string, string>) => void;
   setProviderConnectedIds: (value: string[]) => void;
   setDisabledProviders: (value: string[]) => void;
-  markOpencodeConfigReloadRequired: () => void;
+  markWorkspaceEngineConfigReloadRequired: () => void;
   focusPromptSoon?: () => void;
 };
 
@@ -401,50 +399,50 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
     return Array.from(merged.values()).toSorted(compareProviders);
   };
 
-  const resolveOpenworkConfigTarget = async (mode: "read" | "write") => {
-    const openworkSnapshot = options.openworkServer.getSnapshot();
-    const openworkClient = openworkSnapshot.openworkServerClient;
-    let openworkWorkspaceId = options.runtimeWorkspaceId()?.trim() || null;
-    if (!openworkWorkspaceId && openworkSnapshot.openworkServerStatus === "connected" && openworkClient) {
-      openworkWorkspaceId = (await options.ensureRuntimeWorkspaceId?.())?.trim() || null;
+  const resolveSofiaConfigTarget = async (mode: "read" | "write") => {
+    const sofiaSnapshot = options.sofiaServer.getSnapshot();
+    const sofiaClient = sofiaSnapshot.sofiaServerClient;
+    let sofiaWorkspaceId = options.runtimeWorkspaceId()?.trim() || null;
+    if (!sofiaWorkspaceId && sofiaSnapshot.sofiaServerStatus === "connected" && sofiaClient) {
+      sofiaWorkspaceId = (await options.ensureRuntimeWorkspaceId?.())?.trim() || null;
     }
-    const hasOpenworkTarget =
-      openworkSnapshot.openworkServerStatus === "connected" &&
-      Boolean(openworkClient && openworkWorkspaceId);
-    const canUseOpenworkServer =
-      hasOpenworkTarget &&
-      openworkSnapshot.openworkServerCapabilities?.config?.[mode] !== false;
+    const hasSofiaTarget =
+      sofiaSnapshot.sofiaServerStatus === "connected" &&
+      Boolean(sofiaClient && sofiaWorkspaceId);
+    const canUseSofiaServer =
+      hasSofiaTarget &&
+      sofiaSnapshot.sofiaServerCapabilities?.config?.[mode] !== false;
     return {
-      openworkClient,
-      openworkWorkspaceId,
-      hasOpenworkTarget,
-      canUseOpenworkServer,
+      sofiaClient,
+      sofiaWorkspaceId,
+      hasSofiaTarget,
+      canUseSofiaServer,
     };
   };
 
   const serverHandlesProviderSync = () => {
-    const openworkSnapshot = options.openworkServer.getSnapshot();
+    const sofiaSnapshot = options.sofiaServer.getSnapshot();
     return Boolean(
-      openworkSnapshot.openworkServerStatus === "connected" &&
-      openworkSnapshot.openworkServerCapabilities?.providerSync === true &&
-      openworkSnapshot.openworkServerAuth?.hostToken?.trim() &&
-      openworkSnapshot.openworkServerClient,
+      sofiaSnapshot.sofiaServerStatus === "connected" &&
+      sofiaSnapshot.sofiaServerCapabilities?.providerSync === true &&
+      sofiaSnapshot.sofiaServerAuth?.hostToken?.trim() &&
+      sofiaSnapshot.sofiaServerClient,
     );
   };
 
   const pushDenSession = (force = false): Promise<void> => {
-    const openworkSnapshot = options.openworkServer.getSnapshot();
-    const openworkClient = openworkSnapshot.openworkServerClient;
+    const sofiaSnapshot = options.sofiaServer.getSnapshot();
+    const sofiaClient = sofiaSnapshot.sofiaServerClient;
     const settings = readDenSettings();
     const apiBaseUrl = settings.apiBaseUrl ?? resolveDenBaseUrls(settings).apiBaseUrl;
     const token = settings.authToken?.trim() ?? "";
     const orgId = settings.activeOrgId?.trim() ?? "";
-    if (!serverHandlesProviderSync() || !openworkClient || !token || !orgId) return Promise.resolve();
+    if (!serverHandlesProviderSync() || !sofiaClient || !token || !orgId) return Promise.resolve();
     const key = `${apiBaseUrl}::${orgId}::${token}`;
     if (!force && key === lastDenSessionPushKey) return Promise.resolve();
     if (key === denSessionPushKey && denSessionPushInFlight) return denSessionPushInFlight;
     denSessionPushKey = key;
-    const request = openworkClient.putDenSession({ baseUrl: apiBaseUrl, token, orgId });
+    const request = sofiaClient.putDenSession({ baseUrl: apiBaseUrl, token, orgId });
     denSessionPushInFlight = request;
     request.then(
       () => { lastDenSessionPushKey = key; },
@@ -499,45 +497,45 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
     return "";
   };
 
-  const mirrorOpenWorkModelsVoiceEnv = async (provider: DenOrgLlmProviderConnection, apiKey: string) => {
+  const mirrorSofiaModelsVoiceEnv = async (provider: DenOrgLlmProviderConnection, apiKey: string) => {
     const trimmedKey = apiKey.trim();
     if (!trimmedKey) return;
-    const openworkClient = options.openworkServer.getSnapshot().openworkServerClient;
-    if (!openworkClient) return;
+    const sofiaClient = options.sofiaServer.getSnapshot().sofiaServerClient;
+    if (!sofiaClient) return;
     const entries = getCloudProviderEnv(provider.providerConfig)
       .slice(0, 1)
       .map((key) => ({ key, value: trimmedKey }));
-    if (provider.source === "openwork") {
-      if (!entries.some((entry) => entry.key === "OPENWORK_API_KEY")) {
-        entries.unshift({ key: "OPENWORK_API_KEY", value: trimmedKey });
+    if (provider.source === "sofia") {
+      if (!entries.some((entry) => entry.key === "SOFIA_API_KEY")) {
+        entries.unshift({ key: "SOFIA_API_KEY", value: trimmedKey });
       }
       const baseUrl = readCloudProviderBaseUrl(provider);
-      if (baseUrl) entries.push({ key: "OPENWORK_INFERENCE_BASE_URL", value: baseUrl });
+      if (baseUrl) entries.push({ key: "SOFIA_INFERENCE_BASE_URL", value: baseUrl });
     }
     if (entries.length === 0) return;
-    await openworkClient.upsertUserEnv(entries);
+    await sofiaClient.upsertUserEnv(entries);
   };
 
-  const readWorkspaceOpenworkConfigRecord = async (): Promise<
+  const readWorkspaceSofiaConfigRecord = async (): Promise<
     Record<string, unknown>
   > => {
     const root = options.selectedWorkspaceRoot().trim();
     const isLocalWorkspace =
       options.selectedWorkspaceDisplay().workspaceType === "local";
-    const { openworkClient, openworkWorkspaceId, hasOpenworkTarget, canUseOpenworkServer } =
-      await resolveOpenworkConfigTarget("read");
+    const { sofiaClient, sofiaWorkspaceId, hasSofiaTarget, canUseSofiaServer } =
+      await resolveSofiaConfigTarget("read");
 
-    if (canUseOpenworkServer && openworkClient && openworkWorkspaceId) {
-      const config = await openworkClient.getConfig(openworkWorkspaceId);
-      return config.openwork ?? {};
+    if (canUseSofiaServer && sofiaClient && sofiaWorkspaceId) {
+      const config = await sofiaClient.getConfig(sofiaWorkspaceId);
+      return config.engine ?? {};
     }
 
-    if (hasOpenworkTarget) {
+    if (hasSofiaTarget) {
       return {};
     }
 
     if (isLocalWorkspace && isDesktopRuntime() && root) {
-      return (await workspaceOpenworkRead({
+      return (await workspaceSofiaRead({
         workspacePath: root,
       })) as unknown as Record<string, unknown>;
     }
@@ -545,33 +543,33 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
     return {};
   };
 
-  const writeWorkspaceOpenworkConfigRecord = async (
+  const writeWorkspaceSofiaConfigRecord = async (
     config: Record<string, unknown>,
   ) => {
     const root = options.selectedWorkspaceRoot().trim();
     const isLocalWorkspace =
       options.selectedWorkspaceDisplay().workspaceType === "local";
-    const { openworkClient, openworkWorkspaceId, hasOpenworkTarget, canUseOpenworkServer } =
-      await resolveOpenworkConfigTarget("write");
+    const { sofiaClient, sofiaWorkspaceId, hasSofiaTarget, canUseSofiaServer } =
+      await resolveSofiaConfigTarget("write");
 
-    if (canUseOpenworkServer && openworkClient && openworkWorkspaceId) {
-      await openworkClient.patchConfig(openworkWorkspaceId, { openwork: config });
+    if (canUseSofiaServer && sofiaClient && sofiaWorkspaceId) {
+      await sofiaClient.patchConfig(sofiaWorkspaceId, { sofia: config });
       return true;
     }
 
-    if (hasOpenworkTarget) {
+    if (hasSofiaTarget) {
       return false;
     }
 
     if (isLocalWorkspace && isDesktopRuntime() && root) {
-      const result = await workspaceOpenworkWrite({
+      const result = await workspaceSofiaWrite({
         workspacePath: root,
         config: config as never,
       });
       const typed = result as { ok: boolean; stderr?: string; stdout?: string };
       if (!typed.ok) {
         throw new Error(
-          typed.stderr || typed.stdout || "Failed to write .opencode/openwork.json",
+          typed.stderr || typed.stdout || "Failed to write .sofia/sofia.json",
         );
       }
       return true;
@@ -583,9 +581,9 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
   const refreshImportedCloudProviders = async (refreshOptions?: { strict?: boolean }) => {
     try {
       if (serverHandlesProviderSync()) {
-        const openworkClient = options.openworkServer.getSnapshot().openworkServerClient;
-        if (!openworkClient) throw new Error("Sofia App server unavailable.");
-        const status = await openworkClient.getCloudProviderSyncStatus();
+        const sofiaClient = options.sofiaServer.getSnapshot().sofiaServerClient;
+        if (!sofiaClient) throw new Error("Sofia App server unavailable.");
+        const status = await sofiaClient.getCloudProviderSyncStatus();
         const next = Object.fromEntries(status.providers.map((provider) => [provider.cloudProviderId, provider]));
         setStateField("importedCloudProviders", next);
         // Carry the server's truth alongside the records: rows must not show
@@ -604,7 +602,7 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
       if (state.cloudProviderServerSync !== null) {
         setStateField("cloudProviderServerSync", null);
       }
-      const config = await readWorkspaceOpenworkConfigRecord();
+      const config = await readWorkspaceSofiaConfigRecord();
       const cloudImports = readWorkspaceCloudImports(config);
       const next = cloudImports.providers;
       // Guard: don't overwrite non-empty import state with an empty read.
@@ -628,7 +626,7 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
   const persistImportedCloudProviders = async (
     nextProviders: Record<string, CloudImportedProvider>,
   ) => {
-    const config = await readWorkspaceOpenworkConfigRecord();
+    const config = await readWorkspaceSofiaConfigRecord();
     const cloudImports = readWorkspaceCloudImports(config);
     const nextCloudImports = {
       ...cloudImports,
@@ -637,7 +635,7 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
     const nextConfig = withWorkspaceCloudImports(config, {
       ...nextCloudImports,
     });
-    const persisted = await writeWorkspaceOpenworkConfigRecord(nextConfig);
+    const persisted = await writeWorkspaceSofiaConfigRecord(nextConfig);
     if (!persisted) {
       throw new Error(
         "Sofia App server unavailable. Connect to manage imported cloud providers.",
@@ -646,76 +644,14 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
     setStateField("importedCloudProviders", nextProviders);
   };
 
-  const readProjectConfigFile = async () => {
-    const root = options.selectedWorkspaceRoot().trim();
-    const isLocalWorkspace =
-      options.selectedWorkspaceDisplay().workspaceType === "local";
-    const { openworkClient, openworkWorkspaceId, hasOpenworkTarget, canUseOpenworkServer } =
-      await resolveOpenworkConfigTarget("read");
-
-    if (canUseOpenworkServer && openworkClient && openworkWorkspaceId) {
-      return await openworkClient.readOpencodeConfigFile(openworkWorkspaceId, "project");
-    }
-
-    if (hasOpenworkTarget) {
-      throw new Error("Sofia App server config API is unavailable for this workspace.");
-    }
-
-    if (isLocalWorkspace && isDesktopRuntime() && root) {
-      return await readOpencodeConfig("project", root);
-    }
-
-    return null;
-  };
-
-  const writeProjectConfigFile = async (content: string) => {
-    const root = options.selectedWorkspaceRoot().trim();
-    const isLocalWorkspace =
-      options.selectedWorkspaceDisplay().workspaceType === "local";
-    const { openworkClient, openworkWorkspaceId, hasOpenworkTarget, canUseOpenworkServer } =
-      await resolveOpenworkConfigTarget("write");
-
-    if (canUseOpenworkServer && openworkClient && openworkWorkspaceId) {
-      const result = await openworkClient.writeOpencodeConfigFile(
-        openworkWorkspaceId,
-        "project",
-        content,
-      ) as { ok: boolean; stderr?: string; stdout?: string };
-      if (!result.ok) {
-        throw new Error(result.stderr || result.stdout || "Failed to write opencode.jsonc");
-      }
-      return true;
-    }
-
-    if (hasOpenworkTarget) {
-      throw new Error("Sofia App server config API is unavailable for this workspace.");
-    }
-
-    if (isLocalWorkspace && isDesktopRuntime() && root) {
-      const result = await writeOpencodeConfig("project", root, content) as { ok: boolean; stderr?: string; stdout?: string };
-      if (!result.ok) {
-        throw new Error(result.stderr || result.stdout || "Failed to write opencode.jsonc");
-      }
-      return true;
-    }
-
-    return false;
-  };
-
-  /**
-   * Upsert/delete cloud-managed provider entries in the workspace's runtime
-   * opencode config (server-side SQLite merged into OPENCODE_CONFIG). Record
-   * values upsert, explicit `null` deletes — per-key on the server, so there
-   * is no read-modify-write race and no edit of the user's opencode.jsonc.
-   */
   const patchRuntimeProviders = async (update: Record<string, unknown>) => {
-    const { openworkClient, openworkWorkspaceId, canUseOpenworkServer } =
-      await resolveOpenworkConfigTarget("write");
-    if (!canUseOpenworkServer || !openworkClient || !openworkWorkspaceId) {
+    const { sofiaClient, sofiaWorkspaceId, canUseSofiaServer } =
+      await resolveSofiaConfigTarget("write");
+    if (!canUseSofiaServer || !sofiaClient || !sofiaWorkspaceId) {
       throw new Error("Sofia App server unavailable. Connect to manage cloud providers.");
     }
-    await openworkClient.patchConfig(openworkWorkspaceId, {
-      opencode: { provider: update },
+    await sofiaClient.patchConfig(sofiaWorkspaceId, {
+      engine: { provider: update },
     });
   };
 
@@ -723,79 +659,45 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
     providerUpdate: Record<string, unknown>,
     nextProviders: Record<string, CloudImportedProvider>,
   ) => {
-    const { openworkClient, openworkWorkspaceId, canUseOpenworkServer } =
-      await resolveOpenworkConfigTarget("write");
-    if (!canUseOpenworkServer || !openworkClient || !openworkWorkspaceId) {
+    const { sofiaClient, sofiaWorkspaceId, canUseSofiaServer } =
+      await resolveSofiaConfigTarget("write");
+    if (!canUseSofiaServer || !sofiaClient || !sofiaWorkspaceId) {
       throw new Error("Sofia App server unavailable. Connect to manage cloud providers.");
     }
-    const config = await readWorkspaceOpenworkConfigRecord();
+    const config = await readWorkspaceSofiaConfigRecord();
     const cloudImports = readWorkspaceCloudImports(config);
     const nextConfig = withWorkspaceCloudImports(config, {
       ...cloudImports,
       providers: nextProviders,
     });
-    await openworkClient.patchConfig(openworkWorkspaceId, {
-      opencode: { provider: providerUpdate },
-      openwork: nextConfig,
+    await sofiaClient.patchConfig(sofiaWorkspaceId, {
+      engine: { provider: providerUpdate },
+      sofia: nextConfig,
     });
     setStateField("importedCloudProviders", nextProviders);
   };
 
-  /**
-   * Best-effort migration: pre-runtime builds wrote cloud provider blocks
-   * into the project opencode.jsonc. Strip them so the runtime entry is the
-   * single owner (and stale blocks from older builds stop shadowing state).
-   */
-  const stripLegacyCloudProviderBlocks = async (providerIds: Array<string | null | undefined>) => {
-    const ids = [...new Set(providerIds.flatMap((id) => (id?.trim() ? [id.trim()] : [])))];
-    if (ids.length === 0) return;
-    try {
-      await updateProjectConfigFile((raw) => {
-        let next = raw;
-        for (const id of ids) {
-          next = formatConfigWithoutCloudProvider(next, id, options.disabledProviders());
-        }
-        return next;
-      });
-    } catch {
-      // Legacy cleanup only — the runtime entry already owns the provider.
-    }
-  };
-
   const updateProjectConfigFile = async (
-    updater: (raw: string) => string,
+    _updater: (raw: string) => string,
     fallbackUpdate?: (config: Record<string, unknown>) => Record<string, unknown>,
   ) => {
-    const configFile = await readProjectConfigFile() as { content?: string } | null;
-    if (configFile) {
-      const raw = configFile.content?.trim()
-        ? configFile.content
-        : '{\n  "$schema": "https://opencode.ai/config.json"\n}\n';
-      const next = updater(raw);
-      if (configsAreSemanticallyEqual(raw, next)) {
-        return false;
-      }
-      await writeProjectConfigFile(next);
-      return true;
-    }
-
     if (!fallbackUpdate) {
       return false;
     }
 
     const c = options.client();
-    const openworkSnapshot = options.openworkServer.getSnapshot();
+    const sofiaSnapshot = options.sofiaServer.getSnapshot();
     const workspaceId = options.runtimeWorkspaceId();
     const workspaceType = options.selectedWorkspaceDisplay().workspaceType;
-    const canUseManagedRuntime = Boolean(openworkSnapshot.openworkServerClient && workspaceId?.trim() && workspaceType === "local");
+    const canUseManagedRuntime = Boolean(sofiaSnapshot.sofiaServerClient && workspaceId?.trim() && workspaceType === "local");
     if (!c && !canUseManagedRuntime) {
       throw new Error(t("providers.not_connected"));
     }
     const config = c ? unwrap(await c.config.get()) : {};
     const next = fallbackUpdate(config);
     await updateManagedDisabledProviders({
-      opencodeClient: c,
-      openworkClient: openworkSnapshot.openworkServerClient,
+      engineClient: c,
+      sofiaClient: sofiaSnapshot.sofiaServerClient,
       workspaceId,
       workspaceType,
       disabledProviders: next.disabled_providers,
@@ -825,7 +727,7 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
     const resolvedProviderId = providerId.trim();
     let updated = raw.trim()
       ? raw
-      : '{\n  "$schema": "https://opencode.ai/config.json"\n}\n';
+      : '{\n  "$schema": "https://github.com/RuutChatCSM/sofia/config.json"\n}\n';
     const parsed = parse(updated) as Record<string, unknown> | undefined;
     const currentDisabled = normalizeDisabledProviders(parsed?.disabled_providers);
     const nextDisabled = disabled
@@ -863,30 +765,30 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
       return false;
     }
 
-    // Prefer runtime OPENCODE_CONFIG injection (server SQLite) so OpenCode Zen
+    // Prefer runtime SOFIA_ENGINE_CONFIG injection (server SQLite) so Sofia Zen
     // and other built-in/env-backed providers can be disabled without editing
-    // the user's opencode.jsonc. Fall back to project config only when the
+    // the user's engine.jsonc. Fall back to project config only when the
     // managed runtime endpoint is unavailable.
     const c = options.client();
-    const openworkSnapshot = options.openworkServer.getSnapshot();
+    const sofiaSnapshot = options.sofiaServer.getSnapshot();
     const workspaceId = options.runtimeWorkspaceId();
     const workspaceType = options.selectedWorkspaceDisplay().workspaceType;
     const canUseManagedRuntime = Boolean(
-      openworkSnapshot.openworkServerClient && workspaceId?.trim() && workspaceType === "local",
+      sofiaSnapshot.sofiaServerClient && workspaceId?.trim() && workspaceType === "local",
     );
 
     if (canUseManagedRuntime || c) {
       const result = await updateManagedDisabledProviders({
-        opencodeClient: c,
-        openworkClient: openworkSnapshot.openworkServerClient,
+        engineClient: c,
+        sofiaClient: sofiaSnapshot.sofiaServerClient,
         workspaceId,
         workspaceType,
         disabledProviders: nextDisabled,
         removeFallbackKeyWhenEmpty: true,
-        markReloadRequired: () => options.markOpencodeConfigReloadRequired(),
+        markReloadRequired: () => options.markWorkspaceEngineConfigReloadRequired(),
       });
       options.setDisabledProviders(result.disabledProviders);
-      options.markOpencodeConfigReloadRequired();
+      options.markWorkspaceEngineConfigReloadRequired();
       refreshSnapshot();
       emitChange();
       return true;
@@ -910,7 +812,7 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
     }
 
     options.setDisabledProviders(nextDisabled);
-    options.markOpencodeConfigReloadRequired();
+    options.markWorkspaceEngineConfigReloadRequired();
     refreshSnapshot();
     emitChange();
     return true;
@@ -938,7 +840,7 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
   };
 
   // Sweep all cloud-managed provider entries (keys matching /^lpr_/) from
-  // both the runtime config and opencode.jsonc, regardless of
+  // both the runtime config and engine.jsonc, regardless of
   // importedCloudProviders state. Returns the list of provider IDs that were
   // removed so callers can also clear their auth credentials.
   const sweepOrphanCloudProvidersFromConfig = async (): Promise<string[]> => {
@@ -946,11 +848,11 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
 
     // Runtime-managed orphans (`lpr_*` keys in the workspace runtime config).
     try {
-      const { openworkClient, openworkWorkspaceId, canUseOpenworkServer } =
-        await resolveOpenworkConfigTarget("write");
-      if (canUseOpenworkServer && openworkClient && openworkWorkspaceId) {
-        const merged = await openworkClient.getConfig(openworkWorkspaceId);
-        const runtimeProvider = isRecord(merged.opencode) ? merged.opencode.provider : null;
+      const { sofiaClient, sofiaWorkspaceId, canUseSofiaServer } =
+        await resolveSofiaConfigTarget("write");
+      if (canUseSofiaServer && sofiaClient && sofiaWorkspaceId) {
+        const merged = await sofiaClient.getConfig(sofiaWorkspaceId);
+        const runtimeProvider = isRecord(merged.engine) ? merged.sofia.provider : null;
         const runtimeOrphans = isRecord(runtimeProvider)
           ? Object.keys(runtimeProvider).filter((key) => /^lpr_/i.test(key))
           : [];
@@ -965,30 +867,6 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
       // Best-effort; the legacy file sweep below still runs.
     }
 
-    // Legacy `opencode.jsonc` blocks written by pre-runtime builds.
-    const configFile = await readProjectConfigFile().catch(() => null) as { content?: string } | null;
-    if (configFile?.content?.trim()) {
-      const parsed = parse(configFile.content);
-      const providerSection =
-        parsed && typeof parsed === "object" && !Array.isArray(parsed)
-          ? (parsed as Record<string, unknown>).provider
-          : null;
-      const fileOrphans =
-        providerSection && typeof providerSection === "object" && !Array.isArray(providerSection)
-          ? Object.keys(providerSection as Record<string, unknown>).filter((key) => /^lpr_/i.test(key))
-          : [];
-      if (fileOrphans.length > 0) {
-        await updateProjectConfigFile((raw) => {
-          let next = raw;
-          for (const id of fileOrphans) {
-            next = formatConfigWithoutCloudProvider(next, id, options.disabledProviders());
-          }
-          return next;
-        });
-        for (const id of fileOrphans) orphanIds.add(id);
-      }
-    }
-
     return [...orphanIds];
   };
 
@@ -997,7 +875,7 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
   ) => {
     const localProviderId = getCloudManagedProviderId(provider);
     const existingImported = state.importedCloudProviders[provider.id] ?? null;
-    // `lpr_*` / `openwork` keys are owned by the cloud-import system. When the
+    // `lpr_*` / `sofia` keys are owned by the cloud-import system. When the
     // import baseline was lost or diverged (e.g. it lives in a different file
     // than the provider block, or a prior reconcile failed mid-flight), an
     // existing cloud-managed block must be treated as a re-import to reconcile,
@@ -1025,30 +903,6 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
       );
     }
 
-    const configFile = await readProjectConfigFile() as { content?: string } | null;
-    if (
-      !configFile?.content?.trim() ||
-      existingImported ||
-      (cloudManagedKey && localProviderId !== "openwork")
-    ) {
-      return;
-    }
-
-    const parsed = parse(configFile.content);
-    const providerSection =
-      parsed && typeof parsed === "object" && !Array.isArray(parsed)
-        ? (parsed as Record<string, unknown>).provider
-        : null;
-    if (
-      providerSection &&
-      typeof providerSection === "object" &&
-      !Array.isArray(providerSection) &&
-      localProviderId in (providerSection as Record<string, unknown>)
-    ) {
-      throw new CloudProviderImportConflictError(
-        `${localProviderId} already has a provider block in opencode.jsonc. Remove it before importing the cloud-managed version.`,
-      );
-    }
   };
 
   const getCloudOrgProvidersKey = () => {
@@ -1456,19 +1310,19 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
         lastGlobalProviderDisposeRefreshAt = now;
         if (shouldUseServerReload) {
           try {
-            const openworkSnapshot = options.openworkServer.getSnapshot();
-            const openworkClient = openworkSnapshot.openworkServerClient;
-            if (openworkSnapshot.openworkServerStatus === "connected" && openworkClient) {
+            const sofiaSnapshot = options.sofiaServer.getSnapshot();
+            const sofiaClient = sofiaSnapshot.sofiaServerClient;
+            if (sofiaSnapshot.sofiaServerStatus === "connected" && sofiaClient) {
               const workspaceId =
                 options.runtimeWorkspaceId()?.trim() ||
                 (await options.ensureRuntimeWorkspaceId?.())?.trim() ||
                 "";
               if (workspaceId) {
                 try {
-                  await openworkClient.reloadEngine(workspaceId);
+                  await sofiaClient.reloadEngine(workspaceId);
                 } catch (error) {
                   const unreachable =
-                    error instanceof OpenworkServerError && error.code === "opencode_engine_unreachable";
+                    error instanceof SofiaServerError && error.code === "engine_engine_unreachable";
                   if (!unreachable || !isDesktopRuntime()) {
                     throw error;
                   }
@@ -1573,7 +1427,7 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
     };
 
     try {
-      if (resolved.toLowerCase() === DESKTOP_RESTRICTION_OPENCODE_PROVIDER_ID) {
+      if (resolved.toLowerCase() === DESKTOP_RESTRICTION_SOFIA_ENGINE_PROVIDER_ID) {
         await ensureProjectProviderDisabledState(resolved, false);
       }
       const trimmedCode = code?.trim();
@@ -1626,13 +1480,13 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
 
     setStateField("providerAuthBusy", true);
     try {
-      if (providerId.trim().toLowerCase() === DESKTOP_RESTRICTION_OPENCODE_PROVIDER_ID) {
+      if (providerId.trim().toLowerCase() === DESKTOP_RESTRICTION_SOFIA_ENGINE_PROVIDER_ID) {
         await ensureProjectProviderDisabledState(providerId, false);
       }
       await c.auth.set({ providerID: providerId, auth: { type: "api", key: trimmed } });
       // Mirror the key into the codex auth store so the bundled codex engine
       // can read it at spawn via its provider `env_key` (codexengine.json).
-      // This mirrors how opencode receives UI-entered keys (its auth API).
+      // This mirrors how engine receives UI-entered keys (its auth API).
       await mirrorCodexAuthKey(providerId, trimmed);
       await refreshProviders({ dispose: true });
       return `${t("status.connected")} ${providerId}`;
@@ -1648,11 +1502,11 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
   async function mirrorCodexAuthKey(providerId: string, apiKey: string) {
     const provider = getProviderAuthProviders().find((entry) => entry.id === providerId);
     const envNames = provider?.env ?? [];
-    const envKey = envNames.find((name) => !/^OPENWORK_/.test(name)) ?? envNames[0];
+    const envKey = envNames.find((name) => !/^SOFIA_/.test(name)) ?? envNames[0];
     if (!envKey) return;
-    const { openworkClient, openworkWorkspaceId } = await resolveOpenworkConfigTarget("write");
-    if (!openworkClient || !openworkWorkspaceId) return;
-    await openworkClient.setCodexAuth(openworkWorkspaceId, providerId, envKey, apiKey);
+    const { sofiaClient, sofiaWorkspaceId } = await resolveSofiaConfigTarget("write");
+    if (!sofiaClient || !sofiaWorkspaceId) return;
+    await sofiaClient.setCodexAuth(sofiaWorkspaceId, providerId, envKey, apiKey);
   }
 
   async function connectCloudProviderInternal(
@@ -1694,22 +1548,22 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
       await assertCloudProviderImportSafe(provider);
 
       if (envEntries.length > 0) {
-        const openworkClient = options.openworkServer.getSnapshot().openworkServerClient;
-        if (!openworkClient) {
+        const sofiaClient = options.sofiaServer.getSnapshot().sofiaServerClient;
+        if (!sofiaClient) {
           throw new CloudProviderNeedsServerError(
             `${provider.name} needs environment variables (${envEntries
               .map((entry) => entry.key)
               .join(", ")}) but the Sofia App server is not available.`,
           );
         }
-        await openworkClient.upsertUserEnv(envEntries);
+        await sofiaClient.upsertUserEnv(envEntries);
       }
       if (primaryApiKey) {
         await c.auth.set({
           providerID: localProviderId,
           auth: { type: "api", key: primaryApiKey },
         });
-        await mirrorOpenWorkModelsVoiceEnv(provider, primaryApiKey);
+        await mirrorSofiaModelsVoiceEnv(provider, primaryApiKey);
       }
       if (existingImported?.providerId && existingImported.providerId !== localProviderId) {
         try {
@@ -1739,19 +1593,18 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
       };
       // Cloud providers are runtime-managed: upsert (and delete a renamed
       // predecessor) via one server config write, together with the import
-      // baseline, instead of editing the user's opencode.jsonc.
+      // baseline, instead of editing the user's engine.jsonc.
       await patchRuntimeProviderAndImportedCloudProviders(
         buildRuntimeProviderPatch(provider, localProviderId, existingImported?.providerId ?? null),
         nextImportedProviders,
       );
-      await stripLegacyCloudProviderBlocks([localProviderId, existingImported?.providerId]);
 
       const nextDisabledProviders = options
         .disabledProviders()
         .filter((id) => id !== localProviderId && id !== existingImported?.providerId);
       options.setDisabledProviders(nextDisabledProviders);
       if (!optionsArg?.silent) {
-        options.markOpencodeConfigReloadRequired();
+        options.markWorkspaceEngineConfigReloadRequired();
         await refreshProviders({ dispose: true });
       }
       refreshSnapshot();
@@ -1826,10 +1679,9 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
         }
       }
       // Runtime-managed: delete the provider entry via the server's per-key
-      // merge (`null` deletes), then strip any legacy opencode.jsonc block
+      // merge (`null` deletes), then strip any legacy engine.jsonc block
       // left by pre-runtime builds. Both are idempotent.
       await patchRuntimeProviders({ [imported.providerId]: null });
-      await stripLegacyCloudProviderBlocks([imported.providerId]);
 
       const nextImportedProviders = { ...state.importedCloudProviders };
       delete nextImportedProviders[cloudProviderId];
@@ -1838,7 +1690,7 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
       options.setDisabledProviders(
         options.disabledProviders().filter((id) => id !== imported.providerId),
       );
-      options.markOpencodeConfigReloadRequired();
+      options.markWorkspaceEngineConfigReloadRequired();
       refreshSnapshot();
       emitChange();
       return `${t("providers.disconnected_prefix")} ${imported.name}`;
@@ -1943,14 +1795,14 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
     // the target resolves made the baseline read fall back to an empty source
     // and re-import every org provider — engine dispose churn on settings open.
     const [readTarget, target] = await Promise.all([
-      resolveOpenworkConfigTarget("read"),
-      resolveOpenworkConfigTarget("write"),
+      resolveSofiaConfigTarget("read"),
+      resolveSofiaConfigTarget("write"),
     ]);
     if (
-      !readTarget.canUseOpenworkServer ||
-      !target.canUseOpenworkServer ||
-      !target.openworkClient ||
-      !target.openworkWorkspaceId
+      !readTarget.canUseSofiaServer ||
+      !target.canUseSofiaServer ||
+      !target.sofiaClient ||
+      !target.sofiaWorkspaceId
     ) {
       return;
     }
@@ -2088,7 +1940,7 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
       }
       return;
     }
-    if (getOpenworkGatewayOrigin()) {
+    if (getSofiaGatewayOrigin()) {
       if (!loggedGatewayCloudProviderSyncSkip) {
         loggedGatewayCloudProviderSyncSkip = true;
         console.info(
@@ -2103,12 +1955,12 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
         const result = await enqueueGlobalCloudProviderSync(
           `server:${getCloudProviderSyncContextKey()}`,
           async () => {
-            const openworkClient = options.openworkServer.getSnapshot().openworkServerClient;
-            if (!openworkClient) throw new Error("Sofia App server unavailable.");
-            let result = await openworkClient.runCloudProviderSyncNow(reason);
+            const sofiaClient = options.sofiaServer.getSnapshot().sofiaServerClient;
+            if (!sofiaClient) throw new Error("Sofia App server unavailable.");
+            let result = await sofiaClient.runCloudProviderSyncNow(reason);
             if (result.status === "no_session") {
               await pushDenSession(true);
-              result = await openworkClient.runCloudProviderSyncNow(reason);
+              result = await sofiaClient.runCloudProviderSyncNow(reason);
             }
             return result;
           },
@@ -2170,9 +2022,9 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
     }
 
     try {
-      // OpenCode Zen is built-in / env-backed. Credential removal alone leaves
-      // it connected — disable it via runtime OPENCODE_CONFIG injection.
-      if (resolved.toLowerCase() === DESKTOP_RESTRICTION_OPENCODE_PROVIDER_ID) {
+      // Sofia Zen is built-in / env-backed. Credential removal alone leaves
+      // it connected — disable it via runtime SOFIA_ENGINE_CONFIG injection.
+      if (resolved.toLowerCase() === DESKTOP_RESTRICTION_SOFIA_ENGINE_PROVIDER_ID) {
         try {
           await removeProviderAuthCredentials(resolved);
         } catch {
@@ -2337,7 +2189,7 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
         } else {
           const logoutProviderIds = detail?.status === "signed_out"
             ? [...new Set(options.providerConnectedIds())].filter(
-              (providerId) => providerId.trim().toLowerCase() !== DESKTOP_RESTRICTION_OPENCODE_PROVIDER_ID,
+              (providerId) => providerId.trim().toLowerCase() !== DESKTOP_RESTRICTION_SOFIA_ENGINE_PROVIDER_ID,
             )
             : [];
           // Account-scoped catalog state must disappear synchronously. Config
@@ -2365,9 +2217,9 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
           if (serverHandlesProviderSync()) {
             lastDenSessionPushKey = "";
             void (async () => {
-              await options.openworkServer.getSnapshot().openworkServerClient?.deleteDenSession().catch(() => undefined);
+              await options.sofiaServer.getSnapshot().sofiaServerClient?.deleteDenSession().catch(() => undefined);
               // The server removes cloud-owned environment entries from disk,
-              // but a running OpenCode child retains its spawn environment.
+              // but a running Sofia child retains its spawn environment.
               // Explicit desktop sign-out must replace that process so an
               // account-scoped provider cannot remain connected in the UI.
               if (detail?.status === "signed_out" && isDesktopRuntime()) {
@@ -2380,7 +2232,7 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
           const importedProviders = { ...state.importedCloudProviders };
           const importedIds = Object.keys(importedProviders);
 
-          // Best-effort cleanup: remove each cloud provider from opencode.jsonc
+          // Best-effort cleanup: remove each cloud provider from engine.jsonc
           // BEFORE clearing state so removeCloudProviderInternal can find the records
           void (async () => {
             for (const providerId of logoutProviderIds) {
@@ -2400,7 +2252,7 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
               }
             }
             // Final sweep: remove any orphan `lpr_*` provider keys that remain
-            // in opencode.jsonc but weren't tracked in importedCloudProviders
+            // in engine.jsonc but weren't tracked in importedCloudProviders
             // (e.g. from a previous failed cleanup or external edit).
             try {
               const orphans = await sweepOrphanCloudProvidersFromConfig();
@@ -2412,7 +2264,7 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
                 }
               }
               if (orphans.length > 0) {
-                options.markOpencodeConfigReloadRequired();
+                options.markWorkspaceEngineConfigReloadRequired();
               }
             } catch {
               // Ignore sweep failures during sign-out cleanup
@@ -2473,7 +2325,7 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
               } catch {}
             }
           }
-          // Then: sweep any `lpr_*` keys that remain in opencode.jsonc
+          // Then: sweep any `lpr_*` keys that remain in engine.jsonc
           try {
             const orphans = await sweepOrphanCloudProvidersFromConfig();
             for (const providerId of orphans) {
@@ -2482,7 +2334,7 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
               } catch {}
             }
             if (orphans.length > 0) {
-              options.markOpencodeConfigReloadRequired();
+              options.markWorkspaceEngineConfigReloadRequired();
             }
           } catch {}
           mutateState((current) => ({

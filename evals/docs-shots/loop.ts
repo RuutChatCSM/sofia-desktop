@@ -1,7 +1,7 @@
 import { setTimeout as delay } from "node:timers/promises";
-import type { Surface } from "@openwork/cdp";
-import { screenshot } from "@openwork/test-evidence";
-import type { ScreenshotArtifact } from "@openwork/test-evidence";
+import type { Surface } from "@sofia/cdp";
+import { screenshot } from "@sofia/test-evidence";
+import type { ScreenshotArtifact } from "@sofia/test-evidence";
 import type { Gate } from "./gate.ts";
 
 /** Wait for accepted content to hold across stable consecutive frames. */

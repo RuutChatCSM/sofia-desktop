@@ -1,20 +1,20 @@
-# OpenWork Server
+# Sofia Server
 
-Filesystem-backed API for OpenWork remote clients. This package provides the OpenWork server layer described in `apps/app/pr/openwork-server.md` and is intentionally independent from the desktop app.
+Filesystem-backed API for Sofia remote clients. This package provides the Sofia server layer described in `apps/app/pr/sofia-server.md` and is intentionally independent from the desktop app.
 
 ## Quick start
 
 ```bash
-npm install -g openwork-server
-openwork-server --workspace /path/to/workspace --approval auto
+npm install -g sofia-server
+sofia-server --workspace /path/to/workspace --approval auto
 ```
 
-`openwork-server` ships as a compiled binary, so Bun is not required at runtime.
+`sofia-server` ships as a compiled binary, so Bun is not required at runtime.
 
 Or from source:
 
 ```bash
-pnpm --filter openwork-server dev -- \
+pnpm --filter sofia-server dev -- \
   --workspace /path/to/workspace \
   --approval auto
 ```
@@ -25,7 +25,7 @@ Add `--verbose` to print resolved config details on startup. Use `--version` to 
 
 ## Config file
 
-Defaults to `~/.config/openwork/server.json` (override with `OPENWORK_SERVER_CONFIG` or `--config`).
+Defaults to `~/.config/sofia/server.json` (override with `SOFIA_SERVER_CONFIG` or `--config`).
 
 ```json
 {
@@ -47,33 +47,33 @@ Defaults to `~/.config/openwork/server.json` (override with `OPENWORK_SERVER_CON
 
 ## Environment variables
 
-- `OPENWORK_SERVER_CONFIG` path to config JSON
-- `OPENWORK_HOST` / `OPENWORK_PORT`
-- `OPENWORK_TOKEN` client bearer token
-- `OPENWORK_HOST_TOKEN` host approval token
-- `OPENWORK_APPROVAL_MODE` (`manual` | `auto`)
-- `OPENWORK_APPROVAL_TIMEOUT_MS`
-- `OPENWORK_WORKSPACES` (JSON array or comma-separated list of paths)
-- `OPENWORK_CORS_ORIGINS` (comma-separated list or `*`)
-- `OPENWORK_OPENCODE_BASE_URL`
-- `OPENWORK_OPENCODE_DIRECTORY`
-- `OPENWORK_OPENCODE_USERNAME`
-- `OPENWORK_OPENCODE_PASSWORD`
+- `SOFIA_SERVER_CONFIG` path to config JSON
+- `SOFIA_HOST` / `SOFIA_PORT`
+- `SOFIA_TOKEN` client bearer token
+- `SOFIA_HOST_TOKEN` host approval token
+- `SOFIA_APPROVAL_MODE` (`manual` | `auto`)
+- `SOFIA_APPROVAL_TIMEOUT_MS`
+- `SOFIA_WORKSPACES` (JSON array or comma-separated list of paths)
+- `SOFIA_CORS_ORIGINS` (comma-separated list or `*`)
+- `SOFIA_SOFIA_ENGINE_BASE_URL`
+- `SOFIA_SOFIA_ENGINE_DIRECTORY`
+- `SOFIA_SOFIA_ENGINE_USERNAME`
+- `SOFIA_SOFIA_ENGINE_PASSWORD`
 
 Token management (scoped tokens):
 
-- `OPENWORK_TOKEN_STORE` path to token store JSON (default: alongside `server.json`)
+- `SOFIA_TOKEN_STORE` path to token store JSON (default: alongside `server.json`)
 
 File injection / artifacts:
 
-- `OPENWORK_INBOX_ENABLED` (`1` | `0`)
-- `OPENWORK_INBOX_MAX_BYTES` (default: 50MB, capped)
-- `OPENWORK_OUTBOX_ENABLED` (`1` | `0`)
+- `SOFIA_INBOX_ENABLED` (`1` | `0`)
+- `SOFIA_INBOX_MAX_BYTES` (default: 50MB, capped)
+- `SOFIA_OUTBOX_ENABLED` (`1` | `0`)
 
 Sandbox advertisement (for capability discovery):
 
-- `OPENWORK_SANDBOX_ENABLED` (`1` | `0`)
-- `OPENWORK_SANDBOX_BACKEND` (`docker` | `container` | `none`)
+- `SOFIA_SANDBOX_ENABLED` (`1` | `0`)
+- `SOFIA_SANDBOX_BACKEND` (`docker` | `container` | `none`)
 
 ## Endpoints
 
@@ -110,7 +110,7 @@ Token management (host/owner auth):
 
 Inbox/outbox:
 
-- `POST /workspace/:id/inbox` (multipart upload into `.opencode/openwork/inbox/`)
+- `POST /workspace/:id/inbox` (multipart upload into `.sofia/sofia/inbox/`)
 - `GET /workspace/:id/artifacts`
 - `GET /workspace/:id/artifacts/:artifactId`
 - `POST /workspace/:id/files/sessions`
@@ -122,10 +122,10 @@ Inbox/outbox:
 - `POST /files/sessions/:sessionId/write-batch`
 - `POST /files/sessions/:sessionId/ops`
 
-OpenCode proxy:
+Sofia proxy:
 
-- `GET|POST|... /opencode/*`
-- `GET|POST|... /w/:id/opencode/*`
+- `GET|POST|... /engine/*`
+- `GET|POST|... /w/:id/engine/*`
 
 ## Approvals
 
@@ -133,7 +133,7 @@ All writes are gated by host approval.
 
 Host APIs accept either:
 
-- `X-OpenWork-Host-Token: <token>` (legacy host token), or
+- `X-Sofia-Host-Token: <token>` (legacy host token), or
 - `Authorization: Bearer <token>` where the token scope is `owner`.
 
 Approvals endpoints:
@@ -141,4 +141,4 @@ Approvals endpoints:
 - `GET /approvals`
 - `POST /approvals/:id` with `{ "reply": "allow" | "deny" }`
 
-Set `OPENWORK_APPROVAL_MODE=auto` to auto-approve during local development.
+Set `SOFIA_APPROVAL_MODE=auto` to auto-approve during local development.

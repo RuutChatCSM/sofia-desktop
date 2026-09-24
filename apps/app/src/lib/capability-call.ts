@@ -138,7 +138,7 @@ function verbPhrase(action: string, tense: "present" | "past"): string {
 /**
  * Build the human sentence for a dynamic (MCP / capability) tool call.
  * Tool names follow "{connection}_{tool}", e.g.
- * "openwork-cloud_search_capabilities".
+ * "sofia-cloud_search_capabilities".
  */
 export function getCapabilityCallSentence(
   part: DynamicToolUIPart,

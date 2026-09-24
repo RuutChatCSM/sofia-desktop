@@ -1,8 +1,8 @@
 import { expect } from "vitest";
-import { clickButton, evalIn, fill, waitFor } from "@openwork/behaviors";
-import { navigate } from "@openwork/cdp";
-import { screenshot } from "@openwork/test-evidence";
-import { chrome } from "@openwork/hosts";
+import { clickButton, evalIn, fill, waitFor } from "@sofia/behaviors";
+import { navigate } from "@sofia/cdp";
+import { screenshot } from "@sofia/test-evidence";
+import { chrome } from "@sofia/hosts";
 import {
   localMysqlIsRunning,
   localRedisIsRunning,
@@ -10,18 +10,18 @@ import {
   selfHostServer,
   test,
   unmetNeeds,
-} from "@openwork/testkit";
-import type { TestNeeds } from "@openwork/testkit";
+} from "@sofia/testkit";
+import type { TestNeeds } from "@sofia/testkit";
 
-const requirements: TestNeeds = { optIn: ["OPENWORK_EVAL_E2E_TESTS"] };
+const requirements: TestNeeds = { optIn: ["SOFIA_EVAL_E2E_TESTS"] };
 const missingRequirements = unmetNeeds(requirements, process.env);
-const daytonaPlacement = process.env.OPENWORK_EVAL_DAYTONA === "1";
+const daytonaPlacement = process.env.SOFIA_EVAL_DAYTONA === "1";
 const mysqlOpen = await localMysqlIsRunning();
 const redisOpen = await localRedisIsRunning();
 const title = missingRequirements.length > 0
   ? `enterprise install guide skipped — needs: ${missingRequirements.join(", ")}`
   : daytonaPlacement
-    ? "enterprise install guide skipped — needs: local placement (unset OPENWORK_EVAL_DAYTONA)"
+    ? "enterprise install guide skipped — needs: local placement (unset SOFIA_EVAL_DAYTONA)"
     : !mysqlOpen
       ? "enterprise install guide skipped — needs: MySQL on 127.0.0.1:3306"
       : !redisOpen
@@ -36,7 +36,7 @@ test.skipIf(missingRequirements.length > 0 || daytonaPlacement || !mysqlOpen || 
   needs(requirements);
 
   const ownerEmail = `owner+${Date.now().toString(36)}@enterprise-install.test`;
-  const password = "OpenWorkEval123!";
+  const password = "SofiaEval123!";
   await using den = await selfHostServer({
     place,
     name: "Enterprise Install Guide",
@@ -80,7 +80,7 @@ test.skipIf(missingRequirements.length > 0 || daytonaPlacement || !mysqlOpen || 
 
   const rawGuide = await evalIn(browser, `(async () => {
     const headers = new Headers({ Accept: "application/json" });
-    const storedToken = localStorage.getItem("openwork:web:auth-token")?.trim();
+    const storedToken = localStorage.getItem("sofia:web:auth-token")?.trim();
     if (storedToken) headers.set("Authorization", "Bearer " + storedToken);
     const response = await fetch("/api/den/v1/me/install-config", { credentials: "include", headers });
     const config = await response.json();
@@ -93,7 +93,7 @@ test.skipIf(missingRequirements.length > 0 || daytonaPlacement || !mysqlOpen || 
       steps,
       fourthStep: Boolean(document.querySelector('[data-testid="install-guide"] > li:nth-child(4)')),
       cloudReturnControl: [...document.querySelectorAll("a")]
-        .some((anchor) => (anchor.textContent ?? "").trim() === "I already installed OpenWork"),
+        .some((anchor) => (anchor.textContent ?? "").trim() === "I already installed Sofia App"),
       mintedToken: resources.some((url) => url.includes("/install-links") || url.includes("/v1/install-config?token=")),
     });
   })()`, { awaitPromise: true });

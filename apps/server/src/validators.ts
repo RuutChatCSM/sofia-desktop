@@ -3,8 +3,8 @@ import { ApiError } from "./errors.js";
 const SKILL_NAME_REGEX = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 const COMMAND_NAME_REGEX = /^[A-Za-z0-9_-]+$/;
 const MCP_NAME_REGEX = /^[A-Za-z0-9_-]+$/;
-const RESERVED_USER_MCP_NAMES = new Set(["openwork-cloud"]);
-const RESERVED_USER_MCP_PREFIXES = ["openwork-connect-"];
+const RESERVED_USER_MCP_NAMES = new Set(["sofia-cloud"]);
+const RESERVED_USER_MCP_PREFIXES = ["sofia-connect-"];
 
 export function validateSkillName(name: string): void {
   if (!name || name.length < 1 || name.length > 64 || !SKILL_NAME_REGEX.test(name)) {
@@ -45,7 +45,7 @@ export function validateUserMcpName(name: string): void {
   validateMcpName(name);
   if (RESERVED_USER_MCP_NAMES.has(name.toLowerCase())
     || RESERVED_USER_MCP_PREFIXES.some((prefix) => name.toLowerCase().startsWith(prefix))) {
-    throw new ApiError(409, "reserved_mcp_name", `${name} is reserved for OpenWork Connect`);
+    throw new ApiError(409, "reserved_mcp_name", `${name} is reserved for Sofia App Connect`);
   }
 }
 

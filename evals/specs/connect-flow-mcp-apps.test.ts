@@ -1,12 +1,12 @@
 import { spawnSync } from "node:child_process"
 import { resolve } from "node:path"
 import { expect } from "vitest"
-import { test } from "@openwork/testkit"
+import { test } from "@sofia/testkit"
 
 const repoRoot = resolve(import.meta.dirname, "../..")
 
 function runInDenApi(args: string[]): { status: number | null; output: string; error?: Error } {
-  const result = spawnSync("pnpm", ["--filter", "@openwork-ee/den-api", ...args], {
+  const result = spawnSync("pnpm", ["--filter", "@sofia-ee/den-api", ...args], {
     cwd: repoRoot,
     encoding: "utf8",
     timeout: 180_000,
@@ -34,7 +34,7 @@ test("connection-action and plugin-flow cards publish standard MCP App contracts
 
   evidence.recordAssertionEvidence(
     "Connection steering is an MCP App",
-    "The gateway serves ui://openwork/connection-action/v1/view.html with an app-only connection_action tool, and connection_status payloads map to schema-valid cards carrying the exact human action plus a same-server openwork/mcpApp launch.",
+    "The gateway serves ui://sofia/connection-action/v1/view.html with an app-only connection_action tool, and connection_status payloads map to schema-valid cards carrying the exact human action plus a same-server sofia/mcpApp launch.",
     true,
   )
   evidence.recordAssertionEvidence(

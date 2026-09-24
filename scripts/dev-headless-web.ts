@@ -1,9 +1,11 @@
 import { execFileSync, spawn, type ChildProcess } from "node:child_process";
-import { openSync } from "node:fs";
+import { existsSync, openSync } from "node:fs";
 import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
+import { homedir } from "node:os";
+import { resolveSofiaEngine } from "../apps/desktop/electron/sofia-engine.mjs";
 
 import {
   buildDetachedRespawnArgs,
@@ -11,9 +13,11 @@ import {
   buildHeadlessCorsOrigins,
   buildHeadlessRuntimeManifest,
   buildHeadlessServerLaunch,
-  buildOpenworkServerArgs,
+  buildSofiaServerArgs,
   isHeadlessStackCommand,
   mergeHeadlessServerConfig,
+  resolveHeadlessSofiaHome,
+  resolveHeadlessProviderHome,
   resolveHeadlessRuntimeManifestPath,
   resolveHeadlessServerConfigPath,
   resolveHeadlessTokens,
@@ -25,7 +29,7 @@ const tmpDir = path.join(cwd, "tmp");
 
 const DEFAULT_WEB_PORT = "5178";
 const DEFAULT_SERVER_PORT = "8778";
-const DEFAULT_DEN_TARGET = "https://app.openworklabs.com";
+const DEFAULT_DEN_TARGET = "https://sofia-app.ruut.chat";
 
 const ensureTmp = async () => {
   await mkdir(tmpDir, { recursive: true });
@@ -83,12 +87,12 @@ const readBool = (value: string | undefined) => {
 const silent = process.argv.includes("--silent");
 const replaceRequested =
   process.argv.includes("--replace") ||
-  readBool(process.env.OPENWORK_DEV_HEADLESS_WEB_REPLACE);
+  readBool(process.env.SOFIA_DEV_HEADLESS_WEB_REPLACE);
 
 const denProxyEnabled =
-  process.env.OPENWORK_DEV_HEADLESS_WEB_DEN_PROXY == null
+  process.env.SOFIA_DEV_HEADLESS_WEB_DEN_PROXY == null
     ? true
-    : readBool(process.env.OPENWORK_DEV_HEADLESS_WEB_DEN_PROXY);
+    : readBool(process.env.SOFIA_DEV_HEADLESS_WEB_DEN_PROXY);
 
 // Detached: each child leads its own process group, so signals aimed at the
 // launcher (e.g. a terminal session getting reaped) cannot take the stack down.
@@ -189,7 +193,7 @@ const existingHealthy = existingManifest
 if (existingManifest && existingHealthy && !replaceRequested) {
   logLine("[dev:headless-web] Already running; reusing the healthy instance");
   logLine(`[dev:headless-web] Web URL: ${existingManifest.webUrl}`);
-  logLine(`[dev:headless-web] OpenWork server: ${existingManifest.openworkUrl}`);
+  logLine(`[dev:headless-web] Sofia server: ${existingManifest.sofiaUrl}`);
   logLine(
     `[dev:headless-web] Agent runtime: ${path.relative(cwd, runtimeManifestPath)}`,
   );
@@ -200,7 +204,7 @@ if (existingManifest && existingHealthy && !replaceRequested) {
 // --detach: re-spawn this script in its own process group so the stack does
 // not depend on the invoking terminal surviving, then wait for health.
 const detachRequested = process.argv.includes("--detach");
-const isDetachedChild = readBool(process.env.OPENWORK_DEV_HEADLESS_WEB_DETACHED);
+const isDetachedChild = readBool(process.env.SOFIA_DEV_HEADLESS_WEB_DETACHED);
 if (detachRequested && !isDetachedChild) {
   const launcherLogPath = path.join(tmpDir, "dev-headless-web.launcher.log");
   const launcherLogFd = openSync(launcherLogPath, "w");
@@ -212,7 +216,7 @@ if (detachRequested && !isDetachedChild) {
     ],
     {
       cwd,
-      env: { ...process.env, OPENWORK_DEV_HEADLESS_WEB_DETACHED: "1" },
+      env: { ...process.env, SOFIA_DEV_HEADLESS_WEB_DETACHED: "1" },
       stdio: ["ignore", launcherLogFd, launcherLogFd],
       detached: true,
     },
@@ -231,7 +235,7 @@ if (detachRequested && !isDetachedChild) {
       (await probeStack(manifest))
     ) {
       logLine(`[dev:headless-web] Web URL: ${manifest.webUrl}`);
-      logLine(`[dev:headless-web] OpenWork server: ${manifest.openworkUrl}`);
+      logLine(`[dev:headless-web] Sofia server: ${manifest.sofiaUrl}`);
       if (manifest.denApiUrl) {
         logLine(
           `[dev:headless-web] Den (same-origin): ${manifest.denApiUrl} -> ${manifest.denTarget}`,
@@ -257,22 +261,22 @@ if (existingManifest) {
     logLine("[dev:headless-web] Cleaning up stale instance from the last run");
   }
   await killStackPid(existingManifest.pids?.web);
-  await killStackPid(existingManifest.pids?.openworkServer);
+  await killStackPid(existingManifest.pids?.sofiaServer);
   await killStackPid(existingManifest.pids?.launcher ?? existingManifest.pid);
 }
 
-const remoteAccessEnabled = readBool(process.env.OPENWORK_REMOTE_ACCESS);
+const remoteAccessEnabled = readBool(process.env.SOFIA_REMOTE_ACCESS);
 const host = remoteAccessEnabled ? "0.0.0.0" : "127.0.0.1";
 const viteHost = process.env.VITE_HOST ?? process.env.HOST ?? host;
-const publicHost = process.env.OPENWORK_PUBLIC_HOST ?? null;
+const publicHost = process.env.SOFIA_PUBLIC_HOST ?? null;
 const clientHost = publicHost ?? (host === "0.0.0.0" ? "127.0.0.1" : host);
-const workspace = path.resolve(process.env.OPENWORK_WORKSPACE ?? cwd);
-const openworkPort = await resolvePort(
-  process.env.OPENWORK_PORT ?? DEFAULT_SERVER_PORT,
+const workspace = path.resolve(process.env.SOFIA_WORKSPACE ?? cwd);
+const sofiaPort = await resolvePort(
+  process.env.SOFIA_PORT ?? DEFAULT_SERVER_PORT,
   "127.0.0.1",
 );
 const webPort = await resolvePort(
-  process.env.OPENWORK_WEB_PORT ?? DEFAULT_WEB_PORT,
+  process.env.SOFIA_WEB_PORT ?? DEFAULT_WEB_PORT,
   "127.0.0.1",
 );
 // `--replace` starts a new process, so leaked credentials from the previous
@@ -282,16 +286,16 @@ const keepTokensRequested = process.argv.includes("--keep-tokens");
 const rotateTokensRequested =
   process.argv.includes("--rotate-tokens") ||
   (replaceRequested && !keepTokensRequested);
-const { token: openworkToken, hostToken: openworkHostToken } =
+const { token: sofiaToken, hostToken: sofiaHostToken } =
   resolveHeadlessTokens({
-    envToken: process.env.OPENWORK_TOKEN,
-    envHostToken: process.env.OPENWORK_HOST_TOKEN,
+    envToken: process.env.SOFIA_TOKEN,
+    envHostToken: process.env.SOFIA_HOST_TOKEN,
     previous: rotateTokensRequested ? null : existingManifest,
     generate: randomUUID,
   });
 const serverConfigPath = resolveHeadlessServerConfigPath(
   cwd,
-  process.env.OPENWORK_DEV_HEADLESS_WEB_CONFIG,
+  process.env.SOFIA_DEV_HEADLESS_WEB_CONFIG,
 );
 const webLogPath = path.join(tmpDir, "dev-web.log");
 const headlessLogPath = path.join(tmpDir, "dev-headless.log");
@@ -307,7 +311,7 @@ await writeFile(
   "utf8",
 );
 
-const openworkUrl = `http://${clientHost}:${openworkPort}`;
+const sofiaUrl = `http://${clientHost}:${sofiaPort}`;
 const webUrl = `http://${clientHost}:${webPort}`;
 
 // Den wiring: Vite serves /api/den same-origin (proxied to the target) and
@@ -316,7 +320,7 @@ const webUrl = `http://${clientHost}:${webPort}`;
 // web app itself. Deliberately NOT gateway-marker mode: that runtime assumes
 // a provisioned cloud instance and disables local workspace creation.
 const denTarget = denProxyEnabled
-  ? normalizeDenTarget(process.env.OPENWORK_DEV_DEN_PROXY_TARGET)
+  ? normalizeDenTarget(process.env.SOFIA_DEV_DEN_PROXY_TARGET)
   : null;
 const denApiUrl = denTarget ? `${webUrl}/api/den` : null;
 
@@ -324,17 +328,17 @@ const viteEnv = {
   ...process.env,
   HOST: viteHost,
   PORT: String(webPort),
-  VITE_OPENWORK_URL: process.env.VITE_OPENWORK_URL ?? openworkUrl,
-  VITE_OPENWORK_PORT: process.env.VITE_OPENWORK_PORT ?? String(openworkPort),
-  VITE_OPENWORK_TOKEN: process.env.VITE_OPENWORK_TOKEN ?? openworkToken,
+  VITE_SOFIA_URL: process.env.VITE_SOFIA_URL ?? sofiaUrl,
+  VITE_SOFIA_PORT: process.env.VITE_SOFIA_PORT ?? String(sofiaPort),
+  VITE_SOFIA_TOKEN: process.env.VITE_SOFIA_TOKEN ?? sofiaToken,
   // Never put the host token in VITE_*: Vite inlines those into the browser
   // bundle. The owner bearer is enough for the web UI; host-token routes
   // (env secrets, den-session) stay on the server process.
-  VITE_OPENWORK_FORCE_ENV_SETTINGS: "1",
-  VITE_OPENWORK_DEPLOYMENT: process.env.VITE_OPENWORK_DEPLOYMENT ?? "web",
+  VITE_SOFIA_FORCE_ENV_SETTINGS: "1",
+  VITE_SOFIA_DEPLOYMENT: process.env.VITE_SOFIA_DEPLOYMENT ?? "web",
   ...(denTarget && denApiUrl
     ? {
-        OPENWORK_DEV_HEADLESS_DEN_TARGET: denTarget,
+        SOFIA_DEV_HEADLESS_DEN_TARGET: denTarget,
         // Den API calls go same-origin through the Vite proxy.
         VITE_DEN_API_BASE_URL: process.env.VITE_DEN_API_BASE_URL ?? denApiUrl,
         // For custom control planes, point the sign-in page at the target's
@@ -346,17 +350,33 @@ const viteEnv = {
     : {}),
 };
 
+// Share desktop engine selection so both surfaces use the same Sofia binary.
+const sofiaEngine = resolveSofiaEngine({
+  home: homedir(),
+  sidecarDirs: [path.join(cwd, "apps", "desktop", "resources", "sidecars")],
+});
+if (!sofiaEngine) throw new Error("Sofia engine not found. Install Sofia or set SOFIA_BIN.");
+const sofiaBin = sofiaEngine.path;
+
+// Isolate engine state from the desktop (`~/.sofia`), but share the provider
+// catalog/credentials so the same connected providers are available.
+const headlessSofiaHome = resolveHeadlessSofiaHome(cwd);
+const headlessProviderHome = resolveHeadlessProviderHome();
+
 const headlessEnv = {
   ...process.env,
-  OPENWORK_WORKSPACE: workspace,
-  OPENWORK_HOST: host,
-  OPENWORK_REMOTE_ACCESS: remoteAccessEnabled ? "1" : "0",
-  OPENWORK_PORT: String(openworkPort),
-  OPENWORK_TOKEN: openworkToken,
-  OPENWORK_HOST_TOKEN: openworkHostToken,
-  OPENWORK_SERVER_CONFIG: serverConfigPath,
-  OPENWORK_MANAGE_OPENCODE: "1",
-  OPENWORK_OPENCODE_BIN: process.env.OPENWORK_OPENCODE_BIN ?? "opencode",
+  SOFIA_WORKSPACE: workspace,
+  SOFIA_HOST: host,
+  SOFIA_REMOTE_ACCESS: remoteAccessEnabled ? "1" : "0",
+  SOFIA_PORT: String(sofiaPort),
+  SOFIA_TOKEN: sofiaToken,
+  SOFIA_HOST_TOKEN: sofiaHostToken,
+  SOFIA_SERVER_CONFIG: serverConfigPath,
+  SOFIA_MANAGE_SOFIA_ENGINE: "1",
+  SOFIA_SOFIA_ENGINE_BIN: process.env.SOFIA_SOFIA_ENGINE_BIN ?? "engine",
+  SOFIA_BIN: sofiaBin,
+  SOFIA_HOME: headlessSofiaHome,
+  ...(headlessProviderHome ? { SOFIA_PROVIDER_HOME: headlessProviderHome } : {}),
 };
 
 const children: ChildProcess[] = [];
@@ -365,7 +385,7 @@ const webProcess = spawnLogged(
   "pnpm",
   [
     "--filter",
-    "@openwork/app",
+    "@sofia/app",
     "exec",
     "vite",
     "--host",
@@ -381,9 +401,9 @@ children.push(webProcess);
 
 const headlessServerLaunch = buildHeadlessServerLaunch(
   cwd,
-  buildOpenworkServerArgs({
+  buildSofiaServerArgs({
     host,
-    port: openworkPort,
+    port: sofiaPort,
     configPath: serverConfigPath,
     corsOrigins: buildHeadlessCorsOrigins({ webUrl, webPort }),
   }),
@@ -398,17 +418,17 @@ children.push(headlessProcess);
 
 const runtimeManifest = buildHeadlessRuntimeManifest({
   webUrl,
-  openworkUrl,
+  sofiaUrl,
   workspace,
-  token: openworkToken,
-  hostToken: openworkHostToken,
+  token: sofiaToken,
+  hostToken: sofiaHostToken,
   serverConfigPath,
   runtimeManifestPath,
   webLogPath,
   headlessLogPath,
   denTarget,
   webPid: webProcess.pid ?? null,
-  openworkServerPid: headlessProcess.pid ?? null,
+  sofiaServerPid: headlessProcess.pid ?? null,
 });
 // The manifest carries the server bearer and host tokens, so keep it
 // owner-only. `mode` applies on creation only; chmod covers the rewrite of a
@@ -422,10 +442,10 @@ await chmod(runtimeManifestPath, 0o600);
 
 logLine("[dev:headless-web] Starting isolated local-server session");
 logLine(`[dev:headless-web] Workspace: ${workspace}`);
-logLine(`[dev:headless-web] OpenWork server: ${openworkUrl}`);
+logLine(`[dev:headless-web] Sofia server: ${sofiaUrl}`);
 logLine(`[dev:headless-web] Web URL: ${webUrl}`);
 logLine(
-  `[dev:headless-web] Server config: ${path.relative(cwd, serverConfigPath)} (not ~/.config/openwork/server.json)`,
+  `[dev:headless-web] Server config: ${path.relative(cwd, serverConfigPath)} (not ~/.config/sofia/server.json)`,
 );
 logLine(
   `[dev:headless-web] Agent runtime: ${path.relative(cwd, runtimeManifestPath)}`,
@@ -436,7 +456,7 @@ if (denApiUrl && denTarget) {
     "[dev:headless-web] Cloud sign-in: Account -> sign in opens the Den web flow in this browser",
   );
 } else {
-  logLine("[dev:headless-web] Den disabled (OPENWORK_DEV_HEADLESS_WEB_DEN_PROXY=0)");
+  logLine("[dev:headless-web] Den disabled (SOFIA_DEV_HEADLESS_WEB_DEN_PROXY=0)");
 }
 logLine(
   `[dev:headless-web] Web logs: ${path.relative(cwd, webLogPath)}`,
@@ -495,5 +515,5 @@ webProcess.on("exit", (code, signal) => {
   void shutdown("web", code, signal);
 });
 headlessProcess.on("exit", (code, signal) => {
-  void shutdown("openwork-server", code, signal);
+  void shutdown("sofia-server", code, signal);
 });

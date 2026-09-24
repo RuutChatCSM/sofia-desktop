@@ -41,7 +41,7 @@ type SettingsTone = "ready" | "warning" | "neutral" | "error";
 
 declare global {
   interface WindowEventMap {
-    "openwork-den-session-updated": CustomEvent<DenSessionUpdatedDetail>;
+    "sofia-den-session-updated": CustomEvent<DenSessionUpdatedDetail>;
   }
 }
 
@@ -181,12 +181,12 @@ export function useDenSession({
       setSigninFallbackUrl(null);
       setStatusMessage(message ?? null);
       // Remove ONLY the cloud (lpr_*) provider IDs from the acknowledged
-      // list. Local providers (openai, opencode) stay acknowledged so they
+      // list. Local providers (openai, engine) stay acknowledged so they
       // don't re-trigger the onboarding modal. When the user signs in
       // again, fresh cloud providers will be detected as new and surface
       // the toast (which is the intended behavior).
       try {
-        const raw = window.localStorage.getItem("openwork.acknowledgedProviders");
+        const raw = window.localStorage.getItem("sofia.acknowledgedProviders");
         if (raw) {
           const parsed = JSON.parse(raw);
           if (Array.isArray(parsed)) {
@@ -194,7 +194,7 @@ export function useDenSession({
               (id: unknown) => typeof id === "string" && !/^lpr_/i.test(id),
             );
             window.localStorage.setItem(
-              "openwork.acknowledgedProviders",
+              "sofia.acknowledgedProviders",
               JSON.stringify(kept),
             );
           }

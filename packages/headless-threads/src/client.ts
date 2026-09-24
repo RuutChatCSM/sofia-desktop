@@ -1,15 +1,15 @@
 /**
- * A function-driven client for native OpenWork threads.
+ * A function-driven client for native Sofia threads.
  *
- * Every call goes to an OpenWork server surface that already exists:
+ * Every call goes to an Sofia server surface that already exists:
  *
  * - `POST   /workspace/:id/sessions`                        create a thread
  * - `GET    /workspace/:id/sessions/:threadId/messages`     read messages
  * - `GET    /workspace/:id/sessions/:threadId/snapshot`     read status + messages + todos
  * - `POST   /workspace/:id/sessions/:threadId/abort`        stop a run
- * - `POST   /workspace/:id/opencode/session/:threadId/prompt_async`  submit a turn
+ * - `POST   /workspace/:id/engine/session/:threadId/prompt_async`  submit a turn
  *
- * The last one is the workspace OpenCode mount the desktop app itself prompts
+ * The last one is the workspace Sofia mount the desktop app itself prompts
  * through. Routing turns through it — rather than adding a parallel prompt
  * route — is what keeps a headless thread indistinguishable from a thread the
  * user typed into. Callers depend on the functions below, not on those paths,
@@ -103,7 +103,7 @@ export function createHeadlessThreadClient(options: HeadlessThreadClientOptions)
       code: detail.success && detail.data.code !== undefined ? detail.data.code : "request_failed",
       message: detail.success && detail.data.message !== undefined
         ? detail.data.message
-        : `OpenWork returned ${response.status} for ${method} ${path}`,
+        : `Sofia returned ${response.status} for ${method} ${path}`,
       method,
       path,
       status: response.status,
@@ -117,7 +117,7 @@ export function createHeadlessThreadClient(options: HeadlessThreadClientOptions)
     if (parsed.success) return parsed.data;
     throw new HeadlessThreadError({
       code: "invalid_response",
-      message: `OpenWork returned an unexpected payload for ${method} ${path}`,
+      message: `Sofia returned an unexpected payload for ${method} ${path}`,
       method,
       path,
       status: response.status,
@@ -153,7 +153,7 @@ export function createHeadlessThreadClient(options: HeadlessThreadClientOptions)
     if (input.messageId && messages.some((message) => message.info.id === input.messageId && message.info.role === "user")) {
       return { threadId, acceptedAt: now(), messageCountBefore, messageId: input.messageId, alreadyPresent: true };
     }
-    await send("POST", `${workspacePath}/opencode/session/${encodeURIComponent(threadId)}/prompt_async`, {
+    await send("POST", `${workspacePath}/engine/session/${encodeURIComponent(threadId)}/prompt_async`, {
       parts: [{ type: "text", text: input.prompt }],
       ...(input.messageId === undefined ? {} : { messageID: input.messageId }),
       ...(model === undefined ? {} : { model: { providerID: model.providerId, modelID: model.modelId } }),

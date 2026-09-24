@@ -13,12 +13,12 @@ function probe(script: string, value?: string) {
       PATH: process.env.PATH ?? "",
       HOME: process.env.HOME ?? "",
       TMPDIR: process.env.TMPDIR ?? "",
-      DATABASE_URL: "mysql://root:password@127.0.0.1:3306/openwork_test",
+      DATABASE_URL: "mysql://root:password@127.0.0.1:3306/sofia_test",
       DB_MODE: "mysql",
       DEN_DB_ENCRYPTION_KEY: "x".repeat(32),
       BETTER_AUTH_SECRET: "y".repeat(32),
-      BETTER_AUTH_URL: "https://den.openwork.test",
-      OPENWORK_DEV_MODE: "0",
+      BETTER_AUTH_URL: "https://den.sofia.test",
+      SOFIA_DEV_MODE: "0",
       PROVISIONER_MODE: "stub",
       ...(value === undefined ? {} : { DEN_REMOTE_MCP_APPS_ENABLED: value }),
     },
@@ -47,7 +47,7 @@ function probeNativeMcpAppIndex(
         { deploymentEnabled: env.remoteMcpAppsEnabled },
       ) && supportsConnectMcpAppHost(${JSON.stringify(clientCapabilities)}),
       connections: [{ id: "emc_fixture", name: "Fixture MCP" }],
-      publicOrigin: "https://openwork.example",
+      publicOrigin: "https://sofia.example",
     })
     console.log(JSON.stringify(index.servers.map((server) => server.name)))
   `, value)

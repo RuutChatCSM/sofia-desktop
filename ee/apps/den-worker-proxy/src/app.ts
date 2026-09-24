@@ -1,9 +1,9 @@
 import "./load-env.js"
 import { Daytona } from "@daytonaio/sdk"
 import { Hono } from "hono"
-import { and, eq, isNull, sql } from "@openwork-ee/den-db/drizzle"
-import { createDenDb, DaytonaSandboxTable, RateLimitTable, WorkerTokenTable } from "@openwork-ee/den-db"
-import { createDenTypeId, normalizeDenTypeId } from "@openwork-ee/utils/typeid"
+import { and, eq, isNull, sql } from "@sofia-ee/den-db/drizzle"
+import { createDenDb, DaytonaSandboxTable, RateLimitTable, WorkerTokenTable } from "@sofia-ee/den-db"
+import { createDenTypeId, normalizeDenTypeId } from "@sofia-ee/utils/typeid"
 import { env } from "./env.js"
 
 const { db } = createDenDb({
@@ -22,10 +22,10 @@ const publicCorsAllowHeaders = [
   "Authorization",
   "Content-Type",
   "X-Sofia-Host-Token",
-  "X-OpenWork-Client-Id",
-  "X-OpenCode-Directory",
-  "X-Opencode-Directory",
-  "x-opencode-directory",
+  "X-Sofia-Client-Id",
+  "X-Sofia-Directory",
+  "X-WorkspaceEngine-Directory",
+  "x-engine-directory",
 ]
 type WorkerId = typeof DaytonaSandboxTable.$inferSelect.worker_id
 type WorkerTokenScope = typeof WorkerTokenTable.$inferSelect.scope
@@ -268,7 +268,7 @@ async function getSignedPreviewUrl(workerId: WorkerId) {
     await sandbox.refreshData()
 
     const expiresInSeconds = normalizedSignedPreviewExpirySeconds()
-    const preview = await sandbox.getSignedPreviewUrl(env.daytona.openworkPort, expiresInSeconds)
+    const preview = await sandbox.getSignedPreviewUrl(env.daytona.sofiaPort, expiresInSeconds)
 
     await db
       .update(DaytonaSandboxTable)

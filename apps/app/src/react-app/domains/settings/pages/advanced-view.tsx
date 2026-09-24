@@ -3,8 +3,8 @@ import { useEffect, useReducer, useState } from "react";
 
 import { Separator } from "@/components/ui/separator";
 
-import type { OpencodeConnectStatus } from "@/app/types";
-import type { OpenworkCloudMcpHealth, OpenworkRuntimeConfigStatus, OpenworkServerStatus } from "@/app/lib/openwork-server";
+import type { WorkspaceEngineConnectStatus } from "@/app/types";
+import type { SofiaCloudMcpHealth, SofiaRuntimeConfigStatus, SofiaServerStatus } from "@/app/lib/sofia-server";
 import { t } from "@/i18n";
 import { LayoutStack } from "../settings-layout";
 import type { CodexEngineAvailability } from "./advanced-view-sections";
@@ -36,19 +36,19 @@ type AdvancedOrganizationServerSession = Pick<
 export type AdvancedViewProps = {
   busy: boolean;
   clientConnected: boolean;
-  opencodeConnectStatus: OpencodeConnectStatus | null;
-  openworkServerStatus: OpenworkServerStatus;
+  engineConnectStatus: WorkspaceEngineConnectStatus | null;
+  sofiaServerStatus: SofiaServerStatus;
   developerMode: boolean;
   toggleDeveloperMode: () => void;
-  opencodeDevModeEnabled: boolean;
+  engineDevModeEnabled: boolean;
   openDebugDeepLink: (rawUrl: string) => Promise<{ ok: boolean; message: string }>;
   canMigrateRuntimeConfig: boolean;
   migrateRuntimeConfig: () => Promise<{ migrated: boolean; keys: string[] }>;
-  getRuntimeConfigStatus: () => Promise<OpenworkRuntimeConfigStatus>;
+  getRuntimeConfigStatus: () => Promise<SofiaRuntimeConfigStatus>;
   organizationServer: AdvancedOrganizationServerSession;
   cloudMcpUrl: string | null;
-  cloudMcpHealth: OpenworkCloudMcpHealth | null;
-  refreshCloudMcpHealth: () => Promise<OpenworkCloudMcpHealth | null>;
+  cloudMcpHealth: SofiaCloudMcpHealth | null;
+  refreshCloudMcpHealth: () => Promise<SofiaCloudMcpHealth | null>;
   codexEngineStatus: CodexEngineAvailability | null;
 };
 
@@ -59,7 +59,7 @@ export function AdvancedView(props: AdvancedViewProps) {
     advancedLocalReducer,
     initialAdvancedLocalState,
   );
-  const [configStatus, setConfigStatus] = useState<OpenworkRuntimeConfigStatus | null>(null);
+  const [configStatus, setConfigStatus] = useState<SofiaRuntimeConfigStatus | null>(null);
   const [configStatusBusy, setConfigStatusBusy] = useState(false);
   const [configStatusError, setConfigStatusError] = useState<string | null>(null);
   const {
@@ -72,21 +72,21 @@ export function AdvancedView(props: AdvancedViewProps) {
   } = localState;
 
   const clientStatusLabel = (() => {
-    const status = props.opencodeConnectStatus?.status;
+    const status = props.engineConnectStatus?.status;
     if (status === "connecting") return t("status.connecting");
     if (status === "error") return t("settings.connection_failed");
     return props.clientConnected ? t("status.connected") : t("config.status_not_connected");
   })();
 
   const clientTone: AdvancedStatusTone = (() => {
-    const status = props.opencodeConnectStatus?.status;
+    const status = props.engineConnectStatus?.status;
     if (status === "connecting") return "warning";
     if (status === "error") return "error";
     return props.clientConnected ? "ready" : "neutral";
   })();
 
-  const openworkStatusLabel = (() => {
-    switch (props.openworkServerStatus) {
+  const sofiaStatusLabel = (() => {
+    switch (props.sofiaServerStatus) {
       case "connected":
         return t("config.status_connected");
       case "limited":
@@ -96,8 +96,8 @@ export function AdvancedView(props: AdvancedViewProps) {
     }
   })();
 
-  const openworkTone: AdvancedStatusTone = (() => {
-    switch (props.openworkServerStatus) {
+  const sofiaTone: AdvancedStatusTone = (() => {
+    switch (props.sofiaServerStatus) {
       case "connected":
         return "ready";
       case "limited":
@@ -108,13 +108,13 @@ export function AdvancedView(props: AdvancedViewProps) {
   })();
 
   const clientDetailLines = props.clientConnected
-    ? ["Chat and task creation can use the OpenCode engine for this workspace."]
+    ? ["Chat and task creation can use the Sofia engine for this workspace."]
     : [
-        "Chat and task creation may fail until OpenCode restarts.",
+        "Chat and task creation may fail until the engine restarts.",
         "Sofia App server config sources below can still be inspected.",
       ];
 
-  const openworkDetailLines = props.openworkServerStatus === "connected"
+  const sofiaDetailLines = props.sofiaServerStatus === "connected"
     ? ["Runtime DB, workspace config, and migration diagnostics are available."]
     : ["Runtime config diagnostics need the Sofia App server connection."];
 
@@ -201,9 +201,9 @@ export function AdvancedView(props: AdvancedViewProps) {
         clientStatusLabel={clientStatusLabel}
         clientTone={clientTone}
         clientDetailLines={clientDetailLines}
-        openworkStatusLabel={openworkStatusLabel}
-        openworkTone={openworkTone}
-        openworkDetailLines={openworkDetailLines}
+        sofiaStatusLabel={sofiaStatusLabel}
+        sofiaTone={sofiaTone}
+        sofiaDetailLines={sofiaDetailLines}
         codexEngineStatus={props.codexEngineStatus}
       />
 
@@ -227,7 +227,7 @@ export function AdvancedView(props: AdvancedViewProps) {
       <AdvancedDeveloperSection
         busy={props.busy}
         developerMode={props.developerMode}
-        opencodeDevModeEnabled={props.opencodeDevModeEnabled}
+        engineDevModeEnabled={props.engineDevModeEnabled}
         deepLinkOpen={debugDeepLinkOpen}
         deepLinkInput={debugDeepLinkInput}
         deepLinkBusy={debugDeepLinkBusy}

@@ -87,7 +87,7 @@ function optionHomeDir(opts) {
   return fromEnv || homedir();
 }
 
-function defaultOpenworkConfigDir(opts) {
+function defaultSofiaConfigDir(opts) {
   const env = optionEnv(opts);
   const platform = optionPlatform(opts);
   const paths = pathApi(platform);
@@ -95,38 +95,38 @@ function defaultOpenworkConfigDir(opts) {
   if (platform === "win32") {
     const appData = envValue(env, "APPDATA");
     const root = appData || paths.join(homeDir, "AppData", "Roaming");
-    return paths.join(root, "openwork");
+    return paths.join(root, "sofia");
   }
   const xdgConfigHome = envValue(env, "XDG_CONFIG_HOME");
   const root = xdgConfigHome || paths.join(homeDir, ".config");
-  return paths.join(root, "openwork");
+  return paths.join(root, "sofia");
 }
 
-export function openworkConfigDir(opts) {
+export function sofiaServerConfigDir(opts) {
   const env = optionEnv(opts);
   const platform = optionPlatform(opts);
   const paths = pathApi(platform);
-  const override = envValue(env, "OPENWORK_SERVER_CONFIG");
+  const override = envValue(env, "SOFIA_SERVER_CONFIG");
   if (override) return paths.dirname(paths.resolve(override));
-  return defaultOpenworkConfigDir(opts);
+  return defaultSofiaConfigDir(opts);
 }
 
-export function openworkServerConfigPath(opts) {
+export function sofiaServerConfigPath(opts) {
   const env = optionEnv(opts);
   const platform = optionPlatform(opts);
   const paths = pathApi(platform);
-  const override = envValue(env, "OPENWORK_SERVER_CONFIG");
+  const override = envValue(env, "SOFIA_SERVER_CONFIG");
   if (override) return paths.resolve(override);
-  return paths.join(defaultOpenworkConfigDir(opts), "server.json");
+  return paths.join(defaultSofiaConfigDir(opts), "server.json");
 }
 
-export function openworkEnvStorePath(opts) {
+export function sofiaEnvStorePath(opts) {
   const env = optionEnv(opts);
   const platform = optionPlatform(opts);
   const paths = pathApi(platform);
-  const override = envValue(env, "OPENWORK_ENV_STORE");
+  const override = envValue(env, "SOFIA_ENV_STORE");
   if (override) return paths.resolve(override);
-  return paths.join(defaultOpenworkConfigDir(opts), "env.json");
+  return paths.join(defaultSofiaConfigDir(opts), "env.json");
 }
 
 function safeConfigRoot(value, paths) {
@@ -136,45 +136,62 @@ function safeConfigRoot(value, paths) {
     && !FORBIDDEN_CONFIG_ROOT_CHARS.test(value);
 }
 
-export function globalOpencodeConfigDir(opts) {
+export function globalWorkspaceEngineConfigDir(opts) {
   const env = optionEnv(opts);
   const platform = optionPlatform(opts);
   const paths = pathApi(platform);
-  const configuredDirectory = envRawValue(env, "OPENCODE_CONFIG_DIR");
+  const configuredDirectory = envRawValue(env, "SOFIA_ENGINE_CONFIG_DIR");
   if (safeConfigRoot(configuredDirectory, paths)) return configuredDirectory;
 
   const configuredRoot = envRawValue(env, "XDG_CONFIG_HOME");
   const configRoot = safeConfigRoot(configuredRoot, paths)
     ? configuredRoot
     : paths.join(optionHomeDir(opts), ".config");
-  // OpenCode accepts OPENCODE_CONFIG_DIR as the directory containing its
-  // opencode.json(c) files. It is not an XDG parent directory.
-  return paths.join(configRoot, "opencode");
+  // Sofia accepts SOFIA_ENGINE_CONFIG_DIR as the directory containing its
+  // engine.json(c) files. It is not an XDG parent directory.
+  return paths.join(configRoot, "engine");
 }
 
-export function resolveGlobalOpencodeConfigPath(opts) {
+export function resolveGlobalWorkspaceEngineConfigPath(opts) {
   const platform = optionPlatform(opts);
   const paths = pathApi(platform);
-  const base = globalOpencodeConfigDir(opts);
-  const jsonc = paths.join(base, "opencode.jsonc");
-  const json = paths.join(base, "opencode.json");
+  const base = globalWorkspaceEngineConfigDir(opts);
+  const jsonc = paths.join(base, "engine.jsonc");
+  const json = paths.join(base, "engine.json");
   if (existsSync(jsonc)) return jsonc;
   if (existsSync(json)) return json;
   return jsonc;
 }
 
-export function workspaceOpencodeConfigCandidates(workspaceRoot) {
+export function workspaceWorkspaceEngineConfigCandidates(workspaceRoot) {
   return [
-    path.join(workspaceRoot, "opencode.jsonc"),
-    path.join(workspaceRoot, "opencode.json"),
-    path.join(workspaceRoot, ".opencode", "opencode.jsonc"),
-    path.join(workspaceRoot, ".opencode", "opencode.json"),
+    path.join(workspaceRoot, "engine.jsonc"),
+    path.join(workspaceRoot, "engine.json"),
+    path.join(workspaceRoot, ".sofia", "engine.jsonc"),
+    path.join(workspaceRoot, ".sofia", "engine.json"),
   ];
 }
 
-export function resolveWorkspaceOpencodeConfigPath(workspaceRoot) {
-  const candidates = workspaceOpencodeConfigCandidates(workspaceRoot);
+export function resolveWorkspaceWorkspaceEngineConfigPath(workspaceRoot) {
+  const candidates = workspaceWorkspaceEngineConfigCandidates(workspaceRoot);
   return candidates.find((candidate) => existsSync(candidate)) ?? candidates[0];
+}
+
+/**
+ * Sofia-owned config locations. Sofia no longer reads or writes Sofia's
+ * `engine.json(c)` files: the engine surface is the Sofia home (`~/.sofia`)
+ * and per-workspace state lives under the workspace-local `.sofia` directory.
+ */
+export function sofiaConfigDir(opts) {
+  const env = optionEnv(opts);
+  const override = envValue(env, "SOFIA_CONFIG_DIR");
+  if (override) return override;
+  return pathApi(optionPlatform(opts)).join(optionHomeDir(opts), ".sofia");
+}
+
+/** The Sofia engine's own config file (`model_providers`, `[mcp_servers.*]`). */
+export function sofiaEngineConfigPath(opts) {
+  return pathApi(optionPlatform(opts)).join(sofiaConfigDir(opts), "config.toml");
 }
 
 function desktopConfigDir(opts) {
@@ -195,12 +212,12 @@ export function desktopBootstrapPath(opts) {
   const env = optionEnv(opts);
   const platform = optionPlatform(opts);
   const paths = pathApi(platform);
-  const override = envValue(env, "OPENWORK_DESKTOP_BOOTSTRAP_PATH");
+  const override = envValue(env, "SOFIA_DESKTOP_BOOTSTRAP_PATH");
   if (override) return override;
-  if (envValue(env, "OPENWORK_DEV_MODE") === "1" && opts?.userDataDir) {
-    return paths.join(opts.userDataDir, "openwork-dev-data", "home", ".config", "openwork", "desktop-bootstrap.json");
+  if (envValue(env, "SOFIA_DEV_MODE") === "1" && opts?.userDataDir) {
+    return paths.join(opts.userDataDir, "sofia-dev-data", "home", ".config", "sofia", "desktop-bootstrap.json");
   }
-  return paths.join(desktopConfigDir(opts), "openwork", "desktop-bootstrap.json");
+  return paths.join(desktopConfigDir(opts), "sofia", "desktop-bootstrap.json");
 }
 
 export function legacyDesktopBootstrapPath(opts) {
@@ -210,7 +227,7 @@ export function legacyDesktopBootstrapPath(opts) {
   // Electron used os.homedir(). optionHomeDir accepts an explicit homeDir but
   // otherwise checks the same env variables before os.homedir(), so both legacy
   // locations continue to resolve for normal installs.
-  return paths.join(optionHomeDir(opts), ".config", "openwork", "desktop-bootstrap.json");
+  return paths.join(optionHomeDir(opts), ".config", "sofia", "desktop-bootstrap.json");
 }
 
 export function expandHomePath(value, opts) {
@@ -221,39 +238,39 @@ export function expandHomePath(value, opts) {
   return value;
 }
 
-export function openworkServerDataDir(opts) {
+export function sofiaServerDataDir(opts) {
   const env = optionEnv(opts);
   const platform = optionPlatform(opts);
   const paths = pathApi(platform);
-  const override = envValue(env, "OPENWORK_DATA_DIR");
+  const override = envValue(env, "SOFIA_DATA_DIR");
   if (override) return expandHomePath(override, opts);
-  return paths.join(optionHomeDir(opts), ".openwork", "openwork-server");
+  return paths.join(optionHomeDir(opts), ".sofia", "sofia-server");
 }
 
-export function opencodeDataDirs(opts) {
+export function engineDataDirs(opts) {
   const env = optionEnv(opts);
   const platform = optionPlatform(opts);
   const paths = pathApi(platform);
   const homeDir = optionHomeDir(opts);
   const dirs = [];
   const xdgDataHome = envValue(env, "XDG_DATA_HOME");
-  if (xdgDataHome) dirs.push(paths.join(xdgDataHome, "opencode"));
-  dirs.push(paths.join(homeDir, ".local", "share", "opencode"));
-  if (platform === "darwin") dirs.push(paths.join(homeDir, "Library", "Application Support", "opencode"));
+  if (xdgDataHome) dirs.push(paths.join(xdgDataHome, "engine"));
+  dirs.push(paths.join(homeDir, ".local", "share", "engine"));
+  if (platform === "darwin") dirs.push(paths.join(homeDir, "Library", "Application Support", "engine"));
   if (platform === "win32") {
     const appData = envValue(env, "APPDATA") || paths.join(homeDir, "AppData", "Roaming");
-    dirs.push(paths.join(appData, "opencode"));
+    dirs.push(paths.join(appData, "engine"));
   }
   return Array.from(new Set(dirs));
 }
 
-export function opencodeCacheDirs(opts) {
+export function engineCacheDirs(opts) {
   const env = optionEnv(opts);
   const platform = optionPlatform(opts);
   const paths = pathApi(platform);
   const dirs = [];
   const xdgCacheHome = envValue(env, "XDG_CACHE_HOME");
-  if (xdgCacheHome) dirs.push(paths.join(xdgCacheHome, "opencode"));
-  dirs.push(paths.join(optionHomeDir(opts), ".cache", "opencode"));
+  if (xdgCacheHome) dirs.push(paths.join(xdgCacheHome, "engine"));
+  dirs.push(paths.join(optionHomeDir(opts), ".cache", "engine"));
   return Array.from(new Set(dirs));
 }

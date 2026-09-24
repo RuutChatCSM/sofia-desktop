@@ -1,13 +1,13 @@
 import { buildResponseHeaders, jsonResponse, rateLimitFormRequest, validateAntiSpamFields, validateTrustedOrigin, verifyFormBotProtection } from "../_lib/security";
-import { EmailSendError, sendEmail, type FeedbackEmailProps } from "@openwork/email";
+import { EmailSendError, sendEmail, type FeedbackEmailProps } from "@sofia/email";
 
 type FeedbackContext = {
   source?: string;
   entrypoint?: string;
   deployment?: string;
   appVersion?: string;
-  openworkServerVersion?: string;
-  opencodeVersion?: string;
+  sofiaServerVersion?: string;
+  engineVersion?: string;
   osName?: string;
   osVersion?: string;
   platform?: string;
@@ -23,7 +23,7 @@ type FeedbackPayload = {
   context?: FeedbackContext;
 };
 
-const DEFAULT_INTERNAL_FEEDBACK_EMAIL = "team@openworklabs.com";
+const DEFAULT_INTERNAL_FEEDBACK_EMAIL = "team@ruut.chat";
 
 function sanitizeValue(value: unknown, maxLength = 240) {
   return typeof value === "string" ? value.trim().slice(0, maxLength) : "";
@@ -35,8 +35,8 @@ function sanitizeContext(input: FeedbackContext | undefined) {
     entrypoint: sanitizeValue(input?.entrypoint),
     deployment: sanitizeValue(input?.deployment),
     appVersion: sanitizeValue(input?.appVersion),
-    openworkServerVersion: sanitizeValue(input?.openworkServerVersion),
-    opencodeVersion: sanitizeValue(input?.opencodeVersion),
+    sofiaServerVersion: sanitizeValue(input?.sofiaServerVersion),
+    engineVersion: sanitizeValue(input?.engineVersion),
     osName: sanitizeValue(input?.osName),
     osVersion: sanitizeValue(input?.osVersion),
     platform: sanitizeValue(input?.platform),
@@ -50,8 +50,8 @@ function formatDiagnosticsSummary(context: ReturnType<typeof sanitizeContext>) {
     ["Entrypoint", context.entrypoint],
     ["Deployment", context.deployment],
     ["App version", context.appVersion],
-    ["OpenWork server", context.openworkServerVersion],
-    ["OpenCode", context.opencodeVersion],
+    ["Sofia server", context.sofiaServerVersion],
+    ["Sofia", context.engineVersion],
     ["OS", osLabel],
     ["Platform", context.platform],
   ].filter(([, value]) => value);
@@ -82,7 +82,7 @@ export async function POST(request: Request) {
   }
 
   const internalEmail =
-    process.env.OPENWORK_FEEDBACK_EMAIL?.trim() ||
+    process.env.SOFIA_FEEDBACK_EMAIL?.trim() ||
     process.env.LOOPS_INTERNAL_FEEDBACK_EMAIL?.trim() ||
     DEFAULT_INTERNAL_FEEDBACK_EMAIL;
 
@@ -140,12 +140,12 @@ export async function POST(request: Request) {
     email,
     message,
     mode,
-    source: context.source || "openwork-app",
+    source: context.source || "sofia-app",
     entrypoint: context.entrypoint || "unknown",
     deployment: context.deployment || "desktop",
     appVersion: context.appVersion || "unknown",
-    openworkServerVersion: context.openworkServerVersion || "unknown",
-    opencodeVersion: context.opencodeVersion || "unknown",
+    sofiaServerVersion: context.sofiaServerVersion || "unknown",
+    engineVersion: context.engineVersion || "unknown",
     osName: context.osName || "unknown",
     osVersion: context.osVersion || "",
     platform: context.platform || "unknown",

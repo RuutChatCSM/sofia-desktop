@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto"
-import type { ArtifactFreshness } from "@openwork/types/workflows"
+import type { ArtifactFreshness } from "@sofia/types/workflows"
 
 export const WORKFLOW_MARKDOWN_RENDERER_VERSION = "codemode-markdown-v1" as const
 

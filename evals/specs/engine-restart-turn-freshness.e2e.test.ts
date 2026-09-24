@@ -7,17 +7,17 @@ import {
   evalIn,
   selectModel,
   waitFor,
-} from "@openwork/behaviors";
-import { screenshot, validate } from "@openwork/test-evidence";
-import { desktop, localHost } from "@openwork/hosts";
-import { eventually, needs, test } from "@openwork/testkit";
+} from "@sofia/behaviors";
+import { screenshot, validate } from "@sofia/test-evidence";
+import { desktop, localHost } from "@sofia/hosts";
+import { eventually, needs, test } from "@sofia/testkit";
 
 const providerId = "engine-restart-freshness-mock";
 const modelId = "engine-restart-freshness-model";
-const e2eTestsEnabled = process.env.OPENWORK_EVAL_E2E_TESTS === "1";
+const e2eTestsEnabled = process.env.SOFIA_EVAL_E2E_TESTS === "1";
 const title = e2eTestsEnabled
   ? "multiple sessions generate fresh replies after the bundled engine restarts"
-  : "engine restart turn freshness skipped — needs: set OPENWORK_EVAL_E2E_TESTS=1";
+  : "engine restart turn freshness skipped — needs: set SOFIA_EVAL_E2E_TESTS=1";
 
 interface TranscriptMessage {
   role: string;
@@ -76,7 +76,7 @@ function assistantHasText(text: string): string {
 
 function routeHasSession(sessionId: string): string {
   return `(() => {
-    const parts = window.__openworkControl.snapshot().route.split("/");
+    const parts = window.__sofiaControl.snapshot().route.split("/");
     const index = parts.indexOf("session");
     return index >= 0 && decodeURIComponent(parts[index + 1] ?? "") === ${JSON.stringify(sessionId)};
   })()`;
@@ -88,7 +88,7 @@ async function openSession(app: Awaited<ReturnType<typeof desktop>>, sessionId: 
     timeoutMs: 60_000,
     label: `route reached session ${sessionId}`,
   });
-  await waitFor(app, `window.__openworkControl.listActions().some((action) =>
+  await waitFor(app, `window.__sofiaControl.listActions().some((action) =>
     action.id === "session.read_transcript" && !action.disabled)`, {
     timeoutMs: 60_000,
     label: `transcript control ready for session ${sessionId}`,
@@ -103,13 +103,13 @@ async function readTranscript(app: Awaited<ReturnType<typeof desktop>>, sessionI
 }
 
 async function sendMessage(app: Awaited<ReturnType<typeof desktop>>, text: string): Promise<void> {
-  await waitFor(app, `window.__openworkControl.listActions().some((action) =>
+  await waitFor(app, `window.__sofiaControl.listActions().some((action) =>
     action.id === "composer.set_text" && !action.disabled)`, {
     timeoutMs: 30_000,
     label: "composer text action enabled",
   });
   await control(app, "composer.set_text", { text }, { timeoutMs: 30_000 });
-  await waitFor(app, `window.__openworkControl.listActions().some((action) =>
+  await waitFor(app, `window.__sofiaControl.listActions().some((action) =>
     action.id === "composer.send" && !action.disabled)`, {
     timeoutMs: 30_000,
     label: "composer send action enabled",
@@ -148,7 +148,7 @@ function assertTranscript(
 }
 
 test.skipIf(!e2eTestsEnabled)(title, { timeout: 600_000 }, async ({ evidence }) => {
-  needs({ optIn: ["OPENWORK_EVAL_E2E_TESTS"] });
+  needs({ optIn: ["SOFIA_EVAL_E2E_TESTS"] });
 
   const runId = Date.now();
   const p1a = `P1a-${runId}`;
@@ -220,7 +220,7 @@ test.skipIf(!e2eTestsEnabled)(title, { timeout: 600_000 }, async ({ evidence }) 
   if (!address || typeof address === "string") throw new Error("Mock provider did not bind a TCP port.");
   const baseUrl = `http://127.0.0.1:${address.port}/v1`;
 
-  const profileDir = `/tmp/openwork-engine-restart-freshness-${process.pid}-${runId}`;
+  const profileDir = `/tmp/sofia-engine-restart-freshness-${process.pid}-${runId}`;
   const workspacePath = `${profileDir}/continuity-workspace`;
   onTestFinished(async () => rm(profileDir, { recursive: true, force: true }));
   await using host = localHost();
@@ -234,28 +234,28 @@ test.skipIf(!e2eTestsEnabled)(title, { timeout: 600_000 }, async ({ evidence }) 
     workspaceId = workspace.workspaceId;
 
     const versionRaw = await evalIn(firstApp, `(async () => {
-      const port = localStorage.getItem("openwork.server.port");
-      const token = localStorage.getItem("openwork.server.token");
+      const port = localStorage.getItem("sofia.server.port");
+      const token = localStorage.getItem("sofia.server.token");
       if (!port || !token) return "missing local server credentials";
       const response = await fetch("http://127.0.0.1:" + port + "/status", {
         headers: { Authorization: "Bearer " + token },
       });
       if (!response.ok) return "status failed: " + response.status + " " + (await response.text()).slice(0, 500);
       const body = await response.json();
-      return typeof body.opencodeVersion === "string" ? body.opencodeVersion : "missing opencodeVersion: " + JSON.stringify(body);
+      return typeof body.engineVersion === "string" ? body.engineVersion : "missing engineVersion: " + JSON.stringify(body);
     })()`, { awaitPromise: true, timeoutMs: 30_000 });
     const engineVersion = String(versionRaw).replace(/^v/, "");
     evidence.recordAssertionEvidence(
-      "The local OpenWork server reports the fixed bundled OpenCode engine",
-      `GET /status observed ${JSON.stringify({ opencodeVersion: versionRaw })}.`,
+      "The local Sofia App server reports the fixed bundled Sofia engine",
+      `GET /status observed ${JSON.stringify({ engineVersion: versionRaw })}.`,
       engineVersion === "1.18.18" && !engineVersion.startsWith("1.17."),
     );
     expect(engineVersion, `stale 1.17.x engine reported by /status: ${engineVersion}`).not.toMatch(/^1\.17\./);
     expect(engineVersion).toBe("1.18.18");
 
     const configured = await evalIn(firstApp, `(async () => {
-      const port = localStorage.getItem("openwork.server.port");
-      const token = localStorage.getItem("openwork.server.token");
+      const port = localStorage.getItem("sofia.server.port");
+      const token = localStorage.getItem("sofia.server.token");
       if (!port || !token) return "missing local server credentials";
       const request = async (path, init) => {
         const response = await fetch("http://127.0.0.1:" + port + path, {
@@ -269,7 +269,7 @@ test.skipIf(!e2eTestsEnabled)(title, { timeout: 600_000 }, async ({ evidence }) 
       const patched = await request("/workspace/" + encodeURIComponent(workspaceId) + "/config", {
         method: "PATCH",
         body: JSON.stringify({
-          opencode: {
+          engine: {
             provider: {
               [${JSON.stringify(providerId)}]: {
                 npm: "@ai-sdk/openai-compatible",
@@ -284,18 +284,18 @@ test.skipIf(!e2eTestsEnabled)(title, { timeout: 600_000 }, async ({ evidence }) 
       if (patched !== "ok") return patched;
       const reloaded = await request("/workspace/" + encodeURIComponent(workspaceId) + "/engine/reload", { method: "POST" });
       if (reloaded !== "ok") return reloaded;
-      const raw = localStorage.getItem("openwork.preferences");
+      const raw = localStorage.getItem("sofia.preferences");
       let preferences = {};
       try { preferences = raw ? JSON.parse(raw) : {}; } catch { preferences = {}; }
       if (!preferences || typeof preferences !== "object" || Array.isArray(preferences)) preferences = {};
-      localStorage.setItem("openwork.preferences", JSON.stringify({
+      localStorage.setItem("sofia.preferences", JSON.stringify({
         ...preferences,
         defaultModel: { providerID: ${JSON.stringify(providerId)}, modelID: ${JSON.stringify(modelId)} },
         modelVariant: null,
         providerStepCompleted: true,
       }));
-      localStorage.setItem("openwork.defaultModel", ${JSON.stringify(`${providerId}/${modelId}`)});
-      localStorage.removeItem("openwork.sessionModels." + workspaceId);
+      localStorage.setItem("sofia.defaultModel", ${JSON.stringify(`${providerId}/${modelId}`)});
+      localStorage.removeItem("sofia.sessionModels." + workspaceId);
       return "ok";
     })()`, { awaitPromise: true, timeoutMs: 30_000 });
     expect(configured).toBe("ok");
@@ -351,8 +351,8 @@ test.skipIf(!e2eTestsEnabled)(title, { timeout: 600_000 }, async ({ evidence }) 
   const restartedApp = await desktop({ name: "engine-restart-turn-freshness", host, profileDir });
   try {
     await waitFor(restartedApp, `(async () => {
-      const port = localStorage.getItem("openwork.server.port");
-      const token = localStorage.getItem("openwork.server.token");
+      const port = localStorage.getItem("sofia.server.port");
+      const token = localStorage.getItem("sofia.server.token");
       if (!port || !token) return false;
       try {
         const response = await fetch("http://127.0.0.1:" + port + "/status", {
@@ -365,7 +365,7 @@ test.skipIf(!e2eTestsEnabled)(title, { timeout: 600_000 }, async ({ evidence }) 
     })()`, {
       awaitPromise: true,
       timeoutMs: 120_000,
-      label: "restarted local OpenWork server ready",
+      label: "restarted local Sofia App server ready",
     });
     const reopenedWorkspace = await createAndSelectWorkspace(restartedApp, { path: workspacePath });
     expect(reopenedWorkspace.workspaceId).toBe(workspaceId);

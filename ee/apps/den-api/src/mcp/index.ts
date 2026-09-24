@@ -87,7 +87,7 @@ export function registerMcpRoutes<T extends { Variables: RequestIdVariables & Re
 
     const catalog = await getCatalog(app as unknown as Hono, c.env)
     const server = new McpServer({
-      name: "openwork-den-api",
+      name: "sofia-den-api",
       version: "1.0.0",
     })
 

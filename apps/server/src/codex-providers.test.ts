@@ -1,5 +1,5 @@
 // Tests for the codex-native providers.json catalog, config.toml generation and
-// the opencode provider-map sync.
+// the engine provider-map sync.
 import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";

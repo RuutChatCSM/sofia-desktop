@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeAll, describe, expect, mock, test } from "bun:test"
-import { and, eq, inArray, sql } from "@openwork-ee/den-db/drizzle"
+import { and, eq, inArray, sql } from "@sofia-ee/den-db/drizzle"
 import {
   AuthUserTable,
   ConfigObjectAccessGrantTable,
@@ -24,12 +24,12 @@ import {
   PluginTable,
   OrganizationTable,
   TeamTable,
-} from "@openwork-ee/den-db/schema"
-import { createDenTypeId, normalizeDenTypeId, type DenTypeId } from "@openwork-ee/utils/typeid"
+} from "@sofia-ee/den-db/schema"
+import { createDenTypeId, normalizeDenTypeId, type DenTypeId } from "@sofia-ee/utils/typeid"
 import type { PluginArchActorContext } from "../src/routes/org/plugin-system/access.js"
 
 function seedRequiredEnv() {
-  process.env.DATABASE_URL = process.env.DATABASE_URL ?? "mysql://root:password@127.0.0.1:3306/openwork_test_pr6"
+  process.env.DATABASE_URL = process.env.DATABASE_URL ?? "mysql://root:password@127.0.0.1:3306/sofia_test_pr6"
   process.env.DEN_DB_ENCRYPTION_KEY = process.env.DEN_DB_ENCRYPTION_KEY ?? "local-dev-db-encryption-key-please-change-1234567890"
   process.env.BETTER_AUTH_SECRET = process.env.BETTER_AUTH_SECRET ?? "local-dev-secret-not-for-production-use!!"
   process.env.BETTER_AUTH_URL = process.env.BETTER_AUTH_URL ?? "http://127.0.0.1:8790"
@@ -77,7 +77,7 @@ const createdUserIds: DenTypeId<"user">[] = []
 beforeAll(async () => {
   seedRequiredEnv()
   mock.restore()
-  db = (await import("@openwork-ee/den-db")).createDenDb({
+  db = (await import("@sofia-ee/den-db")).createDenDb({
     databaseUrl: process.env.DATABASE_URL,
     mode: "mysql",
   }).db
@@ -1503,7 +1503,7 @@ describe("marketplace cloud readiness payload", () => {
       remoteId: `target-${connectorTargetId}`,
       targetKind: "repository_branch",
       externalTargetRef: "main",
-      targetConfigJson: { branch: "main", repositoryFullName: "openwork/test", installationId: 1 },
+      targetConfigJson: { branch: "main", repositoryFullName: "sofia/test", installationId: 1 },
       createdAt: now,
       updatedAt: now,
     })

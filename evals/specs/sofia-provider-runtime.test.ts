@@ -2,16 +2,16 @@ import { mkdtemp, readFile, writeFile, mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect } from "vitest";
-import { test } from "@openwork/testkit";
+import { test } from "@sofia/testkit";
 import { codexAuthStorePath, writeCodexAuthStore } from "../../apps/server/src/codex-auth-store.ts";
 import { codexProvidersPath, codexConfigTomlPath, readCodexEngineConfig } from "../../apps/server/src/codex-providers.ts";
 import { prepareSofiaAuthInHome } from "../../apps/server/src/codex-registry.ts";
-import { useCodexSessionStore } from "../../apps/app/src/react-app/domains/session/codex-session-store.ts";
+import { describeSofiaError, useCodexSessionStore } from "../../apps/app/src/react-app/domains/session/codex-session-store.ts";
 
 test("Sofia shares CLI providers and credentials while keeping development sessions isolated", async () => {
   const root = await mkdtemp(join(tmpdir(), "sofia-provider-test-"));
   const shared = join(root, ".sofia"), engine = join(root, "engine");
-  const env = { HOME: join(root, "isolated"), REAL_HOME: root, SOFIA_PROVIDER_HOME: shared, OPENWORK_CODEX_HOME: engine };
+  const env = { HOME: join(root, "isolated"), REAL_HOME: root, SOFIA_PROVIDER_HOME: shared, SOFIA_CODEX_HOME: engine };
   const previous = Object.fromEntries(Object.keys(env).map((key) => [key, process.env[key]]));
   try {
     Object.assign(process.env, env);
@@ -50,8 +50,18 @@ test("A failed Sofia turn stops thinking and renders a single error across nativ
   expect(entry.session.status).toBe("error");
   expect(entry.items).toHaveLength(1);
   expect(entry.items[0].status).toBe("error");
-  expect(entry.items[0].text).toBe("Sofia couldn't complete this request: Missing environment variable: DEEPSEEK_API_KEY");
+  expect(entry.items[0].text).toBe("Deepseek credentials unavailable");
+  expect(entry.items[0].errorPresentation?.technicalDetails).toBe("Missing environment variable: DEEPSEEK_API_KEY");
   store.failSession("s", "Another failure", "next-turn");
   expect(useCodexSessionStore.getState().sessions.s.items).toHaveLength(2);
   store.clear();
+});
+
+
+test("Sofia RPC errors display the provider message without transport prefixes", () => {
+  const raw = "Sofia RPC error (-32600): Provider rejected the request";
+  const error = describeSofiaError(raw);
+  expect(error.title).toBe("Sofia hit an error");
+  expect(error.body).toBe("Provider rejected the request");
+  expect(error.raw).toBe(raw);
 });

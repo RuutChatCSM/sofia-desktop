@@ -32,7 +32,7 @@ export default {
                 feed,
                 version: "0.17.30",
                 platform: "win-x64",
-                expected: `${feed.baseUrl}/different-ai/openwork/releases/download/v0.17.30/openwork-enterprise-win-x64-0.17.30.exe`,
+                expected: `${feed.baseUrl}/RuutChatCSM/sofia-desktop/releases/download/v0.17.30/sofia-enterprise-win-x64-0.17.30.exe`,
               });
             },
           });

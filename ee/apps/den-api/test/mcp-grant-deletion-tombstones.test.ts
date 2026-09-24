@@ -59,7 +59,7 @@ function transactionFake() {
 }
 
 beforeAll(async () => {
-  mock.module("@openwork-ee/den-db/schema", () => ({
+  mock.module("@sofia-ee/den-db/schema", () => ({
     AuthAccountTable,
     AuthApiKeyTable,
     AuthSessionTable,
@@ -74,7 +74,7 @@ beforeAll(async () => {
     ScimSyncEventTable,
     WorkerTable,
   }))
-  mock.module("@openwork-ee/den-db/drizzle", () => ({
+  mock.module("@sofia-ee/den-db/drizzle", () => ({
     eq: (field: unknown, value: unknown) => ({ operator: "eq", field, value }),
   }))
   mock.module("../src/cache.js", () => ({

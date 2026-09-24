@@ -1,14 +1,14 @@
 import { expect } from "vitest";
-import { denFetch, evalIn, waitFor } from "@openwork/behaviors";
-import type { DenSession } from "@openwork/behaviors";
-import { navigate } from "@openwork/cdp";
-import { screenshot, validate } from "@openwork/test-evidence";
-import { chrome } from "@openwork/hosts";
-import { needs, server, test, unmetNeeds } from "@openwork/testkit";
-import type { TestNeeds } from "@openwork/testkit";
+import { denFetch, evalIn, waitFor } from "@sofia/behaviors";
+import type { DenSession } from "@sofia/behaviors";
+import { navigate } from "@sofia/cdp";
+import { screenshot, validate } from "@sofia/test-evidence";
+import { chrome } from "@sofia/hosts";
+import { needs, server, test, unmetNeeds } from "@sofia/testkit";
+import type { TestNeeds } from "@sofia/testkit";
 
 const requirements: TestNeeds = {
-  optIn: ["OPENWORK_EVAL_E2E_TESTS"],
+  optIn: ["SOFIA_EVAL_E2E_TESTS"],
 };
 const missingRequirements = unmetNeeds(requirements, process.env);
 const title = missingRequirements.length > 0
@@ -120,8 +120,8 @@ test(title, async ({ evidence, place }) => {
   });
 
   const adminTokenStored = await evalIn(browser, `(() => {
-    localStorage.setItem("openwork:web:auth-token", ${JSON.stringify(den.admin.token)});
-    return localStorage.getItem("openwork:web:auth-token") === ${JSON.stringify(den.admin.token)};
+    localStorage.setItem("sofia:web:auth-token", ${JSON.stringify(den.admin.token)});
+    return localStorage.getItem("sofia:web:auth-token") === ${JSON.stringify(den.admin.token)};
   })()`);
   expect(adminTokenStored).toBe(true);
   await navigate(browser.client, `${den.ref.webUrl}/dashboard/org-settings`);
@@ -145,7 +145,7 @@ test(title, async ({ evidence, place }) => {
   const adminHasExtensions = adminItems.some((item) => item === "Extensions" || item.startsWith("Extensions "));
   const adminHasYourConnections = adminItems.some((item) => item.includes("Your Connections"));
   const adminHasMyLibrary = adminItems.some((item) => item.includes("My Library"));
-  const adminHasOpenWorkWeb = adminItems.some((item) => item.includes("OpenWork Web"));
+  const adminHasSofiaWeb = adminItems.some((item) => item.includes("Sofia App Web"));
 
   expect(adminSectionNames).toEqual(["work", "manage", "observability", "team"]);
   expect(adminHasMyLibrary).toBe(true);
@@ -155,7 +155,7 @@ test(title, async ({ evidence, place }) => {
   expect(adminHasWorkflowRuns).toBe(true);
   expect(adminHasToolTester).toBe(true);
   expect(adminHasTopLevelToolTester).toBe(false);
-  expect(adminHasOpenWorkWeb).toBe(true);
+  expect(adminHasSofiaWeb).toBe(true);
   expect(adminHasExtensions).toBe(false);
   expect(adminHasYourConnections).toBe(false);
   evidence.recordAssertionEvidence(
@@ -184,8 +184,8 @@ test(title, async ({ evidence, place }) => {
   }
 
   const memberTokenStored = await evalIn(browser, `(() => {
-    localStorage.setItem("openwork:web:auth-token", ${JSON.stringify(member.token)});
-    return localStorage.getItem("openwork:web:auth-token") === ${JSON.stringify(member.token)};
+    localStorage.setItem("sofia:web:auth-token", ${JSON.stringify(member.token)});
+    return localStorage.getItem("sofia:web:auth-token") === ${JSON.stringify(member.token)};
   })()`);
   expect(memberTokenStored).toBe(true);
   await navigate(browser.client, `${den.ref.webUrl}/dashboard/library`);

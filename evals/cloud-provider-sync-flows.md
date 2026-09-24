@@ -8,7 +8,7 @@ the desktop app and workspace config.
 1. Start a Daytona Den server sandbox and a Daytona Electron sandbox pointed at it.
 2. Sign the desktop app into Cloud Account.
 3. Create or select a local workspace through the desktop UI.
-4. Ensure the workspace has a writable `opencode.jsonc`.
+4. Ensure the workspace has a writable `engine.jsonc`.
 
 ## Flow 1: Provider add-to-use
 
@@ -43,7 +43,7 @@ curl -H "authorization: Bearer $TOKEN" \
 ### Expected outcome
 
 - The provider appears with `Credential ready`.
-- `opencode.jsonc` contains an `lpr_*` provider block.
+- `engine.jsonc` contains an `lpr_*` provider block.
 - The model selector shows the imported provider/model.
 - No provider key is written to the visible provider config.
 
@@ -59,12 +59,12 @@ curl -H "authorization: Bearer $TOKEN" \
 4. Click `Refresh`.
 5. Verify the provider row marks itself out of sync or updates its metadata.
 6. Import or re-import the provider.
-7. Inspect `opencode.jsonc`.
+7. Inspect `engine.jsonc`.
 
 ### Expected outcome
 
 - The changed provider metadata is visible in the desktop UI.
-- `opencode.jsonc` reflects the new model list after sync.
+- `engine.jsonc` reflects the new model list after sync.
 - The `lpr_*` provider block's `models` map is rewritten to match Den exactly:
   newly added models appear and removed models are dropped (not the
   first-import snapshot — see #2346).
@@ -86,7 +86,7 @@ state.
 2. Delete the provider in Den API.
 3. Open Settings -> Cloud -> Cloud Providers.
 4. Click `Refresh` or wait for cloud sync.
-5. Inspect `opencode.jsonc`.
+5. Inspect `engine.jsonc`.
 
 ### Expected outcome
 

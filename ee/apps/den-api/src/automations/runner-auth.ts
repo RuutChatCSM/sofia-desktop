@@ -2,7 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto"
 import {
   AUTOMATION_MODEL_ATTENTION_CAPABILITY,
   type AutomationDesktopRunnerCapability,
-} from "@openwork/types/automations"
+} from "@sofia/types/automations"
 import { env } from "../env.js"
 import { firstForwardedValue, publicRequestUrl, trustedForwardedOrigin } from "../request-url.js"
 
@@ -73,7 +73,7 @@ export class AutomationRunnerAuth {
 
   private sign(payload: string) {
     return createHmac("sha256", this.secret)
-      .update(`openwork-automation-runner-v1.${payload}`)
+      .update(`sofia-automation-runner-v1.${payload}`)
       .digest("base64url")
   }
 

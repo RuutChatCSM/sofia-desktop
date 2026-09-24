@@ -1,10 +1,10 @@
 ---
 title: "Okta SAML SSO"
-description: "Connect Okta to OpenWork Cloud or a self-hosted OpenWork deployment with SAML"
+description: "Connect Okta to Sofia Cloud or a self-hosted Sofia deployment with SAML"
 ---
 
-Use this guide to let organization members sign in to OpenWork through an
-Okta application integration. It works for OpenWork Cloud and for a Helm
+Use this guide to let organization members sign in to Sofia through an
+Okta application integration. It works for Sofia Cloud and for a Helm
 deployment with a public HTTPS web origin.
 
 After SAML sign-in works, use [Okta SCIM provisioning](/cloud/scim-okta) to
@@ -14,18 +14,18 @@ synchronize members and groups.
 
 You need:
 
-- An OpenWork owner, or a member who can manage security configuration.
+- An Sofia owner, or a member who can manage security configuration.
 - An Okta administrator who can create and assign application integrations.
 - Control of DNS for the email domain you will associate with the connection.
-- The final HTTPS OpenWork web origin, for example
-  `https://openwork.example.com`.
+- The final HTTPS Sofia web origin, for example
+  `https://sofia.example.com`.
 
 Keep **Require SSO for this organization** off until an owner has completed a
 fresh SAML sign-in. Keep password access available as a recovery path during
 setup.
 
 <Note>
-For a Helm deployment with separate web and API hosts, use the URLs OpenWork
+For a Helm deployment with separate web and API hosts, use the URLs Sofia
 shows in **Settings → SSO**. Do not replace their host with the separate API
 origin. SAML uses the deployment's configured auth origin, which is normally
 the public web origin when `/api/auth` is proxied through the web host.
@@ -33,20 +33,20 @@ the public web origin when `/api/auth` is proxied through the web host.
 
 ## 1. Get the organization ID
 
-In OpenWork, select the organization and open **Settings → General**. Copy the
-organization ID. OpenWork creates the SAML provider ID as:
+In Sofia, select the organization and open **Settings → General**. Copy the
+organization ID. Sofia creates the SAML provider ID as:
 
 ```text
-openwork-sso-<organization-id>
+sofia-sso-<organization-id>
 ```
 
 The corresponding assertion consumer service URL is:
 
 ```text
-https://<openwork-web-origin>/api/auth/sso/saml2/sp/acs/openwork-sso-<organization-id>
+https://<sofia-web-origin>/api/auth/sso/saml2/sp/acs/sofia-sso-<organization-id>
 ```
 
-You can confirm the exact generated URL after saving the OpenWork connection.
+You can confirm the exact generated URL after saving the Sofia connection.
 
 ## 2. Create the Okta SAML application
 
@@ -55,7 +55,7 @@ In the Okta Admin Console:
 1. Open **Applications → Applications**.
 2. Select **Create App Integration**.
 3. Choose **SAML 2.0**, then select **Next**.
-4. Set **App name** to `OpenWork` or another recognizable workspace name.
+4. Set **App name** to `Sofia` or another recognizable workspace name.
 5. Select **Next**.
 
 ## 3. Configure SAML in Okta
@@ -64,9 +64,9 @@ Under **General**, enter:
 
 | Okta field | Value |
 | --- | --- |
-| Single sign-on URL | The OpenWork ACS URL from step 1 |
+| Single sign-on URL | The Sofia ACS URL from step 1 |
 | Use this for Recipient URL and Destination URL | Enabled |
-| Audience URI (SP Entity ID) | The OpenWork web origin, for example `https://openwork.example.com` |
+| Audience URI (SP Entity ID) | The Sofia web origin, for example `https://sofia.example.com` |
 | Default RelayState | Leave blank |
 | Name ID format | `EmailAddress` |
 | Application username | `Okta username` |
@@ -79,13 +79,13 @@ Open **Show Advanced Settings** and confirm:
 - **Digest Algorithm**: `SHA256`
 - **Assertion Encryption**: `Unencrypted`
 
-OpenWork requires a signed assertion. Keep the Okta username and NameID equal
+Sofia requires a signed assertion. Keep the Okta username and NameID equal
 to the stable work email that SCIM will later send as `userName`.
 
 Select **Next**, mark the integration as an internal application when
 appropriate, then select **Finish**.
 
-## 4. Copy Okta values into OpenWork
+## 4. Copy Okta values into Sofia
 
 In the Okta application's **Sign On** tab, select
 **View SAML setup instructions**. Copy:
@@ -95,19 +95,19 @@ In the Okta application's **Sign On** tab, select
 - **X.509 Certificate**, including the `BEGIN CERTIFICATE` and
   `END CERTIFICATE` lines
 
-In OpenWork, open **Settings → SSO**, select **SAML**, and enter:
+In Sofia, open **Settings → SSO**, select **SAML**, and enter:
 
-| OpenWork field | Okta value |
+| Sofia field | Okta value |
 | --- | --- |
 | IdP Issuer URL | **Identity Provider Issuer** |
 | Domain | The members' email domain, for example `example.com` |
 | SAML Entry Point | **Identity Provider Single Sign-On URL** |
-| Audience URL | Leave blank to use the configured OpenWork auth origin |
+| Audience URL | Leave blank to use the configured Sofia auth origin |
 | IdP Certificate | **X.509 Certificate** |
 
 Save the connection. Compare the generated **ACS URL** with Okta's
 **Single sign-on URL** character for character. Also copy the generated
-OpenWork **Sign-in URL**; use this URL for the first test.
+Sofia **Sign-in URL**; use this URL for the first test.
 
 ## 5. Verify the email domain
 
@@ -118,18 +118,18 @@ record for the email domain:
 | --- | --- |
 | Type | `TXT` |
 | Name | `_better-auth-token-<provider-id>` |
-| Value | The token OpenWork displays |
+| Value | The token Sofia displays |
 
-For example, provider `openwork-sso-org_123` for `example.com` produces:
+For example, provider `sofia-sso-org_123` for `example.com` produces:
 
 ```text
-_better-auth-token-openwork-sso-org_123.example.com
+_better-auth-token-sofia-sso-org_123.example.com
 ```
 
 In a DNS console that automatically appends the zone, enter only
 `_better-auth-token-<provider-id>` in the name field. The token is valid for
 seven days. After the TXT record resolves publicly, select **Verify domain**
-in OpenWork and confirm the connection shows **Domain verified: Yes**.
+in Sofia and confirm the connection shows **Domain verified: Yes**.
 
 ## 6. Assign a test user in Okta
 
@@ -137,21 +137,21 @@ In the Okta application:
 
 1. Open **Assignments**.
 2. Select **Assign → Assign to People**.
-3. Assign one OpenWork owner or another controlled test user.
+3. Assign one Sofia owner or another controlled test user.
 4. Confirm the application username is that user's stable work email.
 
 Do not assign broad groups until the test user can complete the full flow.
 
 ## 7. Test SP-initiated sign-in
 
-Open the organization-specific OpenWork **Sign-in URL** in a fresh browser
+Open the organization-specific Sofia **Sign-in URL** in a fresh browser
 session. Confirm that:
 
-1. OpenWork redirects to the expected Okta tenant.
+1. Sofia redirects to the expected Okta tenant.
 2. Okta authenticates the assigned user.
-3. Okta posts the assertion to the generated OpenWork ACS URL.
-4. OpenWork returns the user to the intended organization.
-5. The member identity in OpenWork uses the same email that Okta sent as
+3. Okta posts the assertion to the generated Sofia ACS URL.
+4. Sofia returns the user to the intended organization.
+5. The member identity in Sofia uses the same email that Okta sent as
    NameID.
 
 Only after this succeeds should you configure SCIM or enable
@@ -162,8 +162,8 @@ Only after this succeeds should you configure SCIM or enable
 | Symptom | Likely cause | Fix |
 | --- | --- | --- |
 | `Provider domain has not been verified` | The TXT record is missing, attached to the zone apex, or has not propagated | Put the token at `_better-auth-token-<provider-id>.<domain>`, wait for public DNS, then select **Verify domain** |
-| `invalid_saml_configuration` | The OpenWork build did not persist the generated ACS callback URL in the SAML provider | Upgrade to a build containing the SAML callback configuration fix, then edit and save the connection again |
-| `invalid_audience` | Okta's Audience URI does not match OpenWork's configured auth origin | Use the OpenWork web/auth origin shown by the deployment; do not substitute a separate API host |
-| `invalid_destination` or `invalid_recipient` | Okta is posting to a different URL than OpenWork expects | Copy the generated OpenWork ACS URL into Okta and keep **Use this for Recipient URL and Destination URL** enabled |
-| `Invalid SAML response` | The assertion is unsigned, uses a deprecated algorithm, or the active Okta certificate differs from OpenWork | Sign the assertion with RSA-SHA256 and paste Okta's current active X.509 certificate into OpenWork |
+| `invalid_saml_configuration` | The Sofia build did not persist the generated ACS callback URL in the SAML provider | Upgrade to a build containing the SAML callback configuration fix, then edit and save the connection again |
+| `invalid_audience` | Okta's Audience URI does not match Sofia's configured auth origin | Use the Sofia web/auth origin shown by the deployment; do not substitute a separate API host |
+| `invalid_destination` or `invalid_recipient` | Okta is posting to a different URL than Sofia expects | Copy the generated Sofia ACS URL into Okta and keep **Use this for Recipient URL and Destination URL** enabled |
+| `Invalid SAML response` | The assertion is unsigned, uses a deprecated algorithm, or the active Okta certificate differs from Sofia | Sign the assertion with RSA-SHA256 and paste Okta's current active X.509 certificate into Sofia |
 | Okta refuses access | The person is not assigned to the application | Assign the test user under **Assignments** |

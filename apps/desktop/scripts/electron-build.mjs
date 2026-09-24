@@ -11,7 +11,7 @@ const electronHelperDir = resolve(desktopRoot, "resources", "helpers");
 const electronRoot = resolve(desktopRoot, "electron");
 const packagedServerRoot = resolve(desktopRoot, "server");
 const packagedRuntimeRoot = resolve(desktopRoot, ".electron-runtime", "node_modules");
-const sentryBuildConfigPath = resolve(desktopRoot, ".electron-runtime", "openwork-sentry.json");
+const sentryBuildConfigPath = resolve(desktopRoot, ".electron-runtime", "sofia-sentry.json");
 
 const pnpmCmd = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
 const nodeCmd = process.execPath;
@@ -33,8 +33,8 @@ function run(command, args, cwd, env) {
 }
 
 function writeSentryBuildConfig() {
-  const dsn = process.env.OPENWORK_DESKTOP_SENTRY_DSN?.trim() ?? "";
-  const tracesSampleRateRaw = process.env.OPENWORK_DESKTOP_SENTRY_TRACES_SAMPLE_RATE?.trim() ?? "";
+  const dsn = process.env.SOFIA_DESKTOP_SENTRY_DSN?.trim() ?? "";
+  const tracesSampleRateRaw = process.env.SOFIA_DESKTOP_SENTRY_TRACES_SAMPLE_RATE?.trim() ?? "";
   const tracesSampleRate = tracesSampleRateRaw ? Number(tracesSampleRateRaw) : 0.01;
   const config = {
     dsn: dsn || null,
@@ -50,12 +50,12 @@ run(nodeCmd, [resolve(__dirname, "prepare-computer-use-helper.mjs"), "--force", 
 run(nodeCmd, [resolve(__dirname, "prepare-runtime-node-modules.mjs"), "--outdir", packagedRuntimeRoot], desktopRoot);
 writeSentryBuildConfig();
 // Build the server TS → JS so Electron can import it in-process
-run(pnpmCmd, ["--filter", "openwork-server", "build"], repoRoot);
-// OPENWORK_ELECTRON_BUILD tells Vite to emit relative asset paths so
+run(pnpmCmd, ["--filter", "sofia-server", "build"], repoRoot);
+// SOFIA_ELECTRON_BUILD tells Vite to emit relative asset paths so
 // index.html resolves /assets/* correctly when loaded via file:// from
 // inside the packaged .app bundle.
-run(pnpmCmd, ["--filter", "@openwork/app", "build"], repoRoot, {
-  OPENWORK_ELECTRON_BUILD: "1",
+run(pnpmCmd, ["--filter", "@sofia/app", "build"], repoRoot, {
+  SOFIA_ELECTRON_BUILD: "1",
 });
 // Copy constants.json next to server dist so the packaged asar can resolve it.
 // Also patch the compiled import path so it works from both dev and packaged layouts.

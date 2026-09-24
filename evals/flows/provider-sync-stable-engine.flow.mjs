@@ -5,16 +5,16 @@ import { loadVoiceoverParagraphs } from "../runner/voiceover.mjs";
 const vo = await loadVoiceoverParagraphs("provider-sync-stable-engine");
 
 const PROVIDER_NAME = "Acme Azure Foundry";
-const RELOAD_TEXT = "Reloading OpenCode config";
+const RELOAD_TEXT = "Reloading Sofia config";
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function denRequest(ctx, path, init = {}) {
-  const apiBase = ctx.env.OPENWORK_EVAL_DEN_API_URL.trim().replace(/\/+$/, "");
+  const apiBase = ctx.env.SOFIA_EVAL_DEN_API_URL.trim().replace(/\/+$/, "");
   const response = await fetch(`${apiBase}${path}`, {
     ...init,
     headers: {
-      authorization: `Bearer ${ctx.env.OPENWORK_EVAL_DEN_TOKEN.trim()}`,
+      authorization: `Bearer ${ctx.env.SOFIA_EVAL_DEN_TOKEN.trim()}`,
       "content-type": "application/json",
       ...(init.headers ?? {}),
     },
@@ -78,8 +78,8 @@ async function chooseAcmeIfPickerVisible(ctx) {
 
 const workspaceConfigStateExpr = (workspaceId) => `(async () => {
   try {
-    const port = localStorage.getItem("openwork.server.port");
-    const token = localStorage.getItem("openwork.server.token");
+    const port = localStorage.getItem("sofia.server.port");
+    const token = localStorage.getItem("sofia.server.token");
     const workspaceId = ${JSON.stringify(workspaceId)};
     if (!port || !token || !workspaceId) {
       return JSON.stringify({ providers: [], runtimeProviders: [], error: "missing server port/token/workspace" });
@@ -92,8 +92,8 @@ const workspaceConfigStateExpr = (workspaceId) => `(async () => {
     }
     const config = await response.json();
     return JSON.stringify({
-      providers: Object.keys(config.openwork?.cloudImports?.providers ?? {}),
-      runtimeProviders: Object.keys(config.opencode?.provider ?? {}),
+      providers: Object.keys(config.engine?.cloudImports?.providers ?? {}),
+      runtimeProviders: Object.keys(config.engine?.provider ?? {}),
     });
   } catch (error) {
     return JSON.stringify({
@@ -150,7 +150,7 @@ export default {
   id: "provider-sync-stable-engine",
   title: "Org cloud providers import once and the engine connection stays stable",
   kind: "user-facing",
-  requiredEnv: ["OPENWORK_EVAL_DEN_API_URL", "OPENWORK_EVAL_DEN_TOKEN", "OPENWORK_EVAL_DEN_WEB_URL"],
+  requiredEnv: ["SOFIA_EVAL_DEN_API_URL", "SOFIA_EVAL_DEN_TOKEN", "SOFIA_EVAL_DEN_WEB_URL"],
   steps: [
     {
       name: "Frame 1",
@@ -159,7 +159,7 @@ export default {
           voiceover: vo[0],
           // "Alex starts on a clean workspace, signed out of the cloud — the composer is "
           action: async () => {
-            await ctx.waitFor("Boolean(window.__openworkControl)", {
+            await ctx.waitFor("Boolean(window.__sofiaControl)", {
               timeoutMs: 60_000,
               label: "control API",
             });
@@ -184,18 +184,18 @@ export default {
       run: async (ctx) => {
         await ctx.prove("Desktop handoff sign-in lands on the org picker and Alex picks Acme Robotics", {
           voiceover: vo[1],
-          // "He signs in to OpenWork Cloud with a pasted sign-in code and lands on the or"
+          // "He signs in to Sofia Cloud with a pasted sign-in code and lands on the or"
           action: async () => {
             const payload = await denRequest(ctx, "/v1/auth/desktop-handoff", {
               method: "POST",
-              body: JSON.stringify({ desktopScheme: "openwork" }),
+              body: JSON.stringify({ desktopScheme: "sofia" }),
             });
             ctx.assert(
-              typeof payload?.openworkUrl === "string" && payload.openworkUrl.length > 0,
-              "No openworkUrl in handoff response.",
+              typeof payload?.sofiaUrl === "string" && payload.sofiaUrl.length > 0,
+              "No sofiaUrl in handoff response.",
             );
-            const handoffUrl = new URL(payload.openworkUrl);
-            handoffUrl.searchParams.set("denBaseUrl", ctx.env.OPENWORK_EVAL_DEN_WEB_URL.trim().replace(/\/+$/, ""));
+            const handoffUrl = new URL(payload.sofiaUrl);
+            handoffUrl.searchParams.set("denBaseUrl", ctx.env.SOFIA_EVAL_DEN_WEB_URL.trim().replace(/\/+$/, ""));
             ctx.handoffUrl = handoffUrl.toString();
 
             await ctx.navigateHash("/settings/cloud-account");
@@ -215,7 +215,7 @@ export default {
               await ctx.fill("#den-signin-link", ctx.handoffUrl);
               await ctx.clickText("Finish sign-in", { timeoutMs: 30_000 });
               await ctx.waitFor(
-                "Boolean((localStorage.getItem('openwork.den.authToken') ?? '').trim())",
+                "Boolean((localStorage.getItem('sofia.den.authToken') ?? '').trim())",
                 { timeoutMs: 60_000, label: "persisted den auth token" },
               );
             }
@@ -338,7 +338,7 @@ export default {
     {
       name: "Frame 5",
       run: async (ctx) => {
-        await ctx.prove("Sixty seconds in the session with zero 'Reloading OpenCode config' flashes — the reload loop is gone", {
+        await ctx.prove("Sixty seconds in the session with zero 'Reloading Sofia config' flashes — the reload loop is gone", {
           voiceover: vo[4],
           // "The proof is in the waiting: a full minute in the session and the status bar"
           action: async () => {

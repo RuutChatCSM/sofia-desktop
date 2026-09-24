@@ -35,7 +35,7 @@ function shouldCheck(file: string): boolean {
   return !path.endsWith(".test.ts")
     && !path.endsWith(".e2e.test.ts")
     && path !== "server-fetch.ts"
-    && !path.startsWith("opencode-plugins/");
+    && !path.startsWith("engine-plugins/");
 }
 
 test("server source does not use bare fetch", async () => {

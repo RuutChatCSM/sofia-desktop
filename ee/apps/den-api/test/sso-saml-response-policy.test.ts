@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test"
 import { validateSamlResponsePolicy } from "../src/sso-saml-response-policy.js"
 
-const expectedAudience = "https://openwork.example.com/saml/metadata"
-const expectedAcsUrl = "https://openwork.example.com/api/auth/sso/saml2/sp/acs/openwork-sso-org_123"
+const expectedAudience = "https://sofia.example.com/saml/metadata"
+const expectedAcsUrl = "https://sofia.example.com/api/auth/sso/saml2/sp/acs/sofia-sso-org_123"
 
 describe("SAML response policy", () => {
   test("accepts matching audience, destination, recipient, and assertion ID", () => {

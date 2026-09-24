@@ -1,15 +1,15 @@
 # MCP Apps inline host
 
-OpenWork Desktop can render the standard MCP Apps UI attached to a completed
+Sofia Desktop can render the standard MCP Apps UI attached to a completed
 MCP tool call. The normal text result remains visible and usable if the view is
 absent, unsupported, or fails to initialize.
 
 ## Runtime flow
 
-1. OpenCode calls the configured MCP tool once.
-2. OpenWork's bundled engine plugin preserves that call's standard `content`,
+1. Sofia calls the configured MCP tool once.
+2. Sofia's bundled engine plugin preserves that call's standard `content`,
    `structuredContent`, and result `_meta` fields in the completed tool part.
-3. The desktop asks its local OpenWork server to find the original projected
+3. The desktop asks its local Sofia server to find the original projected
    tool on the configured MCP server.
 4. The server advertises the `io.modelcontextprotocol/ui` extension, reads the
    tool's `_meta.ui.resourceUri`, and resolves the `ui://` resource through
@@ -45,7 +45,7 @@ data. MCP tools that return only standard text content can still attach a view.
 
 The resource resolver currently supports configured remote Streamable HTTP MCP
 servers, with SSE fallback for legacy remote servers. It does not yet resolve
-resources directly from command/stdio MCP entries. OpenWork-managed OAuth
+resources directly from command/stdio MCP entries. Sofia-managed OAuth
 connections also require a follow-up adapter so resource discovery can reuse
 their encrypted server-side credential path; ordinary remote connections with
 configured server-side headers work today.
@@ -56,6 +56,6 @@ Focused server tests cover extension negotiation, projected tool naming,
 resource resolution, tool visibility, read-only same-server mediation, and
 write rejection. App tests cover result preservation, session mapping, CSP
 construction, and safe HTML injection. The Testkit scenario
-`mcp-app-inline-host.e2e.test.ts` drives a deterministic OpenCode tool call,
+`mcp-app-inline-host.e2e.test.ts` drives a deterministic Sofia tool call,
 resolves the declared `ui://` resource, mounts the sandboxed view, and captures
 the visible inline card and fallback transcript.

@@ -28,7 +28,7 @@ function desktopFake(diskUse = "40%"):
       return { stdout: "", stderr: "already started", code: 1 };
     }
     if (args[0] === "snapshot") {
-      return { stdout: JSON.stringify([{ name: "openwork-eval-vnc", id: "snapshot-123" }]), stderr: "", code: 0 };
+      return { stdout: JSON.stringify([{ name: "sofia-eval-vnc", id: "snapshot-123" }]), stderr: "", code: 0 };
     }
     if (args[0] !== "exec") return { stdout: "", stderr: "", code: 0 };
 
@@ -69,16 +69,16 @@ test("connector E2E test env rendering and parsing round-trip the provision cont
   assert.deepEqual(parseConnectorE2eTestEnv(content), facts);
   assert.match(content, /^# provisioned for org-connector-two-members — generated .*; ref=feat\/eval-connector-two-members$/m);
   assert.match(content, /^# provision-created=den,desktop-a$/m);
-  assert.match(content, /OPENWORK_EVAL_MODEL=big-pickle/);
-  const missingApi = content.split("\n").filter((line) => !line.startsWith("OPENWORK_EVAL_DEN_API_URL=")).join("\n");
-  assert.throws(() => parseConnectorE2eTestEnv(missingApi), /OPENWORK_EVAL_DEN_API_URL/);
+  assert.match(content, /SOFIA_EVAL_MODEL=big-pickle/);
+  const missingApi = content.split("\n").filter((line) => !line.startsWith("SOFIA_EVAL_DEN_API_URL=")).join("\n");
+  assert.throws(() => parseConnectorE2eTestEnv(missingApi), /SOFIA_EVAL_DEN_API_URL/);
 });
 
 test("server sandbox names are unique within the same CI process and second", () => {
   const first = serverSandboxName();
   const second = serverSandboxName();
 
-  assert.match(first, new RegExp(`^openwork-server-\\d{8}-\\d{6}-${process.pid}-[0-9a-f]{8}$`));
+  assert.match(first, new RegExp(`^sofia-server-\\d{8}-\\d{6}-${process.pid}-[0-9a-f]{8}$`));
   assert.notEqual(first, second);
 });
 
@@ -86,7 +86,7 @@ test("desktop sandbox names stay unique when parallel workers use the same surfa
   const first = desktopSandboxName("testkit admin");
   const second = desktopSandboxName("testkit admin");
 
-  assert.match(first, new RegExp(`^openwork-connector-testkit-admin-\\d{8}-\\d{6}-${process.pid}-[0-9a-f]{8}$`));
+  assert.match(first, new RegExp(`^sofia-connector-testkit-admin-\\d{8}-\\d{6}-${process.pid}-[0-9a-f]{8}$`));
   assert.notEqual(first, second);
 });
 
@@ -130,7 +130,7 @@ test("rendered values are shell-quoted, because the env file is meant to be sour
     created: [],
   });
 
-  assert(content.includes(`OPENWORK_EVAL_DAYTONA_SANDBOX_A='$(touch /tmp/pwned); echo it'"'"'s-here'`));
+  assert(content.includes(`SOFIA_EVAL_DAYTONA_SANDBOX_A='$(touch /tmp/pwned); echo it'"'"'s-here'`));
   assert.equal(parseConnectorE2eTestEnv(content).sandboxA, nasty);
 });
 
@@ -161,7 +161,7 @@ test("the eval secrets volume is mounted only when explicitly asked for", async 
   await provisionDesktopSandbox({ ref: "dev", name: "b", secrets: true, exec, log: () => undefined });
 
   const create = calls.find((call) => call.args[0] === "create");
-  assert(create?.args.includes("openwork-eval-secrets:/daytona-secrets"));
+  assert(create?.args.includes("sofia-eval-secrets:/daytona-secrets"));
 });
 
 test("provisionDesktopSandbox fails the disk gate above 85 percent", async () => {
@@ -235,16 +235,16 @@ test("startFaultProxyOnSandbox uploads and detaches the proxy after resolving it
   assert.match(proxy.token, /^[0-9a-f]{32}$/);
   assert.deepEqual(calls[0]?.args, ["preview-url", "den-1", "-p", "3985", "--expires", "86400"]);
   const scripts = calls.filter((call) => call.args[0] === "exec").map((call) => call.args[3]?.slice(10, -1) ?? "");
-  assert.match(scripts[0] ?? "", /pkill -f openwork-fault-proxy/);
-  assert.match(scripts[1] ?? "", /^printf %s [A-Za-z0-9+/=]+ \| base64 -d > \/tmp\/openwork-fault-proxy\.mjs$/);
+  assert.match(scripts[0] ?? "", /pkill -f sofia-fault-proxy/);
+  assert.match(scripts[1] ?? "", /^printf %s [A-Za-z0-9+/=]+ \| base64 -d > \/tmp\/sofia-fault-proxy\.mjs$/);
   assert(!scripts[1]?.includes("'"));
   assert.match(scripts[2] ?? "", /start_new_session=True/);
   assert.match(scripts[2] ?? "", /UPSTREAM=http:\/\/127\.0\.0\.1:3005/);
-  assert.match(scripts[2] ?? "", /node \/tmp\/openwork-fault-proxy\.mjs/);
+  assert.match(scripts[2] ?? "", /node \/tmp\/sofia-fault-proxy\.mjs/);
   assertRemoteCommandsAreSingleArgument(calls);
 
   await proxy.stop();
-  assert.match(calls.at(-1)?.args[3] ?? "", /pkill -f openwork-fault-proxy\.mjs/);
+  assert.match(calls.at(-1)?.args[3] ?? "", /pkill -f sofia-fault-proxy\.mjs/);
 });
 
 test("startFaultProxyOnSandbox rejects a health response with the wrong issuer", async () => {

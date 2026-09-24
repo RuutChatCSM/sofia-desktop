@@ -1,4 +1,4 @@
-// CDP broker: an engine-agnostic proxy that sits between an agent (OpenCode,
+// CDP broker: an engine-agnostic proxy that sits between an agent (Sofia engine,
 // Codex, or any CDP client) and the built-in browser panel's Chromium. It
 // makes agent-driven browsing feel human by:
 //
@@ -12,7 +12,7 @@
 // The agent's tool surface is unchanged: it still receives `browser_url` +
 // `target_id` and calls the same browser_* tools. Every connection and command
 // passes through here untouched except the Input domain, so this is fully
-// backward compatible for OpenCode and equally reusable for a future Codex
+// backward compatible for Sofia engine and equally reusable for a future Codex
 // runtime.
 import http from "node:http";
 import { WebSocket, WebSocketServer } from "ws";
@@ -24,20 +24,20 @@ const SYNTHETIC_ID_BASE = 1_000_000_000;
 // pointer-transparent ghost cursor and exposes a tiny controller the broker
 // drives via Runtime.evaluate. The cursor uses high-contrast colors (white ring
 // with a black outline) so it is visible on any background — no blend modes.
-// `__openworkAgentCursor` guard makes repeated injection a no-op even across
+// `__sofiaAgentCursor` guard makes repeated injection a no-op even across
 // multiple CDP sessions sharing the page.
 // Cursor SVG — a hand-drawn mouse, recolored (white body) so it stays visible on
 // dark pages, with a neon under-aura and a subtle idle wobble/breath so the agent
 // cursor feels alive (mirrors the ChatGPT desktop cursor).
 const CURSOR_MOUSE_PATH = "m151 41.78c-3.03 0.99-7.53 2.97-10 4.4-2.47 1.43-6.86 5.13-9.75 8.21-2.89 3.09-6.45 8.2-7.91 11.36-1.46 3.16-3.09 8.45-3.62 11.75-0.74 4.55 0.74 41.29 6.12 152.5 3.9 80.58 7.49 150.77 7.98 156 0.61 6.49 1.69 11.24 3.4 15 1.37 3.02 4.48 7.69 6.89 10.36 2.91 3.22 6.9 6.09 11.84 8.5 6.92 3.38 8.08 3.64 16.5 3.6 6.85-0.02 10.39-0.56 14.55-2.2 3.03-1.19 7.71-4.09 10.41-6.46 2.7-2.36 16.95-20.28 31.67-39.8 14.72-19.52 29.39-38.09 32.59-41.25 3.21-3.16 8.53-7.55 11.83-9.75 3.3-2.2 9.15-5.32 13-6.92 3.85-1.6 10.49-3.62 14.75-4.5 6.43-1.31 15.89-1.58 55.5-1.59 39.26-0.01 48.73-0.28 53.25-1.51 3.02-0.82 7.52-2.72 10-4.2 2.48-1.49 6.19-4.41 8.25-6.49 2.06-2.09 4.81-5.93 6.11-8.54 1.3-2.61 2.94-7.23 3.64-10.25 0.77-3.31 1.02-7.79 0.64-11.25-0.35-3.16-1.52-8.11-2.59-11-1.07-2.89-3.88-7.46-6.25-10.16-2.36-2.71-54.25-46.16-115.3-96.57-61.05-50.41-114.6-94.56-119-98.1-4.4-3.54-10.93-7.75-14.5-9.34-5.25-2.34-8.23-2.97-15.5-3.25-6.72-0.26-10.39 0.1-14.5 1.45z";
 const CURSOR_SCRIPT = `(() => {
-  if (window.__openworkAgentCursor) return;
+  if (window.__sofiaAgentCursor) return;
   let el = null, aura = null, mouse = null;
   const S = 30; // rendered cursor size (px)
   const ensure = () => {
     if (el && el.isConnected) return el;
     el = document.createElement("div");
-    el.id = "__openwork-agent-cursor";
+    el.id = "__sofia-agent-cursor";
     el.setAttribute("aria-hidden", "true");
     const st = el.style;
     st.position = "fixed"; st.top = "0"; st.left = "0";
@@ -79,7 +79,7 @@ const CURSOR_SCRIPT = `(() => {
     });
     setTimeout(() => { if (el && el.isConnected) { el.style.transform = "translate(" + (Math.round(x) - S / 2) + "px," + (Math.round(y) - S / 2) + "px) scale(1)"; } }, 150);
   };
-  window.__openworkAgentCursor = {
+  window.__sofiaAgentCursor = {
     present() {
       const e = ensure();
       const cx = Math.round((window.innerWidth || 640) / 2);
@@ -238,14 +238,14 @@ export function createCdpBroker({ upstreamBaseUrl, port = 0, stepMs = 28, debug 
 
     function moveCursor(x, y, sessionId) {
       return sendSynthetic("Runtime.evaluate", {
-        expression: "window.__openworkAgentCursor && window.__openworkAgentCursor.moveTo(" +
+        expression: "window.__sofiaAgentCursor && window.__sofiaAgentCursor.moveTo(" +
           `${Math.round(x)},${Math.round(y)});`,
       }, sessionId).catch(() => {});
     }
 
     function flashCursor(x, y, sessionId) {
       return sendSynthetic("Runtime.evaluate", {
-        expression: "window.__openworkAgentCursor && window.__openworkAgentCursor.flash(" +
+        expression: "window.__sofiaAgentCursor && window.__sofiaAgentCursor.flash(" +
           `${Math.round(x)},${Math.round(y)});`,
       }, sessionId).catch(() => {});
     }
@@ -256,7 +256,7 @@ export function createCdpBroker({ upstreamBaseUrl, port = 0, stepMs = 28, debug 
     // from center to its target.
     function presentCursor(sessionId) {
       return sendSynthetic("Runtime.evaluate", {
-        expression: "window.__openworkAgentCursor && window.__openworkAgentCursor.present()",
+        expression: "window.__sofiaAgentCursor && window.__sofiaAgentCursor.present()",
         returnByValue: true,
       }, sessionId).then(({ result }) => {
         const value = result?.result?.value;

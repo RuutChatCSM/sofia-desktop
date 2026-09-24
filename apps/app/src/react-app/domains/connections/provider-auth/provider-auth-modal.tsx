@@ -50,15 +50,15 @@ type ProviderOAuthSession = ProviderOAuthStartResult & {
 };
 
 const PROVIDER_LABELS: Record<string, string> = {
-  openwork: "Sofia App",
-  opencode: "OpenCode Zen",
+  sofia: "Sofia App",
+  engine: "Sofia Zen",
   openai: "OpenAI",
   anthropic: "Anthropic",
   google: "Google",
   openrouter: "OpenRouter",
 };
 
-const OPENWORK_MODELS_PROVIDER_ID = "openwork";
+const SOFIA_MODELS_PROVIDER_ID = "sofia";
 
 export type ProviderAuthModalProps = {
   open: boolean;
@@ -78,8 +78,8 @@ export type ProviderAuthModalProps = {
     code?: string,
   ) => Promise<{ connected: boolean; pending?: boolean; message?: string }>;
   onRefreshProviders?: () => Promise<unknown>;
-  showOpenWorkModelsSubscribe?: boolean;
-  onSubscribeOpenWorkModels?: () => void | Promise<void>;
+  showSofiaModelsSubscribe?: boolean;
+  onSubscribeSofiaModels?: () => void | Promise<void>;
   onClose: () => void;
 };
 
@@ -88,7 +88,7 @@ export default function ProviderAuthModal(props: ProviderAuthModalProps) {
   const isRemoteWorker = workerType === "remote";
 
   const [view, setView] = useState<
-    "list" | "method" | "api" | "oauth-code" | "oauth-auto" | "openwork-subscribe"
+    "list" | "method" | "api" | "oauth-code" | "oauth-auto" | "sofia-subscribe"
   >("list");
   const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null);
   const [apiKeyInput, setApiKeyInput] = useState("");
@@ -149,9 +149,9 @@ export default function ProviderAuthModal(props: ProviderAuthModalProps) {
     return normalizedId === "anthropic" || normalizedName === "anthropic";
   };
 
-  const isOpencodeZenProvider = (id: string) => id.trim().toLowerCase() === "opencode";
+  const isWorkspaceEngineZenProvider = (id: string) => id.trim().toLowerCase() === "engine";
 
-  const OPENCODE_ZEN_KEY_URL = "https://opencode.ai/auth";
+  const SOFIA_ENGINE_ZEN_KEY_URL = "https://github.com/RuutChatCSM/sofia/auth";
 
   const openExternalUrl = async (url: string) => {
     if (!url) return;
@@ -196,22 +196,22 @@ export default function ProviderAuthModal(props: ProviderAuthModalProps) {
       })
       .sort(compareProviders);
 
-    if (props.showOpenWorkModelsSubscribe) {
-      const connectedToOpenWork = connected.has(OPENWORK_MODELS_PROVIDER_ID);
+    if (props.showSofiaModelsSubscribe) {
+      const connectedToSofia = connected.has(SOFIA_MODELS_PROVIDER_ID);
       return [
         {
-          id: OPENWORK_MODELS_PROVIDER_ID,
+          id: SOFIA_MODELS_PROVIDER_ID,
           name: "Sofia App",
           methods: [{ type: "cloud", label: "Subscribe" }],
-          connected: connectedToOpenWork,
+          connected: connectedToSofia,
           env: [],
         },
-        ...nextEntries.filter((entry) => entry.id.trim().toLowerCase() !== OPENWORK_MODELS_PROVIDER_ID),
+        ...nextEntries.filter((entry) => entry.id.trim().toLowerCase() !== SOFIA_MODELS_PROVIDER_ID),
       ];
     }
 
     return nextEntries;
-  }, [isRemoteWorker, props.authMethods, props.connectedProviderIds, props.providers, props.showOpenWorkModelsSubscribe]);
+  }, [isRemoteWorker, props.authMethods, props.connectedProviderIds, props.providers, props.showSofiaModelsSubscribe]);
 
   const selectedEntry = useMemo(
     () => entries.find((entry) => entry.id === selectedProviderId) ?? null,
@@ -525,7 +525,7 @@ export default function ProviderAuthModal(props: ProviderAuthModalProps) {
     }
 
     if (method.type === "cloud") {
-      setView("openwork-subscribe");
+      setView("sofia-subscribe");
       return;
     }
 
@@ -537,8 +537,8 @@ export default function ProviderAuthModal(props: ProviderAuthModalProps) {
     setLocalError(null);
     setSelectedProviderId(entry.id);
 
-    if (props.showOpenWorkModelsSubscribe && entry.id.trim().toLowerCase() === OPENWORK_MODELS_PROVIDER_ID) {
-      setView("openwork-subscribe");
+    if (props.showSofiaModelsSubscribe && entry.id.trim().toLowerCase() === SOFIA_MODELS_PROVIDER_ID) {
+      setView("sofia-subscribe");
       return;
     }
 
@@ -568,7 +568,7 @@ export default function ProviderAuthModal(props: ProviderAuthModalProps) {
     try {
       await props.onSubmitApiKey(selectedEntry.id, trimmed);
       toast.success(`${selectedEntry.name} connected`, {
-        description: "API key saved locally by OpenCode.",
+        description: "API key saved locally by Sofia.",
       });
       // Close the modal after a successful save
       props.onClose();
@@ -591,7 +591,7 @@ export default function ProviderAuthModal(props: ProviderAuthModalProps) {
   };
 
   const handleBack = () => {
-    if (resolvedView === "openwork-subscribe") {
+    if (resolvedView === "sofia-subscribe") {
       resetState();
       return;
     }
@@ -681,8 +681,8 @@ export default function ProviderAuthModal(props: ProviderAuthModalProps) {
     if (method.type === "cloud") {
       return "Subscribe to Hosted models.";
     }
-    if (isOpencodeZenProvider(entry.id)) {
-      return "Sign in to OpenCode Zen with an API key to unlock paid models alongside the free tier.";
+    if (isWorkspaceEngineZenProvider(entry.id)) {
+      return "Sign in to Sofia Zen with an API key to unlock paid models alongside the free tier.";
     }
     return "Paste a secret key that Sofia App stores locally on this device.";
   };
@@ -861,19 +861,19 @@ export default function ProviderAuthModal(props: ProviderAuthModalProps) {
                     </div>
                   </div>
                   <div className="text-xs text-gray-10">
-                    {isOpencodeZenProvider(selectedEntry.id)
-                      ? "Sign in to OpenCode Zen with an API key from opencode.ai/auth."
+                    {isWorkspaceEngineZenProvider(selectedEntry.id)
+                      ? "Sign in with an API key from the Zen auth page."
                       : "Paste your API key to connect."}
                   </div>
-                  {isOpencodeZenProvider(selectedEntry.id) ? (
+                  {isWorkspaceEngineZenProvider(selectedEntry.id) ? (
                     <div className="rounded-lg border border-indigo-5/30 bg-indigo-3/15 px-3 py-2.5 text-xs text-indigo-12 space-y-1.5">
                       <div>
-                        OpenCode Zen gives you access to the best coding models. Free models keep working without a key.
+                        Sofia Zen gives you access to the best coding models. Free models keep working without a key.
                       </div>
                       <button
                         type="button"
                         className="text-indigo-11 hover:text-indigo-12 underline underline-offset-2 font-medium"
-                        onClick={() => void openExternalUrl(OPENCODE_ZEN_KEY_URL)}
+                        onClick={() => void openExternalUrl(SOFIA_ENGINE_ZEN_KEY_URL)}
                       >
                         Get an API key →
                       </button>
@@ -882,7 +882,7 @@ export default function ProviderAuthModal(props: ProviderAuthModalProps) {
                   <TextInput
                     label="API key"
                     type="password"
-                    placeholder={isOpencodeZenProvider(selectedEntry.id) ? "ock_..." : "sk-..."}
+                    placeholder={isWorkspaceEngineZenProvider(selectedEntry.id) ? "ock_..." : "sk-..."}
                     value={apiKeyInput}
                     onChange={(event) => {
                       setApiKeyInput(event.currentTarget.value);
@@ -909,7 +909,7 @@ export default function ProviderAuthModal(props: ProviderAuthModalProps) {
                 </div>
               ) : null}
 
-              {resolvedView === "openwork-subscribe" && selectedEntry ? (
+              {resolvedView === "sofia-subscribe" && selectedEntry ? (
                 <div className="rounded-xl border border-blue-6/50 bg-blue-2/25 shadow-sm p-5 space-y-4">
                   <div className="flex items-center justify-between gap-4">
                     <div>
@@ -923,7 +923,7 @@ export default function ProviderAuthModal(props: ProviderAuthModalProps) {
                     </Button>
                   </div>
                   <div className="flex items-center justify-end">
-                    <Button onClick={() => void props.onSubscribeOpenWorkModels?.()} disabled={actionDisabled}>
+                    <Button onClick={() => void props.onSubscribeSofiaModels?.()} disabled={actionDisabled}>
                       Subscribe
                     </Button>
                   </div>

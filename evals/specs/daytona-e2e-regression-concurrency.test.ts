@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { expect } from "vitest";
-import { test } from "@openwork/testkit";
+import { test } from "@sofia/testkit";
 
 const workflowPath = fileURLToPath(
   new URL("../../.github/workflows/daytona-e2e-regression-suite.yml", import.meta.url),

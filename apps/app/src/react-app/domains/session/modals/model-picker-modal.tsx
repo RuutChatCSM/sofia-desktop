@@ -27,9 +27,9 @@ import { ProviderIcon } from "../../../design-system/provider-icon";
 import { useDenAuth } from "../../cloud/den-auth-provider";
 import { usePlatform } from "../../../kernel/platform";
 import {
-  OPENWORK_MODELS_PROVIDER_ID,
-  OPENWORK_MODELS_PROVIDER_NAME,
-} from "../../cloud/openwork-models-promo";
+  SOFIA_MODELS_PROVIDER_ID,
+  SOFIA_MODELS_PROVIDER_NAME,
+} from "../../cloud/sofia-models-promo";
 
 export const MODEL_PICKER_DEFAULT_SUBTITLE = "Select a model for this session.";
 export const MODEL_PICKER_UNAVAILABLE_SUBTITLE = "The model you were using is no longer available, please select a different model for this session.";
@@ -55,9 +55,9 @@ export type ModelPickerModalProps = {
   onOpenSettings: () => void;
   onClose: (options?: { restorePromptFocus?: boolean }) => void;
   /** Den entitlement present. Picker no longer upsells here; callers still pass it. */
-  openWorkModelsEntitled?: boolean;
+  sofiaModelsEntitled?: boolean;
   /** The server is waiting to reload this workspace with Hosted models. */
-  openWorkModelsSyncing?: boolean;
+  sofiaModelsSyncing?: boolean;
   onRefreshOrganizationModels?: () => void | Promise<void>;
   restrictToCloud?: boolean;
 };
@@ -220,8 +220,8 @@ export function ModelPickerModal(props: ModelPickerModalProps) {
     for (const group of providerGroups) {
       if (group.isCloud) queueExpand(group.id);
     }
-    const openwork = providerGroups.find((group) => group.id === OPENWORK_MODELS_PROVIDER_ID);
-    if (openwork) queueExpand(openwork.id);
+    const sofia = providerGroups.find((group) => group.id === SOFIA_MODELS_PROVIDER_ID);
+    if (sofia) queueExpand(sofia.id);
     if (toExpand.length === 0) return;
     for (const id of toExpand) autoExpandedRef.current.add(id);
     setExpandedProviders((prev) => {
@@ -301,13 +301,13 @@ export function ModelPickerModal(props: ModelPickerModalProps) {
             />
           </div>
 
-          {props.openWorkModelsSyncing ? (
+          {props.sofiaModelsSyncing ? (
             <div className="mb-3 flex shrink-0 items-center overflow-hidden rounded-2xl border border-amber-6/60 bg-amber-2/40">
               <div className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5">
-                <ProviderIcon providerId={OPENWORK_MODELS_PROVIDER_ID} providerName={OPENWORK_MODELS_PROVIDER_NAME} size={18} className="shrink-0 text-amber-11" />
+                <ProviderIcon providerId={SOFIA_MODELS_PROVIDER_ID} providerName={SOFIA_MODELS_PROVIDER_NAME} size={18} className="shrink-0 text-amber-11" />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5 text-[13px] font-medium text-dls-text">
-                    <span>{OPENWORK_MODELS_PROVIDER_NAME}</span>
+                    <span>{SOFIA_MODELS_PROVIDER_NAME}</span>
                   </div>
                   <div className="truncate text-[11px] text-dls-secondary">
                     Included on your plan — pending workspace reload.

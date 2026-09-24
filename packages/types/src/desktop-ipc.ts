@@ -7,7 +7,7 @@
  * Consumer: apps/app/src/app/lib/desktop.ts — the `desktopBridge` Proxy and
  * its named exports derive per-command signatures from `DesktopCommandMap`.
  *
- * Every command sent over the `openwork:desktop` channel has exactly one
+ * Every command sent over the `sofia:desktop` channel has exactly one
  * entry here: `args` is the tuple the renderer passes, `result` what the
  * main process resolves. Results marked `unknown` are not yet modeled —
  * tighten them instead of widening call sites.
@@ -20,17 +20,17 @@ import type { WorkspaceWire } from "./workspace.js";
 // re-exports them — keep that file as the app-side import path).
 // ---------------------------------------------------------------------------
 
-export type OpencodeExecutionEnvEntry = {
+export type WorkspaceEngineExecutionEnvEntry = {
   name: string;
   value: string;
   redacted: boolean;
 };
 
-export type OpencodeExecutionSnapshot = {
+export type WorkspaceEngineExecutionSnapshot = {
   command: string;
   args: string[];
   cwd: string;
-  env: OpencodeExecutionEnvEntry[];
+  env: WorkspaceEngineExecutionEnvEntry[];
 };
 
 export type EngineInfo = {
@@ -41,14 +41,14 @@ export type EngineInfo = {
   projectDir: string | null;
   hostname: string | null;
   port: number | null;
-  opencodeUsername: string | null;
-  opencodePassword: string | null;
-  opencodeBinPath: string | null;
-  opencodeBinSource: string | null;
+  engineUsername: string | null;
+  enginePassword: string | null;
+  engineBinPath: string | null;
+  engineBinSource: string | null;
   pid: number | null;
   lastStdout: string | null;
   lastStderr: string | null;
-  execution: OpencodeExecutionSnapshot | null;
+  execution: WorkspaceEngineExecutionSnapshot | null;
 };
 
 export type CodexEngineStatus = {
@@ -79,7 +79,7 @@ export type DesktopIntegrationIssue =
 export type DesktopIntegrationStatus = {
   supported: boolean;
   state: "unsupported" | "not_integrated" | "integrated" | "needs_repair" | "managed_externally";
-  ownership: "none" | "openwork" | "external";
+  ownership: "none" | "sofia" | "external";
   appImagePath: string | null;
   desktopEntryPath: string | null;
   handlerDesktopId: string | null;
@@ -92,7 +92,7 @@ export type DesktopIntegrationResult = {
   error?: string;
 };
 
-export type OpenworkServerInfo = {
+export type SofiaServerInfo = {
   running: boolean;
   engineRollover: boolean;
   remoteAccessEnabled: boolean;
@@ -105,12 +105,12 @@ export type OpenworkServerInfo = {
   clientToken: string | null;
   ownerToken: string | null;
   hostToken: string | null;
-  managedOpencodeBinPath: string | null;
-  managedOpencodeBinSource: string | null;
+  managedWorkspaceEngineBinPath: string | null;
+  managedWorkspaceEngineBinSource: string | null;
   pid: number | null;
   lastStdout: string | null;
   lastStderr: string | null;
-  managedOpencodeExecution: OpencodeExecutionSnapshot | null;
+  managedWorkspaceEngineExecution: WorkspaceEngineExecutionSnapshot | null;
 };
 
 export type EngineDoctorResult = {
@@ -143,7 +143,7 @@ export type BrandIconApplyResult = { ok: boolean; reason?: string };
 export type BrandIconState = { applied: boolean; sourceUrl: string | null; reason: string | null };
 export type EvalRelaunchResult = { ok: true };
 
-export type OpencodeCommandDraft = {
+export type WorkspaceEngineCommandDraft = {
   name: string;
   description?: string;
   template: string;
@@ -152,7 +152,7 @@ export type OpencodeCommandDraft = {
   subtask?: boolean;
 };
 
-export type WorkspaceOpenworkConfig = {
+export type WorkspaceSofiaConfig = {
   version: number;
   workspace?: {
     name?: string | null;
@@ -170,7 +170,7 @@ export type AppBuildInfo = {
   version: string;
   gitSha?: string | null;
   buildEpoch?: string | null;
-  openworkDevMode?: boolean;
+  sofiaDevMode?: boolean;
   os?: string | null;
   arch?: string | null;
 };
@@ -226,7 +226,7 @@ export type DesktopBootstrapConfig = {
   } | null;
 };
 
-export type OpenworkDockerCleanupResult = {
+export type SofiaDockerCleanupResult = {
   candidates: string[];
   removed: string[];
   errors: string[];
@@ -249,12 +249,6 @@ export type LocalSkillCard = {
 export type LocalSkillContent = {
   path: string;
   content: string;
-};
-
-export type OpencodeConfigFile = {
-  path: string;
-  exists: boolean;
-  content: string | null;
 };
 
 export type UpdaterEnvironment = {
@@ -321,15 +315,15 @@ export type WorkspaceCreateInput = {
 
 export type WorkspaceCreateRemoteInput = {
   baseUrl: string;
-  remoteType?: "openwork" | "opencode" | null;
+  remoteType?: "sofia" | "engine" | null;
   directory?: string | null;
   displayName?: string | null;
-  openworkHostUrl?: string | null;
-  openworkToken?: string | null;
-  openworkClientToken?: string | null;
-  openworkHostToken?: string | null;
-  openworkWorkspaceId?: string | null;
-  openworkWorkspaceName?: string | null;
+  sofiaHostUrl?: string | null;
+  sofiaToken?: string | null;
+  sofiaClientToken?: string | null;
+  sofiaHostToken?: string | null;
+  sofiaWorkspaceId?: string | null;
+  sofiaWorkspaceName?: string | null;
   sandboxBackend?: string | null;
   sandboxRunId?: string | null;
   sandboxContainerName?: string | null;
@@ -377,12 +371,12 @@ export type DesktopCommandMap = {
     args: [input: { workspacePath: string; folderPath?: string; authorizedRoot?: string }];
     result: unknown;
   };
-  workspaceOpenworkRead: {
+  workspaceSofiaRead: {
     args: [input: { workspacePath: string }];
-    result: WorkspaceOpenworkConfig;
+    result: WorkspaceSofiaConfig;
   };
-  workspaceOpenworkWrite: {
-    args: [input: { workspacePath: string; config: WorkspaceOpenworkConfig }];
+  workspaceSofiaWrite: {
+    args: [input: { workspacePath: string; config: WorkspaceSofiaConfig }];
     result: unknown;
   };
   workspaceExportConfig: {
@@ -394,16 +388,16 @@ export type DesktopCommandMap = {
     result: unknown;
   };
 
-  // Opencode custom commands
-  opencodeCommandList: {
+  // WorkspaceEngine custom commands
+  engineCommandList: {
     args: [input: { scope: string; projectDir?: string }];
     result: string[];
   };
-  opencodeCommandWrite: {
-    args: [input: { scope: string; projectDir?: string; command: OpencodeCommandDraft }];
+  engineCommandWrite: {
+    args: [input: { scope: string; projectDir?: string; command: WorkspaceEngineCommandDraft }];
     result: unknown;
   };
-  opencodeCommandDelete: {
+  engineCommandDelete: {
     args: [input: { scope: string; projectDir?: string; name: string }];
     result: unknown;
   };
@@ -418,8 +412,8 @@ export type DesktopCommandMap = {
   engineInfo: { args: []; result: EngineInfo };
   engineDoctor: { args: [projectDir?: string]; result: EngineDoctorResult };
   codexEngineStatus: { args: []; result: CodexEngineStatus };
-  codexEngineSelectionRead: { args: []; result: { engine: "codex" | "opencode" } };
-  codexEngineSelectionWrite: { args: [{ engine: "codex" | "opencode" }]; result: { ok: boolean } };
+  codexEngineSelectionRead: { args: []; result: { engine: "codex" | "engine" } };
+  codexEngineSelectionWrite: { args: [{ engine: "codex" | "engine" }]; result: { ok: boolean } };
   engineInstall: { args: []; result: unknown };
   codexEngineInstall: { args: []; result: unknown };
 
@@ -441,9 +435,9 @@ export type DesktopCommandMap = {
   };
   desktopIntegrationRemove: { args: []; result: DesktopIntegrationResult };
   getUiControlBridgeInfo: { args: []; result: UiControlBridgeInfo | null };
-  getOpenworkUiMcpCommand: { args: []; result: string[] };
+  getSofiaUiMcpCommand: { args: []; result: string[] };
   getComputerUseMcpCommand: { args: []; result: string[] };
-  getOpenworkUiMcpEnvironment: { args: []; result: Record<string, string> };
+  getSofiaUiMcpEnvironment: { args: []; result: Record<string, string> };
 
   // Computer use
   checkComputerUsePermissions: { args: []; result: ComputerUsePermissions };
@@ -469,21 +463,21 @@ export type DesktopCommandMap = {
     args: [rawUrl: string];
     result: { ok: true; config: DesktopBootstrapConfig } | ConnectLinkVerifyFailure;
   };
-  nukeOpenworkAndOpencodeConfigPreview: { args: [options?: NukeOptions]; result: NukeManifestPreview };
-  nukeOpenworkAndOpencodeConfigAndExit: { args: [options?: NukeOptions]; result: NukeReceipt };
+  nukeSofiaAndWorkspaceEngineConfigPreview: { args: [options?: NukeOptions]; result: NukeManifestPreview };
+  nukeSofiaAndWorkspaceEngineConfigAndExit: { args: [options?: NukeOptions]; result: NukeReceipt };
 
   // Sandbox
-  sandboxCleanupOpenworkContainers: { args: []; result: OpenworkDockerCleanupResult };
+  sandboxCleanupSofiaContainers: { args: []; result: SofiaDockerCleanupResult };
 
-  // Openwork server sidecar
-  openworkServerInfo: { args: []; result: OpenworkServerInfo };
+  // Sofia server sidecar
+  sofiaServerInfo: { args: []; result: SofiaServerInfo };
   automationRunnerConfigure: {
     args: [configuration: { baseUrl: string; token: string; runnerId: string } | null];
     result: { connected: boolean };
   };
-  openworkServerRestart: {
+  sofiaServerRestart: {
     args: [options?: Record<string, unknown>];
-    result: OpenworkServerInfo;
+    result: SofiaServerInfo;
   };
 
   // Dialogs
@@ -526,20 +520,15 @@ export type DesktopCommandMap = {
 
   // Updater / config / resets
   updaterEnvironment: { args: []; result: UpdaterEnvironment };
-  readOpencodeConfig: { args: [scope: string, projectDir?: string]; result: OpencodeConfigFile };
-  writeOpencodeConfig: {
-    args: [scope: string, projectDir: string, content: string];
-    result: ExecResult;
-  };
   /**
    * The renderer passes its reset-modal mode, but the main process currently
    * IGNORES it and always removes workspace state + bootstrap config; only
    * the renderer's localStorage cleanup is mode-scoped. Follow-up: decide
    * whether "onboarding" should preserve desktop workspace state.
    */
-  resetOpenworkState: { args: [mode?: "onboarding" | "all"]; result: unknown };
-  resetOpencodeCache: { args: []; result: CacheResetResult };
-  opencodeMcpAuth: { args: [action: string, name: string]; result: ExecResult };
+  resetSofiaState: { args: [mode?: "onboarding" | "all"]; result: unknown };
+  resetWorkspaceEngineCache: { args: []; result: CacheResetResult };
+  engineMcpAuth: { args: [action: string, name: string]; result: ExecResult };
   setWindowDecorations: { args: [decorated: boolean]; result: unknown };
 
   // Window / OS utilities (dunder commands)

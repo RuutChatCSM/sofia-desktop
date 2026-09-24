@@ -1,12 +1,12 @@
 import { expect } from "vitest";
-import { evalIn, waitFor } from "@openwork/behaviors";
-import { navigate } from "@openwork/cdp";
-import { chrome } from "@openwork/hosts";
-import { needs, server, test, unmetNeeds } from "@openwork/testkit";
-import type { TestNeeds } from "@openwork/testkit";
+import { evalIn, waitFor } from "@sofia/behaviors";
+import { navigate } from "@sofia/cdp";
+import { chrome } from "@sofia/hosts";
+import { needs, server, test, unmetNeeds } from "@sofia/testkit";
+import type { TestNeeds } from "@sofia/testkit";
 
 const requirements: TestNeeds = {
-  optIn: ["OPENWORK_EVAL_E2E_TESTS"],
+  optIn: ["SOFIA_EVAL_E2E_TESTS"],
 };
 const missingRequirements = unmetNeeds(requirements, process.env);
 const title = missingRequirements.length > 0
@@ -120,8 +120,8 @@ test(title, async ({ evidence, place }) => {
   });
 
   const adminTokenStored = await evalIn(browser, `(() => {
-    localStorage.setItem("openwork:web:auth-token", ${JSON.stringify(den.admin.token)});
-    return localStorage.getItem("openwork:web:auth-token") === ${JSON.stringify(den.admin.token)};
+    localStorage.setItem("sofia:web:auth-token", ${JSON.stringify(den.admin.token)});
+    return localStorage.getItem("sofia:web:auth-token") === ${JSON.stringify(den.admin.token)};
   })()`);
   expect(adminTokenStored).toBe(true);
   await navigate(browser.client, `${den.ref.webUrl}/dashboard/org-settings`);

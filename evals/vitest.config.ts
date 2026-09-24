@@ -7,7 +7,7 @@ const common = {
 };
 
 const prepareSuite = shouldPrepareSuite(process.argv);
-const attachedDen = Boolean(process.env.OPENWORK_EVAL_DEN_API_URL?.trim());
+const attachedDen = Boolean(process.env.SOFIA_EVAL_DEN_API_URL?.trim());
 const managedStack = prepareSuite && !attachedDen;
 const e2eWorkers = managedStack ? suiteWorkerCount(process.argv, process.env) : 1;
 

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import type { OpenworkSessionMessage } from "../src/app/lib/openwork-server";
+import type { SofiaSessionMessage } from "../src/app/lib/sofia-server";
 import {
   createSessionSearcher,
   type SearchableSession,
@@ -32,7 +32,7 @@ function textMessage(id: string, role: "user" | "assistant", text: string) {
         messageID: id,
       },
     ],
-  } satisfies OpenworkSessionMessage;
+  } satisfies SofiaSessionMessage;
 }
 
 describe("session search", () => {

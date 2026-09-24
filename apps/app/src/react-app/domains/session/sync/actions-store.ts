@@ -8,7 +8,7 @@ import type {
 } from "@/app/lib/engine-types";
 
 import { t } from "../../../../i18n";
-import { unwrap } from "../../../../app/lib/opencode";
+import { unwrap } from "../../../../app/lib/engine";
 import {
   abortSession as abortSessionTyped,
   abortSessionSafe,
@@ -17,7 +17,7 @@ import {
   revertSession,
   shellInSession,
   unrevertSession,
-} from "../../../../app/lib/opencode-session";
+} from "../../../../app/lib/engine-session";
 import { finishPerf, perfNow, recordPerfLog } from "../../../../app/lib/perf-log";
 import { toSessionTransportDirectory } from "../../../../app/lib/session-scope";
 import { workspaceSessionRoute } from "../../../shell/workspace-routes";
@@ -29,7 +29,7 @@ import type {
   MessageWithParts,
   ModelRef,
 } from "../../../../app/types";
-import { addOpencodeCacheHint, safeStringify } from "../../../../app/utils";
+import { addWorkspaceEngineCacheHint, safeStringify } from "../../../../app/utils";
 import { clearSessionDraft, saveSessionDraft } from "./draft-store";
 import { firstLineLocalFileParts } from "./prompt-file-parts";
 import { composerAttachmentToFilePart } from "./attachment-file-part";
@@ -50,7 +50,7 @@ type SessionActionsSnapshot = {
   sessionAgentById: Record<string, string>;
 };
 
-const FLUSH_PROMPT_EVENT = "openwork:flushPromptDraft";
+const FLUSH_PROMPT_EVENT = "sofia:flushPromptDraft";
 
 export function createSessionActionsStore(options: {
   client: () => Client | null;
@@ -325,7 +325,7 @@ export function createSessionActionsStore(options: {
     const perfEnabled = options.developerMode();
     const startedAt = perfNow();
     const runId = (() => {
-      const key = "__openwork_create_session_run__";
+      const key = "__sofia_create_session_run__";
       const w = window as typeof window & { [key]?: number };
       w[key] = (w[key] ?? 0) + 1;
       return w[key];
@@ -433,7 +433,7 @@ export function createSessionActionsStore(options: {
         workspaceId: id,
       });
       const message = e instanceof Error ? e.message : t("app.unknown_error");
-      options.setError(addOpencodeCacheHint(message));
+      options.setError(addWorkspaceEngineCacheHint(message));
       return undefined;
     } finally {
       options.setCreatingSession(false);
@@ -605,7 +605,7 @@ export function createSessionActionsStore(options: {
         error: e instanceof Error ? e.message : safeStringify(e),
       });
       const message = e instanceof Error ? e.message : safeStringify(e);
-      options.appendSessionErrorTurn(sessionID, addOpencodeCacheHint(message));
+      options.appendSessionErrorTurn(sessionID, addWorkspaceEngineCacheHint(message));
     } finally {
       options.setBusy(false);
       options.setBusyLabel(null);

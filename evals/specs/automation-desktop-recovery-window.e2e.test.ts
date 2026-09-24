@@ -1,13 +1,13 @@
 import { createServer } from "node:http";
 import { expect, onTestFinished } from "vitest";
-import { denFetch } from "@openwork/behaviors";
-import type { DenSession } from "@openwork/behaviors";
+import { denFetch } from "@sofia/behaviors";
+import type { DenSession } from "@sofia/behaviors";
 import {
   eventually,
   needs,
   server,
   test,
-} from "@openwork/testkit";
+} from "@sofia/testkit";
 
 const PROVIDER_NAME = "Recovery Window Gateway";
 const PROVIDER_KEY = "recovery-window-gateway";
@@ -96,7 +96,7 @@ async function createProvider(
 ): Promise<string> {
   const result = await denFetch(admin, "/v1/llm-providers", {
     method: "POST",
-    headers: { ...auth(admin), "x-openwork-org-id": orgId },
+    headers: { ...auth(admin), "x-sofia-org-id": orgId },
     body: JSON.stringify({
       name: PROVIDER_NAME,
       source: "custom",
@@ -131,7 +131,7 @@ async function createAutomation(
 ): Promise<string> {
   const result = await denFetch(admin, "/v1/automations", {
     method: "POST",
-    headers: { ...auth(admin), "x-openwork-org-id": orgId },
+    headers: { ...auth(admin), "x-sofia-org-id": orgId },
     body: JSON.stringify({
       name: input.name,
       instructions: `Synthetic recovery-window occurrence for ${input.name}.`,
@@ -198,7 +198,7 @@ async function readPresence(admin: DenSession): Promise<Record<string, unknown>>
 }
 
 test("a scheduled Desktop occurrence survives a short runner outage with named missed causes", { timeout: 15 * 60_000 }, async ({ evidence, place }) => {
-  needs({ optIn: ["OPENWORK_EVAL_E2E_TESTS"] });
+  needs({ optIn: ["SOFIA_EVAL_E2E_TESTS"] });
   const completionCalls: unknown[] = [];
   const providerBaseUrl = await startProviderMock(completionCalls);
   await using den = await server({

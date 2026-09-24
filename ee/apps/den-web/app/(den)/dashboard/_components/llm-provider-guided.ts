@@ -225,7 +225,7 @@ export function readEnvNamesFromCustomProviderText(text: string): string[] {
 /**
  * Parse pasted JSON text into guided fields (used when switching from the
  * JSON editor back to the form). Accepts a bare provider block or an
- * opencode-style `{ "provider": { "<id>": { ... } } }` wrapper.
+ * engine-style `{ "provider": { "<id>": { ... } } }` wrapper.
  */
 export function readGuidedCustomProviderFieldsFromText(
     text: string,

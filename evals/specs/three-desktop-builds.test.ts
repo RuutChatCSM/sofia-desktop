@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { expect } from "vitest";
-import { test } from "@openwork/testkit";
+import { test } from "@sofia/testkit";
 import {
   CLOUD_DESKTOP_DISTRIBUTION,
   ENTERPRISE_DESKTOP_DISTRIBUTION,
@@ -39,7 +39,7 @@ test("the three desktop builds own sign-in policy; no installer bundle rewrites 
   const main = readFileSync(mainPath, "utf8");
   for (const marker of [
     "importBundledDesktopBootstrapConfigIfPreferred",
-    "OPENWORK_BOOTSTRAP_BUNDLE_DIR",
+    "SOFIA_BOOTSTRAP_BUNDLE_DIR",
     "STANDARD_DESKTOP_INSTALLER_PATTERN",
     "bundleSearchRoots",
   ]) {

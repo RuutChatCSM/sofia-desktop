@@ -3,11 +3,9 @@ import { readFile } from "node:fs/promises";
 
 import { ensureDir, exists } from "./utils.js";
 import { ApiError } from "./errors.js";
-import { opencodeConfigPath } from "./workspace-files.js";
-import { readJsoncFile } from "./jsonc.js";
 import type { ReloadReason, WorkspaceInfo } from "./types.js";
 
-type WorkspaceOpenworkConfig = {
+type WorkspaceSofiaConfig = {
   version: number;
   workspace?: {
     name?: string | null;
@@ -39,13 +37,13 @@ function errorStringField(error: unknown, field: "code" | "path" | "syscall"): s
 }
 
 /**
- * Build the default per-workspace openwork config metadata. The openwork
+ * Build the default per-workspace sofia config metadata. The sofia
  * config is now stored in the runtime DB (see
- * `seedOpenworkWorkspaceConfigIfEmpty`), not in `.opencode/openwork.json`, so
+ * `seedSofiaWorkspaceConfigIfEmpty`), not in `.sofia/sofia.json`, so
  * this no longer writes a file. Exposed so the workspace-creation route can
  * seed the DB row with the same defaults.
  */
-export function defaultWorkspaceOpenworkConfig(workspaceRoot: string, preset: string): WorkspaceOpenworkConfig {
+export function defaultWorkspaceSofiaConfig(workspaceRoot: string, preset: string): WorkspaceSofiaConfig {
   return {
     version: 1,
     workspace: {
@@ -56,14 +54,6 @@ export function defaultWorkspaceOpenworkConfig(workspaceRoot: string, preset: st
     authorizedRoots: [workspaceRoot],
     reload: null,
   };
-}
-
-async function ensureOpencodeConfig(workspaceRoot: string): Promise<boolean> {
-  const path = opencodeConfigPath(workspaceRoot);
-  if (await exists(path)) {
-    await readJsoncFile<Record<string, unknown>>(path, {}, { allowInvalid: true });
-  }
-  return false;
 }
 
 export async function ensureWorkspaceFiles(workspaceRoot: string, presetInput: string): Promise<EnsureWorkspaceFilesResult> {
@@ -81,10 +71,10 @@ export async function ensureWorkspaceFiles(workspaceRoot: string, presetInput: s
       fsPath: errorStringField(error, "path"),
     });
   }
+  // Sofia owns no engine config file in the workspace: engine config is
+  // generated from the runtime DB, and the workspace sofia config is seeded
+  // into that DB by the caller.
   const reloadReasons = new Set<ReloadReason>();
-  if (await ensureOpencodeConfig(workspaceRoot)) reloadReasons.add("config");
-  // openwork config is seeded into the runtime DB by the caller, not written
-  // as a file here.
   void preset;
   return {
     changed: reloadReasons.size > 0,
@@ -116,7 +106,7 @@ export async function ensureLocalWorkspaceFiles(
   }
 }
 
-export async function readRawOpencodeConfig(path: string): Promise<{ exists: boolean; content: string | null }> {
+export async function readRawWorkspaceEngineConfig(path: string): Promise<{ exists: boolean; content: string | null }> {
   const hasFile = await exists(path);
   if (!hasFile) {
     return { exists: false, content: null };

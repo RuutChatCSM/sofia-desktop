@@ -1,13 +1,13 @@
-// Engine client: the app-side replacement for the OpenCode SDK.
+// Engine client: the app-side replacement for the Sofia SDK.
 //
-// Every method the UI used to call on the OpenCode SDK client is preserved but
+// Every method the UI used to call on the Sofia SDK client is preserved but
 // re-pointed at the Sofia App server's adapter-backed REST routes
 // (`/workspace/:id/...`) and the native Codex surface (`/workspace/:id/codex/*`).
 // Return values keep the SDK's `{ data, error, response }` envelope so existing
 // `unwrap`/`assertNoClientError` call sites stay unchanged.
 import { desktopFetch } from "./desktop";
 import { isDesktopRuntime } from "./runtime-env";
-import { parseOpenworkWorkspaceIdFromUrl } from "./openwork-server";
+import { parseSofiaWorkspaceIdFromUrl } from "./sofia-server";
 import type {
   Agent,
   Config,
@@ -28,11 +28,11 @@ import type {
   VcsInfo,
 } from "./engine-types";
 
-export type OpencodeAuth = {
+export type WorkspaceEngineAuth = {
   username?: string;
   password?: string;
   token?: string;
-  mode?: "basic" | "openwork";
+  mode?: "basic" | "sofia";
 };
 
 export type EngineResult<T> =
@@ -52,7 +52,7 @@ export type EngineMcpStatusMap = Record<string, EngineMcpServerStatus>;
 export type EngineClientOptions = {
   baseUrl: string;
   directory?: string;
-  auth?: OpencodeAuth;
+  auth?: WorkspaceEngineAuth;
   headers?: Record<string, string>;
   fetch?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
   signal?: AbortSignal;
@@ -75,24 +75,24 @@ type EngineMount = {
 
 function resolveEngineMount(baseUrl: string, directory?: string): EngineMount {
   const raw = baseUrl.replace(/\/+$/, "");
-  const workspaceId = parseOpenworkWorkspaceIdFromUrl(raw) ?? directory?.trim() ?? null;
+  const workspaceId = parseSofiaWorkspaceIdFromUrl(raw) ?? directory?.trim() ?? null;
   let host = raw;
   try {
     const url = new URL(raw);
-    url.pathname = url.pathname.replace(/\/+$/, "").replace(/\/opencode$/, "");
+    url.pathname = url.pathname.replace(/\/+$/, "").replace(/\/engine$/, "");
     const match = url.pathname.match(/^(.*)\/(?:w|workspace)\/[^/]+$/);
     if (match) url.pathname = match[1] || "/";
     url.search = "";
     url.hash = "";
     host = url.toString().replace(/\/+$/, "");
   } catch {
-    host = raw.replace(/\/opencode$/, "");
+    host = raw.replace(/\/engine$/, "");
   }
   return { host, workspaceId: workspaceId || null };
 }
 
-function buildAuthHeader(auth?: OpencodeAuth): string | undefined {
-  if (auth?.mode === "openwork" && auth.token) return `Bearer ${auth.token}`;
+function buildAuthHeader(auth?: WorkspaceEngineAuth): string | undefined {
+  if (auth?.mode === "sofia" && auth.token) return `Bearer ${auth.token}`;
   if (auth?.token) return `Bearer ${auth.token}`;
   if (auth?.username && auth.password) {
     const token = `${auth.username}:${auth.password}`;
@@ -805,9 +805,9 @@ export function createEngineClient(options: EngineClientOptions) {
         void params;
         const id = workspaceId();
         if (!id) return failResult("Workspace is not mounted on this server.", "/config");
-        const result = await request<{ opencode: Config }>(`${workspacePath(id)}/config`);
+        const result = await request<{ engine: Config }>(`${workspacePath(id)}/config`);
         if (!result.ok) return result;
-        const config = result.data.opencode;
+        const config = result.data.engine;
         const runtime = await request<{ runtime?: { disabled_providers?: unknown } }>(
           `${workspacePath(id)}/runtime-config`,
         );
@@ -829,12 +829,12 @@ export function createEngineClient(options: EngineClientOptions) {
         const id = workspaceId();
         if (!id) return failResult("Workspace is not mounted on this server.", "/config");
         return mapResult(
-          await request<{ opencode?: Config }>(`${workspacePath(id)}/config`, {
+          await request<{ engine?: Config }>(`${workspacePath(id)}/config`, {
             method: "PATCH",
-            body: { opencode: params.config },
+            body: { engine: params.config },
             timeoutMs: 30_000,
           }),
-          (data) => data.opencode ?? params.config,
+          (data) => data.engine ?? params.config,
         );
       },
     },
@@ -865,8 +865,13 @@ export function createEngineClient(options: EngineClientOptions) {
         limit?: number;
         directory?: string;
       }): Promise<EngineResult<string[]>> {
-        void params;
-        return okResult<string[]>([]);
+        const id = workspaceId();
+        if (!id) return failResult("Select a workspace to find files.", "/files/search");
+        const query = new URLSearchParams({ query: params.query, limit: String(params.limit ?? 50) });
+        return mapResult(
+          await request<{ items: string[] }>(`${workspacePath(id)}/files/search?${query}`),
+          (data) => data.items,
+        );
       },
     },
 
@@ -906,6 +911,14 @@ export function createEngineClient(options: EngineClientOptions) {
         return await request<Record<string, never>>(
           `${workspacePath(id)}/codex/auth/${encodeURIComponent(params.providerID)}`,
           { method: "PUT", body: { key: params.auth.key ?? "" }, timeoutMs: 30_000 },
+        );
+      },
+      async remove(params: { providerID: string }): Promise<EngineResult<Record<string, never>>> {
+        const id = workspaceId();
+        if (!id) return failResult("Workspace is not mounted on this server.", "/codex/auth");
+        return await request<Record<string, never>>(
+          `${workspacePath(id)}/codex/auth/${encodeURIComponent(params.providerID)}`,
+          { method: "DELETE", timeoutMs: 30_000 },
         );
       },
     },
@@ -976,6 +989,6 @@ export function createEngineClient(options: EngineClientOptions) {
 
 export type EngineClient = ReturnType<typeof createEngineClient>;
 
-export function createOpencodeClient(options: EngineClientOptions) {
+export function createWorkspaceEngineClient(options: EngineClientOptions) {
   return createEngineClient(options);
 }

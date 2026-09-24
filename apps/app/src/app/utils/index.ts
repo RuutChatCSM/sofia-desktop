@@ -6,7 +6,7 @@ import type {
   MessageInfo,
   MessageWithParts,
   ModelRef,
-  OpencodeEvent,
+  WorkspaceEngineEvent,
   PlaceholderAssistantMessage,
   ProviderListItem,
 } from "../types";
@@ -34,7 +34,7 @@ export function modelEquals(a: ModelRef, b: ModelRef) {
  * Used when the backend doesn't return a provider name.
  */
 export const FRIENDLY_PROVIDER_LABELS: Record<string, string> = {
-  opencode: "OpenCode",
+  engine: "Sofia",
   openai: "OpenAI",
   anthropic: "Anthropic",
   google: "Google",
@@ -106,7 +106,7 @@ export const FRIENDLY_MODEL_LABELS: [pattern: string, label: string][] = [
   ["grok-3", "Grok 3"],
   ["grok-2", "Grok 2"],
 
-  // OpenCode
+  // Sofia
   ["big-pickle", "Big Pickle"],
 ];
 
@@ -192,9 +192,9 @@ export function isMacPlatform() {
   return /mac/i.test(platform) || /macintosh|mac os x/i.test(ua);
 }
 
-const STARTUP_PREF_KEY = "openwork.startupPref";
-const LEGACY_PREF_KEY = "openwork.modePref";
-const LEGACY_PREF_KEY_ALT = "openwork_mode_pref";
+const STARTUP_PREF_KEY = "sofia.startupPref";
+const LEGACY_PREF_KEY = "sofia.modePref";
+const LEGACY_PREF_KEY_ALT = "sofia_mode_pref";
 
 export function readStartupPreference(): "local" | "server" | null {
   if (typeof window === "undefined") return null;
@@ -291,7 +291,7 @@ export function formatBytes(bytes: number) {
  * comparison only (e.g. case-insensitive matching via {@link normalizeDirectoryPath}).
  *
  * **Do NOT use this when building a directory value that will be sent to the
- * OpenCode server** (session.list, session.create, mcp.status, etc.).  The
+ * Sofia server** (session.list, session.create, mcp.status, etc.).  The
  * server compares directories with strict equality and on Windows it stores
  * native backslash paths.  Use
  * {@link import("../lib/session-scope").toSessionTransportDirectory toSessionTransportDirectory}
@@ -317,7 +317,7 @@ export function normalizeDirectoryPath(input?: string | null) {
   return isWindowsPlatform() || isMacPlatform() ? normalized.toLowerCase() : normalized;
 }
 
-export function normalizeEvent(raw: unknown): OpencodeEvent | null {
+export function normalizeEvent(raw: unknown): WorkspaceEngineEvent | null {
   if (!raw || typeof raw !== "object") {
     return null;
   }
@@ -366,18 +366,18 @@ export function formatRelativeTime(timestampMs: number) {
   return new Date(timestampMs).toLocaleDateString();
 }
 
-export function addOpencodeCacheHint(message: string) {
+export function addWorkspaceEngineCacheHint(message: string) {
   const lower = message.toLowerCase();
   const cacheSignals = [
-    ".cache/opencode",
-    "library/caches/opencode",
-    "appdata/local/opencode",
+    ".cache/engine",
+    "library/caches/engine",
+    "appdata/local/engine",
     "fetch_jwks.js",
-    "opencode cache",
+    "engine cache",
   ];
 
   if (cacheSignals.some((signal) => lower.includes(signal)) && lower.includes("enoent")) {
-    return `${message}\n\nOpenCode cache looks corrupted. Use Repair cache in Settings to rebuild it.`;
+    return `${message}\n\nSofia cache looks corrupted. Use Repair cache in Settings to rebuild it.`;
   }
 
   return message;
@@ -457,7 +457,7 @@ export function getWorkspaceTaskLoadErrorDisplay(workspace: WorkspaceInfo, error
   const normalized = raw.toLowerCase();
   const hasDockerHint = SANDBOX_DOCKER_OFFLINE_HINTS.some((hint) => normalized.includes(hint));
   const hasNetworkHint = SANDBOX_NETWORK_HINTS.some((hint) => normalized.includes(hint));
-  const host = `${workspace.baseUrl ?? ""} ${workspace.openworkHostUrl ?? ""}`.toLowerCase();
+  const host = `${workspace.baseUrl ?? ""} ${workspace.sofiaHostUrl ?? ""}`.toLowerCase();
   const localHost = host.includes("localhost") || host.includes("127.0.0.1");
 
   if (!hasDockerHint && !(localHost && hasNetworkHint)) {
@@ -981,8 +981,8 @@ const ARTIFACT_OUTPUT_SKIP_TOOLS = new Set(["webfetch"]);
 
 // Patterns that indicate a path is a truncated system/absolute path rather than a workspace-relative path
 const TRUNCATED_SYSTEM_PATH_PATTERNS = [
-  /com\.[^/]+\.(openwork|opencode)/i, // macOS app bundle identifiers
-  /\.openwork\.dev\//i, // Sofia App dev paths
+  /com\.[^/]+\.(sofia|engine)/i, // macOS app bundle identifiers
+  /\.sofia\.dev\//i, // Sofia App dev paths
   /Application Support\//i, // macOS Application Support
   /AppData[/\\]/i, // Windows AppData
   /\.local\/share\//i, // Linux XDG data

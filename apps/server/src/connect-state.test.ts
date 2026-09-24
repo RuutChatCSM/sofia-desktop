@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { OPENWORK_CLOUD_EXPECTED_TOOLS, OPENWORK_CLOUD_PLUGIN_CANARIES } from "./cloud-mcp-health.js";
+import { SOFIA_CLOUD_EXPECTED_TOOLS, SOFIA_CLOUD_PLUGIN_CANARIES } from "./cloud-mcp-health.js";
 import { getConnectSnapshot } from "./connect-state.js";
 import type {
   EngineMcpStatus,
@@ -11,18 +11,18 @@ import type {
   EngineResult,
   WorkspaceEngineClient,
 } from "./engine/workspace-engine-client.js";
-import { writeRuntimeOpencodeConfig } from "./runtime-opencode-config-store.js";
+import { writeRuntimeWorkspaceEngineConfig } from "./runtime-engine-config-store.js";
 import type { ServerConfig, WorkspaceInfo } from "./types.js";
 
-const previousRuntimeDb = process.env.OPENWORK_RUNTIME_DB;
+const previousRuntimeDb = process.env.SOFIA_RUNTIME_DB;
 const runtimeDbRoots: string[] = [];
 const roots: string[] = [];
 
 afterEach(async () => {
   while (roots.length) await rm(roots.pop() ?? "", { recursive: true, force: true });
   while (runtimeDbRoots.length) await rm(runtimeDbRoots.pop() ?? "", { recursive: true, force: true });
-  if (previousRuntimeDb === undefined) delete process.env.OPENWORK_RUNTIME_DB;
-  else process.env.OPENWORK_RUNTIME_DB = previousRuntimeDb;
+  if (previousRuntimeDb === undefined) delete process.env.SOFIA_RUNTIME_DB;
+  else process.env.SOFIA_RUNTIME_DB = previousRuntimeDb;
 });
 
 async function createRoot(prefix: string): Promise<string> {
@@ -32,7 +32,7 @@ async function createRoot(prefix: string): Promise<string> {
 }
 
 function allReadyToolIds(): string[] {
-  return [...OPENWORK_CLOUD_EXPECTED_TOOLS, ...OPENWORK_CLOUD_PLUGIN_CANARIES];
+  return [...SOFIA_CLOUD_EXPECTED_TOOLS, ...SOFIA_CLOUD_PLUGIN_CANARIES];
 }
 
 function ok<T>(data: T): EngineResult<T> {
@@ -49,7 +49,7 @@ function unavailable(): EngineResult<never> {
  * the transport is irrelevant to the directory-scoping behavior under test.
  */
 function readyEngineClient(): WorkspaceEngineClient {
-  const mcpStatus: EngineMcpStatus = { "openwork-cloud": { status: "connected" } };
+  const mcpStatus: EngineMcpStatus = { "sofia-cloud": { status: "connected" } };
   const providerList: EngineProviderList = {
     all: [
       {
@@ -104,7 +104,7 @@ function workspace(id: string, path: string, baseUrl: string): WorkspaceInfo {
 }
 
 function serverConfig(workspaces: WorkspaceInfo[], runtimeRoot: string): ServerConfig {
-  process.env.OPENWORK_RUNTIME_DB = join(runtimeRoot, "runtime.sqlite");
+  process.env.SOFIA_RUNTIME_DB = join(runtimeRoot, "runtime.sqlite");
   return {
     host: "127.0.0.1",
     port: 0,
@@ -126,20 +126,20 @@ function serverConfig(workspaces: WorkspaceInfo[], runtimeRoot: string): ServerC
 
 describe("connect state Cloud health scoping", () => {
   test("uses verified health for the exact requested directory without borrowing another workspace", async () => {
-    const rootA = await createRoot("openwork-connect-state-a-");
-    const rootB = await createRoot("openwork-connect-state-b-");
-    const runtimeRoot = await createRoot("openwork-connect-state-runtime-");
+    const rootA = await createRoot("sofia-connect-state-a-");
+    const rootB = await createRoot("sofia-connect-state-b-");
+    const runtimeRoot = await createRoot("sofia-connect-state-runtime-");
     const baseUrl = "http://127.0.0.1:1";
     const config = serverConfig([
       workspace("ws_a", rootA, baseUrl),
       workspace("ws_b", rootB, baseUrl),
     ], runtimeRoot);
 
-    await writeRuntimeOpencodeConfig(config, "ws_b", (current) => ({
+    await writeRuntimeWorkspaceEngineConfig(config, "ws_b", (current) => ({
       ...current,
       mcp: {
         ...current.mcp,
-        "openwork-cloud": {
+        "sofia-cloud": {
           type: "remote",
           url: `${baseUrl}/cloud-mcp/mcp/agent`,
           enabled: true,
@@ -149,7 +149,7 @@ describe("connect state Cloud health scoping", () => {
       },
     }));
 
-    const options = { createWorkspaceOpencodeClient: () => readyEngineClient() };
+    const options = { createWorkspaceWorkspaceEngineClient: () => readyEngineClient() };
 
     const first = await getConnectSnapshot(config, { directory: rootA, ...options });
     expect(first.cloudMcpPresent).toBe(false);

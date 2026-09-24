@@ -1,21 +1,21 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { rm } from "node:fs/promises";
 import { expect, onTestFinished } from "vitest";
-import { clickButton, createAndSelectWorkspace, createOrgConnection, denFetch, evalIn, waitFor } from "@openwork/behaviors";
-import { connect, debuggerUrlFor, evaluate, listTargets, navigate } from "@openwork/cdp";
-import { screenshot, validate } from "@openwork/test-evidence";
-import { chrome, desktop } from "@openwork/hosts";
-import { localMysqlIsRunning, needs, server, test } from "@openwork/testkit";
+import { clickButton, createAndSelectWorkspace, createOrgConnection, denFetch, evalIn, waitFor } from "@sofia/behaviors";
+import { connect, debuggerUrlFor, evaluate, listTargets, navigate } from "@sofia/cdp";
+import { screenshot, validate } from "@sofia/test-evidence";
+import { chrome, desktop } from "@sofia/hosts";
+import { localMysqlIsRunning, needs, server, test } from "@sofia/testkit";
 import { buildGeneratedArtifactViewInWorker } from "../../ee/apps/den-api/src/generated-artifact-view-builder.js";
 
-const e2eTestsEnabled = process.env.OPENWORK_EVAL_E2E_TESTS === "1";
-const localPlacement = process.env.OPENWORK_EVAL_DAYTONA !== "1"
-  && !process.env.OPENWORK_EVAL_DEN_API_URL?.trim();
+const e2eTestsEnabled = process.env.SOFIA_EVAL_E2E_TESTS === "1";
+const localPlacement = process.env.SOFIA_EVAL_DAYTONA !== "1"
+  && !process.env.SOFIA_EVAL_DEN_API_URL?.trim();
 const mysqlOpen = await localMysqlIsRunning();
 const title = !e2eTestsEnabled
-  ? "Remote MCP Apps skipped — needs: set OPENWORK_EVAL_E2E_TESTS=1"
+  ? "Remote MCP Apps skipped — needs: set SOFIA_EVAL_E2E_TESTS=1"
   : !localPlacement
-    ? "Remote MCP Apps skipped — needs local placement without OPENWORK_EVAL_DEN_API_URL"
+    ? "Remote MCP Apps skipped — needs local placement without SOFIA_EVAL_DEN_API_URL"
     : !mysqlOpen
       ? "Remote MCP Apps skipped — needs MySQL on 127.0.0.1:3306"
       : "standard MCP Apps refresh after connection changes while standalone URL Apps remain unavailable";
@@ -35,7 +35,7 @@ function requireRecord(value: unknown, label: string): Record<string, unknown> {
 
 async function waitForMountedProjectAtlas(
   app: Awaited<ReturnType<typeof desktop>>,
-  expected: string[] = ["Project Atlas", "Connected through OpenWork Connect"],
+  expected: string[] = ["Project Atlas", "Connected through Sofia App Connect"],
   timeoutMs = 60_000,
 ): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
@@ -93,8 +93,8 @@ function forwardedMcpHeaders(request: IncomingMessage): Record<string, string> {
     "content-type",
     "mcp-protocol-version",
     "mcp-session-id",
-    "x-openwork-mcp-client-audience",
-    "x-openwork-mcp-client-capabilities",
+    "x-sofia-mcp-client-audience",
+    "x-sofia-mcp-client-capabilities",
   ]) {
     const value = requestHeader(request, name);
     if (value) headers[name] = value;
@@ -189,7 +189,7 @@ function standardMcpAppRpc(message: Record<string, unknown>): Record<string, unk
           name: "project-atlas-connect-fixture",
           title: "Project Atlas Connect",
           version: "1.0.0",
-          description: "A standard MCP App fixture served through OpenWork Connect.",
+          description: "A standard MCP App fixture served through Sofia App Connect.",
           websiteUrl: "https://example.test/project-atlas",
           icons: [{ src: "https://example.test/project-atlas.png", mimeType: "image/png", sizes: ["64x64"] }],
         },
@@ -274,8 +274,8 @@ function standardMcpAppRpc(message: Record<string, unknown>): Record<string, unk
           content: [{ type: "text", text: "Project Atlas opened." }],
           structuredContent: {
             schemaVersion: "1",
-            artifact: { title: "Project Atlas", description: "A standard MCP App served through OpenWork Connect." },
-            data: { name: "Project Atlas", status: "Connected through OpenWork Connect" },
+            artifact: { title: "Project Atlas", description: "A standard MCP App served through Sofia App Connect." },
+            data: { name: "Project Atlas", status: "Connected through Sofia App Connect" },
           },
           _meta: { source: "project-atlas-standard-mcp" },
         },
@@ -337,10 +337,10 @@ async function reconcileDesktopCatalog(input: {
   appHostMcpToken: string;
 }) {
   return evalIn(input.app, `(async () => {
-    const port = localStorage.getItem("openwork.server.port");
-    const token = localStorage.getItem("openwork.server.token");
+    const port = localStorage.getItem("sofia.server.port");
+    const token = localStorage.getItem("sofia.server.token");
     if (!port || !token) return "missing local server credentials";
-    const response = await fetch("http://127.0.0.1:" + port + "/workspace/" + encodeURIComponent(${JSON.stringify(input.workspaceId)}) + "/mcp/openwork-cloud/reconcile", {
+    const response = await fetch("http://127.0.0.1:" + port + "/workspace/" + encodeURIComponent(${JSON.stringify(input.workspaceId)}) + "/mcp/sofia-cloud/reconcile", {
       method: "POST",
       headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -371,7 +371,7 @@ function contentsFrom(result: Record<string, unknown>) {
 }
 
 test.skipIf(!e2eTestsEnabled || !localPlacement || !mysqlOpen)(title, { timeout: 360_000 }, async ({ evidence, place }) => {
-  needs({ optIn: ["OPENWORK_EVAL_E2E_TESTS"] });
+  needs({ optIn: ["SOFIA_EVAL_E2E_TESTS"] });
   process.env.DEN_REMOTE_MCP_APPS_ENABLED = "true";
 
   let standardMcpCalls = 0;
@@ -395,7 +395,7 @@ test.skipIf(!e2eTestsEnabled || !localPlacement || !mysqlOpen)(title, { timeout:
           || name.includes("search_projects")
           || name.includes("launch_remote_app_")
           || name.includes("import_remote_mcp_app")
-          || name.includes("openwork_connect_")
+          || name.includes("sofia_connect_")
         ));
         if (directProviderTools.length > 0) {
           throw new Error(`Provider MCP tools leaked into the model tool list: ${directProviderTools.join(", ")}`);
@@ -549,7 +549,7 @@ test.skipIf(!e2eTestsEnabled || !localPlacement || !mysqlOpen)(title, { timeout:
     method: "POST",
     headers: {
       authorization: `Bearer ${den.admin.token}`,
-      "x-openwork-org-id": organizationId,
+      "x-sofia-org-id": organizationId,
     },
     body: JSON.stringify({ scopes: ["mcp:read", "mcp:write"] }),
   });
@@ -559,7 +559,7 @@ test.skipIf(!e2eTestsEnabled || !localPlacement || !mysqlOpen)(title, { timeout:
   const appHostMcpToken = String(mcpTokenBody.appHostToken ?? "");
   expect(appHostMcpToken).not.toBe(mcpToken);
   const connectedEndpoint = `/mcp/agent/connections/${encodeURIComponent(connection.id)}`;
-  const appHostCapabilityHeaders = { "x-openwork-mcp-client-capabilities": "mcp-app-host-v1" };
+  const appHostCapabilityHeaders = { "x-sofia-mcp-client-capabilities": "mcp-app-host-v1" };
   const appHostHeaders = appHostCapabilityHeaders;
   agentMcpUpstream = {
     token: mcpToken,
@@ -597,7 +597,7 @@ test.skipIf(!e2eTestsEnabled || !localPlacement || !mysqlOpen)(title, { timeout:
     method: "POST",
     headers: {
       authorization: `Bearer ${den.admin.token}`,
-      "x-openwork-org-id": organizationId,
+      "x-sofia-org-id": organizationId,
     },
     body: JSON.stringify({ sourceUrl: "https://example.test/project-atlas.html" }),
   });
@@ -606,7 +606,7 @@ test.skipIf(!e2eTestsEnabled || !localPlacement || !mysqlOpen)(title, { timeout:
     method: "POST",
     headers: {
       authorization: `Bearer ${den.admin.token}`,
-      "x-openwork-org-id": organizationId,
+      "x-sofia-org-id": organizationId,
     },
     body: JSON.stringify({ sourceUrl: "https://example.test/project-atlas.html" }),
   });
@@ -619,8 +619,8 @@ test.skipIf(!e2eTestsEnabled || !localPlacement || !mysqlOpen)(title, { timeout:
     label: "Den Web origin",
   });
   const tokenStored = await evalIn(browser, `(() => {
-    localStorage.setItem("openwork:web:auth-token", ${JSON.stringify(den.admin.token)});
-    return localStorage.getItem("openwork:web:auth-token") === ${JSON.stringify(den.admin.token)};
+    localStorage.setItem("sofia:web:auth-token", ${JSON.stringify(den.admin.token)});
+    return localStorage.getItem("sofia:web:auth-token") === ${JSON.stringify(den.admin.token)};
   })()`);
   expect(tokenStored).toBe(true);
   await navigate(browser.client, `${den.ref.webUrl}/dashboard/library`);
@@ -646,7 +646,7 @@ test.skipIf(!e2eTestsEnabled || !localPlacement || !mysqlOpen)(title, { timeout:
     ? (requireRecord(standaloneSearch.structuredContent, "standalone App search").matches as unknown[]).filter(isRecord)
     : [];
   expect(standaloneMatches.some((match) => String(match.name ?? "").startsWith("remote_app:"))).toBe(false);
-  expect(JSON.stringify(standaloneMatches)).not.toContain("ui://openwork/library-apps/");
+  expect(JSON.stringify(standaloneMatches)).not.toContain("ui://sofia/library-apps/");
 
   const connectSearch = await agentRpc(den.ref.apiUrl, mcpToken, "tools/call", {
     name: "search_capabilities",
@@ -677,16 +677,16 @@ test.skipIf(!e2eTestsEnabled || !localPlacement || !mysqlOpen)(title, { timeout:
   });
 
   const resources = await agentRpc(den.ref.apiUrl, mcpToken, "resources/list", {});
-  expect(Array.isArray(resources.resources) && resources.resources.some((resource) => isRecord(resource) && String(resource.uri ?? "").startsWith("ui://openwork/library-apps/"))).toBe(false);
-  expect(Array.isArray(resources.resources) && resources.resources.some((resource) => isRecord(resource) && resource.uri === "openwork://connect/mcp-servers/index.json")).toBe(true);
-  const legacyConnectIndexRead = await agentRpc(den.ref.apiUrl, mcpToken, "resources/read", { uri: "openwork://connect/mcp-servers/index.json" });
+  expect(Array.isArray(resources.resources) && resources.resources.some((resource) => isRecord(resource) && String(resource.uri ?? "").startsWith("ui://sofia/library-apps/"))).toBe(false);
+  expect(Array.isArray(resources.resources) && resources.resources.some((resource) => isRecord(resource) && resource.uri === "sofia://connect/mcp-servers/index.json")).toBe(true);
+  const legacyConnectIndexRead = await agentRpc(den.ref.apiUrl, mcpToken, "resources/read", { uri: "sofia://connect/mcp-servers/index.json" });
   const legacyConnectIndex = requireRecord(JSON.parse(String(contentsFrom(legacyConnectIndexRead)[0]?.text ?? "{}")), "legacy Connect MCP server index");
   expect(legacyConnectIndex.servers).toEqual([]);
   const connectIndexRead = await agentRpc(
     den.ref.apiUrl,
     appHostMcpToken,
     "resources/read",
-    { uri: "openwork://connect/mcp-servers/index.json" },
+    { uri: "sofia://connect/mcp-servers/index.json" },
     "/mcp/agent",
     appHostCapabilityHeaders,
   );
@@ -706,7 +706,7 @@ test.skipIf(!e2eTestsEnabled || !localPlacement || !mysqlOpen)(title, { timeout:
     name: "project-atlas-connect-fixture",
     title: "Project Atlas Connect",
     version: "1.0.0",
-    description: "A standard MCP App fixture served through OpenWork Connect.",
+    description: "A standard MCP App fixture served through Sofia App Connect.",
     websiteUrl: "https://example.test/project-atlas",
     icons: [{ src: "https://example.test/project-atlas.png", mimeType: "image/png", sizes: ["64x64"] }],
   });
@@ -777,7 +777,7 @@ test.skipIf(!e2eTestsEnabled || !localPlacement || !mysqlOpen)(title, { timeout:
     connectedEndpoint,
     appHostCapabilityHeaders,
   ))
-    .rejects.toThrow("only through the OpenWork App host");
+    .rejects.toThrow("only through the Sofia App host");
   const connectedRead = await agentRpc(
     den.ref.apiUrl,
     appHostMcpToken,
@@ -815,18 +815,18 @@ test.skipIf(!e2eTestsEnabled || !localPlacement || !mysqlOpen)(title, { timeout:
   expect(JSON.stringify(providerAppRun.structuredContent)).toContain("Atlas migration");
   expect(standardMcpCalls).toBe(2);
 
-  const desktopProfileDir = `/tmp/openwork-remote-mcp-apps-profile-${Date.now()}`;
+  const desktopProfileDir = `/tmp/sofia-remote-mcp-apps-profile-${Date.now()}`;
   let desktopApp = await desktop({
     name: "remote-mcp-apps",
-    mode: process.env.OPENWORK_EVAL_CDP_URL?.trim() ? "attach" : "spawn",
-    profileDir: process.env.OPENWORK_EVAL_CDP_URL?.trim() ? undefined : desktopProfileDir,
+    mode: process.env.SOFIA_EVAL_CDP_URL?.trim() ? "attach" : "spawn",
+    profileDir: process.env.SOFIA_EVAL_CDP_URL?.trim() ? undefined : desktopProfileDir,
     env: {
       ANTHROPIC_API_KEY: "",
       OPENAI_API_KEY: "",
       OPENROUTER_API_KEY: "",
       GOOGLE_GENERATIVE_AI_API_KEY: "",
-      OPENWORK_API_KEY: "",
-      OPENWORK_INFERENCE_BASE_URL: "",
+      SOFIA_API_KEY: "",
+      SOFIA_INFERENCE_BASE_URL: "",
     },
   });
   onTestFinished(async () => {
@@ -834,11 +834,11 @@ test.skipIf(!e2eTestsEnabled || !localPlacement || !mysqlOpen)(title, { timeout:
     await rm(desktopProfileDir, { recursive: true, force: true });
   });
   const workspace = await createAndSelectWorkspace(desktopApp, {
-    path: `/tmp/openwork-remote-mcp-apps-${Date.now()}`,
+    path: `/tmp/sofia-remote-mcp-apps-${Date.now()}`,
   });
   const configured = await evalIn(desktopApp, `(async () => {
-    const port = localStorage.getItem("openwork.server.port");
-    const token = localStorage.getItem("openwork.server.token");
+    const port = localStorage.getItem("sofia.server.port");
+    const token = localStorage.getItem("sofia.server.token");
     if (!port || !token) return "missing local server credentials";
     const request = async (path, init) => {
       const response = await fetch("http://127.0.0.1:" + port + path, {
@@ -852,7 +852,7 @@ test.skipIf(!e2eTestsEnabled || !localPlacement || !mysqlOpen)(title, { timeout:
     const patched = await request("/workspace/" + encodeURIComponent(workspaceId) + "/config", {
       method: "PATCH",
       body: JSON.stringify({
-        opencode: {
+        engine: {
           provider: {
             [${JSON.stringify(providerId)}]: {
               npm: "@ai-sdk/openai-compatible",
@@ -866,8 +866,8 @@ test.skipIf(!e2eTestsEnabled || !localPlacement || !mysqlOpen)(title, { timeout:
     });
     if (patched !== "ok") return patched;
     const reloaded = await request("/workspace/" + encodeURIComponent(workspaceId) + "/engine/reload", { method: "POST" });
-    if (reloaded !== "ok" && !reloaded.includes("opencode_reload_timeout")) return reloaded;
-    const reconcileResponse = await fetch("http://127.0.0.1:" + port + "/workspace/" + encodeURIComponent(workspaceId) + "/mcp/openwork-cloud/reconcile", {
+    if (reloaded !== "ok" && !reloaded.includes("engine_reload_timeout")) return reloaded;
+    const reconcileResponse = await fetch("http://127.0.0.1:" + port + "/workspace/" + encodeURIComponent(workspaceId) + "/mcp/sofia-cloud/reconcile", {
       method: "POST",
       headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -895,20 +895,20 @@ test.skipIf(!e2eTestsEnabled || !localPlacement || !mysqlOpen)(title, { timeout:
     if (!listedResponse.ok) return "runtime MCP list failed: " + listedResponse.status;
     const listed = await listedResponse.json();
     const names = (Array.isArray(listed?.items) ? listed.items : []).map((item) => item?.name).filter((name) => typeof name === "string");
-    if (!names.includes("openwork-cloud")) return "central openwork-cloud MCP missing: " + JSON.stringify(names);
-    if (names.some((name) => name.startsWith("openwork-connect-"))) return "provider MCP leaked into OpenCode: " + JSON.stringify(names);
-    const raw = localStorage.getItem("openwork.preferences");
+    if (!names.includes("sofia-cloud")) return "central sofia-cloud MCP missing: " + JSON.stringify(names);
+    if (names.some((name) => name.startsWith("sofia-connect-"))) return "provider MCP leaked into Sofia engine: " + JSON.stringify(names);
+    const raw = localStorage.getItem("sofia.preferences");
     let preferences = {};
     try { preferences = raw ? JSON.parse(raw) : {}; } catch { preferences = {}; }
     if (!preferences || typeof preferences !== "object" || Array.isArray(preferences)) preferences = {};
-    localStorage.setItem("openwork.preferences", JSON.stringify({
+    localStorage.setItem("sofia.preferences", JSON.stringify({
       ...preferences,
       defaultModel: { providerID: ${JSON.stringify(providerId)}, modelID: ${JSON.stringify(modelId)} },
       modelVariant: null,
       providerStepCompleted: true,
     }));
-    localStorage.setItem("openwork.defaultModel", ${JSON.stringify(`${providerId}/${modelId}`)});
-    localStorage.removeItem("openwork.sessionModels." + workspaceId);
+    localStorage.setItem("sofia.defaultModel", ${JSON.stringify(`${providerId}/${modelId}`)});
+    localStorage.removeItem("sofia.sessionModels." + workspaceId);
     return "ok";
   })()`, { awaitPromise: true, timeoutMs: 60_000 });
   expect(configured).toBe("ok");
@@ -925,7 +925,7 @@ test.skipIf(!e2eTestsEnabled || !localPlacement || !mysqlOpen)(title, { timeout:
     den.ref.apiUrl,
     appHostMcpToken,
     "resources/read",
-    { uri: "openwork://connect/mcp-servers/index.json" },
+    { uri: "sofia://connect/mcp-servers/index.json" },
     "/mcp/agent",
     appHostCapabilityHeaders,
   );
@@ -937,16 +937,16 @@ test.skipIf(!e2eTestsEnabled || !localPlacement || !mysqlOpen)(title, { timeout:
   expect(refreshedServers).toContainEqual(expect.objectContaining({ connectionId: lateConnection.id }));
 
   await evalIn(desktopApp, "location.reload(); true");
-  await waitFor(desktopApp, "Boolean(window.__openworkControl)", { timeoutMs: 30_000, label: "desktop control after reload" });
+  await waitFor(desktopApp, "Boolean(window.__sofiaControl)", { timeoutMs: 30_000, label: "desktop control after reload" });
   const engineReady = await evalIn(desktopApp, `(async () => {
-    const port = localStorage.getItem("openwork.server.port");
-    const token = localStorage.getItem("openwork.server.token");
+    const port = localStorage.getItem("sofia.server.port");
+    const token = localStorage.getItem("sofia.server.token");
     if (!port || !token) return "missing local server credentials";
     const deadline = Date.now() + 60_000;
     let last = "";
     while (Date.now() < deadline) {
       try {
-        const response = await fetch("http://127.0.0.1:" + port + "/workspace/" + encodeURIComponent(${JSON.stringify(workspace.workspaceId)}) + "/opencode/session", {
+        const response = await fetch("http://127.0.0.1:" + port + "/workspace/" + encodeURIComponent(${JSON.stringify(workspace.workspaceId)}) + "/engine/session", {
           headers: { Authorization: "Bearer " + token },
           signal: AbortSignal.timeout(2_000),
         });
@@ -958,7 +958,7 @@ test.skipIf(!e2eTestsEnabled || !localPlacement || !mysqlOpen)(title, { timeout:
     return "engine not ready: " + last;
   })()`, { awaitPromise: true, timeoutMs: 70_000 });
   expect(engineReady).toBe("ready");
-  await waitFor(desktopApp, `window.__openworkControl.listActions().some((action) => action.id === "session.create_task" && !action.disabled)`, {
+  await waitFor(desktopApp, `window.__sofiaControl.listActions().some((action) => action.id === "session.create_task" && !action.disabled)`, {
     timeoutMs: 60_000,
     label: "desktop new task ready",
   });
@@ -966,7 +966,7 @@ test.skipIf(!e2eTestsEnabled || !localPlacement || !mysqlOpen)(title, { timeout:
     const deadline = Date.now() + 60_000;
     let last = null;
     while (Date.now() < deadline) {
-      last = await window.__openworkControl.execute("session.create_task", null);
+      last = await window.__sofiaControl.execute("session.create_task", null);
       if (last?.ok === true) return last;
       await new Promise((resolve) => setTimeout(resolve, 1_000));
     }
@@ -995,8 +995,8 @@ test.skipIf(!e2eTestsEnabled || !localPlacement || !mysqlOpen)(title, { timeout:
     label: "Remote MCP App desktop response",
   });
   const persistedProjectAtlasTool = await evalIn(desktopApp, `(async () => {
-    const port = localStorage.getItem("openwork.server.port");
-    const token = localStorage.getItem("openwork.server.token");
+    const port = localStorage.getItem("sofia.server.port");
+    const token = localStorage.getItem("sofia.server.token");
     if (!port || !token) return "missing local server credentials";
     const headers = { Authorization: "Bearer " + token };
     const workspaceId = ${JSON.stringify(workspace.workspaceId)};
@@ -1022,15 +1022,15 @@ test.skipIf(!e2eTestsEnabled || !localPlacement || !mysqlOpen)(title, { timeout:
     return JSON.stringify({ sessionId, messages: messagesPayload });
   })()`, { awaitPromise: true, timeoutMs: 30_000 });
   const persistedTool = requireRecord(JSON.parse(String(persistedProjectAtlasTool)), "persisted Project Atlas tool");
-  expect(persistedTool.tool).toBe("openwork-cloud_execute_capability");
+  expect(persistedTool.tool).toBe("sofia-cloud_execute_capability");
   const persistedState = requireRecord(persistedTool.state, "persisted Project Atlas state");
   expect(persistedState.status).toBe("completed");
   const persistedMetadata = requireRecord(persistedState.metadata, "persisted Project Atlas metadata");
-  const persistedMcpResult = requireRecord(persistedMetadata.openworkMcpApp, "persisted Project Atlas MCP result");
+  const persistedMcpResult = requireRecord(persistedMetadata.sofiaMcpApp, "persisted Project Atlas MCP result");
   expect(persistedMcpResult.structuredContent).toEqual({
     schemaVersion: "1",
-    artifact: { title: "Project Atlas", description: "A standard MCP App served through OpenWork Connect." },
-    data: { name: "Project Atlas", status: "Connected through OpenWork Connect" },
+    artifact: { title: "Project Atlas", description: "A standard MCP App served through Sofia App Connect." },
+    data: { name: "Project Atlas", status: "Connected through Sofia App Connect" },
     serverTools: {
       searchCapabilities: "search_capabilities",
       executeCapability: "execute_capability",
@@ -1038,7 +1038,7 @@ test.skipIf(!e2eTestsEnabled || !localPlacement || !mysqlOpen)(title, { timeout:
   });
   expect(persistedMcpResult._meta).toEqual({
     source: "project-atlas-standard-mcp",
-    "openwork/mcpApp": {
+    "sofia/mcpApp": {
       connectionId: lateConnection.id,
       toolName: "open_project_atlas",
       resourceUri: connectedResourceUri,
@@ -1057,21 +1057,21 @@ test.skipIf(!e2eTestsEnabled || !localPlacement || !mysqlOpen)(title, { timeout:
   expect(standardMcpCalls).toBe(3);
 
   await evalIn(desktopApp, "location.reload(); true");
-  await waitFor(desktopApp, "Boolean(window.__openworkControl)", { timeoutMs: 30_000, label: "desktop control after App reload" });
+  await waitFor(desktopApp, "Boolean(window.__sofiaControl)", { timeoutMs: 30_000, label: "desktop control after App reload" });
   expect(await waitForMountedProjectAtlas(desktopApp, undefined, 30_000)).toBe(true);
   expect(standardMcpCalls).toBe(3);
   const desktopShot = await screenshot(desktopApp);
   const desktopExpectations = [
     "The conversation visibly contains the connected Project Atlas MCP App",
     "The user requested Project Atlas naturally without a generated native tool name",
-    "OpenWork searched and executed the exact connected capability through the gateway",
+    "Sofia App searched and executed the exact connected capability through the gateway",
     "The app was loaded from the standard ui://project-atlas/view.html resource",
     `The assistant says ${desktopClosingReply}`,
     "No interactive-view-unavailable or crash message is visible",
   ];
   const desktopSeen = await validate(desktopShot, desktopExpectations, {
     ask: async (request) => request.prompt.startsWith("Objectively describe")
-      ? JSON.stringify({ description: "An OpenWork Desktop conversation with a visible Project Atlas MCP App delivered through a normal Connect server and a completed assistant reply." })
+      ? JSON.stringify({ description: "An Sofia App Desktop conversation with a visible Project Atlas MCP App delivered through a normal Connect server and a completed assistant reply." })
       : JSON.stringify({ results: desktopExpectations.map((expectation) => ({ expectation, passed: true, evidence: "The deterministic desktop DOM and MCP protocol assertions completed before capture." })) }),
   });
   expect(desktopSeen.ok, desktopSeen.why).toBe(true);
@@ -1105,8 +1105,8 @@ test.skipIf(!e2eTestsEnabled || !localPlacement || !mysqlOpen)(title, { timeout:
     arguments: { name: gatewayCapabilityName, body: {} },
   });
   expect(flagOffRun.isError, JSON.stringify(flagOffRun)).not.toBe(true);
-  expect(JSON.stringify(flagOffRun.structuredContent)).toContain("Connected through OpenWork Connect");
-  expect(requireRecord(flagOffRun._meta, "flag-off provider metadata")["openwork/mcpApp"]).toBeUndefined();
+  expect(JSON.stringify(flagOffRun.structuredContent)).toContain("Connected through Sofia App Connect");
+  expect(requireRecord(flagOffRun._meta, "flag-off provider metadata")["sofia/mcpApp"]).toBeUndefined();
 
   const flagOffProviderTools = await agentRpc(den.ref.apiUrl, appHostMcpToken, "tools/list", {}, connectedEndpoint, appHostHeaders);
   expect(toolsFrom(flagOffProviderTools)).toEqual([]);
@@ -1114,7 +1114,7 @@ test.skipIf(!e2eTestsEnabled || !localPlacement || !mysqlOpen)(title, { timeout:
     den.ref.apiUrl,
     appHostMcpToken,
     "resources/read",
-    { uri: "openwork://connect/mcp-servers/index.json" },
+    { uri: "sofia://connect/mcp-servers/index.json" },
     "/mcp/agent",
     appHostCapabilityHeaders,
   );
@@ -1154,7 +1154,7 @@ test.skipIf(!e2eTestsEnabled || !localPlacement || !mysqlOpen)(title, { timeout:
   await evalIn(desktopApp, "location.reload(); true");
   expect(await waitForMountedProjectAtlas(desktopApp, undefined, 30_000)).toBe(true);
 
-  if (!process.env.OPENWORK_EVAL_CDP_URL?.trim()) {
+  if (!process.env.SOFIA_EVAL_CDP_URL?.trim()) {
     const persistedSessionHash = String(await evalIn(desktopApp, "location.hash"));
     expect(persistedSessionHash).toContain("/session/");
     await desktopApp.stop();
@@ -1166,19 +1166,19 @@ test.skipIf(!e2eTestsEnabled || !localPlacement || !mysqlOpen)(title, { timeout:
         OPENAI_API_KEY: "",
         OPENROUTER_API_KEY: "",
         GOOGLE_GENERATIVE_AI_API_KEY: "",
-        OPENWORK_API_KEY: "",
-        OPENWORK_INFERENCE_BASE_URL: "",
+        SOFIA_API_KEY: "",
+        SOFIA_INFERENCE_BASE_URL: "",
       },
     });
-    await waitFor(desktopApp, "Boolean(window.__openworkControl)", { timeoutMs: 30_000, label: "restarted Desktop control" });
-    await waitFor(desktopApp, `Boolean(localStorage.getItem("openwork.server.port") && localStorage.getItem("openwork.server.token"))`, {
+    await waitFor(desktopApp, "Boolean(window.__sofiaControl)", { timeoutMs: 30_000, label: "restarted Desktop control" });
+    await waitFor(desktopApp, `Boolean(localStorage.getItem("sofia.server.port") && localStorage.getItem("sofia.server.token"))`, {
       timeoutMs: 60_000,
       label: "restarted Desktop local server credentials",
     });
     await evalIn(desktopApp, `location.hash = ${JSON.stringify(persistedSessionHash)}; true`);
     const restartResolution = await evalIn(desktopApp, `(async () => {
-      const port = localStorage.getItem("openwork.server.port");
-      const token = localStorage.getItem("openwork.server.token");
+      const port = localStorage.getItem("sofia.server.port");
+      const token = localStorage.getItem("sofia.server.token");
       if (!port || !token) return { error: "missing local server credentials" };
       const headers = { Authorization: "Bearer " + token, "Content-Type": "application/json" };
       const base = "http://127.0.0.1:" + port + "/workspace/" + encodeURIComponent(${JSON.stringify(workspace.workspaceId)});
@@ -1187,7 +1187,7 @@ test.skipIf(!e2eTestsEnabled || !localPlacement || !mysqlOpen)(title, { timeout:
           method: "POST",
           headers,
           body: JSON.stringify({
-            projectedToolName: "openwork-cloud_execute_capability",
+            projectedToolName: "sofia-cloud_execute_capability",
             launch: {
               connectionId: ${JSON.stringify(connection.id)},
               toolName: "open_project_atlas",

@@ -1,12 +1,12 @@
 import { useQuery, type QueryClient } from "@tanstack/react-query";
 
 import type { Client, ModelRef, ProviderListItem } from "../../app/types";
-import { unwrap } from "../../app/lib/opencode";
+import { unwrap } from "../../app/lib/engine";
 import { dispatchNewProviders } from "../../app/lib/provider-events";
 import type { ProviderListResponse } from "@/app/lib/engine-types";
 
 export const PROVIDER_LIST_CACHE_MS = 5 * 60 * 1000;
-const PROVIDER_LIST_QUERY_ROOT = ["opencode-provider-list"] as const;
+const PROVIDER_LIST_QUERY_ROOT = ["engine-provider-list"] as const;
 
 export type ConnectedProviderSnapshot = Array<{
   id: string;
@@ -66,7 +66,7 @@ export function getConnectedProviderItems(value: ProviderListResponse | null | u
   return (value?.all ?? []).filter(
     (provider) =>
       connected.has(provider.id) &&
-      (provider.source !== "custom" || provider.id === "opencode" || Object.keys(provider.models ?? {}).length > 0),
+      (provider.source !== "custom" || provider.id === "engine" || Object.keys(provider.models ?? {}).length > 0),
   );
 }
 

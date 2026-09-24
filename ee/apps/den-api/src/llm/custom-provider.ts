@@ -52,7 +52,7 @@ function parseCustomProviderText(text: string) {
   return parsed
 }
 
-function unwrapOpencodeProviderConfig(value: unknown) {
+function unwrapWorkspaceEngineProviderConfig(value: unknown) {
   if (!isRecord(value) || !isRecord(value.provider)) {
     return value
   }
@@ -105,7 +105,7 @@ function normalizeModels(value: unknown) {
 }
 
 function normalizeProviderShape(value: unknown) {
-  const provider = unwrapOpencodeProviderConfig(value)
+  const provider = unwrapWorkspaceEngineProviderConfig(value)
   if (!isRecord(provider)) {
     return provider
   }

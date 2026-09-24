@@ -1,14 +1,14 @@
 import { expect } from "vitest";
-import { denFetch, evalIn, provisionOrg, waitFor } from "@openwork/behaviors";
-import { navigate } from "@openwork/cdp";
-import { chrome } from "@openwork/hosts";
-import { startMockIdpLab } from "@openwork/labs";
-import { localMysqlIsRunning, server, test } from "@openwork/testkit";
+import { denFetch, evalIn, provisionOrg, waitFor } from "@sofia/behaviors";
+import { navigate } from "@sofia/cdp";
+import { chrome } from "@sofia/hosts";
+import { startMockIdpLab } from "@sofia/labs";
+import { localMysqlIsRunning, server, test } from "@sofia/testkit";
 
-const localPlacement = process.env.OPENWORK_EVAL_DAYTONA !== "1" && !process.env.OPENWORK_EVAL_DEN_API_URL?.trim();
+const localPlacement = process.env.SOFIA_EVAL_DAYTONA !== "1" && !process.env.SOFIA_EVAL_DEN_API_URL?.trim();
 const mysqlOpen = await localMysqlIsRunning();
 const title = !localPlacement
-  ? "SSO domain verification skipped — needs local placement without OPENWORK_EVAL_DEN_API_URL"
+  ? "SSO domain verification skipped — needs local placement without SOFIA_EVAL_DEN_API_URL"
   : !mysqlOpen
     ? "SSO domain verification skipped — needs MySQL on 127.0.0.1:3306"
     : "an unverified SSO connection stays pending and gives the owner complete DNS instructions";
@@ -54,7 +54,7 @@ test.skipIf(!localPlacement || !mysqlOpen)(title, async ({ evidence, place }) =>
     headers: {
       authorization: `Bearer ${org.admin.token}`,
       cookie: sessionCookie,
-      "x-openwork-org-id": org.orgId,
+      "x-sofia-org-id": org.orgId,
     },
     body: JSON.stringify({
       issuer: registration.issuer,
@@ -127,8 +127,8 @@ test.skipIf(!localPlacement || !mysqlOpen)(title, async ({ evidence, place }) =>
   });
   expect(browserSessionCookie.success).toBe(true);
   const tokenStored = await evalIn(browser, `(() => {
-    localStorage.setItem("openwork:web:auth-token", ${JSON.stringify(org.admin.token)});
-    return localStorage.getItem("openwork:web:auth-token") === ${JSON.stringify(org.admin.token)};
+    localStorage.setItem("sofia:web:auth-token", ${JSON.stringify(org.admin.token)});
+    return localStorage.getItem("sofia:web:auth-token") === ${JSON.stringify(org.admin.token)};
   })()`);
   expect(tokenStored).toBe(true);
   await navigate(browser.client, `${den.ref.webUrl}/dashboard/sso`);

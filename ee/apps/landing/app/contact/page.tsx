@@ -1,28 +1,28 @@
 import Link from "next/link";
 import { AppFeedbackForm, type AppFeedbackPrefill } from "../../components/app-feedback-form";
-import { OpenWorkMark } from "../../components/openwork-mark";
+import { SofiaMark } from "../../components/sofia-mark";
 import { SiteFooter } from "../../components/site-footer";
 import { baseOpenGraph } from "../../lib/seo";
 
 export const metadata = {
-  title: "OpenWork — Contact",
-  description: "Contact the OpenWork team for product, support, security, and sales questions.",
+  title: "Sofia — Contact",
+  description: "Contact the Sofia team for product, support, security, and sales questions.",
   alternates: {
     canonical: "/contact",
   },
   openGraph: {
     ...baseOpenGraph,
-    url: "https://openworklabs.com/contact",
+    url: "https://sofia.ruut.chat/contact",
   },
 };
 
 const prefill: AppFeedbackPrefill = {
-  source: "openwork-contact-page",
+  source: "sofia-contact-page",
   entrypoint: "/contact",
   deployment: "landing",
   appVersion: "",
-  openworkServerVersion: "",
-  opencodeVersion: "",
+  sofiaServerVersion: "",
+  engineVersion: "",
   osName: "",
   osVersion: "",
   platform: "web",
@@ -34,9 +34,9 @@ export default function ContactPage() {
       <div className="mx-auto max-w-5xl px-6 pb-20 pt-6 md:px-8 md:pt-8">
         <header className="mb-10 flex items-center justify-between gap-4">
           <Link href="/" className="inline-flex items-center gap-3 text-[#011627]">
-            <OpenWorkMark className="h-[30px] w-[38px]" />
+            <SofiaMark className="h-[30px] w-[38px]" />
             <span className="text-[1.2rem] font-semibold tracking-tight lowercase">
-              OpenWork
+              Sofia
             </span>
           </Link>
           <Link

@@ -1,5 +1,5 @@
 import { expect } from "vitest";
-import { test } from "@openwork/testkit";
+import { test } from "@sofia/testkit";
 import {
   compareCapabilityMatches,
   type CapabilityMatch,

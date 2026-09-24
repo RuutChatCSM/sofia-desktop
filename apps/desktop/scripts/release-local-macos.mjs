@@ -6,7 +6,7 @@
 // macOS hosts when CI is unavailable.
 //
 // Usage:
-//   pnpm --filter @openwork/desktop release:local:macos --version 0.1.1
+//   pnpm --filter @sofia/desktop release:local:macos --version 0.1.1
 //
 // Configuration comes from the environment or an env file (default:
 //   ~/.sofia/app-release.env), one KEY=VALUE per line:
@@ -17,6 +17,7 @@
 //
 // Flags: --version X.Y.Z  --repo OWNER/REPO  --prefix NAME  --target TRIPLE
 //        --env-file PATH  --no-build  --no-github  --no-mirror  --dry-run
+//        --ref REF (git ref the GitHub Release tag points at; default: HEAD)
 
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, mkdtempSync, rmSync, chmodSync } from "node:fs";
@@ -34,6 +35,7 @@ const options = {
   repo: "RuutChatCSM/sofia-desktop",
   prefix: "sofia-desktop",
   target: "",
+  ref: "",
   envFile: path.join(homedir(), ".sofia", "app-release.env"),
   build: true,
   github: true,
@@ -70,6 +72,7 @@ for (let i = 0; i < rawArgs.length; i += 1) {
   else if (arg === "--repo" || arg.startsWith("--repo=")) options.repo = take("--repo");
   else if (arg === "--prefix" || arg.startsWith("--prefix=")) options.prefix = take("--prefix");
   else if (arg === "--target" || arg.startsWith("--target=")) options.target = take("--target");
+  else if (arg === "--ref" || arg.startsWith("--ref=")) options.ref = take("--ref");
   else if (arg === "--env-file" || arg.startsWith("--env-file=")) options.envFile = take("--env-file");
   else if (arg === "--no-build") options.build = false;
   else if (arg === "--no-github") options.github = false;
@@ -115,12 +118,17 @@ if (process.platform !== "darwin") die("macOS releases must run on macOS");
 if (!options.version || !/^\d+\.\d+\.\d+$/.test(options.version)) die("--version X.Y.Z is required");
 const tag = `v${options.version}`;
 
+// The release must point at the commit that produced these artifacts. Defaulting to a
+// branch name silently tags whatever that branch held at publish time, which is how
+// v0.1.1 ended up tagged on `main` while its artifacts came from a feature branch.
+const releaseRef = options.ref || capture("git", ["rev-parse", "HEAD"]) || "main";
+
 const arch = options.target.startsWith("aarch64") ? "arm64" : "x64";
 const artifacts = [
-  `sofia-app-mac-${arch}-${options.version}.dmg`,
-  `sofia-app-mac-${arch}-${options.version}.dmg.blockmap`,
-  `sofia-app-mac-${arch}-${options.version}.zip`,
-  `sofia-app-mac-${arch}-${options.version}.zip.blockmap`,
+  `sofia-mac-${arch}-${options.version}.dmg`,
+  `sofia-mac-${arch}-${options.version}.dmg.blockmap`,
+  `sofia-mac-${arch}-${options.version}.zip`,
+  `sofia-mac-${arch}-${options.version}.zip.blockmap`,
 ].map((name) => path.join(distDir, name));
 
 const p12 = process.env.CSC_LINK;
@@ -137,7 +145,7 @@ if (options.build) {
   log(`Stamping version ${options.version}`);
   run(process.execPath, [path.join(repoRoot, "scripts", "release", "stamp-version.mjs"), "--version", options.version]);
   log(`Building Sofia App ${options.version} (${options.target})`);
-  run("pnpm", ["--filter", "@openwork/desktop", "package:electron"], {
+  run("pnpm", ["--filter", "@sofia/desktop", "package:electron"], {
     SOFIA_SOURCE_DIR: process.env.SOFIA_SOURCE_DIR,
     TARGET: options.target,
     MACOS_NOTARIZE: "true",
@@ -200,7 +208,7 @@ function githubRelease() {
   if (exists) {
     run("gh", ["release", "upload", tag, "--repo", options.repo, "--clobber", ...assets]);
   } else {
-    run("gh", ["release", "create", tag, "--repo", options.repo, "--target", "main",
+    run("gh", ["release", "create", tag, "--repo", options.repo, "--target", releaseRef,
       "--title", `Sofia App ${options.version}`, "--notes", `Sofia App ${options.version} (macOS, Apple Silicon), signed and notarized.`,
       ...assets]);
   }

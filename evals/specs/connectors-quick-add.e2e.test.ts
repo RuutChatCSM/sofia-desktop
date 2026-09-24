@@ -1,14 +1,14 @@
 import { expect } from "vitest";
-import { evalIn, waitFor } from "@openwork/behaviors";
-import { navigate } from "@openwork/cdp";
-import type { Surface } from "@openwork/cdp";
-import { screenshot, validate } from "@openwork/test-evidence";
-import { chrome } from "@openwork/hosts";
-import { mcpMock, needs, server, test, unmetNeeds } from "@openwork/testkit";
-import type { TestNeeds } from "@openwork/testkit";
+import { evalIn, waitFor } from "@sofia/behaviors";
+import { navigate } from "@sofia/cdp";
+import type { Surface } from "@sofia/cdp";
+import { screenshot, validate } from "@sofia/test-evidence";
+import { chrome } from "@sofia/hosts";
+import { mcpMock, needs, server, test, unmetNeeds } from "@sofia/testkit";
+import type { TestNeeds } from "@sofia/testkit";
 
 const requirements: TestNeeds = {
-  optIn: ["OPENWORK_EVAL_E2E_TESTS"],
+  optIn: ["SOFIA_EVAL_E2E_TESTS"],
 };
 const missingRequirements = unmetNeeds(requirements, process.env);
 const title = missingRequirements.length > 0
@@ -68,8 +68,8 @@ test(title, async ({ evidence, place }) => {
     label: "Den Web origin before admin auth token handoff",
   });
   const tokenStored = await evalIn(browser, `(() => {
-    localStorage.setItem("openwork:web:auth-token", ${JSON.stringify(den.admin.token)});
-    return localStorage.getItem("openwork:web:auth-token") === ${JSON.stringify(den.admin.token)};
+    localStorage.setItem("sofia:web:auth-token", ${JSON.stringify(den.admin.token)});
+    return localStorage.getItem("sofia:web:auth-token") === ${JSON.stringify(den.admin.token)};
   })()`);
   expect(tokenStored).toBe(true);
 

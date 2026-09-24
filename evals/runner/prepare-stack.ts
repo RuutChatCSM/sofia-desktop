@@ -18,7 +18,7 @@ export type StackPreparation =
 
 declare module "vitest" {
   export interface ProvidedContext {
-    openworkStackPreparation: StackPreparation;
+    sofiaStackPreparation: StackPreparation;
   }
 }
 
@@ -36,21 +36,21 @@ async function readable(path: string): Promise<boolean> {
 }
 
 async function prepareLocal(): Promise<StackPreparation> {
-  console.error("[openwork/evals] preparing shared local Den and Electron runtime once...");
+  console.error("[sofia/evals] preparing shared local Den and Electron runtime once...");
   const runtimeBuilds = [
-    "@openwork/email",
-    "@openwork/install-config",
-    "@openwork/connect-link",
-    "@openwork/enterprise-mcp-client",
-    "@openwork/codemode",
-    "@openwork/headless-threads",
+    "@sofia/email",
+    "@sofia/install-config",
+    "@sofia/connect-link",
+    "@sofia/enterprise-mcp-client",
+    "@sofia/codemode",
+    "@sofia/headless-threads",
   ].map((pkg) => run("pnpm", ["--filter", pkg, "build"]));
   await Promise.all(runtimeBuilds);
-  await run("pnpm", ["--filter", "@openwork-ee/den-db", "build"]);
+  await run("pnpm", ["--filter", "@sofia-ee/den-db", "build"]);
 
   await Promise.all([
-    run("pnpm", ["--filter", "@openwork/ui", "build"]),
-    run("pnpm", ["--filter", "@openwork-ee/utils", "build"]),
+    run("pnpm", ["--filter", "@sofia/ui", "build"]),
+    run("pnpm", ["--filter", "@sofia-ee/utils", "build"]),
     run(process.execPath, [join(REPO_ROOT, "apps/desktop/scripts/prepare-sidecar.mjs"), "--force", "--outdir", join(REPO_ROOT, "apps/desktop/resources/sidecars")], join(REPO_ROOT, "apps/desktop")),
     run(process.execPath, [join(REPO_ROOT, "apps/desktop/scripts/prepare-computer-use-helper.mjs"), "--force", "--outdir", join(REPO_ROOT, "apps/desktop/resources/helpers")], join(REPO_ROOT, "apps/desktop")),
   ]);
@@ -59,7 +59,7 @@ async function prepareLocal(): Promise<StackPreparation> {
   const hadNextEnv = await readable(nextEnvPath);
   const nextEnv = hadNextEnv ? await readFile(nextEnvPath) : null;
   try {
-    await run("pnpm", ["--filter", "@openwork-ee/den-web", "build"]);
+    await run("pnpm", ["--filter", "@sofia-ee/den-web", "build"]);
   } finally {
     if (nextEnv) await writeFile(nextEnvPath, nextEnv);
     else if (!hadNextEnv) await rm(nextEnvPath, { force: true });
@@ -69,15 +69,15 @@ async function prepareLocal(): Promise<StackPreparation> {
 
 async function prepareDaytona(argv: readonly string[]): Promise<{ preparation: StackPreparation; cleanup: () => Promise<void> }> {
   const workerCount = suiteWorkerCount(argv, process.env);
-  const ref = process.env.OPENWORK_EVAL_REF?.trim() || process.env.GITHUB_SHA?.trim() || "dev";
+  const ref = process.env.SOFIA_EVAL_REF?.trim() || process.env.GITHUB_SHA?.trim() || "dev";
   const created = new Set<string>();
-  const log = (line: string): void => console.error(`[openwork/evals] ${line}`);
+  const log = (line: string): void => console.error(`[sofia/evals] ${line}`);
   try {
     const slots = await Promise.all(Array.from({ length: workerCount }, async (_, index) => {
       const [den, desktop] = await Promise.all([
         provisionDenSandbox({
           ref,
-          bootstrapAdminEmail: process.env.OPENWORK_EVAL_DEMO_EMAIL?.trim() || "alex@acme.test",
+          bootstrapAdminEmail: process.env.SOFIA_EVAL_DEMO_EMAIL?.trim() || "alex@acme.test",
           log,
         }).then((result) => {
           if (result.created) created.add(result.sandbox);
@@ -90,7 +90,7 @@ async function prepareDaytona(argv: readonly string[]): Promise<{ preparation: S
       ]);
       return { denSandbox: den.sandbox, desktopSandbox: desktop.sandbox };
     }));
-    console.error(`[openwork/evals] prepared ${slots.length} isolated Daytona worker slot${slots.length === 1 ? "" : "s"}.`);
+    console.error(`[sofia/evals] prepared ${slots.length} isolated Daytona worker slot${slots.length === 1 ? "" : "s"}.`);
     return {
       preparation: { kind: "daytona", slots },
       cleanup: async () => {
@@ -104,16 +104,16 @@ async function prepareDaytona(argv: readonly string[]): Promise<{ preparation: S
 }
 
 export default async function setup(project: TestProject): Promise<() => Promise<void>> {
-  if (!shouldPrepareSuite(process.argv) || process.env.OPENWORK_EVAL_DEN_API_URL?.trim()) {
-    project.provide("openworkStackPreparation", { kind: "none" });
+  if (!shouldPrepareSuite(process.argv) || process.env.SOFIA_EVAL_DEN_API_URL?.trim()) {
+    project.provide("sofiaStackPreparation", { kind: "none" });
     return async () => undefined;
   }
-  if (process.env.OPENWORK_EVAL_DAYTONA?.trim() === "1") {
+  if (process.env.SOFIA_EVAL_DAYTONA?.trim() === "1") {
     const prepared = await prepareDaytona(process.argv);
-    project.provide("openworkStackPreparation", prepared.preparation);
+    project.provide("sofiaStackPreparation", prepared.preparation);
     return prepared.cleanup;
   }
   const preparation = await prepareLocal();
-  project.provide("openworkStackPreparation", preparation);
+  project.provide("sofiaStackPreparation", preparation);
   return async () => undefined;
 }
