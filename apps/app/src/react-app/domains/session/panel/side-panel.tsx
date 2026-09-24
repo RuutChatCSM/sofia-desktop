@@ -303,7 +303,7 @@ function BrowserPanelContent({
 
   return (
     <>
-      <div className="flex h-10 shrink-0 items-center gap-1 border-b border-border bg-background px-2 mac:bg-background/80 mac:backdrop-blur-2xl mac:backdrop-saturate-150">
+      <div className="flex h-10 shrink-0 items-center gap-1 border-b border-border bg-dls-canvas px-2 mac:bg-dls-canvas/80 mac:backdrop-blur-2xl mac:backdrop-saturate-150">
         {isAvailable ? (
           <>
             <Tooltip>
@@ -634,7 +634,7 @@ export function SidePanel({
           event.stopPropagation();
         }}
       >
-        <div className="shrink-0 border-b border-border bg-background mac:bg-background/80 mac:backdrop-blur-2xl mac:backdrop-saturate-150">
+        <div className="shrink-0 border-b border-border bg-dls-canvas mac:bg-dls-canvas/80 mac:backdrop-blur-2xl mac:backdrop-saturate-150">
           <div className="flex h-10 items-center gap-1 border-b border-border/60 px-2">
             <div className="no-scrollbar min-w-0 flex-1 overflow-x-auto">
               <PanelTabList

@@ -780,7 +780,7 @@ export function VoicePanel(props: VoicePanelProps) {
   useControlAction(statusAction);
 
   return (
-    <div ref={panelRef} className="flex h-full min-h-0 flex-col bg-background">
+    <div ref={panelRef} className="flex h-full min-h-0 flex-col bg-dls-canvas">
       <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2 text-sm font-semibold text-foreground">

@@ -1159,7 +1159,7 @@ export function ReactSessionComposer(props: ComposerProps) {
     if (!slashOpen) return null;
     return (
       <div className="absolute bottom-full left-[-1px] right-[-1px] z-30">
-          <div className="overflow-hidden rounded-t-[20px] border border-dls-border border-b-0 bg-dls-surface shadow-[var(--dls-shell-shadow)]">
+          <div className="overflow-hidden rounded-t-[20px] border border-dls-border border-b-0 bg-dls-canvas shadow-[var(--dls-shell-shadow)]">
             <div
               role="presentation"
               className="max-h-64 overflow-y-auto p-2"
@@ -1215,7 +1215,7 @@ export function ReactSessionComposer(props: ComposerProps) {
     if (!mentionOpen) return null;
     return (
       <div className="absolute bottom-full left-[-1px] right-[-1px] z-30">
-          <div className="overflow-hidden rounded-t-[20px] border border-dls-border border-b-0 bg-dls-surface shadow-[var(--dls-shell-shadow)]">
+          <div className="overflow-hidden rounded-t-[20px] border border-dls-border border-b-0 bg-dls-canvas shadow-[var(--dls-shell-shadow)]">
             <div
               role="presentation"
               className="max-h-64 overflow-y-auto p-2"
@@ -1282,7 +1282,7 @@ export function ReactSessionComposer(props: ComposerProps) {
         {props.aboveComposer ? <div className="pb-2">{props.aboveComposer}</div> : null}
         {/* Main composer panel */}
         <div
-          className={`sofia-composer-panel relative overflow-visible rounded-[24px] border border-dls-border bg-dls-surface shadow-sm transition-colors ${panelRoundedClass}`}
+          className={`sofia-composer-panel relative overflow-visible rounded-[24px] border border-dls-border bg-dls-canvas shadow-sm transition-colors ${panelRoundedClass}`}
         >
           {props.topAccessory ? <div className="relative z-10">{props.topAccessory}</div> : null}
 
@@ -1299,7 +1299,7 @@ export function ReactSessionComposer(props: ComposerProps) {
 
           {dropzoneActive ? (
             <div className="pointer-events-none absolute inset-3 z-20 flex items-center justify-center rounded-[20px] border-2 border-dashed border-dls-accent bg-[color:color-mix(in_oklab,var(--dls-accent)_10%,transparent)]">
-              <div className="rounded-2xl border border-dls-border bg-dls-surface/95 px-5 py-4 text-center backdrop-blur-sm">
+              <div className="rounded-2xl border border-dls-border bg-dls-canvas/95 px-5 py-4 text-center backdrop-blur-sm">
                 <div className="text-sm font-medium text-dls-text">{t("composer.attach_files")}</div>
                 <div className="mt-1 text-xs text-dls-secondary">{t("composer.any_file_type_supported")}</div>
               </div>
