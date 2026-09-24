@@ -42,8 +42,12 @@ package() {
   install -d "${pkgdir}/usr/bin"
   ln -s /opt/sofia/@sofiadesktop "${pkgdir}/usr/bin/sofia"
 
-  install -Dm644 "${pkgdir}/opt/sofia/resources/app-dist/sofia-logo-square.svg" \
-    "${pkgdir}/usr/share/icons/hicolor/scalable/apps/sofia.svg"
+  # Use the generated hicolor set rather than the retired square logo so the
+  # launcher entry matches the packaged app icon.
+  for size in 16 24 32 48 64 96 128 256 512; do
+    install -Dm644 "${pkgdir}/opt/sofia/resources/icons/linux/${size}x${size}.png" \
+      "${pkgdir}/usr/share/icons/hicolor/${size}x${size}/apps/sofia.png"
+  done
 
   install -d "${pkgdir}/usr/share/applications"
   cat > "${pkgdir}/usr/share/applications/sofia.desktop" <<'EOF'
