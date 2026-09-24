@@ -52,7 +52,7 @@ import {
 } from "./connect-link-branding.mjs";
 import { resolveConnectLinkPublicKeys } from "./connect-link-keys.mjs";
 import { openExternalUrl } from "./open-external.mjs";
-import { resolveAppIdentifier, resolveUserDataPath } from "./dev-profile.mjs";
+import { migrateLegacyUserDataDir, resolveAppIdentifier, resolveUserDataPath } from "./dev-profile.mjs";
 import { fetchAgentContextDiagnosticsResponse } from "./agent-context-diagnostics-fetch.mjs";
 import {
   createLinuxDesktopIntegration,
@@ -238,6 +238,11 @@ if (
 ) {
   app.setAsDefaultProtocolClient(DESKTOP_PROTOCOL_SCHEME);
 }
+await migrateLegacyUserDataDir({
+  appDataPath: app.getPath("appData"),
+  appIdentifier: APP_IDENTIFIER,
+  userDataOverride: process.env.SOFIA_ELECTRON_USERDATA,
+});
 const userDataPath = BLANK_SLATE_LAUNCH.userDataPath ?? resolveUserDataPath({
   appDataPath: app.getPath("appData"),
   appIdentifier: APP_IDENTIFIER,

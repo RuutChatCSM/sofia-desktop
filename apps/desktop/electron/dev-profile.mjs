@@ -1,4 +1,6 @@
 import { createHash } from "node:crypto";
+import { existsSync } from "node:fs";
+import { rename } from "node:fs/promises";
 import path from "node:path";
 
 const WINDOWS_RESERVED_NAMES = new Set([
@@ -71,4 +73,38 @@ export function resolveUserDataPath({ appDataPath, appIdentifier, userDataOverri
   const explicitUserData = userDataOverride?.trim();
   if (explicitUserData) return explicitUserData;
   return path.join(appDataPath, appIdentifier);
+}
+
+/**
+ * The cloud and enterprise flavours identified themselves as
+ * `com.differentai.openwork` before the rebrand, so Electron resolved a
+ * different profile directory and an upgrade would start empty. Map an
+ * identifier back to its pre-rebrand spelling; public builds keep the same
+ * identifier throughout and are therefore unaffected.
+ */
+export function legacyAppIdentifierFor(appIdentifier) {
+  return String(appIdentifier ?? "").replace(/\.sofia(?=\.|$)/, ".openwork");
+}
+
+/**
+ * Move a pre-rebrand profile directory into place before Electron binds it.
+ * Only runs when the current directory is absent and the legacy one exists, so
+ * it cannot overwrite a profile that has already been migrated.
+ */
+export async function migrateLegacyUserDataDir({ appDataPath, appIdentifier, userDataOverride }) {
+  const explicitUserData = userDataOverride?.trim();
+  if (explicitUserData) return null;
+  const legacyIdentifier = legacyAppIdentifierFor(appIdentifier);
+  if (!legacyIdentifier || legacyIdentifier === appIdentifier) return null;
+  const current = path.join(appDataPath, appIdentifier);
+  const legacy = path.join(appDataPath, legacyIdentifier);
+  if (existsSync(current) || !existsSync(legacy)) return null;
+  try {
+    await rename(legacy, current);
+    console.info("[migration] moved legacy desktop profile", { from: legacy, to: current });
+    return current;
+  } catch (error) {
+    console.warn("[migration] legacy desktop profile move failed", error);
+    return null;
+  }
 }

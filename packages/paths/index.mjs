@@ -220,6 +220,26 @@ export function desktopBootstrapPath(opts) {
   return paths.join(desktopConfigDir(opts), "sofia", "desktop-bootstrap.json");
 }
 
+/**
+ * Config directory the pre-rebrand (OpenWork) builds wrote to. Sofia keeps
+ * resolving it so an upgraded install can import its activation, server config,
+ * and env store instead of silently starting from an empty profile.
+ */
+export function legacySofiaConfigDir(opts) {
+  const env = optionEnv(opts);
+  const platform = optionPlatform(opts);
+  const paths = pathApi(platform);
+  const homeDir = optionHomeDir(opts);
+  if (platform === "win32") {
+    const appData = envValue(env, "APPDATA");
+    const root = appData || paths.join(homeDir, "AppData", "Roaming");
+    return paths.join(root, "openwork");
+  }
+  const xdgConfigHome = envValue(env, "XDG_CONFIG_HOME");
+  const root = xdgConfigHome || paths.join(homeDir, ".config");
+  return paths.join(root, "openwork");
+}
+
 export function legacyDesktopBootstrapPath(opts) {
   const platform = optionPlatform(opts);
   const paths = pathApi(platform);
@@ -227,7 +247,15 @@ export function legacyDesktopBootstrapPath(opts) {
   // Electron used os.homedir(). optionHomeDir accepts an explicit homeDir but
   // otherwise checks the same env variables before os.homedir(), so both legacy
   // locations continue to resolve for normal installs.
-  return paths.join(optionHomeDir(opts), ".config", "sofia", "desktop-bootstrap.json");
+  return paths.join(optionHomeDir(opts), ".config", "openwork", "desktop-bootstrap.json");
+}
+
+export function legacySofiaServerConfigPath(opts) {
+  const env = optionEnv(opts);
+  const paths = pathApi(optionPlatform(opts));
+  const override = envValue(env, "OPENWORK_SERVER_CONFIG");
+  if (override) return paths.resolve(override);
+  return paths.join(legacySofiaConfigDir(opts), "server.json");
 }
 
 export function expandHomePath(value, opts) {

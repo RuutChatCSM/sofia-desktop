@@ -7,6 +7,7 @@ import {
   desktopBootstrapPath,
   globalWorkspaceEngineConfigDir,
   legacyDesktopBootstrapPath,
+  legacySofiaServerConfigPath,
   MAX_CONFIG_ROOT_LENGTH,
   normalizeWorkspaceRootPath,
   sofiaEnvStorePath,
@@ -145,9 +146,24 @@ describe("sofia env store and desktop bootstrap paths", () => {
     })).toBe("/tmp/sofia-userdata/sofia-dev-data/home/.config/sofia/desktop-bootstrap.json");
   });
 
-  test("resolves the legacy desktop bootstrap path from the chosen home", () => {
+  test("resolves the legacy desktop bootstrap path to the openwork config home", () => {
     expect(legacyDesktopBootstrapPath({ env: {}, homeDir: "/Users/ada", platform: "darwin" }))
-      .toBe("/Users/ada/.config/sofia/desktop-bootstrap.json");
+      .toBe("/Users/ada/.config/openwork/desktop-bootstrap.json");
+    expect(legacyDesktopBootstrapPath({ env: {}, homeDir: "C:\\Users\\ada", platform: "win32" }))
+      .toBe("C:\\Users\\ada\\.config\\openwork\\desktop-bootstrap.json");
+  });
+
+  test("resolves the legacy server config next to the openwork bootstrap file", () => {
+    expect(legacySofiaServerConfigPath({
+      env: { XDG_CONFIG_HOME: "/tmp/xdg" },
+      homeDir: "/home/ada",
+      platform: "linux",
+    })).toBe("/tmp/xdg/openwork/server.json");
+    expect(legacySofiaServerConfigPath({
+      env: { OPENWORK_SERVER_CONFIG: "/tmp/explicit/server.json" },
+      homeDir: "/home/ada",
+      platform: "linux",
+    })).toBe("/tmp/explicit/server.json");
   });
 });
 

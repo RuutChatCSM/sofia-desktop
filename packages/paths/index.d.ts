@@ -20,7 +20,9 @@ export declare function resolveWorkspaceWorkspaceEngineConfigPath(workspaceRoot:
 export declare function sofiaConfigDir(opts?: PathOptions): string;
 export declare function sofiaEngineConfigPath(opts?: PathOptions): string;
 export declare function desktopBootstrapPath(opts?: PathOptions): string;
+export declare function legacySofiaConfigDir(opts?: PathOptions): string;
 export declare function legacyDesktopBootstrapPath(opts?: PathOptions): string;
+export declare function legacySofiaServerConfigPath(opts?: PathOptions): string;
 export declare function expandHomePath(value: string, opts?: PathOptions): string;
 export declare function sofiaServerDataDir(opts?: PathOptions): string;
 export declare function engineDataDirs(opts?: PathOptions): string[];

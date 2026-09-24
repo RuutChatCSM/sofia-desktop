@@ -10,6 +10,7 @@ import {
   preventPendingUpdaterInstall,
   registerUpdaterIpc,
   staleUpdaterStatePaths,
+  supportsAlphaChannel,
   targetedStableUpdaterFeed,
 } from "./updater.mjs";
 import {
@@ -608,6 +609,13 @@ describe("downloaded update lifecycle", () => {
 });
 
 describe("release channel changes", () => {
+  it("only offers the alpha feed where it publishes builds", () => {
+    assert.equal(supportsAlphaChannel({ platform: "darwin", arch: "arm64" }), true);
+    assert.equal(supportsAlphaChannel({ platform: "darwin", arch: "x64" }), false);
+    assert.equal(supportsAlphaChannel({ platform: "linux", arch: "arm64" }), false);
+    assert.equal(supportsAlphaChannel({ platform: "win32", arch: "x64" }), false);
+  });
+
   it("prevents a previously downloaded update from installing on quit", () => {
     const updater = { autoInstallOnAppQuit: true };
 
@@ -643,7 +651,7 @@ describe("release channel changes", () => {
   });
 
   it("does not let a check overwrite the selected channel", {
-    skip: process.platform !== "darwin",
+    skip: !supportsAlphaChannel(),
   }, async () => {
     const { tempDir, handlers } = await registerFakeUpdaterIpc({
       version: "0.18.0",
@@ -662,7 +670,7 @@ describe("release channel changes", () => {
   });
 
   it("downloads from the channel used by the successful check", {
-    skip: process.platform !== "darwin",
+    skip: !supportsAlphaChannel(),
   }, async () => {
     const { tempDir, handlers, downloadFeeds } = await registerFakeUpdaterIpc({
       version: "0.18.0-alpha.1",
@@ -683,7 +691,7 @@ describe("release channel changes", () => {
   });
 
   it("keeps Alpha selected when a Stable check is already in flight", {
-    skip: process.platform !== "darwin",
+    skip: !supportsAlphaChannel(),
   }, async () => {
     const { tempDir, handlers, updater, feeds } = await registerFakeUpdaterIpc({
       version: "0.18.0",
