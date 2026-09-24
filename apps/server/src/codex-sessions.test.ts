@@ -36,6 +36,8 @@ type FakeCodexOptions = {
   itemsPages?: Array<{ data: unknown[]; nextCursor?: string | null }>;
   /** `thread/list` payload (threads restored into the session map). */
   threads?: unknown[];
+  /** `thread/read` payloads keyed by thread id. */
+  readThreads?: Record<string, unknown>;
   /** `thread/loaded/list` payload (threads loaded in this engine process). */
   loadedThreads?: string[];
   /** Make `thread/resume` fail the way a competing writer does. */
@@ -61,6 +63,7 @@ async function writeFakeCodex(
     "const listItems = " + JSON.stringify(options.items ?? []) + ";",
     "const itemPages = " + JSON.stringify(options.itemsPages ?? []) + ";",
     "const listedThreads = " + JSON.stringify(options.threads ?? []) + ";",
+    "const readThreads = " + JSON.stringify(options.readThreads ?? {}) + ";",
     "const loadedThreads = " + JSON.stringify(options.loadedThreads ?? []) + ";",
     "const resumeConflict = " + JSON.stringify(options.resumeConflict === true) + ";",
     "const send = (m) => process.stdout.write(JSON.stringify(m) + '\\n');",
@@ -118,6 +121,8 @@ async function writeFakeCodex(
     "      const page = itemPages.find((p, i) => (i === 0 ? requested === null : requested === itemPages[i - 1].nextCursor));",
     "      send({ jsonrpc: '2.0', id: msg.id, result: { data: page?.data ?? [], nextCursor: page?.nextCursor ?? null } });",
     "    }",
+    "  } else if (msg.method === 'thread/read') {",
+    "    send({ jsonrpc: '2.0', id: msg.id, result: readThreads[msg.params.threadId] ?? {} });",
     "  } else if (msg.method === 'thread/resume') {",
     "    if (resumeConflict) {",
     "      send({ jsonrpc: '2.0', id: msg.id, error: { code: -32600, message: 'thread ' + msg.params.threadId + ' already has an active writer' } });",
@@ -441,6 +446,59 @@ describe("CodexSessionManager", () => {
       }
       expect(seen).toContain("rate:codex");
       expect(seen).toContain("approval:rm -rf /");
+    } finally {
+      await manager.close();
+    }
+  });
+
+  test("the pending placeholder never becomes the engine's thread name", async () => {
+    const root = await createRoot();
+    const logPath = join(root, "calls.log");
+    const bin = await writeFakeCodex(root, [], {
+      logPath,
+      readThreads: {
+        "thread-1": { thread: { id: "thread-1", name: null, preview: "launch and navigate ruut.chat" } },
+      },
+    });
+    const manager = new CodexSessionManager({ bin, cwd: root, interpreter: process.execPath });
+    const updatedTitles: string[] = [];
+    manager.on((event) => {
+      if (event.type === "session.updated") updatedTitles.push(event.session.title);
+    });
+    try {
+      const session = await manager.createSession({ title: "New Sofia task", workspaceId: "ws_1" });
+      // Writing the placeholder as the thread name would shadow the title the
+      // engine derives from the first user message for every client.
+      expect(readCallLog(logPath)).not.toContain("thread/name/set");
+      expect(session.title).toBe("");
+
+      await manager.prompt(session.id, "launch and navigate ruut.chat");
+      const deadline = Date.now() + 2000;
+      while (Date.now() < deadline && !manager.getSession(session.id)?.title) {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      expect(manager.getSession(session.id)?.title).toBe("launch and navigate ruut.chat");
+      expect(updatedTitles).toContain("launch and navigate ruut.chat");
+    } finally {
+      await manager.close();
+    }
+  });
+
+  test("a stored placeholder name does not mask the generated title", async () => {
+    const root = await createRoot();
+    const bin = await writeFakeCodex(root, [], {
+      threads: [
+        { id: "thread-pending", name: "New Sofia task", preview: "review the release driver", cwd: root },
+        { id: "thread-renamed", name: "My rename", preview: "first message", cwd: root },
+      ],
+    });
+    const manager = new CodexSessionManager({ bin, cwd: root, interpreter: process.execPath });
+    try {
+      await manager.start();
+      expect(manager.listSessions().map((session) => [session.threadId, session.title])).toEqual([
+        ["thread-pending", "review the release driver"],
+        ["thread-renamed", "My rename"],
+      ]);
     } finally {
       await manager.close();
     }

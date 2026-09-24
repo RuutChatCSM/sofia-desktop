@@ -58,10 +58,12 @@ test("Sofia preserves resume errors, unlocks failed turns and resumes again afte
     await expect(f.manager.prompt("codex-reject-turn", "Retry")).rejects.toThrow("turn rejected by provider");
     expect(f.manager.getSession("codex-reject-turn")?.status).toBe("error");
     await f.manager.getSessionItems("codex-saved");
+    // Reading a transcript is read-only: it must not take the writer lock.
+    expect((await f.requests()).filter((r) => r.method === "thread/resume" && r.params.threadId === "saved")).toHaveLength(0);
     await f.manager.close();
     await f.manager.prompt("codex-saved", "After restart");
     expect(f.manager.getSession("codex-saved")?.status).toBe("running");
-    expect((await f.requests()).filter((r) => r.method === "thread/resume" && r.params.threadId === "saved")).toHaveLength(2);
+    expect((await f.requests()).filter((r) => r.method === "thread/resume" && r.params.threadId === "saved")).toHaveLength(1);
   } finally { await f.close(); }
 });
 

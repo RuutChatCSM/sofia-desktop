@@ -22,6 +22,7 @@ import { downloadTextAsFile } from "@/app/lib/download";
 import { canCreateWorkspaces } from "@/app/lib/workspace-creation-policy";
 import { createClient, unwrap } from "@/app/lib/engine";
 import { abortSessionSafe, forkSession, listCommands, revertSession, setSessionArchived, shellInSession, unrevertSession } from "@/app/lib/engine-session";
+import { PENDING_SESSION_TITLE } from "@/app/lib/session-title";
 import { useSessionManagementStore as sessionManagementStore } from "@/react-app/domains/session/sidebar/session-management-store";
 import {
   buildSofiaWorkspaceBaseUrl,
@@ -2045,7 +2046,7 @@ export function SessionRoute() {
           workspaceId: targetEndpoint.workspaceId,
         });
         const result = await targetClient.createSession({
-          title: "New Sofia task",
+          title: PENDING_SESSION_TITLE,
           cwd: workspace.path?.trim() || undefined,
           model: selectedProviderIsConfigured ? preferredModel?.modelID : codexEngine.config?.model ?? undefined,
           providerId: selectedProviderIsConfigured ? preferredModel?.providerID : codexEngine.config?.defaultProviderId ?? undefined,

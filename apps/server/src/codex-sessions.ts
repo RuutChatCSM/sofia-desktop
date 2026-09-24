@@ -166,6 +166,24 @@ export type CodexSession = {
   providerId?: string;
 };
 
+/** The desktop stamps a brand-new task with this title before the engine has
+ * seen a turn. It must never mask the title the engine derives from the first
+ * user message, and it must not be written to the engine's thread name where
+ * every other client would then show it. */
+const PENDING_TASK_TITLE = "New Sofia task";
+
+function isPendingTaskTitle(value: string | null | undefined): boolean {
+  return (value?.trim() ?? "") === PENDING_TASK_TITLE;
+}
+
+/** The engine exposes its own generated title only as `preview`, so prefer a
+ * real user/engine name and fall back to the first user message. */
+function threadDisplayTitle(thread: { name?: unknown; preview?: unknown }): string {
+  const name = typeof thread.name === "string" ? thread.name.trim() : "";
+  if (name && !isPendingTaskTitle(name)) return name;
+  return typeof thread.preview === "string" ? thread.preview.trim() : "";
+}
+
 export type CodexEvent =
   | { type: "session.created"; session: CodexSession }
   | { type: "session.updated"; session: CodexSession }
@@ -697,9 +715,7 @@ export class CodexSessionManager {
         const session: CodexSession = {
           id: sessionId,
           threadId,
-          title: thread.name?.trim() || (typeof thread.preview === "string" && thread.preview.trim()
-            ? thread.preview.trim()
-            : "Sofia task"),
+          title: threadDisplayTitle(thread) || "Sofia task",
           cwd: thread.cwd ?? this.handle.cwd,
           workspaceId: this.workspaceId ?? "local",
           created,
@@ -811,10 +827,11 @@ export class CodexSessionManager {
         cwd: input.cwd ?? this.handle.cwd,
       }),
     });
+    const requestedTitle = input.title.trim();
     const session: CodexSession = {
       id: codexSessionId(threadId),
       threadId,
-      title: input.title,
+      title: isPendingTaskTitle(requestedTitle) ? "" : requestedTitle,
       workspaceId: input.workspaceId,
       created: new Date().toISOString(),
       turnId: null,
@@ -824,7 +841,11 @@ export class CodexSessionManager {
       ...(input.providerId ? { providerId: input.providerId } : {}),
     };
     this.loadedThreads.add(threadId);
-    await this.engine.renameThread(threadId, input.title);
+    // Only a real title is worth writing: a placeholder name would shadow the
+    // title the engine derives from the first user message.
+    if (requestedTitle && !isPendingTaskTitle(requestedTitle)) {
+      await this.engine.renameThread(threadId, requestedTitle);
+    }
     this.sessions.set(session.id, session);
     this.emit({ type: "session.created", session });
     if (input.prompt) {
@@ -841,13 +862,13 @@ export class CodexSessionManager {
     if (!session && isCodexSessionId(sessionId)) {
       const threadId = sessionId.slice("codex-".length);
       try {
-        const raw = await engine.readThread(threadId) as { thread?: { id?: string; preview?: string; cwd?: string }; id?: string; preview?: string; cwd?: string };
+        const raw = await engine.readThread(threadId) as { thread?: { id?: string; name?: string; preview?: string; cwd?: string }; id?: string; preview?: string; cwd?: string };
         const thread = raw.thread ?? raw;
         if (thread.id === threadId && typeof thread.cwd === "string" && resolve(thread.cwd) === resolve(this.handle.cwd)) {
           session = {
             id: sessionId,
             threadId,
-            title: typeof thread.preview === "string" && thread.preview.trim() ? thread.preview.trim() : "Sofia task",
+            title: threadDisplayTitle(thread) || "Sofia task",
             workspaceId: this.workspaceId ?? "local",
             created: new Date().toISOString(),
             turnId: null,
@@ -1099,6 +1120,26 @@ export class CodexSessionManager {
     this.emit({ type: "session.updated", session: { ...session } });
   }
 
+  /**
+   * The engine derives the first title from the user's message but only exposes
+   * it as `preview`, so a task created with a placeholder would keep it forever.
+   * Adopt the generated title once the turn that produced it has finished.
+   */
+  private async adoptGeneratedTitle(session: CodexSession, threadId: string): Promise<void> {
+    const engine = this.engine;
+    const current = session.title.trim();
+    if (!engine || (current && !isPendingTaskTitle(current))) return;
+    try {
+      const raw = await engine.readThread(threadId) as { thread?: { name?: unknown; preview?: unknown } };
+      const generated = threadDisplayTitle(raw.thread ?? {});
+      if (!generated || generated === current || this.sessions.get(session.id) !== session) return;
+      session.title = generated;
+      this.emit({ type: "session.updated", session: { ...session } });
+    } catch {
+      // Best-effort: the placeholder stays until the next read instead.
+    }
+  }
+
   private handleTurnCompleted(params: unknown): void {
     const { threadId, thread_id, turn, error } = params as {
       threadId?: string;
@@ -1117,6 +1158,7 @@ export class CodexSessionManager {
     // Idle now: let the engine unload the thread (and drop its writer lock)
     // instead of holding the session exclusively until this server exits.
     this.releaseThread(tid);
+    void this.adoptGeneratedTitle(session, tid);
     const turnError = turn?.error as { message?: string } | undefined;
     const raw = (turnError?.message ?? (typeof error === "string" ? error : (error as { message?: string } | undefined)?.message))?.trim();
     if (raw || session.status === "error") {
