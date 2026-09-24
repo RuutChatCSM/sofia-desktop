@@ -26,9 +26,14 @@ const MASTER_SIZE = 1024;
 // grid while the Linux, Windows and web outputs stay full bleed.
 const MACOS_TILE_BODY_RATIO = 824 / MASTER_SIZE;
 const MACOS_TILE_CORNER_RADIUS_RATIO = 185.4 / 824;
-// Launcher tile background, and how much of the tile height the mark fills.
+// Launcher tile background, and how much of the tile height the mark's full
+// extent fills. The mark carries a soft halo that is barely distinguishable
+// from the tile, so its measured box is larger than the figure inside it: at 1
+// the figure reads at about 72% of the tile with a 10% margin, and only the
+// halo meets the tile edge. Sizing by the box alone leaves the figure looking
+// undersized.
 const TILE_BACKGROUND = "#f5f1e8";
-const TILE_GLYPH_HEIGHT_RATIO = 0.7;
+const TILE_GLYPH_HEIGHT_RATIO = 1;
 
 function loadMaster(name) {
   const image = nativeImage.createFromPath(path.join(icons, name));
