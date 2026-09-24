@@ -18,15 +18,66 @@
 // Protocol: newline-delimited JSON-RPC 2.0 on stdio (MCP stdio transport).
 import { createInterface } from "node:readline";
 import { createRequire } from "node:module";
+import { readFileSync } from "node:fs";
 import { AsyncLocalStorage } from "node:async_hooks";
+import path from "node:path";
 import vm from "node:vm";
 
-const BROKER_URL = process.env.SOFIA_BROWSER_CDP_URL?.trim() || "";
-if (!BROKER_URL) {
-  console.error("[sofia-repl] SOFIA_BROWSER_CDP_URL not set");
-  process.exit(1);
+// The engine records the broker URL in `config.toml` when it prepares a session.
+// That port is ephemeral and every build on the machine rewrites the same shared
+// config, so the URL we are started with can outlive the app that wrote it. The
+// desktop app also publishes the live endpoint to a discovery file beside the
+// engine home (see apps/desktop/electron/cdp-broker-discovery.mjs); prefer the
+// URL that actually answers so a stale registration self-heals.
+const ENV_BROKER_URL = process.env.SOFIA_BROWSER_CDP_URL?.trim() || "";
+const DISCOVERY_PATH = path.join(
+  process.env.SOFIA_HOME?.trim() || path.join(process.env.HOME?.trim() || ".", ".sofia"),
+  "sofia-cdp-broker.json",
+);
+
+function discoveryBrokerUrl() {
+  try {
+    const parsed = JSON.parse(readFileSync(DISCOVERY_PATH, "utf8"));
+    return typeof parsed?.url === "string" ? parsed.url.trim() : "";
+  } catch {
+    return "";
+  }
 }
-const BROKER_WS = BROKER_URL.replace(/^http/, "ws").replace(/\/+$/, "");
+
+function brokerCandidates() {
+  return [ENV_BROKER_URL, discoveryBrokerUrl()]
+    .filter((url, index, all) => url && all.indexOf(url) === index);
+}
+
+async function probeBroker(url) {
+  try {
+    const res = await fetch(`${url.replace(/\/+$/, "")}/json/version`, { signal: AbortSignal.timeout(2500) });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+let resolvedBrokerUrl = "";
+async function brokerUrl() {
+  if (resolvedBrokerUrl && await probeBroker(resolvedBrokerUrl)) return resolvedBrokerUrl;
+  for (const candidate of brokerCandidates()) {
+    if (await probeBroker(candidate)) {
+      if (candidate !== resolvedBrokerUrl) console.error(`[sofia-repl] browser bridge ${candidate}`);
+      resolvedBrokerUrl = candidate;
+      return candidate;
+    }
+  }
+  resolvedBrokerUrl = "";
+  const tried = brokerCandidates();
+  throw new Error(tried.length
+    ? `in-app browser bridge is not answering (tried ${tried.join(", ")}). The Sofia App window that owns it may have restarted; tell the user instead of driving CDP by hand.`
+    : "in-app browser bridge is not configured: SOFIA_BROWSER_CDP_URL is unset and no broker discovery file was found.");
+}
+
+function brokerWsUrl(base) {
+  return base.replace(/^http/, "ws").replace(/\/+$/, "");
+}
 
 const rl = createInterface({ input: process.stdin });
 let nextId = 1;
@@ -41,7 +92,7 @@ const bPending = new Map();
 async function browserWsUrl() {
   // The broker proxies /json/version and rewrites its webSocketDebuggerUrl to
   // point at the broker, so we discover the browser WS id dynamically.
-  const res = await fetch(BROKER_URL.replace(/\/+$/, "") + "/json/version", { signal: AbortSignal.timeout(2500) });
+  const res = await fetch((await brokerUrl()).replace(/\/+$/, "") + "/json/version", { signal: AbortSignal.timeout(2500) });
   const v = await res.json();
   if (v?.webSocketDebuggerUrl) return v.webSocketDebuggerUrl;
   throw new Error("could not discover browser websocket from /json/version");
@@ -156,11 +207,11 @@ const SAFE_LABEL = `function(e){const tag=(e.tagName||'').toLowerCase();const ty
 const RESOLVE = `function(t){t=t||{};const safeLabel=${SAFE_LABEL};const coll=()=>Array.from(document.querySelectorAll('a,button,input,select,textarea,label,[role],[aria-label],[data-testid]')).filter(e=>{const vis=e.getClientRects().length>0&&getComputedStyle(e).visibility!=='hidden';const l=safeLabel(e);return vis&&l&&l.trim();});const c=[];let e;if(t.selector){e=document.querySelector(t.selector);if(e)c.push(e);}if(t.index!=null){c.push(coll()[t.index]);}const txt=(t.text||'').trim().toLowerCase();if(txt){const m=coll().find(x=>safeLabel(x).trim().toLowerCase().includes(txt));if(m)c.push(m);}if(t.role){const r=t.role.toLowerCase();const m=coll().find(x=>(x.getAttribute('role')||x.tagName.toLowerCase())===r);if(m)c.push(m);}if(t.placeholder){e=document.querySelector('input[placeholder="'+t.placeholder+'"],textarea[placeholder="'+t.placeholder+'"]');if(e)c.push(e);}if(t.testid){e=document.querySelector('[data-testid="'+t.testid+'"]');if(e)c.push(e);}if(t.label){const m=coll().find(x=>(x.textContent||'').trim()===t.label);if(m)c.push(m);}return c.find(Boolean)||null;}`;
 const runAct = (target, action) => `(() => { const e=(${RESOLVE})(${JSON.stringify(target)}); if(!e) return {ok:false,error:'not found'}; try{e.scrollIntoView({block:'center'});}catch{} e.focus(); ${action} })()`;
 
+// Throws when the bridge is unreachable: an empty list would read as "no tabs
+// are open" and hide a dead registration from the agent.
 async function jsonList() {
-  try {
-    const res = await fetch(BROKER_URL.replace(/\/+$/, "") + "/json/list", { signal: AbortSignal.timeout(2500) });
-    const t = await res.json(); return Array.isArray(t) ? t : [];
-  } catch { return []; }
+  const res = await fetch((await brokerUrl()).replace(/\/+$/, "") + "/json/list", { signal: AbortSignal.timeout(2500) });
+  const t = await res.json(); return Array.isArray(t) ? t : [];
 }
 
 async function waitForLoad(send, timeoutMs = 12000) {
@@ -240,8 +291,9 @@ function makeTab(tabEntry) {
     if (!page) {
       // Re-resolve the tab's page WS (it may have moved after the marker nav).
       const list = await jsonList();
-      const entry = list.find((t) => t.id === pageTargetId) || { webSocketDebuggerUrl: `${BROKER_WS}/devtools/page/${pageTargetId}` };
-      const p = connectPage(entry.webSocketDebuggerUrl ? entry.webSocketDebuggerUrl.replace(/^ws/, BROKER_WS.startsWith("wss") ? "wss" : "ws") : `${BROKER_WS}/devtools/page/${pageTargetId}`);
+      const wsBase = brokerWsUrl(await brokerUrl());
+      const entry = list.find((t) => t.id === pageTargetId) || { webSocketDebuggerUrl: `${wsBase}/devtools/page/${pageTargetId}` };
+      const p = connectPage(entry.webSocketDebuggerUrl ? entry.webSocketDebuggerUrl.replace(/^ws/, wsBase.startsWith("wss") ? "wss" : "ws") : `${wsBase}/devtools/page/${pageTargetId}`);
       await p.ready;
       page = p;
       if (!stealthApplied) {
@@ -376,7 +428,11 @@ globalThis.agent = {
     list: async () => ["iab"],
   },
 };
-globalThis.setupBrowserRuntime = async function setupBrowserRuntime() { await waitBrowser().catch(() => {}); return globalThis.agent; };
+// Resolving the endpoint here is what surfaces a dead bridge to the agent:
+// silently returning the runtime left every later call failing far from the
+// cause. Only the HTTP probe is required — the browser-level socket that
+// `tabs.open()` needs is established on demand.
+globalThis.setupBrowserRuntime = async function setupBrowserRuntime() { await brokerUrl(); return globalThis.agent; };
 
 function browserDoc() {
   return `# In-App Browser
@@ -402,6 +458,7 @@ Reliable browser protocol:
 - Batch actions only when they are independent and the required state is already known.
 - Screenshot ONLY when the a11y tree is ambiguous; otherwise read the tree.
 - Re-use the open tab; don't open new tabs repeatedly.
+- If a call reports "in-app browser bridge is not answering", the app window that owns the bridge has probably restarted. Report that to the user; never reconnect to Chromium over raw CDP by hand.
 - CAPTCHA? Call tab.botDetection.check() once. If .captcha is true, STOP, report, hand off — never loop.`;
 }
 function tabDoc() {
@@ -452,6 +509,7 @@ function jsTool() {
     description: `Drive the visible, signed-in Sofia App browser by running JavaScript. Initialize with setupBrowserRuntime(), read browser.documentation() before first use, inspect the latest page state with tab.see() or tab.ax.get(), then act by index/text/role. Re-inspect after navigation or state-changing actions before deciding what to do next. Pattern:
 const browser = (await setupBrowserRuntime()).browsers.get("iab"); await browser.documentation(); const tab = await browser.tabs.open("url"); const view = await tab.see(); await tab.click({index:view.elements[0].index}); await tab.see();
 Use tab.getByText/getByRole/fill/select/check/waitFor; use screenshots when the semantic tree is ambiguous.
+If a call reports "in-app browser bridge is not answering", the app window that owns the bridge has restarted: say so and stop, never reconnect over raw CDP by hand.
 CAPTCHA: if tab.botDetection.check().captcha is true, STOP — call tab.botDetection.report() and hand control to the user. Never loop or retry a captcha.`,
     inputSchema: { type: "object", properties: { code: { type: "string", description: "JavaScript to run (async allowed)" } }, required: ["code"] },
   };

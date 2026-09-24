@@ -163,6 +163,7 @@ export function codexRuntimeSkill(name: "computer-use" | "browser"): string {
       "- If `check_permissions` reports missing Accessibility or Screen Recording, surface the permission request to the user instead of retrying silently.",
       "- Prefer `launch_app`/`open_url` for opening things over raw shortcuts.",
       "- The `cua_*` tools are compatibility aliases for screenshot-first loops; prefer the semantic `snapshot`/`click`/... surface for new work.",
+      "- These tools are registered for every turn. If they are missing from your tool list, computer use is not available on this runtime: say so and stop instead of working around it.",
       "",
     ].join("\n");
   }
@@ -201,6 +202,7 @@ export function codexRuntimeSkill(name: "computer-use" | "browser"): string {
     "3. Always `tab.snapshot()` before acting. After an action changes the page, take a fresh snapshot before choosing the next action.",
     "4. Prefer `tab.click({index})`/`tab.fill(target, value)`/`tab.type({text})`; use coordinates only when the semantic snapshot cannot identify the target.",
     "5. `tab.cdp.send(method, params)` is raw CDP on the tab if you need Page/Runtime/Network directly.",
+    "6. `tab.evaluate(script)` runs a JavaScript **string** in the page and returns its value, awaiting promises. It takes a string, not a function and not an `{expression}` object: `await tab.evaluate(\"document.body.innerText\")`. Prefer `tab.snapshot()`/`tab.see()` to read page state and `tab.cdp.send` for protocol work; reach for `evaluate` only when neither can express the query.",
     "",
     "## Rules",
     "",
@@ -209,18 +211,39 @@ export function codexRuntimeSkill(name: "computer-use" | "browser"): string {
     "- Keep discovery read-only: do not copy cookies or credentials.",
     "- Prefer `tab.goto(url)` to navigate instead of opening new tabs repeatedly.",
     "- Do not assume an action succeeded. Verify the resulting page state before continuing.",
+    "- If a call reports `in-app browser bridge is not answering`, the app window that owns the bridge has restarted. Say so and stop; never reconnect to Chromium over raw CDP by hand.",
+    "- `mcp__node_repl__js` is registered for every turn. If it is missing from your tool list the in-app browser bridge failed to start: say so and stop. Never substitute a separate browser process (Chrome, a browser harness) for the in-app browser.",
     "",
   ].join("\n");
 }
 
-/** Write the runtime SKILL.md docs into `CODEX_HOME/skills/`. Returns the skill
- * directories written. Best-effort: never throws (caller ignores failures). */
-export async function codexRuntimeSkillsFor(codexHome: string): Promise<string[]> {
+/** The MCP server each runtime skill documents. A skill is only written when
+ * its server is registered, so the agent never reads docs for tools it cannot
+ * call. */
+const runtimeSkillServers: Record<"browser" | "computer-use", string> = {
+  browser: "node_repl",
+  "computer-use": "computer-use",
+};
+
+/** Write the runtime SKILL.md docs into `CODEX_HOME/skills/`, one per registered
+ * MCP server. Returns the skill directories written. Best-effort: never throws
+ * (caller ignores failures). */
+export async function codexRuntimeSkillsFor(
+  codexHome: string,
+  servers: CodexRuntimeMcpServer[],
+): Promise<string[]> {
   const written: string[] = [];
+  const registered = new Set(servers.filter((server) => server.enabled !== false).map((server) => server.name));
   for (const name of ["computer-use", "browser"] as const) {
-    const { mkdir, writeFile } = await import("node:fs/promises");
     const dir = join(codexHome, "skills", name);
     try {
+      const { mkdir, rm, writeFile } = await import("node:fs/promises");
+      if (!registered.has(runtimeSkillServers[name])) {
+        // A skill left behind by an earlier run still teaches the agent tools
+        // it cannot call, so docs for unregistered servers are removed too.
+        await rm(dir, { recursive: true, force: true });
+        continue;
+      }
       await mkdir(dir, { recursive: true });
       await writeFile(join(dir, "SKILL.md"), codexRuntimeSkill(name), "utf8");
       written.push(dir);
@@ -262,6 +285,31 @@ function tomlKey(value: string): string {
 
 function tomlString(value: string): string {
   return JSON.stringify(value);
+}
+
+/** The model-visible namespace the engine derives for an MCP server's tools.
+ * It sanitizes every non-alphanumeric to `_` and prepends `mcp__`, so the
+ * `computer-use` server's tools live under `mcp__computer_use`. */
+export function codexRuntimeMcpToolNamespace(serverName: string): string {
+  return `mcp__${serverName.replace(/[^A-Za-z0-9_]/g, "_")}`;
+}
+
+/**
+ * Keep the runtime surfaces directly model-visible.
+ *
+ * Whenever the model supports `tool_search`, the engine DEFERS MCP tools: the
+ * server is still registered, connected and callable, but its tools are absent
+ * from the agent's tool list until it searches for them. The SKILL.md docs below
+ * name their tools directly (`mcp__node_repl__js`), so a deferred server reads to
+ * the agent as "this capability does not exist" and it improvises outside the app
+ * (e.g. launching a separate Chrome instead of the in-app browser).
+ * `direct_only_tool_namespaces` is the engine's supported knob for pinning a
+ * namespace into the tool list instead.
+ */
+export function codexDirectToolNamespacesToml(servers: CodexRuntimeMcpServer[]): string {
+  if (servers.length === 0) return "";
+  const namespaces = servers.map((server) => codexRuntimeMcpToolNamespace(server.name));
+  return `[features.code_mode]\ndirect_only_tool_namespaces = [${namespaces.map((namespace) => tomlString(namespace)).join(", ")}]\n`;
 }
 
 export function codexRuntimeSkillsDir(codexHome: string): string {

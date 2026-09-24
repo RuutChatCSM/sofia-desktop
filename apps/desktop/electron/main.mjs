@@ -24,6 +24,10 @@ import { registerMigrationIpc } from "./migration.mjs";
 import { createRuntimeManager, createSystemCaCertificateVerifyProc } from "./runtime.mjs";
 import { registerUpdaterIpc } from "./updater.mjs";
 import {
+  clearCdpBrokerDiscovery,
+  writeCdpBrokerDiscovery,
+} from "./cdp-broker-discovery.mjs";
+import {
   checkComputerUsePermissions,
   getComputerUseMcpCommand,
   listRunningApps,
@@ -1053,11 +1057,28 @@ if (remoteDebugPort > 0) {
       createTarget: (params) => cdpBrokerCreateTarget?.(params) ?? Promise.reject(new Error("browser panel not ready")),
     });
     cdpBrokerBaseUrl = broker.baseUrl;
-    closeCdpBroker = broker.close;
+    // Clear the published endpoint on quit: the port is ephemeral, so a file
+    // left behind would point the next launch's harness at a dead broker.
+    closeCdpBroker = async () => {
+      await broker.close();
+      await clearCdpBrokerDiscovery({ sofiaHome: process.env.SOFIA_HOME });
+    };
     // Expose the broker endpoint to the embedded server so it can register the
     // chrome-devtools MCP server pointing at it (the browser surface for both
     // the engine and future codex runtimes).
     process.env.SOFIA_ELECTRON_AGENT_CDP_BASE_URL = broker.baseUrl;
+    // The engine config records this URL too, but that config is rewritten per
+    // request and shared by every build on the machine, so a stale copy can
+    // outlive the app that wrote it. The discovery file is what the browser
+    // harness re-reads when the URL it was started with no longer answers.
+    await writeCdpBrokerDiscovery({
+      sofiaHome: process.env.SOFIA_HOME,
+      url: broker.baseUrl,
+      appIdentifier: app.getName(),
+      pid: process.pid,
+    }).catch((error) => {
+      console.warn("[sofia] could not publish the browser bridge endpoint", error);
+    });
     if (isDevMode && !app.isPackaged) {
       console.log(`[sofia] dev cdp-broker=${broker.baseUrl} (upstream http://127.0.0.1:${remoteDebugPort})`);
     }

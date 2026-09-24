@@ -11,6 +11,7 @@ import { readCodexAuthStore } from "./codex-auth-store.js";
 import { codexConfigTomlFromRuntime } from "./codex-config.js";
 import { codexConfigTomlFromEngineConfig, readCodexEngineConfig } from "./codex-providers.js";
 import {
+  codexDirectToolNamespacesToml,
   codexMcpServersToml,
   codexRuntimeSkillsFor,
   defaultCodexRuntimeMcpServers,
@@ -154,6 +155,11 @@ export async function prepareCodexConfigToml(
     const runtimeServers = defaultCodexRuntimeMcpServers();
     const runtimeToml = codexMcpServersToml(runtimeServers);
     if (runtimeToml) toml += `${toml ? "\n" : ""}${runtimeToml}`;
+    // The engine defers MCP tools whenever the model supports `tool_search`, so
+    // a registered server can still be missing from the agent's tool list. Pin
+    // the runtime surfaces so the tools their SKILL.md docs name are callable.
+    const directToolsToml = codexDirectToolNamespacesToml(runtimeServers);
+    if (directToolsToml) toml += `${toml ? "\n" : ""}${directToolsToml}`;
     // Codex's sandbox defaults to read-only, so a project is only editable when
     // we opt in. The access mode (the composer toggle) maps to codex's
     // `sandbox_mode`: "ask"/"approve" write within the workspace (with network),
@@ -168,7 +174,7 @@ export async function prepareCodexConfigToml(
         : `sandbox_mode = ${JSON.stringify(sandboxMode)}\n`;
     if (sandboxBlock) toml = insertTomlTopLevelBlock(toml, sandboxBlock);
     await writeEngineFile(join(codexHome, "config.toml"), toml);
-    await codexRuntimeSkillsFor(codexHome);
+    await codexRuntimeSkillsFor(codexHome, runtimeServers);
   } catch (error) {
     throw new Error("Unable to prepare Sofia engine configuration", { cause: error });
   }
