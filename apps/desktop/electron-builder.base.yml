@@ -51,7 +51,7 @@ mac:
     - from: resources/helpers
       to: helpers
       filter:
-        - "Sofia Computer Use.app/**"
+        - "Sofia App Computer Use.app/**"
   target:
     - dmg
     - zip

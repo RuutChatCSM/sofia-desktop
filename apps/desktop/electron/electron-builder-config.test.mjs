@@ -11,6 +11,14 @@ async function readConfig(name) {
   return YAML.parse(await readFile(path.resolve(dirname, "..", name), "utf8"));
 }
 
+async function readSource(name) {
+  return readFile(path.resolve(dirname, "..", name), "utf8");
+}
+
+function escapeForRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 describe("Electron distribution configs", () => {
   it("uses a stable Linux desktop identity and ships integration icons", async () => {
     const packageMetadata = JSON.parse(
@@ -68,5 +76,29 @@ describe("Electron distribution configs", () => {
       config.artifactName,
       "sofia-cloud-${os}-${arch}-${version}.${ext}",
     );
+  });
+  it("ships the Computer Use helper under the one name the runtime, signer and packager agree on", async () => {
+    const config = await readConfig("electron-builder.base.yml");
+    const [helpersResource] = config.mac.extraResources.filter((entry) => entry.to === "helpers");
+    const declaration = /const computerUseHelperAppName = "([^"]+)"/.exec(
+      await readSource("scripts/electron-after-pack.cjs"),
+    );
+    assert.ok(declaration, "scripts/electron-after-pack.cjs must declare computerUseHelperAppName");
+    const helperAppName = declaration[1];
+    assert.deepEqual(helpersResource, {
+      from: "resources/helpers",
+      to: "helpers",
+      filter: [`${helperAppName}/**`],
+    });
+    const quotedName = new RegExp(`["'\`]${escapeForRegExp(helperAppName)}["'\`]`);
+    for (const source of [
+      "scripts/electron-after-pack.cjs",
+      "scripts/electron-after-sign.cjs",
+      "scripts/prepare-computer-use-helper.mjs",
+      "electron/computer-use.mjs",
+      "../../packages/handsfree/test/e2e/run.mjs",
+    ]) {
+      assert.match(await readSource(source), quotedName, `${source} must reference ${helperAppName}`);
+    }
   });
 });
