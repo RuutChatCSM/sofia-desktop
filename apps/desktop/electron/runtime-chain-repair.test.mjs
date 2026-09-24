@@ -267,23 +267,32 @@ test("chain repair total timeout can be shortened by env", async () => {
   const logs = [];
   const startTime = Date.now();
 
-  const env = await resolveSystemCaEnv({
-    tlsModule: { getCACertificates: () => [] },
-    userDataDir,
-    parentEnv: { SOFIA_CHAIN_REPAIR_TIMEOUT_MS: "1500" },
-    logInfo(message) {
-      logs.push(String(message));
-    },
-    loadPlatformCertificates: async () => [],
-    chainRepair: {
-      origins: ["https://localhost:443"],
-      fetchImpl: async () => {
-        throw new Error("timed-out chain repair should not fetch");
+  // The repair deadline is deliberately unref'd so it can never hold the app open, and the stub
+  // socket holds no handle the way a really-pending socket would. Keep one ref'd timer alive for
+  // the call so the deadline, not the drained event loop, is what ends the race.
+  const keepAlive = setTimeout(() => {}, 10_000);
+  let env;
+  try {
+    env = await resolveSystemCaEnv({
+      tlsModule: { getCACertificates: () => [] },
+      userDataDir,
+      parentEnv: { SOFIA_CHAIN_REPAIR_TIMEOUT_MS: "1500" },
+      logInfo(message) {
+        logs.push(String(message));
       },
-      tlsConnectImpl: hangingSocket,
-      rootsProvider: () => [rootPem],
-    },
-  });
+      loadPlatformCertificates: async () => [],
+      chainRepair: {
+        origins: ["https://localhost:443"],
+        fetchImpl: async () => {
+          throw new Error("timed-out chain repair should not fetch");
+        },
+        tlsConnectImpl: hangingSocket,
+        rootsProvider: () => [rootPem],
+      },
+    });
+  } finally {
+    clearTimeout(keepAlive);
+  }
 
   assert.deepEqual(env, {});
   assert.ok(Date.now() - startTime < 5000);

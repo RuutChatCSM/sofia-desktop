@@ -38,6 +38,7 @@
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
     "better-sqlite3": "^13.0.2",
+    "chrome-devtools-mcp": "^1.7.0",
     "drizzle-orm": "^0.45.2",
     "electron-updater": "^6.3.9",
     "jsonc-parser": "^3.2.1",
