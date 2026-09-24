@@ -211,7 +211,11 @@ test("buildNukeManifest includes Windows path shapes", () => {
   assert.ok(manifest.deletePaths.includes("C:\\Users\\Alice\\AppData\\Roaming\\engine"));
   assert.ok(manifest.deletePaths.includes("C:\\Users\\Alice\\AppData\\Roaming\\engine"));
   assert.ok(manifest.deletePaths.includes("C:\\Users\\Alice\\.cache\\engine"));
-  assert.ok(manifest.deletePaths.includes("C:\\Users\\Alice\\.config\\sofia\\desktop-bootstrap.json"));
+  assert.ok(manifest.deletePaths.includes("C:\\Users\\Alice\\.config\\openwork\\desktop-bootstrap.json"));
+  assert.ok(manifest.deletePaths.includes("C:\\Users\\Alice\\AppData\\Roaming\\openwork"));
+  assert.ok(manifest.deletePaths.includes("C:\\Users\\Alice\\AppData\\Roaming\\openwork\\server.json"));
+  assert.ok(manifest.deletePaths.includes("C:\\Users\\Alice\\AppData\\Roaming\\com.differentai.sofia\\openwork-workspaces.json"));
+  assert.ok(manifest.deletePaths.includes("C:\\Users\\Alice\\AppData\\Roaming\\com.differentai.sofia\\openwork-server-tokens.json"));
 });
 
 test("buildNukeManifest honors SOFIA_ELECTRON_USERDATA override", () => {

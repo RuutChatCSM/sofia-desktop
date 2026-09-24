@@ -49,9 +49,18 @@ const ELECTRON_UPDATER_FEEDS = Object.freeze({
   alpha: SOFIA_RELEASE.alpha,
 });
 
+/**
+ * The rolling alpha release only publishes macOS arm64 assets, so an Intel
+ * build that selected it would find no matching file and silently stop
+ * receiving updates. Keep alpha limited to the platform it is built for.
+ */
+export function supportsAlphaChannel({ platform = process.platform, arch = process.arch } = {}) {
+  return platform === "darwin" && arch === "arm64";
+}
+
 function normalizeElectronUpdaterChannel(value, manifestChannel = "latest") {
   if (manifestChannel !== "latest") return "stable";
-  if (value === "alpha" && process.platform === "darwin") return "alpha";
+  if (value === "alpha" && supportsAlphaChannel()) return "alpha";
   return "stable";
 }
 

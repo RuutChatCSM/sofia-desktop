@@ -44,7 +44,8 @@ async function withIsolatedBootstrapStore(callback) {
       store,
       createStore,
       canonicalPath: path.join(xdg, "sofia", "desktop-bootstrap.json"),
-      legacyPath: path.join(home, ".config", "sofia", "desktop-bootstrap.json"),
+      // Pre-rebrand (OpenWork) installs kept the bootstrap config here.
+      legacyPath: path.join(home, ".config", "openwork", "desktop-bootstrap.json"),
       root,
       userDataPath: path.join(root, "userData"),
     });
@@ -603,5 +604,128 @@ test("clearDesktopBootstrapConfig removes bootstrap files without deleting works
     assert.equal(config.baseUrl, "https://default.example.com");
     assert.equal(config.requireSignin, false);
     assert.equal(config.fromFile, false);
+  });
+});
+
+test("imports pre-rebrand workspace state and renames its openwork keys", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "sofia-workspace-store-"));
+  const userData = path.join(root, "userData");
+  const workspace = path.join(root, "workspace");
+  await mkdir(userData, { recursive: true });
+  await mkdir(workspace, { recursive: true });
+  const workspaceReal = await realpath(workspace);
+
+  await writeFile(
+    path.join(userData, "openwork-workspaces.json"),
+    JSON.stringify({
+      version: 1,
+      selectedWorkspaceId: "ws-1",
+      watchedWorkspaceId: "ws-1",
+      workspaces: [{
+        id: "ws-1",
+        name: "Workspace",
+        path: workspaceReal,
+        workspaceType: "local",
+        openworkHostUrl: "https://host.example.test",
+        openworkToken: "token-1",
+        openworkWorkspaceId: "remote-1",
+      }],
+    }),
+    "utf8",
+  );
+
+  const previousServerConfig = process.env.SOFIA_SERVER_CONFIG;
+  process.env.SOFIA_SERVER_CONFIG = path.join(root, "missing-server.json");
+  try {
+    const store = createWorkspaceStore({
+      app: { getPath: (name) => name === "userData" ? userData : root },
+      defaultDenBaseUrl: "https://example.test",
+      defaultRequireSignin: false,
+      forceRequireSignin: false,
+    });
+
+    const state = await store.readWorkspaceState();
+    assert.equal(state.selectedId, "ws-1");
+    assert.equal(state.workspaces.length, 1);
+
+    const imported = JSON.parse(await readFile(path.join(userData, "sofia-workspaces.json"), "utf8"));
+    assert.deepEqual(imported.workspaces[0], {
+      id: "ws-1",
+      name: "Workspace",
+      path: workspaceReal,
+      workspaceType: "local",
+      sofiaHostUrl: "https://host.example.test",
+      sofiaToken: "token-1",
+      sofiaWorkspaceId: "remote-1",
+    });
+  } finally {
+    restoreEnv("SOFIA_SERVER_CONFIG", previousServerConfig);
+  }
+});
+
+test("imports pre-rebrand token stores before recovering workspaces", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "sofia-workspace-store-"));
+  const userData = path.join(root, "userData");
+  const workspace = path.join(root, "workspace");
+  await mkdir(userData, { recursive: true });
+  await mkdir(workspace, { recursive: true });
+  const workspaceReal = await realpath(workspace);
+
+  await writeFile(
+    path.join(userData, "openwork-server-tokens.json"),
+    JSON.stringify({ version: 1, workspaces: { [workspaceReal]: { updatedAt: 7 } } }),
+    "utf8",
+  );
+
+  const previousServerConfig = process.env.SOFIA_SERVER_CONFIG;
+  process.env.SOFIA_SERVER_CONFIG = path.join(root, "missing-server.json");
+  try {
+    const store = createWorkspaceStore({
+      app: { getPath: (name) => name === "userData" ? userData : root },
+      defaultDenBaseUrl: "https://example.test",
+      defaultRequireSignin: false,
+      forceRequireSignin: false,
+    });
+
+    const state = await store.readWorkspaceState();
+    assert.equal(state.workspaces.length, 1);
+    assert.equal(state.workspaces[0].path, workspaceReal);
+
+    const imported = JSON.parse(await readFile(path.join(userData, "sofia-server-tokens.json"), "utf8"));
+    assert.deepEqual(imported.workspaces, { [workspaceReal]: { updatedAt: 7 } });
+  } finally {
+    restoreEnv("SOFIA_SERVER_CONFIG", previousServerConfig);
+  }
+});
+
+test("reads per-workspace config from the pre-rebrand opencode directory", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "sofia-workspace-store-"));
+  const userData = path.join(root, "userData");
+  const workspace = path.join(root, "workspace");
+  await mkdir(userData, { recursive: true });
+  await mkdir(path.join(workspace, ".opencode"), { recursive: true });
+  await writeFile(
+    path.join(workspace, ".opencode", "openwork.json"),
+    JSON.stringify({
+      version: 1,
+      workspace: { name: "Legacy workspace", preset: "starter" },
+      authorizedRoots: [workspace],
+      openworkReload: { requestedAt: 12 },
+    }),
+    "utf8",
+  );
+
+  const store = createWorkspaceStore({
+    app: { getPath: (name) => name === "userData" ? userData : root },
+    defaultDenBaseUrl: "https://example.test",
+    defaultRequireSignin: false,
+    forceRequireSignin: false,
+  });
+
+  assert.deepEqual(await store.readWorkspaceSofiaConfig(workspace), {
+    version: 1,
+    workspace: { name: "Legacy workspace", preset: "starter" },
+    authorizedRoots: [workspace],
+    sofiaReload: { requestedAt: 12 },
   });
 });

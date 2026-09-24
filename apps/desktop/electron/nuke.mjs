@@ -36,6 +36,10 @@ const USERDATA_WORKSPACE_FILENAMES = [
   "workspace-state.json",
   "sofia-server-tokens.json",
   "sofia-server-state.json",
+  // Pre-rebrand names. The app imports these when the Sofia-named files are
+  // absent, so a nuke has to clear them or the profile would not be fresh.
+  "openwork-workspaces.json",
+  "openwork-server-tokens.json",
 ];
 const LEGACY_ORCHESTRATOR_DIR_NAME = ["sofia", "orchestrator"].join("-");
 const SHIP_IT_CACHE_DOMAIN = "com.differentai.sofia.ShipIt";
@@ -179,6 +183,20 @@ function desktopBootstrapPath(env, homedir, platform, paths, userDataPath) {
 
 function legacyDesktopBootstrapPath(homedir, platform) {
   return resolveLegacyDesktopBootstrapPath({ env: {}, homeDir: homedir, platform });
+}
+
+/**
+ * Directories a pre-rebrand build could have written its server config, env
+ * store, and bootstrap file into. Windows used `%APPDATA%\Roaming\openwork`,
+ * everything else used `<config home>/openwork`.
+ */
+function preRebrandConfigRoots(env, homedir, platform, paths, legacyBootstrapPath) {
+  const roaming = envValue(env, "APPDATA") || paths.join(homedir, "AppData", "Roaming");
+  return [
+    paths.join(desktopConfigHome(env, homedir, platform, paths), "openwork"),
+    paths.join(roaming, "openwork"),
+    paths.dirname(legacyBootstrapPath),
+  ];
 }
 
 function engineDataDirs(env, homedir, platform, paths) {
@@ -341,8 +359,10 @@ function resolveNukePlan(input) {
     paths.dirname(tokens),
     paths.dirname(envStore),
   ];
-  deletePaths.push(...sofiaConfigRoots);
+  const legacyConfigRoots = preRebrandConfigRoots(env, homedir, platform, paths, legacyBootstrapPath);
+  deletePaths.push(...sofiaConfigRoots, ...legacyConfigRoots);
   addSofiaConfigFiles(deletePaths, sofiaConfigRoots, paths);
+  addSofiaConfigFiles(deletePaths, legacyConfigRoots, paths);
 
   if (platform === "darwin") {
     deletePaths.push(paths.join(homedir, "Library", "Caches", SHIP_IT_CACHE_DOMAIN));

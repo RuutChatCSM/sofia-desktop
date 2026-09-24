@@ -18,9 +18,11 @@
 // Flags: --version X.Y.Z  --repo OWNER/REPO  --prefix NAME  --target TRIPLE
 //        --env-file PATH  --no-build  --no-github  --no-mirror  --dry-run
 //        --ref REF (git ref the GitHub Release tag points at; default: HEAD)
+//        --no-build reuses dist-electron, which must carry the provenance file
+//        written by the build that produced it.
 
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, mkdtempSync, rmSync, chmodSync } from "node:fs";
+import { existsSync, readFileSync, mkdirSync, mkdtempSync, rmSync, chmodSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -97,6 +99,7 @@ function loadEnvFile(file) {
 loadEnvFile(options.envFile);
 
 const log = (message) => process.stderr.write(`\n==> ${message}\n`);
+const warn = (message) => process.stderr.write(`\nwarning: ${message}\n`);
 const run = (command, args, env) => {
   const printable = [command, ...args].join(" ");
   if (options.dryRun) {
@@ -121,7 +124,58 @@ const tag = `v${options.version}`;
 // The release must point at the commit that produced these artifacts. Defaulting to a
 // branch name silently tags whatever that branch held at publish time, which is how
 // v0.1.1 ended up tagged on `main` while its artifacts came from a feature branch.
-const releaseRef = options.ref || capture("git", ["rev-parse", "HEAD"]) || "main";
+const headRef = capture("git", ["rev-parse", "HEAD"]);
+const releaseRef = options.ref || headRef || "main";
+if (options.build && headRef && releaseRef !== headRef) {
+  die(`--ref ${releaseRef} is not the checkout being built (${headRef}); build the ref you intend to publish`);
+}
+
+// Provenance ties the published binaries to the commit they were built from, so
+// `--no-build` cannot republish whatever happens to sit in dist-electron under a
+// fresh tag, and a mistyped `--ref` cannot relabel a build.
+const provenancePath = path.join(distDir, "release-provenance.json");
+
+function readProvenance() {
+  try {
+    return JSON.parse(readFileSync(provenancePath, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function writeProvenance() {
+  const record = {
+    schemaVersion: 1,
+    version: options.version,
+    ref: releaseRef,
+    target: options.target,
+    dirty: Boolean(capture("git", ["status", "--porcelain"])),
+    builtAt: new Date().toISOString(),
+  };
+  if (options.dryRun) {
+    process.stderr.write(`+ write ${provenancePath} ${JSON.stringify(record)}\n`);
+    return record;
+  }
+  mkdirSync(distDir, { recursive: true });
+  writeFileSync(provenancePath, `${JSON.stringify(record, null, 2)}\n`, "utf8");
+  if (record.dirty) warn(`artifacts include uncommitted changes; ${provenancePath} records dirty=true`);
+  return record;
+}
+
+function requireProvenance() {
+  const record = readProvenance();
+  if (!record) {
+    if (options.dryRun) {
+      warn(`no build provenance at ${provenancePath}; a real publish would refuse`);
+      return null;
+    }
+    die(`no build provenance at ${provenancePath}; rebuild instead of publishing with --no-build`);
+  }
+  if (record.version !== options.version || record.ref !== releaseRef) {
+    die(`artifacts were built for ${record.version} at ${record.ref}, not ${options.version} at ${releaseRef}`);
+  }
+  return record;
+}
 
 const arch = options.target.startsWith("aarch64") ? "arm64" : "x64";
 const artifacts = [
@@ -155,6 +209,7 @@ if (options.build) {
     APPLE_API_ISSUER: process.env.APPLE_API_ISSUER,
     APPLE_API_KEY_PATH: p8,
   });
+  writeProvenance();
 }
 
 const dmg = artifacts[0];
@@ -225,6 +280,7 @@ function mirror() {
   }
 }
 
+if (options.github || options.mirror) requireProvenance();
 if (options.github) githubRelease();
 if (options.mirror) mirror();
 

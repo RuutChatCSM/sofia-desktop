@@ -9,6 +9,7 @@ import path from "node:path";
 import {
   desktopBootstrapPath as resolveDesktopBootstrapPath,
   legacyDesktopBootstrapPath as resolveLegacyDesktopBootstrapPath,
+  legacySofiaServerConfigPath as resolveLegacySofiaServerConfigPath,
   normalizeWorkspaceRootPath,
   sofiaServerConfigPath as resolveSofiaServerConfigPath,
 } from "@sofia/paths";
@@ -26,6 +27,47 @@ const EMPTY_WORKSPACE_LIST = Object.freeze({
 function execResult(ok, stdout = "", stderr = "", status = ok ? 0 : 1) {
   return { ok, status, stdout, stderr };
 }
+
+const OPENWORK_KEY_PREFIX = /^openwork(?=[A-Z])/;
+
+/**
+ * The reboot renamed both the persisted file names and every `openwork*` key
+ * inside them (`openworkServerToken` -> `sofiaServerToken`, ...). Rewrite the
+ * keys while importing so a profile written by the old build still resolves.
+ */
+function renameOpenworkKeys(value) {
+  if (Array.isArray(value)) return value.map(renameOpenworkKeys);
+  if (typeof value !== "object" || value === null) return value;
+  const renamed = {};
+  for (const [key, entry] of Object.entries(value)) {
+    renamed[key.replace(OPENWORK_KEY_PREFIX, "sofia")] = renameOpenworkKeys(entry);
+  }
+  return renamed;
+}
+
+/**
+ * Import the first readable pre-rebrand file at `current`'s directory or the
+ * extra `legacyPaths`. Does nothing once `current` exists, so it is safe to
+ * call on every read.
+ */
+async function importLegacyJsonFileIfNeeded({ current, legacyPaths = [] }) {
+  try {
+    if (existsSync(current)) return false;
+    for (const legacyPath of legacyPaths) {
+      if (!legacyPath || legacyPath === current || !existsSync(legacyPath)) continue;
+      const parsed = renameOpenworkKeys(JSON.parse(await readFile(legacyPath, "utf8")));
+      await mkdir(path.dirname(current), { recursive: true });
+      await writeFile(current, `${JSON.stringify(parsed, null, 2)}\n`, "utf8");
+      console.info("[migration] imported legacy desktop state", { from: legacyPath, to: current });
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.warn("[migration] legacy desktop state import failed", error);
+    return false;
+  }
+}
+
 
 async function pathExists(targetPath) {
   try {
@@ -177,29 +219,37 @@ export function createWorkspaceStore({
     return resolveSofiaServerConfigPath({ env: process.env, homeDir: os.homedir() });
   }
 
-  // Earlier Electron alpha builds copied Tauri's sofia-workspaces.json into
-  // an Electron-only workspace-state.json. Keep importing that file when the
-  // shared canonical file is missing, but write sofia-workspaces.json going
-  // forward so Tauri rollback and Electron both read the same desktop state.
-  function legacyElectronWorkspaceStatePath() {
-    return path.join(app.getPath("userData"), "workspace-state.json");
+  // Three generations of the same desktop state file can be on disk:
+  //   - `openwork-workspaces.json`: written before the Sofia rename
+  //   - `workspace-state.json`: Tauri/early-Electron alpha builds
+  //   - `sofia-workspaces.json`: what every build reads and writes now
+  // Import the older two when the canonical file is missing, with the
+  // pre-rebrand key names rewritten, so an upgrade keeps its workspaces.
+  function legacyWorkspaceStatePaths() {
+    const userData = app.getPath("userData");
+    return [
+      path.join(userData, "openwork-workspaces.json"),
+      path.join(userData, "workspace-state.json"),
+    ];
   }
 
   async function migrateLegacyElectronWorkspaceStateIfNeeded() {
-    const current = workspaceStatePath();
-    const legacy = legacyElectronWorkspaceStatePath();
-    try {
-      if (existsSync(current)) return false;
-      if (!existsSync(legacy)) return false;
-      await mkdir(path.dirname(current), { recursive: true });
-      const raw = await readFile(legacy, "utf8");
-      await writeFile(current, raw, "utf8");
-      console.info("[migration] copied workspace-state.json to sofia-workspaces.json");
-      return true;
-    } catch (error) {
-      console.warn("[migration] legacy Electron workspace-state copy failed", error);
-      return false;
-    }
+    return importLegacyJsonFileIfNeeded({
+      current: workspaceStatePath(),
+      legacyPaths: legacyWorkspaceStatePaths(),
+    });
+  }
+
+  function legacySofiaServerTokenStorePath() {
+    return path.join(app.getPath("userData"), "openwork-server-tokens.json");
+  }
+
+  async function readSofiaServerTokenStore() {
+    await importLegacyJsonFileIfNeeded({
+      current: sofiaServerTokenStorePath(),
+      legacyPaths: [legacySofiaServerTokenStorePath()],
+    });
+    return readJsonFile(sofiaServerTokenStorePath(), null);
   }
 
   function normalizeDesktopBootstrapConfig(input) {
@@ -555,7 +605,7 @@ export function createWorkspaceStore({
   }
 
   async function recoverWorkspacesFromTokenStore() {
-    const store = await readJsonFile(sofiaServerTokenStorePath(), null);
+    const store = await readSofiaServerTokenStore();
     if (!isRecord(store) || !isRecord(store.workspaces)) return [];
 
     const candidates = [];
@@ -591,7 +641,7 @@ export function createWorkspaceStore({
     const workspaceKey = normalizeWorkspacePathKey(workspacePath);
     if (!workspaceKey) return;
 
-    const store = await readJsonFile(sofiaServerTokenStorePath(), null);
+    const store = await readSofiaServerTokenStore();
     if (!isRecord(store) || !isRecord(store.workspaces)) return;
 
     const workspaces = { ...store.workspaces };
@@ -607,6 +657,16 @@ export function createWorkspaceStore({
   }
 
   async function recoverWorkspacesFromServerConfig() {
+    // An explicit server config defines an isolated installation boundary, the
+    // same way an explicit bootstrap path does; never let the global
+    // pre-rebrand config cross it.
+    const legacyServerConfigPath = process.env.SOFIA_SERVER_CONFIG?.trim()
+      ? null
+      : resolveLegacySofiaServerConfigPath({ env: process.env, homeDir: os.homedir() });
+    await importLegacyJsonFileIfNeeded({
+      current: sofiaServerConfigPath(),
+      legacyPaths: [legacyServerConfigPath],
+    });
     const config = await readJsonFile(sofiaServerConfigPath(), null);
     if (!isRecord(config) || !Array.isArray(config.workspaces)) return [];
 
@@ -778,11 +838,16 @@ export function createWorkspaceStore({
 
   async function readWorkspaceSofiaConfig(workspacePath) {
     const sofiaPath = path.join(workspacePath, ".sofia", "sofia.json");
-    if (!(await pathExists(sofiaPath))) {
-      return defaultWorkspaceSofiaConfig(workspacePath);
+    if (await pathExists(sofiaPath)) {
+      return JSON.parse(await readFile(sofiaPath, "utf8"));
     }
-    const raw = await readFile(sofiaPath, "utf8");
-    return JSON.parse(raw);
+    // Workspaces created before the rename kept the same document under
+    // OpenCode's directory. Read it rather than resetting to defaults.
+    const legacyPath = path.join(workspacePath, ".opencode", "openwork.json");
+    if (await pathExists(legacyPath)) {
+      return renameOpenworkKeys(JSON.parse(await readFile(legacyPath, "utf8")));
+    }
+    return defaultWorkspaceSofiaConfig(workspacePath);
   }
 
   async function writeWorkspaceSofiaConfig(workspacePath, config) {
@@ -812,6 +877,7 @@ export function createWorkspaceStore({
   }
 
   async function readWorkspaceState() {
+    await migrateLegacyElectronWorkspaceStateIfNeeded();
     const workspaceStateExists = existsSync(workspaceStatePath());
     const state = await readJsonFile(workspaceStatePath(), EMPTY_WORKSPACE_LIST);
     let selectedId =
