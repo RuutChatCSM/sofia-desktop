@@ -1279,7 +1279,11 @@ export function ReactSessionComposer(props: ComposerProps) {
       }}
     >
       <div className={props.flush ? "" : "max-w-[800px] mx-auto sofia-composer-dock"}>
-        {props.aboveComposer ? <div className="pb-2">{props.aboveComposer}</div> : null}
+        {props.aboveComposer ? (
+          <div className="sofia-composer-queue relative mx-3 -mb-3 rounded-t-[16px] border border-dls-border bg-dls-surface-muted pb-3 max-sm:mx-2">
+            {props.aboveComposer}
+          </div>
+        ) : null}
         {/* Main composer panel */}
         <div
           className={`sofia-composer-panel relative overflow-visible rounded-[24px] border border-dls-border bg-dls-canvas shadow-sm transition-colors ${panelRoundedClass}`}

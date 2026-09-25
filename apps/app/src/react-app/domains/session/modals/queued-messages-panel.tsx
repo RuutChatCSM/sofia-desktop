@@ -1,5 +1,5 @@
 /** @jsxImportSource react */
-import { CornerDownRight, MoreHorizontal, Paperclip, Trash2 } from "lucide-react";
+import { CornerDownRight, ListEnd, MoreHorizontal, Paperclip, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import {
@@ -89,7 +89,7 @@ function QueuedRow(props: {
 
   if (editing) {
     return (
-      <div className="rounded-xl border border-dls-border bg-dls-surface px-2.5 py-2">
+      <div className="px-3 py-2">
         <textarea
           autoFocus
           value={draftText}
@@ -133,8 +133,8 @@ function QueuedRow(props: {
   const hasAttachments = props.item.draft.attachments.length > 0;
 
   return (
-    <div className="flex h-9 items-center gap-2 rounded-xl border border-dls-border bg-dls-surface-muted px-2.5">
-      <CornerDownRight size={14} className="shrink-0 text-gray-9" aria-hidden="true" />
+    <div className="flex min-h-9 items-center gap-2 px-3 py-1">
+      <ListEnd size={14} className="shrink-0 text-gray-9" aria-hidden="true" />
       <button
         type="button"
         disabled={props.sending}
@@ -153,8 +153,9 @@ function QueuedRow(props: {
           disabled={props.sending}
           onClick={() => props.onSendNow(props.item.id)}
           title={t("composer.queued_send_now_hint")}
-          className="rounded-md px-2 py-1 text-[12px] font-medium text-gray-11 transition-colors hover:bg-gray-3 hover:text-gray-12 disabled:pointer-events-none disabled:opacity-40"
+          className="flex items-center gap-1 rounded-md px-2 py-1 text-[12px] text-gray-11 transition-colors hover:bg-gray-3 hover:text-gray-12 disabled:pointer-events-none disabled:opacity-40"
         >
+          <CornerDownRight size={13} aria-hidden="true" />
           {t("composer.queued_steer")}
         </button>
         <button
@@ -209,7 +210,7 @@ export function QueuedMessagesPanel(props: QueuedMessagesPanelProps) {
   const hiddenCount = props.items.length - visible.length;
 
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col divide-y divide-dls-border/50">
       {visible.map((item, index) => (
         <QueuedRow
           key={item.id}
@@ -224,7 +225,7 @@ export function QueuedMessagesPanel(props: QueuedMessagesPanelProps) {
         />
       ))}
       {hiddenCount > 0 ? (
-        <div className="px-2 text-[11px] text-gray-9">{t("composer.queued_more", { count: hiddenCount })}</div>
+        <div className="px-3 py-1.5 text-[11px] text-gray-9">{t("composer.queued_more", { count: hiddenCount })}</div>
       ) : null}
     </div>
   );
