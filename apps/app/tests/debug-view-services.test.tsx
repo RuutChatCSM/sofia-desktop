@@ -139,8 +139,8 @@ describe("Debug services section", () => {
     const html = renderToStaticMarkup(<DebugView {...debugViewProps()} />);
 
     expect(countOccurrences(html, ">Sofia engine</div>")).toBe(1);
-    expect(html).toContain("Multi-model Sofia engine managed by Sofia App.");
-    expect(html).not.toContain("Local engine process managed by Sofia App.");
+    expect(html).toContain("Multi-model Sofia engine managed by Sofia.");
+    expect(html).not.toContain("Local engine process managed by Sofia.");
   });
 
   test("drops the removed engine runtime selection", () => {

@@ -38,11 +38,11 @@ const requirements: TestNeeds = {
 const missingRequirements = unmetNeeds(requirements, process.env);
 const title = missingRequirements.length > 0
   ? `Den behind enterprise TLS skipped — needs: ${missingRequirements.join(", ")}`
-  : "Linux OS trust lets Sofia App use one corporate TLS Den without trusting an unrelated private CA";
+  : "Linux OS trust lets Sofia use one corporate TLS Den without trusting an unrelated private CA";
 
 const PROFILE_MARKER = "enterprise-tls-profile-continuity";
 const ASSISTANT_MARKER = "ENTERPRISE-TLS-CHAT-OK";
-const CORPORATE_ROOT = "Sofia App Egress Lab Corporate Root CA";
+const CORPORATE_ROOT = "Sofia Egress Lab Corporate Root CA";
 
 type EdgeRequest = {
   endpoint: string;

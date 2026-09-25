@@ -1,6 +1,6 @@
 {
-  "name": "Sofia App",
-  "short_name": "Sofia App",
+  "name": "Sofia",
+  "short_name": "Sofia",
   "description": "Local-first agent workspace",
   "start_url": "/",
   "display": "standalone",

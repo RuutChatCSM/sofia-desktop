@@ -155,13 +155,13 @@ export const BUILT_IN_SOFIA_EXTENSION_MANIFESTS: SofiaExtensionManifest[] = [
   {
     schemaVersion: 1,
     id: "sofia-browser",
-    name: "Sofia App Browser",
-    description: "Automate the built-in browser panel that stays visible inside Sofia App.",
+    name: "Sofia Browser",
+    description: "Automate the built-in browser panel that stays visible inside Sofia.",
     source: { format: "sofia-builtin", origin: "builtin", trusted: true },
     icon: { src: "/sofia-mark.png" },
-    composer: { prompt: "Use the Sofia App Browser extension to " },
+    composer: { prompt: "Use the Sofia Browser extension to " },
     setup: {
-      instructions: "Sofia App Browser is ready by default in desktop workspaces.",
+      instructions: "Sofia Browser is ready by default in desktop workspaces.",
     },
     resources: [
       {
@@ -174,7 +174,7 @@ export const BUILT_IN_SOFIA_EXTENSION_MANIFESTS: SofiaExtensionManifest[] = [
     contributions: [
       { type: "settings-panel", ref: "sofia.browser.settings", location: "settings-detail" },
       { type: "session-side-panel", ref: "sofia.browser.panel", location: "session-right-pane" },
-      { type: "composer-prompt", prompt: "Use the Sofia App Browser extension to ", location: "composer" },
+      { type: "composer-prompt", prompt: "Use the Sofia Browser extension to ", location: "composer" },
     ],
     enablement: [
       { type: "toggle-enabled", ref: "sofia-browser", label: "Enabled" },
@@ -234,13 +234,13 @@ export const BUILT_IN_SOFIA_EXTENSION_MANIFESTS: SofiaExtensionManifest[] = [
     schemaVersion: 1,
     id: "sofia-voice",
     name: "Voice Mode",
-    description: "Talk to Sofia App through a Realtime voice panel that drives the same semantic UI controls as Sofia App UI MCP.",
+    description: "Talk to Sofia through a Realtime voice panel that drives the same semantic UI controls as Sofia UI MCP.",
     preview: true,
     source: { format: "sofia-builtin", origin: "builtin", trusted: true },
     icon: { src: "/sofia-mark.png" },
     composer: { prompt: "Use Voice Mode to " },
     setup: {
-      instructions: "Voice Mode uses OpenAI Realtime. Save an OpenAI API key in Sofia App env vars, then open the session rail panel and speak or send a typed voice command.",
+      instructions: "Voice Mode uses OpenAI Realtime. Save an OpenAI API key in Sofia env vars, then open the session rail panel and speak or send a typed voice command.",
       primaryCta: "Save OpenAI key",
       secondaryCta: "Test Realtime",
       requiredEnv: ["OPENAI_REALTIME_API_KEY", "OPENAI_API_KEY"],

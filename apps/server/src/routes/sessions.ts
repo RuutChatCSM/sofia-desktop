@@ -283,7 +283,7 @@ export function registerSessionRoutes(options: RegisterSessionRoutesOptions): vo
       phase: "start",
       source: "workspace.sessions.abort_route",
       initiator: "user",
-      reason: "client requested session abort through Sofia App server route",
+      reason: "client requested session abort through Sofia server route",
       workspaceId: workspace.id,
       sessionID: sessionId,
       actorType: ctx.actor?.type ?? "unknown",

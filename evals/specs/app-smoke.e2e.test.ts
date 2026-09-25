@@ -23,7 +23,7 @@ test.skipIf(!e2eTestsEnabled)(title, async () => {
   await waitFor(app, "document.body.innerText.trim().length > 40", { timeoutMs: 30_000, label: "rendered body text" });
   const shot = await screenshot(app);
   const seen = await validate(shot, [
-    "A ready Sofia App workspace composer with meaningful visible content is on screen",
+    "A ready Sofia workspace composer with meaningful visible content is on screen",
     "No generic error or 'Something went wrong' crash message is visible",
   ]);
   expect(seen.ok, seen.why).toBe(true);

@@ -136,7 +136,7 @@ const connectCatalogResponseSchema = z.object({
 }).passthrough();
 
 export const SOFIA_EXTENSION_DISCOVERY_INSTRUCTION =
-  "If the user asks for something you cannot do with obvious built-in tools, check Sofia App extensions before saying the capability is unavailable. Use sofia_query with id extension.actions to inspect available extension actions, then sofia_execute with id extension.call for the matching action.";
+  "If the user asks for something you cannot do with obvious built-in tools, check Sofia extensions before saying the capability is unavailable. Use sofia_query with id extension.actions to inspect available extension actions, then sofia_execute with id extension.call for the matching action.";
 
 export const SOFIA_CLOUD_SKILL_AUTHORING_INSTRUCTION =
   "Skill creation: Cloud. When the user asks to create a skill, retrieve and follow the listed create-skill remote skill by calling sofia-cloud_execute_capability with its exact <capability>. Create the skill in Sofia Cloud as a private plugin, not in the workspace. For later steps, use share-plugin when the user wants a specific person or team to use a skill, and use add-to-marketplace or add-user-to-marketplace only when the user asks. Use a workspace-local skill only when the user explicitly requests one. Do not create both copies.";
@@ -145,10 +145,10 @@ export const SOFIA_LOCAL_SKILL_AUTHORING_INSTRUCTION =
   "Skill creation: Local. Create or update a workspace-local skill only when the user requests one. Keep one skill in .sofia/skills/<skill-name>/SKILL.md, validate it, and re-read it after writing. Do not create a Cloud copy.";
 
 export const SOFIA_CLOUD_CONNECTION_INSTRUCTION =
-  "The Sofia Cloud connection is verified ready for this exact workspace/model. For org-connected services, use sofia-cloud_search_capabilities with 2-4 keyword variants, then sofia-cloud_execute_capability with an exact returned name — and only mention services that search (or available_skills) actually returns. When a search result has kind mcp_app, execute that exact capability normally so Sofia App can render its originating standard MCP App; do not import it, ask for a standalone HTML URL, or require a generated direct-tool name. When a remote skill is listed under available_skills, call sofia-cloud_execute_capability with its <capability> directly; do not treat the local Sofia engine skill list as the full inventory. Local Sofia App extensions remain available through sofia_query/sofia_execute with extension.actions and extension.call. Settings > Extensions is the member inventory surface for org and local apps. A successful search proves Sofia Cloud itself is authorized, so a downstream connector failure does not mean Sofia Cloud needs to be reconnected. If a result has kind connection_status, execute that exact capability once so Sofia App renders an actionable connection card, then name connectionStatus.connectionName and relay connectionStatus.action exactly: use Your Connections for the member, the organization Connections dashboard for an org admin, or the provider admin console for a provider-side failure. After the requested human fixes that connector, search again in the same task because results are live, not cached, so unchanged retries return the same error.";
+  "The Sofia Cloud connection is verified ready for this exact workspace/model. For org-connected services, use sofia-cloud_search_capabilities with 2-4 keyword variants, then sofia-cloud_execute_capability with an exact returned name — and only mention services that search (or available_skills) actually returns. When a search result has kind mcp_app, execute that exact capability normally so Sofia can render its originating standard MCP App; do not import it, ask for a standalone HTML URL, or require a generated direct-tool name. When a remote skill is listed under available_skills, call sofia-cloud_execute_capability with its <capability> directly; do not treat the local Sofia engine skill list as the full inventory. Local Sofia extensions remain available through sofia_query/sofia_execute with extension.actions and extension.call. Settings > Extensions is the member inventory surface for org and local apps. A successful search proves Sofia Cloud itself is authorized, so a downstream connector failure does not mean Sofia Cloud needs to be reconnected. If a result has kind connection_status, execute that exact capability once so Sofia renders an actionable connection card, then name connectionStatus.connectionName and relay connectionStatus.action exactly: use Your Connections for the member, the organization Connections dashboard for an org admin, or the provider admin console for a provider-side failure. After the requested human fixes that connector, search again in the same task because results are live, not cached, so unchanged retries return the same error.";
 
 export const SOFIA_CONNECT_SIGN_IN_INSTRUCTION =
-  `${SOFIA_EXTENSION_DISCOVERY_INSTRUCTION} Sofia Cloud is not signed in or no desired agent access configuration exists for this workspace. Direct the user to sign in to Sofia App and connect the service in Settings → Connect.`;
+  `${SOFIA_EXTENSION_DISCOVERY_INSTRUCTION} Sofia Cloud is not signed in or no desired agent access configuration exists for this workspace. Direct the user to sign in to Sofia and connect the service in Settings → Connect.`;
 
 export const SOFIA_CONNECT_DISABLED_INSTRUCTION =
   `${SOFIA_EXTENSION_DISCOVERY_INSTRUCTION} Sofia Cloud agent access is explicitly disabled for this workspace. Explain that the user can enable agent access in Settings → Connect.`;
@@ -212,7 +212,7 @@ function requireSofiaServer(): { url: string; token: string } {
   const url = serverUrl();
   const token = serverToken();
   if (!url || !token) {
-    throw new Error("Sofia App extension tools are only available when Sofia engine is launched by Sofia App.");
+    throw new Error("Sofia extension tools are only available when Sofia engine is launched by Sofia.");
   }
   return { url, token };
 }
@@ -284,7 +284,7 @@ async function fetchSofiaConnectState(input: unknown, fetcher: SofiaFetch): Prom
     headers: { Authorization: `Bearer ${token}` },
   });
   const payload = await parseResponse(response);
-  if (!response.ok) throw new Error(errorMessage(payload, "Sofia App connect state request failed"));
+  if (!response.ok) throw new Error(errorMessage(payload, "Sofia connect state request failed"));
   const parsed = connectStateResponseSchema.parse(payload);
   return {
     connectEnabled: parsed.connectEnabled,

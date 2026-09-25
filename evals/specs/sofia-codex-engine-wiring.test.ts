@@ -19,7 +19,7 @@ const repoRoot = path.resolve(import.meta.dirname, "../..");
 test("Sofia preserves native engine behavior while wiring multi-provider and browser capabilities", async () => {
   const context = buildSofiaDeveloperInstructions({ workspaceId: "workspace-1", cwd: "/repo" });
   expect(context).toContain("<sofia_context>");
-  expect(context).not.toMatch(/Sofia App|Codex/);
+  expect(context).not.toMatch(/Codex/);
   expect(context).toContain("Working directory: /repo");
   expect(context).not.toMatch(/make a short plan|execute it back-to-back|report the outcome in one line/i);
 
@@ -102,7 +102,7 @@ function callHarness({ brokerUrl, sofiaHome, code }: { brokerUrl: string; sofiaH
 test("the in-app browser tool survives the stale registration the engine writes", async () => {
   // `config.toml` records an ephemeral broker port and every build rewrites that
   // shared file, so the URL the harness is started with routinely belongs to a
-  // Sofia App window that has since closed. It used to hang there.
+  // Sofia window that has since closed. It used to hang there.
   const home = await mkdtemp(path.join(tmpdir(), "sofia-wiring-"));
   const stale = callHarness({
     brokerUrl: "http://127.0.0.1:59558",

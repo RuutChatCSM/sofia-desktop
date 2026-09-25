@@ -110,7 +110,7 @@ test("ordinary MCP clients receive only bounded search and execute without the p
     await expect(client.callTool({ name: "open_fixture", arguments: {} }))
       .rejects.toThrow("Use search_capabilities and execute_capability")
     await expect(client.readResource({ uri: resourceUri }))
-      .rejects.toThrow("only through the Sofia App host")
+      .rejects.toThrow("only through the Sofia host")
   }, {}, false)
 })
 
@@ -133,7 +133,7 @@ test("legacy clients retain ordinary operations through bounded search and execu
     await expect(client.callTool({ name: "search_fixture", arguments: { query: "ordinary" } }))
       .rejects.toThrow("Use search_capabilities and execute_capability")
     await expect(client.readResource({ uri: resourceUri }))
-      .rejects.toThrow("only through the Sofia App host")
+      .rejects.toThrow("only through the Sofia host")
   }, {
     listTools: async () => [{
       name: "search_fixture",

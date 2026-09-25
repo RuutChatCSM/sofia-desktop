@@ -49,7 +49,7 @@ async function makeWebRoot() {
   const root = await mkdtemp(join(tmpdir(), "den-gateway-web-"))
   tempDirs.push(root)
   await mkdir(join(root, "assets"), { recursive: true })
-  await writeFile(join(root, "index.html"), "<!doctype html><div id=\"root\">Sofia App</div>")
+  await writeFile(join(root, "index.html"), "<!doctype html><div id=\"root\">Sofia</div>")
   await writeFile(join(root, "assets", "app.js"), "globalThis.__sofiaTest = true;")
   return root
 }
@@ -198,11 +198,11 @@ describe("den-gateway static UI", () => {
     const index = await fetch(`${base}/`)
     expect(index.status).toBe(200)
     expect(index.headers.get("cache-control")).toBe("no-cache")
-    expect(await index.text()).toContain("Sofia App")
+    expect(await index.text()).toContain("Sofia")
 
     const deep = await fetch(`${base}/sessions/deep/link`)
     expect(deep.status).toBe(200)
-    expect(await deep.text()).toContain("Sofia App")
+    expect(await deep.text()).toContain("Sofia")
 
     const asset = await fetch(`${base}/assets/app.js`)
     expect(asset.status).toBe(200)
@@ -211,7 +211,7 @@ describe("den-gateway static UI", () => {
     const missingAsset = await fetch(`${base}/assets/missing.js`)
     expect(missingAsset.status).toBe(404)
     expect(missingAsset.headers.get("content-type")).not.toContain("text/html")
-    expect(await missingAsset.text()).not.toContain("Sofia App")
+    expect(await missingAsset.text()).not.toContain("Sofia")
 
     const traversal = await fetch(`${base}/%2e%2e%2fsecret.txt`)
     expect(traversal.status).toBe(400)
@@ -508,7 +508,7 @@ describe("den-gateway proxy", () => {
       headers: { "Sec-Fetch-Mode": "navigate" },
     })
     expect(navigation.status).toBe(200)
-    expect(await navigation.text()).toContain("Sofia App")
+    expect(await navigation.text()).toContain("Sofia")
     expect(upstream.observed.requests).toHaveLength(0)
 
     const api = await fetch(`${base}/workspace/ws_1/sessions`, {
@@ -556,7 +556,7 @@ describe("den-gateway proxy", () => {
       headers: { "Sec-Fetch-Mode": "navigate" },
     })
     expect(settings.status).toBe(200)
-    expect(await settings.text()).toContain("Sofia App")
+    expect(await settings.text()).toContain("Sofia")
     expect(upstream.observed.requests).toHaveLength(1)
   })
 

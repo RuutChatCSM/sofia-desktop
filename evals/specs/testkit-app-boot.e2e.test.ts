@@ -6,7 +6,7 @@ import { screenshot, validate } from "@sofia/test-evidence";
 import { expectVisualEvidence } from "@sofia/test-evidence/vitest";
 import { app, localMysqlIsRunning, needs, server, test } from "@sofia/testkit";
 
-const expectation = "The Sofia App workspace shell is visible and ready for a task";
+const expectation = "The Sofia workspace shell is visible and ready for a task";
 const e2eTestsEnabled = process.env.SOFIA_EVAL_E2E_TESTS === "1";
 const localPlacement = process.env.SOFIA_EVAL_DAYTONA !== "1" && !process.env.SOFIA_EVAL_DEN_API_URL?.trim();
 const mysqlOpen = await localMysqlIsRunning();
@@ -41,7 +41,7 @@ test.skipIf(!e2eTestsEnabled || !localPlacement || !mysqlOpen)(title, async ({ e
     const shot = await screenshot(desktopApp);
     const seen = await validate(shot, [expectation], {
       ask: async (request) => request.prompt.startsWith("Objectively describe")
-        ? JSON.stringify({ description: "An Sofia App workspace shell with navigation and a task composer." })
+        ? JSON.stringify({ description: "An Sofia workspace shell with navigation and a task composer." })
         : JSON.stringify({
           results: [{
             expectation,

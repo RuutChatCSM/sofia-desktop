@@ -62,9 +62,9 @@ test("claim builder supports present, absent, and unexpected group claim shapes"
   const oddConfig = normalizeMockIdpConfig({ knobs: { groupClaims: "unexpected-shape" } });
   const odd = buildOidcClaims({ issuer: oddConfig.issuer, clientId: oddConfig.clientId, subject, knobs: oddConfig.knobs });
 
-  assert.deepEqual(present.groups, ["Engineering", "Sofia App Lab"]);
+  assert.deepEqual(present.groups, ["Engineering", "Sofia Lab"]);
   assert.equal("groups" in absent, false);
-  assert.deepEqual(odd.groups, { primary: "Engineering", all: ["Engineering", "Sofia App Lab"] });
+  assert.deepEqual(odd.groups, { primary: "Engineering", all: ["Engineering", "Sofia Lab"] });
 });
 
 test("email mismatch and guest-user knobs shape SSO subjects", () => {
@@ -94,7 +94,7 @@ test("blocked-user response uses the Entra-style policy wording", () => {
   assert.equal(response.error, "access_denied");
   assert.match(response.errorDescription, /administrator has configured the application to block users/);
   assert.match(response.message, /IdP administrator/);
-  assert.match(response.html, /Sofia App Mock IdP policy/);
+  assert.match(response.html, /Sofia Mock IdP policy/);
 });
 
 test("mock IdP escapes request-derived blocked-user HTML", async () => {

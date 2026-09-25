@@ -46,7 +46,7 @@ describe("assigned model options", () => {
         id: "lpr_sofia_subscription",
         source: "sofia",
         providerId: "sofia",
-        name: "Sofia App Models",
+        name: "Sofia Models",
         hasApiKey: false,
         models: [{ id: "gpt-5", name: "GPT-5", config: {}, createdAt: null }],
       }),
@@ -64,7 +64,7 @@ describe("assigned model options", () => {
         providerID: "sofia",
         modelID: "gpt-5",
         title: "GPT-5",
-        description: "Sofia App Models",
+        description: "Sofia Models",
         source: "cloud",
       },
     ]);

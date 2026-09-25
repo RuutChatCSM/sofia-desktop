@@ -14,7 +14,7 @@ const VISION_MODEL_ID = "deepseek-v4-flash-vision-exp";
 
 /**
  * ACCEPTANCE TEST for shipping DeepSeek-V4-Flash-Vision-Exp (published
- * 2026-08-21 on DeepSeek's API platform) through the Sofia App curated model
+ * 2026-08-21 on DeepSeek's API platform) through the Sofia curated model
  * catalog served at sofia-models.ruut.chat/models/api.json.
  *
  * Regression this pins: the deployed catalog lacked the new model entirely,
@@ -28,8 +28,8 @@ const VISION_MODEL_ID = "deepseek-v4-flash-vision-exp";
  *      with image input (and its text-only sibling does NOT claim image).
  *   2. The real generator script produces a catalog whose deepseek provider
  *      serves that exact model shape — these are the bytes engines fetch.
- *   3. The Sofia App overlay in the same catalog exposes the model too.
- *   4. Every Sofia App overlay model has a Den inference alias, and the
+ *   3. The Sofia overlay in the same catalog exposes the model too.
+ *   4. Every Sofia overlay model has a Den inference alias, and the
  *      vision alias is enabled — an uncovered alias is unreachable in Den.
  */
 test("curated catalog ships deepseek v4 flash vision exp with image input", async () => {

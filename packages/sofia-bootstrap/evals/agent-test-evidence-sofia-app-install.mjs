@@ -146,9 +146,9 @@ const frameFiles = frames.map((frame, index) => {
 const allOk = frames.every((frame) => frame.ok)
 // Keep fraimz.html only because the standalone legacy report contract consumes this filename.
 writeFileSync(join(outDir, "fraimz.html"), `<!doctype html><html lang="en"><head><meta charset="utf-8" />
-<title>Sofia App DMG Install — test evidence</title>
+<title>Sofia DMG Install — test evidence</title>
 <style>body{margin:0;background:#f3f4f6;color:#111827;font-family:system-ui,sans-serif}main{max-width:1180px;margin:0 auto;padding:32px}.meta{color:#4b5563;margin-bottom:24px}section{margin:20px 0;padding:16px;border:1px solid #d1d5db;border-radius:16px;background:white}iframe{width:100%;min-height:360px;border:1px solid #e5e7eb;border-radius:12px;background:white}code{background:#e5e7eb;padding:2px 5px;border-radius:5px}</style>
-</head><body><main><h1>Sofia App DMG Install — test evidence</h1><div class="meta">Result: <code>${allOk ? "passed" : "failed"}</code> · Screenshots: ${frames.length}</div>
+</head><body><main><h1>Sofia DMG Install — test evidence</h1><div class="meta">Result: <code>${allOk ? "passed" : "failed"}</code> · Screenshots: ${frames.length}</div>
 ${frameFiles.map((entry) => `<section><h2>${esc(entry.frame.claim)}</h2><iframe src="${entry.name}" title="${esc(entry.frame.claim)}"></iframe><p><a href="${entry.name}">Open frame</a></p></section>`).join("\n")}
 </main></body></html>`)
 writeFileSync(join(outDir, "report.json"), JSON.stringify({

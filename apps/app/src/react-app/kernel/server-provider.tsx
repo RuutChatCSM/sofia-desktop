@@ -110,7 +110,7 @@ export function ServerProvider({ children, defaultUrl }: ServerProviderProps) {
     const gatewayOrigin = getSofiaGatewayOrigin();
     const fallback = normalizeServerUrl(gatewayOrigin ? `${gatewayOrigin}/engine` : defaultUrl) ?? "";
 
-    // Hosted web deployments served by Sofia App must reuse the Sofia proxy
+    // Hosted web deployments served by Sofia must reuse the Sofia proxy
     // rather than any persisted localhost target.
     const forceProxy =
       Boolean(gatewayOrigin) ||
@@ -150,7 +150,7 @@ export function ServerProvider({ children, defaultUrl }: ServerProviderProps) {
   useEffect(() => {
     if (!active) return;
     if (isDesktopRuntime() && !active.includes("/engine")) {
-      // Desktop React routes now talk to Sofia App server workspace-mounted
+      // Desktop React routes now talk to Sofia server workspace-mounted
       // `/engine` URLs directly. Ignore old persisted raw Sofia daemon
       // URLs here; their ephemeral ports go stale across restarts and otherwise
       // produce noisy `/global/health` connection-refused polling forever.

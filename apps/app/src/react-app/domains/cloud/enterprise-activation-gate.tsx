@@ -70,7 +70,7 @@ function EnterpriseActivationPage() {
 
     const baseUrl = normalizeOrganizationServerInput(serverInput);
     if (!baseUrl) {
-      setServerError("Enter a valid Sofia App server address.");
+      setServerError("Enter a valid Sofia server address.");
       return;
     }
 
@@ -85,7 +85,7 @@ function EnterpriseActivationPage() {
     setAuthBusy(true);
     setAuthError(null);
     setServerError(null);
-    setStatusMessage("Finishing Sofia App Enterprise sign-in…");
+    setStatusMessage("Finishing Sofia Enterprise sign-in…");
     try {
       // Persist the confirmed server before exchanging so the session is
       // scoped to this organization's base URL and survives the provider
@@ -95,7 +95,7 @@ function EnterpriseActivationPage() {
         baseUrl,
         client: createDenClient({ baseUrl }),
         desktopInitiated: true,
-        fallbackErrorMessage: "Sofia App Enterprise did not return a session token.",
+        fallbackErrorMessage: "Sofia Enterprise did not return a session token.",
       });
       if (!result.ok) {
         setStatusMessage(null);
@@ -114,7 +114,7 @@ function EnterpriseActivationPage() {
     } catch (error) {
       setStatusMessage(null);
       setAuthError(
-        error instanceof Error ? error.message : "Unable to finish Sofia App Enterprise sign-in.",
+        error instanceof Error ? error.message : "Unable to finish Sofia Enterprise sign-in.",
       );
     } finally {
       setAuthBusy(false);
@@ -144,11 +144,11 @@ function EnterpriseActivationPage() {
         setAuthError("We couldn't open your browser automatically. Try again, or paste the sign-in link from your browser into the address field.");
         return;
       }
-      setStatusMessage("Finish signing in in your browser, then return to Sofia App.");
+      setStatusMessage("Finish signing in in your browser, then return to Sofia.");
     } catch (error) {
       setStatusMessage(null);
       setServerError(
-        error instanceof Error ? error.message : "Unable to save this Sofia App server.",
+        error instanceof Error ? error.message : "Unable to save this Sofia server.",
       );
     } finally {
       setBrowserBusy(false);
@@ -202,7 +202,7 @@ function EnterpriseActivationPage() {
               aria-hidden="true"
             />
             <span className="text-[15px] font-semibold tracking-tight text-foreground">
-              Sofia App Enterprise
+              Sofia Enterprise
             </span>
           </div>
 
@@ -252,7 +252,7 @@ function EnterpriseActivationPage() {
             {pendingConfirmation ? (
               <section className="space-y-3 rounded-xl border border-border bg-muted/30 p-4">
                 <p className="text-sm leading-6 text-foreground">
-                  Connect this app to <strong className="break-all font-semibold">{pendingConfirmation.baseUrl}</strong>? This signs you in with that organization and binds Sofia App Enterprise to it.
+                  Connect this app to <strong className="break-all font-semibold">{pendingConfirmation.baseUrl}</strong>? This signs you in with that organization and binds Sofia Enterprise to it.
                 </p>
                 <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                   <Button

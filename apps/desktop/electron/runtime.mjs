@@ -461,13 +461,13 @@ export function resetRuntimeStatesAfterFailedServerStart(sofiaServerStateRef, en
 
 function assertSofiaServerReady(snapshot) {
   if (!snapshot?.running) {
-    throw new Error("Sofia App server did not stay running after startup.");
+    throw new Error("Sofia server did not stay running after startup.");
   }
   if (!snapshot.baseUrl) {
-    throw new Error("Sofia App server did not report a base URL after startup.");
+    throw new Error("Sofia server did not report a base URL after startup.");
   }
   if (!snapshot.ownerToken && !snapshot.clientToken) {
-    throw new Error("Sofia App server did not report an access token after startup.");
+    throw new Error("Sofia server did not report an access token after startup.");
   }
   return snapshot;
 }
@@ -1126,14 +1126,14 @@ async function repairIncompleteChains(options) {
   const chainRepair = options.chainRepair ?? {};
   const logInfo = options.logInfo;
   if (chainRepair.disabled === true || String(env.SOFIA_DISABLE_CHAIN_REPAIR ?? "").trim() === "1") {
-    if (typeof logInfo === "function") logInfo("Sofia App runtime: chain repair disabled by SOFIA_DISABLE_CHAIN_REPAIR.");
+    if (typeof logInfo === "function") logInfo("Sofia runtime: chain repair disabled by SOFIA_DISABLE_CHAIN_REPAIR.");
     return { pems: [], timedOut: false };
   }
 
   const origins = await resolveChainRepairOrigins(options);
   if (origins.length === 0) {
     if (!chainRepair.origins && !String(env.SOFIA_CHAIN_REPAIR_ORIGINS ?? "").trim() && typeof logInfo === "function") {
-      logInfo("Sofia App runtime: chain repair skipped: no activation record.");
+      logInfo("Sofia runtime: chain repair skipped: no activation record.");
     }
     return { pems: [], timedOut: false };
   }
@@ -1154,7 +1154,7 @@ async function repairIncompleteChains(options) {
 
   if (typeof fetchImpl !== "function") {
     if (typeof logInfo === "function") {
-      for (const origin of origins) logInfo(`Sofia App runtime: chain repair skipped for ${origin}: fetch unavailable`);
+      for (const origin of origins) logInfo(`Sofia runtime: chain repair skipped for ${origin}: fetch unavailable`);
     }
     return { pems: [], timedOut: false };
   }
@@ -1164,27 +1164,27 @@ async function repairIncompleteChains(options) {
     for (const origin of origins) {
       const strictError = await strictProbeChainRepair(origin, tlsConnectImpl);
       if (strictError === null) {
-        if (typeof logInfo === "function") logInfo(`Sofia App runtime: chain ok for ${origin}`);
+        if (typeof logInfo === "function") logInfo(`Sofia runtime: chain ok for ${origin}`);
         continue;
       }
       if (strictError !== "UNABLE_TO_VERIFY_LEAF_SIGNATURE") {
-        if (typeof logInfo === "function") logInfo(`Sofia App runtime: chain repair skipped for ${origin}: ${strictError}`);
+        if (typeof logInfo === "function") logInfo(`Sofia runtime: chain repair skipped for ${origin}: ${strictError}`);
         continue;
       }
 
       const leafState = await introspectLeafCertificate(origin, tlsConnectImpl);
       if (!leafState) {
-        if (typeof logInfo === "function") logInfo(`Sofia App runtime: chain repair skipped for ${origin}: certificate introspection failed`);
+        if (typeof logInfo === "function") logInfo(`Sofia runtime: chain repair skipped for ${origin}: certificate introspection failed`);
         continue;
       }
       if (!leafState.leafOnly) {
-        if (typeof logInfo === "function") logInfo(`Sofia App runtime: chain repair skipped for ${origin}: served chain includes an intermediate`);
+        if (typeof logInfo === "function") logInfo(`Sofia runtime: chain repair skipped for ${origin}: served chain includes an intermediate`);
         continue;
       }
 
       const issuerUrls = caIssuerUrls(leafState.leaf);
       if (issuerUrls.length === 0) {
-        if (typeof logInfo === "function") logInfo(`Sofia App runtime: chain repair skipped for ${origin}: no CA Issuers AIA URL`);
+        if (typeof logInfo === "function") logInfo(`Sofia runtime: chain repair skipped for ${origin}: no CA Issuers AIA URL`);
         continue;
       }
 
@@ -1199,18 +1199,18 @@ async function repairIncompleteChains(options) {
         if (!intermediate) continue;
         const reason = refusalReason(leafState.leaf, intermediate, rootsProvider);
         if (reason) {
-          if (typeof logInfo === "function") logInfo(`Sofia App runtime: chain repair refused for ${origin}: ${reason}`);
+          if (typeof logInfo === "function") logInfo(`Sofia runtime: chain repair refused for ${origin}: ${reason}`);
           continue;
         }
         pems.push(intermediate.toString());
         repaired = true;
         if (typeof logInfo === "function") {
-          logInfo(`Sofia App runtime: chain repaired for ${origin}: added "${certificateCommonName(intermediate)}"`);
+          logInfo(`Sofia runtime: chain repaired for ${origin}: added "${certificateCommonName(intermediate)}"`);
         }
         break;
       }
       if (!repaired && typeof logInfo === "function") {
-        logInfo(`Sofia App runtime: chain repair skipped for ${origin}: no usable AIA issuer certificate`);
+        logInfo(`Sofia runtime: chain repair skipped for ${origin}: no usable AIA issuer certificate`);
       }
     }
     return { pems, timedOut: false };
@@ -1245,7 +1245,7 @@ async function resolveSystemCa({
   const env = parentEnv ?? {};
   if (Object.prototype.hasOwnProperty.call(env, "NODE_EXTRA_CA_CERTS")) {
     if (typeof logInfo === "function") {
-      logInfo("Sofia App runtime: NODE_EXTRA_CA_CERTS is already set; skipping system CA bundle export.");
+      logInfo("Sofia runtime: NODE_EXTRA_CA_CERTS is already set; skipping system CA bundle export.");
     }
     try {
       const configuredPem = await readFile(String(env.NODE_EXTRA_CA_CERTS), "utf8");
@@ -1268,7 +1268,7 @@ async function resolveSystemCa({
       platform: platformLoader,
     });
     if (typeof logInfo === "function") {
-      logInfo(`Sofia App runtime: system CA bundle sources ${summarizeSystemCaSources(bundle.sources)}`);
+      logInfo(`Sofia runtime: system CA bundle sources ${summarizeSystemCaSources(bundle.sources)}`);
     }
     let repairedPems = [];
     try {
@@ -1284,7 +1284,7 @@ async function resolveSystemCa({
       });
       repairedPems = repaired.pems;
       if (repaired.timedOut && typeof logInfo === "function") {
-        logInfo("Sofia App runtime: chain repair skipped: timed out");
+        logInfo("Sofia runtime: chain repair skipped: timed out");
       }
     } catch {
       repairedPems = [];
@@ -1864,7 +1864,7 @@ export function createRuntimeManager({
           "Content-Type": "application/json",
           "X-Sofia-Host-Token": hostToken,
         },
-        body: JSON.stringify({ scope: "owner", label: "Sofia App desktop owner token" }),
+        body: JSON.stringify({ scope: "owner", label: "Sofia desktop owner token" }),
       },
       5000,
     );
@@ -1956,7 +1956,7 @@ export function createRuntimeManager({
       : [...packagedPaths, devPath];
     const embeddedPath = candidates.find((candidate) => existsSync(candidate));
     if (!embeddedPath) {
-      throw new Error(`Cannot find Sofia App embedded server bundle. Checked: ${candidates.join(", ")}`);
+      throw new Error(`Cannot find Sofia embedded server bundle. Checked: ${candidates.join(", ")}`);
     }
     const { startEmbeddedServer } = await import(embeddedServerImportUrl(embeddedPath));
     // startEmbeddedServer falls back to an OS-assigned port if `port` races
@@ -2040,7 +2040,7 @@ export function createRuntimeManager({
           engineState.childExited = false;
         }
       } catch (error) {
-        appendOutput(sofiaServerState, "lastStderr", `Sofia App server workspace probe: ${error instanceof Error ? error.message : String(error)}\n`);
+        appendOutput(sofiaServerState, "lastStderr", `Sofia server workspace probe: ${error instanceof Error ? error.message : String(error)}\n`);
       }
     }
     if (!portSelection.preferredPort || boundPort === portSelection.preferredPort) {
@@ -2093,7 +2093,7 @@ export function createRuntimeManager({
         engineRollover: options.engineRollover,
       });
     } catch (error) {
-      appendOutput(engineState, "lastStderr", `Sofia App server: ${error instanceof Error ? error.message : String(error)}\n`);
+      appendOutput(engineState, "lastStderr", `Sofia server: ${error instanceof Error ? error.message : String(error)}\n`);
       throw error;
     }
 
@@ -2253,7 +2253,7 @@ export function createRuntimeManager({
         status: -1,
         stdout: "",
         stderr:
-          "Guided install is not supported on Windows yet. Install the Sofia-pinned Sofia engine version manually, then restart Sofia App.",
+          "Guided install is not supported on Windows yet. Install the Sofia-pinned Sofia engine version manually, then restart Sofia.",
       };
     }
 
@@ -2278,7 +2278,7 @@ export function createRuntimeManager({
         status: -1,
         stdout: "",
         stderr:
-          "Guided install is not supported on Windows yet. Install the Sofia-pinned Codex version manually, then restart Sofia App.",
+          "Guided install is not supported on Windows yet. Install the Sofia-pinned Codex version manually, then restart Sofia.",
       };
     }
 

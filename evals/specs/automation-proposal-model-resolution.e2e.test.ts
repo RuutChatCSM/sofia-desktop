@@ -234,7 +234,7 @@ test("chat Automation proposals map Den providers and disclose a safe fallback",
     return true;
   })()`);
 
-  const mappedPrompt = `Use the sofia_execute tool exactly once with arguments: {"id":"automation.propose","args":{"name":${JSON.stringify(mappedName)},"instructions":"Summarize new Sofia App feedback and post one short digest.","schedule":{"kind":"weekly","timezone":"UTC","daysOfWeek":[1],"hour":9,"minute":0},"model":{"providerId":"deepseek","modelId":"deepseek-v4-flash"}}}. This is a tool-call test; do not ask questions, do not call any other tool, and reply only after the tool call.`;
+  const mappedPrompt = `Use the sofia_execute tool exactly once with arguments: {"id":"automation.propose","args":{"name":${JSON.stringify(mappedName)},"instructions":"Summarize new Sofia feedback and post one short digest.","schedule":{"kind":"weekly","timezone":"UTC","daysOfWeek":[1],"hour":9,"minute":0},"model":{"providerId":"deepseek","modelId":"deepseek-v4-flash"}}}. This is a tool-call test; do not ask questions, do not call any other tool, and reply only after the tool call.`;
   expect(mappedPrompt).not.toContain(providerRecordId);
   await sendComposerMessage(desktop, mappedPrompt);
   const mappedCard = await waitForProposalCard(desktop, mappedName, "mapped", false);
@@ -270,7 +270,7 @@ test("chat Automation proposals map Den providers and disclose a safe fallback",
     "No provider-unavailable error or failed creation message is visible",
   ]);
 
-  const fallbackPrompt = `Use the sofia_execute tool exactly once with arguments: {"id":"automation.propose","args":{"name":${JSON.stringify(fallbackName)},"instructions":"Summarize new Sofia App feedback and post one short digest.","schedule":{"kind":"weekly","timezone":"UTC","daysOfWeek":[1],"hour":9,"minute":0},"model":{"providerId":"local-only-provider","modelId":"mystery-model"}}}. This is a tool-call test; do not ask questions, do not call any other tool, and reply only after the tool call.`;
+  const fallbackPrompt = `Use the sofia_execute tool exactly once with arguments: {"id":"automation.propose","args":{"name":${JSON.stringify(fallbackName)},"instructions":"Summarize new Sofia feedback and post one short digest.","schedule":{"kind":"weekly","timezone":"UTC","daysOfWeek":[1],"hour":9,"minute":0},"model":{"providerId":"local-only-provider","modelId":"mystery-model"}}}. This is a tool-call test; do not ask questions, do not call any other tool, and reply only after the tool call.`;
   expect(fallbackPrompt).not.toContain(providerRecordId);
   await sendComposerMessage(desktop, fallbackPrompt);
   const fallbackCard = await waitForProposalCard(desktop, fallbackName, "fallback", false);

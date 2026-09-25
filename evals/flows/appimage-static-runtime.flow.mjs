@@ -28,7 +28,7 @@ function record(ctx, condition, assertion, actual = "") {
 
 export default {
   id: FLOW_ID,
-  title: "Sofia AppImage runs without FUSE2 and remains updateable",
+  title: "SofiaImage runs without FUSE2 and remains updateable",
   kind: "internal",
   requiredEnv: ["SOFIA_EVAL_DAYTONA_SANDBOX"],
   steps: [

@@ -40,7 +40,7 @@ async function certificateFixture() {
     // LibreSSL (macOS system openssl) does not imply CA:TRUE the way OpenSSL 3 does, so spell
     // the CA extension out; otherwise the fixture root is not a usable trust anchor.
     const caExtensions = ["-addext", "basicConstraints=critical,CA:TRUE", "-addext", "keyUsage=critical,keyCertSign,cRLSign"];
-    run("req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", "root.key", "-out", "root.pem", "-subj", "/CN=Sofia App Test Root", "-days", "2", "-sha256", ...caExtensions);
+    run("req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", "root.key", "-out", "root.pem", "-subj", "/CN=Sofia Test Root", "-days", "2", "-sha256", ...caExtensions);
     await writeFile(path.join(directory, "server.ext"), "extendedKeyUsage = serverAuth\nsubjectAltName = DNS:enterprise.test\n");
     run("req", "-newkey", "rsa:2048", "-nodes", "-keyout", "leaf.key", "-out", "leaf.csr", "-subj", "/CN=enterprise.test", "-sha256");
     run("x509", "-req", "-in", "leaf.csr", "-CA", "root.pem", "-CAkey", "root.key", "-set_serial", "2", "-out", "leaf.pem", "-days", "1", "-sha256", "-extfile", "server.ext");

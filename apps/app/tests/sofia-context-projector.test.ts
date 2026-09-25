@@ -39,7 +39,7 @@ const baseInput: ContextProjectorInput = {
   availableAffordances: [],
 };
 
-describe("Sofia App context projector", () => {
+describe("Sofia context projector", () => {
   test("projects the focused split session and its panel state", () => {
     const context = buildSofiaContext(baseInput);
 
@@ -106,7 +106,7 @@ function contextForRoute(route: string) {
         tabs: [{
           id: "browser-one",
           type: "browser",
-          label: "Sofia App docs",
+          label: "Sofia docs",
           url: "https://docs.sofia.so",
           favicon: null,
           status: "ready",
@@ -120,7 +120,7 @@ function contextForRoute(route: string) {
   });
 }
 
-describe("Sofia App context projector", () => {
+describe("Sofia context projector", () => {
   test("represents all open tabs and both visible split sessions", () => {
     const context = contextForRoute("/workspace/workspace-a/session/session-a");
 

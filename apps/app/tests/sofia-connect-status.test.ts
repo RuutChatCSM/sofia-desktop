@@ -26,7 +26,7 @@ function maintenance(
   };
 }
 
-describe("Sofia App Connect status", () => {
+describe("Sofia Connect status", () => {
   test("distinguishes missing, disabled, and unreadable Connect state", () => {
     expect(resolveSofiaConnectStateSummary("missing", false)).toEqual({
       status: "not_configured",
@@ -48,7 +48,7 @@ describe("Sofia App Connect status", () => {
         statusLabel: "Needs attention",
         tone: "error",
         stageLabel: "Connect settings are unavailable",
-        recommendedAction: "Restart Sofia App. If this continues, run diagnostics.",
+        recommendedAction: "Restart Sofia. If this continues, run diagnostics.",
       });
     }
   });

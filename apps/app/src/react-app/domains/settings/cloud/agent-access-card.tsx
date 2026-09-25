@@ -162,7 +162,7 @@ export function AgentAccessCard(props: {
     setBusy("test");
     setError(null);
     try {
-      // probe: verify the Cloud endpoint directly from the Sofia App server as
+      // probe: verify the Cloud endpoint directly from the Sofia server as
       // well, so a failure can be attributed to the endpoint, the network
       // path, or the engine — not just reported as the engine's cached state.
       const result = await runSofiaCloudMcpReconciler({
@@ -198,7 +198,7 @@ export function AgentAccessCard(props: {
       if (result.status === "skipped") {
         setError(
           result.skippedReason === "unsupported"
-            ? "This Sofia App server does not support engine refresh yet. Update Sofia App, then retry."
+            ? "This Sofia server does not support engine refresh yet. Update Sofia, then retry."
             : "Select a workspace before refreshing the engine connection.",
         );
       }

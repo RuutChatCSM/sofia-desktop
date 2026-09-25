@@ -26,7 +26,7 @@ const e2eTestsEnabled = process.env.SOFIA_EVAL_E2E_TESTS === "1";
 const title = e2eTestsEnabled
   ? "first use without an invite or cloud reaches local task UI with honest model setup"
   : "first-run local skipped: set SOFIA_EVAL_E2E_TESTS=1 to opt in";
-const prompt = "Create a short welcome checklist for this Sofia App workspace. Use exactly three bullets and mention one thing I can do next.";
+const prompt = "Create a short welcome checklist for this Sofia workspace. Use exactly three bullets and mention one thing I can do next.";
 
 interface TaskAvailability {
   createTaskEnabled: boolean;
@@ -86,11 +86,11 @@ test.skipIf(!e2eTestsEnabled)(title, async () => {
 
   expect(app.readiness.route).toContain("/welcome");
   expect(app.readiness.state).toBe("welcome");
-  await waitForText(app, "Welcome to Sofia App");
+  await waitForText(app, "Welcome to Sofia");
   {
     const shot = await screenshot(app);
     const seen = await validate(shot, [
-      "The Welcome to Sofia App heading and Use Without Cloud option are visible",
+      "The Welcome to Sofia heading and Use Without Cloud option are visible",
       "No generic error or 'Something went wrong' crash message is visible",
     ]);
     expect(seen.ok, seen.why).toBe(true);
@@ -115,7 +115,7 @@ test.skipIf(!e2eTestsEnabled)(title, async () => {
   }
 
   await clickButton(app, "Skip and use the free model", { timeoutMs: 90_000 });
-  await waitForText(app, "How did you hear about Sofia App?", { timeoutMs: 90_000 });
+  await waitForText(app, "How did you hear about Sofia?", { timeoutMs: 90_000 });
   await clickButton(app, "Skip", { timeoutMs: 15_000 });
   await waitFor(app, `Boolean(localStorage.getItem("sofia.react.activeWorkspace"))
     || /\\/workspace\\/[^/?#]+/.test(window.location.hash)`, {

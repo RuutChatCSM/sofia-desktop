@@ -17,7 +17,7 @@ const requirements: TestNeeds = {
 const missingRequirements = unmetNeeds(requirements, process.env);
 const title = missingRequirements.length > 0
   ? `Managed vault recovery skipped — needs: ${missingRequirements.join(", ")}`
-  : "Sofia App recovers managed MCP connections after the OS secure-storage key changes";
+  : "Sofia recovers managed MCP connections after the OS secure-storage key changes";
 
 const VAULT_FILE = "local-managed-mcp-vault.json";
 const RECONNECT_REASON = "Secure storage on this device changed";

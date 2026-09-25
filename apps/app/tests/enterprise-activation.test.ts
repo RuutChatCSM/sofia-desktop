@@ -31,7 +31,7 @@ const connectConfirmDialogSource = readFileSync(
 
 const publicDistribution = {
   flavor: "public" as const,
-  appName: "Sofia App",
+  appName: "Sofia",
   appIdentifier: "com.differentai.sofia",
   protocolScheme: "sofia",
   requireSignin: false,
@@ -40,7 +40,7 @@ const publicDistribution = {
 
 const enterpriseDistribution = {
   flavor: "enterprise" as const,
-  appName: "Sofia App Enterprise",
+  appName: "Sofia Enterprise",
   appIdentifier: "com.differentai.sofia",
   protocolScheme: "sofia",
   requireSignin: true,
@@ -130,16 +130,16 @@ describe("enterprise desktop activation", () => {
     expect(activationGateSource).toContain('data-testid="organization-server-input"');
     expect(activationGateSource).toContain('data-testid="organization-server-confirm"');
     expect(activationGateSource).toContain("Connect this app to");
-    expect(activationGateSource).toContain("binds Sofia App Enterprise to it");
+    expect(activationGateSource).toContain("binds Sofia Enterprise to it");
     expect(activationGateSource).toContain("Continue in browser");
     expect(activationGateSource).not.toContain('htmlFor="enterprise-sofia-link"');
-    expect(activationGateSource).not.toContain("Sofia App link");
+    expect(activationGateSource).not.toContain("Sofia link");
     expect(activationGateSource).not.toContain("enterprise-sofia-link-connect");
     expect(activationGateSource).toContain("Link this app to your organization");
     expect(activationGateSource).toContain("Enter your workspace address — the page where you downloaded this app. Sign-in finishes in your browser and returns here.");
     expect(activationGateSource).toContain("const pastedLink = parseManualAuthInput(serverInput);");
     expect(activationGateSource).toContain("{pendingConfirmation ? null : (");
-    expect(activationGateSource).not.toContain("Have an Sofia App link");
+    expect(activationGateSource).not.toContain("Have an Sofia link");
     expect(activationGateSource).not.toContain("Use workspace address instead");
     expect(activationGateSource).not.toContain("manualAuthOpen");
     expect(activationGateSource).not.toMatch(/(?:paste|hide) sign-in code/i);

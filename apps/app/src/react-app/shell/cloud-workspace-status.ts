@@ -107,7 +107,7 @@ export function cloudWorkspaceTakeoverCopy(input: {
   if (input.variant === "updating") {
     return {
       title: "Updating your workspace…",
-      body: "We’re applying the latest Sofia App image. Your files and sessions come along.",
+      body: "We’re applying the latest Sofia image. Your files and sessions come along.",
     };
   }
   return {

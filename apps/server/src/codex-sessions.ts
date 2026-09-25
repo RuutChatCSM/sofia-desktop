@@ -4,7 +4,7 @@ import { resolveSofiaPrompt } from "./sofia-commands.js";
 // Sofia-shaped session surface for the codex runtime. This is additive —
 // engine routes are untouched. Each workspace gets its own engine process
 // (mirroring how engine is managed per workspace) and threads are mapped to
-// Sofia App session ids via a `codex-<threadId>` scheme.
+// Sofia session ids via a `codex-<threadId>` scheme.
 import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
@@ -808,7 +808,7 @@ export class CodexSessionManager {
         const threadId = typeof row.id === "string" ? row.id : "";
         if (!threadId || this.sessions.has(codexSessionId(threadId))) continue;
         // Only import sessions whose project matches this workspace's path
-        // (codex groups by project cwd; Sofia App groups by workspace).
+        // (codex groups by project cwd; Sofia groups by workspace).
         const rowCwd = typeof row.cwd === "string" ? row.cwd : "";
         if (workspacePath && rowCwd && !pathsMatch(workspacePath, rowCwd)) continue;
         const createdRaw = row.created_at;

@@ -39,7 +39,7 @@ config.port = server.port;
 const workerActivityHeartbeat = startWorkerActivityHeartbeat(config, logger);
 
 const url = `http://${config.host}:${server.port}`;
-logger.log("info", `Sofia App server listening on ${url}`);
+logger.log("info", `Sofia server listening on ${url}`);
 
 if (config.tokenSource === "generated") {
   logger.log("info", `Client token: ${config.token}`);

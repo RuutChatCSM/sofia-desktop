@@ -39,7 +39,7 @@ const validRequest: AgentContextDiagnosticsRequest = {
 
 const workspace: WorkspaceInfo = {
   id: "remote_sofia_schema_parity",
-  name: "Remote Sofia App schema parity",
+  name: "Remote Sofia schema parity",
   path: "",
   preset: "starter",
   workspaceType: "remote",

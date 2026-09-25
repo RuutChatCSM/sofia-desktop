@@ -12,7 +12,7 @@ import {
 
 const connectedBuiltIn: McpDirectoryInfo = {
   id: "sofia-browser",
-  name: "Sofia App Browser",
+  name: "Sofia Browser",
   serverName: "sofia-browser",
   description: "Connected by default.",
   oauth: false,
@@ -20,7 +20,7 @@ const connectedBuiltIn: McpDirectoryInfo = {
   extensionManifest: {
     schemaVersion: 1,
     id: "sofia-browser",
-    name: "Sofia App Browser",
+    name: "Sofia Browser",
     description: "Connected by default.",
     source: { format: "sofia-builtin", origin: "builtin", trusted: true },
     resources: [],
@@ -113,9 +113,9 @@ describe("extension item projection", () => {
       isBuiltInConnected: (entry) => entry.id === connectedBuiltIn.id,
     });
 
-    expect(result.installedMcpEntries.map((entry) => entry.name)).toEqual(["Sofia App Browser"]);
-    expect(result.builtInItems.map((item) => item.name)).toEqual(["Sofia App Browser", "Computer Use"]);
-    expect(result.quickConnectEntries.map((entry) => entry.name)).toEqual(["Sofia App Browser", "Computer Use"]);
+    expect(result.installedMcpEntries.map((entry) => entry.name)).toEqual(["Sofia Browser"]);
+    expect(result.builtInItems.map((item) => item.name)).toEqual(["Sofia Browser", "Computer Use"]);
+    expect(result.quickConnectEntries.map((entry) => entry.name)).toEqual(["Sofia Browser", "Computer Use"]);
   });
 
   test("projects per-member org MCP grants as Marketplace items until connected", () => {
@@ -214,7 +214,7 @@ describe("resolveExtensionInventoryGroup", () => {
   const baseItem = (overrides: Partial<ExtensionItem> = {}): ExtensionItem => ({
     id: "builtin:sofia-browser",
     source: "builtin",
-    name: "Sofia App Browser",
+    name: "Sofia Browser",
     description: null,
     installState: "installed",
     setupState: "ready",

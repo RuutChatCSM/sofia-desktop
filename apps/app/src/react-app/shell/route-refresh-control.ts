@@ -131,7 +131,7 @@ export type RouteConnectionGapPlan = {
 };
 
 /**
- * Decide what a refresh does when it resolves no usable Sofia App server
+ * Decide what a refresh does when it resolves no usable Sofia server
  * URL/token.
  *
  * On desktop the local server owns that URL and mints fresh tokens on every

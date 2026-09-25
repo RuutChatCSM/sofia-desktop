@@ -205,7 +205,7 @@ describe("organization connection diagnostic observations", () => {
     expect(agentContextDiagnosticsRequestSchema.safeParse(request).success).toBe(true);
   });
 
-  test("omits local organization topology from remote Sofia App diagnostic requests", () => {
+  test("omits local organization topology from remote Sofia diagnostic requests", () => {
     const request = collectAgentContextDiagnosticObservations({
       organizationConnections: [connection],
       organizationConnectionsProbe: {
@@ -372,7 +372,7 @@ describe("organization connection diagnostic observations", () => {
 });
 
 describe("agent diagnostics workspace trust", () => {
-  test("blocks explicit and legacy remote Sofia engine while allowing local and remote Sofia App", () => {
+  test("blocks explicit and legacy remote Sofia engine while allowing local and remote Sofia", () => {
     expect(isAgentContextDiagnosticsWorkspaceAllowed({
       workspaceType: "remote",
       remoteType: "engine",

@@ -39,7 +39,7 @@ test.skipIf(!optedIn)(title, async () => {
   {
     const shot = await screenshot(app);
     const seen = await validate(shot, [
-      "An Sofia App screen offering to sign in to Sofia Cloud is visible",
+      "An Sofia screen offering to sign in to Sofia Cloud is visible",
       "No error or 'Something went wrong' crash message is visible yet",
     ]);
     expect(seen.ok, seen.why).toBe(true);

@@ -125,15 +125,15 @@ export function attributeChatToolError(errorText: string): ToolErrorAttribution 
   const providerCode = stringValue(diagnostic, "providerCode")
 
   if (
-    errorText.includes("Sofia App stopped waiting after")
+    errorText.includes("Sofia stopped waiting after")
     || /The capability call exceeded \d+(?:\.\d+)?s\b/.test(errorText)
     || code === "MCP_LIFECYCLE_DEADLINE"
     || code === "MCP_REQUEST_TIMEOUT"
     || category === "lifecycle_deadline"
   ) {
     return confirmed(
-      "Sofia App timeout",
-      "Sofia App created this deadline. The external operation may still have completed, so verify its state before retrying.",
+      "Sofia timeout",
+      "Sofia created this deadline. The external operation may still have completed, so verify its state before retrying.",
     )
   }
 
@@ -142,7 +142,7 @@ export function attributeChatToolError(errorText: string): ToolErrorAttribution 
     || code === "MCP_URL_BLOCKED"
     || code === "MCP_FETCH_FORBIDDEN_PORT"
   ) {
-    return confirmed("Blocked by Sofia App", "Sofia App blocked the request before it was sent.")
+    return confirmed("Blocked by Sofia", "Sofia blocked the request before it was sent.")
   }
 
   if (httpStatus !== undefined && (httpStatus < 200 || httpStatus >= 300)) {

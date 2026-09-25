@@ -111,12 +111,12 @@ export function AdvancedView(props: AdvancedViewProps) {
     ? ["Chat and task creation can use the Sofia engine for this workspace."]
     : [
         "Chat and task creation may fail until the engine restarts.",
-        "Sofia App server config sources below can still be inspected.",
+        "Sofia server config sources below can still be inspected.",
       ];
 
   const sofiaDetailLines = props.sofiaServerStatus === "connected"
     ? ["Runtime DB, workspace config, and migration diagnostics are available."]
-    : ["Runtime config diagnostics need the Sofia App server connection."];
+    : ["Runtime config diagnostics need the Sofia server connection."];
 
   const submitDebugDeepLink = async () => {
     const rawUrl = debugDeepLinkInput.trim();

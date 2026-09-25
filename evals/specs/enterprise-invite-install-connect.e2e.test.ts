@@ -269,9 +269,9 @@ test(title, { timeout: 1_800_000 }, async ({ evidence, place }) => {
       distribution: config?.distribution,
       downloadHrefs: hrefs.filter((href) => href.includes("/v1/me/install/")),
       cloudDownloadSurface: [...document.querySelectorAll("h1")]
-        .some((heading) => (heading.textContent ?? "").trim() === "Download Sofia App"),
+        .some((heading) => (heading.textContent ?? "").trim() === "Download Sofia"),
       cloudReturnControl: [...document.querySelectorAll("a")]
-        .some((anchor) => (anchor.textContent ?? "").trim() === "I already installed Sofia App"),
+        .some((anchor) => (anchor.textContent ?? "").trim() === "I already installed Sofia"),
       enterpriseGuide: Boolean(document.querySelector('[data-testid="install-guide"]')),
       skipControl: Boolean(document.querySelector('[data-testid="install-skip-download"]')),
       workspaceControl: Boolean(document.querySelector('[data-testid="install-workspace-address"]')),
@@ -397,7 +397,7 @@ test(title, { timeout: 1_800_000 }, async ({ evidence, place }) => {
     expect(isRecord(gate) && gate.methodToggle === false).toBe(true);
     evidence.recordAssertionEvidence(
       "The enterprise blank slate asks one question: the workspace address",
-      "The packaged-policy gate renders Link this app to your organization with only the organization-server-input form; no Sofia App link field and no method toggle exist.",
+      "The packaged-policy gate renders Link this app to your organization with only the organization-server-input form; no Sofia link field and no method toggle exist.",
       true,
     );
 
@@ -467,7 +467,7 @@ test(title, { timeout: 1_800_000 }, async ({ evidence, place }) => {
     });
     expect(reused.response.ok).toBe(false);
     evidence.recordAssertionEvidence(
-      "Pasting the complete Sofia App URL signs the desktop in exactly once",
+      "Pasting the complete Sofia URL signs the desktop in exactly once",
       `After confirming ${webOrigin} the enterprise gate unmounted (sign-in is activation), and replaying the same grant against /v1/auth/desktop-handoff/exchange failed with HTTP ${reused.response.status}: the credential is single-use.`,
       !reused.response.ok,
     );
@@ -512,11 +512,11 @@ test(title, { timeout: 1_800_000 }, async ({ evidence, place }) => {
   const finalShot = await screenshot(browser);
   const seen = await validate(finalShot, distribution === "cloud"
     ? [
-        "The page is an Sofia App download guide",
+        "The page is an Sofia download guide",
         "Desktop download choices are visible",
       ]
     : [
-        "The page is an Sofia App install or setup guide",
+        "The page is an Sofia install or setup guide",
         "A step mentions connecting or a workspace address",
       ]);
   expect(seen.ok, seen.why).toBe(true);

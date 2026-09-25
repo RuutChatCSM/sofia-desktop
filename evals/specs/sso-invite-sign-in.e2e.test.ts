@@ -251,7 +251,7 @@ test.skipIf(!localPlacement || !mysqlOpen)(title, async ({ evidence, place }) =>
 
   const installShot = await screenshot(browser);
   const installSeen = await validate(installShot, [
-    "The page is an Sofia App download or install guide",
+    "The page is an Sofia download or install guide",
     "Download options for desktop computers are visible",
   ]);
   expect(installSeen.ok, installSeen.why).toBe(true);

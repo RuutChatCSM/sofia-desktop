@@ -22,7 +22,7 @@ import {
 const ELECTRON_UPDATER_CHANNEL_FILENAME = "electron-updater-channel.v1.json";
 
 // In dev mode, app.getVersion() returns the Electron framework version
-// (e.g. "35.7.5") instead of the Sofia App version. Read from
+// (e.g. "35.7.5") instead of the Sofia version. Read from
 // package.json so the UI always shows the correct version.
 const __updater_dirname = path.dirname(fileURLToPath(import.meta.url));
 let _cachedAppVersion = null;

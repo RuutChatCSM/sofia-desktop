@@ -12,7 +12,7 @@ const WEB_BOOTSTRAP_TOKEN_ENV = "SOFIA_WEB_BOOTSTRAP_TOKEN";
 async function createWebRoot() {
   const root = join(tmpdir(), `sofia-static-ui-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   await mkdir(join(root, "assets"), { recursive: true });
-  await writeFile(join(root, "index.html"), "<html><head><title>Sofia App</title></head><body>App shell</body></html>");
+  await writeFile(join(root, "index.html"), "<html><head><title>Sofia</title></head><body>App shell</body></html>");
   await writeFile(join(root, "overlay.html"), "<html><head></head><body>Overlay</body></html>");
   await writeFile(join(root, "assets", "app.123.js"), "console.log('app');");
   await writeFile(join(root, "assets", "style.123.css"), "body { color: black; }");

@@ -73,10 +73,10 @@ describe("validateMcpName", () => {
 });
 
 describe("validateUserMcpName", () => {
-  test("reserves the Sofia App Connect runtime name", () => {
-    expect(() => validateUserMcpName("sofia-cloud")).toThrow("reserved for Sofia App Connect");
-    expect(() => validateUserMcpName("SOFIA-CLOUD")).toThrow("reserved for Sofia App Connect");
-    expect(() => validateUserMcpName("sofia-connect-1234")).toThrow("reserved for Sofia App Connect");
+  test("reserves the Sofia Connect runtime name", () => {
+    expect(() => validateUserMcpName("sofia-cloud")).toThrow("reserved for Sofia Connect");
+    expect(() => validateUserMcpName("SOFIA-CLOUD")).toThrow("reserved for Sofia Connect");
+    expect(() => validateUserMcpName("sofia-connect-1234")).toThrow("reserved for Sofia Connect");
   });
 
   test("allows ordinary workspace MCP names", () => {

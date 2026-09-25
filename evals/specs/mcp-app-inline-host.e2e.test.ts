@@ -614,7 +614,7 @@ test.skipIf(!e2eTestsEnabled || !localPlacement)(title, { timeout: 240_000 }, as
     // Keep the checked-in tape runnable without a separate vision-model key.
     ask: async (request) => request.prompt.startsWith("Objectively describe")
       ? JSON.stringify({
-        description: "An Sofia App conversation with a Quarterly plan card, Ready status, and a completed assistant reply.",
+        description: "An Sofia conversation with a Quarterly plan card, Ready status, and a completed assistant reply.",
       })
       : JSON.stringify({
         results: expectations.map((expectation) => ({

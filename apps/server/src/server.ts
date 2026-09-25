@@ -225,19 +225,19 @@ const SOFIA_VOICE_REALTIME_TOOLS = [
   {
     type: "function",
     name: "sofia_snapshot",
-    description: "Read the current Sofia App UI control snapshot: route, status, narration, and visible action metadata.",
+    description: "Read the current Sofia UI control snapshot: route, status, narration, and visible action metadata.",
     parameters: { type: "object", properties: {}, additionalProperties: false },
   },
   {
     type: "function",
     name: "sofia_list_actions",
-    description: "List semantic Sofia App UI actions. Call this before sofia_execute_action when you do not know the exact action id.",
+    description: "List semantic Sofia UI actions. Call this before sofia_execute_action when you do not know the exact action id.",
     parameters: { type: "object", properties: {}, additionalProperties: false },
   },
   {
     type: "function",
     name: "sofia_execute_action",
-    description: "Execute a semantic Sofia App UI action by id. Prefer this over screen coordinates or DOM guessing.",
+    description: "Execute a semantic Sofia UI action by id. Prefer this over screen coordinates or DOM guessing.",
     parameters: {
       type: "object",
       properties: {
@@ -494,8 +494,8 @@ ${trimmedContext}`
     : "";
   return `# Role and Objective
 
-You are Sofia App Voice Mode, a voice-first control layer inside Sofia App.
-Help the user control Sofia App by using the semantic Sofia App UI tools.
+You are Sofia Voice Mode, a voice-first control layer inside Sofia.
+Help the user control Sofia by using the semantic Sofia UI tools.
 
 # Tool Policy
 
@@ -510,7 +510,7 @@ Help the user control Sofia App by using the semantic Sofia App UI tools.
 
 - Be concise, calm, and direct.
 - If audio is unclear, ask the user to repeat it instead of guessing.
-- Ignore background speech that is not addressed to Sofia App.
+- Ignore background speech that is not addressed to Sofia.
 - Summarize tool results briefly and offer the next useful step.${contextSection}`;
 }
 
@@ -545,13 +545,13 @@ async function createOpenAiRealtimeVoiceSession(env: EnvService, input: unknown)
       if (error instanceof ApiError && error.status === 503) {
         const fallbackKey = await resolveOpenAiRealtimeApiKey(env);
         if (fallbackKey) {
-          console.warn("[voice] Sofia App Models broker returned 503 — falling back to direct OpenAI Realtime.");
+          console.warn("[voice] Sofia Models broker returned 503 — falling back to direct OpenAI Realtime.");
           return createDirectOpenAiVoiceSession(fallbackKey, input);
         }
         throw new ApiError(
           503,
           "sofia_models_voice_unavailable",
-          "Sofia App Models voice is active but the server is not fully configured. Ask your admin to add an OpenAI key, or save your own OPENAI_API_KEY in Environment settings.",
+          "Sofia Models voice is active but the server is not fully configured. Ask your admin to add an OpenAI key, or save your own OPENAI_API_KEY in Environment settings.",
         );
       }
       throw error;
@@ -563,7 +563,7 @@ async function createOpenAiRealtimeVoiceSession(env: EnvService, input: unknown)
     throw new ApiError(
       400,
       "openai_api_key_missing",
-      "OpenAI API key missing. Save OPENAI_API_KEY in Sofia App Environment Variables or configure the Voice Mode extension.",
+      "OpenAI API key missing. Save OPENAI_API_KEY in Sofia Environment Variables or configure the Voice Mode extension.",
     );
   }
 
@@ -589,7 +589,7 @@ async function createManagedVoiceSession(config: { baseUrl: string; apiKey: stri
   if (!response.ok) {
     const errorPayload = isRecord(payload) && isRecord(payload.error) ? payload.error : null;
     const message = typeof errorPayload?.message === "string" ? errorPayload.message : response.statusText;
-    throw new ApiError(response.status, "sofia_models_voice_failed", message || "Sofia App Models could not create a voice session");
+    throw new ApiError(response.status, "sofia_models_voice_failed", message || "Sofia Models could not create a voice session");
   }
   if (
     !isRecord(payload) ||
@@ -599,7 +599,7 @@ async function createManagedVoiceSession(config: { baseUrl: string; apiKey: stri
     !Array.isArray(payload.tools) ||
     payload.tools.some((tool) => typeof tool !== "string")
   ) {
-    throw new ApiError(502, "sofia_models_voice_invalid_response", "Sofia App Models did not return a usable Realtime session payload");
+    throw new ApiError(502, "sofia_models_voice_invalid_response", "Sofia Models did not return a usable Realtime session payload");
   }
   return {
     ok: true,
@@ -1547,7 +1547,7 @@ function createRoutes(
       throw new ApiError(
         400,
         "agent_diagnostics_workspace_unsupported",
-        "Agent diagnostics must run on the Sofia App server that owns a local workspace",
+        "Agent diagnostics must run on the Sofia server that owns a local workspace",
       );
     }
     // Reserve before consuming untrusted bytes and hold the reservation through
@@ -2507,7 +2507,7 @@ function createRoutes(
         throw new ApiError(
           502,
           "managed_mcp_connection_failed",
-          `Sofia App could not start sign-in with this MCP server. Check the server URL, OAuth settings, and network connection, then try again.${cause ? ` (${cause})` : ""}`,
+          `Sofia could not start sign-in with this MCP server. Check the server URL, OAuth settings, and network connection, then try again.${cause ? ` (${cause})` : ""}`,
           cause ? { cause } : undefined,
         );
       }
@@ -2552,7 +2552,7 @@ function createRoutes(
       await syncRuntimeMcpToWorkspaceEngineEngine(config, workspace, [connection.name], undefined, engineMcpServerState).catch(() => undefined);
     }
     return new Response(
-      `<!doctype html><meta charset="utf-8"><title>Connected</title><main style="font:16px system-ui;padding:40px;max-width:560px"><h1>Connected</h1><p>${connection.name} is ready in Sofia App. You can close this window.</p><script>setTimeout(()=>window.close(),1200)</script></main>`,
+      `<!doctype html><meta charset="utf-8"><title>Connected</title><main style="font:16px system-ui;padding:40px;max-width:560px"><h1>Connected</h1><p>${connection.name} is ready in Sofia. You can close this window.</p><script>setTimeout(()=>window.close(),1200)</script></main>`,
       { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } },
     );
   });
@@ -4003,7 +4003,7 @@ type EngineMcpServerState = {
 const ENGINE_MCP_REGISTRATION_MAX_AGE_MS = 15 * 60_000;
 // Registration status is point-in-time evidence from a dynamic POST /mcp,
 // not a durable statement about a later engine process. Scope it to one
-// Sofia App server generation and expire it even when the endpoint is stable.
+// Sofia server generation and expire it even when the endpoint is stable.
 const engineMcpServerStateByConfig = new WeakMap<ServerConfig, EngineMcpServerState>();
 const trustedEngineProcessByConfig = new WeakMap<ServerConfig, TrustedEngineProcessIdentity>();
 let nextEngineMcpServerGeneration = 0;
@@ -4031,7 +4031,7 @@ function clearEngineMcpServerEvidence(state: EngineMcpServerState): void {
 
 /**
  * Bind diagnostics evidence to one Sofia engine process generation owned by this
- * Sofia App server. The opaque identity is hashed immediately and never
+ * Sofia server. The opaque identity is hashed immediately and never
  * reported. External engines without a trusted per-boot identity still hot
  * sync normally, but their cached registration result cannot authorize a
  * credentialed diagnostics probe.

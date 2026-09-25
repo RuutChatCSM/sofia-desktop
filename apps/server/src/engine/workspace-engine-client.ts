@@ -1,6 +1,6 @@
 // Codex-backed workspace engine client.
 //
-// This is the adapter that replaces the Sofia engine SDK in the Sofia App server:
+// This is the adapter that replaces the Sofia engine SDK in the Sofia server:
 // it exposes the small subset of the Sofia engine client surface the server's
 // feature modules call, but every method is backed by the bundled Sofia/Codex
 // engine (`CodexSessionManager` + the codex provider/config stores). Feature
@@ -208,7 +208,7 @@ async function readEngineConfig(config: ServerConfig, workspaceId: string): Prom
 
 /**
  * Build a Codex-backed engine client for a workspace. Mirrors the Sofia engine
- * client method names the Sofia App server calls.
+ * client method names the Sofia server calls.
  */
 export function createWorkspaceEngineClient(
   config: ServerConfig,

@@ -454,7 +454,7 @@ describe("runtime MCP engine sync", () => {
     }
   });
 
-  test("scopes registration evidence to the concrete Sofia App server instance", async () => {
+  test("scopes registration evidence to the concrete Sofia server instance", async () => {
     const workspaceRoot = await createWorkspaceRoot();
     const previousDb = process.env.SOFIA_RUNTIME_DB;
     process.env.SOFIA_RUNTIME_DB = join(workspaceRoot, "runtime.sqlite");

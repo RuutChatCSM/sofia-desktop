@@ -32,7 +32,7 @@ function restoreResourcesPath(previous: string | undefined) {
 describe("sofiaPluginPath", () => {
   test("prefers SOFIA_EXTENSIONS_PLUGIN_DIR", () => {
     withPluginDir("/opt/sofia/engine-plugins", () => {
-      const resourcesPath = join("/Applications", "Sofia App.app", "Contents", "Resources");
+      const resourcesPath = join("/Applications", "Sofia.app", "Contents", "Resources");
       const previousResourcesPath = process.resourcesPath;
       process.resourcesPath = resourcesPath;
       try {
@@ -47,7 +47,7 @@ describe("sofiaPluginPath", () => {
   test("uses external resources plugin path in packaged Electron when env is unset", () => {
     withPluginDir(undefined, () => {
       const previousResourcesPath = process.resourcesPath;
-      const resourcesPath = join("/Applications", "Sofia App.app", "Contents", "Resources");
+      const resourcesPath = join("/Applications", "Sofia.app", "Contents", "Resources");
       process.resourcesPath = resourcesPath;
       try {
         const pluginPath = sofiaPluginPath(

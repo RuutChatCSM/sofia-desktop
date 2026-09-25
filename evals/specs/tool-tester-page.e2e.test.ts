@@ -299,7 +299,7 @@ test(title, async ({ evidence, place }) => {
     if (!inspector) return false;
     const tabs = [...inspector.querySelectorAll('[role="tab"]')];
     return (inspector.textContent ?? "").includes("Tool completed")
-      && (inspector.textContent ?? "").includes("Sofia App")
+      && (inspector.textContent ?? "").includes("Sofia")
       && (inspector.textContent ?? "").includes("HTTP 200")
       && (inspector.textContent ?? "").includes("Tool result")
       && (inspector.textContent ?? "").includes(${JSON.stringify(marker)})
@@ -325,7 +325,7 @@ test(title, async ({ evidence, place }) => {
 
   const sessionOnlyCaption = await evalIn(
     browser,
-    `document.body.innerText.includes("Kept in this browser for this session only — Sofia App never stores run results.")`,
+    `document.body.innerText.includes("Kept in this browser for this session only — Sofia never stores run results.")`,
   );
   const orgKillSwitchPresent = await evalIn(browser, `(() => {
     const toggle = document.querySelector('[role="switch"][aria-label="Tools enabled for your organization"]');
@@ -335,7 +335,7 @@ test(title, async ({ evidence, place }) => {
   expect(orgKillSwitchPresent).toBe(true);
   evidence.recordAssertionEvidence(
     "The page exposes the organization kill switch and session-only run-history notice",
-    "The org toggle was enabled and the Recent runs caption said Sofia App never stores run results.",
+    "The org toggle was enabled and the Recent runs caption said Sofia never stores run results.",
     sessionOnlyCaption === true && orgKillSwitchPresent === true,
   );
   await evalIn(browser, `(() => {
@@ -347,7 +347,7 @@ test(title, async ({ evidence, place }) => {
     const shot = await screenshot(browser);
     const seen = await validate(shot, [
       "The dedicated Tool Tester page shows a completed mock_echo run",
-      "A clear trace reads Sofia App, HTTP 200, and Tool result",
+      "A clear trace reads Sofia, HTTP 200, and Tool result",
       "The result is visible with Result, Request, and Response tabs available",
       "No error banner or crash message is visible",
     ]);

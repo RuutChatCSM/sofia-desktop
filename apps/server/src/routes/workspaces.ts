@@ -143,13 +143,13 @@ async function fetchSofiaWorkspaceList(hostUrl: string, token: string, hostToken
       throw new ApiError(
         502,
         "sofia_workspace_discovery_failed",
-        `Sofia App workspace discovery failed (${response.status} ${response.statusText || "HTTP error"})`,
+        `Sofia workspace discovery failed (${response.status} ${response.statusText || "HTTP error"})`,
       );
     }
     return await response.json();
   } catch (error) {
     if (error instanceof ApiError) throw error;
-    throw new ApiError(502, "sofia_workspace_discovery_failed", "Sofia App workspace discovery failed", {
+    throw new ApiError(502, "sofia_workspace_discovery_failed", "Sofia workspace discovery failed", {
       error: String(error),
     });
   } finally {
@@ -369,8 +369,8 @@ export function registerWorkspaceRoutes(options: RegisterWorkspaceRoutesOptions)
           400,
           "sofia_workspace_not_found",
           directory
-            ? `Sofia App server has no workspace matching ${directory}.`
-            : "Sofia App server returned no workspaces.",
+            ? `Sofia server has no workspace matching ${directory}.`
+            : "Sofia server returned no workspaces.",
         );
       }
     }
@@ -506,7 +506,7 @@ export function registerWorkspaceRoutes(options: RegisterWorkspaceRoutesOptions)
       actor: ctx.actor ?? { type: "host" },
       action: "workspace.delete",
       target: "workspace",
-      summary: "Deleted workspace from Sofia App server",
+      summary: "Deleted workspace from Sofia server",
       timestamp: Date.now(),
     });
 

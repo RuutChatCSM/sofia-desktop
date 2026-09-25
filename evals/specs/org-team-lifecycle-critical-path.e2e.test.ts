@@ -494,7 +494,7 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 45 * 60_000 }, asy
       && adminCloudMcp.direct.missing.length === 0
       && adminCloudMcp.tools.missing.length === 0;
     evidence.recordAssertionEvidence(
-      "The admin desktop's Sofia App Connect MCP connector is registered and live-probed ready",
+      "The admin desktop's Sofia Connect MCP connector is registered and live-probed ready",
       `Health phase=${adminCloudMcp.phase}, engine=${adminCloudMcp.engineStatus}, probed tools=${JSON.stringify(adminCloudMcp.direct.present)}.`,
       adminCloudMcpReady,
     );
@@ -620,7 +620,7 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 45 * 60_000 }, asy
     await waitForButtonGone(appAdmin, "Stop", { timeoutMs: 240_000 });
     const shot = await screenshot(appAdmin);
     const seen = await validate(shot, [
-      "An Sofia App chat surface shows the admin's completed Cloud skill creation task",
+      "An Sofia chat surface shows the admin's completed Cloud skill creation task",
       "No 'Something went wrong', blank screen, or crash message is visible",
     ]);
     expect(seen.ok, seen.why).toBe(true);
@@ -725,7 +725,7 @@ test.skipIf(missingRequirements.length > 0)(title, { timeout: 45 * 60_000 }, asy
       && teammateCloudMcp.direct.missing.length === 0
       && teammateCloudMcp.tools.missing.length === 0;
     evidence.recordAssertionEvidence(
-      "The plain-member desktop's Sofia App Connect MCP connector is registered and live-probed ready",
+      "The plain-member desktop's Sofia Connect MCP connector is registered and live-probed ready",
       `Health phase=${teammateCloudMcp.phase}, engine=${teammateCloudMcp.engineStatus}, probed tools=${JSON.stringify(teammateCloudMcp.direct.present)}.`,
       teammateCloudMcpReady,
     );

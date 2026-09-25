@@ -114,18 +114,18 @@ test(title, async ({ evidence, place }) => {
   }
 
   expect(dashboard.pathname).toBe("/dashboard");
-  expect(dashboard.cta).toBe("Get Sofia App");
+  expect(dashboard.cta).toBe("Get Sofia");
   evidence.recordAssertionEvidence(
     "The member dashboard offers the authenticated install guide",
     `pathname=${dashboard.pathname}; cta=${dashboard.cta}`,
-    dashboard.pathname === "/dashboard" && dashboard.cta === "Get Sofia App",
+    dashboard.pathname === "/dashboard" && dashboard.cta === "Get Sofia",
   );
 
   {
     const shot = await screenshot(browser);
     const seen = await validate(shot, [
       "The heading says the workspace is set up for you",
-      "The primary button says Get Sofia App",
+      "The primary button says Get Sofia",
     ]);
     expect(seen.ok, seen.why).toBe(true);
   }

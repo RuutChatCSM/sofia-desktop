@@ -37,7 +37,7 @@ mac:
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
-    NSMicrophoneUsageDescription: Sofia App uses the microphone when you start Voice Mode so you can speak commands to your agent.
+    NSMicrophoneUsageDescription: Sofia uses the microphone when you start Voice Mode so you can speak commands to your agent.
   extraResources:
     - from: resources/sidecars
       to: sidecars
@@ -51,7 +51,7 @@ mac:
     - from: resources/helpers
       to: helpers
       filter:
-        - "Sofia App Computer Use.app/**"
+        - "Sofia Computer Use.app/**"
   target:
     - dmg
     - zip

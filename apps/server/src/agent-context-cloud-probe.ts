@@ -295,7 +295,7 @@ function isLoopbackHostname(hostname: string): boolean {
 }
 
 /**
- * Origins the credentialed diagnostic request may reach: built-in Sofia App
+ * Origins the credentialed diagnostic request may reach: built-in Sofia
  * Cloud origins plus exact administrator-configured diagnostic origins. An
  * enterprise/on-prem Den origin must be provisioned through the same explicit
  * administrator setting; the desktop bootstrap's Den activation state is not
@@ -1010,7 +1010,7 @@ export function differentialCloudVerdict(
  * Performs one credential-safe direct verification of the exact
  * runtime-managed Sofia Cloud entry supplied by the caller, running the
  * complete bounded MCP handshake (initialize, initialized notification,
- * tools/list, best-effort session termination) on the Sofia App runtime's own
+ * tools/list, best-effort session termination) on the Sofia runtime's own
  * fetch stack. This function never discovers another MCP, follows redirects,
  * calls a tool, mutates configuration, or returns endpoint, credential,
  * header, response-body, or caught-error values.

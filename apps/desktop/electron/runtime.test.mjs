@@ -53,7 +53,7 @@ describe("workspace root preparation", () => {
     try {
       const manager = createRuntimeManager({
         app: {
-          getPath: (name) => name === "exe" ? path.join(root, "Sofia App.exe") : root,
+          getPath: (name) => name === "exe" ? path.join(root, "Sofia.exe") : root,
           isPackaged: false,
         },
         desktopRoot: path.dirname(fileURLToPath(import.meta.url)),
@@ -173,8 +173,8 @@ describe("commandMatchesPackagedSidecar", () => {
   it("matches packaged engine sidecars with platform suffixes", () => {
     assert.equal(
       commandMatchesPackagedSidecar(
-        "/Applications/Sofia App.app/Contents/Resources/sidecars/engine-aarch64-apple-darwin serve --hostname 127.0.0.1 --port 49174 --cors *",
-        ["/Applications/Sofia App.app/Contents/Resources/sidecars"],
+        "/Applications/Sofia.app/Contents/Resources/sidecars/engine-aarch64-apple-darwin serve --hostname 127.0.0.1 --port 49174 --cors *",
+        ["/Applications/Sofia.app/Contents/Resources/sidecars"],
       ),
       true,
     );
@@ -184,7 +184,7 @@ describe("commandMatchesPackagedSidecar", () => {
     assert.equal(
       commandMatchesPackagedSidecar(
         "/usr/local/bin/engine serve --hostname 127.0.0.1 --port 49174",
-        ["/Applications/Sofia App.app/Contents/Resources/sidecars"],
+        ["/Applications/Sofia.app/Contents/Resources/sidecars"],
       ),
       false,
     );
@@ -251,7 +251,7 @@ describe("resolveSofiaServerConfigPath", () => {
   });
 });
 
-describe("Sofia App server credential persistence", () => {
+describe("Sofia server credential persistence", () => {
   it("deterministically migrates legacy workspace credentials into one server bundle", () => {
     const migrated = migrateSofiaServerTokenStore({
       version: 1,

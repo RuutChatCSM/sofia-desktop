@@ -8,7 +8,7 @@ import { localMysqlIsRunning, needs, server, test } from "@sofia/testkit";
 
 /**
  * CLAIMS — APPROVED NARRATION:
- *  1. Push → auto-update. GitHub receives the webhook immediately, Sofia App
+ *  1. Push → auto-update. GitHub receives the webhook immediately, Sofia
  *     acknowledges it before processing, and the exact pushed commit becomes
  *     the skill's latest stored version automatically.
  *  2. Rate-limited push retries itself. Two provider 429s recover without a

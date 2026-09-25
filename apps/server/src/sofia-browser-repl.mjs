@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Sofia App in-app browser harness for the codex engine. Exposes the browser
+// Sofia in-app browser harness for the codex engine. Exposes the browser
 // interface the ChatGPT/Codex app uses (mcp__node_repl__js style): the agent runs
 // JavaScript that drives `globalThis.agent.browsers`, e.g.
 //
@@ -13,7 +13,7 @@
 // session does not route them. So each tab connects to its own page WS (~ the
 // app's webContents.debugger equivalent) and drives it directly. The broker
 // proxies both /devtools/browser and /devtools/page, so we reach every tab
-// through the same Sofia App CDP broker URL.
+// through the same Sofia CDP broker URL.
 //
 // Protocol: newline-delimited JSON-RPC 2.0 on stdio (MCP stdio transport).
 import { createInterface } from "node:readline";
@@ -71,7 +71,7 @@ async function brokerUrl() {
   resolvedBrokerUrl = "";
   const tried = brokerCandidates();
   throw new Error(tried.length
-    ? `in-app browser bridge is not answering (tried ${tried.join(", ")}). The Sofia App window that owns it may have restarted; tell the user instead of driving CDP by hand.`
+    ? `in-app browser bridge is not answering (tried ${tried.join(", ")}). The Sofia window that owns it may have restarted; tell the user instead of driving CDP by hand.`
     : "in-app browser bridge is not configured: SOFIA_BROWSER_CDP_URL is unset and no broker discovery file was found.");
 }
 
@@ -227,7 +227,7 @@ async function waitForLoad(send, timeoutMs = 12000) {
 function isSofiaApp(url) { return typeof url === "string" && url.includes("localhost:5173"); }
 
 // --- Stealth: hide CDP/Electron automation fingerprints ------------------------
-// Sofia App's browser is a real Electron <webview>, but the User-Agent leaks
+// Sofia's browser is a real Electron <webview>, but the User-Agent leaks
 // "Electron" / "Sofia-Dev", which bot detectors (e.g. timesdaily) flag. We
 // override the UA + client hints at the network layer and patch the common
 // fingerprint globals on every (sub)document so automation is not detectable.
@@ -506,7 +506,7 @@ async function handleRequest(id, method, params) {
 function jsTool() {
   return {
     name: "js",
-    description: `Drive the visible, signed-in Sofia App browser by running JavaScript. Initialize with setupBrowserRuntime(), read browser.documentation() before first use, inspect the latest page state with tab.see() or tab.ax.get(), then act by index/text/role. Re-inspect after navigation or state-changing actions before deciding what to do next. Pattern:
+    description: `Drive the visible, signed-in Sofia browser by running JavaScript. Initialize with setupBrowserRuntime(), read browser.documentation() before first use, inspect the latest page state with tab.see() or tab.ax.get(), then act by index/text/role. Re-inspect after navigation or state-changing actions before deciding what to do next. Pattern:
 const browser = (await setupBrowserRuntime()).browsers.get("iab"); await browser.documentation(); const tab = await browser.tabs.open("url"); const view = await tab.see(); await tab.click({index:view.elements[0].index}); await tab.see();
 Use tab.getByText/getByRole/fill/select/check/waitFor; use screenshots when the semantic tree is ambiguous.
 If a call reports "in-app browser bridge is not answering", the app window that owns the bridge has restarted: say so and stop, never reconnect over raw CDP by hand.

@@ -1,7 +1,7 @@
 // Public engine-client facade.
 //
 // Historically this module wrapped the Sofia SDK. The SDK is gone; the
-// implementation now lives in `./engine-client` and talks to the Sofia App
+// implementation now lives in `./engine-client` and talks to the Sofia
 // server's adapter-backed REST routes and native Codex surface. Call sites keep
 // importing `createClient`/`unwrap` from here unchanged.
 import { createEngineClient, type EngineResult, type WorkspaceEngineAuth } from "./engine-client";

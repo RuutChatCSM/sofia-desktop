@@ -29,13 +29,13 @@ function reconnectStatus(connectionId = "emc_knowledge", connectionName = "Knowl
 describe("chat tool error attribution", () => {
   test("identifies an Sofia-created capability deadline", () => {
     expect(attributeChatToolError("The capability call exceeded 180s. Retry once.")).toEqual({
-      label: "Sofia App timeout",
+      label: "Sofia timeout",
       confidence: "Confirmed",
-      description: "Sofia App created this deadline. The external operation may still have completed, so verify its state before retrying.",
+      description: "Sofia created this deadline. The external operation may still have completed, so verify its state before retrying.",
     })
   })
 
-  test("identifies a structured Sofia App lifecycle deadline", () => {
+  test("identifies a structured Sofia lifecycle deadline", () => {
     expect(attributeChatToolError(JSON.stringify({
       error: "connection_failed",
       diagnostic: {
@@ -44,16 +44,16 @@ describe("chat tool error attribution", () => {
         phase: "MCP_TOOL_EXECUTION",
       },
     }))).toMatchObject({
-      label: "Sofia App timeout",
+      label: "Sofia timeout",
       confidence: "Confirmed",
     })
   })
 
-  test("identifies an Sofia App block before send", () => {
+  test("identifies an Sofia block before send", () => {
     expect(attributeChatToolError(JSON.stringify({
       diagnostic: { code: "MCP_URL_BLOCKED", category: "security_blocked" },
     }))).toMatchObject({
-      label: "Blocked by Sofia App",
+      label: "Blocked by Sofia",
       confidence: "Confirmed",
     })
   })

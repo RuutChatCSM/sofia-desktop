@@ -35,7 +35,7 @@ function requireRecord(value: unknown, label: string): Record<string, unknown> {
 
 async function waitForMountedProjectAtlas(
   app: Awaited<ReturnType<typeof desktop>>,
-  expected: string[] = ["Project Atlas", "Connected through Sofia App Connect"],
+  expected: string[] = ["Project Atlas", "Connected through Sofia Connect"],
   timeoutMs = 60_000,
 ): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
@@ -189,7 +189,7 @@ function standardMcpAppRpc(message: Record<string, unknown>): Record<string, unk
           name: "project-atlas-connect-fixture",
           title: "Project Atlas Connect",
           version: "1.0.0",
-          description: "A standard MCP App fixture served through Sofia App Connect.",
+          description: "A standard MCP App fixture served through Sofia Connect.",
           websiteUrl: "https://example.test/project-atlas",
           icons: [{ src: "https://example.test/project-atlas.png", mimeType: "image/png", sizes: ["64x64"] }],
         },
@@ -274,8 +274,8 @@ function standardMcpAppRpc(message: Record<string, unknown>): Record<string, unk
           content: [{ type: "text", text: "Project Atlas opened." }],
           structuredContent: {
             schemaVersion: "1",
-            artifact: { title: "Project Atlas", description: "A standard MCP App served through Sofia App Connect." },
-            data: { name: "Project Atlas", status: "Connected through Sofia App Connect" },
+            artifact: { title: "Project Atlas", description: "A standard MCP App served through Sofia Connect." },
+            data: { name: "Project Atlas", status: "Connected through Sofia Connect" },
           },
           _meta: { source: "project-atlas-standard-mcp" },
         },
@@ -706,7 +706,7 @@ test.skipIf(!e2eTestsEnabled || !localPlacement || !mysqlOpen)(title, { timeout:
     name: "project-atlas-connect-fixture",
     title: "Project Atlas Connect",
     version: "1.0.0",
-    description: "A standard MCP App fixture served through Sofia App Connect.",
+    description: "A standard MCP App fixture served through Sofia Connect.",
     websiteUrl: "https://example.test/project-atlas",
     icons: [{ src: "https://example.test/project-atlas.png", mimeType: "image/png", sizes: ["64x64"] }],
   });
@@ -777,7 +777,7 @@ test.skipIf(!e2eTestsEnabled || !localPlacement || !mysqlOpen)(title, { timeout:
     connectedEndpoint,
     appHostCapabilityHeaders,
   ))
-    .rejects.toThrow("only through the Sofia App host");
+    .rejects.toThrow("only through the Sofia host");
   const connectedRead = await agentRpc(
     den.ref.apiUrl,
     appHostMcpToken,
@@ -1029,8 +1029,8 @@ test.skipIf(!e2eTestsEnabled || !localPlacement || !mysqlOpen)(title, { timeout:
   const persistedMcpResult = requireRecord(persistedMetadata.sofiaMcpApp, "persisted Project Atlas MCP result");
   expect(persistedMcpResult.structuredContent).toEqual({
     schemaVersion: "1",
-    artifact: { title: "Project Atlas", description: "A standard MCP App served through Sofia App Connect." },
-    data: { name: "Project Atlas", status: "Connected through Sofia App Connect" },
+    artifact: { title: "Project Atlas", description: "A standard MCP App served through Sofia Connect." },
+    data: { name: "Project Atlas", status: "Connected through Sofia Connect" },
     serverTools: {
       searchCapabilities: "search_capabilities",
       executeCapability: "execute_capability",
@@ -1064,14 +1064,14 @@ test.skipIf(!e2eTestsEnabled || !localPlacement || !mysqlOpen)(title, { timeout:
   const desktopExpectations = [
     "The conversation visibly contains the connected Project Atlas MCP App",
     "The user requested Project Atlas naturally without a generated native tool name",
-    "Sofia App searched and executed the exact connected capability through the gateway",
+    "Sofia searched and executed the exact connected capability through the gateway",
     "The app was loaded from the standard ui://project-atlas/view.html resource",
     `The assistant says ${desktopClosingReply}`,
     "No interactive-view-unavailable or crash message is visible",
   ];
   const desktopSeen = await validate(desktopShot, desktopExpectations, {
     ask: async (request) => request.prompt.startsWith("Objectively describe")
-      ? JSON.stringify({ description: "An Sofia App Desktop conversation with a visible Project Atlas MCP App delivered through a normal Connect server and a completed assistant reply." })
+      ? JSON.stringify({ description: "An Sofia Desktop conversation with a visible Project Atlas MCP App delivered through a normal Connect server and a completed assistant reply." })
       : JSON.stringify({ results: desktopExpectations.map((expectation) => ({ expectation, passed: true, evidence: "The deterministic desktop DOM and MCP protocol assertions completed before capture." })) }),
   });
   expect(desktopSeen.ok, desktopSeen.why).toBe(true);
@@ -1105,7 +1105,7 @@ test.skipIf(!e2eTestsEnabled || !localPlacement || !mysqlOpen)(title, { timeout:
     arguments: { name: gatewayCapabilityName, body: {} },
   });
   expect(flagOffRun.isError, JSON.stringify(flagOffRun)).not.toBe(true);
-  expect(JSON.stringify(flagOffRun.structuredContent)).toContain("Connected through Sofia App Connect");
+  expect(JSON.stringify(flagOffRun.structuredContent)).toContain("Connected through Sofia Connect");
   expect(requireRecord(flagOffRun._meta, "flag-off provider metadata")["sofia/mcpApp"]).toBeUndefined();
 
   const flagOffProviderTools = await agentRpc(den.ref.apiUrl, appHostMcpToken, "tools/list", {}, connectedEndpoint, appHostHeaders);

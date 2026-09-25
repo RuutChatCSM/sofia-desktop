@@ -10,7 +10,7 @@ const requirements: TestNeeds = {
 const missingRequirements = unmetNeeds(requirements, process.env);
 const title = missingRequirements.length > 0
   ? `Local managed MCP OAuth skipped — needs: ${missingRequirements.join(", ")}`
-  : "Sofia App owns local MCP OAuth while Sofia engine consumes the gateway tools";
+  : "Sofia owns local MCP OAuth while Sofia engine consumes the gateway tools";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -78,7 +78,7 @@ test(title, async ({ evidence, place }) => {
   expect(connected.body).toMatchObject({ status: "connected", hasCredential: true, enabled: true });
 
   evidence.recordAssertionEvidence(
-    "The desktop's embedded Sofia App server owns the provider OAuth callback and credential",
+    "The desktop's embedded Sofia server owns the provider OAuth callback and credential",
     `Created ${name}; the provider redirected to the local callback; public state reported connected with a credential present.`,
     connected.body.status === "connected" && connected.body.hasCredential === true,
   );

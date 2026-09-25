@@ -71,7 +71,7 @@ export function createUiControlServer({ appName, appIdentifier, getWindow }) {
     if (command === "snapshot") {
       return evaluateSofiaControl(`(async () => {
         const control = window.__sofiaControl;
-        if (!control) return { ok: false, error: "Sofia App control surface is not available yet." };
+        if (!control) return { ok: false, error: "Sofia control surface is not available yet." };
         control.setEnabled?.(true);
         return { ok: true, ...control.snapshot() };
       })()`);
@@ -79,7 +79,7 @@ export function createUiControlServer({ appName, appIdentifier, getWindow }) {
     if (command === "actions") {
       return evaluateSofiaControl(`(async () => {
         const control = window.__sofiaControl;
-        if (!control) return { ok: false, error: "Sofia App control surface is not available yet." };
+        if (!control) return { ok: false, error: "Sofia control surface is not available yet." };
         control.setEnabled?.(true);
         return { ok: true, actions: control.listActions() };
       })()`);
@@ -87,7 +87,7 @@ export function createUiControlServer({ appName, appIdentifier, getWindow }) {
     if (command === "context") {
       return evaluateSofiaControl(`(async () => {
         const control = window.__sofiaControl;
-        if (!control) return { ok: false, error: "Sofia App control surface is not available yet." };
+        if (!control) return { ok: false, error: "Sofia control surface is not available yet." };
         return { ok: true, context: control.context() };
       })()`);
     }
@@ -95,9 +95,9 @@ export function createUiControlServer({ appName, appIdentifier, getWindow }) {
       return evaluateSofiaControl(`(async () => {
         const control = window.__sofiaControl;
         const input = JSON.parse(${argsJsonLiteral});
-        if (!control) return { ok: false, error: "Sofia App control surface is not available yet." };
+        if (!control) return { ok: false, error: "Sofia control surface is not available yet." };
         if (!input || typeof input.id !== "string" || !input.id.trim()) {
-          return { ok: false, error: "Missing Sofia App affordance id." };
+          return { ok: false, error: "Missing Sofia affordance id." };
         }
         return control[${JSON.stringify(command)}](input);
       })()`);
@@ -106,15 +106,15 @@ export function createUiControlServer({ appName, appIdentifier, getWindow }) {
       return evaluateSofiaControl(`(async () => {
         const control = window.__sofiaControl;
         const input = JSON.parse(${argsJsonLiteral});
-        if (!control) return { ok: false, error: "Sofia App control surface is not available yet." };
+        if (!control) return { ok: false, error: "Sofia control surface is not available yet." };
         if (!input || typeof input.actionId !== "string" || !input.actionId.trim()) {
-          return { ok: false, error: "Missing Sofia App actionId." };
+          return { ok: false, error: "Missing Sofia actionId." };
         }
         control.setEnabled?.(true);
         return control.execute(input.actionId, input.args ?? {});
       })()`);
     }
-    return { ok: false, error: `Unknown Sofia App control command: ${command}` };
+    return { ok: false, error: `Unknown Sofia control command: ${command}` };
   }
 
   async function start() {
@@ -165,7 +165,7 @@ export function createUiControlServer({ appName, appIdentifier, getWindow }) {
     });
     const address = uiControlServer.address();
     const port = typeof address === "object" && address ? address.port : null;
-    if (!port) throw new Error("Could not start Sofia App UI control bridge.");
+    if (!port) throw new Error("Could not start Sofia UI control bridge.");
     uiControlDiscoveryPath = path.join(app.getPath("userData"), "sofia-ui-control.json");
     await writeFile(
       uiControlDiscoveryPath,

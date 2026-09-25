@@ -63,7 +63,7 @@ test.skipIf(!localPlacement || !mysqlOpen || !redisOpen)(title, { timeout: 600_0
     provision: false,
     env: {
       DEN_ORG_MODE: "single_org",
-      DEN_SINGLE_ORG_NAME: "Private Sofia App",
+      DEN_SINGLE_ORG_NAME: "Private Sofia",
       DEN_SINGLE_ORG_SLUG: "private-sofia",
       DEN_SINGLE_ORG_ALLOW_PUBLIC_SIGNUP: "false",
       DEN_SINGLE_ORG_OWNER_EMAILS: `${adminEmail},${otherAdminEmail}`,
@@ -298,7 +298,7 @@ test.skipIf(!localPlacement || !mysqlOpen || !redisOpen)(title, { timeout: 600_0
     web: false,
     env: {
       DEN_ORG_MODE: "single_org",
-      DEN_SINGLE_ORG_NAME: "Race Sofia App",
+      DEN_SINGLE_ORG_NAME: "Race Sofia",
       DEN_SINGLE_ORG_SLUG: "race-sofia",
       DEN_SINGLE_ORG_ALLOW_PUBLIC_SIGNUP: "false",
       DEN_SINGLE_ORG_OWNER_EMAILS: `${adminEmail},${otherAdminEmail}`,

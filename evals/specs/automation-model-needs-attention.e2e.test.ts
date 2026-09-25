@@ -261,7 +261,7 @@ test("an unavailable Automation model needs attention until the owner selects a 
   expect(String(pickerText)).toContain("Replacement Automation Model");
   expect(String(pickerText)).not.toContain("Legacy Automation Model");
   // Provider groups start collapsed unless they hold the current model, a
-  // cloud-sourced group, or Sofia App models — none apply here, so the model
+  // cloud-sourced group, or Sofia models — none apply here, so the model
   // rows are not in the DOM yet. The shipped interaction is: expand the
   // provider group via its header button, then click the model row (a
   // role="button" div whose label span is the model's display name).

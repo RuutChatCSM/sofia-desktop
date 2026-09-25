@@ -29,7 +29,7 @@ type PersistedConnectState = {
   connectEnabled: boolean;
   updatedAt: number;
   /**
-   * Server-scoped Sofia App Connect (`sofia-cloud`) MCP desired config.
+   * Server-scoped Sofia Connect (`sofia-cloud`) MCP desired config.
    * Connect is identity/org scoped, not per-workspace — workspace runtime
    * copies remain for engine registration, but catalog/skill injection reads
    * this host-level entry.
@@ -119,7 +119,7 @@ export function googleWorkspaceConnectGuidance(cloudHealthOrReady: CloudMcpHealt
   if (cloudHealthOrReady && typeof cloudHealthOrReady !== "boolean" && cloudHealthOrReady.desired.present) {
     const failure = cloudHealthOrReady.firstFailure;
     const suffix = failure ? ` Current health check: ${failure.code}.` : "";
-    return `Google Workspace is connected through Sofia App Connect, but agent access needs attention for this workspace. Direct the user to Settings > Connect.${suffix}`;
+    return `Google Workspace is connected through Sofia Connect, but agent access needs attention for this workspace. Direct the user to Settings > Connect.${suffix}`;
   }
   return "Google Workspace is not connected on this device. Direct the user to Settings > Connect to connect their account. Do not direct them to Settings > Extensions.";
 }

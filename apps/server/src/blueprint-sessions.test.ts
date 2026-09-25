@@ -14,10 +14,10 @@ describe("blueprint sessions", () => {
         sessions: [
           {
             id: "welcome",
-            title: "Welcome to Sofia App",
+            title: "Welcome to Sofia",
             openOnFirstLoad: true,
             messages: [
-              { role: "assistant", text: "Hi welcome to Sofia App!" },
+              { role: "assistant", text: "Hi welcome to Sofia!" },
               { role: "user", text: "Help me get started." },
             ],
           },
@@ -28,10 +28,10 @@ describe("blueprint sessions", () => {
     expect(sessions).toEqual([
       {
         id: "welcome",
-        title: "Welcome to Sofia App",
+        title: "Welcome to Sofia",
         openOnFirstLoad: true,
         messages: [
-          { role: "assistant", text: "Hi welcome to Sofia App!" },
+          { role: "assistant", text: "Hi welcome to Sofia!" },
           { role: "user", text: "Help me get started." },
         ],
       },

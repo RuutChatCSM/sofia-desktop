@@ -466,7 +466,7 @@ export function AdvancedCloudMcpDiagnosticsSection(props: AdvancedCloudMcpDiagno
               <DiagnosticRow label="Safe capabilities" value={`schema v${props.cloudMcpHealth.schemaVersion}; connect catalog ${props.cloudMcpHealth.connectCatalogEnabled ? "enabled" : "disabled"}`} />
               {compatibility ? (
                 <>
-                  <DiagnosticRow label="Sofia App versions" value={`server ${formatMaybe(compatibility.sofia.serverVersion)}; app ${formatMetadataRecord(compatibility.sofia.app)}`} />
+                  <DiagnosticRow label="Sofia versions" value={`server ${formatMaybe(compatibility.sofia.serverVersion)}; app ${formatMetadataRecord(compatibility.sofia.app)}`} />
                   <DiagnosticRow label="Engine compatibility" value={`expected ${formatMaybe(compatibility.engine.expectedVersion)}; actual ${formatMaybe(compatibility.engine.actualVersion)}; probe ${compatibility.engine.probe}`} />
                   <DiagnosticRow label="Feature probes" value={formatSupportedFeatures(compatibility.supportedFeatures)} />
                   <DiagnosticRow label="Experimental tool IDs" value={formatMcpToolExposure(compatibility.experimentalToolIds)} />
@@ -609,15 +609,15 @@ export function AdvancedRuntimeMigrationSection(props: AdvancedRuntimeMigrationS
       <LayoutSectionHeader>
         <LayoutSectionTitle>Engine config sources</LayoutSectionTitle>
         <LayoutSectionDescription>
-          Inspect what Sofia App controls at runtime versus what belongs to your workspace config. This works through the Sofia App server and does not require the engine to be healthy.
+          Inspect what Sofia controls at runtime versus what belongs to your workspace config. This works through the Sofia server and does not require the engine to be healthy.
         </LayoutSectionDescription>
       </LayoutSectionHeader>
 
       <LayoutSectionItem>
         <LayoutSectionItemHeader>
-          <LayoutSectionItemTitle>Move Sofia App-managed config</LayoutSectionItemTitle>
+          <LayoutSectionItemTitle>Move Sofia-managed config</LayoutSectionItemTitle>
           <LayoutSectionItemDescription>
-            Moves older Sofia App-owned runtime keys from `.sofia/sofia.json` and safe Sofia App-managed keys from `engine.jsonc` into the runtime database.
+            Moves older Sofia-owned runtime keys from `.sofia/sofia.json` and safe Sofia-managed keys from `engine.jsonc` into the runtime database.
           </LayoutSectionItemDescription>
           <LayoutSectionItemHeaderActions>
             <Button
@@ -647,9 +647,9 @@ export function AdvancedRuntimeMigrationSection(props: AdvancedRuntimeMigrationS
         {props.configStatus ? (
           <div className="space-y-3 rounded-xl border border-gray-6 bg-gray-1/60 p-3 text-xs text-gray-10">
             <div className="space-y-2 rounded-xl border border-blue-6/50 bg-blue-2/40 p-3">
-              <div className="font-medium text-gray-12">Desired Sofia App runtime config</div>
+              <div className="font-medium text-gray-12">Desired Sofia runtime config</div>
               <div className="text-[11px] text-gray-9">
-                This is the Sofia App-built config object requested for the runtime database and injected safely by the server. Sensitive headers are redacted here.
+                This is the Sofia-built config object requested for the runtime database and injected safely by the server. Sensitive headers are redacted here.
               </div>
               <RuntimeConfigSummary config={effectiveRuntimeConfig ?? {}} />
               <details className="rounded-lg bg-gray-3 p-2">
@@ -664,18 +664,18 @@ export function AdvancedRuntimeMigrationSection(props: AdvancedRuntimeMigrationS
                 <div>
                   <div className="font-medium text-gray-12">Engine source breakdown</div>
                   <div className="text-[11px] text-gray-9">
-                    Sofia App injects the runtime config separately; for Sofia App-managed keys, the injected config is the source to inspect.
+                    Sofia injects the runtime config separately; for Sofia-managed keys, the injected config is the source to inspect.
                   </div>
                 </div>
                 <RuntimeConfigSourceBlock
-                  title="Sofia App runtime DB"
-                  description="Sofia App-managed runtime values stored outside workspace files."
+                  title="Sofia runtime DB"
+                  description="Sofia-managed runtime values stored outside workspace files."
                   keys={props.configStatus.sources.runtimeDatabase.keys}
                   config={props.configStatus.sources.runtimeDatabase.config}
                 />
                 <RuntimeConfigSourceBlock
-                  title="Sofia App injected config"
-                  description="The object Sofia App injects into the engine at runtime."
+                  title="Sofia injected config"
+                  description="The object Sofia injects into the engine at runtime."
                   keys={props.configStatus.sources.injected.keys}
                   config={props.configStatus.sources.injected.config}
                 />
@@ -686,7 +686,7 @@ export function AdvancedRuntimeMigrationSection(props: AdvancedRuntimeMigrationS
               <div>Stored keys: {formatKeys(props.configStatus.runtimeKeys)}</div>
             </div>
             <div>
-              <div className="font-medium text-gray-12">Legacy Sofia App metadata</div>
+              <div className="font-medium text-gray-12">Legacy Sofia metadata</div>
               <div className="break-all">{props.configStatus.legacySofia.path}</div>
               {props.configStatus.legacySofia.error ? (
                 <div className="text-amber-11">{props.configStatus.legacySofia.error}; fix this file before moving legacy config.</div>

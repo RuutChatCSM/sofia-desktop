@@ -6,7 +6,7 @@ import { sofiaEnvStorePath } from "@sofia/paths";
 import { ensureDir, exists } from "./utils.js";
 
 // User-level environment variables, persisted so the desktop shell can inject
-// them into every spawned child (Sofia engine and Sofia App server).
+// them into every spawned child (Sofia engine and Sofia server).
 // Motivation: Linux GUI launches don't inherit shell env, so users set
 // ANTHROPIC_API_KEY / GCLOUD_* / GCP_* in .bashrc and hit silent auth failures.
 // Scope: user/machine, not workspace. Not synced to the cloud.
@@ -14,7 +14,7 @@ import { ensureDir, exists } from "./utils.js";
 const ENV_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 // Keys reserved for internal wiring by the desktop shell and server. This UI
-// is for service credentials, not Sofia App/Sofia engine runtime knobs; users who
+// is for service credentials, not Sofia/Sofia engine runtime knobs; users who
 // need SOFIA_ENGINE_* process settings should set them from the launching shell.
 // We refuse writes to these and strip them when reading for injection, so a
 // tampered file cannot shadow auth credentials, token paths, or process
@@ -248,7 +248,7 @@ export class InvalidEnvKeyError extends Error {
   constructor(key: string, code: "invalid_env_key" | "reserved_env_key") {
     super(
       code === "reserved_env_key"
-        ? `Environment variable name is reserved for Sofia App internals: ${key}`
+        ? `Environment variable name is reserved for Sofia internals: ${key}`
         : `Invalid environment variable name: ${key}`,
     );
     this.code = code;

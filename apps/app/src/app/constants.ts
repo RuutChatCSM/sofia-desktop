@@ -37,7 +37,7 @@ export type McpDirectoryInfo = {
   type?: "remote" | "local";
   command?: string[];
   oauth: boolean;
-  /** Route OAuth through the local Sofia App gateway instead of delegating it to Sofia. */
+  /** Route OAuth through the local Sofia gateway instead of delegating it to the hosted Sofia service. */
   managedOAuth?: boolean;
   /** Identifies MCP entries owned by Connections instead of workspace configuration. */
   managedBy?: "sofia-connect";
@@ -54,9 +54,9 @@ export type McpDirectoryInfo = {
   iconSrc?: string;
   /** Prompt inserted from the composer extension picker. */
   composerPrompt?: string;
-  /** Whether Sofia App should show this extension as enabled before user setup. */
+  /** Whether Sofia should show this extension as enabled before user setup. */
   defaultEnabled?: boolean;
-  /** Whether Sofia App should hide this extension from the default catalog view. */
+  /** Whether Sofia should hide this extension from the default catalog view. */
   defaultHidden?: boolean;
   /** Whether this extension is still in preview. */
   preview?: boolean;

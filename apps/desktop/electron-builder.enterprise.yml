@@ -1,10 +1,10 @@
 extends: ./electron-builder.base.yml
 appId: app.sofia.desktop
-productName: Sofia App Enterprise
+productName: Sofia Enterprise
 extraMetadata:
   sofiaDistribution: enterprise
 protocols:
-  - name: Sofia App Enterprise
+  - name: Sofia Enterprise
     schemes:
       - sofia
 publish: null

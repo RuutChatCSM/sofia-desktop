@@ -17,7 +17,7 @@ function testScreenshot(hash: string): ScreenshotArtifact {
     png: Buffer.from("canned png"),
     hash,
     route: "#/workspace/ws_test/session",
-    visibleText: "Sofia App composer",
+    visibleText: "Sofia composer",
     at: "2026-07-29T12:00:00.000Z",
   };
 }

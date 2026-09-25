@@ -170,7 +170,7 @@ export type McpViewProps = {
   mcpLastUpdatedAt: number | null;
   mcpStatuses: McpStatusMap;
   mcpConnectingName: string | null;
-  /** False when secure storage for Sofia App-managed sign-ins is unavailable on this device. */
+  /** False when secure storage for Sofia-managed sign-ins is unavailable on this device. */
   managedOAuthAvailable?: boolean;
   selectedMcp: string | null;
   setSelectedMcp: (name: string | null) => void;
@@ -186,7 +186,7 @@ export type McpViewProps = {
   isExtensionConnected?: (entry: McpDirectoryInfo) => boolean;
   /** Enablement context for evaluating extension active state. */
   enablementContext?: import("../../../../app/enablement").EnablementContext;
-  /** Organization policy restriction for Sofia App-provided built-in extensions. */
+  /** Organization policy restriction for Sofia-provided built-in extensions. */
   builtInExtensionsDisabled?: boolean;
   /** Preview a Claude Code plugin bundle from a GitHub URL ("Will install" disclosure). */
   previewClaudePlugin?: (url: string) => Promise<SofiaClaudePluginPreview>;
@@ -1176,7 +1176,7 @@ export function McpView(props: McpViewProps) {
 
       {props.builtInExtensionsDisabled ? (
         <div className="mb-5 rounded-xl border border-amber-6 bg-amber-2 px-4 py-3 text-xs text-amber-11">
-          Built-in Sofia App extensions are disabled by your organization. Use Show hidden to review blocked built-ins.
+          Built-in Sofia extensions are disabled by your organization. Use Show hidden to review blocked built-ins.
         </div>
       ) : null}
 

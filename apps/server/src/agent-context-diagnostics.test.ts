@@ -953,7 +953,7 @@ describe("agent context diagnostics analyzer", () => {
     });
   });
 
-  test("assigns missing and disabled client runtime cloud entries to the Sofia App client", async () => {
+  test("assigns missing and disabled client runtime cloud entries to the Sofia client", async () => {
     const missing = await createFixture({ runtime: {} });
     const missingReport = await runAgentContextDiagnostics({
       config: missing.config,
@@ -1158,7 +1158,7 @@ describe("agent context diagnostics analyzer", () => {
     expect(fetchCalls).toHaveLength(8);
   });
 
-  test("fails closed when the effective engine does not resolve the Sofia App agent", async () => {
+  test("fails closed when the effective engine does not resolve the Sofia agent", async () => {
     const fixture = await createFixture();
     const fetchCalls: CatalogFetchCall[] = [];
     const report = await runAgentContextDiagnostics({
@@ -1186,7 +1186,7 @@ describe("agent context diagnostics analyzer", () => {
     expect(fetchCalls).toHaveLength(4);
   });
 
-  test("rejects hidden and subagent-only Sofia App defaults before cloud egress", async () => {
+  test("rejects hidden and subagent-only Sofia defaults before cloud egress", async () => {
     const fixture = await createFixture();
     const cases = [
       {
@@ -2272,7 +2272,7 @@ describe("agent context diagnostics route", () => {
     expect(downstreamFetches).toEqual([]);
   });
 
-  test("rejects remote Sofia App shells so diagnostics run on the owning server", async () => {
+  test("rejects remote Sofia shells so diagnostics run on the owning server", async () => {
     const fixture = await createFixture({
       withRuntime: false,
       workspace: {
@@ -2287,7 +2287,7 @@ describe("agent context diagnostics route", () => {
     const downstreamFetches: string[] = [];
     globalThis.fetch = (async (input: Parameters<typeof fetch>[0]) => {
       downstreamFetches.push(String(input));
-      throw new Error("Remote Sofia App shell unexpectedly performed downstream fetch");
+      throw new Error("Remote Sofia shell unexpectedly performed downstream fetch");
     }) as unknown as typeof fetch;
     const base = await startSofia(fixture.config);
 

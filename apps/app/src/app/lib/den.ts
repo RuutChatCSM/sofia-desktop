@@ -72,7 +72,7 @@ const ORG_PROXY_HEADER = "x-sofia-legacy-org-id";
 const ORG_SCOPE_HEADER = "x-sofia-org-id";
 const DEFAULT_DEN_TIMEOUT_MS = 12_000;
 
-export const DEFAULT_DEN_AUTH_NAME = "Sofia App User";
+export const DEFAULT_DEN_AUTH_NAME = "Sofia User";
 const BUILD_DEN_BASE_URL =
   (typeof import.meta !== "undefined" && typeof import.meta.env?.VITE_DEN_BASE_URL === "string"
     ? import.meta.env.VITE_DEN_BASE_URL

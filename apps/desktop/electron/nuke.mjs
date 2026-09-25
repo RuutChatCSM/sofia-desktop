@@ -235,7 +235,7 @@ function serverDataDir(env, homedir, paths) {
   return paths.join(homedir, ".sofia", "sofia-server");
 }
 
-/** Workspace-local state Sofia App owns; the rest of the workspace folder is the user's. */
+/** Workspace-local state Sofia owns; the rest of the workspace folder is the user's. */
 function workspaceSofiaStatePaths(workspacePaths, paths) {
   const output = [];
   for (const workspacePath of workspacePaths) {

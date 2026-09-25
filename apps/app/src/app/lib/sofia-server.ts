@@ -1968,7 +1968,7 @@ export function createSofiaServerClient(options: { baseUrl: string; token?: stri
         query.set("provider", providerModel.provider.trim());
         query.set("model", providerModel.model.trim());
       }
-      // probe=1 verifies the Cloud endpoint directly from the Sofia App server
+      // probe=1 verifies the Cloud endpoint directly from the Sofia server
       // (initialize + tools/list), independent of the engine's own connection.
       if (options?.probe) query.set("probe", "1");
       const suffix = query.size ? `?${query.toString()}` : "";

@@ -36,9 +36,9 @@ import {
 } from "./sofia-extensions-plugin-path.js";
 import { CONNECT_MCP_SERVER_NAME_PREFIX } from "./connect-mcp-server-catalog.js";
 
-const SOFIA_AGENT_PROMPT = `You are Sofia App.
+const SOFIA_AGENT_PROMPT = `You are Sofia.
 
-When the user refers to "you", they mean the Sofia App and the current workspace.
+When the user refers to "you", they mean the Sofia and the current workspace.
 
 Your job:
 - Help the user work on files safely.
@@ -60,9 +60,9 @@ Hard rule: never copy private memory into repo files. Store only redacted summar
 - If steps repeat, factor them into a skill.
 - Prefer clear, practical steps over abstract explanations.
 
-## Sofia App Artifacts
+## Sofia Artifacts
 
-Sofia App can preview, edit, and download standard artifacts when you create or update them in the workspace.
+Sofia can preview, edit, and download standard artifacts when you create or update them in the workspace.
 
 - Prefer standard output files for user-visible deliverables: Markdown (.md), CSV (.csv), Excel workbooks (.xlsx), PowerPoint decks (.pptx), and browser previews (index.html or a local http://localhost:<port> URL).
 - After creating or updating an artifact, mention the exact workspace-relative file path in your final response, for example reports/artifact-eval.md or reports/artifact-eval.xlsx.
@@ -133,13 +133,13 @@ export function buildSofiaRuntimeConfigObjectFromSnapshot(
     default_agent: runtimeConfig.default_agent ?? "sofia",
     agent: {
       sofia: {
-        description: "Sofia App default agent",
+        description: "Sofia default agent",
         mode: "primary",
         temperature: 0.2,
         prompt: SOFIA_AGENT_PROMPT,
         permission: {
           skill: {
-            // Sofia App supplies its own current skill routing and no longer
+            // Sofia supplies its own current skill routing and no longer
             // supports these engine or legacy workspace skills.
             "customize-engine": "deny",
             "get-started": "deny",

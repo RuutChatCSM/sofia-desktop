@@ -982,7 +982,7 @@ const ARTIFACT_OUTPUT_SKIP_TOOLS = new Set(["webfetch"]);
 // Patterns that indicate a path is a truncated system/absolute path rather than a workspace-relative path
 const TRUNCATED_SYSTEM_PATH_PATTERNS = [
   /com\.[^/]+\.(sofia|engine)/i, // macOS app bundle identifiers
-  /\.sofia\.dev\//i, // Sofia App dev paths
+  /\.sofia\.dev\//i, // Sofia dev paths
   /Application Support\//i, // macOS Application Support
   /AppData[/\\]/i, // Windows AppData
   /\.local\/share\//i, // Linux XDG data

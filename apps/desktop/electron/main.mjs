@@ -1417,7 +1417,7 @@ function showShutdownScreen() {
   <body>
     <main>
       <div class="spinner" aria-hidden="true"></div>
-      <div class="title">Stopping Sofia App services</div>
+      <div class="title">Stopping Sofia services</div>
       <div class="body">Closing local workers and background services...</div>
     </main>
   </body>
@@ -1440,13 +1440,13 @@ async function disposeRuntimeBeforeQuit() {
 
 function assertSofiaServerReady(info) {
   if (!info?.running) {
-    throw new Error("Sofia App server did not stay running after startup.");
+    throw new Error("Sofia server did not stay running after startup.");
   }
   if (!info.baseUrl) {
-    throw new Error("Sofia App server did not report a base URL after startup.");
+    throw new Error("Sofia server did not report a base URL after startup.");
   }
   if (!info.ownerToken && !info.clientToken) {
-    throw new Error("Sofia App server did not report an access token after startup.");
+    throw new Error("Sofia server did not report an access token after startup.");
   }
   return info;
 }
@@ -2457,7 +2457,7 @@ function assertDesktopActivation() {
     DESKTOP_DISTRIBUTION,
     workspaceStore.readDesktopBootstrapConfigSync(),
   )) {
-    throw new Error("Sofia App must be activated from your organization portal before this command is available.");
+    throw new Error("Sofia must be activated from your organization portal before this command is available.");
   }
 }
 
@@ -2712,7 +2712,7 @@ const { ensureAutoUpdater } = registerUpdaterIpc({
 
 if (!app.requestSingleInstanceLock()) {
   if (isDevMode && !app.isPackaged) {
-    console.error(`[sofia] Another Sofia App dev instance already holds this profile directory:
+    console.error(`[sofia] Another Sofia dev instance already holds this profile directory:
   ${app.getPath("userData")}
 The second process is exiting so its CDP port is released.
 Run this worktree with an isolated profile: SOFIA_DEV_PROFILE=auto pnpm dev

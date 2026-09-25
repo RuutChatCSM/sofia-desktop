@@ -1,6 +1,6 @@
 extends: electron-builder.yml
 appId: app.sofia.desktop.demo.admin
-productName: Sofia App Demo A
+productName: Sofia Demo A
 protocols: []
 directories:
   output: dist-electron-demo-a

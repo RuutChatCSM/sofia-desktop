@@ -982,7 +982,7 @@ function engineRequestFailure(stage: CloudMcpFailureStage, path: string, respons
       code: "engine_tool_ids_unsupported",
       stage,
       retryable: false,
-      recommendedAction: "Update Sofia App",
+      recommendedAction: "Update Sofia",
       message: "Sofia engine does not support listing tool IDs.",
       details: { path, status, error },
     });
@@ -991,7 +991,7 @@ function engineRequestFailure(stage: CloudMcpFailureStage, path: string, respons
     code: stage === "provider_projection" ? "provider_tool_projection_missing" : "engine_tool_ids_unavailable",
     stage,
     retryable: status >= 500,
-    recommendedAction: status >= 500 ? "Retry after Sofia engine is healthy" : "Update Sofia App",
+    recommendedAction: status >= 500 ? "Retry after Sofia engine is healthy" : "Update Sofia",
     message: "Sofia engine request failed while checking sofia-cloud MCP readiness.",
     aliases: stage === "provider_projection" ? ["provider_projection_unavailable"] : undefined,
     details: { path, status, error },
@@ -1100,7 +1100,7 @@ function directCloudToolsFailure(input: {
     code: "cloud_tools_missing",
     stage: "tool_registration",
     retryable: input.retryable,
-    recommendedAction: "Reconnect Sofia Cloud or contact Sofia App support",
+    recommendedAction: "Reconnect Sofia Cloud or contact Sofia support",
     message: input.message,
     details: input.details,
   });
@@ -1362,7 +1362,7 @@ async function readDirectCloudTools(config: Record<string, unknown>): Promise<Di
       stage: "tool_registration",
       retryable: true,
       recommendedAction: "Check this machine's network path (proxy/TLS trust) to the Cloud MCP endpoint. The engine's own MCP connection is authoritative.",
-      message: "The Sofia App server could not reach the Cloud MCP endpoint for direct verification (transport error before any HTTP response). This does not indicate missing tools.",
+      message: "The Sofia server could not reach the Cloud MCP endpoint for direct verification (transport error before any HTTP response). This does not indicate missing tools.",
       details: { endpoint, error: error instanceof Error ? error.message : String(error), transport: describeTransportError(error) },
     });
     return { ...directToolsNotChecked(), checked: false, missing: [], trace: trace(), error: failureResult.details, failure: failureResult };
@@ -1594,7 +1594,7 @@ function statusFailure(status: McpStatus | undefined): CloudMcpFailure {
       code: "engine_mcp_sync_failed",
       stage: "engine_delivery",
       retryable: false,
-      recommendedAction: "Reconnect Sofia Cloud or update Sofia App",
+      recommendedAction: "Reconnect Sofia Cloud or update Sofia",
       message: "sofia-cloud MCP needs OAuth client registration.",
       aliases: ["sofia_cloud_client_registration_required"],
       details: { error: status.error },
@@ -1650,7 +1650,7 @@ function inferFailedStatus(error: string): CloudMcpFailure {
     return failure({ code: "wrong_mcp_resource", stage: "transport_auth", retryable: false, recommendedAction: "Reconnect Sofia Cloud or choose an accessible organization", message: "Sofia Cloud resource was not found.", aliases: ["sofia_cloud_resource_not_found"], details: { error } });
   }
   if (lower.includes("client registration")) {
-    return failure({ code: "engine_mcp_sync_failed", stage: "engine_delivery", retryable: false, recommendedAction: "Reconnect Sofia Cloud or update Sofia App", message: "sofia-cloud needs client registration.", aliases: ["sofia_cloud_client_registration_required"], details: { error } });
+    return failure({ code: "engine_mcp_sync_failed", stage: "engine_delivery", retryable: false, recommendedAction: "Reconnect Sofia Cloud or update Sofia", message: "sofia-cloud needs client registration.", aliases: ["sofia_cloud_client_registration_required"], details: { error } });
   }
   return failure({
     code: "engine_mcp_sync_failed",
@@ -1842,8 +1842,8 @@ async function inspectSofiaCloud(input: {
       code: "extensions_plugin_missing",
       stage: "plugin_load",
       retryable: true,
-      recommendedAction: "Reload the Sofia engine so Sofia App extensions are loaded",
-      message: "Sofia App extension plugin canary tools are missing.",
+      recommendedAction: "Reload the Sofia engine so Sofia extensions are loaded",
+      message: "Sofia extension plugin canary tools are missing.",
       details: { missing: pluginCanaries.missing },
     }));
   }

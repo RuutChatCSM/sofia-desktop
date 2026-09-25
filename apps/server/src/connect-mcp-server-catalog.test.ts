@@ -84,7 +84,7 @@ function indexFetcher(
   };
 }
 
-describe("Sofia App Connect MCP server catalog", () => {
+describe("Sofia Connect MCP server catalog", () => {
   test("reads the member catalog through an authenticated MCP resource", async () => {
     const requests: Array<{ url: string; headers: Headers; body: Record<string, unknown> }> = [];
     const index = await readSofiaConnectMcpServerIndex({

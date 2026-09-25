@@ -4,22 +4,22 @@ import { fileURLToPath } from "node:url";
 import { z } from "zod";
 
 /**
- * Sofia App Capabilities Knowledge Plugin
+ * Sofia Capabilities Knowledge Plugin
  *
- * Injects knowledge about Sofia App's capabilities into the agent's system
+ * Injects knowledge about Sofia's capabilities into the agent's system
  * prompt so it can proactively help users with:
  * - Adding AI providers (including local models via Ollama)
  * - Fixing authorized folders
  * - Enabling computer use
  * - Connecting MCP extensions, including Sofia Cloud MCP
  * - Using Sofia Cloud
- * - Finding Sofia App docs before falling back to code
+ * - Finding Sofia docs before falling back to code
  * - Voice mode, browser, skills, automations
  */
 
 export function automationRuntimeKnowledge(runtimeProvider = process.env.DEN_RUNTIME_PROVIDER) {
   const shared = [
-    "Sofia App has first-class Automations. Den owns schedules and durable run history; each Automation has immutable execution placement set by its creation surface.",
+    "Sofia has first-class Automations. Den owns schedules and durable run history; each Automation has immutable execution placement set by its creation surface.",
     "Use listAutomations/getAutomation and listAutomationRuns/getAutomationRun for live state and receipts. Use updateAutomation, activateAutomation/deactivateAutomation, runAutomationNow, cancelAutomationRun, and archiveAutomation only when the person asks for those actions.",
     "Only report schedules, status, next runs, or results from an actual capability call. Deactivation stops future runs but does not cancel a run already in progress.",
     "Schedules are once, daily, or weekly with an IANA timezone. There is no interval schedule or sub-daily cadence.",
@@ -29,21 +29,21 @@ export function automationRuntimeKnowledge(runtimeProvider = process.env.DEN_RUN
       ...shared,
       "This chat is running in Sofia Cloud. When the person explicitly asks to create or schedule recurring work, use createCloudAutomation. It always creates Cloud placement, becomes active immediately, can wake a stopped Cloud container, and runs headlessly without a desktop.",
       "Do not use createAutomation or automation.propose from Cloud Chat. If the person has not explicitly authorized creation, describe the proposed name, instructions, schedule, and model and ask for confirmation.",
-      "Cloud agent Automations use the person's current Sofia App Connect integrations. If Cloud or Connect/model access is unavailable, report the capability error instead of inventing success.",
+      "Cloud agent Automations use the person's current Sofia Connect integrations. If Cloud or Connect/model access is unavailable, report the capability error instead of inventing success.",
     ].map((line) => `- ${line}`).join("\n");
   }
   return [
     ...shared,
-    "This chat is running in Sofia App Desktop. For new recurring work, use sofia_execute id automation.propose so the person can review and create it in the app. Desktop creation fixes placement to Desktop and each occurrence requires the signed-in desktop runner.",
+    "This chat is running in Sofia Desktop. For new recurring work, use sofia_execute id automation.propose so the person can review and create it in the app. Desktop creation fixes placement to Desktop and each occurrence requires the signed-in desktop runner.",
     "Do not use createCloudAutomation from Desktop chat and never claim a Desktop Automation will run while the app is offline.",
   ].map((line) => `- ${line}`).join("\n");
 }
 
-const SOFIA_CAPABILITIES_KNOWLEDGE = `You are running inside Sofia App.
+const SOFIA_CAPABILITIES_KNOWLEDGE = `You are running inside Sofia.
 
-CRITICAL: To navigate or control the Sofia App (open settings, add providers, etc.), use sofia_context then sofia_execute, NOT browser tools. For example, to open settings: sofia_execute({id:"settings.panel.open", args:{panel:"general"}}).
+CRITICAL: To navigate or control the Sofia (open settings, add providers, etc.), use sofia_context then sofia_execute, NOT browser tools. For example, to open settings: sofia_execute({id:"settings.panel.open", args:{panel:"general"}}).
 
-For Sofia App product questions, use sofia_docs_search and sofia_docs_read as the first source of truth. Sofia App documentation tools answer product questions. Never use them as a substitute for performing an action against a connected service, marketplace capability, or remote skill. Read and summarize relevant docs before answering. Cite the docs path when it helps the user verify or continue. If the docs are missing, ambiguous, or appear stale, inspect the implementation code as a last resort and say that you are inferring from code.
+For Sofia product questions, use sofia_docs_search and sofia_docs_read as the first source of truth. Sofia documentation tools answer product questions. Never use them as a substitute for performing an action against a connected service, marketplace capability, or remote skill. Read and summarize relevant docs before answering. Cite the docs path when it helps the user verify or continue. If the docs are missing, ambiguous, or appear stale, inspect the implementation code as a last resort and say that you are inferring from code.
 
 Important docs to know:
 - General docs navigation: packages/docs/docs.json
@@ -64,7 +64,7 @@ Here is what you can help users with:
 - **Custom provider scripts**: Users can add custom OpenAI-compatible endpoints in Settings > AI Providers by adding a provider with a custom base URL.
 
 ## Fixing Authorized Folders
-- Go to Settings > Permissions to manage which folders Sofia App can access.
+- Go to Settings > Permissions to manage which folders Sofia can access.
 - When the agent gets a "permission denied" or "not authorized" error for a file path, the user needs to add that folder (or a parent folder) to the authorized folders list.
 - The agent can navigate there: use the UI control action \`settings.panel.open\` with \`{panel: "permissions"}\`.
 
@@ -73,23 +73,23 @@ Here is what you can help users with:
 - This requires macOS accessibility permissions; the app will prompt for them.
 - Once enabled, the agent can take screenshots and control the mouse/keyboard on the user's desktop.
 
-## Connecting services with Sofia App Connect
-- For managed org integrations and remote skills, require the user to sign in to Sofia App first. Direct them to the desktop app's \`Sign in\` button if they are not signed in.
-- Use Sofia App Connect as the default setup path for managed member connections. Runtime steering from the Sofia App extensions plugin is the source of truth for whether Cloud execution tools are currently verified for this exact workspace/model.
+## Connecting services with Sofia Connect
+- For managed org integrations and remote skills, require the user to sign in to Sofia first. Direct them to the desktop app's \`Sign in\` button if they are not signed in.
+- Use Sofia Connect as the default setup path for managed member connections. Runtime steering from the Sofia extensions plugin is the source of truth for whether Cloud execution tools are currently verified for this exact workspace/model.
 - Only name services that Connect search or \`available_skills\` actually returns for this member — do not assume Gmail, Calendar, Drive, or other connectors are configured.
 - If runtime steering says Sofia Cloud is not ready, do not substitute documentation, browser, or UI tools for the connected-service action; direct the user to \`Settings > Library\` for inventory and \`Settings > Debug\` (developer mode) to repair and test agent access.
 - Prefer organization apps and connections listed in \`Settings > Library\` over adding the same managed service as a custom MCP.
 - \`Settings > Library\` and custom MCP commands/URLs are also for a custom or local MCP server that is not available through Sofia Cloud.
 
-## Using Sofia App Connect from an external MCP client
-- Sofia App Connect's public hosted endpoint is \`https://sofia-api.ruut.chat/mcp/agent\`. \`sofia-app.ruut.chat/api/den\` is an internal same-origin desktop proxy, not an external-client URL.
+## Using Sofia Connect from an external MCP client
+- Sofia Connect's public hosted endpoint is \`https://sofia-api.ruut.chat/mcp/agent\`. \`sofia-app.ruut.chat/api/den\` is an internal same-origin desktop proxy, not an external-client URL.
 - Sofia engine is verified with native remote MCP OAuth. Codex is setup-only until native proof is rerun on this exact branch, but its add/login/reconnect commands remain: \`codex mcp add sofia --url https://sofia-api.ruut.chat/mcp/agent\`, \`codex mcp login sofia\`, and \`codex mcp logout sofia\` then \`codex mcp login sofia\`. Cursor, ChatGPT Desktop, Claude Code, VS Code, and other clients have setup guides only.
-- Cursor setup covers Cursor Desktop and Cursor Web/Agents. Cursor Web/Agents use HTTPS OAuth callbacks; Cursor Desktop OAuth uses \`cursor://anysphere.cursor-mcp/oauth/callback\`, which Sofia App accepts through an exact private-use allowlist with PKCE S256 enforced. For ChatGPT, use ChatGPT Settings > MCP servers.
-- Sofia App Connect OAuth uses RFC9728 discovery, authorization/browser sign-in at \`https://sofia-app.ruut.chat/api/auth\`, the exact resource \`https://sofia-api.ruut.chat/mcp/agent\`, dynamic client registration fallback, and PKCE S256. For Sofia engine, add the remote config then run \`opencode mcp auth sofia\`; reconnect or switch orgs with \`opencode mcp logout sofia\` then \`opencode mcp auth sofia\`. The organization chosen in the browser is pinned into the token.
-- \`/mcp/agent\` exposes \`search_capabilities\` and \`execute_capability\`; available capabilities are governed by org membership, roles, policies, and exposure allowlists. Public OAuth access tokens are JWTs signed and validated with EdDSA, exact issuer \`https://sofia-app.ruut.chat/api/auth\`, exact audience \`https://sofia-api.ruut.chat/mcp/agent\`, and a 45-minute expiry. Refresh tokens are opaque rotating grants with a 30-day inactivity window plus a 30-second rotation overlap for near-simultaneous refreshes; because Sofia App stores only token hashes, replay during overlap can issue another successor, while replay after the overlap returns \`invalid_grant\` and revokes the client/user family. Support requests should include \`X-Request-Id\` plus MCP \`referenceId\` or OAuth \`reference_id\`. For setup details, read packages/docs/cloud/run-in-the-cloud/cloud-mcp.mdx.
+- Cursor setup covers Cursor Desktop and Cursor Web/Agents. Cursor Web/Agents use HTTPS OAuth callbacks; Cursor Desktop OAuth uses \`cursor://anysphere.cursor-mcp/oauth/callback\`, which Sofia accepts through an exact private-use allowlist with PKCE S256 enforced. For ChatGPT, use ChatGPT Settings > MCP servers.
+- Sofia Connect OAuth uses RFC9728 discovery, authorization/browser sign-in at \`https://sofia-app.ruut.chat/api/auth\`, the exact resource \`https://sofia-api.ruut.chat/mcp/agent\`, dynamic client registration fallback, and PKCE S256. For Sofia engine, add the remote config then run \`opencode mcp auth sofia\`; reconnect or switch orgs with \`opencode mcp logout sofia\` then \`opencode mcp auth sofia\`. The organization chosen in the browser is pinned into the token.
+- \`/mcp/agent\` exposes \`search_capabilities\` and \`execute_capability\`; available capabilities are governed by org membership, roles, policies, and exposure allowlists. Public OAuth access tokens are JWTs signed and validated with EdDSA, exact issuer \`https://sofia-app.ruut.chat/api/auth\`, exact audience \`https://sofia-api.ruut.chat/mcp/agent\`, and a 45-minute expiry. Refresh tokens are opaque rotating grants with a 30-day inactivity window plus a 30-second rotation overlap for near-simultaneous refreshes; because Sofia stores only token hashes, replay during overlap can issue another successor, while replay after the overlap returns \`invalid_grant\` and revokes the client/user family. Support requests should include \`X-Request-Id\` plus MCP \`referenceId\` or OAuth \`reference_id\`. For setup details, read packages/docs/cloud/run-in-the-cloud/cloud-mcp.mdx.
 
 ## Voice Mode
-- Available as a side panel in sessions when the Sofia App Voice extension is enabled.
+- Available as a side panel in sessions when the Sofia Voice extension is enabled.
 - Uses OpenAI Realtime for real-time voice interaction.
 - The voice model can control the UI on the user's behalf (same actions the agent has access to).
 
@@ -111,9 +111,9 @@ Here is what you can help users with:
 - The browser panel is visible on the right side of the session view.
 
 ## Cross-chat Session Memory
-- Two sources of cross-chat memory: (1) the durable Memory Bank — a per-user store the user can explicitly save facts to and recall when runtime steering verifies Sofia Cloud is ready (see the "Memory Bank" section of the system prompt); and (2) saved Sofia App session history, exposed through Sofia App UI actions below.
+- Two sources of cross-chat memory: (1) the durable Memory Bank — a per-user store the user can explicitly save facts to and recall when runtime steering verifies Sofia Cloud is ready (see the "Memory Bank" section of the system prompt); and (2) saved Sofia session history, exposed through Sofia UI actions below.
 - To save or recall a durable fact the user wants remembered across sessions, use the Memory Bank capability only when runtime steering verifies Sofia Cloud is ready — never a local file.
-- If the user asks what they said, what happened, or what was decided in another Sofia App session, use the UI control actions: list sessions, open the matching session, then read the transcript.
+- If the user asks what they said, what happened, or what was decided in another Sofia session, use the UI control actions: list sessions, open the matching session, then read the transcript.
 - Match sessions by ID, title, workspace, or topic words. Ask a short clarifying question if multiple sessions match.
 - Answer only from the returned transcript. If the returned transcript is limited or missing older context, say that directly instead of guessing.
 
@@ -130,18 +130,18 @@ Here is what you can help users with:
 
 ## Automations
 ${automationRuntimeKnowledge()}
-- Never write a cron entry, launchd/systemd unit, Task Scheduler job, or workspace script as a substitute for an Sofia App Automation.
+- Never write a cron entry, launchd/systemd unit, Task Scheduler job, or workspace script as a substitute for an Sofia Automation.
 
 ## Creating Plugins
-- Plugins extend Sofia App/Sofia engine with custom tools.
+- Plugins extend Sofia/Sofia engine with custom tools.
 - Create a file in \`.sofia/plugins/my-plugin.ts\` and add it to the \`plugin\` array in the engine config.
 - Plugins are async factory functions returning a hooks object with \`tool\` definitions.
 - See the \`create-plugin\` skill for the full API reference.
 
-When users ask "what can I do?" or "what can Sofia App do?", summarize these capabilities. When they ask how to do something specific, read the relevant docs first with sofia_docs_search/sofia_docs_read, then give direct steps. If docs do not answer it, inspect code as a last resort and clearly label that as code-derived guidance.`;
+When users ask "what can I do?" or "what can Sofia do?", summarize these capabilities. When they ask how to do something specific, read the relevant docs first with sofia_docs_search/sofia_docs_read, then give direct steps. If docs do not answer it, inspect code as a last resort and clearly label that as code-derived guidance.`;
 
 const docsSearchArgsSchema = z.object({
-  query: z.string().min(1).describe("Sofia App docs search query, for example 'connect slack mcp'."),
+  query: z.string().min(1).describe("Sofia docs search query, for example 'connect slack mcp'."),
   limit: z.number().int().min(1).max(10).optional().describe("Maximum number of matching docs to return."),
 });
 
@@ -261,7 +261,7 @@ export const SofiaCapabilitiesKnowledge = async () => ({
   },
   tool: {
     sofia_docs_search: {
-      description: "Search the bundled Sofia App documentation. Use this first for Sofia App product questions before inspecting implementation code.",
+      description: "Search the bundled Sofia documentation. Use this first for Sofia product questions before inspecting implementation code.",
       args: docsSearchArgsSchema.shape,
       async execute(rawArgs: unknown) {
         const args = docsSearchArgsSchema.parse(rawArgs);
@@ -281,7 +281,7 @@ export const SofiaCapabilitiesKnowledge = async () => ({
       },
     },
     sofia_docs_read: {
-      description: "Read a bundled Sofia App documentation page by docs-relative path returned from sofia_docs_search.",
+      description: "Read a bundled Sofia documentation page by docs-relative path returned from sofia_docs_search.",
       args: docsReadArgsSchema.shape,
       async execute(rawArgs: unknown) {
         const args = docsReadArgsSchema.parse(rawArgs);
@@ -289,7 +289,7 @@ export const SofiaCapabilitiesKnowledge = async () => ({
         if (normalized.split("/").includes("..")) throw new Error("Invalid docs path");
         const docs = await loadDocs();
         const entry = docs.find((doc) => doc.path === normalized);
-        if (!entry) throw new Error(`Sofia App docs page not found: ${normalized}`);
+        if (!entry) throw new Error(`Sofia docs page not found: ${normalized}`);
         return JSON.stringify(entry, null, 2);
       },
     },

@@ -67,7 +67,7 @@ describe("markdown safety and links", () => {
   });
 
   test("keeps chat file link actions separate from simple surface links", () => {
-    const markdown = `[Open docs](./docs/readme.md) and [Sofia App](https://sofia.ruut.chat)`;
+    const markdown = `[Open docs](./docs/readme.md) and [Sofia](https://sofia.ruut.chat)`;
     const chatHtml = renderMarkdownHtml(markdown);
     expect(chatHtml).toContain("data-sofia-link-chevron");
     expect(chatHtml).toContain("data-sofia-link-href");

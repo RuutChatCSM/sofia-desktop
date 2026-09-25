@@ -126,6 +126,6 @@ app.whenReady().then(async () => {
   });
   await writeFile(path.join(icons,"icon.ico"),Buffer.concat([icoHeader,...entries,...icoSizes.map((size)=>images.get(size))]));
   if (nativeImage.createFromPath(path.join(icons,"icon.png")).isEmpty()) throw new Error("Empty Sofia icon");
-  console.log("Generated Sofia App PNG, ICNS, ICO and web icons.");
+  console.log("Generated Sofia PNG, ICNS, ICO and web icons.");
   app.quit();
 }).catch((error) => { console.error(error); app.exit(1); });

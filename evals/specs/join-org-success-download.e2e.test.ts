@@ -148,7 +148,7 @@ test(title, async ({ evidence, place }) => {
 
   const shot = await screenshot(browser);
   const seen = await validate(shot, [
-    "The page is an Sofia App download or install guide",
+    "The page is an Sofia download or install guide",
     "The page offers downloads for desktop computers",
   ]);
   expect(seen.ok, seen.why).toBe(true);

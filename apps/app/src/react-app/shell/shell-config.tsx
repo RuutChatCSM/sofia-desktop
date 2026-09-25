@@ -37,7 +37,7 @@ export type ShellConfig = {
 /* ------------------------------------------------------------------ */
 
 export const DEFAULT_SHELL_CONFIG: ShellConfig = {
-  appName: "Sofia App",
+  appName: "Sofia",
   statusBar: true,
   sidebar: true,
   docsButton: true,

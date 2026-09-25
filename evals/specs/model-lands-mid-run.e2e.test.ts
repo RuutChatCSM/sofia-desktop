@@ -17,12 +17,12 @@ import type { TestNeeds } from "@sofia/testkit";
 /**
  * VOICEOVER SPEC — "New models arrive without breaking your flow."
  *
- * 1. Maya has Sofia App deep in a real task — subagents fanned out — signed in
+ * 1. Maya has Sofia deep in a real task — subagents fanned out — signed in
  *    to her company's org.
  * 2. While her task runs, her admin grants the team a new model. Nothing
  *    happens on Maya's screen: no flash, no "The message was interrupted",
  *    no retry countdown.
- * 3. Under the hood Sofia App notices the new model but refuses to restart the
+ * 3. Under the hood Sofia notices the new model but refuses to restart the
  *    engine while her sessions are live — it parks the update
  *    (lastRun.detail.reloadDeferred).
  * 4. Her task finishes intact. She touches nothing — within moments the

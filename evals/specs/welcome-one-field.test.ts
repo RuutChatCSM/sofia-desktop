@@ -51,7 +51,7 @@ test("the welcome screen folds the server-URL door into the join-organization fi
 
   evidence.recordAssertionEvidence(
     "The welcome screen has one paste field for invite links, install links, server URLs, and sign-in codes",
-    "The separate Using Sofia App on-premises affordance is gone from Welcome; the join dialog classifies install link, then invite link, then server URL, then sign-in code, and requires explicit host confirmation before opening web invites.",
+    "The separate Using Sofia on-premises affordance is gone from Welcome; the join dialog classifies install link, then invite link, then server URL, then sign-in code, and requires explicit host confirmation before opening web invites.",
     true,
   );
 });

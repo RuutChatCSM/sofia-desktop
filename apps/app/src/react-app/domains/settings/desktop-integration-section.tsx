@@ -21,15 +21,15 @@ import {
 
 function statusDescription(status: DesktopIntegrationStatus) {
   if (status.state === "integrated") {
-    return "Sofia App is in your application launcher and handles sofia:// browser callbacks.";
+    return "Sofia is in your application launcher and handles sofia:// browser callbacks.";
   }
   if (status.state === "managed_externally") {
-    return "This AppImage is integrated by another app. Sofia App will leave its launcher untouched.";
+    return "This AppImage is integrated by another app. Sofia will leave its launcher untouched.";
   }
   if (status.state === "needs_repair" && status.ownership === "external") {
     return status.issues.includes("desktop-entry")
       ? "The manager-owned launcher cannot accept browser callbacks. Re-integrate this AppImage with its manager."
-      : "Another app manages this AppImage. Select its launcher for Sofia App browser callbacks.";
+      : "Another app manages this AppImage. Select its launcher for Sofia browser callbacks.";
   }
   if (status.state === "needs_repair") {
     return "The AppImage moved or its launcher, icon, or browser callback needs repair.";

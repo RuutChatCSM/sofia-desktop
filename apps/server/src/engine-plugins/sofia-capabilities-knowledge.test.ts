@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { resolve } from "node:path";
 import { automationRuntimeKnowledge, SofiaCapabilitiesKnowledge } from "./sofia-capabilities-knowledge.js";
 
-describe("Sofia App capabilities knowledge plugin", () => {
-  test("injects current Sofia App Connect guidance", async () => {
+describe("Sofia capabilities knowledge plugin", () => {
+  test("injects current Sofia Connect guidance", async () => {
     const plugin = await SofiaCapabilitiesKnowledge();
     const output = { system: [] };
 
@@ -27,9 +27,9 @@ describe("Sofia App capabilities knowledge plugin", () => {
     expect(knowledge).toContain("JWTs signed and validated with EdDSA");
     expect(knowledge).toContain("30-day inactivity window");
     expect(knowledge).toContain("reference_id");
-    expect(knowledge).toContain("Sofia App documentation tools answer product questions. Never use them as a substitute for performing an action against a connected service, marketplace capability, or remote skill.");
-    expect(knowledge).toContain("require the user to sign in to Sofia App first");
-    expect(knowledge).toContain("Runtime steering from the Sofia App extensions plugin is the source of truth");
+    expect(knowledge).toContain("Sofia documentation tools answer product questions. Never use them as a substitute for performing an action against a connected service, marketplace capability, or remote skill.");
+    expect(knowledge).toContain("require the user to sign in to Sofia first");
+    expect(knowledge).toContain("Runtime steering from the Sofia extensions plugin is the source of truth");
     expect(knowledge).toContain("retrieve the listed remote `create-skill` skill with its exact capability");
     expect(knowledge).toContain("Follow the separate runtime `Skill creation:` instruction");
     expect(knowledge).not.toContain("create custom skills in `.sofia/skills/`");
@@ -118,7 +118,7 @@ describe("Sofia App capabilities knowledge plugin", () => {
     expect(knowledge).toContain("## Automations");
     expect(knowledge).toContain("sofia_execute");
     expect(knowledge).toContain("automation.propose");
-    // Scheduling Sofia App work through the OS is the exact failure this guidance prevents.
+    // Scheduling Sofia work through the OS is the exact failure this guidance prevents.
     expect(knowledge).toContain("Never write a cron entry, launchd/systemd unit, Task Scheduler job");
     expect(knowledge).toContain("Desktop creation fixes placement to Desktop");
     // Reading and changing an existing Automation is a real capability, so the

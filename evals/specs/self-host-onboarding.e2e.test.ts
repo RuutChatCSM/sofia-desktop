@@ -224,11 +224,11 @@ test.skipIf(missingRequirements.length > 0 || daytonaPlacement || !mysqlOpen)(ti
   const landingText = await evalIn(browser, "document.body.innerText");
   const landingShot = await screenshot(browser);
   expect(landingText).toEqual(expect.any(String));
-  expect(landingText).toContain("Start using Sofia App");
+  expect(landingText).toContain("Start using Sofia");
   expect(landingText).toContain("Enter your email and we'll send you to the right sign-in step.");
   {
     const seen = await validate(landingShot, [
-      "The self-hosted account landing says Start using Sofia App",
+      "The self-hosted account landing says Start using Sofia",
       "An email entry action is visible",
       "No error or crash message is visible",
     ]);

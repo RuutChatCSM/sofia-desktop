@@ -131,7 +131,7 @@ export function AiSettingsView(props: AiSettingsViewProps) {
                   <div>
                     <div className="text-sm font-medium text-dls-text">Hosted models</div>
                     <div className="mt-0.5 text-xs text-muted-foreground">
-                      Hosted frontier models for Sofia App tasks without managing provider API keys.
+                      Hosted frontier models for Sofia tasks without managing provider API keys.
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2 text-[11px] text-blue-11">

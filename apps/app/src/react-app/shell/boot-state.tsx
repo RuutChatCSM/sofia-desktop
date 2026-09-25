@@ -48,7 +48,7 @@ const DEFAULT_STATE: BootStateSnapshot = {
 const PHASE_MESSAGES: Record<BootPhaseId, string> = {
   idle: "",
   "bootstrapping-workspaces": "Loading your workspaces",
-  "starting-sofia-server": "Starting the Sofia App server",
+  "starting-sofia-server": "Starting the Sofia server",
   "starting-engine": "Preparing workspace",
   "activating-workspace": "Activating your workspace",
   ready: "Ready",

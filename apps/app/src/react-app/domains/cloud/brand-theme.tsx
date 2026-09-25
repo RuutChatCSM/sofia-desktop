@@ -95,7 +95,7 @@ export function useBrandLogoUrl(): string {
 
 /** Organization-managed display name. It does not change the signed app identity. */
 export function useBrandAppName(): string {
-  return useOrgRestrictions().brandAppName ?? "Sofia App";
+  return useOrgRestrictions().brandAppName ?? "Sofia";
 }
 
 const POLICY_NOTIFICATION_DEDUPE = "desktop-policy-active";

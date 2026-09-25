@@ -56,12 +56,12 @@ function isSofiaServerReady(info?: BootSofiaServerInfo) {
 /**
  * On desktop (Tauri) startup:
  *   1) bootstrap the workspace list
- *   2) if a local workspace is selected, restart the embedded Sofia App server
+ *   2) if a local workspace is selected, restart the embedded Sofia server
  *   3) start the Sofia engine pointed at the workspace
- *   4) activate the workspace on the running Sofia App server
+ *   4) activate the workspace on the running Sofia server
  *   5) notify React routes that fresh desktop runtime info is available. Electron
  *      routes read live runtime info directly instead of persisting ephemeral
- *      localhost ports/tokens into Sofia App settings.
+ *      localhost ports/tokens into Sofia settings.
  *
  * Safe to call multiple times — gated by a `didBoot` ref so it runs once per mount.
  */
@@ -117,13 +117,13 @@ export function useDesktopRuntimeBoot() {
         };
 
         const startServerWithoutDesktopWorkspace = async () => {
-          setPhase("starting-engine", "Starting Sofia App server");
+          setPhase("starting-engine", "Starting Sofia server");
           const serverInfo = await sofiaServerRestart({ remoteAccessEnabled: preferredRemoteAccess }).catch((error) => {
             console.warn("[desktop-boot] sofiaServerRestart failed:", error);
             return null;
           });
           if (!isSofiaServerInfoLike(serverInfo) || !isSofiaServerReady(serverInfo)) {
-            setError("Sofia App server did not finish starting. Please restart Sofia App.");
+            setError("Sofia server did not finish starting. Please restart Sofia.");
             return;
           }
           publishSofiaServerInfo(serverInfo);
@@ -167,12 +167,12 @@ export function useDesktopRuntimeBoot() {
           };
 
           if (boot.ok === false) {
-            setError(boot.error || "Failed to start Sofia App runtime");
+            setError(boot.error || "Failed to start Sofia runtime");
             return;
           }
 
           if (!boot.skipped && !isSofiaServerReady(boot.sofiaServer)) {
-            setError("Sofia App server did not finish starting. Please restart Sofia App.");
+            setError("Sofia server did not finish starting. Please restart Sofia.");
             return;
           }
 

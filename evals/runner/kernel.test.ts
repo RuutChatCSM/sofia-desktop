@@ -59,7 +59,7 @@ async function startCdpStub(targetId: string): Promise<{ url: string; close(): P
         {
           id: targetId,
           type: "page",
-          title: "Sofia App",
+          title: "Sofia",
           url: "http://127.0.0.1/app",
           webSocketDebuggerUrl: `ws://127.0.0.1/devtools/page/${targetId}`,
         },

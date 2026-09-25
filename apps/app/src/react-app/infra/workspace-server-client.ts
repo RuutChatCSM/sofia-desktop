@@ -70,10 +70,10 @@ export function createWorkspaceServerClientCacheKey(
 }
 
 /**
- * Workspace-scoped Sofia App server client resolver.
+ * Workspace-scoped Sofia server client resolver.
  *
  * The returned endpoint includes the correctly mounted workspace URLs and a
- * memoized Sofia App server client. The cache is intentionally per resolver so
+ * memoized Sofia server client. The cache is intentionally per resolver so
  * React routes/stores do not share mutable clients across workspace contexts.
  */
 export function createWorkspaceServerClientResolver(

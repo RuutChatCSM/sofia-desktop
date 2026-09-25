@@ -1,5 +1,5 @@
 /**
- * Release-channel concept for Sofia App desktop builds.
+ * Release-channel concept for Sofia desktop builds.
  *
  * There are two channels users can opt into:
  *

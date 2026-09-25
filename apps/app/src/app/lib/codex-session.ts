@@ -1,6 +1,6 @@
 // Sofia session client: the app-side surface for the bundled Sofia (codex)
 // engine. Mirrors the engine SDK's session surface but talks to the
-// Sofia App server's /codex/* routes (which drive the engine's JSON-RPC over
+// Sofia server's /codex/* routes (which drive the engine's JSON-RPC over
 // stdio). Used when the selected engine is codex.
 import { SofiaServerError } from "./sofia-server";
 

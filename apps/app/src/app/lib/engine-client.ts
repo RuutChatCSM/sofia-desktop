@@ -1,7 +1,7 @@
 // Engine client: the app-side replacement for the Sofia SDK.
 //
 // Every method the UI used to call on the Sofia SDK client is preserved but
-// re-pointed at the Sofia App server's adapter-backed REST routes
+// re-pointed at the Sofia server's adapter-backed REST routes
 // (`/workspace/:id/...`) and the native Codex surface (`/workspace/:id/codex/*`).
 // Return values keep the SDK's `{ data, error, response }` envelope so existing
 // `unwrap`/`assertNoClientError` call sites stay unchanged.

@@ -289,7 +289,7 @@ export function createExternalConnectionProxyServer(input: {
     server.server.setRequestHandler(ListResourceTemplatesRequestSchema, async () => ({ resourceTemplates: [] }))
     server.server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
       if (!input.appHostClient) {
-        throw new McpError(ErrorCode.InvalidRequest, "Provider MCP App resources are available only through the Sofia App host.")
+        throw new McpError(ErrorCode.InvalidRequest, "Provider MCP App resources are available only through the Sofia host.")
       }
       if (!(await appResourceUris()).has(request.params.uri)) {
         throw new McpError(ErrorCode.InvalidRequest, "The resource is not bound to an available MCP App tool.")

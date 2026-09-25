@@ -50,7 +50,7 @@ export async function buildSofiaEnvSystemContext(
     const keyList = keys.map((key) => `- ${key}`).join("\n");
 
     const context = [
-      "Sofia App environment variables configured:",
+      "Sofia environment variables configured:",
       keyList,
       "Only names are shown; values are secret. Use these names when relevant.",
     ].join("\n");

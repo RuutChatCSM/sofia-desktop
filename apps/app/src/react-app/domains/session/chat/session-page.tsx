@@ -568,7 +568,7 @@ export function SessionPage(props: SessionPageProps) {
   const openBrowserUrlControlAction = useMemo<SofiaControlAction>(() => ({
     id: "browser.open_url",
     label: "Open URL in built-in browser",
-    description: "Create or select an Sofia App built-in browser tab, navigate it to a URL, and return the CDP handle for browser automation.",
+    description: "Create or select an Sofia built-in browser tab, navigate it to a URL, and return the CDP handle for browser automation.",
     sideEffect: "navigation",
     requiresArgs: true,
     args: [
@@ -922,7 +922,7 @@ export function SessionPage(props: SessionPageProps) {
       name: "sessionId",
       type: "string",
       required: true,
-      description: "Session id from the Sofia App context resources or conversation tabs.",
+      description: "Session id from the Sofia context resources or conversation tabs.",
     }],
     execute: (args) => {
       if (!args || typeof args !== "object" || !("sessionId" in args) || typeof args.sessionId !== "string") {

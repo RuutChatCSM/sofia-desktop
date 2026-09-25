@@ -5,7 +5,7 @@ import {
   listAssignedConnectCapabilities,
 } from "../src/react-app/domains/session/surface/connect-capability-inventory";
 
-describe("assigned Sofia App Connect capability inventory", () => {
+describe("assigned Sofia Connect capability inventory", () => {
   test("keeps assigned Workflows returned by Den", async () => {
     const originalFetch = globalThis.fetch;
     const fetchMock: typeof fetch = async () => new Response(JSON.stringify({

@@ -1,4 +1,4 @@
-// Codex runtime surfaces: MCP servers + skills that Sofia App provisions into the
+// Codex runtime surfaces: MCP servers + skills that Sofia provisions into the
 // bundled codex (Sofia) engine's config.toml and codex home. Mirrors the
 // ChatGPT/Codex app's "capabilities = SKILL.md + plugin that registers tools +
 // MCP bridge" model (see reference/codex-app TOOLS-SKILLS.md): each surface is a
@@ -91,7 +91,7 @@ export function computerUseEnabled(): boolean {
 }
 
 /**
- * The MCP servers Sofia App registers with the codex engine. Additive and
+ * The MCP servers Sofia registers with the codex engine. Additive and
  * best-effort: only servers whose backing runtime is present are returned, so a
  * bare server build never references a missing sidecar.
  */
@@ -233,7 +233,7 @@ export function codexRuntimeSkill(name: "computer-use" | "browser"): string {
   return [
     "---",
     "name: \"browser\"",
-    "description: \"Drive the built-in Sofia App in-app browser through the Node REPL tool (mcp__node_repl__js) which exposes globalThis.agent.browsers. Use when the task requires browsing the web, filling forms, or inspecting a live page in a visible tab. Do not use it to interact with the Sofia App itself.\"",
+    "description: \"Drive the built-in Sofia in-app browser through the Node REPL tool (mcp__node_repl__js) which exposes globalThis.agent.browsers. Use when the task requires browsing the web, filling forms, or inspecting a live page in a visible tab. Do not use it to interact with the Sofia itself.\"",
     "---",
     "",
     "# In-App Browser",
@@ -259,7 +259,7 @@ export function codexRuntimeSkill(name: "computer-use" | "browser"): string {
     "",
     "## Protocol",
     "",
-    "1. `browser.tabs.list()` to see open tabs; skip any page whose url is the Sofia App (localhost:5173).",
+    "1. `browser.tabs.list()` to see open tabs; skip any page whose url is the Sofia (localhost:5173).",
     "   `browser.user.openTabs()` is the equivalent user-session tab listing.",
     "2. `browser.tabs.open(url)` opens a new **visible** browser tab and returns it.",
     "3. Always `tab.snapshot()` before acting. After an action changes the page, take a fresh snapshot before choosing the next action.",
@@ -269,7 +269,7 @@ export function codexRuntimeSkill(name: "computer-use" | "browser"): string {
     "",
     "## Rules",
     "",
-    "- Never drive the Sofia App's own tab (the page whose url is the Sofia App UI).",
+    "- Never drive the Sofia's own tab (the page whose url is the Sofia UI).",
     "- The opened tab is already signed in to the user's session; do not attempt login again.",
     "- Keep discovery read-only: do not copy cookies or credentials.",
     "- Prefer `tab.goto(url)` to navigate instead of opening new tabs repeatedly.",

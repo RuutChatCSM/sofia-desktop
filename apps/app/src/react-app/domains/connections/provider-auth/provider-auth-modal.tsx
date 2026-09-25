@@ -50,7 +50,7 @@ type ProviderOAuthSession = ProviderOAuthStartResult & {
 };
 
 const PROVIDER_LABELS: Record<string, string> = {
-  sofia: "Sofia App",
+  sofia: "Sofia",
   engine: "Sofia Zen",
   openai: "OpenAI",
   anthropic: "Anthropic",
@@ -201,7 +201,7 @@ export default function ProviderAuthModal(props: ProviderAuthModalProps) {
       return [
         {
           id: SOFIA_MODELS_PROVIDER_ID,
-          name: "Sofia App",
+          name: "Sofia",
           methods: [{ type: "cloud", label: "Subscribe" }],
           connected: connectedToSofia,
           env: [],
@@ -676,7 +676,7 @@ export default function ProviderAuthModal(props: ProviderAuthModalProps) {
         : "Use OpenAI's device flow when the local browser callback is unreliable.";
     }
     if (method.type === "oauth") {
-      return "Continue in the browser and let Sofia App finish the connection automatically.";
+      return "Continue in the browser and let Sofia finish the connection automatically.";
     }
     if (method.type === "cloud") {
       return "Subscribe to Hosted models.";
@@ -684,7 +684,7 @@ export default function ProviderAuthModal(props: ProviderAuthModalProps) {
     if (isWorkspaceEngineZenProvider(entry.id)) {
       return "Sign in to Sofia Zen with an API key to unlock paid models alongside the free tier.";
     }
-    return "Paste a secret key that Sofia App stores locally on this device.";
+    return "Paste a secret key that Sofia stores locally on this device.";
   };
 
   return (

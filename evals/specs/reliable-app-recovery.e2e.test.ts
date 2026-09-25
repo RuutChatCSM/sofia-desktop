@@ -57,7 +57,7 @@ test.skipIf(!e2eTestsEnabled)(title, async ({ evidence }) => {
         SOFIA_EVAL_FATAL_DESKTOP_BOOTSTRAP_FAILURE: fatalFailure,
         SOFIA_EVAL_RECOVERY_CANDIDATES: JSON.stringify([
           { version: "1.8.2", verified: true, artifactUrl: verifiedArtifact },
-          { version: "1.8.1", verified: false, artifactUrl: "https://tampered.invalid/Sofia App.dmg" },
+          { version: "1.8.1", verified: false, artifactUrl: "https://tampered.invalid/Sofia.dmg" },
         ]),
       },
     });
@@ -73,7 +73,7 @@ test.skipIf(!e2eTestsEnabled)(title, async ({ evidence }) => {
     ).toBe(true);
 
     const text = await visibleText(recoveryApp);
-    expect(text).toMatch(/Sofia App (couldn't|could not) start/i);
+    expect(text).toMatch(/Sofia (couldn't|could not) start/i);
     expect(text).toContain("Restore previous version");
     expect(text).not.toContain(fatalFailure);
     expect(text).not.toMatch(/GitHub|open an issue|download.*manually/i);

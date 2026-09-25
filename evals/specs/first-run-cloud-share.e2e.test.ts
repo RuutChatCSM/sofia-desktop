@@ -22,7 +22,7 @@ import {
 } from "@sofia/behaviors";
 
 /**
- * CORE JOURNEY: a person opens the app for the first time, signs in to Sofia App
+ * CORE JOURNEY: a person opens the app for the first time, signs in to Sofia
  * Cloud — which hands off to a real browser and comes back — then shares a skill
  * with a colleague by authoring it inside a plugin and putting that plugin on a
  * marketplace the colleague can use.
@@ -65,7 +65,7 @@ test.skipIf(!e2eTestsEnabled || !denApiUrl)(title, async () => {
   {
     const shot = await screenshot(app);
     const seen = await validate(shot, [
-      "A fresh Sofia App is visible offering to sign in to Sofia Cloud",
+      "A fresh Sofia is visible offering to sign in to Sofia Cloud",
       "No error or 'Something went wrong' message is visible",
     ]);
     expect(seen.ok, seen.why).toBe(true);
@@ -164,7 +164,7 @@ test.skipIf(!e2eTestsEnabled || !denApiUrl)(title, async () => {
   {
     const shot = await screenshot(app);
     const seen = await validate(shot, [
-      "An Sofia App surface listing extensions, skills or connections is visible",
+      "An Sofia surface listing extensions, skills or connections is visible",
       "No 'Something went wrong' crash message is visible",
     ]);
     expect(seen.ok, seen.why).toBe(true);

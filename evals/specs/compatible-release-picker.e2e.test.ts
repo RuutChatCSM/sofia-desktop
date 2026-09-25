@@ -22,9 +22,9 @@ test.skipIf(!e2eTestsEnabled)(title, async ({ evidence, place }) => {
       SOFIA_EVAL_RECOVERY_RELEASES: JSON.stringify([
         { version: "2.4.0", channel: "stable", artifact: { platform: "darwin", arch: "arm64", distribution: "public", url: currentArtifact } },
         { version: "2.3.1", channel: "stable", artifact: { platform: "darwin", arch: "arm64", distribution: "public", url: previousArtifact } },
-        { version: "2.3.0", channel: "stable", artifact: { platform: "linux", arch: "x64", distribution: "public", url: "https://incompatible.invalid/Sofia App.AppImage" } },
-        { version: "2.2.9", channel: "stable", artifact: { platform: "darwin", arch: "arm64", distribution: "enterprise", url: "https://wrong-flavor.invalid/Sofia App.dmg" } },
-        { version: "2.2.8-beta.1", channel: "prerelease", artifact: { platform: "darwin", arch: "arm64", distribution: "public", url: "https://prerelease.invalid/Sofia App.dmg" } },
+        { version: "2.3.0", channel: "stable", artifact: { platform: "linux", arch: "x64", distribution: "public", url: "https://incompatible.invalid/Sofia.AppImage" } },
+        { version: "2.2.9", channel: "stable", artifact: { platform: "darwin", arch: "arm64", distribution: "enterprise", url: "https://wrong-flavor.invalid/Sofia.dmg" } },
+        { version: "2.2.8-beta.1", channel: "prerelease", artifact: { platform: "darwin", arch: "arm64", distribution: "public", url: "https://prerelease.invalid/Sofia.dmg" } },
       ]),
     },
   });
@@ -85,9 +85,9 @@ test.skipIf(!e2eTestsEnabled)(title, async ({ evidence, place }) => {
   );
   expect(openedArtifactUrls).toEqual([previousArtifact]);
   expect(openedArtifactUrls).not.toContain(currentArtifact);
-  expect(openedArtifactUrls).not.toContain("https://incompatible.invalid/Sofia App.AppImage");
-  expect(openedArtifactUrls).not.toContain("https://wrong-flavor.invalid/Sofia App.dmg");
-  expect(openedArtifactUrls).not.toContain("https://prerelease.invalid/Sofia App.dmg");
+  expect(openedArtifactUrls).not.toContain("https://incompatible.invalid/Sofia.AppImage");
+  expect(openedArtifactUrls).not.toContain("https://wrong-flavor.invalid/Sofia.dmg");
+  expect(openedArtifactUrls).not.toContain("https://prerelease.invalid/Sofia.dmg");
   evidence.recordAssertionEvidence(
     "The picker opened only the exact compatible previous stable artifact",
     "Current and previous were marked, incompatible and prerelease targets were absent, and arbitrary selection opened nothing.",

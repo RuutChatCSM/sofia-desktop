@@ -66,12 +66,12 @@ test.skipIf(!e2eTestsEnabled)(title, async () => {
   }
 
   const extensions = await readLoadedExtensions(app);
-  expect(extensions.some((label) => label.includes("Sofia App Browser"))).toBe(true);
+  expect(extensions.some((label) => label.includes("Sofia Browser"))).toBe(true);
   expect(await evalIn(app, `document.body.innerText.includes("Loading commands")`)).toBe(false);
   {
     const shot = await screenshot(app);
     const seen = await validate(shot, [
-      "The Library list visibly includes Sofia App Browser",
+      "The Library list visibly includes Sofia Browser",
       "No Loading commands state or 'Something went wrong' crash message is visible",
     ]);
     expect(seen.ok, seen.why).toBe(true);

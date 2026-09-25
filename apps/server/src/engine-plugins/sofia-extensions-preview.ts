@@ -59,25 +59,25 @@ const connectSkillsEnvelopeSchema = z.object({
 }).passthrough();
 
 const sessionSearchArgsSchema = z.object({
-  query: z.string().trim().min(1).describe("Text to search for across Sofia App session titles and message transcripts."),
-  workspaceId: z.string().trim().optional().describe("Optional Sofia App workspace id/name to limit the search."),
+  query: z.string().trim().min(1).describe("Text to search for across Sofia session titles and message transcripts."),
+  workspaceId: z.string().trim().optional().describe("Optional Sofia workspace id/name to limit the search."),
   limit: z.number().int().positive().max(20).optional().describe("Maximum matching sessions to return. Defaults to 10, max 20."),
   scanLimit: z.number().int().positive().max(500).optional().describe("Maximum newest sessions to scan across matching workspaces. Defaults to 100, max 500."),
   messageLimit: z.number().int().positive().max(1000).optional().describe("Maximum recent messages to load per scanned session. Defaults to 400, max 1000."),
 });
 
 const sessionReadArgsSchema = z.object({
-  sessionId: z.string().trim().min(1).describe("Sofia App/Sofia engine session ID returned by session.search."),
-  workspaceId: z.string().trim().optional().describe("Optional Sofia App workspace id/name. Omit to resolve the session across all workspaces."),
+  sessionId: z.string().trim().min(1).describe("Sofia/Sofia engine session ID returned by session.search."),
+  workspaceId: z.string().trim().optional().describe("Optional Sofia workspace id/name. Omit to resolve the session across all workspaces."),
   count: z.number().int().positive().max(100).optional().describe("Number of recent transcript messages to return. Defaults to 30, max 100."),
 });
 
 const sessionCreateArgsSchema = z.object({
   sessions: z.array(z.object({
-    title: z.string().trim().min(1).max(120).describe("Short title shown in the Sofia App session list."),
+    title: z.string().trim().min(1).max(120).describe("Short title shown in the Sofia session list."),
     prompt: z.string().trim().min(1).max(100_000).describe("Self-contained task to start in the new session."),
   })).min(1).describe("One entry per new session to create and start."),
-  workspaceId: z.string().trim().optional().describe("Optional Sofia App workspace id/name. Defaults to the workspace containing the current session."),
+  workspaceId: z.string().trim().optional().describe("Optional Sofia workspace id/name. Defaults to the workspace containing the current session."),
 });
 
 const workspaceSchema = z.object({
@@ -136,17 +136,17 @@ const sessionMessagesEnvelopeSchema = z.object({
 }).passthrough();
 
 const SOFIA_AGENT_SURFACE_INSTRUCTION =
-  `## Sofia App context
-Use sofia_context when the request depends on the current Sofia App screen, open tabs, split view, focused pane, sidebar, side panel, settings panel, or available app actions.
-Each affordance declares its effects and executor. Use sofia_query only for side-effect-free affordances whose executor is Sofia App. Use sofia_execute for Sofia App commands without activating the desktop window. If executor names another tool, call that exact tool instead.
+  `## Sofia context
+Use sofia_context when the request depends on the current Sofia screen, open tabs, split view, focused pane, sidebar, side panel, settings panel, or available app actions.
+Each affordance declares its effects and executor. Use sofia_query only for side-effect-free affordances whose executor is Sofia. Use sofia_execute for Sofia commands without activating the desktop window. If executor names another tool, call that exact tool instead.
 Reading another session does not require opening it. Prefer session.search then session.read for transcript questions; use session.create for new chats and a UI command only when the user asks to navigate.
-To open settings or navigate the app, use sofia_execute with ids from sofia_context such as settings.panel.open — never browser_* tools for the Sofia App itself.`;
+To open settings or navigate the app, use sofia_execute with ids from sofia_context such as settings.panel.open — never browser_* tools for the Sofia itself.`;
 
 const SOFIA_BROWSER_INSTRUCTION =
-  `Do NOT use the chrome-devtools browser tools to interact with the Sofia App itself. They are for browsing external websites.
+  `Do NOT use the chrome-devtools browser tools to interact with the Sofia itself. They are for browsing external websites.
 
 ## Built-in Browser (external websites)
-The browser surface is the chrome-devtools MCP server (persistent connection; reuse it, do not spawn another). For web browsing tasks, ALWAYS start with sofia_execute id browser.open_url — it creates a VISIBLE built-in Sofia App browser tab (which is already signed in to the user's session) and returns its browser_url plus target_id.
+The browser surface is the chrome-devtools MCP server (persistent connection; reuse it, do not spawn another). For web browsing tasks, ALWAYS start with sofia_execute id browser.open_url — it creates a VISIBLE built-in Sofia browser tab (which is already signed in to the user's session) and returns its browser_url plus target_id.
 CRITICAL: After browser.open_url, call list_pages and select_page the page whose URL matches the URL you just opened. Do NOT use new_page — new_page creates a separate unauthenticated tab that is invisible to the user. Drive the existing tab: take_snapshot for a low-token a11y tree with uid markers, then click / fill / type_text / navigate_page / take_screenshot. After interacting, check list_console_messages and list_network_requests for errors.
 
 ## Browser reliability rules (learned from real sessions)
@@ -158,7 +158,7 @@ CRITICAL: After browser.open_url, call list_pages and select_page the page whose
 - If clicks keep failing, take_screenshot to check for a blocking overlay (e.g. reCAPTCHA, cookie banner, modal). Reload (navigate_page reload) to clear a stuck overlay, then re-fill from a fresh snapshot.
 - Typing + Enter is the most reliable path on SPAs — focus the input, type_text, then press_key Enter.
 - For sites behind the user's login, prefer browser.open_url (uses the signed-in panel session); do NOT create new_page which lands in an unauthenticated context.
-Do not use browser tools on the Sofia App target (avoid targets with title "Sofia App" or URLs containing ":5173/#/").`;
+Do not use browser tools on the Sofia target (avoid targets with title "Sofia" or URLs containing ":5173/#/").`;
 
 // ── UI control bridge discovery ──
 
@@ -346,7 +346,7 @@ async function discoverUiBridge(): Promise<UiBridge | null> {
 
 async function uiBridgeRequest(path: string, options: { method?: string; body?: unknown } = {}): Promise<unknown> {
   const bridge = await discoverUiBridge();
-  if (!bridge) return { ok: false, error: "Sofia App UI bridge not available. The desktop app may not be running." };
+  if (!bridge) return { ok: false, error: "Sofia UI bridge not available. The desktop app may not be running." };
   try {
     const response = await fetch(`${bridge.baseUrl}${path}`, {
       method: options.method || "GET",
@@ -372,7 +372,7 @@ async function serverGet(path: string): Promise<unknown> {
     headers: { Authorization: `Bearer ${token}` },
   });
   const payload = await parseResponse(response);
-  if (!response.ok) throw new Error(errorMessage(payload, "Sofia App server request failed"));
+  if (!response.ok) throw new Error(errorMessage(payload, "Sofia server request failed"));
   return payload;
 }
 
@@ -478,7 +478,7 @@ async function querySofiaAffordance(rawArgs: unknown): Promise<unknown> {
   });
   return isRecord(result) && typeof result.ok === "boolean"
     ? result
-    : unavailableAffordance(request.id, "Sofia App UI query returned an invalid response.");
+    : unavailableAffordance(request.id, "Sofia UI query returned an invalid response.");
 }
 
 async function executeSofiaAffordance(
@@ -525,7 +525,7 @@ async function executeSofiaAffordance(
   });
   return isRecord(result) && typeof result.ok === "boolean"
     ? result
-    : unavailableAffordance(request.id, "Sofia App UI command returned an invalid response.");
+    : unavailableAffordance(request.id, "Sofia UI command returned an invalid response.");
 }
 
 function collapseWhitespace(value: string): string {
@@ -682,7 +682,7 @@ async function searchSofiaSessions(rawArgs: unknown): Promise<object> {
   const queryLower = args.query.trim().toLowerCase();
   const workspaces = filterWorkspaces(await listSofiaWorkspaces(), args.workspaceId);
   if (!workspaces.length) {
-    return { ok: false, error: args.workspaceId ? `No workspace matched ${args.workspaceId}` : "No Sofia App workspaces are available" };
+    return { ok: false, error: args.workspaceId ? `No workspace matched ${args.workspaceId}` : "No Sofia workspaces are available" };
   }
 
   const sessions: Array<{ workspace: SofiaWorkspace; session: SessionInfo }> = [];
@@ -737,7 +737,7 @@ async function readSofiaSession(rawArgs: unknown): Promise<object> {
   const count = args.count ?? 30;
   const workspaces = filterWorkspaces(await listSofiaWorkspaces(), args.workspaceId);
   if (!workspaces.length) {
-    return { ok: false, error: args.workspaceId ? `No workspace matched ${args.workspaceId}` : "No Sofia App workspaces are available" };
+    return { ok: false, error: args.workspaceId ? `No workspace matched ${args.workspaceId}` : "No Sofia workspaces are available" };
   }
 
   for (const workspace of workspaces) {
@@ -768,7 +768,7 @@ async function readSofiaSession(rawArgs: unknown): Promise<object> {
     }
   }
 
-  return { ok: false, error: `Session ${args.sessionId} was not found in matching Sofia App workspaces` };
+  return { ok: false, error: `Session ${args.sessionId} was not found in matching Sofia workspaces` };
 }
 
 function serverUrl(): string {
@@ -783,7 +783,7 @@ function requireSofiaServer(): { url: string; token: string } {
   const url = serverUrl();
   const token = serverToken();
   if (!url || !token) {
-    throw new Error("Sofia App extension tools are only available when Sofia engine is launched by Sofia App.");
+    throw new Error("Sofia extension tools are only available when Sofia engine is launched by Sofia.");
   }
   return { url, token };
 }
@@ -819,7 +819,7 @@ function normalizeDirPath(path: string): string {
 
 async function resolveContextWorkspace(workspaceId: string | undefined, context: EngineContext): Promise<SofiaWorkspace> {
   const workspaces = await listSofiaWorkspaces();
-  if (!workspaces.length) throw new Error("No Sofia App workspaces are available");
+  if (!workspaces.length) throw new Error("No Sofia workspaces are available");
   if (workspaceId) {
     const match = filterWorkspaces(workspaces, workspaceId).at(0);
     if (!match) throw new Error(`No workspace matched ${workspaceId}`);
@@ -841,7 +841,7 @@ async function resolveContextWorkspace(workspaceId: string | undefined, context:
   }
   const only = workspaces.at(0);
   if (workspaces.length === 1 && only) return only;
-  throw new Error(`Multiple Sofia App workspaces match; pass workspaceId. Available: ${workspaces.map((workspace) => workspaceLabel(workspace)).join(", ")}`);
+  throw new Error(`Multiple Sofia workspaces match; pass workspaceId. Available: ${workspaces.map((workspace) => workspaceLabel(workspace)).join(", ")}`);
 }
 
 async function createSofiaSessions(rawArgs: unknown, context: EngineContext): Promise<object> {
@@ -909,7 +909,7 @@ async function postJson(path: string, body: ExtensionActionPayload | Record<stri
   });
   const payload = await parseResponse(response);
   if (!response.ok) {
-    throw new Error(errorMessage(payload, "Sofia App extension call failed"));
+    throw new Error(errorMessage(payload, "Sofia extension call failed"));
   }
   return payload;
 }
@@ -934,7 +934,7 @@ export const SofiaExtensionsPreview = async (factoryInput?: unknown) => {
     // Sofia engine 1.17.x keeps the text projection of an MCP result but drops
     // structuredContent and result _meta before persisting the completed tool
     // part. Preserve those standard fields in the existing metadata channel
-    // so Sofia App can host the UI without replaying the tool call.
+    // so Sofia can host the UI without replaying the tool call.
     preserveMcpResult(output);
   },
   "experimental.chat.system.transform": async (input: unknown, output: { system: string[] }) => {
@@ -969,7 +969,7 @@ export const SofiaExtensionsPreview = async (factoryInput?: unknown) => {
   },
   tool: {
     sofia_context: {
-      description: "Read one semantic snapshot of Sofia App: current screen, retained conversation tabs, split view and focused pane, sidebar and side panel state, settings panel, provider contributions, remote skill guidance, and available affordances with explicit effects and executors.",
+      description: "Read one semantic snapshot of Sofia: current screen, retained conversation tabs, split view and focused pane, sidebar and side panel state, settings panel, provider contributions, remote skill guidance, and available affordances with explicit effects and executors.",
       args: {},
       async execute() {
         return JSON.stringify(
@@ -980,14 +980,14 @@ export const SofiaExtensionsPreview = async (factoryInput?: unknown) => {
       },
     },
     sofia_query: {
-      description: "Run a side-effect-free Sofia App affordance whose executor is Sofia App. Use the exact id and arguments from sofia_context. This reads backend or app state without navigation or window focus.",
+      description: "Run a side-effect-free Sofia affordance whose executor is Sofia. Use the exact id and arguments from sofia_context. This reads backend or app state without navigation or window focus.",
       args: sofiaAffordanceRequestSchema.shape,
       async execute(rawArgs: unknown) {
         return JSON.stringify(await querySofiaAffordance(rawArgs), null, 2);
       },
     },
     sofia_execute: {
-      description: "Execute an Sofia App command whose executor is Sofia App without activating the desktop window. Use the exact id and arguments from sofia_context, and pass expectedRevision for UI commands to prevent stale writes. If the descriptor names another executor tool, call that tool instead.",
+      description: "Execute an Sofia command whose executor is Sofia without activating the desktop window. Use the exact id and arguments from sofia_context, and pass expectedRevision for UI commands to prevent stale writes. If the descriptor names another executor tool, call that tool instead.",
       args: sofiaAffordanceRequestSchema.shape,
       async execute(rawArgs: unknown, context: EngineContext) {
         const mergedContext = { ...factoryContext, ...normalizeEngineContext(context) };

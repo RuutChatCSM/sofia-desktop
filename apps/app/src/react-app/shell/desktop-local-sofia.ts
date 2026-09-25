@@ -171,7 +171,7 @@ export async function ensureDesktopLocalSofiaConnection(
     // of failing on the first empty answer.
     const info = await waitForReadyLocalSofiaServerInfo();
     if (!isReadyLocalSofiaServerInfo(info) || !info.baseUrl) {
-      throw new Error("Sofia App server did not become ready after activation.");
+      throw new Error("Sofia server did not become ready after activation.");
     }
 
     const previousSettings = readSofiaServerSettings();

@@ -45,7 +45,7 @@ function backupTimestamp(date) {
 function decodeKey(encoded) {
   const key = Buffer.from(encoded, "base64");
   if (key.byteLength !== KEY_BYTES) {
-    throw new Error("The protected Sofia App credential key is invalid.");
+    throw new Error("The protected Sofia credential key is invalid.");
   }
   return key;
 }

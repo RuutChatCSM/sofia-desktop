@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Local macOS release driver for Sofia App.
+// Local macOS release driver for Sofia.
 //
 // Builds, signs, notarizes, staples, publishes a GitHub Release, and mirrors
 // the artifacts to an S3-compatible bucket (release.ruut.chat). Intended for
@@ -198,7 +198,7 @@ if (options.build) {
   if (!process.env.SOFIA_SOURCE_DIR) die("SOFIA_SOURCE_DIR must point at the Sofia engine checkout");
   log(`Stamping version ${options.version}`);
   run(process.execPath, [path.join(repoRoot, "scripts", "release", "stamp-version.mjs"), "--version", options.version]);
-  log(`Building Sofia App ${options.version} (${options.target})`);
+  log(`Building Sofia ${options.version} (${options.target})`);
   run("pnpm", ["--filter", "@sofia/desktop", "package:electron"], {
     SOFIA_SOURCE_DIR: process.env.SOFIA_SOURCE_DIR,
     TARGET: options.target,
@@ -264,7 +264,7 @@ function githubRelease() {
     run("gh", ["release", "upload", tag, "--repo", options.repo, "--clobber", ...assets]);
   } else {
     run("gh", ["release", "create", tag, "--repo", options.repo, "--target", releaseRef,
-      "--title", `Sofia App ${options.version}`, "--notes", `Sofia App ${options.version} (macOS, Apple Silicon), signed and notarized.`,
+      "--title", `Sofia ${options.version}`, "--notes", `Sofia ${options.version} (macOS, Apple Silicon), signed and notarized.`,
       ...assets]);
   }
 }
@@ -284,4 +284,4 @@ if (options.github || options.mirror) requireProvenance();
 if (options.github) githubRelease();
 if (options.mirror) mirror();
 
-log(`Done. Sofia App ${options.version} (${tag}).`);
+log(`Done. Sofia ${options.version} (${tag}).`);

@@ -15,7 +15,7 @@ function filteredIds(platform: "darwin" | "linux" | "windows" | "web") {
     .flatMap((entry) => entry.id ? [entry.id] : []);
 }
 
-describe("Sofia App extension catalog platform filter", () => {
+describe("Sofia extension catalog platform filter", () => {
   test("resolves browser runtime to web and desktop runtime to OS", () => {
     expect(resolveSofiaExtensionCatalogPlatform("web", "macos")).toEqual("web");
     expect(resolveSofiaExtensionCatalogPlatform("desktop", "macos")).toEqual("darwin");
@@ -27,7 +27,7 @@ describe("Sofia App extension catalog platform filter", () => {
     expect(filteredIds("web")).toEqual(["sofia-voice", "ollama"]);
   });
 
-  test("keeps Sofia App Browser desktop-only and Computer Use mac-only", () => {
+  test("keeps Sofia Browser desktop-only and Computer Use mac-only", () => {
     expect(filteredIds("darwin")).toEqual(["sofia-browser", "computer-use", "sofia-voice", "ollama"]);
     expect(filteredIds("linux")).toEqual(["sofia-browser", "sofia-voice", "ollama"]);
   });

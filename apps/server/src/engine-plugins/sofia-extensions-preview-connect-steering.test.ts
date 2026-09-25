@@ -23,7 +23,7 @@ const originalServerUrl = process.env.SOFIA_SERVER_URL;
 const originalServerToken = process.env.SOFIA_SERVER_TOKEN;
 
 const UNCHANGED_EXTENSION_DISCOVERY_INSTRUCTION =
-  "If the user asks for something you cannot do with obvious built-in tools, check Sofia App extensions before saying the capability is unavailable. Use sofia_query with id extension.actions to inspect available extension actions, then sofia_execute with id extension.call for the matching action.";
+  "If the user asks for something you cannot do with obvious built-in tools, check Sofia extensions before saying the capability is unavailable. Use sofia_query with id extension.actions to inspect available extension actions, then sofia_execute with id extension.call for the matching action.";
 
 beforeEach(() => {
   resetSofiaExtensionDiscoveryInstructionCacheForTests();
@@ -61,7 +61,7 @@ function failure(code: string, overrides: Partial<CloudFailure> = {}): CloudFail
 function expectNoDegradedSteering(instruction: string): void {
   expect(instruction).not.toMatch(/not ready/i);
   expect(instruction).not.toContain("Repair and test");
-  expect(instruction).not.toContain("Do not use Sofia App documentation tools");
+  expect(instruction).not.toContain("Do not use Sofia documentation tools");
   expect(instruction).not.toContain("Do not substitute docs");
   expect(instruction).not.toContain("as a substitute for performing an action against a connected service");
   expect(instruction).not.toMatch(/do NOT use/i);
@@ -168,7 +168,7 @@ describe("composeSofiaExtensionDiscoveryInstruction", () => {
       firstFailure: {
         code: "provider_tool_projection_missing",
         stage: "provider_projection",
-        recommendedAction: "Update Sofia App",
+        recommendedAction: "Update Sofia",
         message: "missing",
       },
     })));

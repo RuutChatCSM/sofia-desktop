@@ -81,7 +81,7 @@ describe("ensureWorkspaceFiles", () => {
 
   test("uses external resources plugin path in packaged Electron", () => {
     const previousResourcesPath = process.resourcesPath;
-    const resourcesPath = join("/Applications", "Sofia App.app", "Contents", "Resources");
+    const resourcesPath = join("/Applications", "Sofia.app", "Contents", "Resources");
     process.resourcesPath = resourcesPath;
     try {
       const pluginPath = sofiaPluginPath(
@@ -107,14 +107,14 @@ describe("ensureWorkspaceFiles", () => {
     });
   });
 
-  test("does not rewrite existing Sofia App agents", async () => {
+  test("does not rewrite existing Sofia agents", async () => {
     await withWorkspace(async (root) => {
       await mkdir(join(root, ".sofia", "agents"), { recursive: true });
       await writeFile(join(root, ".sofia", "agents", "sofia.md"), "---\ndescription: Old\n---\n\nOld instructions\n", "utf8");
       const result = await ensureWorkspaceFiles(root, "starter");
       const agent = await readFile(join(root, ".sofia", "agents", "sofia.md"), "utf8");
       expect(agent).toContain("Old instructions");
-      expect(agent).not.toContain("Sofia App Artifacts");
+      expect(agent).not.toContain("Sofia Artifacts");
       expect(result.reloadReasons).toEqual([]);
     });
   });

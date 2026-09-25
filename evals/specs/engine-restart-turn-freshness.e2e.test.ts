@@ -246,7 +246,7 @@ test.skipIf(!e2eTestsEnabled)(title, { timeout: 600_000 }, async ({ evidence }) 
     })()`, { awaitPromise: true, timeoutMs: 30_000 });
     const engineVersion = String(versionRaw).replace(/^v/, "");
     evidence.recordAssertionEvidence(
-      "The local Sofia App server reports the fixed bundled Sofia engine",
+      "The local Sofia server reports the fixed bundled Sofia engine",
       `GET /status observed ${JSON.stringify({ engineVersion: versionRaw })}.`,
       engineVersion === "1.18.18" && !engineVersion.startsWith("1.17."),
     );
@@ -365,7 +365,7 @@ test.skipIf(!e2eTestsEnabled)(title, { timeout: 600_000 }, async ({ evidence }) 
     })()`, {
       awaitPromise: true,
       timeoutMs: 120_000,
-      label: "restarted local Sofia App server ready",
+      label: "restarted local Sofia server ready",
     });
     const reopenedWorkspace = await createAndSelectWorkspace(restartedApp, { path: workspacePath });
     expect(reopenedWorkspace.workspaceId).toBe(workspaceId);

@@ -154,7 +154,7 @@ describe("gateway runtime mode", () => {
     }
   });
 
-  test("resolves Sofia App server traffic through the gateway origin with the Den session token", async () => {
+  test("resolves Sofia server traffic through the gateway origin with the Den session token", async () => {
     const storage = installWindow({ origin: "https://sofia-web.ruut.chat", gateway: true });
     storage.setItem("sofia.den.authToken", "den-session-token");
     storage.setItem("sofia.server.urlOverride", "https://direct-instance.example.com");
@@ -253,7 +253,7 @@ describe("gateway runtime mode", () => {
     expect(readSofiaServerSettings().token).toBeUndefined();
   });
 
-  test("uses same-origin and the Den bearer for Sofia App server store env calls behind the gateway", async () => {
+  test("uses same-origin and the Den bearer for Sofia server store env calls behind the gateway", async () => {
     const storage = installWindow({ origin: "https://gw.example", gateway: true });
     storage.setItem("sofia.den.authToken", "den-session-token");
     storage.setItem("sofia.server.urlOverride", "https://direct-instance.example.com");
@@ -279,7 +279,7 @@ describe("gateway runtime mode", () => {
     const store = createTestSofiaServerStore();
     const snapshot = store.getSnapshot();
     const client = snapshot.sofiaServerClient;
-    if (!client) throw new Error("Expected a gateway Sofia App server client");
+    if (!client) throw new Error("Expected a gateway Sofia server client");
 
     expect(snapshot.sofiaServerBaseUrl).toBe("https://gw.example");
     expect(snapshot.sofiaServerAuth.token).toBe("den-session-token");

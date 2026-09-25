@@ -800,7 +800,7 @@ export function createWorkspaceStore({
         cache: "no-store",
       });
       if (!response.ok) {
-        throw new Error(`Sofia App workspace discovery failed (${response.status} ${response.statusText || "HTTP error"})`);
+        throw new Error(`Sofia workspace discovery failed (${response.status} ${response.statusText || "HTTP error"})`);
       }
       return await response.json();
     } finally {
@@ -901,7 +901,7 @@ export function createWorkspaceStore({
       const recoveredWorkspaces = await recoverWorkspacesFromKnownState();
       if (recoveredWorkspaces.length > 0) {
         const selectedWorkspace = recoveredWorkspaces[0];
-        console.info("[migration] recovered desktop workspaces from persisted Sofia App state", {
+        console.info("[migration] recovered desktop workspaces from persisted Sofia state", {
           count: recoveredWorkspaces.length,
           selectedWorkspaceId: selectedWorkspace.id,
         });
@@ -937,7 +937,7 @@ export function createWorkspaceStore({
       }
       return nextWorkspace;
     });
-    // Older desktop state can contain multiple Sofia App remote entries that
+    // Older desktop state can contain multiple Sofia remote entries that
     // normalize to the same rem_<workspaceId> after stripping worker mounts.
     // Collapse them here so React never receives duplicate workspace keys.
     const workspaceIndexById = new Map();
@@ -1072,8 +1072,8 @@ export function createWorkspaceStore({
       if (!discovered?.id) {
         throw new Error(
           directory
-            ? `Sofia App server has no workspace matching ${directory}.`
-            : "Sofia App server returned no workspaces.",
+            ? `Sofia server has no workspace matching ${directory}.`
+            : "Sofia server returned no workspaces.",
         );
       }
       resolvedSofiaWorkspaceId = String(discovered.id).trim();
@@ -1147,8 +1147,8 @@ export function createWorkspaceStore({
           if (!discovered?.id) {
             throw new Error(
               directory
-                ? `Sofia App server has no workspace matching ${directory}.`
-                : "Sofia App server returned no workspaces.",
+                ? `Sofia server has no workspace matching ${directory}.`
+                : "Sofia server returned no workspaces.",
             );
           }
           remoteWorkspaceId = String(discovered.id).trim();

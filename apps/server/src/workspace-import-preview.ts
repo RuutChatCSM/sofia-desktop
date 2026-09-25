@@ -304,7 +304,7 @@ export async function buildWorkspaceImportPreview(
     changes.push({
       kind: "sofia",
       action: input.modes.sofia === "replace" ? "replace" : "update",
-      label: "Sofia App config",
+      label: "Sofia config",
       path: WORKSPACE_CONFIG_VIRTUAL_PATH,
       absolutePath: WORKSPACE_CONFIG_VIRTUAL_PATH,
       beforeDigest: textDigest(null),

@@ -33,7 +33,7 @@ function sofiaManagedModels(provider: DenOrgLlmProvider): AutomationModelOption[
       providerId: "sofia",
       modelId,
       providerName: provider.name,
-      modelName: model.displayName.replace(/^Sofia App:\s*/, ""),
+      modelName: model.displayName.replace(/^Sofia:\s*/, ""),
       accessKind: "sofia_managed" as const,
     }))
 }

@@ -203,7 +203,7 @@ export function ModelPickerModal(props: ModelPickerModalProps) {
     }
   }, [props.query, providerGroups]);
 
-  // Expand current, organization-provided, and Sofia App groups once they appear
+  // Expand current, organization-provided, and Sofia groups once they appear
   // (options often load async).
   const autoExpandedRef = useRef<Set<string>>(new Set());
   useEffect(() => {

@@ -15,20 +15,20 @@ test("any desktop build can launch with an isolated blank-slate profile", async 
   };
   const originalNormalEnv = { ...normalEnv };
   const normalProfile = prepareBlankSlateProfile({ argv: [], env: normalEnv });
-  const normal = resolveBlankSlateLaunch({ appName: "Sofia App Enterprise", profile: normalProfile });
-  expect(normal).toEqual({ enabled: false, appName: "Sofia App Enterprise", userDataPath: null });
+  const normal = resolveBlankSlateLaunch({ appName: "Sofia Enterprise", profile: normalProfile });
+  expect(normal).toEqual({ enabled: false, appName: "Sofia Enterprise", userDataPath: null });
   expect(normalEnv).toEqual(originalNormalEnv);
 
   const firstEnv: NodeJS.ProcessEnv = { SOFIA_DESKTOP_DISTRIBUTION: "enterprise" };
   const secondEnv: NodeJS.ProcessEnv = {};
   const firstProfile = prepareBlankSlateProfile({ argv: ["--blank-slate"], env: firstEnv });
   const secondProfile = prepareBlankSlateProfile({ argv: ["--blank-slate"], env: secondEnv });
-  const first = resolveBlankSlateLaunch({ appName: "Sofia App Enterprise", profile: firstProfile });
-  const second = resolveBlankSlateLaunch({ appName: "Sofia App Enterprise", profile: secondProfile });
+  const first = resolveBlankSlateLaunch({ appName: "Sofia Enterprise", profile: firstProfile });
+  const second = resolveBlankSlateLaunch({ appName: "Sofia Enterprise", profile: secondProfile });
 
   try {
     expect(first.enabled).toBe(true);
-    expect(first.appName).toBe("Sofia App Enterprise - Test profile");
+    expect(first.appName).toBe("Sofia Enterprise - Test profile");
     expect(first.rootPath).not.toBe(second.rootPath);
     expect(first.userDataPath).not.toContain("com.differentai.sofia");
 
@@ -43,17 +43,17 @@ test("any desktop build can launch with an isolated blank-slate profile", async 
 
     const packageFlavorPreserved = firstEnv.SOFIA_DESKTOP_DISTRIBUTION === "enterprise"
       && !("SOFIA_DEV_MODE" in firstEnv)
-      && first.appName.startsWith("Sofia App Enterprise");
+      && first.appName.startsWith("Sofia Enterprise");
     expect(packageFlavorPreserved).toBe(true);
 
     const normalLaunchUnchanged = normal.userDataPath === null
-      && normal.appName === "Sofia App Enterprise"
+      && normal.appName === "Sofia Enterprise"
       && normalEnv.SOFIA_DESKTOP_BOOTSTRAP_PATH === originalNormalEnv.SOFIA_DESKTOP_BOOTSTRAP_PATH;
     expect(normalLaunchUnchanged).toBe(true);
 
     evidence.recordAssertionEvidence(
       "Blank-slate launches cannot read or overwrite the installed profile",
-      "Every Electron, Sofia App, Sofia engine, home, XDG, and Windows mutable path is below one unique per-launch temporary root.",
+      "Every Electron, Sofia, Sofia engine, home, XDG, and Windows mutable path is below one unique per-launch temporary root.",
       allPathOverridesIsolated && first.rootPath !== second.rootPath,
     );
     evidence.recordAssertionEvidence(

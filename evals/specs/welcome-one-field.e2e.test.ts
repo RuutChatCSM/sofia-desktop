@@ -36,7 +36,7 @@ test(title, async ({ evidence }) => {
     env: { PATH: `${capture.binDir}:${process.env.PATH ?? ""}` },
   });
   expect(app.readiness.route).toContain("/welcome");
-  await waitForText(app, "Welcome to Sofia App");
+  await waitForText(app, "Welcome to Sofia");
 
   const doors = await evalIn(app, `(() => {
     const join = document.querySelector('[data-testid="welcome-join-org"]');
@@ -44,7 +44,7 @@ test(title, async ({ evidence }) => {
       signIn: Boolean(document.querySelector('[data-testid="welcome-team-signin"]')),
       useWithoutCloud: Boolean(document.querySelector('[data-testid="welcome-use-without-cloud"]')),
       join: (join?.textContent ?? "").replace(/\\s+/g, " ").trim(),
-      onPremLink: document.body.innerText.includes("Using Sofia App on-premises?"),
+      onPremLink: document.body.innerText.includes("Using Sofia on-premises?"),
     };
   })()`);
   if (!isRecord(doors) || typeof doors.join !== "string") {
@@ -67,10 +67,10 @@ test(title, async ({ evidence }) => {
   {
     const shot = await screenshot(app);
     const seen = await validate(shot, [
-      "The Welcome to Sofia App heading is visible",
+      "The Welcome to Sofia heading is visible",
       "Sign in to Organization cloud and Use Without Cloud are offered",
       "Join your organization says to paste an invite link, install link, or server URL",
-      "The page does not say Using Sofia App on-premises",
+      "The page does not say Using Sofia on-premises",
     ]);
     expect(seen.ok, seen.why).toBe(true);
   }

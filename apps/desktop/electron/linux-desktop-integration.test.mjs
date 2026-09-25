@@ -21,7 +21,7 @@ async function createHarness(options = {}) {
   const dataHome = path.join(root, "data");
   const configHome = path.join(root, "config");
   const resourcesPath = path.join(root, "resources");
-  const appImagePath = options.appImagePath ?? path.join(root, "Sofia AppImage");
+  const appImagePath = options.appImagePath ?? path.join(root, "SofiaImage");
   await mkdir(path.join(resourcesPath, "icons", "linux"), { recursive: true });
   await Promise.all(iconSizes.map((size) => (
     writeFile(path.join(resourcesPath, "icons", "linux", `${size}x${size}.png`), String(size))
@@ -55,7 +55,7 @@ async function createHarness(options = {}) {
   const integration = createLinuxDesktopIntegration({
     app,
     dialog,
-    appName: "Sofia App",
+    appName: "Sofia",
     distribution: "public",
     env: {
       APPIMAGE: appImagePath,
@@ -93,7 +93,7 @@ function relaunchAt(harness, appImagePath, options = {}) {
         return { response: 0, checkboxChecked: false };
       },
     },
-    appName: "Sofia App",
+    appName: "Sofia",
     distribution: "public",
     env: {
       APPIMAGE: appImagePath,
@@ -127,7 +127,7 @@ describe("Linux AppImage desktop integration", () => {
     );
     const entry = buildSofiaDesktopEntry({
       appImagePath,
-      appName: "Sofia App",
+      appName: "Sofia",
       appVersion: "0.18.7",
       distribution: "public",
     });
@@ -161,14 +161,14 @@ describe("Linux AppImage desktop integration", () => {
   it("detects a moved AppImage and repairs the launcher for the new path", async () => {
     const first = await createHarness();
     assert.equal((await first.integration.install()).ok, true);
-    const movedPath = path.join(first.root, "Applications", "Sofia App.AppImage");
+    const movedPath = path.join(first.root, "Applications", "Sofia.AppImage");
     await mkdir(path.dirname(movedPath), { recursive: true });
     await rename(first.appImagePath, movedPath);
 
     const moved = createLinuxDesktopIntegration({
       app: { isPackaged: true, getVersion: () => "0.18.7" },
       dialog: { showMessageBox: async () => ({ response: 0, checkboxChecked: false }) },
-      appName: "Sofia App",
+      appName: "Sofia",
       distribution: "public",
       env: {
         APPIMAGE: movedPath,
@@ -267,7 +267,7 @@ describe("Linux AppImage desktop integration", () => {
     await mkdir(applications, { recursive: true });
     await writeFile(path.join(applications, managerDesktopId), `[Desktop Entry]
 Type=Application
-Name=Sofia App
+Name=Sofia
 Exec=${quoteDesktopExec(harness.appImagePath)} %U
 TryExec=${harness.appImagePath}
 MimeType=x-scheme-handler/sofia;
@@ -286,7 +286,7 @@ MimeType=x-scheme-handler/sofia;
     await mkdir(path.dirname(harness.integration.paths.desktopEntryPath), { recursive: true });
     const original = `[Desktop Entry]
 Type=Application
-Name=Manager-owned Sofia App
+Name=Manager-owned Sofia
 Exec=${quoteDesktopExec(harness.appImagePath)} %U
 TryExec=${harness.appImagePath}
 MimeType=x-scheme-handler/sofia;
@@ -315,7 +315,7 @@ MimeType=x-scheme-handler/sofia;
     await mkdir(path.dirname(managerPath), { recursive: true });
     const managerEntry = `[Desktop Entry]
 Type=Application
-Name=Sofia App
+Name=Sofia
 Exec=${quoteDesktopExec(harness.appImagePath)} %U
 TryExec=${harness.appImagePath}
 MimeType=x-scheme-handler/sofia;

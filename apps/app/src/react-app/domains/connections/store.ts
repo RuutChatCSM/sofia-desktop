@@ -325,7 +325,7 @@ export function createConnectionsStore(options: {
     });
 
     if (hasSofiaTarget && !canTrySofiaServer) {
-      throw new Error("Sofia App server cannot read MCP config for this workspace.");
+      throw new Error("Sofia server cannot read MCP config for this workspace.");
     }
 
     if (!canTrySofiaServer || !sofiaClient || !sofiaWorkspaceId) return null;
@@ -389,7 +389,7 @@ export function createConnectionsStore(options: {
       if (!fallbackOnError) {
         throw error instanceof Error
           ? error
-          : new Error("Computer Use helper app is unavailable. Restart Sofia App or reinstall the app.");
+          : new Error("Computer Use helper app is unavailable. Restart Sofia or reinstall the app.");
       }
       // Fall through to the published package command in the manifest/catalog.
     }
@@ -504,7 +504,7 @@ export function createConnectionsStore(options: {
     if (isRemoteWorkspace) {
       mutateState((current) => ({
         ...current,
-        mcpStatus: "Sofia App server unavailable. MCP config is read-only.",
+        mcpStatus: "Sofia server unavailable. MCP config is read-only.",
         mcpServers: [],
         mcpStatuses: {},
       }));
@@ -527,7 +527,7 @@ export function createConnectionsStore(options: {
       ...current,
       mcpServers: [],
       mcpStatuses: {},
-      mcpStatus: "Sofia App server unavailable. Connect to manage MCP servers.",
+      mcpStatus: "Sofia server unavailable. Connect to manage MCP servers.",
     }));
   }
 
@@ -551,7 +551,7 @@ export function createConnectionsStore(options: {
       await resolveWritableSofiaTarget();
 
     if (isRemoteWorkspace && !canUseSofiaServer) {
-      const error = "Sofia App server unavailable. MCP config is read-only.";
+      const error = "Sofia server unavailable. MCP config is read-only.";
       setStateField("mcpStatus", error);
       finishPerf(options.developerMode(), "mcp.connect", "blocked", startedAt, {
         reason: "sofia-server-unavailable",
@@ -560,7 +560,7 @@ export function createConnectionsStore(options: {
     }
 
     if (hasSofiaTarget && !canUseSofiaServer) {
-      const error = "Sofia App server MCP config is read-only.";
+      const error = "Sofia server MCP config is read-only.";
       setStateField("mcpStatus", error);
       finishPerf(options.developerMode(), "mcp.connect", "blocked", startedAt, {
         reason: "sofia-server-read-only",
@@ -626,7 +626,7 @@ export function createConnectionsStore(options: {
           throw new Error("Connections MCP metadata is invalid.");
         }
         if (!canUseSofiaServer || !sofiaClient || !sofiaWorkspaceId) {
-          throw new Error("Sofia App server is required to repair agent access to connected services.");
+          throw new Error("Sofia server is required to repair agent access to connected services.");
         }
         const context = await resolveCloudMcpOperationContext(entry.url);
         if (!context) {
@@ -668,13 +668,13 @@ export function createConnectionsStore(options: {
 
       if (entry.managedOAuth) {
         if (isRemoteWorkspace || !isDesktopRuntime()) {
-          throw new Error("Sofia App-managed MCP OAuth is currently available for local desktop workspaces only.");
+          throw new Error("Sofia-managed MCP OAuth is currently available for local desktop workspaces only.");
         }
         if (entryType !== "remote" || !entry.url) {
-          throw new Error("Sofia App-managed OAuth requires a remote MCP URL.");
+          throw new Error("Sofia-managed OAuth requires a remote MCP URL.");
         }
         if (!canUseSofiaServer || !sofiaClient || !sofiaWorkspaceId) {
-          throw new Error("The local Sofia App server is required for managed MCP sign-in.");
+          throw new Error("The local Sofia server is required for managed MCP sign-in.");
         }
         const result = await sofiaClient.addManagedMcp(sofiaWorkspaceId, {
           name: slug,
@@ -732,7 +732,7 @@ export function createConnectionsStore(options: {
 
       if (entryType === "remote") {
         if (!resolvedUrl) {
-          throw new Error("Missing MCP URL. Is the Sofia App desktop app running?");
+          throw new Error("Missing MCP URL. Is the Sofia desktop app running?");
         }
         mcpEntryConfig["url"] = resolvedUrl;
         if (resolvedHeaders) {
@@ -771,11 +771,11 @@ export function createConnectionsStore(options: {
       }
 
       if (canUseSofiaServer && sofiaClient && sofiaWorkspaceId) {
-        // The Sofia App server is the source of truth for workspace-scoped MCP
+        // The Sofia server is the source of truth for workspace-scoped MCP
         // config in the React port. Avoid also calling the Sofia SDK's MCP
         // hot-add endpoint here: when the SDK client is rooted at the aggregate
         // `/engine` route it can resolve to an internal `local_*` workspace
-        // id that the Sofia App server does not expose, producing a confusing
+        // id that the Sofia server does not expose, producing a confusing
         // `workspace_not_found` after the config write already succeeded.
         setStateField("mcpStatuses", filterConfiguredStatuses(snapshot.mcpStatuses, snapshot.mcpServers));
       } else {
@@ -940,7 +940,7 @@ export function createConnectionsStore(options: {
       try {
         const { sofiaClient, sofiaWorkspaceId, canUseSofiaServer } = await resolveWritableSofiaTarget();
         if (!canUseSofiaServer || !sofiaClient || !sofiaWorkspaceId) {
-          throw new Error("The local Sofia App server is required for managed MCP sign-in.");
+          throw new Error("The local Sofia server is required for managed MCP sign-in.");
         }
         mutateState((current) => ({ ...current, mcpStatus: null, mcpConnectingName: entry.name }));
         const result = await sofiaClient.connectManagedMcp(sofiaWorkspaceId, entry.name);
@@ -990,12 +990,12 @@ export function createConnectionsStore(options: {
       await resolveWritableSofiaTarget();
 
     if (isRemoteWorkspace && !canUseSofiaServer) {
-      setStateField("mcpStatus", "Sofia App server unavailable. MCP auth is read-only.");
+      setStateField("mcpStatus", "Sofia server unavailable. MCP auth is read-only.");
       return;
     }
 
     if (hasSofiaTarget && !canUseSofiaServer) {
-      setStateField("mcpStatus", "Sofia App server MCP auth is read-only.");
+      setStateField("mcpStatus", "Sofia server MCP auth is read-only.");
       return;
     }
 
@@ -1064,7 +1064,7 @@ export function createConnectionsStore(options: {
         await sofiaClient.removeMcp(sofiaWorkspaceId, name);
       } else {
         if (hasSofiaTarget) {
-          setStateField("mcpStatus", "Sofia App server MCP config is read-only.");
+          setStateField("mcpStatus", "Sofia server MCP config is read-only.");
           return;
         }
         setStateField("mcpStatus", t("mcp.connect_server_first"));

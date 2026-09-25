@@ -519,11 +519,11 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
       const env = await updaterEnvironmentCmd() as { appBundlePath?: string };
       const appBundlePath = env.appBundlePath?.trim();
       if (!appBundlePath) {
-        setElectronMigrationStatus("Could not resolve the current Sofia App.app bundle path.");
+        setElectronMigrationStatus("Could not resolve the current Sofia.app bundle path.");
         return;
       }
       await revealDesktopItemInDir(`${appBundlePath}.migrate-bak`);
-      setElectronMigrationStatus("Requested Finder reveal for Sofia App.app.migrate-bak. The backup exists after an install handoff completes.");
+      setElectronMigrationStatus("Requested Finder reveal for Sofia.app.migrate-bak. The backup exists after an install handoff completes.");
     } catch (error) {
       setElectronMigrationStatus(error instanceof Error ? error.message : safeStringify(error));
     }
@@ -668,7 +668,7 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
       });
       setSofiaServiceStatus({
         tone: "success",
-        message: t("settings.restart_succeeded_template", { service: "Sofia App server" }),
+        message: t("settings.restart_succeeded_template", { service: "Sofia server" }),
       });
       pushDeveloperLog("Restarted sofia-server");
       await sofiaServerStore.reconnectSofiaServer();
@@ -676,7 +676,7 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
       const message = error instanceof Error ? error.message : safeStringify(error);
       setSofiaServiceStatus({
         tone: "error",
-        message: `${t("settings.restart_failed_template", { service: "Sofia App server" })} ${message}`,
+        message: `${t("settings.restart_failed_template", { service: "Sofia server" })} ${message}`,
       });
       setServiceRestartError(message);
     } finally {
@@ -709,7 +709,7 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
     }
     try {
       await navigator.clipboard.writeText(text);
-      setSofiaLogStatus(t("settings.copied_service_logs", { service: "Sofia App server" }));
+      setSofiaLogStatus(t("settings.copied_service_logs", { service: "Sofia server" }));
     } catch (error) {
       setSofiaLogStatus(error instanceof Error ? error.message : safeStringify(error));
     }
@@ -741,7 +741,7 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
       if (!isDesktopRuntime()) return;
       const message =
         mode === "all"
-          ? "Reset ALL Sofia App data? Open sessions and workspaces will be removed."
+          ? "Reset ALL Sofia data? Open sessions and workspaces will be removed."
           : "Reset onboarding state only?";
       if (typeof window !== "undefined" && !window.confirm(message)) {
         return;
@@ -753,7 +753,7 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
           clearSofiaLocalStorageForReset(mode);
           setResetStatus(
             mode === "all"
-              ? "Reset Sofia App state. Restart the app to see changes."
+              ? "Reset Sofia state. Restart the app to see changes."
               : "Reset onboarding state. Restart the app to see changes.",
           );
           pushDeveloperLog(`reset_sofia_state mode=${mode}`);

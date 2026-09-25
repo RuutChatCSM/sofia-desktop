@@ -3,7 +3,7 @@ import { sofiaFeatureContributionSchema } from "@sofia/types/sofia-provider";
 
 import { buildSofiaProviderContributions } from "./sofia-provider-adapters.js";
 
-describe("Sofia App provider adapters", () => {
+describe("Sofia provider adapters", () => {
   test("normalizes sessions and extensions into semantic contributions", () => {
     const contributions = buildSofiaProviderContributions([]);
 

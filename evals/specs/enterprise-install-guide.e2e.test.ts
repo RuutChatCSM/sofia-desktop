@@ -93,7 +93,7 @@ test.skipIf(missingRequirements.length > 0 || daytonaPlacement || !mysqlOpen || 
       steps,
       fourthStep: Boolean(document.querySelector('[data-testid="install-guide"] > li:nth-child(4)')),
       cloudReturnControl: [...document.querySelectorAll("a")]
-        .some((anchor) => (anchor.textContent ?? "").trim() === "I already installed Sofia App"),
+        .some((anchor) => (anchor.textContent ?? "").trim() === "I already installed Sofia"),
       mintedToken: resources.some((url) => url.includes("/install-links") || url.includes("/v1/install-config?token=")),
     });
   })()`, { awaitPromise: true });

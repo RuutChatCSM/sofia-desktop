@@ -44,7 +44,7 @@ describe("Electron distribution configs", () => {
     const config = await readConfig("electron-builder.yml");
     assert.equal(config.extends, "./electron-builder.base.yml");
     assert.equal(config.appId, "app.sofia.desktop");
-    assert.equal(config.productName, "Sofia App");
+    assert.equal(config.productName, "Sofia");
     assert.equal(config.protocols[0].schemes[0], "sofia");
     assert.equal(config.artifactName, "sofia-${os}-${arch}-${version}.${ext}");
   });
@@ -53,7 +53,7 @@ describe("Electron distribution configs", () => {
     const config = await readConfig("electron-builder.enterprise.yml");
     assert.equal(config.extends, "./electron-builder.base.yml");
     assert.equal(config.appId, "app.sofia.desktop");
-    assert.equal(config.productName, "Sofia App Enterprise");
+    assert.equal(config.productName, "Sofia Enterprise");
     assert.equal(config.extraMetadata.sofiaDistribution, "enterprise");
     assert.equal(config.protocols[0].schemes[0], "sofia");
     // Sofia release destinations are supplied by the release owner.
@@ -68,7 +68,7 @@ describe("Electron distribution configs", () => {
     const config = await readConfig("electron-builder.cloud.yml");
     assert.equal(config.extends, "./electron-builder.base.yml");
     assert.equal(config.appId, "app.sofia.desktop");
-    assert.equal(config.productName, "Sofia App Cloud");
+    assert.equal(config.productName, "Sofia Cloud");
     assert.equal(config.extraMetadata.sofiaDistribution, "cloud");
     assert.equal(config.protocols[0].schemes[0], "sofia");
     assert.equal(config.publish, null);

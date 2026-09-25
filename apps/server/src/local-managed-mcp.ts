@@ -161,7 +161,7 @@ const VAULT_RECOVERY_REASON = "secure_storage_changed";
 const VAULT_RECOVERED_LAST_ERROR =
   "Secure storage on this device changed, so saved sign-ins were cleared. Reconnect to restore this connection.";
 const MANAGED_MCP_CONNECTION_FAILED_MESSAGE =
-  "Sofia App could not connect to this MCP server. Check its OAuth settings and availability, then try again.";
+  "Sofia could not connect to this MCP server. Check its OAuth settings and availability, then try again.";
 const EXTERNAL_HANDSHAKE_REQUEST_PHASES = new Set<EnterpriseMcpRequestPhase>([
   "oauth-client-registration",
   "mcp-initialize",
@@ -183,7 +183,7 @@ function secureVaultStorageUnavailable(): ApiError {
   return new ApiError(
     503,
     "managed_mcp_secure_storage_unavailable",
-    "Secure storage for Sofia-managed MCP credentials is unavailable. Start through Sofia App Desktop or set SOFIA_ENCRYPTION_KEY.",
+    "Secure storage for Sofia-managed MCP credentials is unavailable. Start through Sofia Desktop or set SOFIA_ENCRYPTION_KEY.",
   );
 }
 
@@ -684,7 +684,7 @@ async function enterpriseConnection(config: ServerConfig, workspaceId: string, n
 function enterpriseClient(diagnostics?: EnterpriseMcpDiagnosticEvent[]) {
   return createEnterpriseMcpClient({
     fetch: guardedFetch,
-    clientName: "Sofia App Local MCP Gateway",
+    clientName: "Sofia Local MCP Gateway",
     clientVersion: "1.0.0",
     operationTimeoutMs: 45_000,
     ...(diagnostics ? { diagnosticSink: (event) => diagnostics.push(event) } : {}),
@@ -1249,7 +1249,7 @@ export async function handleLocalManagedMcpGateway(
       throw new McpError(
         ErrorCode.InternalError,
         reconnect
-          ? "This MCP connection needs to be reconnected in Sofia App."
+          ? "This MCP connection needs to be reconnected in Sofia."
           : "This MCP tool catalog could not be loaded. Retry the request.",
       );
     }
@@ -1269,7 +1269,7 @@ export async function handleLocalManagedMcpGateway(
       throw new McpError(
         ErrorCode.InternalError,
         reconnect
-          ? "This MCP tool could not run. Reconnect it in Sofia App and retry."
+          ? "This MCP tool could not run. Reconnect it in Sofia and retry."
           : "This MCP tool could not run. Review the tool input or provider response and retry.",
       );
     }

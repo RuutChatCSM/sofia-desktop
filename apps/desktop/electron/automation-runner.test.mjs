@@ -811,7 +811,7 @@ test("a work poll left hanging by a suspended machine times out and retries", as
   runner.stop()
 })
 
-test("desktop Automation execution creates a normal visible local Sofia App thread", async () => {
+test("desktop Automation execution creates a normal visible local Sofia thread", async () => {
   const requests = []
   let snapshots = 0
   const fetchImpl = async (url, options = {}) => {

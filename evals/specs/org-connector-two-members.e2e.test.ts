@@ -256,7 +256,7 @@ test(title, async ({ evidence, place }) => {
   {
     const shot = await screenshot(appB);
     const seen = await validate(shot, [
-      "An Sofia App session surface is visible with a task that used the connected organization tool",
+      "An Sofia session surface is visible with a task that used the connected organization tool",
       "No 'Something went wrong' crash message is visible",
     ]);
     expect(seen.ok, seen.why).toBe(true);

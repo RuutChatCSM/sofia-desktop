@@ -240,7 +240,7 @@ test.skipIf(!e2eTestsEnabled || !apiUrl || !optedIn)(title, async () => {
   {
     const shot = await screenshot(app);
     const seen = await validate(shot, [
-      "Sofia App visibly shows that Acme Labs browser authorization is in progress",
+      "Sofia visibly shows that Acme Labs browser authorization is in progress",
       "The app has not silently reported success and no OAuth launch error is visible",
     ]);
     expect(seen.ok, seen.why).toBe(true);

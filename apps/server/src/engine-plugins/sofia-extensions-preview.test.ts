@@ -459,7 +459,7 @@ describe("SofiaExtensionsPreview session tools", () => {
     expect(output.system.join("\n")).not.toContain(SOFIA_CLOUD_SKILL_AUTHORING_INSTRUCTION);
     expect(output.system[0]).not.toContain("not ready");
     expect(output.system[0]).not.toContain("Repair and test");
-    expect(output.system[0]).not.toContain("Do not use Sofia App documentation tools");
+    expect(output.system[0]).not.toContain("Do not use Sofia documentation tools");
   });
 
   test("reads a transcript by session id without opening the UI", async () => {
@@ -487,7 +487,7 @@ describe("SofiaExtensionsPreview session tools", () => {
     ]);
   });
 
-  test("creates and starts multiple sessions through the Sofia App backend", async () => {
+  test("creates and starts multiple sessions through the Sofia backend", async () => {
     const fake = startFakeSofiaServer();
     const plugin = await SofiaExtensionsPreview({ directory: "/tmp/archive" });
 

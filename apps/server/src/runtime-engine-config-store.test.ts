@@ -105,7 +105,7 @@ describe("runtime Sofia engine config store", () => {
     });
   });
 
-  test("stores MCP changes in the Sofia App runtime DB without rewriting workspace files", async () => {
+  test("stores MCP changes in the Sofia runtime DB without rewriting workspace files", async () => {
     await withWorkspace(async ({ root, config }) => {
       await addMcp(config, WORKSPACE_ID, "runtime", { type: "remote", url: "https://runtime.example/mcp", enabled: true });
       await setMcpEnabled(config, WORKSPACE_ID, "runtime", false);
@@ -119,7 +119,7 @@ describe("runtime Sofia engine config store", () => {
     });
   });
 
-  test("stores plugin changes in the Sofia App runtime DB without rewriting workspace files", async () => {
+  test("stores plugin changes in the Sofia runtime DB without rewriting workspace files", async () => {
     await withWorkspace(async ({ root, config }) => {
       expect(await addPlugin(config, WORKSPACE_ID, "runtime-plugin")).toBe(true);
       expect(await removePlugin(config, WORKSPACE_ID, "runtime-plugin")).toBe(true);
@@ -204,7 +204,7 @@ describe("runtime Sofia engine config store", () => {
     });
   });
 
-  test("runtime config status reports the Sofia App-managed sources the settings UI renders", async () => {
+  test("runtime config status reports the Sofia-managed sources the settings UI renders", async () => {
     await withWorkspace(async ({ root, config }) => {
       await addMcp(config, WORKSPACE_ID, "runtime", { type: "remote", url: "https://runtime.example/mcp" });
 
@@ -234,7 +234,7 @@ describe("runtime Sofia engine config store", () => {
     });
   });
 
-  test("runtime config status tolerates malformed legacy Sofia App metadata", async () => {
+  test("runtime config status tolerates malformed legacy Sofia metadata", async () => {
     await withWorkspace(async ({ root, config }) => {
       await mkdir(join(root, ".sofia"), { recursive: true });
       await writeFile(join(root, ".sofia", "sofia.json"), "{ invalid\n", "utf8");

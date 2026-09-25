@@ -128,7 +128,7 @@ describe("cloud MCP advanced diagnostics", () => {
             stage: "tool_registration",
             retryable: true,
             recommendedAction: "Check the network path",
-            message: "The Sofia App server could not reach the Cloud MCP endpoint.",
+            message: "The Sofia server could not reach the Cloud MCP endpoint.",
             details: {
               transport: {
                 message: "fetch failed",

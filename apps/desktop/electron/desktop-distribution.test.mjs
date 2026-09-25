@@ -21,7 +21,7 @@ describe("resolveDesktopDistribution", () => {
       }),
       {
         flavor: "cloud",
-        appName: "Sofia App Cloud",
+        appName: "Sofia Cloud",
         appIdentifier: "com.differentai.sofia",
         protocolScheme: "sofia",
         requireSignin: true,
@@ -39,7 +39,7 @@ describe("resolveDesktopDistribution", () => {
 
     assert.deepEqual(distribution, {
       flavor: "enterprise",
-      appName: "Sofia App Enterprise",
+      appName: "Sofia Enterprise",
       appIdentifier: "com.differentai.sofia",
       protocolScheme: "sofia",
       requireSignin: true,

@@ -3,7 +3,7 @@ const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const asar = require("@electron/asar");
 
-const computerUseHelperAppName = "Sofia App Computer Use.app";
+const computerUseHelperAppName = "Sofia Computer Use.app";
 
 const sidecarBases = [
   "engine",

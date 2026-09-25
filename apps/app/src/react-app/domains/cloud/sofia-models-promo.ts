@@ -63,8 +63,8 @@ export const SOFIA_MODEL_PREVIEWS: SofiaModelPreview[] = Object.entries(
   .filter(([, model]) => model.enabled)
   .map(([id, model]) => ({
     id,
-    title: model.displayName.replace(/^Sofia App:\s*/, ""),
-    subtitle: "Sofia App hosted",
+    title: model.displayName.replace(/^Sofia:\s*/, ""),
+    subtitle: "Sofia hosted",
   }));
 
 export function hasSofiaModelsProvider(providerIds: readonly string[]) {

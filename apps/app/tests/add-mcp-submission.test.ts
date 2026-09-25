@@ -14,7 +14,7 @@ const entry: McpDirectoryInfo = {
 };
 
 describe("local MCP submission feedback", () => {
-  test("reserves the Sofia App Connect runtime name for its managed entry", () => {
+  test("reserves the Sofia Connect runtime name for its managed entry", () => {
     expect(conflictsWithSofiaConnect({ name: "sofia-cloud" })).toBe(true);
     expect(conflictsWithSofiaConnect({ id: "sofia-cloud", name: "Custom cloud" })).toBe(true);
     expect(conflictsWithSofiaConnect({

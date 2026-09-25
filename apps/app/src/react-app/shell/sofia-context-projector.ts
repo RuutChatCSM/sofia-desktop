@@ -129,7 +129,7 @@ export function buildSofiaContext(
   const resources: SofiaResourceDescriptor[] = [{
     ref: `screen:${input.route}`,
     kind: "screen",
-    title: screen.kind === "settings" ? `${screen.panel} settings` : "Sofia App",
+    title: screen.kind === "settings" ? `${screen.panel} settings` : "Sofia",
     provider,
     state: { kind: screen.kind, route: input.route },
   }];

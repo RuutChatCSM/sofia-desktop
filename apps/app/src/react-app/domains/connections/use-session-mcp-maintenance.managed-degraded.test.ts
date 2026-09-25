@@ -137,7 +137,7 @@ describe("managed MCP secure-storage degradation in session maintenance", () => 
         throw new SofiaServerError(
           503,
           "managed_mcp_secure_storage_unavailable",
-          "Secure storage for Sofia App-managed MCP credentials is unavailable.",
+          "Secure storage for Sofia-managed MCP credentials is unavailable.",
         );
       },
       getSofiaCloudMcpHealth: async () => cloudHealth(false),

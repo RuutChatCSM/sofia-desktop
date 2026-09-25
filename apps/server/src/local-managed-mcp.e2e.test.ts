@@ -308,7 +308,7 @@ describe("Sofia-managed local MCP OAuth gateway", () => {
       expect(created.status).toBe(502);
       expect(await created.json()).toMatchObject({
         code: "managed_mcp_connection_failed",
-        message: "Sofia App could not connect to this MCP server. Check its OAuth settings and availability, then try again.",
+        message: "Sofia could not connect to this MCP server. Check its OAuth settings and availability, then try again.",
       });
 
       const status = await fetch(
@@ -352,7 +352,7 @@ describe("Sofia-managed local MCP OAuth gateway", () => {
       const server = await startServer(config);
       stops.push(() => server.stop());
       const sofiaBaseUrl = `http://127.0.0.1:${server.port}`;
-      const expectedMessage = "Sofia App could not connect to this MCP server. Check its OAuth settings and availability, then try again.";
+      const expectedMessage = "Sofia could not connect to this MCP server. Check its OAuth settings and availability, then try again.";
 
       const registrationProvider = startHandshakeFailureProvider("oauth-client-registration");
       await createLocalManagedMcpConnection(config, {
@@ -584,8 +584,8 @@ describe("Sofia-managed local MCP OAuth gateway", () => {
 
       const firstClient = await connectGateway(firstRuntimeConfig!);
       expect((await firstClient.listTools()).tools.map((tool) => tool.name)).toContain("mock_echo");
-      expect(await firstClient.callTool({ name: "mock_echo", arguments: { text: "through Sofia App" } }))
-        .toMatchObject({ content: [{ type: "text", text: "through Sofia App" }] });
+      expect(await firstClient.callTool({ name: "mock_echo", arguments: { text: "through Sofia" } }))
+        .toMatchObject({ content: [{ type: "text", text: "through Sofia" }] });
       await expect(firstClient.callTool({ name: "mock_provider_error", arguments: {} })).rejects.toThrow();
       const providerErrorStatus = await fetch(`${sofiaBaseUrl}/workspace/ws_managed/mcp/mock-oauth/managed`, {
         headers: clientHeaders(config.token),

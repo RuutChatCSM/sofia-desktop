@@ -46,7 +46,7 @@ test("waitFor appends a bounded on-screen dump to timeout failures", async () =>
     ? {
       hash: "#/workspace/demo/extensions",
       route: "/workspace/demo/extensions",
-      title: "Sofia App",
+      title: "Sofia",
       buttons: ["Back", "Add extension"],
       body: "Extensions Add an extension to this workspace",
     }
@@ -54,7 +54,7 @@ test("waitFor appends a bounded on-screen dump to timeout failures", async () =>
 
   await assert.rejects(
     waitFor(surface, "false", { timeoutMs: 1, label: "extensions route" }),
-    /On screen: \{"hash":"#\/workspace\/demo\/extensions","route":"\/workspace\/demo\/extensions","title":"Sofia App","buttons":\["Back","Add extension"\],"body":"Extensions Add an extension to this workspace"\}/,
+    /On screen: \{"hash":"#\/workspace\/demo\/extensions","route":"\/workspace\/demo\/extensions","title":"Sofia","buttons":\["Back","Add extension"\],"body":"Extensions Add an extension to this workspace"\}/,
   );
 });
 

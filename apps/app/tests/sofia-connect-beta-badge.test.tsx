@@ -5,11 +5,11 @@ import { t } from "../src/i18n";
 import { ExtensionCard } from "../src/react-app/design-system/extension-card";
 import { SettingsBetaBadge } from "../src/react-app/domains/settings/shell/settings-page";
 
-describe("Sofia App Connect beta label", () => {
+describe("Sofia Connect beta label", () => {
   test("renders the client navigation, pitch, and connection card as beta", () => {
     const badge = renderToStaticMarkup(<SettingsBetaBadge />);
     const card = renderToStaticMarkup(
-      <ExtensionCard name="Team connection" description="Shared through Sofia App Connect" beta />,
+      <ExtensionCard name="Team connection" description="Shared through Sofia Connect" beta />,
     );
 
     expect(badge).toContain(">Beta<");

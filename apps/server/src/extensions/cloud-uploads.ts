@@ -25,7 +25,7 @@ export const SOFIA_CLOUD_UPLOAD_ACTIONS = [
     extensionId: SOFIA_CLOUD_UPLOADS_EXTENSION_ID,
     action: "drive_upload_file",
     title: "Upload a workspace file to Google Drive",
-    description: "Uploads a workspace file up to 4 MiB directly to Google Drive outside model context. Sofia App preserves the file bytes, basename, and source MIME type; it does not convert Office files.",
+    description: "Uploads a workspace file up to 4 MiB directly to Google Drive outside model context. Sofia preserves the file bytes, basename, and source MIME type; it does not convert Office files.",
     inputSchema: {
       type: "object",
       properties: {

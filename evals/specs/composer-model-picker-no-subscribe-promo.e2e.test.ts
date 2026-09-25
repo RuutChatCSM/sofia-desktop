@@ -9,7 +9,7 @@ const requirements: TestNeeds = {
 const missingRequirements = unmetNeeds(requirements, process.env);
 const title = missingRequirements.length > 0
   ? `composer model picker promo removal skipped — needs: ${missingRequirements.join(", ")}`
-  : "the composer model pickers keep their controls without the Sofia App Models subscribe promo";
+  : "the composer model pickers keep their controls without the Sofia Models subscribe promo";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -113,7 +113,7 @@ test(title, async ({ evidence, place }) => {
       search: Boolean(dialog.querySelector('input[placeholder="Search providers and models..."]')),
       done: [...dialog.querySelectorAll("button")]
         .some((button) => (button.textContent ?? "").trim() === "Done"),
-      hideButton: Boolean(dialog.querySelector('button[aria-label="Hide Sofia App Models"]')),
+      hideButton: Boolean(dialog.querySelector('button[aria-label="Hide Sofia Models"]')),
       subscribeSentence: text.includes("Subscribe to use hosted frontier models in this workspace."),
       unlockSentence: text.includes("Sign in to unlock hosted frontier models for your team."),
       subscribeAction: hasExactText("Subscribe"),

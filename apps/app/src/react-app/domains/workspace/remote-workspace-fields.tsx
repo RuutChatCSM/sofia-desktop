@@ -75,7 +75,7 @@ export function RemoteWorkspaceFields({
             className={inputClass}
           />
           <span className={inputHintClass}>
-            Paste the Sofia App worker URL you want to connect to.
+            Paste the Sofia worker URL you want to connect to.
           </span>
         </label>
 

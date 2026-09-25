@@ -119,11 +119,11 @@ import { consumeComposerAutoSend } from "./composer-auto-send";
 
 const EMPTY_TRANSCRIPT: UIMessage[] = [];
 const IDLE_STATUS: SessionStatus = { type: "idle" };
-const DEFAULT_COMPOSER_CONTROL_TEXT = "Help me outline the next Sofia App task.";
+const DEFAULT_COMPOSER_CONTROL_TEXT = "Help me outline the next Sofia task.";
 const SESSION_SURFACE_SELECTOR = "[data-session-surface-id]";
 const MARKDOWN_PRIMITIVE_EVAL_TEXT = `# Markdown proof heading
 
-This shared renderer keeps **bold proof text**, inline \`renderMarkdownHtml\`, and [Sofia App link](https://sofia.ruut.chat) readable in one message.
+This shared renderer keeps **bold proof text**, inline \`renderMarkdownHtml\`, and [Sofia link](https://sofia.ruut.chat) readable in one message.
 
 \`\`\`ts
 const pipeline = "shared markdown primitive";
@@ -285,7 +285,7 @@ function createChatTranscriptEvalMessages(sessionId: string) {
         },
         {
           type: "text",
-          text: "Your plan is drafted — details in [Sofia App](https://sofia.ruut.chat). Search token: chat-transcript-proof.",
+          text: "Your plan is drafted — details in [Sofia](https://sofia.ruut.chat). Search token: chat-transcript-proof.",
         },
       ],
       // `completed` makes the finished turn fold behind a real
@@ -365,7 +365,7 @@ export type SessionSurfaceProps = {
 };
 
 function messageToReadableText(message: UIMessage) {
-  const header = message.role === "user" ? "You" : message.role === "assistant" ? "Sofia App" : message.role;
+  const header = message.role === "user" ? "You" : message.role === "assistant" ? "Sofia" : message.role;
   const body = message.parts
     .flatMap((part) => {
       if (part.type === "text") return [part.text];

@@ -1,5 +1,5 @@
 /**
- * Single entry point for embedding the Sofia App server in-process.
+ * Single entry point for embedding the Sofia server in-process.
  *
  * Handles config resolution, Sofia engine binary wiring, and server start in
  * one call -- mirrors what cli.ts does but returns a handle instead of owning
@@ -60,7 +60,7 @@ export async function startEmbeddedServer(options: EmbeddedServerOptions): Promi
 
     if (errors.length === 1) throw errors[0];
     if (errors.length > 1) {
-      throw new AggregateError(errors, "Failed to stop embedded Sofia App server");
+      throw new AggregateError(errors, "Failed to stop embedded Sofia server");
     }
   };
 
@@ -78,7 +78,7 @@ export async function startEmbeddedServer(options: EmbeddedServerOptions): Promi
       } catch (cleanupError) {
         throw new AggregateError(
           [startupError, cleanupError],
-          "Embedded Sofia App server startup failed and cleanup was incomplete",
+          "Embedded Sofia server startup failed and cleanup was incomplete",
         );
       }
       throw startupError;

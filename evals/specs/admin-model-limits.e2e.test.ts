@@ -191,7 +191,7 @@ test(title, async ({ evidence, place }) => {
     const section = row?.querySelector('[data-testid="admin-usage-section"]');
     const reset = section?.querySelector('[data-testid="admin-usage-reset-open"]');
     return Boolean(section)
-      && (section?.textContent ?? "").includes("Sofia App model consumption")
+      && (section?.textContent ?? "").includes("Sofia model consumption")
       && (section?.textContent ?? "").includes("No organization consumption windows are available for this user.")
       && reset?.disabled === true;
   })()`, {
@@ -204,7 +204,7 @@ test(title, async ({ evidence, place }) => {
     const text = section?.textContent ?? "";
     const reset = section?.querySelector('[data-testid="admin-usage-reset-open"]');
     return {
-      heading: text.includes("Sofia App model consumption"),
+      heading: text.includes("Sofia model consumption"),
       empty: text.includes("No organization consumption windows are available for this user."),
       resetDisabled: reset?.disabled === true,
       hasWindowUsage: text.includes("Shared:") || text.includes("No current five-hour, weekly, or monthly windows.")
@@ -217,7 +217,7 @@ test(title, async ({ evidence, place }) => {
     && emptyUsageState.hasWindowUsage === false;
   expect(emptyUsageProved, JSON.stringify(emptyUsageState)).toBe(true);
   evidence.recordAssertionEvidence(
-    "An expanded user shows Sofia App model consumption's explicit empty state, no window usage, and a disabled reset",
+    "An expanded user shows Sofia model consumption's explicit empty state, no window usage, and a disabled reset",
     JSON.stringify(emptyUsageState),
     emptyUsageProved,
   );
@@ -226,7 +226,7 @@ test(title, async ({ evidence, place }) => {
   {
     const shot = await screenshot(browser);
     const seen = await validate(shot, [
-      "An expanded user row shows a section headed Sofia App model consumption",
+      "An expanded user row shows a section headed Sofia model consumption",
       "That section says no organization consumption windows are available for this user",
     ]);
     expect(seen.ok, seen.why).toBe(true);

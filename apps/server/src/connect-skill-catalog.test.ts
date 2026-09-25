@@ -84,7 +84,7 @@ async function serverConfig(): Promise<ServerConfig> {
   };
 }
 
-describe("Sofia App Connect skill catalog", () => {
+describe("Sofia Connect skill catalog", () => {
   test("renders discovery metadata and capability retrieval guidance", () => {
     const instruction = renderSofiaConnectSkillInstruction([{
       name: "customer-briefing",

@@ -112,7 +112,7 @@ test("openssl argv construction includes CA, AIA, and fullchain prerequisites", 
     "leaf-csr",
     "leaf-cert",
   ]);
-  assert.ok(commands.some((command) => command.args.includes("/CN=Sofia App Egress Lab Corporate Interception CA")));
+  assert.ok(commands.some((command) => command.args.includes("/CN=Sofia Egress Lab Corporate Interception CA")));
   assert.ok(commands.some((command) => command.args.includes("-extfile")));
   const rootCert = commands.find((command) => command.label === "root-cert");
   assert.ok(rootCert, "root-cert command must exist");

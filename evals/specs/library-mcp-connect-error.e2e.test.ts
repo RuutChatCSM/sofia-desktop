@@ -11,7 +11,7 @@ const title = missingRequirements.length > 0
   ? `Library managed MCP connect error skipped — needs: ${missingRequirements.join(", ")}`
   : "Library keeps a failed managed MCP out and connects it after the URL is fixed";
 const safeConnectionFailure =
-  "Sofia App could not connect to this MCP server. Check its OAuth settings and availability, then try again.";
+  "Sofia could not connect to this MCP server. Check its OAuth settings and availability, then try again.";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -136,7 +136,7 @@ test(title, async ({ evidence, place }) => {
   })()`, {
     awaitPromise: true,
     timeoutMs: 60_000,
-    label: "local Sofia App server credentials before managed MCP submission",
+    label: "local Sofia server credentials before managed MCP submission",
   });
 
   const submittedInvalidUrl = await evalIn(desktop, `(() => {

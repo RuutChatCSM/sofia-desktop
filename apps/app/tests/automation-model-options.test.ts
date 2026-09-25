@@ -34,9 +34,9 @@ describe("Automation model options", () => {
     expect(automationModelOptions([], { includeFreeStarter: false })).toEqual([])
   })
 
-  test("expands the member's managed Sofia App aliases even when Den stores no model rows", () => {
+  test("expands the member's managed Sofia aliases even when Den stores no model rows", () => {
     const options = automationModelOptions([
-      provider({ id: "lpr_member_sofia", source: "sofia", name: "Sofia App Models" }),
+      provider({ id: "lpr_member_sofia", source: "sofia", name: "Sofia Models" }),
     ])
 
     expect(options.some((option) => option.providerId === "sofia" && option.modelId === "z-ai/glm-5.2")).toBe(true)
@@ -141,10 +141,10 @@ describe("Automation proposal model resolution", () => {
     const free = { providerId: "engine", modelId: "big-pickle", variant: "low" }
     expect(resolveProposalModel(free, [])).toEqual({ model: free, resolution: "exact" })
 
-    const managedProvider = provider({ id: "lpr_managed", source: "sofia", name: "Sofia App Models" })
+    const managedProvider = provider({ id: "lpr_managed", source: "sofia", name: "Sofia Models" })
     const managedOption = automationModelOptions([managedProvider]).find((option) => option.accessKind === "sofia_managed")
     expect(managedOption).toBeDefined()
-    if (!managedOption) throw new Error("Expected an enabled Sofia App managed model")
+    if (!managedOption) throw new Error("Expected an enabled Sofia managed model")
     const managed = { providerId: managedOption.providerId, modelId: managedOption.modelId, variant: "high" }
     expect(resolveProposalModel(managed, [managedProvider])).toEqual({ model: managed, resolution: "exact" })
   })
@@ -161,7 +161,7 @@ describe("Automation proposal model resolution", () => {
     })
   })
 
-  test("does not map through Sofia App provider records", () => {
+  test("does not map through Sofia provider records", () => {
     const managed = provider({
       ...customProvider,
       id: "lpr_managed",

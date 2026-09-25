@@ -234,7 +234,7 @@ export function AccountStatusMenu(props: AccountStatusMenuProps) {
 
   const docsControlAction = useMemo<SofiaControlAction>(() => ({
     id: "status.docs.open",
-    label: "Open Sofia App docs",
+    label: "Open Sofia docs",
     description: "Open the documentation from the account menu.",
     sideEffect: "external",
     targetRef: triggerRef,
@@ -245,7 +245,7 @@ export function AccountStatusMenu(props: AccountStatusMenuProps) {
   const feedbackControlAction = useMemo<SofiaControlAction>(() => ({
     id: "status.feedback.open",
     label: "Send feedback",
-    description: "Open the Sofia App feedback surface from the account menu.",
+    description: "Open the Sofia feedback surface from the account menu.",
     sideEffect: "external",
     disabled: !props.onSendFeedback,
     targetRef: triggerRef,

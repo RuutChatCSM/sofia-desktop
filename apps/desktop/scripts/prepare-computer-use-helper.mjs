@@ -10,7 +10,7 @@ const packagePath = resolve(repoRoot, "packages", "handsfree", "native", "HandsF
 const iconPath = resolve(desktopRoot, "resources", "icons", "icon.icns");
 const productName = "HandsFreeComputerUse";
 const helperExecutableName = "ComputerUse";
-const helperAppName = "Sofia App Computer Use.app";
+const helperAppName = "Sofia Computer Use.app";
 const bundleIdentifier = "com.differentai.sofia.computer-use";
 
 const readArg = (name) => {
@@ -89,7 +89,7 @@ function infoPlist() {
   <key>CFBundleDevelopmentRegion</key>
   <string>en</string>
   <key>CFBundleDisplayName</key>
-  <string>Sofia App Computer Use</string>
+  <string>Sofia Computer Use</string>
   <key>CFBundleExecutable</key>
   <string>${helperExecutableName}</string>
   <key>CFBundleIdentifier</key>
@@ -99,7 +99,7 @@ function infoPlist() {
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
   <key>CFBundleName</key>
-  <string>Sofia App Computer Use</string>
+  <string>Sofia Computer Use</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>

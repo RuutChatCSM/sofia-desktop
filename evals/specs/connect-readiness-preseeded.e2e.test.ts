@@ -217,7 +217,7 @@ test.skipIf(!e2eTestsEnabled || !mysqlOpen)(title, async ({ evidence, place }) =
       );
       const shot = await screenshot(surface);
       const seen = await validate(shot, [
-        "The Sofia App desktop is visible before organization sign-in",
+        "The Sofia desktop is visible before organization sign-in",
         "No crash or error dialog is visible",
       ]);
       expect(seen.ok, seen.why).toBe(true);

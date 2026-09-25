@@ -90,7 +90,7 @@ describe("codex workspace engine configuration", () => {
       // What "Connect Computer Use MCP" stores in the workspace.
       await addMcp(config, WORKSPACE_ID, "computer-use", {
         type: "local",
-        command: ["/helpers/Sofia App Computer Use.app/Contents/MacOS/ComputerUse", "mcp"],
+        command: ["/helpers/Sofia Computer Use.app/Contents/MacOS/ComputerUse", "mcp"],
         enabled: true,
       });
 
@@ -99,7 +99,7 @@ describe("codex workspace engine configuration", () => {
       expect(existsSync(configFile)).toBe(true);
       const toml = await readFile(configFile, "utf8");
       expect(toml).toContain("[mcp_servers.computer-use]");
-      expect(toml).toContain('command = "/helpers/Sofia App Computer Use.app/Contents/MacOS/ComputerUse"');
+      expect(toml).toContain('command = "/helpers/Sofia Computer Use.app/Contents/MacOS/ComputerUse"');
       expect(toml).toContain('args = ["mcp"]');
       // Without the pin the engine defers MCP tools behind tool_search and the
       // agent never sees mcp__computer_use__*.

@@ -526,7 +526,7 @@ export function readDesktopDistributionInfo(): DesktopDistributionInfo {
     : window.__SOFIA_ELECTRON__?.meta?.distribution;
   return distribution ?? {
     flavor: "public",
-    appName: "Sofia App",
+    appName: "Sofia",
     appIdentifier: "com.differentai.sofia",
     protocolScheme: "sofia",
     requireSignin: false,

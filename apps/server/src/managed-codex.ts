@@ -1,6 +1,6 @@
 // Managed Codex engine: spawns `Sofia app-server --listen stdio://` and speaks
 // its JSON-RPC 2.0 protocol (newline-delimited JSON over stdio). This is the
-// embedding surface the ChatGPT/Codex desktop app uses, so Sofia App can drive a
+// embedding surface the ChatGPT/Codex desktop app uses, so Sofia can drive a
 // real Codex runtime side-by-side with the Sofia engine.
 //
 // Protocol (from openai/Sofia app-server-transport + app-server-protocol):
@@ -310,7 +310,7 @@ export class ManagedCodexEngine {
     if (!this.versionChecked) {
       this.versionChecked = true;
       // Probe the version once for diagnostics (`info.version`). There is no
-      // enforced minimum here: Sofia App only ever spawns its own bundled Sofia
+      // enforced minimum here: Sofia only ever spawns its own bundled Sofia
       // binary (a source build that reports `codex-cli 0.0.0`), so a hard gate
       // would just block the runtime it ships. The version is surfaced for the
       // feature gates and diagnostics, never used to refuse startup.

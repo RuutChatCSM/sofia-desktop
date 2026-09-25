@@ -112,7 +112,7 @@ test("enterprise onboarding is workspace-address-first with a silent paste recov
   expect(gateSource).toContain("Link this app to your organization");
   expect(gateSource).toContain("Enter your workspace address — the page where you downloaded this app. Sign-in finishes in your browser and returns here.");
   expect(gateSource).toContain("{pendingConfirmation ? null : (");
-  expect(gateSource).not.toContain("Sofia App link");
+  expect(gateSource).not.toContain("Sofia link");
   expect(gateSource).not.toContain("enterprise-sofia-link-connect");
   expect(gateSource).not.toContain("enterprise-connection-method-toggle");
   expect(gateSource).not.toContain("manualAuthOpen");
@@ -126,11 +126,11 @@ test("enterprise onboarding is workspace-address-first with a silent paste recov
   );
 
   // The install guide's connect step hands the user the exact address to type,
-  // and the workspace-claim page still copies the complete Sofia App URL for the
+  // and the workspace-claim page still copies the complete Sofia URL for the
   // desktop's silent paste recovery.
   expect(installGuideSource).toContain('data-testid="install-workspace-address"');
   expect(installGuideSource).toContain("In the app, enter your workspace address:");
-  expect(installGuideSource).not.toContain("Copy Sofia App link");
+  expect(installGuideSource).not.toContain("Copy Sofia link");
   expect(workspaceClaimSource).toContain("const sofiaUrl = await createDesktopHandoff();");
   expect(workspaceClaimSource).toContain("await navigator.clipboard.writeText(sofiaUrl);");
   expect(workspaceClaimSource).not.toMatch(/sign-in code/i);
@@ -144,7 +144,7 @@ test("enterprise onboarding is workspace-address-first with a silent paste recov
 
   evidence.recordAssertionEvidence(
     "The guide hands over the workspace address, not a credential",
-    "The install guide's connect step shows the exact workspace address to type, keeps macOS, Windows, and Linux install guidance, avoids activation-link language, and the workspace-claim page still copies a complete Sofia App URL.",
+    "The install guide's connect step shows the exact workspace address to type, keeps macOS, Windows, and Linux install guidance, avoids activation-link language, and the workspace-claim page still copies a complete Sofia URL.",
     true,
   );
 

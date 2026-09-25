@@ -25,9 +25,9 @@ describe("agent instruction compose primitives", () => {
       createInstructionSection("ui", "use sofia_ui_*"),
     );
     const withoutUi = deleteInstructionSection(base, "ui");
-    const expanded = expandInstructionSection(withoutUi, "browser", (body) => `${body}\nnever use browser_* on Sofia App`);
+    const expanded = expandInstructionSection(withoutUi, "browser", (body) => `${body}\nnever use browser_* on Sofia`);
     expect(composeAgentInstructions(expanded)).toEqual([
-      "use sofia_execute browser.open_url\nnever use browser_* on Sofia App",
+      "use sofia_execute browser.open_url\nnever use browser_* on Sofia",
     ]);
   });
 

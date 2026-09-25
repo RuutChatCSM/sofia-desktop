@@ -627,7 +627,7 @@ export function createExtensionsStore(options: {
     const nextConfig = withWorkspaceCloudImports(config, nextCloudImports);
     const persisted = await writeWorkspaceSofiaConfigRecord(nextConfig);
     if (!persisted) {
-      throw new Error("Sofia App server unavailable. Connect to manage imported cloud marketplaces.");
+      throw new Error("Sofia server unavailable. Connect to manage imported cloud marketplaces.");
     }
     setStateField("importedCloudMarketplaces", nextMarketplaces);
     void refreshPendingCloudPluginChanges();
@@ -643,7 +643,7 @@ export function createExtensionsStore(options: {
     const nextConfig = withWorkspaceCloudImports(config, nextCloudImports);
     const persisted = await writeWorkspaceSofiaConfigRecord(nextConfig);
     if (!persisted) {
-      throw new Error("Sofia App server unavailable. Connect to manage imported cloud plugins.");
+      throw new Error("Sofia server unavailable. Connect to manage imported cloud plugins.");
     }
     setStateField("importedCloudPlugins", nextPlugins);
     void refreshPendingCloudPluginChanges(nextPlugins);
@@ -681,11 +681,11 @@ export function createExtensionsStore(options: {
     }
 
     if (hasSofiaTarget) {
-      throw new Error("Sofia App server cannot remove skills for this workspace.");
+      throw new Error("Sofia server cannot remove skills for this workspace.");
     }
 
     if (isRemoteWorkspace) {
-      throw new Error("Sofia App server unavailable. Connect to remove skills.");
+      throw new Error("Sofia server unavailable. Connect to remove skills.");
     }
 
     if (!isDesktopRuntime()) {
@@ -899,7 +899,7 @@ export function createExtensionsStore(options: {
       await sofiaClient.addMcp(sofiaWorkspaceId, { name, config });
       return;
     }
-    throw new Error("Sofia App server unavailable. Connect to import MCP servers into this workspace.");
+    throw new Error("Sofia server unavailable. Connect to import MCP servers into this workspace.");
   };
 
   const deletePluginMcpConfig = async (name: string) => {
@@ -915,7 +915,7 @@ export function createExtensionsStore(options: {
       await sofiaClient.removeMcp(sofiaWorkspaceId, name);
       return;
     }
-    throw new Error("Sofia App server unavailable. Connect to remove imported MCP servers from this workspace.");
+    throw new Error("Sofia server unavailable. Connect to remove imported MCP servers from this workspace.");
   };
 
   const pluginReloadReason = (objectType: string): ReloadReason => {
@@ -946,7 +946,7 @@ export function createExtensionsStore(options: {
       await sofiaClient.writeWorkspaceFile(sofiaWorkspaceId, { path, content, force: true });
       return;
     }
-    throw new Error("Sofia App server unavailable. Connect to import plugin files into this workspace.");
+    throw new Error("Sofia server unavailable. Connect to import plugin files into this workspace.");
   };
 
   const deletePluginWorkspaceFiles = async (files: Array<{ path: string; recursive?: boolean }>) => {
@@ -969,7 +969,7 @@ export function createExtensionsStore(options: {
       }
       return;
     }
-    throw new Error("Sofia App server unavailable. Connect to remove imported plugin files from this workspace.");
+    throw new Error("Sofia server unavailable. Connect to remove imported plugin files from this workspace.");
   };
 
   const applyCloudOrgPluginImport = async (
@@ -1273,7 +1273,7 @@ export function createExtensionsStore(options: {
   async function previewClaudePlugin(url: string): Promise<SofiaClaudePluginPreview> {
     const target = await resolveWorkspaceServerTarget();
     if (!target.sofiaClient || !target.sofiaWorkspaceId) {
-      throw new Error("Sofia App server unavailable. Connect to install plugins from GitHub.");
+      throw new Error("Sofia server unavailable. Connect to install plugins from GitHub.");
     }
     const result = await target.sofiaClient.previewClaudePlugin(target.sofiaWorkspaceId, { url });
     return result.preview;
@@ -1285,7 +1285,7 @@ export function createExtensionsStore(options: {
     try {
       const target = await resolveWorkspaceServerTarget();
       if (!target.sofiaClient || !target.sofiaWorkspaceId) {
-        throw new Error("Sofia App server unavailable. Connect to install plugins from GitHub.");
+        throw new Error("Sofia server unavailable. Connect to install plugins from GitHub.");
       }
       const result = await target.sofiaClient.installClaudePlugin(target.sofiaWorkspaceId, { url });
       await refreshSkills({ force: true });
@@ -1430,7 +1430,7 @@ export function createExtensionsStore(options: {
       mutateState((current) => ({
         ...current,
         skills: [],
-        skillsStatus: "Sofia App server cannot read skills for this workspace.",
+        skillsStatus: "Sofia server cannot read skills for this workspace.",
       }));
       return;
     }
@@ -1480,7 +1480,7 @@ export function createExtensionsStore(options: {
       mutateState((current) => ({
         ...current,
         skills: [],
-        skillsStatus: "Sofia App server unavailable. Connect to load skills.",
+        skillsStatus: "Sofia server unavailable. Connect to load skills.",
       }));
       return;
     }
@@ -1596,9 +1596,9 @@ export function createExtensionsStore(options: {
     if (scope === "project" && hasSofiaTarget) {
       mutateState((current) => ({
         ...current,
-        pluginStatus: "Sofia App server cannot read plugins for this workspace.",
+        pluginStatus: "Sofia server cannot read plugins for this workspace.",
         pluginList: [],
-        sidebarPluginStatus: "Sofia App server cannot read plugins for this workspace.",
+        sidebarPluginStatus: "Sofia server cannot read plugins for this workspace.",
         sidebarPluginList: [],
       }));
       refreshPluginsInFlight = false;
@@ -1620,9 +1620,9 @@ export function createExtensionsStore(options: {
     if (!isLocalWorkspace && !canUseSofiaServer) {
       mutateState((current) => ({
         ...current,
-        pluginStatus: "Sofia App server unavailable. Connect to manage plugins.",
+        pluginStatus: "Sofia server unavailable. Connect to manage plugins.",
         pluginList: [],
-        sidebarPluginStatus: "Connect an Sofia App server to load plugins.",
+        sidebarPluginStatus: "Connect an Sofia server to load plugins.",
         sidebarPluginList: [],
       }));
       refreshPluginsInFlight = false;
@@ -1642,11 +1642,11 @@ export function createExtensionsStore(options: {
     }
 
     // Sofia no longer reads a workspace engine config file: plugins come from
-    // the Sofia App server's plugin API.
+    // the Sofia server's plugin API.
     mutateState((current) => ({
       ...current,
       pluginList: [],
-      pluginStatus: "Sofia App server unavailable. Connect to manage plugins.",
+      pluginStatus: "Sofia server unavailable. Connect to manage plugins.",
       sidebarPluginList: [],
       sidebarPluginStatus: null,
     }));
@@ -1688,7 +1688,7 @@ export function createExtensionsStore(options: {
     }
 
     if (snapshot.pluginScope === "project" && hasSofiaTarget) {
-      setStateField("pluginStatus", "Sofia App server cannot write plugins for this workspace.");
+      setStateField("pluginStatus", "Sofia server cannot write plugins for this workspace.");
       return;
     }
 
@@ -1698,13 +1698,13 @@ export function createExtensionsStore(options: {
     }
 
     if (!isLocalWorkspace) {
-      setStateField("pluginStatus", "Sofia App server unavailable. Connect to manage plugins.");
+      setStateField("pluginStatus", "Sofia server unavailable. Connect to manage plugins.");
       return;
     }
 
     // Sofia no longer edits a workspace engine config file: plugin changes go
-    // through the Sofia App server plugins API.
-    setStateField("pluginStatus", "Sofia App server unavailable. Connect to manage plugins.");
+    // through the Sofia server plugins API.
+    setStateField("pluginStatus", "Sofia server unavailable. Connect to manage plugins.");
   }
 
 
@@ -1743,7 +1743,7 @@ export function createExtensionsStore(options: {
     }
 
     if (snapshot.pluginScope === "project" && hasSofiaTarget) {
-      setStateField("pluginStatus", "Sofia App server cannot write plugins for this workspace.");
+      setStateField("pluginStatus", "Sofia server cannot write plugins for this workspace.");
       return;
     }
 
@@ -1753,13 +1753,13 @@ export function createExtensionsStore(options: {
     }
 
     if (!isLocalWorkspace) {
-      setStateField("pluginStatus", "Sofia App server unavailable. Connect to manage plugins.");
+      setStateField("pluginStatus", "Sofia server unavailable. Connect to manage plugins.");
       return;
     }
 
     // Sofia no longer edits a workspace engine config file: plugin changes go
-    // through the Sofia App server's plugin API.
-    setStateField("pluginStatus", "Sofia App server unavailable. Connect to manage plugins.");
+    // through the Sofia server's plugin API.
+    setStateField("pluginStatus", "Sofia server unavailable. Connect to manage plugins.");
   }
 
   async function importLocalSkill() {
@@ -1834,13 +1834,13 @@ export function createExtensionsStore(options: {
     }
 
     if (hasSofiaTarget) {
-      const message = "Sofia App server cannot write skills for this workspace.";
+      const message = "Sofia server cannot write skills for this workspace.";
       setStateField("skillsStatus", message);
       return { ok: false, message };
     }
 
     if (isRemoteWorkspace) {
-      const message = "Sofia App server unavailable. Connect to install skills.";
+      const message = "Sofia server unavailable. Connect to install skills.";
       setStateField("skillsStatus", message);
       return { ok: false, message };
     }
@@ -1975,7 +1975,7 @@ export function createExtensionsStore(options: {
     }
 
     if (hasSofiaTarget) {
-      setStateField("skillsStatus", "Sofia App server cannot read skills for this workspace.");
+      setStateField("skillsStatus", "Sofia server cannot read skills for this workspace.");
       return null;
     }
 
@@ -1985,7 +1985,7 @@ export function createExtensionsStore(options: {
     }
 
     if (isRemoteWorkspace) {
-      setStateField("skillsStatus", "Sofia App server unavailable. Connect to view skills.");
+      setStateField("skillsStatus", "Sofia server unavailable. Connect to view skills.");
       return null;
     }
     if (!isDesktopRuntime()) {
@@ -2042,7 +2042,7 @@ export function createExtensionsStore(options: {
     }
 
     if (hasSofiaTarget) {
-      setStateField("skillsStatus", "Sofia App server cannot write skills for this workspace.");
+      setStateField("skillsStatus", "Sofia server cannot write skills for this workspace.");
       return;
     }
 
@@ -2052,7 +2052,7 @@ export function createExtensionsStore(options: {
     }
 
     if (isRemoteWorkspace) {
-      setStateField("skillsStatus", "Sofia App server unavailable. Connect to edit skills.");
+      setStateField("skillsStatus", "Sofia server unavailable. Connect to edit skills.");
       return;
     }
     if (!isDesktopRuntime()) {

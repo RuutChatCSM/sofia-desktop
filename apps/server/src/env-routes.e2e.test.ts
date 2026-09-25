@@ -294,7 +294,7 @@ describe("env routes", () => {
     expect(put.status).toBe(400);
     const body = (await put.json()) as { code: string; message: string };
     expect(body.code).toBe("reserved_env_key");
-    expect(body.message).toBe("Environment variable name is reserved for Sofia App internals");
+    expect(body.message).toBe("Environment variable name is reserved for Sofia internals");
     expect(body.message).not.toContain("SOFIA_TOKEN");
   });
 
@@ -367,7 +367,7 @@ describe("env routes", () => {
     });
   });
 
-  test("voice realtime session prefers Sofia App Models broker when configured", async () => {
+  test("voice realtime session prefers Sofia Models broker when configured", async () => {
     process.env.OPENAI_API_KEY = "sk-should-not-be-used";
     const { base } = await boot();
 

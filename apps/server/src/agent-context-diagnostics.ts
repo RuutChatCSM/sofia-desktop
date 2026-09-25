@@ -532,7 +532,7 @@ export function cloudCatalogCheck(probe: CloudCatalogProbe): AgentContextDiagnos
         ? "cloud_catalog_recovered_after_transient_401"
         : exact ? "cloud_catalog_exact_match" : "cloud_catalog_mismatch",
       message: transientUnauthorizedRecovered
-        ? "The Sofia App runtime saw a transient HTTP 401 during the independent Cloud MCP initialize request and recovered on retry; this points to a proxy or auth-gateway blip, not a revoked Sofia Cloud credential."
+        ? "The Sofia runtime saw a transient HTTP 401 during the independent Cloud MCP initialize request and recovered on retry; this points to a proxy or auth-gateway blip, not a revoked Sofia Cloud credential."
         : exact
         ? "The canonical Sofia Cloud catalog exposes exactly the two required capability tools."
         : "The Sofia Cloud catalog does not match the required two-tool contract.",
@@ -562,7 +562,7 @@ export function cloudCatalogCheck(probe: CloudCatalogProbe): AgentContextDiagnos
       status = "warning";
       evidenceKind = "unavailable";
       message = "A local runtime credential was not inspected or used for this remote workspace shell.";
-      action = "Run diagnostics on the Sofia App server that owns the workspace.";
+      action = "Run diagnostics on the Sofia server that owns the workspace.";
       break;
     case "cloud_mcp_missing":
       owner = "sofia-client";
@@ -589,7 +589,7 @@ export function cloudCatalogCheck(probe: CloudCatalogProbe): AgentContextDiagnos
         : "The runtime endpoint probe was not performed because the configured origin is not in the diagnostics trust list; no request was sent, so this is a trust-configuration state, not a network, TLS, or MCP failure.";
       action = probe.enterpriseActivationPresent
         ? "Reconcile the enterprise activation origin with the configured Sofia Cloud MCP origin, or have an administrator add the exact endpoint origin to SOFIA_AGENT_DIAGNOSTICS_TRUSTED_ORIGINS, then rerun diagnostics."
-        : "Activate this installation against your on-prem Den, or have an administrator set SOFIA_AGENT_DIAGNOSTICS_TRUSTED_ORIGINS on the Sofia App desktop/server process to the exact endpoint origin, then rerun diagnostics.";
+        : "Activate this installation against your on-prem Den, or have an administrator set SOFIA_AGENT_DIAGNOSTICS_TRUSTED_ORIGINS on the Sofia desktop/server process to the exact endpoint origin, then rerun diagnostics.";
       break;
     case "credential_missing":
     case "duplicate_authorization":
@@ -617,7 +617,7 @@ export function cloudCatalogCheck(probe: CloudCatalogProbe): AgentContextDiagnos
     case "dns_error":
       owner = "network-admin";
       message = "The independent runtime endpoint probe could not resolve the configured service hostname.";
-      action = "Verify DNS resolution from the Sofia App server, then rerun diagnostics.";
+      action = "Verify DNS resolution from the Sofia server, then rerun diagnostics.";
       break;
     case "connection_refused":
       owner = "network-admin";
@@ -631,7 +631,7 @@ export function cloudCatalogCheck(probe: CloudCatalogProbe): AgentContextDiagnos
       break;
     case "tls_error":
       owner = "network-admin";
-      message = "The independent runtime endpoint probe failed TLS certificate validation or negotiation on the Sofia App runtime trust store.";
+      message = "The independent runtime endpoint probe failed TLS certificate validation or negotiation on the Sofia runtime trust store.";
       action = "Verify the server trust store, enterprise certificates, TLS inspection, and service certificate, then rerun diagnostics.";
       break;
     case "proxy_error":
@@ -663,7 +663,7 @@ export function cloudCatalogCheck(probe: CloudCatalogProbe): AgentContextDiagnos
       status = "warning";
       owner = "sofia-support";
       message = "Sofia Cloud rate-limited the independent runtime probe.";
-      action = "Wait before rerunning diagnostics; contact Sofia App support if rate limiting persists.";
+      action = "Wait before rerunning diagnostics; contact Sofia support if rate limiting persists.";
       break;
     case "gateway_unavailable":
       owner = "network-admin";
@@ -732,7 +732,7 @@ export function cloudDifferentialCheck(probe: CloudCatalogProbe, engineReachable
       ...common,
       status: "passed",
       evidenceKind: "derived",
-      message: "The independent Sofia App runtime probe and the engine registration evidence both report the Sofia Cloud endpoint as reachable.",
+      message: "The independent Sofia runtime probe and the engine registration evidence both report the Sofia Cloud endpoint as reachable.",
       owner: "sofia-server",
       action: "No action is required.",
     });
@@ -742,7 +742,7 @@ export function cloudDifferentialCheck(probe: CloudCatalogProbe, engineReachable
       ...common,
       status: "failed",
       evidenceKind: "derived",
-      message: "The Sofia App runtime reached the Cloud endpoint directly, but the engine registration evidence reports a failure; the engine-side connection path or registration lifecycle is implicated, not the endpoint.",
+      message: "The Sofia runtime reached the Cloud endpoint directly, but the engine registration evidence reports a failure; the engine-side connection path or registration lifecycle is implicated, not the endpoint.",
       owner: "sofia-engine",
       action: "Reconnect Sofia Cloud or restart the selected workspace engine, then rerun diagnostics; the endpoint itself is reachable from this machine.",
     });
@@ -752,9 +752,9 @@ export function cloudDifferentialCheck(probe: CloudCatalogProbe, engineReachable
       ...common,
       status: "warning",
       evidenceKind: "derived",
-      message: "The engine registration evidence reports a live connection, but the independent runtime probe failed; the Sofia App runtime network path is implicated rather than the endpoint or the engine.",
+      message: "The engine registration evidence reports a live connection, but the independent runtime probe failed; the Sofia runtime network path is implicated rather than the endpoint or the engine.",
       owner: "network-admin",
-      action: "Compare proxy, DNS, and trust-store configuration between the Sofia App runtime and the engine process, then rerun diagnostics.",
+      action: "Compare proxy, DNS, and trust-store configuration between the Sofia runtime and the engine process, then rerun diagnostics.",
     });
   }
   if (verdict === "runtime_and_engine_failed") {
@@ -868,7 +868,7 @@ export function cloudEndpointTransportCheck(
         code: "endpoint_tls_handshake_timeout_tls12_comparison_failed",
         message: "The credential-free TLS handshake timed out before any HTTP response, and the explicit TLS 1.3 probe also timed out; the runtime TLS 1.2 comparison timed out too, so this still points to an egress TLS ClientHello stall but this runtime could not prove the TLS 1.2 workaround.",
         owner: "network-admin",
-        action: "Verify the egress proxy and firewall pass TLS ClientHello traffic to Sofia Cloud hosts, then compare with a known Node or openssl TLS 1.2-only probe and confirm every Sofia App runtime honors any temporary TLS-version pinning policy.",
+        action: "Verify the egress proxy and firewall pass TLS ClientHello traffic to Sofia Cloud hosts, then compare with a known Node or openssl TLS 1.2-only probe and confirm every Sofia runtime honors any temporary TLS-version pinning policy.",
         details,
       });
     }
@@ -893,7 +893,7 @@ export function cloudEndpointTransportCheck(
         code: "endpoint_tls_interception_detected",
         message: "The Sofia Cloud endpoint appears to be TLS-inspected or re-signed by a corporate proxy; the runtime does not trust that inspecting issuer.",
         owner: "network-admin",
-        action: "Install the corporate inspection root for the Sofia App runtime with NODE_EXTRA_CA_CERTS, or bypass TLS inspection for Sofia Cloud hosts, then rerun diagnostics.",
+        action: "Install the corporate inspection root for the Sofia runtime with NODE_EXTRA_CA_CERTS, or bypass TLS inspection for Sofia Cloud hosts, then rerun diagnostics.",
         details,
       });
     }
@@ -905,7 +905,7 @@ export function cloudEndpointTransportCheck(
         code: "endpoint_tls_incomplete_chain",
         message: "The Sofia Cloud endpoint served a leaf-only TLS chain and verification failed with UNABLE_TO_VERIFY_LEAF_SIGNATURE; the missing intermediate/fullchain must be repaired before blaming credentials or application logic.",
         owner: "network-admin",
-        action: "Serve the complete certificate chain from the endpoint or let the Sofia App runtime add the AIA intermediate to NODE_EXTRA_CA_CERTS, then rerun diagnostics.",
+        action: "Serve the complete certificate chain from the endpoint or let the Sofia runtime add the AIA intermediate to NODE_EXTRA_CA_CERTS, then rerun diagnostics.",
         details,
       });
     }
@@ -916,7 +916,7 @@ export function cloudEndpointTransportCheck(
       code: "endpoint_tls_untrusted",
       message: `The Sofia Cloud endpoint TLS handshake failed with ${probe.verifyErrorCode ?? "a certificate verification error"}; the OS or corporate CA chain is not visible to this runtime.`,
       owner: "network-admin",
-      action: "Provide the corporate CA chain to Sofia App with NODE_EXTRA_CA_CERTS or fix the server to present its full certificate chain; the served-chain evidence below shows what the endpoint sent.",
+      action: "Provide the corporate CA chain to Sofia with NODE_EXTRA_CA_CERTS or fix the server to present its full certificate chain; the served-chain evidence below shows what the endpoint sent.",
       details,
     });
   }
@@ -965,7 +965,7 @@ function organizationCheck(request: AgentContextDiagnosticsRequest): AgentContex
       evidenceKind: "client-observed",
       code: request.organizationConnectionsProbe.code ?? "organization_connections_skipped",
       message: remotePrivacy
-        ? "Local Den organization topology was intentionally omitted from the remote Sofia App diagnostics request."
+        ? "Local Den organization topology was intentionally omitted from the remote Sofia diagnostics request."
         : "Organization connection readiness was not observed for this run.",
       owner: remotePrivacy ? "sofia-client" : "member",
       action: remotePrivacy
@@ -1122,12 +1122,12 @@ function engineAgentCheck(
     evidenceKind: "observed",
     code: agent ? "effective_sofia_agent_observed" : "effective_sofia_agent_missing",
     message: agent
-      ? "The selected engine resolved the Sofia App agent."
-      : "The selected engine did not resolve a Sofia App agent.",
+      ? "The selected engine resolved the Sofia agent."
+      : "The selected engine did not resolve a Sofia agent.",
     owner: agent ? "sofia-engine" : "sofia-server",
     action: agent
       ? "No action is required."
-      : "Restore the Sofia App runtime agent injection and restart the selected workspace engine.",
+      : "Restore the Sofia runtime agent injection and restart the selected workspace engine.",
     details: {
       engineApiReadPerformed: true,
       effectiveAgentCount: snapshot.agents.length,
@@ -1182,9 +1182,9 @@ function runtimeHealthCheck(
     action: status === "passed"
       ? "No action is required."
       : corrupt
-        ? "Repair the Sofia App runtime state before relying on injected configuration."
+        ? "Repair the Sofia runtime state before relying on injected configuration."
         : remote
-          ? "Run diagnostics on the Sofia App server that owns the workspace."
+          ? "Run diagnostics on the Sofia server that owns the workspace."
           : "Start or configure the selected workspace runtime, then rerun diagnostics.",
     details: {
       workspaceType: workspace.workspaceType,
@@ -1534,7 +1534,7 @@ export async function runAgentContextDiagnostics(input: {
           : "The expected Connect steering branch is internally consistent for the selected workspace.",
       owner: !connectSnapshotAvailable || crossWorkspaceSteeringDrift ? "sofia-server" : "sofia-client",
       action: !connectSnapshotAvailable
-        ? "Verify the Sofia App server runtime state and rerun diagnostics."
+        ? "Verify the Sofia server runtime state and rerun diagnostics."
         : crossWorkspaceSteeringDrift
           ? "Reconnect or sync Sofia Cloud for the selected workspace."
           : "No action is required.",
@@ -1570,22 +1570,22 @@ export async function runAgentContextDiagnostics(input: {
           : "runtime_agent_intent_only",
       message: effectiveEngine
         ? !effectiveSofiaAgent
-          ? "The effective engine configuration does not contain the Sofia App agent."
+          ? "The effective engine configuration does not contain the Sofia agent."
           : effectiveEngine.defaultAgent !== "sofia"
-            ? "The effective engine default does not select the Sofia App agent."
+            ? "The effective engine default does not select the Sofia agent."
             : effectiveSofiaAgent.hidden
-              ? "The effective Sofia App agent is hidden and cannot be used as the default agent."
+              ? "The effective Sofia agent is hidden and cannot be used as the default agent."
               : !effectiveAgentModeUsable
-                ? "The effective Sofia App agent is subagent-only and cannot be used as the default agent."
-            : "The effective engine default selects the resolved Sofia App agent."
+                ? "The effective Sofia agent is subagent-only and cannot be used as the default agent."
+            : "The effective engine default selects the resolved Sofia agent."
         : projectOverrideDetected
-          ? "The configured Sofia App agent intent has project override layers and could not be confirmed live."
-          : "Only the configured Sofia App agent intent was available; effective resolution was not observed.",
+          ? "The configured Sofia agent intent has project override layers and could not be confirmed live."
+          : "Only the configured Sofia agent intent was available; effective resolution was not observed.",
       owner: effectiveEngine ? "sofia-engine" : projectOverrideDetected ? "member" : "sofia-engine",
       action: effectiveEngine && effectiveAgentUsable
         ? "No action is required."
         : effectiveEngine
-          ? "Restore the Sofia App agent and default-agent injection, then restart the selected workspace engine."
+          ? "Restore the Sofia agent and default-agent injection, then restart the selected workspace engine."
           : "Check the selected workspace engine health and rerun diagnostics.",
       details: {
         configuredAgentPresent: Boolean(expectedAgent),
@@ -1612,19 +1612,19 @@ export async function runAgentContextDiagnostics(input: {
           : effectiveEngine ? "effective_prompt_digest_mismatch" : "configured_prompt_digest_mismatch",
       message: promptMatchesCanonicalIntent
         ? effectiveEngine
-          ? "The effective Sofia App base prompt exactly matches the canonical configured injection and contains every required marker."
-          : "The configured Sofia App base prompt intent matches its canonical generated injection and contains every required marker."
+          ? "The effective Sofia base prompt exactly matches the canonical configured injection and contains every required marker."
+          : "The configured Sofia base prompt intent matches its canonical generated injection and contains every required marker."
         : !promptMarkersPresent
           ? effectiveEngine
-            ? "The effective Sofia App base prompt is missing one or more required markers."
-            : "The configured Sofia App base prompt intent is missing one or more required markers."
+            ? "The effective Sofia base prompt is missing one or more required markers."
+            : "The configured Sofia base prompt intent is missing one or more required markers."
           : effectiveEngine
-            ? "The effective Sofia App base prompt contains the markers but does not match the canonical configured injection."
-            : "The configured Sofia App base prompt markers are present, but its digest does not match the canonical generated injection.",
+            ? "The effective Sofia base prompt contains the markers but does not match the canonical configured injection."
+            : "The configured Sofia base prompt markers are present, but its digest does not match the canonical generated injection.",
       owner: effectiveEngine ? "sofia-engine" : "sofia-server",
       action: promptMatchesCanonicalIntent
         ? "No action is required."
-        : "Restore the canonical Sofia App runtime agent definition.",
+        : "Restore the canonical Sofia runtime agent definition.",
       details: {
         ...prompt.markers,
         promptLength: prompt.length,
@@ -1662,7 +1662,7 @@ export async function runAgentContextDiagnostics(input: {
           ? "sofia-engine"
           : "member",
       action: cloudToolPolicyStatus === "denied"
-        ? "Allow the denied sofia-cloud capability tool IDs in top-level or Sofia App agent permission policy, then rerun diagnostics."
+        ? "Allow the denied sofia-cloud capability tool IDs in top-level or Sofia agent permission policy, then rerun diagnostics."
         : cloudToolPolicyStatus === "unavailable"
           ? "Check the selected workspace engine health and rerun diagnostics."
           : "No policy change is required; confirm catalog and registration evidence because this policy check alone does not prove live tool presence.",
@@ -1695,7 +1695,7 @@ export async function runAgentContextDiagnostics(input: {
       owner: effectiveEngine ? "sofia-engine" : "sofia-server",
       action: canonicalPluginSpecMatched
         ? "No action is required."
-        : "Restore the canonical Sofia App runtime plugin bundle.",
+        : "Restore the canonical Sofia runtime plugin bundle.",
       details: {
         configuredPluginLabels: pluginLabels,
         canonicalPluginSpecMatched,
@@ -1745,7 +1745,7 @@ export async function runAgentContextDiagnostics(input: {
         : layerHealthProblem ? "member" : inventory.collisions.length > 0 ? "member" : "sofia-server",
       action: effectiveEngine
         ? inventoryTotal > 200
-          ? "Reduce the configured MCP count or inspect the engine and Sofia App runtime sources directly."
+          ? "Reduce the configured MCP count or inspect the engine and Sofia runtime sources directly."
           : "No action is required; review registration evidence for runtime-managed dynamic MCP connection state."
         : layerHealthProblem
         ? "Repair the invalid or unreadable Sofia engine configuration layer, then rerun diagnostics."

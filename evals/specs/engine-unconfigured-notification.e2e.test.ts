@@ -63,7 +63,7 @@ async function startUnconfiguredServer(
 
   const port = await new Promise<number>((resolvePort, reject) => {
     const timer = setTimeout(
-      () => reject(new Error("Unconfigured Sofia App server did not report a port within 30s.")),
+      () => reject(new Error("Unconfigured Sofia server did not report a port within 30s.")),
       30_000,
     );
     let stdout = "";
@@ -82,7 +82,7 @@ async function startUnconfiguredServer(
     });
     child.on("exit", (code) => {
       clearTimeout(timer);
-      reject(new Error(`Unconfigured Sofia App server exited early (${code}): ${stderr.slice(0, 500)}`));
+      reject(new Error(`Unconfigured Sofia server exited early (${code}): ${stderr.slice(0, 500)}`));
     });
     child.on("error", (error) => {
       clearTimeout(timer);

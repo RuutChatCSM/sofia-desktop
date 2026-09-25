@@ -47,14 +47,14 @@ function render(configStatus: SofiaRuntimeConfigStatus | null): string {
 }
 
 describe("Advanced runtime migration section", () => {
-  test("renders the Sofia App-managed config sources and legacy metadata", () => {
+  test("renders the Sofia-managed config sources and legacy metadata", () => {
     const html = render(runtimeConfigStatus());
 
-    expect(html).toContain("Desired Sofia App runtime config");
-    expect(html).toContain("Sofia App runtime DB");
-    expect(html).toContain("Sofia App injected config");
+    expect(html).toContain("Desired Sofia runtime config");
+    expect(html).toContain("Sofia runtime DB");
+    expect(html).toContain("Sofia injected config");
     expect(html).toContain("sofia-extensions-preview");
-    expect(html).toContain("Legacy Sofia App metadata");
+    expect(html).toContain("Legacy Sofia metadata");
     expect(html).toContain(LEGACY_SOFIA_PATH);
   });
 
@@ -70,7 +70,7 @@ describe("Advanced runtime migration section", () => {
     const status = runtimeConfigStatus();
     const html = render({ ...status, sources: undefined });
 
-    expect(html).toContain("Desired Sofia App runtime config");
+    expect(html).toContain("Desired Sofia runtime config");
     expect(html).not.toContain("Engine source breakdown");
   });
 });

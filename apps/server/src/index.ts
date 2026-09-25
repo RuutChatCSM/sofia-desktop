@@ -1,5 +1,5 @@
 /**
- * Library entry point for the Sofia App server.
+ * Library entry point for the Sofia server.
  *
  * ```ts
  * import { startEmbeddedServer } from "sofia-server";

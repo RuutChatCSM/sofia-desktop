@@ -45,7 +45,7 @@ export function validateUserMcpName(name: string): void {
   validateMcpName(name);
   if (RESERVED_USER_MCP_NAMES.has(name.toLowerCase())
     || RESERVED_USER_MCP_PREFIXES.some((prefix) => name.toLowerCase().startsWith(prefix))) {
-    throw new ApiError(409, "reserved_mcp_name", `${name} is reserved for Sofia App Connect`);
+    throw new ApiError(409, "reserved_mcp_name", `${name} is reserved for Sofia Connect`);
   }
 }
 

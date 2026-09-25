@@ -493,7 +493,7 @@ test("the agent MCP exposes the custom Artifact view authoring lifecycle", { tim
 
   evidence.recordAssertionEvidence(
     "Custom Artifact view provider is available only on the Code Mode agent MCP",
-    "The Workflow appeared immediately as a metadata-only never-run Library item inside its Sofia App Connect Plugin. The live provider then discovered and executed it through the standard capability tools, built two custom React revisions, exposed per-view render and preview tools, preserved both immutable resources, injected retained Artifact data through structuredContent, activated the second revision, rolled back to the first, and retired the custom view back to the generic renderer without deleting either resource.",
+    "The Workflow appeared immediately as a metadata-only never-run Library item inside its Sofia Connect Plugin. The live provider then discovered and executed it through the standard capability tools, built two custom React revisions, exposed per-view render and preview tools, preserved both immutable resources, injected retained Artifact data through structuredContent, activated the second revision, rolled back to the first, and retired the custom view back to the generic renderer without deleting either resource.",
     true,
   )
   evidence.recordAssertionEvidence(
