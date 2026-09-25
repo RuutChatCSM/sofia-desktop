@@ -9,5 +9,6 @@ let package = Package(
             name: "HandsFreeComputerUse",
             path: "Sources/ComputerUse"
         ),
+        .testTarget(name: "ComputerUseTests", dependencies: ["HandsFreeComputerUse"]),
     ]
 )

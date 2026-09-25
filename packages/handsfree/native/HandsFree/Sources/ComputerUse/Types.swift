@@ -134,6 +134,12 @@ struct WindowTarget: @unchecked Sendable {
     }
 }
 
+struct AXRecordCollection {
+    var records: [AXElementRecord] = []
+    var visitedNodes = 0
+    var truncated = false
+}
+
 struct AppSnapshot: @unchecked Sendable {
     let id: String
     let observation: Int
@@ -145,6 +151,7 @@ struct AppSnapshot: @unchecked Sendable {
     let screenshotMimeType: String
     let screenshotMeta: ScreenshotMetadata
     let records: [AXElementRecord]
+    let treeTruncated: Bool
     let strictMode: Bool
     let backgroundActivated: Bool
     let recentActions: [String]
@@ -167,6 +174,7 @@ struct AppSnapshot: @unchecked Sendable {
             screenshotMimeType: screenshotMimeType,
             screenshotMeta: screenshotMeta,
             records: records,
+            treeTruncated: treeTruncated,
             strictMode: strictMode,
             backgroundActivated: backgroundActivated,
             recentActions: recentActions,

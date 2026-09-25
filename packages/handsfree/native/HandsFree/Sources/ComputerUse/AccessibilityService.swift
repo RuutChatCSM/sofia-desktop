@@ -4,7 +4,8 @@ import ScreenCaptureKit
 
 final class AccessibilityService: @unchecked Sendable {
     private let screenshotImageWidth: CGFloat = 768
-    private let maxElements = 250
+    private let maxElements = 1000
+    private let maxVisitedNodes = 5000
     private let maxDepth = 22
 
     private let importantRoles: Set<String> = [
@@ -49,7 +50,7 @@ final class AccessibilityService: @unchecked Sendable {
     }
 
     func snapshot(target: WindowTarget, strictMode: Bool, backgroundActivated: Bool) async throws -> AppSnapshot {
-        let records = records(target: target)
+        let tree = target.axWindow.map(semanticRecords(window:)) ?? AXRecordCollection()
         let (data, meta) = try await captureScreenshot(target: target)
 
         return AppSnapshot(
@@ -62,7 +63,8 @@ final class AccessibilityService: @unchecked Sendable {
             screenshotData: data,
             screenshotMimeType: "image/jpeg",
             screenshotMeta: meta,
-            records: records,
+            records: tree.records,
+            treeTruncated: tree.truncated,
             strictMode: strictMode,
             backgroundActivated: backgroundActivated,
             recentActions: [],
@@ -72,7 +74,7 @@ final class AccessibilityService: @unchecked Sendable {
     }
 
     func records(target: WindowTarget) -> [AXElementRecord] {
-        target.axWindow.map(semanticRecords(window:)) ?? []
+        target.axWindow.map(semanticRecords(window:))?.records ?? []
     }
 
     func press(record: AXElementRecord) -> Bool {
@@ -159,14 +161,18 @@ final class AccessibilityService: @unchecked Sendable {
         return usable.first
     }
 
-    private func semanticRecords(window: AXUIElement) -> [AXElementRecord] {
-        var records: [AXElementRecord] = []
-        collect(element: window, depth: 0, records: &records)
-        return records
+    private func semanticRecords(window: AXUIElement) -> AXRecordCollection {
+        var tree = AXRecordCollection()
+        collect(element: window, depth: 0, tree: &tree)
+        return tree
     }
 
-    private func collect(element: AXUIElement, depth: Int, records: inout [AXElementRecord]) {
-        guard depth <= maxDepth, records.count < maxElements else { return }
+    private func collect(element: AXUIElement, depth: Int, tree: inout AXRecordCollection) {
+        guard depth <= maxDepth, tree.records.count < maxElements, tree.visitedNodes < maxVisitedNodes else {
+            tree.truncated = true
+            return
+        }
+        tree.visitedNodes += 1
 
         let rawRole = axString(element, kAXRoleAttribute) ?? "AXUnknown"
         let role = normalizedRole(rawRole)
@@ -178,7 +184,7 @@ final class AccessibilityService: @unchecked Sendable {
         let shouldSurface = shouldSurfaceElement(rawRole: rawRole, label: label, value: value, frame: frame, capabilities: capabilities)
 
         if shouldSurface, let frame {
-            let id = records.count + 1
+            let id = tree.records.count + 1
             let semantic = SemanticAXElement(
                 id: id,
                 ref: "{e\(id)}",
@@ -194,12 +200,15 @@ final class AccessibilityService: @unchecked Sendable {
                 state: stateFor(element: element, rawRole: rawRole),
                 capabilities: capabilities
             )
-            records.append(AXElementRecord(element: element, semantic: semantic))
+            tree.records.append(AXElementRecord(element: element, semantic: semantic))
         }
 
         for child in axChildren(element) {
-            collect(element: child, depth: depth + 1, records: &records)
-            if records.count >= maxElements { break }
+            if tree.records.count >= maxElements || tree.visitedNodes >= maxVisitedNodes {
+                tree.truncated = true
+                break
+            }
+            collect(element: child, depth: depth + 1, tree: &tree)
         }
     }
 

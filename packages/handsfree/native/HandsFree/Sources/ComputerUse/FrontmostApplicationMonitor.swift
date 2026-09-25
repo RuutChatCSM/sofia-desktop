@@ -6,7 +6,7 @@ final class FrontmostApplicationMonitor: @unchecked Sendable {
     private var timer: DispatchSourceTimer?
     private var lastPID: pid_t?
 
-    init(onChange: @escaping @Sendable (pid_t?) -> Void) {
+    init(onChange: @escaping @Sendable (pid_t?, UInt64) -> Void) {
         lastPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
         let source = DispatchSource.makeTimerSource(queue: queue)
         source.schedule(deadline: .now() + .milliseconds(250), repeating: .milliseconds(250))
@@ -15,7 +15,7 @@ final class FrontmostApplicationMonitor: @unchecked Sendable {
             let pid = NSWorkspace.shared.frontmostApplication?.processIdentifier
             if pid != self.lastPID {
                 self.lastPID = pid
-                onChange(pid)
+                onChange(pid, DispatchTime.now().uptimeNanoseconds)
             }
         }
         timer = source

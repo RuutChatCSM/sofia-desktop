@@ -59,6 +59,16 @@ actor MCPServer {
                 ]
             ),
             toolSchema(
+                name: "snapshot_elements",
+                description: "Page or search the most recent saved accessibility snapshot without recapturing the screen or changing refs. Use nextOffset until null. Search is limited to collected elements; check treeTruncated.",
+                properties: [
+                    "snapshot_id": ["type": "string", "description": "Snapshot id to read; a replaced snapshot is rejected."],
+                    "offset": ["type": "integer", "minimum": 0],
+                    "limit": ["type": "integer", "minimum": 1, "maximum": 50],
+                    "query": ["type": "string", "description": "Case-insensitive label, value, or role substring."],
+                ]
+            ),
+            toolSchema(
                 name: "click",
                 description: "Click a semantic ref like {e1}, an index, or screenshot x/y. AX is tried first; strict mode only falls back to background postToPid.",
                 properties: [
@@ -163,6 +173,9 @@ actor MCPServer {
             switch name {
             case "snapshot", "get_app_state":
                 return try await snapshotResult(args: args)
+            case "snapshot_elements":
+                let snapshot = try await runtime.requireSnapshot(snapshotID: snapshotIDArg(args))
+                return jsonResult(SnapshotPage.payload(snapshot, offset: intArg(args, "offset") ?? 0, limit: intArg(args, "limit") ?? 30, query: args["query"] as? String))
             case "click":
                 let metadata = try await runtime.click(
                     snapshotID: snapshotIDArg(args),
@@ -292,7 +305,7 @@ actor MCPServer {
             windowTitle: args["window_title"] as? String,
             strict: boolArg(args, "strict")
         )
-        let payload = snapshotPayload(snapshot)
+        let payload = SnapshotPage.payload(snapshot)
         guard let text = jsonString(payload) else {
             return textResult("Failed to serialize semantic AX snapshot.")
         }
@@ -300,49 +313,6 @@ actor MCPServer {
             ["type": "image", "data": snapshot.screenshotData.base64EncodedString(), "mimeType": snapshot.screenshotMimeType],
             ["type": "text", "text": text],
         ]
-    }
-
-    private func snapshotPayload(_ snapshot: AppSnapshot) -> [String: Any] {
-        let elements = snapshot.elements.map { element -> [String: Any] in
-            var dict = element.dictionary
-            let imagePoint = snapshot.screenshotMeta.toImage(point: element.frame.center)
-            dict["center"] = [
-                "screenX": Int(element.frame.center.x),
-                "screenY": Int(element.frame.center.y),
-                "imageX": Int(imagePoint.x),
-                "imageY": Int(imagePoint.y),
-            ]
-            return dict
-        }
-
-        var result: [String: Any] = [
-            "ok": true,
-            "semanticAXVersion": 1,
-            "snapshotId": snapshot.id,
-            "snapshot_id": snapshot.id,
-            "observation": snapshot.observation,
-            "app": snapshot.appName,
-            "pid": Int(snapshot.pid),
-            "windowTitle": snapshot.windowTitle ?? "",
-            "screenshot": snapshot.screenshotMeta.dictionary,
-            "execution": [
-                "strictMode": snapshot.strictMode,
-                "backgroundActivated": snapshot.backgroundActivated,
-                "defaultPath": snapshot.strictMode ? "accessibility_then_background_cgevent" : "accessibility_then_foreground_fallback",
-            ],
-            "elements": elements,
-            "hint": "Use refs like {e1}. Prefer AX-capable refs; strict mode rejects foreground fallback and reports path metadata after every action.",
-        ]
-        if !snapshot.recentActions.isEmpty {
-            result["recentActions"] = snapshot.recentActions
-        }
-        if !snapshot.addedLabels.isEmpty || !snapshot.removedLabels.isEmpty {
-            result["stateDelta"] = ["added": snapshot.addedLabels, "removed": snapshot.removedLabels]
-        }
-        if let windowNumber = snapshot.windowNumber {
-            result["windowNumber"] = windowNumber
-        }
-        return result
     }
 
     private func checkPermissions() -> [String: Any] {

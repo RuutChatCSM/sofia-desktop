@@ -16,6 +16,7 @@ actor ComputerUseRuntime {
     private var previousLabelsByWindow: [String: Set<String>] = [:]
     private var recentActions: [String] = []
     private var staleSnapshotReason: String?
+    private var activationStartedAt: UInt64 = 0
 
     func setStrictMode(_ enabled: Bool) -> ActionMetadata {
         strictMode = enabled
@@ -65,20 +66,22 @@ actor ComputerUseRuntime {
         try validateSnapshotForAction(snapshot: snapshot, strict: effectiveStrict)
 
         if let record = findRecord(ref: ref, index: index, in: snapshot) {
-            let fresh = freshRecord(matching: record, in: snapshot)
-            if let fresh {
-                AgentCursorOverlay.shared.show(at: fresh.semantic.frame.center)
-                if fresh.semantic.capabilities.canPress, accessibility.press(record: fresh) {
-                    return recordAction(ActionMetadata(ok: true, path: .accessibility, strictMode: effectiveStrict, backgroundSafe: true, fallbackUsed: false, message: "Pressed \(fresh.semantic.ref) via AXPress."))
-                }
-                if fresh.semantic.capabilities.canFocus, accessibility.focus(record: fresh) {
-                    return recordAction(ActionMetadata(ok: true, path: .accessibility, strictMode: effectiveStrict, backgroundSafe: true, fallbackUsed: false, message: "Focused \(fresh.semantic.ref) via AX."))
-                }
-                return try await clickPoint(fresh.semantic.frame.center, clickCount: clickCount, strict: effectiveStrict, fallbackUsed: true)
+            guard let fresh = freshRecord(matching: record, in: snapshot) else {
+                throw ComputerUseError.staleSnapshot("The target element changed. Take a new snapshot before clicking.")
             }
-            return try await clickPoint(record.semantic.frame.center, clickCount: clickCount, strict: effectiveStrict, fallbackUsed: true)
+            AgentCursorOverlay.shared.show(at: fresh.semantic.frame.center)
+            if fresh.semantic.capabilities.canPress, accessibility.press(record: fresh) {
+                return recordAction(ActionMetadata(ok: true, path: .accessibility, strictMode: effectiveStrict, backgroundSafe: true, fallbackUsed: false, message: "Pressed \(record.semantic.ref) via AXPress."))
+            }
+            if fresh.semantic.capabilities.canFocus, accessibility.focus(record: fresh) {
+                return recordAction(ActionMetadata(ok: true, path: .accessibility, strictMode: effectiveStrict, backgroundSafe: true, fallbackUsed: false, message: "Focused \(record.semantic.ref) via AX."))
+            }
+            return try await clickPoint(fresh.semantic.frame.center, clickCount: clickCount, strict: effectiveStrict, fallbackUsed: true)
         }
 
+        if ref != nil || index != nil {
+            throw ComputerUseError.invalidElement(ref ?? index.map(String.init) ?? "<missing>")
+        }
         if let screenX, let screenY {
             return try await clickPoint(CGPoint(x: screenX, y: screenY), clickCount: clickCount, strict: effectiveStrict, fallbackUsed: false)
         }
@@ -155,7 +158,7 @@ actor ComputerUseRuntime {
         AgentCursorOverlay.shared.show(at: fresh.semantic.frame.center)
         let axWriteAccepted = accessibility.setValue(record: fresh, value: value)
         if axWriteAccepted, valueMatches(record: fresh, expected: value) {
-            return recordAction(ActionMetadata(ok: true, path: .accessibility, strictMode: snapshot.strictMode, backgroundSafe: true, fallbackUsed: false, message: "Set \(fresh.semantic.ref) via AXValue."))
+            return recordAction(ActionMetadata(ok: true, path: .accessibility, strictMode: snapshot.strictMode, backgroundSafe: true, fallbackUsed: false, message: "Set \(record.semantic.ref) via AXValue."))
         }
 
         // Web inputs (Chromium/Electron) accept AXValue writes without applying
@@ -172,8 +175,8 @@ actor ComputerUseRuntime {
             backgroundSafe: true,
             fallbackUsed: true,
             message: verified
-                ? "AXValue write did not stick; set \(fresh.semantic.ref) via select-all + retype fallback."
-                : "Could not verify the value of \(fresh.semantic.ref) after AXValue and retype fallback."
+                ? "AXValue write did not stick; set \(record.semantic.ref) via select-all + retype fallback."
+                : "Could not verify the value of \(record.semantic.ref) after AXValue and retype fallback."
         ))
     }
 
@@ -192,7 +195,7 @@ actor ComputerUseRuntime {
         }
         AgentCursorOverlay.shared.show(at: fresh.semantic.frame.center)
         let ok = accessibility.performAction(record: fresh, action: action)
-        return recordAction(ActionMetadata(ok: ok, path: .accessibility, strictMode: snapshot.strictMode, backgroundSafe: true, fallbackUsed: false, message: ok ? "Performed \(action) on \(fresh.semantic.ref)." : "AX action \(action) failed."))
+        return recordAction(ActionMetadata(ok: ok, path: .accessibility, strictMode: snapshot.strictMode, backgroundSafe: true, fallbackUsed: false, message: ok ? "Performed \(action) on \(record.semantic.ref)." : "AX action \(action) failed."))
     }
 
     func wait(milliseconds: Int) async -> ActionMetadata {
@@ -227,6 +230,7 @@ actor ComputerUseRuntime {
             resetBackgroundActivation()
             let next = BackgroundActivationSession(previousPID: previousPID, targetPID: target.pid)
             try next.start()
+            activationStartedAt = DispatchTime.now().uptimeNanoseconds
             activationSession = next
             activationKey = nextActivationKey
             activationPreviousPID = previousPID
@@ -247,14 +251,15 @@ actor ComputerUseRuntime {
 
     private func ensureFrontmostMonitor() {
         if frontmostMonitor != nil { return }
-        frontmostMonitor = FrontmostApplicationMonitor { [weak self] pid in
+        frontmostMonitor = FrontmostApplicationMonitor { [weak self] pid, observedAt in
             guard let runtime = self else { return }
-            Task { await runtime.frontmostApplicationChanged(pid: pid) }
+            Task { await runtime.frontmostApplicationChanged(pid: pid, observedAt: observedAt) }
         }
     }
 
-    private func frontmostApplicationChanged(pid: pid_t?) {
-        guard let pid, activationSession != nil else { return }
+    private func frontmostApplicationChanged(pid: pid_t?, observedAt: UInt64) {
+        // A callback queued for an earlier activation must not invalidate the new one.
+        guard observedAt >= activationStartedAt, activationSession != nil else { return }
         if pid == activationPreviousPID {
             staleSnapshotReason = "The user returned focus to the previous app. Take a new snapshot before sending more input."
         } else if pid == activationTargetPID {
@@ -274,7 +279,7 @@ actor ComputerUseRuntime {
         activationTargetPID = nil
     }
 
-    private func requireSnapshot(snapshotID: String? = nil) throws -> AppSnapshot {
+    func requireSnapshot(snapshotID: String? = nil) throws -> AppSnapshot {
         guard let lastSnapshot else { throw ComputerUseError.noSnapshot }
         if let snapshotID, snapshotID != lastSnapshot.id {
             throw ComputerUseError.staleSnapshot("Snapshot \(snapshotID) is no longer current. Take a new snapshot before retrying.")
@@ -286,11 +291,11 @@ actor ComputerUseRuntime {
         if let staleSnapshotReason {
             throw ComputerUseError.staleSnapshot(staleSnapshotReason)
         }
-        guard strict else { return }
-        if NSWorkspace.shared.frontmostApplication?.processIdentifier == snapshot.pid { return }
-        guard activationSession != nil, activationTargetPID == snapshot.pid else {
-            throw ComputerUseError.staleSnapshot("The target app is no longer safely activated. Take a new snapshot before retrying.")
-        }
+        try SnapshotPolicy.validateFocus(
+            strict: strict, targetPID: snapshot.pid,
+            frontmostPID: NSWorkspace.shared.frontmostApplication?.processIdentifier,
+            backgroundTargetPID: activationSession == nil ? nil : activationTargetPID
+        )
     }
 
     private func annotate(snapshot: AppSnapshot) -> AppSnapshot {
@@ -324,14 +329,9 @@ actor ComputerUseRuntime {
             return nil
         }
         let records = accessibility.records(target: target)
-        if let index = records.firstIndex(where: { $0.semantic.id == record.semantic.id }), stableMatch(records[index].semantic, record.semantic) {
-            return records[index]
-        }
-        return records.first { stableMatch($0.semantic, record.semantic) }
-    }
-
-    private func stableMatch(_ candidate: SemanticAXElement, _ target: SemanticAXElement) -> Bool {
-        candidate.role == target.role && stableLabel(for: candidate) == stableLabel(for: target)
+        // Traversal numbers, labels, and text-field values are not identity. A rotating
+        // banner can reorder the tree; duplicate unlabeled buttons can share all three.
+        return SnapshotPolicy.refreshed(record, in: records)
     }
 
     private func stableLabel(for element: SemanticAXElement) -> String {
