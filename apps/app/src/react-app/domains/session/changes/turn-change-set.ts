@@ -22,14 +22,26 @@
  */
 export type ChangeStatus = "added" | "modified" | "deleted" | "renamed" | "binary";
 
+/**
+ * A structured diff line, carrying its own line numbers on both sides so the
+ * viewer can render gutters, colour additions and deletions, and anchor inline
+ * comments — rather than re-parsing formatted git text.
+ */
+export type DiffLine = {
+  type: "context" | "add" | "delete";
+  oldLine?: number;
+  newLine?: number;
+  /** The line's text, without the leading ' ', '+' or '-'. */
+  text: string;
+};
+
 export type DiffHunk = {
   header: string;
   oldStart: number;
   oldLines: number;
   newStart: number;
   newLines: number;
-  /** Raw unified-diff body lines, each still carrying its ' ', '-' or '+' prefix. */
-  lines: string[];
+  lines: DiffLine[];
 };
 
 export type FileChange = {

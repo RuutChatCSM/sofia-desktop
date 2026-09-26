@@ -169,16 +169,22 @@ function DiffView({ file, onOpenFile }: { file: FileChange; onOpenFile?: (path: 
               <div className="bg-muted/50 px-3 text-muted-foreground/80">{hunk.header}</div>
               {hunk.lines.map((line, lineIndex) => (
                 <div
-                  key={`${lineIndex}-${line}`}
-                  data-diff-line={line.startsWith("+") ? "added" : line.startsWith("-") ? "removed" : "context"}
+                  key={`${lineIndex}-${line.type}-${line.oldLine ?? ""}-${line.newLine ?? ""}`}
+                  data-diff-line={line.type}
                   className={cn(
-                    "whitespace-pre px-3",
-                    line.startsWith("+") && "bg-emerald-3/40 text-emerald-11",
-                    line.startsWith("-") && "bg-red-3/40 text-red-11",
-                    !line.startsWith("+") && !line.startsWith("-") && "text-muted-foreground",
+                    "grid grid-cols-[2.5rem_2.5rem_1fr] whitespace-pre",
+                    line.type === "add" && "bg-emerald-3/40 text-emerald-11",
+                    line.type === "delete" && "bg-red-3/40 text-red-11",
+                    line.type === "context" && "text-muted-foreground",
                   )}
                 >
-                  {line}
+                  <span className="select-none px-2 text-right tabular-nums text-muted-foreground/50">
+                    {line.oldLine ?? ""}
+                  </span>
+                  <span className="select-none px-2 text-right tabular-nums text-muted-foreground/50">
+                    {line.newLine ?? ""}
+                  </span>
+                  <span className="px-2">{`${line.type === "add" ? "+" : line.type === "delete" ? "-" : " "}${line.text}`}</span>
                 </div>
               ))}
             </div>

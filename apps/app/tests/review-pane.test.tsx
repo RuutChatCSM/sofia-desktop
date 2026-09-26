@@ -18,7 +18,12 @@ const HUNKS = [
     oldLines: 3,
     newStart: 184,
     newLines: 4,
-    lines: [" context", "-removed", "+added", "+more"],
+    lines: [
+      { type: "context" as const, oldLine: 184, newLine: 184, text: "context" },
+      { type: "delete" as const, oldLine: 185, text: "removed" },
+      { type: "add" as const, newLine: 185, text: "added" },
+      { type: "add" as const, newLine: 186, text: "more" },
+    ],
   },
 ];
 
@@ -59,11 +64,15 @@ describe("review pane", () => {
     // Pre-existing work is labelled, not silently claimed.
     expect(markup).toContain("not Sofia");
 
-    // The diff itself.
+    // The diff itself, with real line numbers on both sides.
     expect(markup).toContain("@@ -184,3 +184,4 @@");
-    expect(markup).toContain('data-diff-line="added"');
-    expect(markup).toContain('data-diff-line="removed"');
+    expect(markup).toContain('data-diff-line="add"');
+    expect(markup).toContain('data-diff-line="delete"');
     expect(markup).toContain('data-diff-line="context"');
+    // Old side line 185 is the removal; the new side starts the addition at 185.
+    expect(markup).toContain(">185<");
+    expect(markup).toContain(">186<");
+    expect(markup).toContain("+added");
   });
 
   test("the other scopes read the live working tree instead of a turn", () => {

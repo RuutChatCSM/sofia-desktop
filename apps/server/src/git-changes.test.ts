@@ -82,7 +82,10 @@ describe("git diff --unified", () => {
 
     expect(hunks.get("src/a.ts")).toHaveLength(2);
     expect(hunks.get("src/a.ts")?.[0]).toMatchObject({ oldStart: 1, oldLines: 3, newStart: 1, newLines: 4 });
-    expect(hunks.get("src/a.ts")?.[1]?.lines).toEqual(["-a", "+b"]);
+    expect(hunks.get("src/a.ts")?.[1]?.lines).toEqual([
+      { type: "delete", oldLine: 20, text: "a" },
+      { type: "add", newLine: 21, text: "b" },
+    ]);
     // `+++ /dev/null` keeps the previous path so deletions still get their hunks.
     expect(hunks.get("src/gone.ts")).toHaveLength(1);
   });
@@ -116,7 +119,20 @@ describe("readWorkspaceChanges", () => {
         status: "modified",
         additions: 4,
         deletions: 1,
-        hunks: [{ header: "@@ -1,2 +1,3 @@", oldStart: 1, oldLines: 2, newStart: 1, newLines: 3, lines: ["-a", "+b", "+c"] }],
+        hunks: [
+          {
+            header: "@@ -1,2 +1,3 @@",
+            oldStart: 1,
+            oldLines: 2,
+            newStart: 1,
+            newLines: 3,
+            lines: [
+              { type: "delete", oldLine: 1, text: "a" },
+              { type: "add", newLine: 1, text: "b" },
+              { type: "add", newLine: 2, text: "c" },
+            ],
+          },
+        ],
       },
       { path: "src/untracked.ts", status: "added", additions: 0, deletions: 0 },
     ]);

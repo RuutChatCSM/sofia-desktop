@@ -16,13 +16,26 @@ import { execFile } from "node:child_process";
 
 export type ChangeStatus = "added" | "modified" | "deleted" | "renamed" | "binary";
 
+/**
+ * A structured diff line. The viewer needs real line numbers on both sides to
+ * render gutters, anchors for inline comments, and red/green rows — trying to
+ * re-derive those from formatted git text is how diff viewers end up wrong.
+ */
+export type DiffLine = {
+  type: "context" | "add" | "delete";
+  oldLine?: number;
+  newLine?: number;
+  /** The line's text, without the leading ' ', '+' or '-'. */
+  text: string;
+};
+
 export type DiffHunk = {
   header: string;
   oldStart: number;
   oldLines: number;
   newStart: number;
   newLines: number;
-  lines: string[];
+  lines: DiffLine[];
 };
 
 export type WorkspaceFileChange = {
@@ -158,6 +171,8 @@ export function parseUnifiedDiff(output: string): Map<string, DiffHunk[]> {
   let currentPath: string | null = null;
   let oldPath: string | null = null;
   let current: DiffHunk | null = null;
+  let hunkOldLine = 0;
+  let hunkNewLine = 0;
 
   const flush = () => {
     if (currentPath && current) {
@@ -191,11 +206,13 @@ export function parseUnifiedDiff(output: string): Map<string, DiffHunk[]> {
     const header = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/.exec(line);
     if (header) {
       flush();
+      hunkOldLine = Number.parseInt(header[1] ?? "0", 10);
+      hunkNewLine = Number.parseInt(header[3] ?? "0", 10);
       current = {
         header: line,
-        oldStart: Number.parseInt(header[1] ?? "0", 10),
+        oldStart: hunkOldLine,
         oldLines: Number.parseInt(header[2] ?? "1", 10),
-        newStart: Number.parseInt(header[3] ?? "0", 10),
+        newStart: hunkNewLine,
         newLines: Number.parseInt(header[4] ?? "1", 10),
         lines: [],
       };
@@ -203,7 +220,21 @@ export function parseUnifiedDiff(output: string): Map<string, DiffHunk[]> {
     }
     // Every unified-diff body line carries a prefix (' ', '+' or '-'), so a
     // blank line is only ever the trailing artifact of the final newline.
-    if (current && line !== "") current.lines.push(line);
+    if (!current || line === "") continue;
+    const marker = line.charAt(0);
+    if (marker === "\\") continue; // "\ No newline at end of file"
+    const text = line.slice(1);
+    if (marker === "+") {
+      current.lines.push({ type: "add", newLine: hunkNewLine, text });
+      hunkNewLine += 1;
+    } else if (marker === "-") {
+      current.lines.push({ type: "delete", oldLine: hunkOldLine, text });
+      hunkOldLine += 1;
+    } else {
+      current.lines.push({ type: "context", oldLine: hunkOldLine, newLine: hunkNewLine, text });
+      hunkOldLine += 1;
+      hunkNewLine += 1;
+    }
   }
   flush();
 
