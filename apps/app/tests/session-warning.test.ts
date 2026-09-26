@@ -29,51 +29,32 @@ describe("evaluator state affects behaviour, not product copy", () => {
 });
 
 describe("a long conversation is an advisory, not an incident", () => {
-  const engine = "This conversation is getting long. Starting a new chat may help Sofia stay accurate.";
+  const engine =
+    "Heads up: Long threads and multiple compactions can cause the model to be less accurate. Start a new thread when possible to keep threads small and targeted.";
 
-  test("demotes it to info, re-words it for the product, and offers one action", () => {
+  test("demotes it to info and offers one action, leaving the engine's words alone", () => {
     expect(isLongThreadAdvisory(engine)).toBeTrue();
 
     const notice = sessionNotice(engine, false);
     expect(notice?.kind).toBe("info");
     expect(notice?.action).toBe("new-chat");
-    // The alarm and the engine's internal vocabulary never reach the product.
-    expect(notice?.message).not.toContain("Heads up");
-    expect(notice?.message.toLowerCase()).not.toContain("compaction");
+    // The sentence is the engine's: the app changes how loudly it is said, not
+    // what it says.
+    expect(notice?.message).toBe(engine);
   });
 
-  test("an engine still sending the older wording cannot leak it into normal mode", () => {
-    // Regression: old builds wrote "Heads up: Long threads and multiple
-    // compactions…", which is the copy this redesign exists to remove.
-    const legacy =
-      "Heads up: Long threads and multiple compactions can cause the model to be less accurate. Start a new thread when possible to keep threads small and targeted.";
-
-    expect(isLongThreadAdvisory(legacy)).toBeTrue();
-    const notice = sessionNotice(legacy, false);
-    expect(notice?.kind).toBe("info");
-    expect(notice?.action).toBe("new-chat");
-    expect(notice?.message).not.toContain("Heads up");
-    expect(notice?.message.toLowerCase()).not.toContain("compaction");
-  });
-
-  test("developer mode keeps the string the engine actually sent", () => {
+  test("the register does not depend on developer mode", () => {
+    expect(sessionNotice(engine, false)?.kind).toBe("info");
     expect(sessionNotice(engine, true)?.message).toBe(engine);
   });
 
-  test("other long-conversation phrasings are recognised too", () => {
-    expect(isLongThreadAdvisory("This is a long conversation.")).toBeTrue();
+  test("both wordings the harness has shipped are recognised", () => {
+    // core says "threads", the exec reporter says "conversations"; recognising
+    // both keeps the register from flipping to a warning if either is in play.
     expect(isLongThreadAdvisory("Heads up: Long conversations and multiple compactions can cause the model to be less accurate.")).toBeTrue();
+    expect(sessionNotice("Long threads and multiple compactions can cause the model to be less accurate.", false)?.kind).toBe("info");
     // A different warning must not be re-labelled as the advisory.
     expect(isLongThreadAdvisory("This task is open elsewhere.")).toBeFalse();
-  });
-
-  test("every phrasing normalises to one notice, so a repeat is not new information", () => {
-    // The engine sends this after each compaction. Because both wordings fold to
-    // the same message, a repeat cannot read as a fresh thing to say — that is
-    // what keeps the notice shown once per conversation.
-    const legacy =
-      "Heads up: Long threads and multiple compactions can cause the model to be less accurate. Start a new thread when possible to keep threads small and targeted.";
-
-    expect(sessionNotice(legacy, false)?.message).toBe(sessionNotice(engine, false)?.message);
+    expect(sessionNotice("This task is open elsewhere.", false)?.kind).toBe("warning");
   });
 });

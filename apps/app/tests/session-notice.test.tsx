@@ -6,7 +6,10 @@ import { SessionNotice } from "../src/react-app/domains/session/chat/session-not
 import { claimNoticeSurfacing, resetSurfacedNotices } from "../src/react-app/domains/session/chat/session-notice-state";
 import { sessionNotice } from "../src/lib/session-warning";
 
-const LONG_THREAD = "This conversation is getting long. Starting a new chat may help Sofia stay accurate.";
+// The engine's own sentence, verbatim — the app demotes the register without
+// rewriting it.
+const LONG_THREAD =
+  "Heads up: Long threads and multiple compactions can cause the model to be less accurate. Start a new thread when possible to keep threads small and targeted.";
 
 describe("the session notice speaks at two volumes", () => {
   test("a long-thread advisory is informational and carries one quiet action", () => {
@@ -14,7 +17,8 @@ describe("the session notice speaks at two volumes", () => {
     const markup = renderToStaticMarkup(<SessionNotice notice={notice} onStartNewChat={() => {}} />);
 
     expect(markup).toContain('data-notice-kind="info"');
-    expect(markup).toContain("long conversation");
+    // The engine's wording is shown as it wrote it.
+    expect(markup).toContain("Long threads and multiple compactions");
     expect(markup).toContain('data-notice-action="new-chat"');
     expect(markup).toContain("Start new chat");
     // The incident treatment — an amber accent stripe — is gone.

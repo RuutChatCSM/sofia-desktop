@@ -45,20 +45,16 @@ export type SessionNotice = {
  * The long-thread advisory the engine sends once a conversation has had to be
  * compacted — which is exactly the point at which the advice becomes true.
  *
- * Matched by meaning rather than by equality, because an engine that still sends
- * the older wording ("Heads up: Long threads and multiple compactions…") must not
- * leak that copy into the product. The advisory is a sentence about the user's
- * conversation, not a diagnostic, so normal mode always renders the calm version.
+ * Recognised by meaning rather than by equality, because the wording has already
+ * varied ("threads" in core, "conversations" in the exec reporter). The sentence
+ * is the engine's to write; the app only decides how loudly to say it, so the text
+ * passes through unchanged. Anything not recognised stays a warning, which is the
+ * safe default: an unknown warning must not be quietly demoted.
  */
 const LONG_THREAD_PATTERNS: RegExp[] = [
   /long\s+threads?\s+and\s+multiple\s+compactions/i,
   /long\s+conversations?\s+and\s+multiple\s+compactions/i,
-  /conversation\s+is\s+getting\s+long/i,
-  /this\s+is\s+a\s+long\s+conversation/i,
 ];
-
-const LONG_THREAD_NOTICE =
-  "This is a long conversation. A new chat may give Sofia a fresher context.";
 
 export function isLongThreadAdvisory(message: string): boolean {
   const text = message.trim();
@@ -69,9 +65,8 @@ export function isLongThreadAdvisory(message: string): boolean {
 /**
  * The notice to show in normal mode, or null when there is nothing to show.
  *
- * Developer mode keeps the engine's own wording: the advisory is re-worded for
- * the product, but a developer looking into a compaction problem wants the
- * string the engine actually sent.
+ * Developer mode additionally reveals evaluator/continuation diagnostics; the
+ * advisory is shown either way, since it is product copy rather than a trace.
  */
 export function sessionNotice(
   message: string | null | undefined,
@@ -80,11 +75,7 @@ export function sessionNotice(
   const text = message?.trim();
   if (!text) return null;
   if (isLongThreadAdvisory(text)) {
-    return {
-      kind: "info",
-      message: developerMode ? text : LONG_THREAD_NOTICE,
-      action: "new-chat",
-    };
+    return { kind: "info", message: text, action: "new-chat" };
   }
   if (!developerMode && isEvaluatorTraceWarning(text)) return null;
   return { kind: "warning", message: text };
