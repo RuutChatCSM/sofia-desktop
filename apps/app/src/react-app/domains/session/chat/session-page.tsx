@@ -86,6 +86,9 @@ import { SidePanel } from "../panel/side-panel";
 import { getSidePanelSessionKey } from "../panel/side-panel-session";
 import { TerminalDock } from "../terminal/terminal-dock";
 import { useActivePanelTab, usePanelTabStore, useSessionPanelState } from "../panel/panel-tab-store";
+import { useBrowserTabSync } from "../panel/use-side-panel-tabs";
+import { browserExpandedWidth, dispatchBrowserPresentation, useBrowserPresentationStore } from "../panel/browser-presentation";
+import { BrowserPeek } from "../panel/browser-peek";
 import { useWorkspaceShellLayout } from "../../../shell/workspace-shell-layout";
 import { useControlAction, type SofiaControlAction } from "../../../shell/control/control-provider";
 import { getExtensionId, isSofiaExtensionEnabled, SOFIA_EXTENSION_STATE_CHANGED } from "../../settings/extension-state";
@@ -185,7 +188,7 @@ export type SessionPageCodexEngine = {
   error: string | null;
   config: import("@/app/lib/codex-session").CodexEngineConfigWire | null;
   createSession: (input: { title?: string; prompt?: string; cwd?: string; model?: string; providerId?: string }) => Promise<import("@/app/lib/codex-session").CodexSession>;
-  prompt: (sessionId: string, text: string, selection?: { model?: string; providerId?: string }) => Promise<import("@/app/lib/codex-session").CodexSession>;
+  prompt: (sessionId: string, text: string, selection?: { model?: string; providerId?: string }, images?: string[]) => Promise<import("@/app/lib/codex-session").CodexSession>;
   abort: (sessionId: string) => Promise<void>;
   deleteSession: (sessionId: string) => Promise<void>;
 };
@@ -355,6 +358,7 @@ export function SessionPage(props: SessionPageProps) {
   const transcriptTargets = usePanelTabStore((state) => (
     props.selectedSessionId ? state.transcriptArtifactTargets[props.selectedSessionId] ?? EMPTY_TRANSCRIPT_TARGETS : EMPTY_TRANSCRIPT_TARGETS
   ));
+  useBrowserTabSync(sidePanelSessionKey);
   const sessionPanelState = useSessionPanelState(sidePanelSessionKey);
   const activePanelTab = useActivePanelTab(sidePanelSessionKey);
   const [hiddenTargetRevision, setHiddenTargetRevision] = useState(0);
@@ -371,6 +375,13 @@ export function SessionPage(props: SessionPageProps) {
   const artifactTargetCount = artifactFileTargets.length;
   const hasArtifactTargets = artifactTargetCount > 0;
   const hasBrowserTabs = sessionPanelState.tabs.some((tab) => tab.type === "browser");
+  const browserPresentationMode = useBrowserPresentationStore((state) => state.state.runtime.mode);
+  const browserDockedWidth = useBrowserPresentationStore((state) => state.state.preferences.dockedWidth);
+  const peekBrowserTab = activePanelTab?.type === "browser" ? activePanelTab : null;
+  // Expanded is the browser taking the dominant share of the workspace, not the
+  // whole workspace: the conversation and its composer stay exactly where they
+  // are. Which is also why it needs no separate host — it is the side panel.
+  const browserExpanded = browserPresentationMode === "expanded";
   const activeSidePanel = voiceSidePanelOpen ? "voice" : sessionSidePanel;
   const sidePanelOpen = activeSidePanel !== null;
   const panelRailActive = activeSidePanel === "panel";
@@ -422,7 +433,6 @@ export function SessionPage(props: SessionPageProps) {
   const [createGroupLabel, setCreateGroupLabel] = useState("");
   const [createGroupWorkspaceId, setCreateGroupWorkspaceId] = useState<string | null>(null);
   const browserPanelRef = usePanelRef();
-  const preserveSidePanelOnPanelOpenRef = useRef(false);
 
   const setCurrentSidePanel = useCallback((panel: SidePanelItem | null) => {
     setSidePanelState(GLOBAL_VOICE_SIDE_PANEL_KEY, panel === "voice" ? "voice" : null);
@@ -439,24 +449,55 @@ export function SessionPage(props: SessionPageProps) {
     toggleSidePanelState(sidePanelSessionKey, panel);
   }, [setSidePanelState, sidePanelSessionKey, toggleSidePanelState]);
 
-  // When the agent calls a built-in browser tool, the main process opens
-  // the WebContentsView and sends panel-opened; when hide_browser is called
-  // it sends panel-closed. Without this listener the React UI never knows
-  // the panel opened and doesn't render the unified panel chrome.
+  // Electron reports facts: a real page reached a tab, or every tab is gone.
+  // It never says "open the panel" — presentation policy decides what the user
+  // sees, and a dismissed preview therefore stays dismissed.
   useEffect(() => {
     if (!isElectronRuntime()) return;
     const browser = (window as Window).__SOFIA_ELECTRON__?.browser;
     if (!browser) return;
-    const unsubOpen = browser.onPanelOpened?.(() => {
-      if (preserveSidePanelOnPanelOpenRef.current) {
-        preserveSidePanelOnPanelOpenRef.current = false;
-        return;
-      }
-      setCurrentSidePanel("panel");
+    const unsubOpen = browser.onBrowserTabActivated?.(() => {
+      dispatchBrowserPresentation({ type: "agent-browser-started" });
     });
-    const unsubClose = browser.onPanelClosed?.(() => setCurrentSidePanel(null));
-    return () => { unsubOpen?.(); unsubClose?.(); };
-  }, [setCurrentSidePanel]);
+    const unsubPresentation = browser.onPresentationRequested?.((mode) => {
+      if (mode === "peek") dispatchBrowserPresentation({ type: "user-open-browser" });
+      else if (mode === "docked") dispatchBrowserPresentation({ type: "user-dock-browser" });
+      else if (mode === "expanded") dispatchBrowserPresentation({ type: "user-expand-browser" });
+      else dispatchBrowserPresentation({ type: "user-hide-peek" });
+    });
+    const unsubClose = browser.onBrowserTabsClosed?.(() => {
+      dispatchBrowserPresentation({ type: "last-browser-tab-closed" });
+    });
+    return () => { unsubOpen?.(); unsubClose?.(); unsubPresentation?.(); };
+  }, []);
+
+  const sessionSidePanelRef = useRef(sessionSidePanel);
+  sessionSidePanelRef.current = sessionSidePanel;
+
+  const presentedSessionRef = useRef(props.selectedSessionId);
+  useEffect(() => {
+    if (presentedSessionRef.current === props.selectedSessionId) return;
+    presentedSessionRef.current = props.selectedSessionId;
+    dispatchBrowserPresentation({ type: "session-changed" });
+  }, [props.selectedSessionId]);
+
+  // Presentation is policy; the docked side panel is only one of its outcomes.
+  // Driven by mode *changes* only, so closing the docked panel by hand is never
+  // fought by the policy that opened it.
+  useEffect(() => {
+    if (browserPresentationMode === "docked" || browserPresentationMode === "expanded") {
+      setCurrentSidePanel("panel");
+      return;
+    }
+    if (peekBrowserTab && sessionSidePanelRef.current === "panel") setCurrentSidePanel(null);
+  }, [browserPresentationMode, setCurrentSidePanel, peekBrowserTab?.id]);
+
+  // The main process mirrors the mode so a Peek can render a desktop viewport
+  // without ever rewriting the tab's own viewport.
+  useEffect(() => {
+    if (!isElectronRuntime()) return;
+    void (window as Window).__SOFIA_ELECTRON__?.browser?.setPresentation?.(browserPresentationMode);
+  }, [browserPresentationMode]);
   const {
     leftSidebarResizing,
     leftSidebarWidth,
@@ -468,6 +509,19 @@ export function SessionPage(props: SessionPageProps) {
     minRightWidth: 320,
   });
   const [browserPanelDefaultWidth, setBrowserPanelDefaultWidth] = useState(browserPanelWidth);
+  const browserPanelGroupRef = useRef<HTMLDivElement>(null);
+  const [browserPanelAvailableWidth, setBrowserPanelAvailableWidth] = useState(0);
+  // Expanded sizes the browser against the workspace it is splitting, so the
+  // share stays ~60/40 instead of "as wide as the window allows".
+  useEffect(() => {
+    const group = browserPanelGroupRef.current;
+    if (!group) return;
+    const measure = () => setBrowserPanelAvailableWidth(group.getBoundingClientRect().width);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(group);
+    return () => observer.disconnect();
+  }, []);
   const sidebarProviderStyle: CSSProperties & Record<"--sidebar-width", string> = {
     "--sidebar-width": `${leftSidebarWidth}px`,
   };
@@ -480,8 +534,30 @@ export function SessionPage(props: SessionPageProps) {
   }, [accessibleTargets, props.onAccessibleTargetsChange]);
   const commitBrowserPanelWidth = useCallback(() => {
     const size = browserPanelRef.current?.getSize();
-    if (size?.inPixels) setBrowserPanelWidth(Math.round(size.inPixels));
+    if (!size?.inPixels) return;
+    const width = Math.round(size.inPixels);
+    setBrowserPanelWidth(width);
+    // Docked width is durable user intent: it is what Restore returns to.
+    dispatchBrowserPresentation({ type: "preference-docked-width", value: width });
   }, [browserPanelRef, setBrowserPanelWidth]);
+
+  // Docked and expanded are the same panel at two widths; the mode picks one.
+  // The panel is also the host for artifacts and other destinations, so the
+  // policy only sizes it while the browser is what the panel is showing.
+  const browserOwnsPanel = panelRailActive && (browserPresentationMode === "docked" || browserExpanded);
+  const browserPanelTargetWidth = !browserOwnsPanel
+    ? null
+    : browserExpanded
+      ? browserExpandedWidth(browserPanelAvailableWidth)
+      : browserDockedWidth;
+  useEffect(() => {
+    if (isMobile || browserPanelTargetWidth === null || !sidePanelOpen) return;
+    const panel = browserPanelRef.current;
+    if (!panel) return;
+    const target = Math.round(browserPanelTargetWidth);
+    if (Math.abs(panel.getSize().inPixels - target) < 1) return;
+    panel.resize(`${target}px`);
+  }, [browserPanelTargetWidth, browserPanelRef, isMobile, sidePanelOpen]);
   const browserUrlForTarget = useCallback((target: OpenTarget) => {
     if (/^wss?:\/\//i.test(target.value)) return target.value.replace(/^ws:/i, "http:").replace(/^wss:/i, "https:");
     return target.value;
@@ -505,7 +581,7 @@ export function SessionPage(props: SessionPageProps) {
     if (target.kind === "url" || target.preview === "browser") {
       const url = browserUrlForTarget(target);
       if (isElectronRuntime()) {
-        setCurrentSidePanel("panel");
+        dispatchBrowserPresentation({ type: "user-dock-browser" });
         void window.__SOFIA_ELECTRON__?.browser?.createTab?.(url);
       } else {
         window.open(url, "_blank", "noopener,noreferrer");
@@ -550,7 +626,6 @@ export function SessionPage(props: SessionPageProps) {
       label: target.name,
       preview: target.preview,
     });
-    preserveSidePanelOnPanelOpenRef.current = true;
     setCurrentSidePanel("panel");
   }, [activePanelTab?.id, browserUrlForTarget, downloadOpenTarget, openTab, props.selectedSessionId, props.selectedWorkspaceDisplay.workspaceType, props.selectedWorkspaceRoot, setCurrentSidePanel]);
   const closeRightPane = useCallback(() => {
@@ -559,12 +634,22 @@ export function SessionPage(props: SessionPageProps) {
   const openGeneralSidePanel = useCallback(() => {
     setCurrentSidePanel("panel");
   }, [setCurrentSidePanel]);
+  /** Closing the docked browser is a presentation action, not a tab close. */
+  const closeBrowserPane = useCallback(() => {
+    dispatchBrowserPresentation({ type: "user-hide-peek" });
+    closeRightPane();
+  }, [closeRightPane]);
   const openBrowserRailPane = useCallback(() => {
     if (!hasBrowserTabs) return;
     // Opening the browser pane should land on a usable page, not an empty
     // panel that forces the user to click "+".
-    toggleCurrentSidePanel("panel");
-  }, [hasBrowserTabs, toggleCurrentSidePanel]);
+    dispatchBrowserPresentation({ type: "user-dock-browser" });
+  }, [hasBrowserTabs]);
+
+  /** A human asked for more browser than the floating card can show. */
+  const requestBrowserExpand = useCallback(() => {
+    dispatchBrowserPresentation({ type: "user-expand-browser" });
+  }, []);
   const openBrowserUrlControlAction = useMemo<SofiaControlAction>(() => ({
     id: "browser.open_url",
     label: "Open URL in built-in browser",
@@ -584,7 +669,6 @@ export function SessionPage(props: SessionPageProps) {
       if (provider !== "auto" && provider !== "builtin") {
         return { ok: false, error: `Browser provider is not available yet: ${provider}` };
       }
-      setCurrentSidePanel("panel");
       return window.__SOFIA_ELECTRON__?.browser?.openUrl?.(url, provider);
     },
   }), [setCurrentSidePanel]);
@@ -641,7 +725,6 @@ export function SessionPage(props: SessionPageProps) {
       return;
     }
     if (!panelRailActive) {
-      preserveSidePanelOnPanelOpenRef.current = true;
     }
     if (!panelRailActive) {
       toggleCurrentSidePanel("panel");
@@ -1115,12 +1198,13 @@ export function SessionPage(props: SessionPageProps) {
         >
           <div className="flex min-h-0 flex-1 max-lg:p-0 lg:py-2 lg:pl-2">
           <ResizablePanelGroup
+            elementRef={browserPanelGroupRef}
             orientation="horizontal"
-            onLayoutChanged={sidePanelOpen ? commitBrowserPanelWidth : undefined}
+            onLayoutChanged={browserOwnsPanel && !browserExpanded ? commitBrowserPanelWidth : undefined}
             className="min-h-0 flex-1 max-lg:rounded-none lg:rounded-[14px]"
           >
             <ResizablePanel minSize={isMobile ? "0px" : "360px"} className="min-w-0">
-              <main className="flex h-full min-w-0 flex-col overflow-hidden bg-dls-canvas max-lg:rounded-none max-lg:border-0 max-lg:shadow-none lg:rounded-[14px] lg:border lg:border-border lg:shadow-[0_8px_24px_rgba(15,23,42,0.06)] dark:lg:shadow-[0_10px_30px_rgba(0,0,0,0.45)] mac:bg-dls-canvas/85 mac:backdrop-blur-2xl mac:backdrop-saturate-150">
+              <main className="relative flex h-full min-w-0 flex-col overflow-hidden bg-dls-canvas max-lg:rounded-none max-lg:border-0 max-lg:shadow-none lg:rounded-[14px] lg:border lg:border-border lg:shadow-[0_8px_24px_rgba(15,23,42,0.06)] dark:lg:shadow-[0_10px_30px_rgba(0,0,0,0.45)] mac:bg-dls-canvas/85 mac:backdrop-blur-2xl mac:backdrop-saturate-150">
           <header className="sofia-task-header z-10 flex h-11 shrink-0 items-center justify-between border-b border-border px-3 max-lg:h-12 lg:px-6 mac:titlebar-drag  mac:backdrop-blur-2xl mac:backdrop-saturate-150 @container/titlebar">
             <div className="flex min-w-0 items-center gap-3">
               {shellConfig.sidebar ? <SidebarTrigger className="mac:hidden" /> : null}
@@ -1490,11 +1574,22 @@ export function SessionPage(props: SessionPageProps) {
             ) : null}
           </ResizablePanelGroup>
 
+              {browserPresentationMode === "peek" && peekBrowserTab ? (
+                <BrowserPeek
+                  tab={peekBrowserTab}
+                  tabCount={sessionPanelState.tabs.filter((tab) => tab.type === "browser").length}
+                  onExpand={requestBrowserExpand}
+                  onHide={() => dispatchBrowserPresentation({ type: "user-hide-peek" })}
+                />
+              ) : null}
               </main>
             </ResizablePanel>
               {sidePanelOpen && !isMobile ? (
               <>
-                <ResizableHandle className="hidden bg-transparent lg:flex" />
+                <ResizableHandle
+                  data-testid="browser-panel-divider"
+                  className="hidden bg-transparent transition-colors hover:bg-foreground/20 active:bg-primary/40 lg:flex lg:cursor-col-resize"
+                />
                 <ResizablePanel
                   panelRef={browserPanelRef}
                   defaultSize={`${activeSidePanel === "extensions" ? Math.max(browserPanelDefaultWidth, 480) : browserPanelDefaultWidth}px`}
@@ -1502,7 +1597,12 @@ export function SessionPage(props: SessionPageProps) {
                   maxSize="70%"
                   className="min-h-0 overflow-hidden pl-2 lg:flex lg:flex-col"
                 >
-                  <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-[14px] border border-border bg-dls-canvas shadow-[0_8px_24px_rgba(15,23,42,0.06)] dark:shadow-[0_10px_30px_rgba(0,0,0,0.45)] mac:bg-dls-canvas/85 mac:backdrop-blur-2xl mac:backdrop-saturate-150">
+                  <div
+                    data-testid="browser-panel-shell"
+                    data-native-browser-host
+                    data-browser-presentation={browserExpanded ? "expanded" : "docked"}
+                    className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-[14px] border border-border bg-dls-canvas shadow-[0_8px_24px_rgba(15,23,42,0.06)] dark:shadow-[0_10px_30px_rgba(0,0,0,0.45)] mac:bg-dls-canvas/85 mac:backdrop-blur-2xl mac:backdrop-saturate-150"
+                  >
                   {activeSidePanel === "extensions" && props.settingsSlot ? (
                     <div className="flex h-full min-h-0 flex-col overflow-y-auto bg-dls-canvas">
                       {props.settingsSlot}
@@ -1521,7 +1621,7 @@ export function SessionPage(props: SessionPageProps) {
                       workspaceId={props.runtimeWorkspaceId}
                       workspaceRoot={props.selectedWorkspaceRoot}
                       isRemoteWorkspace={props.surface?.isRemoteWorkspace ?? false}
-                      onClose={closeRightPane}
+                      onClose={closeBrowserPane}
                       onOpenExtensions={props.settingsSlot ? () => setCurrentSidePanel("extensions") : undefined}
                       onOpenVoice={voiceExtensionEnabled ? openVoiceRailPane : undefined}
                     />

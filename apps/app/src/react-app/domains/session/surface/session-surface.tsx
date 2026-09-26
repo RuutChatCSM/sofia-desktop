@@ -48,7 +48,9 @@ import { decodeComposerMentionValue, encodeComposerMentionValue, type ComposerMe
 import { desktopBridge, openDesktopUrl } from "@/app/lib/desktop";
 import { parseSlashCommandInvocation } from "./composer/slash-command";
 import { connectSkillPrompt, parseConnectSkillToken } from "./composer/connect-skill-token";
-import { createPastedTextChip, resolvePastedTextPlaceholders } from "./composer/pasted-text";
+import { createPastedTextChip, createPastedTextFile, resolvePastedTextPlaceholders } from "./composer/pasted-text";
+import { sanitizePromptText } from "@/lib/embedded-data-urls";
+import { userFacingWarning } from "@/lib/session-warning";
 import { DevProfiler } from "@/react-app/shell/dev-profiler";
 import { PaperGrainGradient } from "@sofia/ui/react";
 import { useShellConfig } from "@/react-app/shell/shell-config";
@@ -64,12 +66,14 @@ import { SessionFindBar } from "./find-bar";
 import { useSessionFindStore } from "./find-store";
 import { getSessionActivityStatusLabel, useSessionActivityStore, type SessionActivityStatus } from "@/react-app/domains/session/status/session-activity-store";
 import { PermissionApprovalPanel } from "@/react-app/domains/session/chat/permission-approval-modal";
-import { SessionNotice } from "@/react-app/domains/session/chat/session-notice";
+import { SessionTopRail } from "@/react-app/domains/session/surface/session-top-rail";
 import { QuestionPanel } from "@/react-app/domains/session/modals/question-modal";
 import { QueuedMessagesPanel } from "@/react-app/domains/session/modals/queued-messages-panel";
 import { deriveOpenTargets, selectAutoOpenTarget, type OpenTarget } from "@/react-app/domains/session/artifacts/open-target";
 import { usePanelTabStore } from "@/react-app/domains/session/panel/panel-tab-store";
 import { useSessionPanelState } from "@/react-app/domains/session/panel/panel-tab-store";
+import { ActivityStatus } from "@/react-app/domains/session/surface/activity-status";
+import { dispatchBrowserPresentation } from "@/react-app/domains/session/panel/browser-presentation";
 import {
   markSessionSnapshotFetchStart,
   seedSessionState,
@@ -556,17 +560,24 @@ function BrowserUseIndicator({ sessionId }: { sessionId: string }) {
   const activeTab = browserTabs.find((tab) => tab.id === activeTabId) ?? browserTabs[0];
   const host = activeTab && "url" in activeTab ? browserHost(String((activeTab as { url?: string }).url ?? "")) : "";
   return (
-    <div className="mx-3 mb-2 flex items-center gap-2 rounded-lg border border-border/70 bg-muted/40 px-3 py-1.5 text-[11px] text-muted-foreground">
+    // The pill is the persistent browser access point; Peek is only its visual
+    // representation, so clicking here reopens the preview after a Hide.
+    <button
+      type="button"
+      onClick={() => dispatchBrowserPresentation({ type: "user-open-browser" })}
+      title="Show the browser preview"
+      className="mx-3 mb-2 flex w-fit max-w-[calc(100%-1.5rem)] items-center gap-2 rounded-lg border border-border/70 bg-muted/40 px-3 py-1.5 text-left text-[11px] text-muted-foreground hover:bg-muted/60 focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none"
+    >
       <span className="relative flex size-1.5" aria-hidden="true">
         <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
         <span className="relative inline-flex size-1.5 rounded-full bg-emerald-500" />
       </span>
       <Globe className="size-3" />
       <span className="truncate font-medium text-foreground/90">
-        Browser open · {browserTabs.length} {browserTabs.length === 1 ? "tab" : "tabs"}
+        Browser · {browserTabs.length} {browserTabs.length === 1 ? "tab" : "tabs"}
       </span>
       {host ? <span className="truncate">· {host}</span> : null}
-    </div>
+    </button>
   );
 }
 
@@ -706,6 +717,8 @@ export function SessionSurface(props: SessionSurfaceProps) {
   const local = useLocal();
   const { config: shellConfig } = useShellConfig();
   const engineWarning = useCodexSessionStore((state) => state.sessions[props.sessionId]?.warning);
+  // Evaluator/continuation chatter is diagnostics, not product copy.
+  const sessionNotice = userFacingWarning(engineWarning, props.developerMode);
   const showThinking = local.prefs.showThinking;
   const findOpen = useSessionFindStore((state) => state.open);
   const findSessionId = useSessionFindStore((state) => state.sessionId);
@@ -1171,6 +1184,8 @@ export function SessionSurface(props: SessionSurfaceProps) {
     // Expand paste placeholders in resolvedText so the model receives
     // the actual pasted content instead of "[pasted text <label>]".
     let resolved = resolvePastedTextPlaceholders(text, pasteParts);
+    // Never let encoded binary ride the prompt as text.
+    resolved = sanitizePromptText(resolved);
     resolved = resolved.replace(/\[attachment [^\]]+\]/g, "");
     resolved = resolved.replace(/\[connect-skill [^\]]+\]/g, (match) => {
       const token = parseConnectSkillToken(match);
@@ -1531,6 +1546,20 @@ export function SessionSurface(props: SessionSurfaceProps) {
     const pasted = createPastedTextChip(text);
     setComposerPasteParts(props.sessionId, [...pasteParts, pasted]);
     setComposerDraft(props.sessionId, `${draft}[pasted text ${pasted.label}]`);
+    if (pasted.inline) return;
+    // Too big to inline. The chip still shows what was pasted, but the content
+    // reaches the model as a file it can read instead of burning the context
+    // window (see resolvePastedTextPlaceholders).
+    const file = createPastedTextFile(pasted);
+    const attachment: ComposerAttachment = {
+      id: `att-${pasted.id}`,
+      name: file.name,
+      mimeType: file.type,
+      size: file.size,
+      kind: "file",
+      file,
+    };
+    setComposerAttachments(props.sessionId, [...attachments, attachment]);
   };
 
   const handleExpandPastedText = (id: string) => {
@@ -1742,16 +1771,24 @@ export function SessionSurface(props: SessionSurfaceProps) {
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  // Marker at the very end of the transcript: its visibility, not a distance
+  // threshold, says whether the tail is on screen.
+  const tailSentinelRef = useRef<HTMLDivElement>(null);
+  const lastTouchYRef = useRef<number | null>(null);
   const sessionScroll = useSessionScrollController({
     selectedSessionId: props.sessionId,
     renderedMessages,
     containerRef: scrollRef,
     contentRef,
+    tailSentinelRef,
   });
 
+  // The find bar moves the user off the tail itself, so record it as
+  // navigation rather than letting the resulting scroll event look like a
+  // user scroll.
   const handleFindBeforeJump = useCallback(() => {
-    sessionScroll.markScrollGesture(scrollRef.current);
-  }, [sessionScroll.markScrollGesture]);
+    sessionScroll.markNavigatedAway();
+  }, [sessionScroll.markNavigatedAway]);
 
   const handleFindSurfaceInteraction = useCallback(() => {
     setFindLastFocused(props.sessionId);
@@ -2042,23 +2079,32 @@ export function SessionSurface(props: SessionSurfaceProps) {
         </div>
       ) : null}
 
-      {engineWarning ? <SessionNotice message={engineWarning} /> : null}
+      <SessionTopRail notice={sessionNotice} />
       <div className="relative min-h-0 flex-1">
         <div
           ref={scrollRef}
           onWheel={(event) => {
-            sessionScroll.markScrollGesture(event.target);
+            if (event.deltaY === 0) return;
+            // Wheel down moves toward the tail; wheel up moves away from it.
+            sessionScroll.markScrollGesture({ type: "wheel", direction: event.deltaY < 0 ? "up" : "down" });
           }}
           onTouchStart={(event) => {
-            sessionScroll.markScrollGesture(event.target);
+            lastTouchYRef.current = event.touches[0]?.clientY ?? null;
           }}
           onTouchMove={(event) => {
-            sessionScroll.markScrollGesture(event.target);
+            const nextY = event.touches[0]?.clientY ?? null;
+            const previousY = lastTouchYRef.current;
+            lastTouchYRef.current = nextY;
+            if (nextY === null || previousY === null || nextY === previousY) return;
+            // A finger dragging down reveals older content ("up" in scroll terms);
+            // dragging up moves toward the tail.
+            sessionScroll.markScrollGesture({ type: "touch", direction: nextY > previousY ? "up" : "down" });
           }}
           onPointerDown={(event) => {
             if (event.target !== event.currentTarget) return;
-            sessionScroll.markScrollGesture(event.currentTarget);
+            sessionScroll.markScrollGesture({ type: "pointer" });
           }}
+          onKeyDown={sessionScroll.handleKeyDown}
           onScroll={sessionScroll.handleScroll}
           // Extra top padding while the find bar is open so it never covers
           // the first message (short transcripts cannot scroll it clear).
@@ -2152,6 +2198,8 @@ export function SessionSurface(props: SessionSurfaceProps) {
                 </OpenTargetProvider>
               </DevProfiler>
             )}
+            {/* End-of-transcript marker: observed, never rendered. */}
+            <div ref={tailSentinelRef} data-tail-sentinel aria-hidden="true" className="h-px w-full" />
           </div>
         </div>
         <SessionScrollOverlay
@@ -2180,6 +2228,7 @@ export function SessionSurface(props: SessionSurfaceProps) {
         ) : null}
         <DevProfiler id="SessionComposer">
         <BrowserUseIndicator sessionId={props.sessionId} />
+        <ActivityStatus sessionId={props.sessionId} turnActive={chatStreaming} />
         {props.cloudMcpSubmissionState.status === "failed" ? (
           <div
             className="mx-3 mb-2 flex items-center gap-3 rounded-xl border border-red-7/40 bg-red-2/40 px-3 py-2 text-xs text-red-11"

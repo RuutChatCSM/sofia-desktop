@@ -47,13 +47,13 @@ function withoutWindow<T>(run: () => T): T {
   }
 }
 
-function renderList(messages: UIMessage[]) {
+function renderList(messages: UIMessage[], developerMode = false) {
   return withoutWindow(() => renderToStaticMarkup(
     <MessageListProvider
       workspaceId="ws"
       sessionId="session"
       showThinking={true}
-      developerMode={false}
+      developerMode={developerMode}
       displaySuggestions={false}
       providerConnectedCount={1}
       dispatchAction={() => {}}
@@ -104,7 +104,7 @@ describe("finished turn step fold (single Sofia engine message per turn)", () =>
     expect(markup).toContain("Everything passed — the change is in.");
   });
 
-  test("a short turn stays inline with one aggregate line", () => {
+  test("every finished turn gets the same collapsed work block", () => {
     const assistant: UIMessage = {
       id: "assistant-2",
       role: "assistant",
@@ -119,10 +119,15 @@ describe("finished turn step fold (single Sofia engine message per turn)", () =>
 
     const markup = renderList([userMessage, assistant]);
 
-    expect(markup).not.toContain("Worked for");
-    // Both calls merge into one aggregate summary line.
-    expect(markup).toContain("Edited 1 file, ran 1 command");
+    // Same component, same place, same height as a long turn — the transcript
+    // records outcomes, not engine item boundaries.
+    expect(markup).toContain("Worked for 4s");
     expect(markup).toContain("Done.");
+
+    // The aggregate summary is the *contents* of the block: inspectable, but
+    // folded away by default (developer mode opens it).
+    expect(markup).not.toContain("Edited 1 file, ran 1 command");
+    expect(renderList([userMessage, assistant], true)).toContain("Edited 1 file, ran 1 command");
   });
 
   test("reasoning between calls does not fragment the aggregate", () => {
@@ -140,8 +145,11 @@ describe("finished turn step fold (single Sofia engine message per turn)", () =>
       ],
     };
 
-    const markup = renderList([userMessage, assistant]);
+    const markup = renderList([userMessage, assistant], true);
 
     expect(markup).toContain("Ran 2 commands");
+    // Two reasoning items, one merged reasoning section: a turn's reasoning is
+    // a single object, not one "Thought" row per engine item.
+    expect((markup.match(/Thought/g) ?? []).length).toBe(1);
   });
 });

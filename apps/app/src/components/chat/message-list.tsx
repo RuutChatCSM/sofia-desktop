@@ -13,6 +13,7 @@ import {
   LoaderCircle,
   MoreHorizontal,
   Pencil,
+  Sparkles,
   Split,
   Undo2,
 } from "lucide-react"
@@ -29,6 +30,7 @@ import { openDesktopUrl, revealDesktopItemInDir } from "@/app/lib/desktop"
 import { isElectronRuntime } from "@/app/lib/runtime-env"
 import { SYNTHETIC_SESSION_ERROR_MESSAGE_PREFIX } from "@/app/types"
 import { ApplyPatchTool } from "@/components/tools/apply-patch"
+import { BackgroundProcessTool } from "@/components/tools/background-process"
 import { BashTool } from "@/components/tools/bash"
 import { EditTool } from "@/components/tools/edit"
 import { EnvVarRequestTool } from "@/components/tools/env-var-request"
@@ -47,6 +49,15 @@ import { TodoWriteTool } from "@/components/tools/todowrite"
 import { WebfetchTool } from "@/components/tools/webfetch"
 import { WebsearchTool } from "@/components/tools/websearch"
 import { useMessageList, useSessionErrorMessage } from "@/components/chat/message-list-provider"
+import { liveActivityLabel } from "@/react-app/domains/session/activity"
+import { useSessionTurnTiming } from "@/react-app/domains/session/codex-session-store"
+import {
+  finishedTurnDurationMs,
+  resolveTurnTiming,
+  turnWorkLabel,
+  type LocalTurnTiming,
+} from "@/components/chat/turn-timing"
+import { useSessionActivities } from "@/react-app/domains/session/use-session-activities"
 import { ArtifactList } from "@/components/chat/artifact"
 import { TaskSuggestions } from "@/components/chat/task-suggestions"
 import {
@@ -83,12 +94,6 @@ import {
 } from "@/components/ui/message"
 import { Tool } from "@/components/ui/tool"
 import { CapabilityCallLine } from "@/components/chat/capability-call-line"
-import {
-  isLiveStepAtBottom,
-  pinnedAfterUserScroll,
-  pinnedAfterWheel,
-  shouldFollowLiveStepGrowth,
-} from "@/components/chat/live-step-scroll"
 import { hasPreservedMcpAppResult, McpAppFrame } from "@/components/chat/mcp-app-frame"
 import { ReasoningBlock } from "@/components/chat/reasoning-block"
 import { SubagentRunLine } from "@/components/chat/subagent-run-line"
@@ -122,7 +127,6 @@ import type { AnyToolPart } from "@/lib/tool-aggregate"
 const SEARCH_HIGHLIGHT_MARK_CLASS = "rounded px-0.5 bg-amber-4/70 text-current"
 
 /** Above this many step rows a finished turn folds into one summary line. */
-const COLLAPSED_STEP_RUN_MIN_ROWS = 4
 
 function MessageTimestamp({ message, className }: { message: UIMessage; className?: string }) {
   const created = getMessageCreated(message)
@@ -174,7 +178,7 @@ class ToolMessage extends React.Component<ToolMessageProps, { failed: boolean }>
 }
 
 const ToolMessageInner = ({ part }: ToolMessageProps) => {
-  const { onMcpReconnect, onMcpReopenAuthorization, onMcpRetry } = useMessageList()
+  const { onMcpReconnect, onMcpReopenAuthorization, onMcpRetry, developerMode } = useMessageList()
 
   if (isBashToolPart(part)) {
     return <BashTool part={part} />
@@ -234,6 +238,13 @@ const ToolMessageInner = ({ part }: ToolMessageProps) => {
 
   if (part.type === "dynamic-tool" && part.toolName === "sofia_session_create") {
     return <SofiaSessionCreateTool part={part} />
+  }
+
+  if (part.type === "dynamic-tool" && part.toolName === "background_process") {
+    // The transcript speaks in activities ("✦ Running the app tests"), so the
+    // terminal command card is a developer detail, not the default reading.
+    // Everyone else reaches it from the Activity drawer's Details.
+    return developerMode ? <BackgroundProcessTool part={part} /> : null
   }
 
   if (part.type === "dynamic-tool" && isAutomationProposalToolPart(part)) {
@@ -783,8 +794,15 @@ const LoadingMessage = React.memo(({ label }: { label?: string }) => (
   <Message className="mx-auto flex w-full max-w-[800px] flex-col items-start gap-2 px-2 md:px-6">
     <div className="group flex w-full flex-col gap-0">
       <div className="flex items-center gap-1.5 px-1 py-1 text-sm text-muted-foreground">
-        <span className="sofia-working-dot" aria-hidden="true" />
-        <span>{label ?? "Sofia is working…"}</span>
+        {label ? (
+          <Sparkles className="size-3.5 shrink-0 text-foreground/70" aria-hidden="true" />
+        ) : (
+          <span className="sofia-working-dot" aria-hidden="true" />
+        )}
+        {/* The semantic phase ("Running the app tests") is what tells the user
+            what is happening; the shimmer only says it is still in progress.
+            "Sofia is working…" is the rare no-title fallback. */}
+        <span className={label ? "ow-text-shimmer font-medium" : undefined}>{label ?? "Sofia is working…"}</span>
       </div>
     </div>
   </Message>
@@ -886,26 +904,57 @@ function getRenderableMessage(message: UIMessage) {
 }
 
 /**
- * A finished turn's steps collapse to a single "Worked for 1m 19s" line
- * that expands back into the full run. Only live turns show their steps
- * unprompted; once the answer is in, the reasoning is available but out
- * of the way.
+ * One work unit per assistant turn.
+ *
+ * A turn can contain dozens of engine items — reasoning, tool calls, edits,
+ * subagent runs — and those are transport boundaries, not UX boundaries.
+ * Rendering each one as its own row made a long turn explode vertically
+ * ("Thought, Thought, Thought…"). The whole turn is therefore one collapsible
+ * object: collapsed while it works *and* after it finishes, so the transcript
+ * stays a record of outcomes. While the work is live the header is the
+ * semantic Activity title; once finished it becomes the duration summary.
  */
-function CompletedStepRun({ label, children }: { label: string; children: React.ReactNode }) {
-  const [open, setOpen] = React.useState(false)
+function TurnWorkBlock({
+  label,
+  active,
+  streaming,
+  elapsedMs,
+  defaultOpen,
+  children,
+}: {
+  label: string
+  active: boolean
+  streaming: boolean
+  elapsedMs: number | null
+  defaultOpen: boolean
+  children: React.ReactNode
+}) {
+  const [open, setOpen] = React.useState(defaultOpen)
 
   return (
     <Collapsible open={open} onOpenChange={setOpen} className="flex w-full flex-col gap-2">
       <div className="mx-auto flex w-full max-w-[800px] px-2 md:px-6">
         <CollapsibleTrigger
-          className="group flex cursor-pointer items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
-          aria-label={open ? `${label}. Hide steps` : `${label}. Show steps`}
+          className="group flex cursor-pointer items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+          aria-label={open ? `${label}. Hide work` : `${label}. Show work`}
+          data-turn-work-header={active ? "active" : "done"}
         >
-          <span>{label}</span>
+          {active ? (
+            <Sparkles
+              aria-hidden="true"
+              className={cn("size-3.5 shrink-0 text-foreground/70", streaming && "animate-pulse")}
+            />
+          ) : null}
+          <span className={cn("truncate", streaming && "ow-text-shimmer font-medium")}>{label}</span>
+          {active && elapsedMs !== null && elapsedMs >= 1000 ? (
+            <span className="shrink-0 tabular-nums text-muted-foreground/70">
+              {formatToolCallDuration(elapsedMs)}
+            </span>
+          ) : null}
           <ChevronRight
             aria-hidden="true"
             className={cn(
-              "size-3.5 text-muted-foreground/70 transition-transform duration-150",
+              "size-3.5 shrink-0 text-muted-foreground/70 transition-transform duration-150",
               open && "rotate-90"
             )}
           />
@@ -918,10 +967,43 @@ function CompletedStepRun({ label, children }: { label: string; children: React.
   )
 }
 
+/** Ticks while a turn is live so its header can show elapsed work time. */
+function useLiveElapsed(startedAt: number | null, active: boolean): number | null {
+  const [now, setNow] = React.useState(() => Date.now())
+
+  React.useEffect(() => {
+    if (!active) return
+    setNow(Date.now())
+    const timer = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [active])
+
+  if (startedAt === null || !active) return null
+  return Math.max(0, now - startedAt)
+}
+
+/**
+ * Whether a turn group already has visible work. When it does, the generic
+ * "Sofia is working…" fallback must stay out of the transcript: the work block
+ * header is the single live-progress line.
+ */
+function groupHasWork(items: UIMessageWithIndex[], showThinking: boolean): boolean {
+  return items.some(
+    (item) =>
+      item.message.role === "assistant"
+      && !isSessionErrorMessage(item.message)
+      && getAssistantRenderGroups(item.message.parts, showThinking).some((group) => group.kind !== "text")
+  )
+}
+
 interface AssistantMessageGroupProps {
   items: UIMessageWithIndex[]
   messages: UIMessage[]
   isStreaming: boolean
+  /** Semantic Activity title for the live turn, e.g. "Running the app tests". */
+  activeLabel?: string | null
+  /** UI-recorded turn clock, used when engine item metadata is thin. */
+  localTurnTiming?: LocalTurnTiming
 }
 
 function collectMcpAppParts(items: UIMessageWithIndex[]): DynamicToolUIPart[] {
@@ -945,52 +1027,21 @@ function MessageGroup({
   items,
   messages,
   isStreaming,
+  activeLabel,
+  localTurnTiming,
 }: AssistantMessageGroupProps) {
-  const { onRevertToUserMessage, onForkAtMessage, showThinking } = useMessageList()
+  const { onRevertToUserMessage, onForkAtMessage, showThinking, developerMode } = useMessageList()
   const lastItem = items[items.length - 1]
   // Branch/revert must target a real server-side message id. Synthetic
   // client-side messages (e.g. session errors) don't exist on the server and
   // silently corrupt fork/revert boundaries.
   const lastRealItem = items.findLast((item) => !isSessionErrorMessage(item.message))
   const isLiveGroup = isStreaming && lastItem !== undefined && lastItem.index === messages.length - 1
-  const stepsRef = React.useRef<HTMLDivElement>(null)
-  const stepsPinnedRef = React.useRef(true)
-  const stepsProgrammaticRef = React.useRef(false)
-
-  const handleStepsScroll = React.useCallback((event: React.UIEvent<HTMLDivElement>) => {
-    const atBottom = isLiveStepAtBottom(event.currentTarget)
-    if (stepsProgrammaticRef.current && atBottom) return
-    stepsProgrammaticRef.current = false
-    stepsPinnedRef.current = pinnedAfterUserScroll(atBottom)
-  }, [])
-
-  const handleStepsWheel = React.useCallback((event: React.WheelEvent<HTMLDivElement>) => {
-    const nextPinned = pinnedAfterWheel({
-      deltaY: event.deltaY,
-      pinned: stepsPinnedRef.current,
-      atBottom: isLiveStepAtBottom(event.currentTarget),
-    })
-    stepsPinnedRef.current = nextPinned
-    if (!nextPinned) stepsProgrammaticRef.current = false
-  }, [])
-
-  // Follow the latest live step only while the user is still at the tail.
-  // Wheel-up unpins immediately so streaming re-renders cannot yank the list
-  // back to the bottom while they browse earlier thinking.
-  React.useLayoutEffect(() => {
-    const node = stepsRef.current
-    if (!node) return
-    if (!shouldFollowLiveStepGrowth({ isLive: isLiveGroup, pinned: stepsPinnedRef.current })) {
-      node.style.overflowAnchor = "auto"
-      return
-    }
-    node.style.overflowAnchor = "none"
-    stepsProgrammaticRef.current = true
-    node.scrollTop = node.scrollHeight
-    window.requestAnimationFrame(() => {
-      stepsProgrammaticRef.current = false
-    })
-  })
+  // Timing belongs to the whole logical turn — narration, an earlier premature
+  // answer, resumed work and the trailing answer all count (see turn-timing.ts).
+  // The ticking clock is a hook, so it must run before the early return below.
+  const timing = resolveTurnTiming(items.map((item) => item.message), localTurnTiming)
+  const liveElapsedMs = useLiveElapsed(timing.startedAt, isLiveGroup)
 
   if (!lastItem || isMessageEmptyGroup(items)) {
     return null;
@@ -1017,15 +1068,11 @@ function MessageGroup({
       proseItems = [{ index: firstProse.index, message: split.answer }, ...proseItems.slice(1)]
     }
   }
-  // How long the turn spent working, from the first step to when the answer
-  // finished (or started, for older history without a completed timestamp).
-  // Server timestamps, so this survives a reload.
-  const stepsStartedAt = stepItems.length > 0 ? getMessageCreated(stepItems[0].message) : null
-  const stepsEndedAt = getMessageCompleted(lastItem.message) ?? getMessageCreated(lastItem.message)
 
-  // The answer message's own thinking belongs to the work, not the answer, so
-  // a collapsed run shows it and the message below renders text only.
-  const proseReasoning = proseItems.flatMap((item) =>
+  // Reasoning is work, not an answer. Every reasoning group in the turn merges
+  // into one block, so a turn that arrived as six reasoning items reads as one
+  // expandable section instead of six stacked rows.
+  const turnReasoning = [...stepItems, ...proseItems].flatMap((item) =>
     item.message.role === "assistant" && !isSessionErrorMessage(item.message)
       ? getAssistantRenderGroups(item.message.parts, showThinking).flatMap((group, groupIndex) =>
         group.kind === "reasoning"
@@ -1034,39 +1081,20 @@ function MessageGroup({
       )
       : []
   )
-  // An aggregate line counts each call it absorbed: it reads as one row but
-  // stands for that much work, and folding should key off the work done.
-  const stepRowCount =
-    stepItems.reduce(
-      (total, item) =>
-        total +
-        (item.message.role === "assistant" && !isSessionErrorMessage(item.message)
-          ? getAssistantRenderGroups(item.message.parts, showThinking).reduce(
-            (rows, group) => rows + (group.kind === "tool-aggregate" ? group.parts.length : 1),
-            0
-          )
-          : 1),
-      0
-    ) + proseReasoning.length
-  const stepRunLabel =
-    stepsStartedAt !== null && stepsEndedAt !== null && stepsEndedAt > stepsStartedAt
-      ? `Worked for ${formatToolCallDuration(stepsEndedAt - stepsStartedAt)}`
-      : stepRowCount === 1
-        ? "1 step"
-        : `${stepRowCount} steps`
-  // A short finished run reads fine as a list, so only long ones fold away.
-  const collapseSteps =
-    !isLiveGroup && stepItems.length > 0 && stepRowCount > COLLAPSED_STEP_RUN_MIN_ROWS
-  const foldedReasoning = collapseSteps
-    ? proseReasoning.map((reasoning) => (
-      <Message
-        key={`folded-reasoning-${reasoning.key}`}
-        className="mx-auto flex w-full max-w-[800px] flex-col items-start gap-2 px-2 md:px-6"
-      >
-        <ReasoningBlock text={reasoning.text} isStreaming={reasoning.isStreaming} />
-      </Message>
-    ))
-    : []
+  const reasoningText = turnReasoning
+    .map((reasoning) => reasoning.text.trim())
+    .filter(Boolean)
+    .join("\n\n")
+  const reasoningStreaming = turnReasoning.some((reasoning) => reasoning.isStreaming)
+  const durationMs = finishedTurnDurationMs(timing)
+  // Active: the semantic operation. Finished: how long the turn took.
+  const workLabel = turnWorkLabel({
+    isLive: isLiveGroup,
+    activeLabel,
+    durationMs,
+    formatDuration: formatToolCallDuration,
+  })
+  const hasWork = stepItems.length > 0 || Boolean(reasoningText)
 
   const renderItem = (item: UIMessageWithIndex, groupIndex: number, hideReasoning?: boolean) => {
     const isLastMessage = item.index === messages.length - 1
@@ -1123,26 +1151,28 @@ function MessageGroup({
       {/* The scroll area keeps the same 8px rhythm the parts inside a single
           message use, so a step row is spaced identically whether or not a
           message boundary happens to fall between it and the previous row. */}
-      {stepItems.length > 0 ? (
-        collapseSteps ? (
-          <CompletedStepRun label={stepRunLabel}>
-            <div data-scrollable="" className="flex flex-col gap-2">
-              {renderItems(stepItems, 0)}
-              {foldedReasoning}
-            </div>
-          </CompletedStepRun>
-        ) : (
-          <div
-            ref={stepsRef}
-            data-scrollable=""
-            data-live-steps=""
-            onScroll={handleStepsScroll}
-            onWheel={handleStepsWheel}
-            className="flex max-h-[280px] flex-col gap-2 overflow-y-auto overscroll-y-contain"
+      {hasWork ? (
+        // One vertical scroll owner: the transcript. The work block is a plain
+        // collapsible row (no inner viewport), so the session scroll controller
+        // decides whether to follow the tail.
+        <div data-live-steps="">
+          <TurnWorkBlock
+            label={workLabel}
+            active={isLiveGroup}
+            streaming={isLiveGroup && isStreaming}
+            elapsedMs={liveElapsedMs}
+            defaultOpen={developerMode}
           >
-            {renderItems(stepItems, 0)}
-          </div>
-        )
+            <div className="flex flex-col gap-2">
+              {reasoningText ? (
+                <Message className="mx-auto flex w-full max-w-[800px] flex-col items-start gap-2 px-2 md:px-6">
+                  <ReasoningBlock text={reasoningText} isStreaming={reasoningStreaming} />
+                </Message>
+              ) : null}
+              {renderItems(stepItems, 0, true)}
+            </div>
+          </TurnWorkBlock>
+        </div>
       ) : null}
       {mcpAppParts.map((part) => (
         <Message
@@ -1152,7 +1182,7 @@ function MessageGroup({
           <McpAppFrame part={part} />
         </Message>
       ))}
-      {renderItems(proseItems, stepItems.length, collapseSteps)}
+      {renderItems(proseItems, stepItems.length, true)}
       {/* Paper artifact strip: one FILES row per turn, at the end. */}
       <ArtifactList
         messages={items.map((item) => item.message)}
@@ -1206,14 +1236,28 @@ export function shouldShowMessageListLoading(status: ThreadStatus, messageCount:
 }
 
 export function MessageList({ messages, status, retryStatus }: MessageListProps) {
+  const { sessionId, showThinking } = useMessageList()
+  const localTurnTiming = useSessionTurnTiming(sessionId)
   const isStreaming = status === "streaming" || status === "retrying"
   const showLoading = shouldShowMessageListLoading(status, messages.length)
   const items = React.useMemo(() => groupMessages(messages, status), [messages, status]);
   const error = useSessionErrorMessage();
   const hasSessionErrorMessage = React.useMemo(() => messages.some(isSessionErrorMessage), [messages])
-  const liveActionLabel = isStreaming
-    ? getActiveToolLabel(collectLatestAssistantToolParts(messages))
-    : null
+  const activities = useSessionActivities(sessionId)
+  // Exactly one live-progress line. An Activity is authoritative ("Running the
+  // app tests"); an in-flight tool is the fallback; "Sofia is working…" is
+  // reserved for the moments where no operation title exists yet.
+  const liveActionLabel = React.useMemo(() => {
+    if (!isStreaming) return null
+    return liveActivityLabel(activities, getActiveToolLabel(collectLatestAssistantToolParts(messages)))
+  }, [isStreaming, activities, messages])
+  // Once the live turn has a work block, its header *is* the progress line, so
+  // the generic "Sofia is working…" fallback must not render alongside it.
+  const lastGroup = items[items.length - 1]
+  const liveWorkVisible = isStreaming
+    && lastGroup !== undefined
+    && isMessageGroup(lastGroup)
+    && groupHasWork(lastGroup.messages, showThinking)
 
   return (
     <div className={cn("flex flex-col gap-2 @container/message-list")}>
@@ -1227,6 +1271,8 @@ export function MessageList({ messages, status, retryStatus }: MessageListProps)
               items={item.messages}
               messages={messages}
               isStreaming={isStreaming}
+              activeLabel={liveActionLabel}
+              localTurnTiming={localTurnTiming}
             />
           )
         }
@@ -1248,7 +1294,7 @@ export function MessageList({ messages, status, retryStatus }: MessageListProps)
         )
       })}
 
-      {showLoading && <LoadingMessage label={liveActionLabel ?? undefined} />}
+      {showLoading && !liveWorkVisible ? <LoadingMessage label={liveActionLabel ?? undefined} /> : null}
       {retryStatus ? <RetryMessage status={retryStatus} /> : null}
       {error && !hasSessionErrorMessage ? <ErrorMessage error={error} /> : null}
     </div>

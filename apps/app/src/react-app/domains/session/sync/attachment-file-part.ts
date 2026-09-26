@@ -166,7 +166,7 @@ function isTextLikeAttachmentMime(mime: string) {
  * - everything else returns `null`: workspace (`file://`) attachments fall
  *   back to a `text/plain` part that engine mediates through the Read tool,
  *   while data-URL attachments are dropped (inlining binary bytes as text is
- *   garbage); the synthetic workspace-path note gives tools the bytes.
+ *   garbage); the copied workspace path travels on the part's `source.path`.
  */
 export function modelFacingAttachmentMime(mimeType: string): string | null {
   const mime = normalizedMime(mimeType);
@@ -285,20 +285,6 @@ function uploadErrorMessage(filename: string, error: unknown) {
   return `Failed to copy attachment "${filename}" into this worker workspace: ${detail}`;
 }
 
-function attachmentPathNotePart(uploaded: UploadedChatAttachment[]): TextPartInput {
-  // Synthetic: model/tools still see workspace paths, but the chat UI renders
-  // file parts as compact badges instead of this wall of path text.
-  return {
-    type: "text",
-    synthetic: true,
-    text: [
-      "Attached files were copied into this worker workspace for tool access:",
-      ...uploaded.map((item) => `- ${item.filename}: ${item.workspacePath} (${item.url})`),
-      "Use these paths with Read/Bash/MCP/Docling when a tool needs the file bytes.",
-    ].join("\n"),
-  };
-}
-
 async function uploadedAttachmentFilePart(item: UploadedChatAttachment): Promise<FilePartInput> {
   // Binary/unknown mimes also get a `text/plain` file part: engine expands
   // text/plain `file://` parts through the Read tool (which fails gracefully
@@ -306,15 +292,24 @@ async function uploadedAttachmentFilePart(item: UploadedChatAttachment): Promise
   // so the transcript keeps an attachment badge without any provider risk.
   const modelMime = modelFacingAttachmentMime(item.mime) ?? "text/plain";
 
+  // Where the bytes are copied to is *metadata on the attachment*, not prompt
+  // prose. It used to ride in a synthetic note that leaked into the user's own
+  // message ("Attached files were copied into this worker workspace…").
+  const source = {
+    type: "file" as const,
+    path: item.workspacePath,
+    text: { value: item.filename, start: 0, end: 0 },
+  };
+
   // Images need a browser-displayable URL so the transcript can show the same
-  // expandable miniature preview as paste/composer attachments. Workspace
-  // `file://` paths stay in the synthetic note for tool access.
+  // expandable miniature preview as paste/composer attachments.
   if (modelMime.startsWith("image/")) {
     return {
       type: "file",
       url: await fileToDataUrl(item.file, modelMime),
       filename: item.filename,
       mime: modelMime,
+      source,
     };
   }
 
@@ -323,6 +318,7 @@ async function uploadedAttachmentFilePart(item: UploadedChatAttachment): Promise
     url: item.url,
     filename: item.filename,
     mime: modelMime,
+    source,
   };
 }
 
@@ -332,7 +328,7 @@ export async function composerAttachmentsToWorkspaceFileParts(input: {
   sessionId: string;
   workspaceRoot: string;
   createId?: () => string;
-}): Promise<Array<TextPartInput | FilePartInput>> {
+}): Promise<FilePartInput[]> {
   if (input.attachments.length === 0) return [];
 
   const workspaceRoot = input.workspaceRoot.trim();
@@ -388,10 +384,9 @@ export async function composerAttachmentsToWorkspaceFileParts(input: {
     });
   }
 
-  return [
-    attachmentPathNotePart(uploaded),
-    ...(await Promise.all(uploaded.map(uploadedAttachmentFilePart))),
-  ];
+  // No path/instruction text part: workspace-copy metadata is hidden runtime
+  // detail. The copied path travels on each part's `source.path`.
+  return Promise.all(uploaded.map(uploadedAttachmentFilePart));
 }
 
 export async function composerAttachmentToFilePart(attachment: ComposerAttachment): Promise<FilePartInput | null> {

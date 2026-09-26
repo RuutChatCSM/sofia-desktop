@@ -53,7 +53,7 @@ export function SiteFooter() {
           <Link href="/terms" className="whitespace-nowrap transition-colors hover:text-gray-800">
             Terms
           </Link>
-          <div className="whitespace-nowrap">© 2026 Different AI</div>
+          <div className="whitespace-nowrap">© 2026 Sofia</div>
         </div>
       </div>
     </footer>

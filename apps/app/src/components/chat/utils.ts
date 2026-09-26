@@ -1,6 +1,7 @@
 import { messageTurnId } from "./turn-structure"
 import { isReasoningUIPart, isToolUIPart, type DynamicToolUIPart, type FileUIPart, type ToolUIPart, type UIMessage } from "ai"
 import type { ThreadStatus } from "@/lib/messages"
+import { partText } from "@/lib/message-part-text"
 import { isAggregatableToolPart } from "@/lib/tool-aggregate"
 
 const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -188,11 +189,11 @@ export function getAggregateOnlyParts(
   for (const part of message.parts) {
     if (part.type === "step-start") continue
     if (isReasoningUIPart(part)) {
-      if (showThinking && part.text.trim()) return null
+      if (showThinking && partText(part).trim()) return null
       continue
     }
     if (part.type === "text") {
-      if (part.text.trim()) return null
+      if (partText(part).trim()) return null
       continue
     }
     if (isToolUIPart(part) && isAggregatableToolPart(part)) {
@@ -217,7 +218,7 @@ export function splitTurnAtAnswer(message: UIMessage): { steps: UIMessage; answe
   let answerStart = -1
   for (let index = parts.length - 1; index >= 0; index -= 1) {
     const part = parts[index]
-    if (part.type === "text" && part.text.trim()) {
+    if (part.type === "text" && partText(part).trim()) {
       answerStart = index
       break
     }
@@ -265,21 +266,21 @@ export function getAssistantRenderGroups(
       // Each reasoning part is its own section (often opening with a bold
       // "**Title**"); joining without a break glues that title onto the
       // previous paragraph's last sentence.
-      previous.text += previous.text && part.text.trim() ? `\n\n${part.text}` : part.text
+      previous.text += previous.text && partText(part).trim() ? `\n\n${partText(part)}` : partText(part)
       previous.isStreaming = previous.isStreaming || part.state === "streaming"
       return
     }
 
-    if (!part.text.trim()) {
+    if (!partText(part).trim()) {
       return
     }
 
-    groups.push({ kind: "reasoning", text: part.text, isStreaming: part.state === "streaming" })
+    groups.push({ kind: "reasoning", text: partText(part), isStreaming: part.state === "streaming" })
   }
 
   for (const part of filteredParts) {
     if (part.type === "text") {
-      appendText(part.text)
+      appendText(partText(part))
       continue
     }
 

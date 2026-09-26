@@ -1,25 +1,13 @@
 /** @jsxImportSource react */
 import * as React from "react";
-import {
-  ArrowLeft,
-  ArrowRight,
-  Globe,
-  Loader2,
-  Plus,
-  RotateCw,
-  X,
-} from "lucide-react";
+import { Globe, Loader2, Plus, X, Maximize2, Minimize2, PictureInPicture2 } from "lucide-react";
 import { useDragControls } from "motion/react";
 
 import type { SofiaServerClient } from "@/app/lib/sofia-server";
 import { PanelTab, PanelTabClose, PanelTabItem, PanelTabList } from "@/components/panel-tabs";
 import { Button } from "@/components/ui/button";
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupInput,
-} from "@/components/ui/input-group";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 
 import { ArtifactIcon } from "../artifacts/artifact-icon";
 import { ArtifactPanel } from "../artifacts/artifact-panel";
@@ -32,15 +20,12 @@ import {
 } from "./panel-tab-store";
 import { useControlAction, type SofiaControlAction } from "../../../shell/control/control-provider";
 import type { OpenTarget } from "../artifacts/open-target";
+import { dispatchBrowserPresentation, useBrowserPresentationStore } from "./browser-presentation";
+import { BrowserView } from "./browser-view";
 import { useSidePanelTabs } from "./use-side-panel-tabs";
 import { handlePanelEscape, PanelEmpty } from "./panel-empty";
-import {
-  computeBounds,
-  getElectronBrowser,
-  getNativeMenuPoint,
-  hasNativeBrowserOccluder,
-  sameBounds,
-} from "./utils";
+import { getElectronBrowser, getNativeMenuPoint } from "./utils";
+
 
 type SidePanelProps = {
   sessionId: string;
@@ -108,6 +93,7 @@ function SidePanelTab({ tab, active, onSelect, onClose }: SidePanelTabProps) {
       <div ref={tabRef} className="relative">
         <PanelTab
           active={active}
+          data-testid={`panel-tab-${tab.id}`}
           onClick={() => onSelect(tab.id)}
           onPointerDown={tab.type === "browser" ? (event) => {
             if (event.button !== 0) {
@@ -130,7 +116,7 @@ function SidePanelTab({ tab, active, onSelect, onClose }: SidePanelTabProps) {
           {tab.type === "browser" ? (
             tab.favicon ? (
               <img src={tab.favicon} alt="" className="size-3.5 shrink-0 rounded-[2px]" />
-            ) : tab.status === "loading" ? (
+            ) : tab.pageState.status === "loading" ? (
               <Loader2 className="animate-spin" />
             ) : (
               <Globe />
@@ -150,290 +136,6 @@ function SidePanelTab({ tab, active, onSelect, onClose }: SidePanelTabProps) {
   );
 }
 
-type BrowserPanelContentProps = {
-  tab: BrowserPanelTab;
-  onClose: () => void;
-};
-
-function BrowserPanelContent({
-  tab,
-  onClose,
-}: BrowserPanelContentProps) {
-  const isAvailable = Boolean(getElectronBrowser());
-  const [urlInput, setUrlInput] = React.useState(tab.url);
-  const urlFocusedRef = React.useRef(false);
-  const contentRef = React.useRef<HTMLDivElement>(null);
-  const urlInputRef = React.useRef<HTMLInputElement>(null);
-  const shownRef = React.useRef(false);
-  const boundsFrameRef = React.useRef<number | null>(null);
-  const lastBoundsRef = React.useRef<{ x: number; y: number; width: number; height: number } | null>(null);
-
-  React.useEffect(() => {
-    if (!urlFocusedRef.current) {
-      setUrlInput(tab.url);
-    }
-  }, [tab.id, tab.url]);
-
-  const navigate = React.useCallback(() => {
-    void getElectronBrowser()?.navigate?.(urlInput);
-  }, [urlInput]);
-
-  const back = React.useCallback(() => {
-    void getElectronBrowser()?.back?.();
-  }, []);
-
-  const forward = React.useCallback(() => {
-    void getElectronBrowser()?.forward?.();
-  }, []);
-
-  const reload = React.useCallback(() => {
-    void getElectronBrowser()?.reload?.();
-  }, []);
-
-  const handleUrlKeyDown = React.useCallback((event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === "Enter") {
-      event.preventDefault();
-      navigate();
-      urlInputRef.current?.blur();
-    }
-  }, [navigate]);
-
-  React.useLayoutEffect(() => {
-    const browser = getElectronBrowser();
-    const content = contentRef.current;
-    if (!browser || !content || !isAvailable) {
-      return;
-    }
-
-    const bounds = computeBounds(content);
-    if (bounds.width < 1 || bounds.height < 1) {
-      return;
-    }
-
-    browser.setBounds?.(bounds);
-    lastBoundsRef.current = bounds;
-  });
-
-  React.useLayoutEffect(() => {
-    const browser = getElectronBrowser();
-    const content = contentRef.current;
-
-    if (!browser || !content || !isAvailable) {
-      browser?.hide?.();
-      shownRef.current = false;
-      lastBoundsRef.current = null;
-
-      if (boundsFrameRef.current != null) {
-        window.cancelAnimationFrame(boundsFrameRef.current);
-        boundsFrameRef.current = null;
-      }
-
-      return;
-    }
-
-    let disposed = false;
-
-    const resetNativeView = async () => {
-      await browser.hide?.();
-
-      if (disposed) {
-        return;
-      }
-
-      shownRef.current = false;
-      lastBoundsRef.current = null;
-      boundsFrameRef.current = window.requestAnimationFrame(watchBounds);
-    };
-
-    const syncBounds = () => {
-      const bounds = computeBounds(content);
-
-      if (bounds.width < 1 || bounds.height < 1 || hasNativeBrowserOccluder()) {
-        if (shownRef.current) {
-          browser.hide?.();
-          shownRef.current = false;
-          lastBoundsRef.current = null;
-        }
-
-        return;
-      }
-
-      if (!shownRef.current) {
-        browser.show?.(bounds);
-        shownRef.current = true;
-        lastBoundsRef.current = bounds;
-        return;
-      }
-
-      if (!sameBounds(lastBoundsRef.current, bounds)) {
-        browser.setBounds?.(bounds);
-        lastBoundsRef.current = bounds;
-      }
-    };
-
-    const watchBounds = () => {
-      syncBounds();
-      boundsFrameRef.current = window.requestAnimationFrame(watchBounds);
-    };
-
-    void resetNativeView();
-
-    const observer = new ResizeObserver(syncBounds);
-
-    observer.observe(content);
-    window.addEventListener("resize", syncBounds);
-    window.addEventListener("scroll", syncBounds, true);
-
-    return () => {
-      disposed = true;
-      observer.disconnect();
-      window.removeEventListener("resize", syncBounds);
-      window.removeEventListener("scroll", syncBounds, true);
-
-      if (boundsFrameRef.current != null) {
-        window.cancelAnimationFrame(boundsFrameRef.current);
-        boundsFrameRef.current = null;
-      }
-
-      browser.hide?.();
-      shownRef.current = false;
-      lastBoundsRef.current = null;
-    };
-  }, [isAvailable]);
-
-  return (
-    <>
-      <div className="flex h-10 shrink-0 items-center gap-1 border-b border-border bg-dls-canvas px-2 mac:bg-dls-canvas/80 mac:backdrop-blur-2xl mac:backdrop-saturate-150">
-        {isAvailable ? (
-          <>
-            <Tooltip>
-              <TooltipTrigger
-                render={(
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={back}
-                    disabled={!tab.canGoBack}
-                    aria-label="Go back"
-                  >
-                    <ArrowLeft />
-                  </Button>
-                )}
-              />
-              <TooltipContent>Back</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger
-                render={(
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={forward}
-                    disabled={!tab.canGoForward}
-                    aria-label="Go forward"
-                  >
-                    <ArrowRight />
-                  </Button>
-                )}
-              />
-              <TooltipContent>Forward</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger
-                render={(
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={reload}
-                    aria-label="Reload page"
-                  >
-                    {tab.status === "loading" ? <Loader2 className="animate-spin" /> : <RotateCw />}
-                  </Button>
-                )}
-              />
-              <TooltipContent>Reload</TooltipContent>
-            </Tooltip>
-            <InputGroup className="mx-1 h-7 flex-1 rounded-md">
-              <InputGroupInput
-                ref={urlInputRef}
-                type="text"
-                className="h-7"
-                value={urlInput}
-                onChange={(event) => setUrlInput(event.target.value)}
-                onKeyDown={handleUrlKeyDown}
-                onFocus={() => {
-                  urlFocusedRef.current = true;
-                  urlInputRef.current?.select();
-                }}
-                onBlur={() => {
-                  urlFocusedRef.current = false;
-                }}
-                placeholder="Enter URL..."
-                spellCheck={false}
-                autoComplete="off"
-              />
-              <InputGroupAddon align="inline-start" className="ps-2">
-                <Globe />
-              </InputGroupAddon>
-            </InputGroup>
-          </>
-        ) : (
-          <p className="px-2 text-sm text-muted-foreground">
-            Browser panel is only available in the desktop app.
-          </p>
-        )}
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={onClose}
-          title="Close panel"
-          aria-label="Close panel"
-        >
-          <X />
-        </Button>
-      </div>
-      {isAvailable ? <BrowserPanelStatus tab={tab} /> : null}
-      <div className="min-h-0 flex-1 overflow-hidden">
-        {isAvailable ? <div ref={contentRef} className="h-full overflow-hidden" /> : null}
-      </div>
-    </>
-  );
-}
-
-function browserHost(url: string): string {
-  try {
-    return new URL(url).hostname.replace(/^www\./, "");
-  } catch {
-    return "";
-  }
-}
-
-type BrowserPanelStatusProps = {
-  tab: BrowserPanelTab;
-};
-
-/**
- * Slim status row under the browser address bar: the active tab's host and a
- * pulsing "loading" indicator, so it is always obvious what page the agent is
- * on and whether it is still settling.
- */
-function BrowserPanelStatus({ tab }: BrowserPanelStatusProps) {
-  const host = browserHost(tab.url);
-  return (
-    <div className="flex h-6 shrink-0 items-center gap-1.5 border-b border-border/60 bg-muted/30 px-2.5 text-[11px] text-muted-foreground">
-      {tab.status === "loading" ? (
-        <Loader2 className="size-3 animate-spin text-primary" />
-      ) : (
-        <span className="relative flex size-1.5" aria-hidden="true">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
-          <span className="relative inline-flex size-1.5 rounded-full bg-emerald-500" />
-        </span>
-      )}
-      <span className="truncate">{host || (tab.url ? tab.url : "Blank tab")}</span>
-    </div>
-  );
-}
-
 export function SidePanel({
   sessionId,
   client,
@@ -444,6 +146,7 @@ export function SidePanel({
   onOpenExtensions,
   onOpenVoice,
 }: SidePanelProps) {
+  const mode = useBrowserPresentationStore((store) => store.state.runtime.mode);
   const { tabs } = useSessionPanelState(sessionId);
   const activeTab = useActivePanelTab(sessionId);
   const isBrowserAvailable = Boolean(getElectronBrowser());
@@ -652,6 +355,14 @@ export function SidePanel({
                 ))}
               </PanelTabList>
             </div>
+            {activeTab?.type === "browser" ? <>
+              <Button variant="ghost" size="icon-sm" aria-label={mode === "expanded" ? "Restore browser" : "Expand browser"}
+                data-testid="browser-expand" onClick={() => dispatchBrowserPresentation({ type: mode === "expanded" ? "user-restore-browser" : "user-expand-browser" })}>
+                {mode === "expanded" ? <Minimize2 /> : <Maximize2 />}
+              </Button>
+              <Button variant="ghost" size="icon-sm" aria-label="Peek browser" data-testid="browser-show-peek"
+                onClick={() => dispatchBrowserPresentation({ type: "user-open-browser" })}><PictureInPicture2 /></Button>
+            </> : null}
             {!activeTab ? <span className="sr-only">Panel destinations</span> : null}
             {activeTab && isBrowserAvailable ? (
               <Tooltip>
@@ -662,6 +373,7 @@ export function SidePanel({
                       size="icon-sm"
                       onClick={() => createTab()}
                       aria-label="New tab"
+                      data-testid="browser-new-tab"
                     >
                       <Plus />
                     </Button>
@@ -689,7 +401,7 @@ export function SidePanel({
           />
         ) : null}
         {activeTab?.type === "browser" ? (
-          <BrowserPanelContent tab={activeTab} onClose={onClose} />
+          <BrowserView sessionId={sessionId} tab={activeTab} onClose={onClose} />
         ) : activeTab?.type === "artifact" ? (
           <div className="min-h-0 flex-1 overflow-hidden">
             <ArtifactPanel

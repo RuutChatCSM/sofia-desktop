@@ -12,6 +12,7 @@ import { ReactSessionComposer } from "@/react-app/domains/session/surface/compos
 import { encodeComposerMentionValue, type ComposerMentionKind } from "@/react-app/domains/session/surface/composer/mention-encoding";
 import {
   createPastedTextChip,
+  createPastedTextFile,
   resolvePastedTextPlaceholders,
   type PastedTextChip,
 } from "@/react-app/domains/session/surface/composer/pasted-text";
@@ -184,6 +185,21 @@ export function NewTaskComposer(props: NewTaskComposerProps) {
     const pasted = createPastedTextChip(text);
     setPastedText((current) => [...current, pasted]);
     props.onDraftChange(`${props.draft}[pasted text ${pasted.label}]`);
+    if (pasted.inline) return;
+    // Too big to inline: the chip stays, and the content reaches the model as a
+    // file it can read rather than as an enormous inline blob.
+    const file = createPastedTextFile(pasted);
+    setAttachments((current) => [
+      ...current,
+      {
+        id: `att-${pasted.id}`,
+        name: file.name,
+        mimeType: file.type,
+        size: file.size,
+        kind: "file",
+        file,
+      },
+    ]);
   };
 
   const handleExpandPastedText = (id: string) => {

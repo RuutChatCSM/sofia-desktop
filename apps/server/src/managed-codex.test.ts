@@ -62,6 +62,8 @@ async function writeFakeCodex(root: string, options?: {
     "  } else if (msg.method === 'turn/start') {",
     "    const threadId = msg.params.threadId;",
     "    const turnId = 'turn-' + (++id);",
+    // Expose the wire input so tests can assert how user input is serialized.
+    "    send({ jsonrpc: '2.0', method: 'test/turnInput', params: { input: msg.params.input } });",
     "    send({ jsonrpc: '2.0', id: msg.id, result: { threadId, turnId } });",
     "    emitNotifications(threadId, turnId);",
     "  } else if (msg.method === 'thread/fork') {",
@@ -138,7 +140,7 @@ describe("ManagedCodexEngine", () => {
       await engine.initialize();
       const threadId = await engine.startThread({ cwd: root });
       expect(threadId).toMatch(/^thread-/);
-      expect(await engine.forkThread({ threadId, input: [{ text: "copy" }] })).toMatch(/^forked-/);
+      expect(await engine.forkThread({ threadId, lastTurnId: "turn-1" })).toMatch(/^forked-/);
       expect(await engine.steerTurn({ threadId, expectedTurnId: "turn-1", input: [{ text: "go" }] })).toMatch(/^steered-/);
       await expect(engine.resumeThread(threadId)).resolves.toBeTruthy();
       await expect(engine.archiveThread(threadId, true)).resolves.toBeTruthy();

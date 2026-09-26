@@ -1,0 +1,76 @@
+<!doctype html>
+<!--
+  Diagnostic page for the built-in browser viewport proof. Intentionally loud
+  rather than pretty: every fact the spec asserts is also rendered on screen, so
+  a failing screenshot explains itself.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sofia Browser Viewport Fixture</title>
+<style>
+  body { margin: 0; padding: 16px; background: #fff; color: #111;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  h1 { margin: 0 0 8px; font-size: 18px; }
+  dl { display: grid; grid-template-columns: max-content max-content; gap: 4px 16px; margin: 16px 0; }
+  dt { color: #555; }
+  dd { margin: 0; font-weight: 700; }
+  .flag { display: none; padding: 4px 8px; margin-inline-end: 8px; border-radius: 4px; font-weight: 700; }
+  #desktop { background: #dcfce7; }
+  #tablet { background: #fef3c7; }
+  #phone { background: #dbeafe; }
+  @media (min-width: 1200px) { #desktop { display: inline-block; } }
+  @media (max-width: 768px) { #tablet { display: inline-block; } }
+  @media (max-width: 480px) { #phone { display: inline-block; } }
+  .ruler { position: relative; height: 56px; margin-top: 32px; border-top: 1px solid #999; }
+  .tick { position: absolute; top: 0; height: 14px; border-left: 1px solid #999; padding-left: 4px; font-size: 10px; color: #555; }
+  .grid { position: fixed; inset: 0; pointer-events: none;
+    background-image: repeating-linear-gradient(to right, rgba(0,0,0,.07) 0 1px, transparent 1px 120px); }
+</style>
+</head>
+<body>
+<div class="grid" aria-hidden="true"></div>
+<h1>Sofia Browser Viewport Fixture</h1>
+<p>
+  <span id="desktop" class="flag">desktop &ge; 1200</span>
+  <span id="tablet" class="flag">tablet &le; 768</span>
+  <span id="phone" class="flag">phone &le; 480</span>
+</p>
+<dl>
+  <dt>innerWidth</dt><dd id="inner-width">?</dd>
+  <dt>innerHeight</dt><dd id="inner-height">?</dd>
+  <dt>devicePixelRatio</dt><dd id="dpr">?</dd>
+  <dt>outerWidth</dt><dd id="outer-width">?</dd>
+</dl>
+<div class="ruler" id="ruler"></div>
+<script>
+  const fields = {
+    innerWidth: document.getElementById("inner-width"),
+    innerHeight: document.getElementById("inner-height"),
+    dpr: document.getElementById("dpr"),
+    outerWidth: document.getElementById("outer-width"),
+  };
+  const ruler = document.getElementById("ruler");
+
+  for (let x = 0; x <= 2400; x += 120) {
+    const tick = document.createElement("span");
+    tick.className = "tick";
+    tick.style.left = x + "px";
+    tick.textContent = String(x);
+    ruler.appendChild(tick);
+  }
+
+  const write = () => {
+    fields.innerWidth.textContent = String(window.innerWidth);
+    fields.innerHeight.textContent = String(window.innerHeight);
+    fields.dpr.textContent = String(window.devicePixelRatio);
+    fields.outerWidth.textContent = String(window.outerWidth);
+    document.body.dataset.innerWidth = String(window.innerWidth);
+  };
+
+  write();
+  window.addEventListener("resize", write);
+  window.addEventListener("DOMContentLoaded", write);
+</script>
+</body>
+</html>

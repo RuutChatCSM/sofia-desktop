@@ -129,7 +129,7 @@ export function LandingHeroPrompt({ className, compact = false }: Props) {
         className="group cursor-pointer rounded-2xl bg-white p-5 shadow-[0_8px_24px_rgba(1,22,39,0.05)] transition-shadow hover:shadow-[0_10px_28px_rgba(1,22,39,0.08)]"
       >
         <div className="mb-2 text-[13px] text-[var(--lp-muted)]">
-          Already use an AI agent? Paste this prompt — it installs Sofia for you.
+          Ask your coding agent to help you set up Sofia.
         </div>
         <p className="text-[15px] leading-relaxed text-[#011627]">
           Install Sofia on my computer, set up my first workspace, and open it
@@ -146,7 +146,7 @@ export function LandingHeroPrompt({ className, compact = false }: Props) {
           <div className="flex min-w-0 items-center gap-2 text-[var(--lp-faint)]">
             <LandingAgentGlyphs />
             <span className="hidden text-xs text-[var(--lp-faint)] sm:inline">
-              Works with Claude Code, Cursor, Codex — any agent
+              For coding agents that can install apps on your computer
             </span>
           </div>
           {copyButton}
@@ -167,7 +167,7 @@ export function LandingHeroPrompt({ className, compact = false }: Props) {
                     strokeWidth={1.75}
                     aria-hidden="true"
                   />
-                  Copied — now paste it into Claude Code, Cursor, or ChatGPT:
+                  Copied — paste it into your coding agent to get started:
                 </div>
                 <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-2">
                   {steps.map((label, index) => (

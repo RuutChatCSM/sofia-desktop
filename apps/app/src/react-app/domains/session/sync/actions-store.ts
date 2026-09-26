@@ -33,6 +33,7 @@ import { addWorkspaceEngineCacheHint, safeStringify } from "../../../../app/util
 import { clearSessionDraft, saveSessionDraft } from "./draft-store";
 import { firstLineLocalFileParts } from "./prompt-file-parts";
 import { composerAttachmentToFilePart } from "./attachment-file-part";
+import { sanitizePromptText } from "@/lib/embedded-data-urls";
 import { appMentionInstruction } from "../surface/composer/app-mentions";
 
 type SessionModelConfig = {
@@ -139,7 +140,8 @@ export function createSessionActionsStore(options: {
 
   const buildPromptParts = async (draft: ComposerDraft): Promise<PartInput[]> => {
     const parts: PartInput[] = [];
-    const text = draft.resolvedText ?? draft.text;
+    // Send-time invariant: encoded binary never enters the prompt as text.
+    const text = sanitizePromptText(draft.resolvedText ?? draft.text);
     parts.push({ type: "text", text } as TextPartInput);
 
     const root = options.runtimeWorkspaceRoot().trim() || options.selectedWorkspaceRoot().trim();
@@ -477,7 +479,7 @@ export function createSessionActionsStore(options: {
       attachments: [] as ComposerAttachment[],
       text: fallbackText,
     };
-    const content = (resolvedDraft.resolvedText ?? resolvedDraft.text).trim();
+    const content = sanitizePromptText(resolvedDraft.resolvedText ?? resolvedDraft.text).trim();
     if (!content && !resolvedDraft.attachments.length) return;
 
     const workspaceId = options.selectedWorkspaceId().trim();

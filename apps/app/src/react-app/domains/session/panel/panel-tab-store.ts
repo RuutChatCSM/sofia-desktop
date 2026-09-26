@@ -2,13 +2,36 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
 import { isCollectibleArtifactTarget, type OpenTarget, type OpenTargetPreview } from "../artifacts/open-target";
+import {
+  createBrowserPanelTab,
+  isRecord,
+  isSameBrowserPanelTab,
+  mergeBrowserTabNavigation,
+  normalizeBrowserAnnotations,
+  normalizeBrowserInteractionMode,
+  normalizeBrowserScroll,
+  normalizeBrowserViewport,
+  normalizeBrowserZoom,
+} from "../../../../app/lib/browser-tab-state";
 
-export const PERSISTED_PANEL_TAB_STORE_KEY = "sofia:panel-tabs:v1";
+// v2 persists the durable, user-owned part of a browser tab (viewport, zoom,
+// interaction mode, annotations). Navigation and health stay with Electron and
+// agent leases are never persisted at all.
+export const PERSISTED_PANEL_TAB_STORE_KEY = "sofia:panel-tabs:v2";
+export const LEGACY_PANEL_TAB_STORE_KEY = "sofia:panel-tabs:v1";
 
 export type PanelTabType = "artifact" | "browser";
 
 export type { BrowserPanelTab } from "../../../../app/lib/desktop-types";
-import type { BrowserPanelTab } from "../../../../app/lib/desktop-types";
+import type {
+  BrowserInteractionMode,
+  BrowserPanelTab,
+  BrowserTabId,
+  BrowserTabPersistentState,
+  BrowserTabSyncState,
+  BrowserViewport,
+  BrowserZoom,
+} from "../../../../app/lib/desktop-types";
 
 export type ArtifactPanelTab = {
   id: string;
@@ -24,13 +47,13 @@ export type SessionPanelState = {
   activeTabId: string | null;
 };
 
-type PersistedPanelTabRef = {
-  id: string;
-  type: PanelTabType;
-};
+// Persistence stores the tab identity plus the user-owned slice only. Runtime
+// health lives in the same object in memory and cannot end up in storage,
+// because the writer below does not accept it.
+type PersistedBrowserTabState = BrowserTabId & BrowserTabPersistentState;
 
 type PersistedSessionPanelState = {
-  tabs: PersistedPanelTabRef[];
+  tabs: PersistedBrowserTabState[];
   activeTabId: string | null;
 };
 
@@ -45,7 +68,14 @@ export type PanelTabStore = {
   closeTab: (sessionId: string, tabId: string) => void;
   selectTab: (sessionId: string, tabId: string) => void;
   reorderTabs: (sessionId: string, tabIds: string[]) => void;
-  syncBrowserTabs: (sessionId: string, browserTabs: BrowserPanelTab[], activeBrowserTabId: string | null) => void;
+  syncBrowserTabs: (
+    sessionId: string,
+    browserTabs: BrowserTabSyncState[],
+    activeBrowserTabId: string | null,
+  ) => void;
+  setBrowserViewport: (sessionId: string, tabId: string, viewport: BrowserViewport) => void;
+  setBrowserZoom: (sessionId: string, tabId: string, zoom: BrowserZoom) => void;
+  setBrowserInteractionMode: (sessionId: string, tabId: string, mode: BrowserInteractionMode) => void;
   syncArtifactTargets: (
     sessionId: string,
     targets: Array<{ id: string; name: string; preview: OpenTargetPreview }>,
@@ -74,6 +104,41 @@ function updateSession(
       [sessionId]: session,
     },
   };
+}
+
+/**
+ * Field-level update for one browser tab. Panel bounds, page viewport, and zoom
+ * are separate user intents, so nothing here ever changes them together.
+ */
+function updateBrowserTab(
+  state: PanelTabStore,
+  sessionId: string,
+  tabId: string,
+  update: (tab: BrowserPanelTab) => BrowserPanelTab,
+): PanelTabStore | Partial<PanelTabStore> {
+  const session = getWritableSession(state, sessionId);
+  const index = session.tabs.findIndex((tab) => tab.id === tabId && tab.type === "browser");
+
+  if (index < 0) {
+    return state;
+  }
+
+  const tab = session.tabs[index];
+
+  if (tab.type !== "browser") {
+    return state;
+  }
+
+  const nextTab = update(tab);
+
+  if (isSameBrowserPanelTab(tab, nextTab)) {
+    return state;
+  }
+
+  const tabs = [...session.tabs];
+  tabs[index] = nextTab;
+
+  return updateSession(state, sessionId, { ...session, tabs });
 }
 
 function reconcileOpenArtifactTabs(
@@ -142,14 +207,7 @@ function isSameTab(left: PanelTab, right: PanelTab) {
   }
 
   if (left.type === "browser" && right.type === "browser") {
-    return (
-      left.label === right.label &&
-      left.url === right.url &&
-      left.favicon === right.favicon &&
-      left.status === right.status &&
-      left.canGoBack === right.canGoBack &&
-      left.canGoForward === right.canGoForward
-    );
+    return isSameBrowserPanelTab(left, right);
   }
 
   return false;
@@ -182,15 +240,13 @@ function mergePersistedSessions(
   for (const [sessionId, session] of Object.entries(persisted.sessions)) {
     const tabs = session.tabs
       .filter(({ type }) => type === "browser")
-      .map(({ id }): PanelTab => ({
-        id,
-        type: "browser",
-        label: "New tab",
-        url: "",
-        favicon: null,
-        status: "ready",
-        canGoBack: false,
-        canGoForward: false,
+      .map((tab): PanelTab => ({
+        ...createBrowserPanelTab(tab.id),
+        viewport: normalizeBrowserViewport(tab.viewport),
+        zoom: normalizeBrowserZoom(tab.zoom),
+        interactionMode: normalizeBrowserInteractionMode(tab.interactionMode),
+        annotations: normalizeBrowserAnnotations(tab.annotations),
+        scroll: normalizeBrowserScroll(tab.scroll),
       }));
 
     sessions[sessionId] = {
@@ -204,6 +260,83 @@ function mergePersistedSessions(
     sessions,
   };
 }
+
+/**
+ * The durable record for one browser tab. The return type is identity plus the
+ * user-owned slice, and the fields are listed explicitly, so a newly added
+ * navigation or health field can never reach storage by accident.
+ */
+function toPersistedBrowserTabState(tab: BrowserPanelTab): PersistedBrowserTabState {
+  return {
+    id: tab.id,
+    type: "browser",
+    viewport: tab.viewport,
+    zoom: tab.zoom,
+    interactionMode: tab.interactionMode,
+    annotations: tab.annotations,
+    scroll: tab.scroll,
+  };
+}
+
+function isLegacyBrowserTabRef(value: unknown): value is { id: string; type: "browser" } {
+  return isRecord(value) && typeof value.id === "string" && value.type === "browser";
+}
+
+/**
+ * v1 persisted browser tabs as bare `{ id, type }` refs. Carry the open tabs
+ * forward into v2 rather than dropping them on upgrade.
+ */
+export function migrateLegacyPanelTabSessions(legacyValue: unknown): PersistedPanelTabStore {
+  const sessions: Record<string, PersistedSessionPanelState> = {};
+  const persisted = isRecord(legacyValue) && isRecord(legacyValue.state)
+    ? legacyValue.state
+    : legacyValue;
+
+  if (!isRecord(persisted) || !isRecord(persisted.sessions)) {
+    return { sessions };
+  }
+
+  for (const [sessionId, session] of Object.entries(persisted.sessions)) {
+    if (!isRecord(session) || !Array.isArray(session.tabs)) {
+      continue;
+    }
+
+    const tabs = session.tabs
+      .filter(isLegacyBrowserTabRef)
+      .map((tab) => toPersistedBrowserTabState(createBrowserPanelTab(tab.id)));
+
+    sessions[sessionId] = {
+      tabs,
+      activeTabId: resolveActiveTabId(tabs, typeof session.activeTabId === "string" ? session.activeTabId : null),
+    };
+  }
+
+  return { sessions };
+}
+
+function bootstrapLegacyPanelTabStorage() {
+  if (typeof localStorage === "undefined" || localStorage.getItem(PERSISTED_PANEL_TAB_STORE_KEY)) {
+    return;
+  }
+
+  const legacy = localStorage.getItem(LEGACY_PANEL_TAB_STORE_KEY);
+
+  if (!legacy) {
+    return;
+  }
+
+  try {
+    const migrated = migrateLegacyPanelTabSessions(JSON.parse(legacy));
+    // zustand's createJSONStorage envelope, which is what the store rehydrates.
+    localStorage.setItem(PERSISTED_PANEL_TAB_STORE_KEY, JSON.stringify({ state: migrated, version: 0 }));
+  } catch {
+    // A corrupt legacy blob must not block boot; the v1 key is dropped either way.
+  }
+
+  localStorage.removeItem(LEGACY_PANEL_TAB_STORE_KEY);
+}
+
+bootstrapLegacyPanelTabStorage();
 
 export const usePanelTabStore = create<PanelTabStore>()(
   persist(
@@ -286,15 +419,20 @@ export const usePanelTabStore = create<PanelTabStore>()(
             continue;
           }
 
-          const browserTab = browserTabsById.get(tab.id);
-          if (browserTab) {
-            mergedTabs.push(browserTab);
-            browserTabsById.delete(tab.id);
+          const navigation = browserTabsById.get(tab.id);
+          if (!navigation) {
+            // Electron closed this tab; keep the rest untouched.
+            continue;
           }
+
+          // Electron owns navigation and health. Viewport, zoom, annotations,
+          // and interaction mode are the user's and survive every sync.
+          mergedTabs.push(mergeBrowserTabNavigation(tab, navigation));
+          browserTabsById.delete(tab.id);
         }
 
-        for (const browserTab of browserTabsById.values()) {
-          mergedTabs.push(browserTab);
+        for (const navigation of browserTabsById.values()) {
+          mergedTabs.push(mergeBrowserTabNavigation(createBrowserPanelTab(navigation.id), navigation));
         }
 
         const currentActiveTab = session.tabs.find((tab) => tab.id === session.activeTabId);
@@ -314,6 +452,15 @@ export const usePanelTabStore = create<PanelTabStore>()(
           activeTabId,
         });
       }),
+      setBrowserViewport: (sessionId, tabId, viewport) => set((state) => (
+        updateBrowserTab(state, sessionId, tabId, (tab) => ({ ...tab, viewport }))
+      )),
+      setBrowserZoom: (sessionId, tabId, zoom) => set((state) => (
+        updateBrowserTab(state, sessionId, tabId, (tab) => ({ ...tab, zoom }))
+      )),
+      setBrowserInteractionMode: (sessionId, tabId, mode) => set((state) => (
+        updateBrowserTab(state, sessionId, tabId, (tab) => ({ ...tab, interactionMode: mode }))
+      )),
       syncArtifactTargets: (sessionId, targets) => set((state) => {
         const session = getWritableSession(state, sessionId);
         const nextSession = reconcileOpenArtifactTabs(session, targets);
@@ -386,7 +533,7 @@ export const usePanelTabStore = create<PanelTabStore>()(
           Object.entries(state.sessions).map(([sessionId, session]) => {
             const tabs = session.tabs
               .filter((tab) => tab.type === "browser")
-              .map(({ id, type }) => ({ id, type }));
+              .map(toPersistedBrowserTabState);
 
             return [
               sessionId,

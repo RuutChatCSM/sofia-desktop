@@ -1,16 +1,21 @@
+import { ArrowDown } from "lucide-react";
 import { memo, useCallback } from "react";
 
+import { shouldShowJumpToLatest } from "./scroll-intent";
 import {
-  selectSessionIsStickyBottom,
+  selectSessionIsFollowing,
+  selectSessionTailVisible,
   selectSessionTopClippedMessageId,
   useSessionScrollStore,
+  useSessionTailStore,
 } from "./scroll-store";
 
 function useSessionScrollOverlayState(sessionId: string) {
-  const isAtBottom = useSessionScrollStore((state) => selectSessionIsStickyBottom(state.sessions, sessionId));
+  const following = useSessionScrollStore((state) => selectSessionIsFollowing(state.sessions, sessionId));
   const topClippedMessageId = useSessionScrollStore((state) => selectSessionTopClippedMessageId(state.sessions, sessionId));
+  const tailVisible = useSessionTailStore((state) => selectSessionTailVisible(state.bySession, sessionId));
 
-  return { isAtBottom, topClippedMessageId };
+  return { following, topClippedMessageId, tailVisible };
 }
 
 type JumpToStartButtonProps = {
@@ -47,12 +52,18 @@ const JumpToLatestButton = memo(function JumpToLatestButton({
   }, [onJumpToLatest]);
 
   return (
+    // A compact round affordance: a textual pill competes with everything else
+    // in the transcript for horizontal attention. The label lives in the
+    // tooltip/aria-label.
     <button
       type="button"
-      className="rounded-full px-3 py-1.5 text-xs text-dls-text transition-colors hover:bg-dls-hover"
+      title="Jump to latest"
+      aria-label="Jump to latest"
+      data-jump-to-latest
+      className="flex size-8 items-center justify-center rounded-full border border-dls-border bg-dls-canvas/95 text-dls-text shadow-(--dls-card-shadow) backdrop-blur-md transition-colors hover:bg-dls-hover"
       onClick={handleClick}
     >
-      Jump to latest
+      <ArrowDown className="size-4" aria-hidden="true" />
     </button>
   );
 });
@@ -70,9 +81,11 @@ export const SessionScrollOverlay = memo(function SessionScrollOverlay({
   onJumpToLatest,
   onJumpToStartOfMessage,
 }: SessionScrollOverlayProps) {
-  const { isAtBottom, topClippedMessageId } = useSessionScrollOverlayState(sessionId);
+  const { following, topClippedMessageId, tailVisible } = useSessionScrollOverlayState(sessionId);
   const showJumpToStart = !isStreaming && Boolean(topClippedMessageId);
-  const showJumpToLatest = !isAtBottom;
+  // Intent + real visibility of the tail, never a distance threshold: growth
+  // while following must not flash the affordance.
+  const showJumpToLatest = shouldShowJumpToLatest({ following, tailVisible });
 
   if (!showJumpToStart && !showJumpToLatest) {
     return null;
@@ -80,13 +93,13 @@ export const SessionScrollOverlay = memo(function SessionScrollOverlay({
 
   return (
     <div className="pointer-events-none absolute bottom-2 left-1/2 z-30 flex -translate-x-1/2 justify-center">
-      <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-dls-border bg-dls-canvas/95 p-1 shadow-(--dls-card-shadow) backdrop-blur-md">
+      <div className="pointer-events-auto flex items-center gap-1">
         {showJumpToStart ? (
-          <JumpToStartButton onJumpToStartOfMessage={onJumpToStartOfMessage} />
+          <div className="rounded-full border border-dls-border bg-dls-canvas/95 p-1 shadow-(--dls-card-shadow) backdrop-blur-md">
+            <JumpToStartButton onJumpToStartOfMessage={onJumpToStartOfMessage} />
+          </div>
         ) : null}
-        {showJumpToLatest ? (
-          <JumpToLatestButton onJumpToLatest={onJumpToLatest} />
-        ) : null}
+        {showJumpToLatest ? <JumpToLatestButton onJumpToLatest={onJumpToLatest} /> : null}
       </div>
     </div>
   );

@@ -1499,11 +1499,23 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
     }
   }
 
+  /**
+   * Mirror a UI-entered key into the engine's credential store so the bundled
+   * engine reads it at spawn via its provider `env_key`.
+   *
+   * The provider being connected is, by definition, not in the connected list
+   * yet — so its `env` is usually empty here. Returning early in that case is
+   * what made every key pasted into the app disappear. Fall back to the
+   * engine's own `<ID>_API_KEY` derivation (the same rule `/connect` uses), and
+   * let the server reconcile against the shared catalog.
+   */
   async function mirrorCodexAuthKey(providerId: string, apiKey: string) {
     const provider = getProviderAuthProviders().find((entry) => entry.id === providerId);
     const envNames = provider?.env ?? [];
-    const envKey = envNames.find((name) => !/^SOFIA_/.test(name)) ?? envNames[0];
-    if (!envKey) return;
+    const envKey =
+      envNames.find((name) => !/^SOFIA_/.test(name)) ??
+      envNames[0] ??
+      `${providerId.trim().toUpperCase().replace(/-/g, "_")}_API_KEY`;
     const { sofiaClient, sofiaWorkspaceId } = await resolveSofiaConfigTarget("write");
     if (!sofiaClient || !sofiaWorkspaceId) return;
     await sofiaClient.setCodexAuth(sofiaWorkspaceId, providerId, envKey, apiKey);

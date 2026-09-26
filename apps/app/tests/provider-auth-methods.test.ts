@@ -37,17 +37,33 @@ function installWindow(options: {
   });
 }
 
-function installProviderAuthFetch() {
+/**
+ * Mirrors the shape the server derives from the shared connectable catalog
+ * (`providerAuthMethodsById()`): a method list per provider, covering every
+ * connectable provider rather than a hardcoded OpenAI-only object.
+ */
+function installProviderAuthFetch(overrides?: Record<string, Array<{ type: string; label: string }>>) {
   Object.defineProperty(globalThis, "fetch", {
     configurable: true,
     value: async () =>
       new Response(
-        JSON.stringify({
-          openai: [
-            { type: "oauth", label: "Sign in with ChatGPT" },
-            { type: "oauth", label: "Headless device flow" },
-          ],
-        }),
+        JSON.stringify(
+          overrides ?? {
+            openai: [
+              { type: "oauth", label: "Sign in with ChatGPT" },
+              { type: "oauth", label: "Headless device flow" },
+              { type: "api", label: "API key" },
+            ],
+            anthropic: [{ type: "api", label: "API key" }],
+            openrouter: [{ type: "api", label: "API key" }],
+            groq: [{ type: "api", label: "API key" }],
+            deepseek: [{ type: "api", label: "API key" }],
+            // Catalog-only providers the engine's env-var list never mentions.
+            neuralwatt: [{ type: "api", label: "API key" }],
+            "qiniu-ai": [{ type: "api", label: "API key" }],
+            "umans-ai-coding-plan": [{ type: "api", label: "API key" }],
+          },
+        ),
         { status: 200, headers: { "content-type": "application/json" } },
       ),
   });
@@ -115,7 +131,7 @@ describe("OpenAI provider auth methods", () => {
 
     expect(store.getSnapshot().providerAuthMethods.openai).toEqual([
       { type: "oauth", label: "Sign in with ChatGPT", methodIndex: 0 },
-      { type: "api", label: "API key" },
+      { type: "api", label: "API key", methodIndex: 2 },
     ]);
   });
 
@@ -131,7 +147,7 @@ describe("OpenAI provider auth methods", () => {
 
     expect(store.getSnapshot().providerAuthMethods.openai).toEqual([
       { type: "oauth", label: "Headless device flow", methodIndex: 1 },
-      { type: "api", label: "API key" },
+      { type: "api", label: "API key", methodIndex: 2 },
     ]);
   });
 
@@ -143,7 +159,84 @@ describe("OpenAI provider auth methods", () => {
     await store.openProviderAuthModal();
 
     expect(store.getSnapshot().providerAuthMethods.openai).toEqual([
-      { type: "api", label: "API key" },
+      { type: "api", label: "API key", methodIndex: 2 },
     ]);
+  });
+});
+
+describe("non-OpenAI provider auth methods", () => {
+  test("exposes every provider the engine advertises", async () => {
+    installWindow({
+      origin: "http://localhost:3000",
+      electronInfo: { baseUrl: "http://localhost:8787", ownerToken: "owner-token" },
+    });
+    installProviderAuthFetch();
+    const store = createTestStore("local");
+
+    await store.openProviderAuthModal();
+
+    const methods = store.getSnapshot().providerAuthMethods;
+    for (const id of ["anthropic", "openrouter", "groq", "deepseek"]) {
+      expect(methods[id]).toEqual([{ type: "api", label: "API key", methodIndex: 0 }]);
+    }
+  });
+
+  test("never offers oauth for providers the engine cannot complete", async () => {
+    installWindow({
+      origin: "http://localhost:3000",
+      electronInfo: { baseUrl: "http://localhost:8787", ownerToken: "owner-token" },
+    });
+    installProviderAuthFetch();
+    const store = createTestStore("local");
+
+    await store.openProviderAuthModal();
+
+    const methods = store.getSnapshot().providerAuthMethods;
+    for (const [id, providerMethods] of Object.entries(methods)) {
+      if (id === "openai") continue;
+      expect(providerMethods.some((method) => method.type === "oauth")).toBe(false);
+    }
+  });
+});
+
+describe("catalog providers in the connect modal", () => {
+  test("surfaces providers that are not yet connected", async () => {
+    installWindow({
+      origin: "http://localhost:3000",
+      electronInfo: { baseUrl: "http://localhost:8787", ownerToken: "owner-token" },
+    });
+    installProviderAuthFetch();
+    const store = createTestStore("local");
+
+    await store.openProviderAuthModal();
+
+    // A provider only in the models.dev catalog must still be connectable, even
+    // though it is not in the connected provider list yet.
+    const methods = store.getSnapshot().providerAuthMethods;
+    expect(methods.neuralwatt).toEqual([{ type: "api", label: "API key", methodIndex: 0 }]);
+    expect(methods["qiniu-ai"]).toEqual([{ type: "api", label: "API key", methodIndex: 0 }]);
+  });
+
+  test("renders a large catalog without collapsing entries", async () => {
+    installWindow({
+      origin: "http://localhost:3000",
+      electronInfo: { baseUrl: "http://localhost:8787", ownerToken: "owner-token" },
+    });
+    const many: Record<string, Array<{ type: string; label: string }>> = {
+      openai: [{ type: "oauth", label: "Sign in with ChatGPT" }, { type: "api", label: "API key" }],
+    };
+    for (let index = 0; index < 150; index += 1) {
+      many[`gateway-${index}`] = [{ type: "api", label: "API key" }];
+    }
+    installProviderAuthFetch(many);
+    const store = createTestStore("local");
+
+    await store.openProviderAuthModal();
+
+    const methods = store.getSnapshot().providerAuthMethods;
+    // The full models.dev catalog, not the fixed 14 the app used to offer.
+    expect(Object.keys(methods).length).toBeGreaterThan(150);
+    expect(methods["gateway-42"]).toEqual([{ type: "api", label: "API key", methodIndex: 0 }]);
+    expect(methods["umans-ai-coding-plan"]).toBeUndefined();
   });
 });

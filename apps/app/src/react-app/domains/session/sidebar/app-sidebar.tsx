@@ -135,12 +135,15 @@ import {
   useSessionManagementStore,
   usePinnedSessionIds,
   useUnreadSessionIds,
+  useNeedsAttentionSessionIds,
   useSessionOrder,
   useWorkspaceGroups,
   type SessionGroupDefinition,
 } from "./session-management-store";
 import { cn } from "@/lib/utils";
 import { getSessionActivityStatusLabel, type SessionActivityStatus } from "../status/session-activity-store";
+import { activityTitleForStatus, currentActivity } from "../activity";
+import { useSessionActivities } from "../use-session-activities";
 import { SessionDotMatrixLoader } from "./session-dot-matrix-loader";
 import {
   SIDEBAR_ROW_LANE,
@@ -204,13 +207,15 @@ interface SessionOutcomeIndicatorProps {
   status?: string;
   isActiveWork: boolean;
   isUnread: boolean;
+  /** A background process failed; needs the user even though the turn is idle. */
+  needsAttention?: boolean;
 }
 
 /** Right-edge outcome: orange = needs you, green = unread result, none = read/idle. */
-function SessionOutcomeIndicator({ className, status, isActiveWork, isUnread }: SessionOutcomeIndicatorProps) {
+function SessionOutcomeIndicator({ className, status, isActiveWork, isUnread, needsAttention = false }: SessionOutcomeIndicatorProps) {
   if (isActiveWork) return null;
 
-  if (isNeedsAttentionSessionStatus(status)) {
+  if (needsAttention || isNeedsAttentionSessionStatus(status)) {
     const title = isSessionActivityStatus(status)
       ? getSessionActivityStatusLabel(status)
       : t("workspace_list.session_needs_attention");
@@ -235,6 +240,36 @@ function SessionOutcomeIndicator({ className, status, isActiveWork, isUnread }: 
       title={t("workspace_list.session_unread")}
       aria-label={t("workspace_list.session_unread")}
     />
+  );
+}
+
+/**
+ * Inline in the row: a quiet generic dot for background work — never a
+ * terminal/process glyph. The semantic title lives in the tooltip; the dot
+ * only says "something is still running here" ("!" when it needs the user).
+ */
+function SessionActivityBadge({ sessionId }: { sessionId: string }) {
+  const activities = useSessionActivities(sessionId);
+  const visible = activities.filter(
+    (activity) => activity.status === "running" || activity.status === "failed",
+  );
+  if (visible.length === 0) return null;
+  const current = currentActivity(activities) ?? visible[0];
+  const label = activityTitleForStatus(current);
+  const title = visible.length > 1 ? `${label} +${visible.length - 1}` : label;
+  const failed = visible.some((activity) => activity.status === "failed");
+  return (
+    <span
+      data-session-activity-indicator={failed ? "failed" : "running"}
+      className={cn(
+        "inline-flex size-3 shrink-0 items-center justify-center text-[10px] font-semibold leading-none",
+        failed ? "text-amber-11" : "text-emerald-11",
+      )}
+      title={title}
+      aria-label={title}
+    >
+      {failed ? "!" : <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />}
+    </span>
   );
 }
 
@@ -2299,6 +2334,7 @@ function SessionMenuItem({
   const [isTitleHovered, setIsTitleHovered] = React.useState(false);
   const [isTitleFocused, setIsTitleFocused] = React.useState(false);
   const unreadIds = useUnreadSessionIds();
+  const needsAttentionIds = useNeedsAttentionSessionIds();
   const isSelected = ctx.selectedSessionId === session.id;
   const displayTitle = getDisplaySessionTitle(session.title);
   const itemTitle = workspaceName ? `${displayTitle} — ${workspaceName}` : displayTitle;
@@ -2307,6 +2343,7 @@ function SessionMenuItem({
   const sessionActivityStatus = ctx.sessionStatusById?.[session.id];
   const resolvedActiveWork = isActiveWorkSessionStatus(sessionActivityStatus);
   const isUnread = unreadIds.has(session.id) && !isSelected;
+  const needsAttention = needsAttentionIds.has(session.id);
   const isArchived = isSessionArchived(session);
   const relativeTime = formatSessionRelativeTime(session.time?.updated ?? session.time?.created);
   const shortcutDigit = ctx.sessionNumberShortcutByTarget.get(
@@ -2318,6 +2355,7 @@ function SessionMenuItem({
 
   const openSession = () => {
     useSessionManagementStore.getState().clearUnread(session.id);
+    useSessionManagementStore.getState().clearNeedsAttention(session.id);
     ctx.onOpenSession(workspaceId, session.id);
   };
 
@@ -2376,6 +2414,7 @@ function SessionMenuItem({
         status={sessionActivityStatus}
         isActiveWork={resolvedActiveWork}
         isUnread={isUnread}
+        needsAttention={needsAttention}
       />
       <SessionHoverQuickActions
         sessionId={session.id}
@@ -2421,6 +2460,7 @@ function SessionMenuItem({
               >
                 {leading}
                 <SessionTitle intent={titleIntent} title={displayTitle} tooltip={itemTitle} />
+                <SessionActivityBadge sessionId={session.id} />
                 <SessionNumberShortcutSlot digit={shortcutDigit} />
                 <span className="flex size-6 shrink-0 items-center justify-center">
                   <ChevronRight className="size-4 text-muted-foreground transition-transform duration-200 group-data-open/session-collapsible:rotate-90 hover:text-foreground" />
@@ -2460,6 +2500,7 @@ function SessionMenuItem({
         >
           {leading}
           <SessionTitle intent={titleIntent} title={displayTitle} tooltip={itemTitle} />
+          <SessionActivityBadge sessionId={session.id} />
           <SessionNumberShortcutSlot digit={shortcutDigit} />
         </SidebarMenuSubButton>
       </SessionContextMenu>

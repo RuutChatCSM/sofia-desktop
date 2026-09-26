@@ -45,11 +45,23 @@ export function codexItemToToolPart(item: Record<string, unknown>, sessionId: st
   const failed = status === "failed" || status === "declined" || item.success === false || Boolean(item.error);
   const start = Date.now();
 
-  const input: Record<string, unknown> = isCommand
-    ? { command: item.command }
-    : isEdit
-      ? { filePath: str(item.path) }
-      : { arguments: safeJson(item.arguments) };
+  // Unified-exec startup is a long-running background process, not a one-shot
+  // shell call. Keep it distinct so the transcript says "started a background
+  // process" instead of flattening it into an ordinary `$ command` card.
+  const source = str(item.source);
+  const isBackgroundProcess = isCommand && source === "unifiedExecStartup";
+  const resolvedToolName = isBackgroundProcess ? "background_process" : toolName;
+
+  // The agent/orchestrator's own words for the operation, when it supplies
+  // them; the command is only the fallback title.
+  const description = str(item.description).trim();
+  const input: Record<string, unknown> = isBackgroundProcess
+    ? { command: item.command, processId: item.processId, cwd: item.cwd, ...(description ? { description } : {}) }
+    : isCommand
+      ? { command: item.command }
+      : isEdit
+        ? { filePath: str(item.path) }
+        : { arguments: safeJson(item.arguments) };
 
   const output = str(item.aggregatedOutput) || (typeof item.result === "string" ? item.result : item.result != null ? JSON.stringify(item.result) : "");
   const state: "output-available" | "input-streaming" | "output-error" =
@@ -57,11 +69,11 @@ export function codexItemToToolPart(item: Record<string, unknown>, sessionId: st
 
   const part: Record<string, unknown> = {
     type: "dynamic-tool",
-    toolName,
+    toolName: resolvedToolName,
     toolCallId: id,
     state,
     input,
-    callProviderMetadata: { engine: { partId: id, codexItemType: type } },
+    callProviderMetadata: { engine: { partId: id, codexItemType: type, codexItemSource: source } },
   };
   if (completed && !failed) part.output = output;
   if (failed) part.errorText = str(item.error) || "tool failed";

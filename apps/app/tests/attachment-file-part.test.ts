@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { ComposerAttachment } from "../src/app/types";
+import { codexPromptFromParts } from "../src/react-app/domains/session/sync/codex-prompt-parts";
 import {
   buildChatAttachmentInboxPath,
   composerAttachmentsToWorkspaceFileParts,
@@ -74,14 +75,20 @@ function uploadRecorder(workspaceId: string) {
   return { endpoint, calls };
 }
 
-function textPart(parts: Awaited<ReturnType<typeof composerAttachmentsToWorkspaceFileParts>>) {
-  const part = parts[0];
-  if (!part || part.type !== "text") throw new Error("Expected first attachment part to be a text note");
-  return part;
+function expectNoTextPart(parts: Awaited<ReturnType<typeof composerAttachmentsToWorkspaceFileParts>>) {
+  expect(parts.filter((part) => part.type === "text")).toEqual([]);
 }
 
-function textPartText(parts: Awaited<ReturnType<typeof composerAttachmentsToWorkspaceFileParts>>) {
-  return textPart(parts).text;
+/** The workspace copy path is attachment metadata, never prompt prose. */
+function workerPathOf(
+  parts: Awaited<ReturnType<typeof composerAttachmentsToWorkspaceFileParts>>,
+  index: number,
+) {
+  const part = parts[index];
+  if (!part || part.type !== "file") throw new Error(`Expected attachment part ${index} to be a file`);
+  const source = part.source;
+  if (!source || source.type !== "file") throw new Error(`Expected attachment part ${index} to carry a file source`);
+  return source.path;
 }
 
 function filePartUrl(parts: Awaited<ReturnType<typeof composerAttachmentsToWorkspaceFileParts>>, index: number) {
@@ -318,7 +325,7 @@ describe("composer attachment file parts", () => {
     expect(basename).not.toContain("�");
   });
 
-  test("uploads exact bytes to the endpoint workspace id and exposes a worker file URL plus path note", async () => {
+  test("uploads exact bytes to the endpoint workspace id and carries the copy path as part metadata", async () => {
     const { endpoint, calls } = uploadRecorder("server-workspace-42");
     const file = new File([PDF_BYTES], "image-only scan.pdf", { type: "application/pdf" });
 
@@ -336,22 +343,19 @@ describe("composer attachment file parts", () => {
       filename: "image-only scan.pdf",
       bytes: Array.from(PDF_BYTES),
     }]);
-    expect(textPart(parts)).toMatchObject({
-      type: "text",
-      synthetic: true,
-    });
-    expect(textPartText(parts).startsWith("Attached files were copied")).toBe(true);
-    expect(textPartText(parts)).toContain(".sofia/sofia/inbox/chat-attachments/ses_abc/nonce-a-image-only scan.pdf");
-    expect(textPartText(parts)).toContain("Read/Bash/MCP/Docling");
-    expect(filePartUrl(parts, 1)).toBe("file:///workspaces/Worker%20Root/.sofia/sofia/inbox/chat-attachments/ses_abc/nonce-a-image-only%20scan.pdf");
-    expect(parts[1]).toMatchObject({
+    // No "Attached files were copied into this worker workspace…" text part: the
+    // copied path is metadata on the file part instead.
+    expectNoTextPart(parts);
+    expect(workerPathOf(parts, 0)).toBe(".sofia/sofia/inbox/chat-attachments/ses_abc/nonce-a-image-only scan.pdf");
+    expect(filePartUrl(parts, 0)).toBe("file:///workspaces/Worker%20Root/.sofia/sofia/inbox/chat-attachments/ses_abc/nonce-a-image-only%20scan.pdf");
+    expect(parts[0]).toMatchObject({
       type: "file",
       filename: "image-only scan.pdf",
       mime: "application/pdf",
     });
   });
 
-  test("workspace image attachments use displayable data URLs while keeping a synthetic path note for tools", async () => {
+  test("workspace image attachments use displayable data URLs while keeping the copy path as metadata", async () => {
     const { endpoint, calls } = uploadRecorder("server-workspace-42");
     const file = new File([JPEG_BYTES], "shot.png", { type: "image/png" });
 
@@ -369,12 +373,11 @@ describe("composer attachment file parts", () => {
       filename: "shot.png",
       bytes: Array.from(JPEG_BYTES),
     }]);
-    expect(textPart(parts)).toMatchObject({ type: "text", synthetic: true });
-    expect(textPartText(parts)).toContain(".sofia/sofia/inbox/chat-attachments/ses_img/nonce-img-shot.png");
-    expect(textPartText(parts)).toContain("file:///workspaces/Worker%20Root/.sofia/sofia/inbox/chat-attachments/ses_img/nonce-img-shot.png");
-    expect(filePartUrl(parts, 1).startsWith("data:image/png;base64,")).toBe(true);
-    expect(Array.from(decodedDataUrlBytes(filePartUrl(parts, 1)))).toEqual(Array.from(JPEG_BYTES));
-    expect(parts[1]).toMatchObject({
+    expectNoTextPart(parts);
+    expect(workerPathOf(parts, 0)).toBe(".sofia/sofia/inbox/chat-attachments/ses_img/nonce-img-shot.png");
+    expect(filePartUrl(parts, 0).startsWith("data:image/png;base64,")).toBe(true);
+    expect(Array.from(decodedDataUrlBytes(filePartUrl(parts, 0)))).toEqual(Array.from(JPEG_BYTES));
+    expect(parts[0]).toMatchObject({
       type: "file",
       filename: "shot.png",
       mime: "image/png",
@@ -394,8 +397,8 @@ describe("composer attachment file parts", () => {
     });
 
     expect(calls).toHaveLength(1);
-    expect(filePartUrl(parts, 1)).toBe("file:///workspaces/Worker%20Root/.sofia/sofia/inbox/chat-attachments/ses_xml/nonce-xml-sitemap.xml");
-    expect(parts[1]).toMatchObject({
+    expect(filePartUrl(parts, 0)).toBe("file:///workspaces/Worker%20Root/.sofia/sofia/inbox/chat-attachments/ses_xml/nonce-xml-sitemap.xml");
+    expect(parts[0]).toMatchObject({
       type: "file",
       filename: "sitemap.xml",
       mime: "text/plain",
@@ -420,13 +423,12 @@ describe("composer attachment file parts", () => {
       filename: "recording.zip",
       bytes: Array.from(PPTX_BYTES),
     }]);
-    expect(textPart(parts)).toMatchObject({ type: "text", synthetic: true });
-    expect(textPartText(parts)).toContain(".sofia/sofia/inbox/chat-attachments/ses_bin/nonce-bin-recording.zip");
-    expect(textPartText(parts)).toContain("Read/Bash/MCP/Docling");
+    expectNoTextPart(parts);
+    expect(workerPathOf(parts, 0)).toBe(".sofia/sofia/inbox/chat-attachments/ses_bin/nonce-bin-recording.zip");
     // text/plain file parts never reach the provider (engine expands them
     // through the Read tool), so binaries keep a transcript badge safely.
-    expect(filePartUrl(parts, 1)).toBe("file:///workspaces/Worker%20Root/.sofia/sofia/inbox/chat-attachments/ses_bin/nonce-bin-recording.zip");
-    expect(parts[1]).toMatchObject({
+    expect(filePartUrl(parts, 0)).toBe("file:///workspaces/Worker%20Root/.sofia/sofia/inbox/chat-attachments/ses_bin/nonce-bin-recording.zip");
+    expect(parts[0]).toMatchObject({
       type: "file",
       filename: "recording.zip",
       mime: "text/plain",
@@ -456,8 +458,45 @@ describe("composer attachment file parts", () => {
       "chat-attachments/ses_dupes/nonce-b-scan.pdf",
     ]);
     expect(new Set(calls.map((call) => call.path)).size).toBe(2);
-    expect(filePartUrl(parts, 1)).toBe("file:///C:/Users/Ada%20Lovelace/%E5%B7%A5%E4%BD%9C%E5%8C%BA/.sofia/sofia/inbox/chat-attachments/ses_dupes/nonce-a-scan.pdf");
-    expect(filePartUrl(parts, 2)).toBe("file:///C:/Users/Ada%20Lovelace/%E5%B7%A5%E4%BD%9C%E5%8C%BA/.sofia/sofia/inbox/chat-attachments/ses_dupes/nonce-b-scan.pdf");
+    expect(filePartUrl(parts, 0)).toBe("file:///C:/Users/Ada%20Lovelace/%E5%B7%A5%E4%BD%9C%E5%8C%BA/.sofia/sofia/inbox/chat-attachments/ses_dupes/nonce-a-scan.pdf");
+    expect(filePartUrl(parts, 1)).toBe("file:///C:/Users/Ada%20Lovelace/%E5%B7%A5%E4%BD%9C%E5%8C%BA/.sofia/sofia/inbox/chat-attachments/ses_dupes/nonce-b-scan.pdf");
+  });
+
+  test("a pasted image's outgoing prompt carries the picture, not the plumbing", async () => {
+    const { endpoint, calls } = uploadRecorder("server-workspace-42");
+    const file = new File([JPEG_BYTES], "shot.png", { type: "image/png" });
+
+    const attachmentParts = await composerAttachmentsToWorkspaceFileParts({
+      attachments: [attachmentFor(file)],
+      endpoint,
+      sessionId: "ses_paste",
+      workspaceRoot: "/workspaces/Worker Root",
+      createId: () => "nonce-paste",
+    });
+
+    // Exactly what the codex send path composes: the user's own words plus the
+    // structured attachment parts.
+    const composed = codexPromptFromParts([
+      { type: "text", text: "what is in this shot?" },
+      ...attachmentParts,
+    ]);
+
+    // The bytes were copied for tools...
+    expect(calls).toHaveLength(1);
+    expect(workerPathOf(attachmentParts, 0)).toContain("chat-attachments/ses_paste/nonce-paste-shot.png");
+
+    // ...the model still receives the image itself...
+    expect(composed.images).toHaveLength(1);
+    expect(composed.images[0].startsWith("data:image/png;base64,")).toBe(true);
+
+    // ...and neither the outgoing prompt nor the echoed user message (which is
+    // exactly this text) contains workspace-copy plumbing.
+    expect(composed.text).toBe("what is in this shot?");
+    expect(composed.text).not.toContain("Attached files were copied");
+    expect(composed.text).not.toContain("chat-attachments");
+    expect(composed.text).not.toContain(".sofia/sofia/inbox");
+    expect(composed.text).not.toContain("file:///");
+    expect(composed.text).not.toContain("base64");
   });
 
   test("fails before producing prompt parts when workspace upload fails", async () => {

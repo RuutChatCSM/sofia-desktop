@@ -61,6 +61,8 @@ type SessionGroupSyncStatus = {
 type SessionManagementState = {
   pinnedIds: string[];
   unreadIds: string[];
+  /** Sessions whose background process failed and the user has not opened yet. */
+  needsAttentionIds: string[];
   orderByWorkspace: Record<string, string[]>;
   groupsByWorkspace: Record<string, WorkspaceGroupState>;
 };
@@ -69,6 +71,8 @@ type SessionManagementActions = {
   togglePin: (sessionId: string) => void;
   markUnread: (sessionId: string) => void;
   clearUnread: (sessionId: string) => void;
+  markNeedsAttention: (sessionId: string) => void;
+  clearNeedsAttention: (sessionId: string) => void;
   reorderSessions: (workspaceId: string, sessionIds: string[]) => void;
   assignGroup: (workspaceId: string, sessionId: string, groupId: string | null) => void;
   createGroup: (workspaceId: string, label: string) => void;
@@ -176,6 +180,7 @@ export const useSessionManagementStore = create<SessionManagementStore>()(
     (set) => ({
       pinnedIds: [],
       unreadIds: [],
+      needsAttentionIds: [],
       orderByWorkspace: {},
       groupsByWorkspace: {},
 
@@ -201,6 +206,20 @@ export const useSessionManagementStore = create<SessionManagementStore>()(
         set((state) => (
           state.unreadIds.includes(sessionId)
             ? { unreadIds: state.unreadIds.filter((id) => id !== sessionId) }
+            : state
+        )),
+
+      markNeedsAttention: (sessionId) =>
+        set((state) => (
+          state.needsAttentionIds.includes(sessionId)
+            ? state
+            : { needsAttentionIds: [...state.needsAttentionIds, sessionId] }
+        )),
+
+      clearNeedsAttention: (sessionId) =>
+        set((state) => (
+          state.needsAttentionIds.includes(sessionId)
+            ? { needsAttentionIds: state.needsAttentionIds.filter((id) => id !== sessionId) }
             : state
         )),
 
@@ -392,6 +411,11 @@ export function usePinnedSessionIds(): Set<string> {
 export function useUnreadSessionIds(): Set<string> {
   const ids = useSessionManagementStore((s) => s.unreadIds);
   return ids.length ? new Set(ids) : EMPTY_UNREAD;
+}
+
+export function useNeedsAttentionSessionIds(): Set<string> {
+  const ids = useSessionManagementStore((s) => s.needsAttentionIds);
+  return Array.isArray(ids) && ids.length ? new Set(ids) : EMPTY_UNREAD;
 }
 
 export function useSessionOrder(workspaceId: string): string[] {

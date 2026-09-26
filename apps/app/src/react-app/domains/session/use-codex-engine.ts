@@ -3,9 +3,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 
 import { createCodexSessionClient, isThreadWriterConflictError, type CodexEngineConfigWire } from "@/app/lib/codex-session";
-import { setCodexAbortHandler } from "@/app/lib/engine-session";
-import { runCodexStream, useCodexSessionStore } from "./codex-session-store";
+import { setCodexAbortHandler, setCodexForkHandler } from "@/app/lib/engine-session";
+import { refreshBackgroundProcesses, runCodexStream, setCodexClient, useCodexSessionStore } from "./codex-session-store";
 import { syncCodexTranscriptToCache, restoreCodexSessionItems, ensureCodexTranscriptCached } from "./sync/codex-transcript-adapter";
+import { useCodexAttentionFeed } from "./use-codex-attention";
 
 export type CodexEngineEndpoint = {
   baseUrl: string;
@@ -69,6 +70,21 @@ export function useCodexEngine(endpoint: CodexEngineEndpoint | null, activeSessi
     return () => setCodexAbortHandler(null);
   }, [enabled, client]);
 
+  // Route "Branch in new chat" for codex sessions to the codex engine.
+  useEffect(() => {
+    if (!enabled || !client) {
+      setCodexForkHandler(null);
+      return;
+    }
+    setCodexForkHandler(async (sessionId, messageId) => {
+      const result = await client.forkSession(sessionId, messageId);
+      result.session.workspaceId = displayWorkspaceId ?? result.session.workspaceId;
+      useCodexSessionStore.getState().upsertSession(result.session);
+      return { id: result.session.id };
+    });
+    return () => setCodexForkHandler(null);
+  }, [enabled, client, displayWorkspaceId]);
+
   useEffect(() => {
     const store = useCodexSessionStore.getState();
     if (!enabled || !client) {
@@ -94,6 +110,9 @@ export function useCodexEngine(endpoint: CodexEngineEndpoint | null, activeSessi
       });
     };
     const unsubscribe = useCodexSessionStore.subscribe(mirror);
+    // Background-process UI (footer/list/stop) needs the same client the stream
+    // uses; the store owns the registry so it stays in sync with this effect.
+    if (displayWorkspaceId) setCodexClient(displayWorkspaceId, client);
     void (async () => {
       try {
         const list = (await client.listSessions()).map((session) => ({ ...session, workspaceId: displayWorkspaceId ?? session.workspaceId }));
@@ -110,6 +129,7 @@ export function useCodexEngine(endpoint: CodexEngineEndpoint | null, activeSessi
       if (!controller.signal.aborted) await runCodexStream(client, controller.signal, undefined, displayWorkspaceId);
     })();
     return () => {
+      if (displayWorkspaceId) setCodexClient(displayWorkspaceId, null);
       controller.abort();
       if (mirrorFrame !== null) cancelAnimationFrame(mirrorFrame);
       unsubscribe();
@@ -127,11 +147,21 @@ export function useCodexEngine(endpoint: CodexEngineEndpoint | null, activeSessi
     const workspaceId = displayWorkspaceId ?? entry?.session.workspaceId;
     if (!workspaceId) return;
     void ensureCodexTranscriptCached(client, workspaceId, activeSessionId);
+    // Opening a task reconciles background processes: the renderer's cache is
+    // transient, the server registry is authoritative.
+    void refreshBackgroundProcesses(activeSessionId);
   }, [activeSessionId, client, displayWorkspaceId]);
 
   // All store hooks must run at the top with stable selectors; a selector that
   // builds a new array each call makes useSyncExternalStore loop forever.
   const workspaceId = displayWorkspaceId;
+
+  // Cross-workspace attention: the server observes every workspace it manages,
+  // so a background failure is surfaced (attention + notification) even while
+  // the window shows another workspace.
+  useCodexAttentionFeed(
+    enabled && endpoint ? { baseUrl: endpoint.baseUrl, token: endpoint.token, hostToken: endpoint.hostToken } : null,
+  );
   const sessions = useCodexSessionStore(
     useShallow((state) =>
       Object.values(state.sessions)
@@ -159,14 +189,14 @@ export function useCodexEngine(endpoint: CodexEngineEndpoint | null, activeSessi
         }
       : null,
     prompt: client
-      ? async (sessionId: string, text: string, selection?: { model?: string; providerId?: string }) => {
+      ? async (sessionId: string, text: string, selection?: { model?: string; providerId?: string }, images?: string[]) => {
           useCodexSessionStore.setState((state) => {
             const entry = state.sessions[sessionId];
             return entry ? { sessions: { ...state.sessions, [sessionId]: { ...entry, warning: undefined } } } : state;
           });
           useCodexSessionStore.getState().startTurn(sessionId);
           try {
-            const result = await client.prompt(sessionId, text, selection);
+            const result = await client.prompt(sessionId, text, selection, images);
             // Lifecycle events are authoritative: the turn may already have
             // completed before this HTTP response arrives.
             return result.session;
@@ -188,7 +218,7 @@ export function useCodexEngine(endpoint: CodexEngineEndpoint | null, activeSessi
     // Steer the in-flight turn (codex `turn/steer`). Returns a discriminated
     // result so the caller can start a turn or queue when steering is refused.
     steer: client
-      ? (sessionId: string, text: string) => client.steer(sessionId, text)
+      ? (sessionId: string, text: string, images?: string[]) => client.steer(sessionId, text, images)
       : null,
     archiveSession: client
       ? async (sessionId: string, archived: boolean) => {

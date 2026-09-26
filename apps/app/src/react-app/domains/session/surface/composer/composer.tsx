@@ -26,7 +26,8 @@ import {
   type ComposerSlashCommandOption,
 } from "./slash-command";
 import { encodeConnectSkillToken } from "./connect-skill-token";
-import { FILE_URL_RE, HTTP_URL_RE, type PastedTextChip } from "./pasted-text";
+import { type PastedTextChip } from "./pasted-text";
+import { classifyClipboard } from "./clipboard-payload";
 import { resolveSubmitAction } from "./submit-action";
 import { loadSessionConnectCapabilities } from "@/react-app/domains/connections/cloud-inventory-cache";
 import { useOrgMcpConnections } from "@/react-app/domains/connections/use-org-mcp-connections";
@@ -128,31 +129,6 @@ const DEFAULT_AGENT_NAME = "sofia";
 
 function isNonDefaultAgent(agent: Agent) {
   return agent.name !== DEFAULT_AGENT_NAME;
-}
-
-/**
- * Extract external file/URL drops from a clipboard. Only used when the user
- * drag-drops a file reference from another app (Finder / browser), which sets
- * the text/uri-list MIME type explicitly. Plain text pastes — even ones that
- * contain absolute paths like "/Users/..." — are NEVER treated as links here
- * because that intercepted real text pastes and made composer paste feel
- * broken. Plain text goes straight into the editor via Lexical's default.
- */
-function parseClipboardUriList(clipboard: DataTransfer) {
-  const raw = clipboard.getData("text/uri-list") ?? "";
-  if (!raw.trim()) return [];
-  const links: string[] = [];
-  const seen = new Set<string>();
-  for (const line of raw.split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-    if (!FILE_URL_RE.test(trimmed) && !HTTP_URL_RE.test(trimmed)) continue;
-    const normalized = encodeURI(trimmed);
-    if (seen.has(normalized)) continue;
-    seen.add(normalized);
-    links.push(normalized);
-  }
-  return links;
 }
 
 function isImageAttachment(attachment: ComposerAttachment) {
@@ -1331,32 +1307,30 @@ export function ReactSessionComposer(props: ComposerProps) {
               onRemoveAttachment={props.onRemoveAttachment}
               onPasteText={props.onPasteText}
               onPaste={(event) => {
-                // Paste policy:
-                // 1. Actual files on the clipboard -> attach them.
-                // 2. Explicit text/uri-list (drag from Finder / browser) -> insert links.
-                // 3. Plain text -> DO NOTHING. Let Lexical's PlainTextPlugin
-                //    handle the paste natively so newlines render correctly
-                //    and no content is silently dropped. Previous behavior
-                //    hijacked pastes that merely contained absolute paths
-                //    like "/Users/..." or pastes longer than 10 lines, which
-                //    was the root cause of "paste into composer is broken".
-                const files = Array.from(event.clipboardData?.files ?? []);
-                if (files.length) {
+                // Paste policy — classify the clipboard *before* the editor
+                // sees anything, because a clipboard image can arrive as an
+                // item, as files, as an <img src="data:image/…">, or as a bare
+                // data: URI in text/plain. If any of those falls through, the
+                // bytes land in the prompt as text.
+                // 1. Images/files -> the attachment pipeline (never text).
+                // 2. Explicit text/uri-list (drag from Finder / browser) -> links.
+                // 3. Plain text -> DO NOTHING; Lexical's PlainTextPlugin handles
+                //    it natively so newlines render correctly and nothing is
+                //    silently dropped.
+                const payload = classifyClipboard(event.clipboardData);
+                if (payload.type === "image" || payload.type === "files") {
                   event.preventDefault();
-                  void addAttachments(files);
+                  void addAttachments(payload.files);
                   return;
                 }
 
-                const uriList = event.clipboardData
-                  ? parseClipboardUriList(event.clipboardData)
-                  : [];
-                if (uriList.length) {
+                if (payload.type === "uris") {
                   event.preventDefault();
-                  props.onUnsupportedFileLinks(uriList);
+                  props.onUnsupportedFileLinks(payload.uris);
                   return;
                 }
 
-                const text = event.clipboardData?.getData("text/plain") ?? "";
+                const text = payload.type === "text" ? payload.text : "";
 
                 // Plain text paste display is owned by PasteChipPlugin inside
                 // the Lexical editor: text collapses when it would exceed the
@@ -1806,10 +1780,6 @@ export function ReactSessionComposer(props: ComposerProps) {
                   Cmd/Ctrl+Enter still steers).
               */}
               <div className="ml-auto flex shrink-0 items-center gap-1.5">
-                {props.busy && canSend ? <>
-                  <button type="button" onClick={props.onQueue} disabled={props.disabled || props.submissionPreparing} title="Send after this turn · Enter" className="sofia-followup-button">Queue</button>
-                  <button type="button" onClick={props.onSteer} disabled={props.disabled || props.steering || props.submissionPreparing} title="Guide the current turn · ⌘/Ctrl + Enter" className="sofia-followup-button sofia-steer-button">{props.steering ? "Sending…" : "Steer"}</button>
-                </> : null}
                 {props.busy && escapeArmed ? (
                   <span className="self-center pr-1 text-[12px] font-medium text-gray-10 max-lg:hidden">
                     {t("composer.escape_to_stop")}

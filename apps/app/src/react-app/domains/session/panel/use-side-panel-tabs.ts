@@ -1,6 +1,7 @@
 import * as React from "react";
 
 import type { BrowserStatePayload } from "@/app/lib/desktop";
+import type { BrowserViewport, BrowserZoom } from "@/app/lib/desktop-types";
 
 import {
   type PanelTab,
@@ -8,7 +9,7 @@ import {
 } from "./panel-tab-store";
 import { getElectronBrowser } from "./utils";
 
-export function useSidePanelTabs(sessionId: string) {
+export function useBrowserTabSync(sessionId: string) {
   const syncBrowserTabs = usePanelTabStore((state) => state.syncBrowserTabs);
 
   const applyBrowserState = React.useCallback((browserState: BrowserStatePayload) => {
@@ -26,6 +27,11 @@ export function useSidePanelTabs(sessionId: string) {
     }
 
     const unsub = browser.onStateChange?.(applyBrowserState);
+    const unsubControls = browser.onControlsChange?.(({ tabId, viewport, zoom }) => {
+      const store = usePanelTabStore.getState();
+      store.setBrowserViewport(sessionId, tabId, viewport);
+      store.setBrowserZoom(sessionId, tabId, zoom);
+    });
 
     void browser.getState?.().then((browserState) => {
       if (browserState) {
@@ -33,9 +39,12 @@ export function useSidePanelTabs(sessionId: string) {
       }
     });
 
-    return unsub;
+    return () => { unsub?.(); unsubControls?.(); };
   }, [applyBrowserState]);
 
+}
+
+export function useSidePanelTabs(sessionId: string) {
   const createTab = useCreateTab();
 
   const closeTab = useCloseTab();
@@ -118,4 +127,24 @@ export function useReorderTabs() {
 
     void getElectronBrowser()?.reorderTabs?.(browserTabIds);
   }, [reorderTabs]);
+}
+
+// Panel bounds, page viewport, and zoom are three separate user intents. These
+// hooks deliberately go through three separate IPC calls; nothing combines them.
+export function useSetBrowserViewport() {
+  const setBrowserViewport = usePanelTabStore((state) => state.setBrowserViewport);
+
+  return React.useCallback((sessionId: string, tabId: string, viewport: BrowserViewport) => {
+    setBrowserViewport(sessionId, tabId, viewport);
+    void getElectronBrowser()?.setViewport?.(tabId, viewport);
+  }, [setBrowserViewport]);
+}
+
+export function useSetBrowserZoom() {
+  const setBrowserZoom = usePanelTabStore((state) => state.setBrowserZoom);
+
+  return React.useCallback((sessionId: string, tabId: string, zoom: BrowserZoom) => {
+    setBrowserZoom(sessionId, tabId, zoom);
+    void getElectronBrowser()?.setZoom?.(tabId, zoom);
+  }, [setBrowserZoom]);
 }

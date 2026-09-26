@@ -165,6 +165,7 @@ contextBridge.exposeInMainWorld("__SOFIA_ELECTRON__", {
     back() { return ipcRenderer.invoke("sofia:browser:back"); },
     forward() { return ipcRenderer.invoke("sofia:browser:forward"); },
     reload() { return ipcRenderer.invoke("sofia:browser:reload"); },
+    stop() { return ipcRenderer.invoke("sofia:browser:stop"); },
     setBounds(bounds) { return ipcRenderer.invoke("sofia:browser:bounds", bounds); },
     getState() { return ipcRenderer.invoke("sofia:browser:state"); },
     createTab(url) { return ipcRenderer.invoke("sofia:browser:createTab", url); },
@@ -173,8 +174,31 @@ contextBridge.exposeInMainWorld("__SOFIA_ELECTRON__", {
     selectTab(tabId) { return ipcRenderer.invoke("sofia:browser:selectTab", tabId); },
     reorderTabs(tabIds) { return ipcRenderer.invoke("sofia:browser:reorderTabs", tabIds); },
     listTabs() { return ipcRenderer.invoke("sofia:browser:listTabs"); },
+    setViewport(tabId, viewport) { return ipcRenderer.invoke("sofia:browser:setViewport", tabId, viewport); },
+    setPresentation(mode) { return ipcRenderer.invoke("sofia:browser:setPresentation", mode); },
+    setPeekChrome(chrome) { return ipcRenderer.invoke("sofia:browser:peekChrome", chrome); },
+    setZoom(tabId, zoom) { return ipcRenderer.invoke("sofia:browser:setZoom", tabId, zoom); },
+    pan(tabId, pan) { return ipcRenderer.invoke("sofia:browser:pan", tabId, pan); },
+    agentLease(action, request) { return ipcRenderer.invoke("sofia:browser:agentLease", action, request); },
     setProxy(proxy) { return ipcRenderer.invoke("sofia:browser:setProxy", proxy); },
     getProxy() { return ipcRenderer.invoke("sofia:browser:getProxy"); },
+    showToolbarMenu(tabId, kind, point) { return ipcRenderer.invoke("sofia:browser:toolbarMenu", tabId, kind, point); },
+    find(tabId, text, forward) { return ipcRenderer.invoke("sofia:browser:find", tabId, text, forward); },
+    onControlsChange(callback) {
+      const handler = (_event, state) => callback(state);
+      ipcRenderer.on("sofia:browser:controls-changed", handler);
+      return () => ipcRenderer.removeListener("sofia:browser:controls-changed", handler);
+    },
+    onFindRequested(callback) {
+      const handler = (_event, state) => callback(state);
+      ipcRenderer.on("sofia:browser:find-requested", handler);
+      return () => ipcRenderer.removeListener("sofia:browser:find-requested", handler);
+    },
+    onPresentationRequested(callback) {
+      const handler = (_event, mode) => callback(mode);
+      ipcRenderer.on("sofia:browser:presentation-requested", handler);
+      return () => ipcRenderer.removeListener("sofia:browser:presentation-requested", handler);
+    },
     showTabContextMenu(tabId, point) { return ipcRenderer.invoke("sofia:browser:tabContextMenu", tabId, point); },
     destroy() { return ipcRenderer.invoke("sofia:browser:destroy"); },
     onStateChange(callback) {
@@ -182,15 +206,33 @@ contextBridge.exposeInMainWorld("__SOFIA_ELECTRON__", {
       ipcRenderer.on("sofia:browser:state", handler);
       return () => ipcRenderer.removeListener("sofia:browser:state", handler);
     },
-    onPanelOpened(callback) {
-      const handler = () => callback();
-      ipcRenderer.on("sofia:browser:panel-opened", handler);
-      return () => ipcRenderer.removeListener("sofia:browser:panel-opened", handler);
+    // Facts only: what the browser did, never what the UI should do about it.
+    onBrowserTabActivated(callback) {
+      const handler = (_event, payload) => callback(payload ?? {});
+      ipcRenderer.on("sofia:browser:tab-activated", handler);
+      return () => ipcRenderer.removeListener("sofia:browser:tab-activated", handler);
     },
-    onPanelClosed(callback) {
+    onBrowserTabsClosed(callback) {
       const handler = () => callback();
-      ipcRenderer.on("sofia:browser:panel-closed", handler);
-      return () => ipcRenderer.removeListener("sofia:browser:panel-closed", handler);
+      ipcRenderer.on("sofia:browser:tabs-closed", handler);
+      return () => ipcRenderer.removeListener("sofia:browser:tabs-closed", handler);
+    },
+    /** A human activated the read-only Peek surface (the agent's CDP input never does). */
+    onBrowserPeekActivated(callback) {
+      const handler = () => callback();
+      ipcRenderer.on("sofia:browser:peek-activated", handler);
+      return () => ipcRenderer.removeListener("sofia:browser:peek-activated", handler);
+    },
+    /** A human dismissed the preview. The tab, page and agent are untouched. */
+    onBrowserPeekHidden(callback) {
+      const handler = () => callback();
+      ipcRenderer.on("sofia:browser:peek-hidden", handler);
+      return () => ipcRenderer.removeListener("sofia:browser:peek-hidden", handler);
+    },
+    onBrowserPeekPointer(callback) {
+      const handler = (_event, pointer) => callback(pointer);
+      ipcRenderer.on("sofia:browser:peek-pointer", handler);
+      return () => ipcRenderer.removeListener("sofia:browser:peek-pointer", handler);
     },
   },
   terminal: {

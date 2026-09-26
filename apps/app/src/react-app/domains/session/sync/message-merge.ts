@@ -1,5 +1,7 @@
 import type { UIMessage } from "ai";
 
+import { partText } from "@/lib/message-part-text";
+
 function mergeMessageParts(snapshotMessage: UIMessage, cachedMessage: UIMessage) {
   const parts = snapshotMessage.parts.map((part, index) => {
     const cachedPart = cachedMessage.parts[index];
@@ -8,9 +10,9 @@ function mergeMessageParts(snapshotMessage: UIMessage, cachedMessage: UIMessage)
     if (
       (part.type === "text" || part.type === "reasoning") &&
       cachedPart.type === part.type &&
-      cachedPart.text.length > part.text.length
+      partText(cachedPart).length > partText(part).length
     ) {
-      return { ...part, text: cachedPart.text };
+      return { ...part, text: partText(cachedPart) };
     }
 
     return part;

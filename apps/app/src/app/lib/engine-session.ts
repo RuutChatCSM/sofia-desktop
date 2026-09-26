@@ -17,9 +17,16 @@ import { unwrap } from "./engine";
  * codex engine instead of the engine SDK.
  */
 let codexAbortHandler: ((sessionID: string) => Promise<boolean>) | null = null;
+let codexForkHandler: ((sessionID: string, messageID?: string) => Promise<{ id: string }>) | null = null;
 
 export function setCodexAbortHandler(handler: ((sessionID: string) => Promise<boolean>) | null): void {
   codexAbortHandler = handler;
+}
+
+export function setCodexForkHandler(
+  handler: ((sessionID: string, messageID?: string) => Promise<{ id: string }>) | null,
+): void {
+  codexForkHandler = handler;
 }
 
 function isCodexSessionId(sessionID: string): boolean {
@@ -125,7 +132,10 @@ export async function forkSession(
   client: Client,
   sessionID: string,
   messageID?: string,
-): Promise<Session> {
+): Promise<{ id: string }> {
+  if (isCodexSessionId(sessionID) && codexForkHandler) {
+    return codexForkHandler(sessionID, messageID);
+  }
   return unwrap(await client.session.fork({ sessionID, messageID })) as Session;
 }
 

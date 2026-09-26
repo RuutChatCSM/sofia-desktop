@@ -43,11 +43,22 @@ import type {
   NukeReceipt,
   WorkspaceList,
 } from "./desktop-types";
-import type { BrowserPanelTab } from "./desktop-types";
+import type {
+  AgentBrowserLeaseAction,
+  AgentBrowserLeaseRequest,
+  BrowserAgentState,
+  BrowserPanOffset,
+  BrowserPeekChrome,
+  BrowserPeekPointer,
+  BrowserPresentationMode,
+  BrowserTabSyncState,
+  BrowserViewport,
+  BrowserZoom,
+} from "./desktop-types";
 
 export type BrowserStatePayload = {
   activeTabId?: string | null;
-  tabs?: BrowserPanelTab[];
+  tabs?: BrowserTabSyncState[];
 };
 
 export type BrowserProxyState = {
@@ -176,21 +187,49 @@ declare global {
         back?: () => Promise<void>;
         forward?: () => Promise<void>;
         reload?: () => Promise<void>;
+        stop?: () => Promise<void>;
         setBounds?: (bounds: { x: number; y: number; width: number; height: number }) => Promise<void>;
         getState?: () => Promise<BrowserStatePayload | null>;
         createTab?: (url?: string) => Promise<{ tabId: string }>;
         closeTab?: (tabId: string) => Promise<string | null>;
         closeAllTabs?: () => Promise<string[]>;
         selectTab?: (tabId: string) => Promise<string>;
-        reorderTabs?: (tabIds: string[]) => Promise<BrowserPanelTab[]>;
-        listTabs?: () => Promise<BrowserPanelTab[]>;
+        reorderTabs?: (tabIds: string[]) => Promise<BrowserTabSyncState[]>;
+        listTabs?: () => Promise<BrowserTabSyncState[]>;
+        setViewport?: (tabId: string, viewport: BrowserViewport) => Promise<BrowserViewport>;
+        setPresentation?: (mode: BrowserPresentationMode) => Promise<BrowserPresentationMode>;
+        /** Content for the floating preview's hover chrome (title, status, corners). */
+        setPeekChrome?: (chrome: BrowserPeekChrome) => Promise<boolean>;
+        setZoom?: (tabId: string, zoom: BrowserZoom) => Promise<BrowserZoom>;
+        pan?: (tabId: string, pan: BrowserPanOffset) => Promise<BrowserPanOffset>;
+        agentLease?: (
+          action: AgentBrowserLeaseAction,
+          request?: AgentBrowserLeaseRequest,
+        ) => Promise<BrowserAgentState>;
         setProxy?: (proxy?: string | null) => Promise<BrowserProxyState>;
         getProxy?: () => Promise<BrowserProxyState>;
+        showToolbarMenu?: (tabId: string, kind: "browser" | "viewport" | "zoom", point: { x: number; y: number }) => Promise<void>;
+        find?: (tabId: string, text: string, forward?: boolean) => Promise<number | void>;
+        onControlsChange?: (callback: (state: { tabId: string; viewport: BrowserViewport; zoom: BrowserZoom }) => void) => () => void;
+        onFindRequested?: (callback: (state: { tabId: string }) => void) => () => void;
+        onPresentationRequested?: (callback: (mode: BrowserPresentationMode) => void) => () => void;
         showTabContextMenu?: (tabId: string, point?: { x: number; y: number }) => Promise<void>;
         destroy?: () => Promise<void>;
         onStateChange?: (callback: (state: BrowserStatePayload) => void) => () => void;
-        onPanelOpened?: (callback: () => void) => () => void;
-        onPanelClosed?: (callback: () => void) => () => void;
+        /** A real page is on screen in a tab; presentation policy decides what the user sees. */
+        onBrowserTabActivated?: (callback: (event: { tabId?: string }) => void) => () => void;
+        /** Every tab is gone (closed or destroyed). */
+        onBrowserTabsClosed?: (callback: () => void) => () => void;
+        /** A human clicked the floating preview; agent CDP input never fires this. */
+        onBrowserPeekActivated?: (callback: () => void) => () => void;
+        /** A human dismissed the floating preview. The browser itself keeps running. */
+        onBrowserPeekHidden?: (callback: () => void) => () => void;
+        /**
+         * Raw pointer motion on the floating preview, in renderer CSS pixels
+         * relative to where the drag started. Presentation turns this into
+         * either a click (expand) or a new position.
+         */
+        onBrowserPeekPointer?: (callback: (pointer: BrowserPeekPointer) => void) => () => void;
       };
       terminal?: {
         create?: (options: { cwd: string; cols: number; rows: number }) => Promise<{ terminalId: string }>;

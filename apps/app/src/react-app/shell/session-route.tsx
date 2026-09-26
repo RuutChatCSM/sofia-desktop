@@ -12,12 +12,14 @@ import type {
   AgentPartInput,
   FilePartInput,
   ProviderListResponse,
+  Session,
   TextPartInput,
 } from "@/app/lib/engine-types";
 
 import { captureAnalyticsEvent, markTaskRunStart } from "@/app/lib/analytics";
 import { trackSessionActive, trackTaskStarted } from "@/app/lib/den-telemetry";
 import { buildDiagnosticsBundleJson } from "@/app/lib/diagnostics-bundle";
+import { sanitizePromptText } from "@/lib/embedded-data-urls";
 import { downloadTextAsFile } from "@/app/lib/download";
 import { canCreateWorkspaces } from "@/app/lib/workspace-creation-policy";
 import { createClient, unwrap } from "@/app/lib/engine";
@@ -132,6 +134,7 @@ import {
 } from "@/react-app/domains/session/sync/session-sync";
 import { firstLineLocalFileParts, joinWorkspaceRelativePath, toFileUrl } from "@/react-app/domains/session/sync/prompt-file-parts";
 import { composerAttachmentsToWorkspaceFileParts } from "@/react-app/domains/session/sync/attachment-file-part";
+import { codexPromptFromParts } from "@/react-app/domains/session/sync/codex-prompt-parts";
 import { useSessionInteractions } from "@/react-app/domains/session/sync/use-session-interactions";
 import { useModelBehavior } from "@/react-app/domains/session/surface/use-model-behavior";
 import { useSessionFindStore } from "@/react-app/domains/session/surface/find-store";
@@ -426,12 +429,8 @@ async function draftToParts(
       sessionId,
       workspaceRoot: root,
     });
-    for (const part of uploaded) {
-      if (part.type === "text") {
-        parts.push(part);
-        continue;
-      }
-    }
+    // Attachment parts are structured only: paths/instructions from the
+    // workspace copy must never become user text (see draftToParts callers).
     const fileParts = uploaded.filter((part): part is FilePartInput => part.type === "file");
     for (const [index, attachment] of draft.attachments.entries()) {
       const filePart = fileParts[index];
@@ -542,7 +541,7 @@ async function draftToParts(
     }
   }
 
-  parts.push(...firstLineLocalFileParts(draft.resolvedText ?? draft.text, root));
+  parts.push(...firstLineLocalFileParts(sanitizePromptText(draft.resolvedText ?? draft.text), root));
 
   return parts;
 }
@@ -1477,7 +1476,11 @@ export function SessionRoute() {
       onSendDraft: async (draft: ComposerDraft, sessionId: string): Promise<CloudMcpSubmissionResult> => {
         const targetSessionId = sessionId.trim() || selectedSessionId;
         if (!targetSessionId) return { outcome: "cancelled", reason: "context_changed" };
-        const text = (draft.resolvedText ?? draft.text).trim();
+        // What the model receives, with any encoded binary stripped out.
+        const text = sanitizePromptText(draft.resolvedText ?? draft.text).trim();
+        // What the user sees optimistically. Display text keeps collapsed
+        // pastes collapsed instead of dumping resolved content into the bubble.
+        const displayText = draft.text.trim();
         if (!text && draft.attachments.length === 0) {
           return { outcome: "cancelled", reason: "context_changed" };
         }
@@ -1492,29 +1495,29 @@ export function SessionRoute() {
             providerId: sendModel?.providerID,
           };
           const parts = await draftToParts(draft, selectedWorkspaceRoot, targetSessionId, selectedWorkspaceEndpoint);
-          const promptText = parts.map((part) => {
-            if (part.type === "text") return part.text;
-            if (part.type === "file") return `\nReferenced file: ${part.filename ?? "file"} (${part.url})\n`;
-            return `Use the ${part.name} agent. `;
-          }).join("") || text;
+          // Never stringify a file part's URL into the prompt: attachment images
+          // carry a base64 data URL, which used to land in the turn as a wall of
+          // base64. Image payloads ride as structured image inputs instead.
+          const composed = codexPromptFromParts(parts);
+          const promptText = composed.text || text;
           // Render the user's message immediately; it is dropped once the
           // engine echoes it back as a `userMessage` item.
-          useCodexSessionStore.getState().addPendingUserMessage(targetSessionId, text);
+          useCodexSessionStore.getState().addPendingUserMessage(targetSessionId, displayText);
           try {
             const turnRunning = useCodexSessionStore.getState().sessions[targetSessionId]?.session.status === "running";
             if (turnRunning && codexEngine.steer) {
-              const result = await codexEngine.steer(targetSessionId, promptText);
+              const result = await codexEngine.steer(targetSessionId, promptText, composed.images);
               if (result.outcome === "not_steerable" || result.outcome === "turn_mismatch") {
-                useCodexSessionStore.getState().confirmPendingUserMessage(targetSessionId, text);
+                useCodexSessionStore.getState().confirmPendingUserMessage(targetSessionId, displayText);
                 useComposerStateStore.getState().appendQueuedDraft(targetSessionId, draft);
               } else if (result.outcome === "no_active_turn") {
-                await codexEngine.prompt(targetSessionId, promptText, selection);
+                await codexEngine.prompt(targetSessionId, promptText, selection, composed.images);
               }
             } else {
-              await codexEngine.prompt(targetSessionId, promptText, selection);
+              await codexEngine.prompt(targetSessionId, promptText, selection, composed.images);
             }
           } catch (error) {
-            useCodexSessionStore.getState().confirmPendingUserMessage(targetSessionId, text);
+            useCodexSessionStore.getState().confirmPendingUserMessage(targetSessionId, displayText);
             // Let the composer retain the draft. A rejected follow-up does not
             // stop the active turn and must never disappear silently.
             throw error;
@@ -1702,10 +1705,14 @@ export function SessionRoute() {
             const forked = await forkSession(engineClient, targetSessionId, messageId ?? undefined);
             writeLastSessionFor(selectedWorkspaceId, forked.id);
             rememberPendingCreatedSession(selectedWorkspaceId, forked.id);
-            setSessionsByWorkspaceId((current) => ({
-              ...current,
-              [selectedWorkspaceId]: [forked, ...(current[selectedWorkspaceId] ?? [])],
-            }));
+            // Codex branches live in the codex session store (which the sidebar
+            // reads); only engine sessions belong in the engine list.
+            if (!targetSessionId.startsWith("codex-")) {
+              setSessionsByWorkspaceId((current) => ({
+                ...current,
+                [selectedWorkspaceId]: [forked as Session, ...(current[selectedWorkspaceId] ?? [])],
+              }));
+            }
             navigateToWorkspaceSession(selectedWorkspaceId, forked.id);
             void refreshRouteState();
           } catch (error) {
@@ -2045,11 +2052,24 @@ export function SessionRoute() {
           hostToken: targetEndpoint.isRemote ? workspace.sofiaHostToken ?? undefined : sofiaServerHostInfoState?.hostToken ?? undefined,
           workspaceId: targetEndpoint.workspaceId,
         });
+        // Provider and model are one selection: a model id only means something
+        // relative to the provider that serves it. Resolving them with two
+        // independent ternaries let `providerId` be sent while `model` was
+        // `undefined`, so the engine switched provider and kept its previously
+        // configured model — DeepSeek receiving OpenRouter's
+        // `stealth/space-bunny-alpha`. Resolve the pair together, and send
+        // neither when there is no complete pair.
+        const initialModel = selectedProviderIsConfigured
+          ? preferredModel
+          : codexEngine.config?.defaultProviderId && codexEngine.config?.model
+            ? { providerID: codexEngine.config.defaultProviderId, modelID: codexEngine.config.model }
+            : null;
         const result = await targetClient.createSession({
           title: PENDING_SESSION_TITLE,
           cwd: workspace.path?.trim() || undefined,
-          model: selectedProviderIsConfigured ? preferredModel?.modelID : codexEngine.config?.model ?? undefined,
-          providerId: selectedProviderIsConfigured ? preferredModel?.providerID : codexEngine.config?.defaultProviderId ?? undefined,
+          ...(initialModel
+            ? { model: initialModel.modelID, providerId: initialModel.providerID }
+            : {}),
         });
         const session = { ...result.session, workspaceId };
         useCodexSessionStore.getState().upsertSession(session);

@@ -1,50 +1,50 @@
-import { useCallback, useEffect, useRef, type RefObject, type UIEventHandler } from "react";
+import { useCallback, useEffect, useRef, type KeyboardEventHandler, type RefObject, type UIEventHandler } from "react";
 
-import { getSessionScrollState, useSessionScrollStore, type SessionScrollState } from "./scroll-store";
+import {
+  intentFromGesture,
+  intentFromKey,
+  intentFromNavigation,
+  intentFromUserScroll,
+  isAtTail,
+  shouldCountHiddenUpdate,
+  shouldFollowContentGrowth,
+  shouldRepinAfterViewportResize,
+  type ScrollGesture,
+  type ScrollGeometry,
+  type ScrollIntent,
+} from "./scroll-intent";
+import {
+  getSessionScrollState,
+  selectSessionIsFollowing,
+  selectSessionTailVisible,
+  useSessionScrollStore,
+  useSessionTailStore,
+} from "./scroll-store";
 
-// Scroll policy, modelled on Codex's TUI: finalized history is append-only and
-// the live turn renders in place at the bottom. Codex never scrolls the user —
-// the terminal owns the scrollback. The web equivalent is a single rule:
+// Scroll policy: intent first, geometry only as corroboration.
 //
-//   * "sticky bottom" = follow the tail (auto-scroll on growth)
-//   * any user scroll away from the bottom detaches immediately, and stays
-//     detached until the user scrolls back to the bottom
+// "Near the bottom" (geometry) and "wants to follow the newest content"
+// (intent) are different questions. Content growth, a composer resize, a work
+// block changing height, an Activity title change or a late-loading image all
+// move the geometry without the user ever leaving the tail, so only a real user
+// gesture — or an explicit navigation — may detach following. Once detached the
+// user's viewport is never moved by new content.
 //
-// There is deliberately NO time window and NO gesture bookkeeping: those made
-// auto-scroll keep fighting the user mid-stream. Classification is purely by
-// scroll position, and only our own smooth "jump to latest" is suppressed.
-
-const BOTTOM_THRESHOLD_PX = 24;
-// While a user-initiated smooth scroll is animating, intermediate scroll events
-// must not be read as "the user scrolled away".
+//   * follow-tail = pin on growth
+//   * detached    = preserve the user's position, offer "Jump to latest"
+//
+// Our own scrolls (pinning, smooth jumps, navigation) are marked so their
+// scroll events are never mistaken for user intent.
 const SMOOTH_JUMP_SUPPRESS_MS = 500;
-const EXACT_BOTTOM_GAP_PX = 1;
+// Window during which scroll events are known to be ours, not the user's.
+const PROGRAMMATIC_SCROLL_MS = 120;
 
-function readScrollState(sessionId: string | null): SessionScrollState {
-  return getSessionScrollState(useSessionScrollStore.getState().sessions, sessionId);
-}
-
-function isStickyBottom(sessionId: string | null) {
-  return readScrollState(sessionId).mode === "stickyBottom";
-}
-
-type SessionScrollControllerOptions = {
-  selectedSessionId: string | null;
-  renderedMessages: unknown;
-  containerRef: RefObject<HTMLDivElement | null>;
-  contentRef: RefObject<HTMLDivElement | null>;
-};
-
-function scrollBottomGap(container: HTMLElement) {
-  return container.scrollHeight - (container.scrollTop + container.clientHeight);
-}
-
-function isAtBottom(container: HTMLElement) {
-  return scrollBottomGap(container) <= BOTTOM_THRESHOLD_PX;
-}
-
-function isExactlyAtBottom(container: HTMLElement) {
-  return scrollBottomGap(container) <= EXACT_BOTTOM_GAP_PX;
+function readGeometry(container: HTMLElement): ScrollGeometry {
+  return {
+    scrollTop: container.scrollTop,
+    scrollHeight: container.scrollHeight,
+    clientHeight: container.clientHeight,
+  };
 }
 
 function messageIdForElement(element: HTMLElement) {
@@ -85,6 +85,15 @@ function latestMessageTopClippedId(container: HTMLElement) {
   return lastMessageDoesNotFit && !startVisible ? messageId : null;
 }
 
+type SessionScrollControllerOptions = {
+  selectedSessionId: string | null;
+  renderedMessages: unknown;
+  containerRef: RefObject<HTMLDivElement | null>;
+  contentRef: RefObject<HTMLDivElement | null>;
+  /** Marker at the very end of the transcript; drives "is the tail in view?". */
+  tailSentinelRef: RefObject<HTMLDivElement | null>;
+};
+
 export function useSessionScrollController(options: SessionScrollControllerOptions) {
   const selectedSessionId = options.selectedSessionId;
   const setStickyBottom = useSessionScrollStore((state) => state.setStickyBottom);
@@ -96,14 +105,38 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
   // Timestamp until which scroll classification is skipped because a
   // user-initiated smooth scroll is still animating.
   const suppressClassifyUntilRef = useRef(0);
+  // Timestamp until which scroll events are known to be ours, not the user's.
+  const programmaticScrollUntilRef = useRef(0);
+
+  const isFollowing = useCallback(
+    () => selectSessionIsFollowing(useSessionScrollStore.getState().sessions, selectedSessionId),
+    [selectedSessionId],
+  );
+
+  const applyIntent = useCallback(
+    (intent: ScrollIntent) => {
+      const container = options.containerRef.current;
+      if (!container) return;
+
+      const topClippedMessageId = latestMessageTopClippedId(container);
+      if (intent.mode === "follow-tail") {
+        setStickyBottom(selectedSessionId, topClippedMessageId);
+        useSessionTailStore.getState().clearHiddenUpdates(selectedSessionId);
+        return;
+      }
+      // Detached: remember where the user is so a session switch restores it.
+      setManualScroll(selectedSessionId, container.scrollTop, topClippedMessageId);
+    },
+    [options.containerRef, selectedSessionId, setManualScroll, setStickyBottom],
+  );
 
   const updateOverflowAnchor = useCallback(() => {
     const container = options.containerRef.current;
     if (!container) return;
     // Disable browser scroll anchoring while following the tail: anchoring can
     // nudge scrollTop on content growth and be misread as a manual scroll.
-    container.style.overflowAnchor = isStickyBottom(selectedSessionId) ? "none" : "auto";
-  }, [options.containerRef, selectedSessionId]);
+    container.style.overflowAnchor = isFollowing() ? "none" : "auto";
+  }, [isFollowing, options.containerRef]);
 
   const refreshTopClippedMessage = useCallback(() => {
     const container = options.containerRef.current;
@@ -124,6 +157,7 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
       }
 
       setStickyBottom(selectedSessionId, null);
+      programmaticScrollUntilRef.current = Date.now() + PROGRAMMATIC_SCROLL_MS;
       container.scrollTop = container.scrollHeight;
       refreshTopClippedMessage();
     },
@@ -137,46 +171,116 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
       // Our own smooth jump in progress — ignore the intermediate frames.
       if (Date.now() < suppressClassifyUntilRef.current) return;
 
-      const topClippedMessageId = latestMessageTopClippedId(container);
-
-      if (isAtBottom(container)) {
-        // Follow the tail (idempotent: the store no-ops when unchanged).
-        setStickyBottom(selectedSessionId, topClippedMessageId);
+      // A scroll we caused (pinning, navigation) is never user intent. If it
+      // landed on the tail, confirm the follow state; otherwise leave intent
+      // exactly as it was.
+      if (Date.now() < programmaticScrollUntilRef.current) {
+        if (isFollowing() && isAtTail(readGeometry(container))) {
+          setStickyBottom(selectedSessionId, latestMessageTopClippedId(container));
+        }
         return;
       }
 
-      // The user moved away from the bottom: detach and stop auto-scrolling
-      // until they deliberately come back. No timers, no re-attach.
-      setManualScroll(selectedSessionId, container.scrollTop, topClippedMessageId);
+      // Geometry corroborates a user's scroll; it never defines intent alone.
+      applyIntent(intentFromUserScroll(readGeometry(container)));
     },
-    [selectedSessionId, setManualScroll, setStickyBottom],
+    [applyIntent, isFollowing, selectedSessionId, setStickyBottom],
   );
 
-  // Kept for API compatibility with callers that signal a scroll gesture.
-  const markScrollGesture = useCallback((_target?: EventTarget | null) => {
-    void _target;
-  }, []);
+  const handleKeyDown = useCallback<KeyboardEventHandler<HTMLDivElement>>(
+    (event) => {
+      const container = options.containerRef.current;
+      if (!container) return;
+      const intent = intentFromKey(event.key, readGeometry(container));
+      if (intent) applyIntent(intent);
+    },
+    [applyIntent, options.containerRef],
+  );
 
+  const markScrollGesture = useCallback(
+    (gesture: ScrollGesture) => {
+      const container = options.containerRef.current;
+      if (!container) return;
+      const intent = intentFromGesture(gesture, readGeometry(container));
+      if (intent) applyIntent(intent);
+    },
+    [applyIntent, options.containerRef],
+  );
+
+  /**
+   * Sofia moved the user itself (search result, jump to an older message).
+   * Same effect as a user scroll away from the tail, recorded as navigation.
+   */
+  const markNavigatedAway = useCallback(() => {
+    applyIntent(intentFromNavigation());
+  }, [applyIntent]);
+
+  /**
+   * Clicking "Jump to latest" is a state change first and a scroll second: set
+   * the intent, then move, then verify on the next frames because React may
+   * still be committing the newest work-block/Activity update.
+   */
   const jumpToLatest = useCallback(
     (behavior: ScrollBehavior = "smooth") => {
-      scrollToBottom(behavior);
+      const container = options.containerRef.current;
+      if (!container) return;
+
+      setStickyBottom(selectedSessionId, null);
+      useSessionTailStore.getState().clearHiddenUpdates(selectedSessionId);
+
+      const verifyTail = () => {
+        const node = options.containerRef.current;
+        if (!node) return;
+        if (!isFollowing()) return;
+        if (isAtTail(readGeometry(node))) {
+          refreshTopClippedMessage();
+          return;
+        }
+        // A late layout commit left us short of the new bottom: pin instantly.
+        programmaticScrollUntilRef.current = Date.now() + PROGRAMMATIC_SCROLL_MS;
+        node.scrollTop = node.scrollHeight;
+        refreshTopClippedMessage();
+      };
+
+      if (behavior === "smooth") {
+        // Let the animation play; verify once it should have finished rather
+        // than snapping mid-flight (which makes the easing look broken).
+        suppressClassifyUntilRef.current = Date.now() + SMOOTH_JUMP_SUPPRESS_MS;
+        container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+        window.setTimeout(verifyTail, SMOOTH_JUMP_SUPPRESS_MS + 50);
+        return;
+      }
+
+      programmaticScrollUntilRef.current = Date.now() + PROGRAMMATIC_SCROLL_MS;
+      container.scrollTop = container.scrollHeight;
+      window.requestAnimationFrame(() => {
+        verifyTail();
+        window.requestAnimationFrame(verifyTail);
+      });
     },
-    [scrollToBottom],
+    [
+      isFollowing,
+      options.containerRef,
+      refreshTopClippedMessage,
+      selectedSessionId,
+      setStickyBottom,
+    ],
   );
 
   const jumpToStartOfMessage = useCallback(
     (behavior: ScrollBehavior = "smooth") => {
-      const messageId = readScrollState(selectedSessionId).topClippedMessageId;
+      const messageId = getSessionScrollState(useSessionScrollStore.getState().sessions, selectedSessionId).topClippedMessageId;
       const container = options.containerRef.current;
       if (!messageId || !container) return;
 
       const target = messageElementById(container, messageId);
       if (!target) return;
 
-      setManualScroll(selectedSessionId, container.scrollTop, messageId);
+      applyIntent(intentFromNavigation());
+      programmaticScrollUntilRef.current = Date.now() + PROGRAMMATIC_SCROLL_MS;
       target.scrollIntoView({ behavior, block: "start" });
     },
-    [options.containerRef, selectedSessionId, setManualScroll],
+    [applyIntent, options.containerRef, selectedSessionId],
   );
 
   useEffect(() => {
@@ -184,8 +288,28 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
     return useSessionScrollStore.subscribe(updateOverflowAnchor);
   }, [updateOverflowAnchor]);
 
-  // Auto-follow: re-anchor to the bottom only while in sticky-bottom mode. Once
-  // the user has scrolled up (manual mode), content growth never moves them.
+  // Is the tail actually on screen? This — not a distance threshold — is what
+  // decides whether "Jump to latest" is worth showing.
+  useEffect(() => {
+    const sentinel = options.tailSentinelRef.current;
+    const container = options.containerRef.current;
+    if (!sentinel || !container || typeof IntersectionObserver === "undefined") return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[entries.length - 1];
+        if (!entry) return;
+        useSessionTailStore.getState().setTailVisible(selectedSessionId, entry.isIntersecting);
+      },
+      { root: container, threshold: 0 },
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [options.containerRef, options.tailSentinelRef, selectedSessionId]);
+
+  // Content growth: pin only while the user is following. While detached, the
+  // viewport is theirs — we just count what they cannot see yet.
   useEffect(() => {
     const content = options.contentRef.current;
     if (!content) return;
@@ -199,9 +323,15 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
       const grew = nextHeight > observedContentHeightRef.current + 1;
       observedContentHeightRef.current = nextHeight;
 
-      if (grew && isStickyBottom(selectedSessionId)) {
-        scrollToBottom("auto");
-        return;
+      if (grew) {
+        if (shouldFollowContentGrowth(isFollowing())) {
+          scrollToBottom("auto");
+          return;
+        }
+        const tailVisible = selectSessionTailVisible(useSessionTailStore.getState().bySession, selectedSessionId);
+        if (shouldCountHiddenUpdate({ following: false, tailVisible })) {
+          useSessionTailStore.getState().noteHiddenUpdate(selectedSessionId);
+        }
       }
 
       refreshTopClippedMessage();
@@ -209,16 +339,34 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
 
     observer.observe(content);
     return () => observer.disconnect();
-  }, [options.contentRef, refreshTopClippedMessage, scrollToBottom, selectedSessionId]);
+  }, [isFollowing, options.contentRef, refreshTopClippedMessage, scrollToBottom, selectedSessionId]);
 
-  // Session switch: restore the user's own position for a manual session, or
-  // jump to the tail for a fresh/sticky one.
+  // Composer growth (activity status, queued messages, questions, permissions)
+  // shrinks the transcript viewport without touching the content, so the content
+  // observer above never fires. Re-pin only while following; a detached
+  // transcript keeps the user's anchor.
+  useEffect(() => {
+    const container = options.containerRef.current;
+    if (!container) return;
+
+    const observer = new ResizeObserver(() => {
+      if (!shouldRepinAfterViewportResize(isFollowing())) return;
+      scrollToBottom("auto");
+    });
+
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [isFollowing, options.containerRef, scrollToBottom]);
+
+  // Session switch: restore the user's own position after a detach, or jump to
+  // the tail for a fresh/following session.
   useEffect(() => {
     if (selectedSessionId === previousSessionIdRef.current) return;
     previousSessionIdRef.current = selectedSessionId;
     if (!selectedSessionId) return;
 
     observedContentHeightRef.current = 0;
+    useSessionTailStore.getState().clearHiddenUpdates(selectedSessionId);
     queueMicrotask(() => {
       const container = options.containerRef.current;
       if (!container) return;
@@ -226,6 +374,7 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
       const savedState = getSessionScrollState(useSessionScrollStore.getState().sessions, selectedSessionId);
       if (savedState.mode === "manual") {
         const top = Math.min(savedState.scrollTop, Math.max(0, container.scrollHeight - container.clientHeight));
+        programmaticScrollUntilRef.current = Date.now() + PROGRAMMATIC_SCROLL_MS;
         container.scrollTop = top;
         return;
       }
@@ -241,7 +390,9 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
 
   return {
     handleScroll,
+    handleKeyDown,
     markScrollGesture,
+    markNavigatedAway,
     scrollToBottom,
     jumpToLatest,
     jumpToStartOfMessage,

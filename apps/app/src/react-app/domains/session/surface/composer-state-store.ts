@@ -13,6 +13,8 @@ export type ComposerPastePart = {
   label: string;
   text: string;
   lines: number;
+  /** False when the paste exceeds the inline budget and rides as an attachment. */
+  inline: boolean;
 };
 
 export type ComposerSessionState = {

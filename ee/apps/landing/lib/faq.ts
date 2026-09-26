@@ -7,31 +7,31 @@ export const homeFaq: FaqEntry[] = [
   {
     question: "What is Sofia?",
     answer:
-      "Sofia is a free, open-source desktop app for macOS, Windows, and Linux that lets you do work with AI agents on your own files. It is built on Sofia and is an open-source alternative to Claude Cowork and Codex."
+      "Sofia is a desktop app for working with AI on your files and everyday tasks. Ask it to research a topic, work through a spreadsheet, draft a document, or help with a project. You choose the model and tools it uses."
   },
   {
     question: "Is Sofia free?",
     answer:
-      "Yes. The desktop app is free and open source — you bring your own LLM provider keys. The Team Starter plan includes your first 5 seats free, then $10 per seat per month, and adds API access and the Extension Marketplace. Enterprise plans have custom pricing with SSO and bring-your-own inference."
+      "The desktop app is free. Connect your own model provider; that provider’s usage charges may apply. Cloud and enterprise services have separate plans. See the pricing page for current options."
   },
   {
-    question: "How is Sofia different from Claude Cowork?",
+    question: "Can I use Sofia with my team?",
     answer:
-      "Sofia is open source, works with 50+ LLMs from any provider instead of a single vendor, and runs locally so your files stay on your machine. Teams can package skills, MCP servers, plugins, and configs into a single link that teammates import in one click."
+      "Yes. Sofia Cloud lets your organization manage model access, share skills and plugins, and connect tools for your team. Administrators can assign access and set policies so people have the resources they need."
   },
   {
     question: "Which AI models does Sofia support?",
     answer:
-      "Any model Sofia supports — OpenAI, Anthropic, Google, and local models across 50+ providers. You connect your own API keys, or use a managed provider on the cloud plans."
+      "Sofia supports providers including OpenAI, Anthropic, Google, OpenRouter, and Mistral. Connect your own provider or use one made available by your organization. Available models and capabilities depend on the provider you choose."
   },
   {
-    question: "Does Sofia send my files to the cloud?",
+    question: "Where does my work happen?",
     answer:
-      "No. In desktop mode your files stay on your machine, and prompts are sent directly to the LLM provider you choose. Hosted cloud workers are optional and run on sandboxed infrastructure."
+      "The desktop app works with files on your computer. Prompts and relevant file content may be sent to your selected model provider or connected tools to complete a task. Cloud workspaces run remotely. Where data is processed depends on your workspace, provider, and connections."
   },
   {
     question: "Do I need to be technical to use Sofia?",
     answer:
-      "No. Sofia is a point-and-click desktop app. Skills, MCP servers, and plugins shared by a teammate import in one click — no terminal or setup guide required."
+      "You can describe tasks in plain language and review the results in the app. To get started, connect a model provider and choose a project folder. Your organization can also provide models, skills, and tools for you."
   }
 ];

@@ -55,7 +55,7 @@ export const sofiaPanelTabSchema = z.object({
   kind: z.enum(["browser", "artifact"]),
   label: z.string(),
   url: z.string().optional(),
-  status: z.enum(["loading", "ready"]).optional(),
+  status: z.enum(["loading", "ready", "error"]).optional(),
 })
 export type SofiaPanelTab = z.infer<typeof sofiaPanelTabSchema>
 

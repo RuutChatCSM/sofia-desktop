@@ -142,6 +142,9 @@ function toModel(
 type CodexProviderConfigWire = {
   providerId: string;
   providerName: string;
+  baseUrl?: string | null;
+  /** Env var the engine resolves this provider's credential from. */
+  envKey?: string | null;
   models: Array<{ id: string; name: string; reasoning?: boolean; contextWindow?: number | null }>;
 };
 
@@ -196,8 +199,12 @@ function buildProviderList(config: CodexConfigWire): ProviderListResponse {
     id: provider.providerId,
     name: provider.providerName,
     source: "config" as const,
-    env: [],
-    options: {},
+    // The engine's own env var for this provider. It must be surfaced: the
+    // provider-auth flow reads `env` to decide which providers can take an API
+    // key and which env name to write the key under. Reporting an empty list
+    // here hid every provider from the connect modal and silently dropped keys.
+    env: provider.envKey?.trim() ? [provider.envKey.trim()] : [],
+    options: provider.baseUrl?.trim() ? { baseURL: provider.baseUrl.trim() } : {},
     models: Object.fromEntries(
       provider.models.map((model) => [model.id, toModel(provider.providerId, model)]),
     ),

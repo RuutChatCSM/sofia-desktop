@@ -102,12 +102,17 @@ test("Sofia archive/rename routes enforce write scope and stream cancellation re
   };
   let session: CodexSession = { id: "codex-one", threadId: "one", title: "Original", workspaceId: "ws", created: "2026-01-01", status: "idle", turnId: null };
   let subscriptions = 0, scopes = 0;
+  const forkRequests: Array<string | null | undefined> = [];
   const registry: CodexSessionRegistry = { getOrCreate: async () => ({
     engineInfo: {}, start: async () => {}, listSessions: () => [session],
     createSession: async () => session, prompt: async () => session, abort: async () => {}, delete: async () => {},
     getSessionItems: async () => [],
     setArchived: async (_, archived) => (session = { ...session, archived }),
     rename: async (_, title) => (session = { ...session, title }),
+    forkSession: async (_id, options) => { forkRequests.push(options?.messageId); return session; },
+    listBackgroundProcesses: async () => [],
+    terminateBackgroundProcess: async () => false,
+    cleanBackgroundProcesses: async () => {},
     on: () => { subscriptions++; return () => { subscriptions--; }; },
   }) };
   registerCodexRoutes({ routes, config, registry,
@@ -124,9 +129,11 @@ test("Sofia archive/rename routes enforce write scope and stream cancellation re
   }
   expect((await (await request("POST", "sessions/codex-one/archive", { archived: true })).json()).session.archived).toBe(true);
   expect((await (await request("POST", "sessions/codex-one/rename", { title: "New name" })).json()).session.title).toBe("New name");
+  expect((await (await request("POST", "sessions/codex-one/fork", { messageId: "msg-9" })).json()).session.id).toBe("codex-one");
+  expect(forkRequests).toEqual(["msg-9"]);
   await request("POST", "sessions/codex-one/abort");
   await request("DELETE", "sessions/codex-one");
-  expect(scopes).toBe(4);
+  expect(scopes).toBe(5);
   await expect(request("POST", "sessions/codex-one/archive", { archived: "yes" })).rejects.toThrow("boolean");
   const stream = await request("GET", "stream");
   expect(subscriptions).toBe(1);
@@ -255,4 +262,38 @@ test("Sofia reports a task held by another process as a conflict the app can exp
     code: "thread_writer_conflict",
     message: expect.stringContaining("open elsewhere"),
   });
+});
+
+test("Sofia branches a task at the boundary message's turn", async () => {
+  const logPath = path.join(mkdtempSync(path.join(tmpdir(), "sofia-fork-")), "calls.log");
+  const manager = fixtureManager({
+    SOFIA_FIXTURE_LOG: logPath,
+    SOFIA_FIXTURE_ITEMS: "1",
+    // The fixture rejects thread/fork unless the bound maps to turn t1, so this
+    // proves message -> turn mapping rather than just "a fork happened".
+    SOFIA_FIXTURE_EXPECT_FORK_LAST_TURN: "t1",
+  });
+  try {
+    await manager.start();
+    const forked = await manager.forkSession("codex-local", { messageId: "m2" });
+    expect(forked.id).toBe("codex-forked-1");
+    expect(forked.threadId).toBe("forked-1");
+    expect(manager.getSession("codex-forked-1")?.title).toContain("(branch)");
+    expect(readCalls(logPath)).toContain("thread/fork");
+  } finally {
+    await manager.close();
+  }
+});
+
+test("Sofia forks the whole task when the branch point is the last message", async () => {
+  const logPath = path.join(mkdtempSync(path.join(tmpdir(), "sofia-fork-all-")), "calls.log");
+  const manager = fixtureManager({ SOFIA_FIXTURE_LOG: logPath });
+  try {
+    await manager.start();
+    const forked = await manager.forkSession("codex-local");
+    expect(forked.id).toBe("codex-forked-1");
+    expect(readCalls(logPath)).toContain("thread/fork");
+  } finally {
+    await manager.close();
+  }
 });

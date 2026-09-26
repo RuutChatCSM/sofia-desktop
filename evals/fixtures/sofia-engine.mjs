@@ -9,6 +9,8 @@ const log = (method) => { if (logPath) appendFileSync(logPath, `${method}\n`); }
 // resume but does not show up in `thread/loaded/list`.
 const loaded = new Set(csv(process.env.SOFIA_FIXTURE_LOADED));
 const held = new Set(csv(process.env.SOFIA_FIXTURE_WRITER_HELD));
+// Unified-exec background terminals this fixture pretends to own.
+const backgroundTerminals = new Map();
 createInterface({ input: process.stdin }).on("line", (line) => {
   const { id, method, params: p = {} } = JSON.parse(line);
   if (!method || id === undefined) return;
@@ -34,11 +36,111 @@ createInterface({ input: process.stdin }).on("line", (line) => {
       break;
     case "turn/start":
       send({ method: "turn/started", params: { threadId: p.threadId, turn: { id: "turn-active", status: "inProgress" } } });
+      if (process.env.SOFIA_FIXTURE_BACKGROUND_TERMINAL === "1") {
+        backgroundTerminals.set("1234", {
+          itemId: "call-bg-1",
+          processId: "1234",
+          command: "pnpm dev",
+          cwd: process.cwd(),
+        });
+        send({
+          method: "item/started",
+          params: {
+            threadId: p.threadId,
+            turnId: "turn-active",
+            item: {
+              type: "commandExecution",
+              id: "call-bg-1",
+              command: "pnpm dev",
+              cwd: process.cwd(),
+              processId: "1234",
+              source: "unifiedExecStartup",
+              status: "inProgress",
+            },
+          },
+        });
+      }
+      if (
+        process.env.SOFIA_FIXTURE_BACKGROUND_TERMINAL === "1" &&
+        process.env.SOFIA_FIXTURE_BACKGROUND_TERMINAL_FAIL === "1"
+      ) {
+        // Model a dev server that dies on its own after starting.
+        backgroundTerminals.delete("1234");
+        send({
+          method: "item/completed",
+          params: {
+            threadId: p.threadId,
+            turnId: "turn-active",
+            item: {
+              type: "commandExecution",
+              id: "call-bg-1",
+              command: "pnpm dev",
+              cwd: process.cwd(),
+              processId: "1234",
+              source: "unifiedExecStartup",
+              status: "failed",
+              exitCode: 1,
+            },
+          },
+        });
+      }
       if (process.env.SOFIA_FIXTURE_COMPLETE_BEFORE_START_REPLY === "1") {
         send({ method: "turn/completed", params: { threadId: p.threadId, turn: { id: "turn-active", status: "completed" } } });
       }
       result = { turn: { id: "turn-active" } };
       break;
+    case "thread/backgroundTerminals/list":
+      result = { data: [...backgroundTerminals.values()], nextCursor: null };
+      break;
+    case "thread/backgroundTerminals/terminate": {
+      const terminal = backgroundTerminals.get(String(p.processId));
+      if (terminal) {
+        backgroundTerminals.delete(String(p.processId));
+        send({
+          method: "item/completed",
+          params: {
+            threadId: p.threadId,
+            turnId: "turn-active",
+            item: {
+              type: "commandExecution",
+              id: terminal.itemId,
+              command: terminal.command,
+              cwd: terminal.cwd,
+              processId: terminal.processId,
+              source: "unifiedExecStartup",
+              status: "completed",
+              exitCode: 0,
+            },
+          },
+        });
+      }
+      result = { terminated: Boolean(terminal) };
+      break;
+    }
+    case "thread/backgroundTerminals/clean": {
+      for (const terminal of backgroundTerminals.values()) {
+        send({
+          method: "item/completed",
+          params: {
+            threadId: p.threadId,
+            turnId: "turn-active",
+            item: {
+              type: "commandExecution",
+              id: terminal.itemId,
+              command: terminal.command,
+              cwd: terminal.cwd,
+              processId: terminal.processId,
+              source: "unifiedExecStartup",
+              status: "completed",
+              exitCode: 0,
+            },
+          },
+        });
+      }
+      backgroundTerminals.clear();
+      result = {};
+      break;
+    }
     case "turn/steer":
       if (process.env.SOFIA_FIXTURE_REJECT_STEER === "1") return send({ id, error: { code: -32602, message: "active turn cannot be steered" } });
       if (process.env.SOFIA_FIXTURE_STALE_COMPLETION === "1") {
@@ -55,7 +157,22 @@ createInterface({ input: process.stdin }).on("line", (line) => {
     case "thread/archive":
     case "thread/unarchive": break;
     case "thread/delete": return send({ id, error: { code: -32000, message: "delete rejected" } });
-    case "thread/items/list": result = { data: [] }; break;
+    case "thread/items/list":
+      result = process.env.SOFIA_FIXTURE_ITEMS === "1"
+        ? { data: [
+            { turnId: "t1", item: { id: "m1", type: "userMessage", content: [{ type: "text", text: "first" }] } },
+            { turnId: "t2", item: { id: "m2", type: "userMessage", content: [{ type: "text", text: "second" }] } },
+          ] }
+        : { data: [] };
+      break;
+    case "thread/fork": {
+      const expectedLastTurn = process.env.SOFIA_FIXTURE_EXPECT_FORK_LAST_TURN;
+      if (expectedLastTurn && p.lastTurnId !== expectedLastTurn) {
+        return send({ id, error: { code: -32602, message: `expected fork lastTurnId ${expectedLastTurn}, got ${p.lastTurnId}` } });
+      }
+      result = { thread: { id: "forked-1" } };
+      break;
+    }
     default: return send({ id, error: { code: -32601, message: `unexpected method ${method}` } });
   }
   send({ id, result });

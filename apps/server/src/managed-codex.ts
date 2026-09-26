@@ -457,12 +457,16 @@ export class ManagedCodexEngine {
     return await this.request("thread/read", { threadId });
   }
 
-  /** Fork a thread into a new thread (thread/fork). */
-  async forkThread(params: { threadId: string; input: Array<{ text: string } | { url: string }> }): Promise<string | null> {
-    const input = params.input.map((entry) =>
-      "text" in entry ? { type: "text", text: entry.text } : { type: "image", url: entry.url },
-    );
-    const result = await this.request("thread/fork", { threadId: params.threadId, input });
+  /**
+   * Fork a thread into a new thread (thread/fork). The engine forks history at
+   * a turn boundary and does not start a turn, so no `input` is sent.
+   */
+  async forkThread(params: { threadId: string; lastTurnId?: string; beforeTurnId?: string }): Promise<string | null> {
+    const result = await this.request("thread/fork", {
+      threadId: params.threadId,
+      ...(params.lastTurnId ? { lastTurnId: params.lastTurnId } : {}),
+      ...(params.beforeTurnId ? { beforeTurnId: params.beforeTurnId } : {}),
+    });
     const payload = result as { threadId?: string; thread?: { id?: string } };
     return payload.threadId ?? payload.thread?.id ?? null;
   }

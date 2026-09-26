@@ -30,6 +30,10 @@ function readCallLog(path: string): string[] {
 type FakeCodexOptions = {
   /** Append every requested method here so tests can assert what was called. */
   logPath?: string;
+  /** Append every turn input (prompt/steer) here so tests can assert its shape. */
+  inputLogPath?: string;
+  /** Append every `thread/settings/update` payload so tests can assert the pair. */
+  settingsLogPath?: string;
   /** `thread/items/list` payload (materialized store items). */
   items?: unknown[];
   /** Paged `thread/items/list` payloads, oldest first; each links to the next. */
@@ -60,6 +64,8 @@ async function writeFakeCodex(
     "const rl = createInterface({ input: process.stdin });",
     "const notifications = " + JSON.stringify(notifications) + ";",
     "const logPath = " + JSON.stringify(options.logPath ?? null) + ";",
+    "const inputLogPath = " + JSON.stringify(options.inputLogPath ?? null) + ";",
+    "const settingsLogPath = " + JSON.stringify(options.settingsLogPath ?? null) + ";",
     "const listItems = " + JSON.stringify(options.items ?? []) + ";",
     "const itemPages = " + JSON.stringify(options.itemsPages ?? []) + ";",
     "const listedThreads = " + JSON.stringify(options.threads ?? []) + ";",
@@ -87,6 +93,7 @@ async function writeFakeCodex(
     "  } else if (msg.method === 'turn/start') {",
     "    const turnId = 'turn-' + (++id);",
     "    const threadId = msg.params.threadId;",
+    "    if (inputLogPath) appendFileSync(inputLogPath, JSON.stringify(msg.params.input) + '\\n');",
     "    send({ jsonrpc: '2.0', id: msg.id, result: { threadId, turnId } });",
     "    // Stream a fake agent message delta, then complete the turn — unless the",
     "    // input asks to hold it open (so tests can steer an in-flight turn).",
@@ -102,6 +109,7 @@ async function writeFakeCodex(
     "    send({ jsonrpc: '2.0', id: msg.id, result: { threadId: 'forked-' + (++id) } });",
     "  } else if (msg.method === 'turn/steer') {",
     "    const steerText = JSON.stringify(msg.params.input ?? '');",
+    "    if (inputLogPath) appendFileSync(inputLogPath, JSON.stringify(msg.params.input) + '\\n');",
     "    if (steerText.includes('steer-no-active')) {",
     "      send({ jsonrpc: '2.0', id: msg.id, error: { code: -32600, message: 'no active turn to steer' } });",
     "    } else if (steerText.includes('steer-not-steerable')) {",
@@ -129,6 +137,9 @@ async function writeFakeCodex(
     "    } else {",
     "      send({ jsonrpc: '2.0', id: msg.id, result: {} });",
     "    }",
+    "  } else if (msg.method === 'thread/settings/update') {",
+    "    if (settingsLogPath) appendFileSync(settingsLogPath, JSON.stringify(msg.params) + '\\n');",
+    "    send({ jsonrpc: '2.0', id: msg.id, result: {} });",
     "  } else if (msg.method === 'thread/archive' || msg.method === 'thread/unarchive' || msg.method === 'thread/unsubscribe' || msg.method === 'turn/interrupt') {",
     "    send({ jsonrpc: '2.0', id: msg.id, result: {} });",
     "  } else {",
@@ -201,6 +212,34 @@ describe("CodexSessionManager", () => {
     }
   });
 
+  test("prompt and steer send images as structured inputs, never as base64 prompt text", async () => {
+    const root = await createRoot();
+    const inputLogPath = join(root, "inputs.log");
+    const bin = await writeFakeCodex(root, [], { inputLogPath });
+    const manager = new CodexSessionManager({ bin, cwd: root, interpreter: process.execPath });
+    const image = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUg==";
+    try {
+      const session = await manager.createSession({ title: "T", workspaceId: "ws_1", cwd: root });
+
+      // "hold" keeps the turn in flight so steer is available right after.
+      await manager.prompt(session.id, "describe this hold", { images: [image] });
+      const lines = readFileSync(inputLogPath, "utf8").trim().split("\n");
+      const promptInput = JSON.parse(lines[0] ?? "[]") as Array<Record<string, unknown>>;
+      expect(promptInput).toContainEqual({ type: "image", url: image });
+      const promptText = promptInput.filter((entry) => entry.type === "text").map((entry) => entry.text).join("");
+      expect(promptText).toContain("describe this hold");
+      expect(promptText).not.toContain("iVBORw0KGgo");
+      expect(promptText).not.toContain("data:image");
+
+      await manager.steer(session.id, "and this one", [image]);
+      const steerLines = readFileSync(inputLogPath, "utf8").trim().split("\n");
+      const steerInput = JSON.parse(steerLines[steerLines.length - 1] ?? "[]") as Array<Record<string, unknown>>;
+      expect(steerInput).toContainEqual({ type: "image", url: image });
+    } finally {
+      await manager.close();
+    }
+  });
+
   test("RPC parity: steer, fork, archive, unsubscribe at the session level", async () => {
     const root = await createRoot();
     const bin = await writeFakeCodex(root);
@@ -215,7 +254,7 @@ describe("CodexSessionManager", () => {
       expect(steered.turnId).toMatch(/^steered-/);
       expect(manager.getSession(session.id)?.status).toBe("running");
 
-      const forked = await manager.forkSession(session.id, "copy this");
+      const forked = await manager.forkSession(session.id);
       expect(forked.id).toBe(codexSessionId(forked.threadId));
       expect(forked.threadId).toMatch(/^forked-/);
       expect(manager.listSessions()).toHaveLength(2);
@@ -418,6 +457,38 @@ describe("CodexSessionManager", () => {
       });
       expect(updated.model).toBe("model-b");
       expect(updated.providerId).toBe("provider-b");
+    } finally {
+      await manager.close();
+    }
+  });
+
+  test("prompt that changes only the provider still sends the model", async () => {
+    // Provider and model are one selection. Sending only `modelProvider` left
+    // the engine's previously configured model in place, so the provider
+    // flipped while a stale model id survived — DeepSeek being handed
+    // OpenRouter's `stealth/space-bunny-alpha`.
+    const root = await createRoot();
+    const settingsLogPath = join(root, "settings.log");
+    const manager = new CodexSessionManager({
+      bin: await writeFakeCodex(root, [], { settingsLogPath }),
+      cwd: root,
+      interpreter: process.execPath,
+    });
+    try {
+      const session = await manager.createSession({
+        title: "T",
+        workspaceId: "ws_1",
+        model: "model-a",
+        providerId: "provider-a",
+      });
+      await manager.prompt(session.id, "same model, new provider", {
+        model: "model-a",
+        providerId: "provider-b",
+      });
+      const lines = readFileSync(settingsLogPath, "utf8").trim().split("\n").filter(Boolean);
+      const update = JSON.parse(lines[lines.length - 1]) as { model?: string; modelProvider?: string };
+      expect(update.modelProvider).toBe("provider-b");
+      expect(update.model).toBe("model-a");
     } finally {
       await manager.close();
     }

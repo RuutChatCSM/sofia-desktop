@@ -17,6 +17,7 @@ import {
   isWriteToolPart,
 } from "@/lib/build-in-tools"
 import { parseFilename, truncateText } from "@/components/tools/path"
+import { activityTitleForCommand } from "@/lib/activity-title"
 
 type AnyToolPart = ToolUIPart | DynamicToolUIPart
 
@@ -94,6 +95,12 @@ export function getToolActivityLabel(part: AnyToolPart): string {
     return description
       ? `Agent: ${truncateText(description, 56)}`
       : "Running an agent"
+  }
+  if (part.type === "dynamic-tool" && part.toolName === "background_process") {
+    // A background process is a resource, not the operation. Name the
+    // operation ("Running the app tests"), never the runtime plumbing.
+    const input = (part.input ?? {}) as { command?: string; description?: string }
+    return activityTitleForCommand(input.command?.trim() ?? "", input.description?.trim() ?? "")
   }
   if (part.type === "dynamic-tool") {
     return `Running ${part.toolName.replace(/[_-]+/g, " ")}`

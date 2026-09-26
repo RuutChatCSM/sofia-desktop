@@ -9,15 +9,20 @@
 import { randomUUID } from "node:crypto";
 
 import { removeCodexAuthKey, setCodexAuthKey } from "./codex-auth-store.js";
-import { ensureProviderModels } from "./codex-model-discovery.js";
+import { getCatalogProvider, listCatalogProviders } from "./models-dev-catalog.js";
+import { catalogProvider, providerAuthMethodsById } from "./provider-catalog.js";
+import { discoverProviderModels, ensureProviderModels } from "./codex-model-discovery.js";
 import {
   codexEnvKeyForProvider,
   parseCodexEngineConfig,
   readCodexEngineConfig,
+  readCodexProviders,
   writeCodexEngineConfigFromProviders,
+  writeCodexProviders,
 } from "./codex-providers.js";
-import type { CodexEvent, CodexSession } from "./codex-sessions.js";
+import type { BackgroundProcess, CodexEvent, CodexSession } from "./codex-sessions.js";
 import { CodexSteerError, CodexThreadBusyError, MAX_TRANSCRIPT_ITEMS, isCodexSessionId } from "./codex-sessions.js";
+import type { CodexAttentionHub } from "./codex-attention.js";
 import { ApiError } from "./errors.js";
 import { addRoute, type RequestContext, type Route } from "./routes/registry.js";
 import type { ServerConfig, TokenScope } from "./types.js";
@@ -32,13 +37,17 @@ export interface CodexSessionRegistry {
     start: () => Promise<void>;
     listSessions: () => CodexSession[];
     createSession: (input: { title: string; prompt?: string; workspaceId: string; cwd?: string; model?: string; providerId?: string }) => Promise<CodexSession>;
-    prompt: (sessionId: string, text: string, opts?: { model?: string; providerId?: string }) => Promise<CodexSession>;
-    steer: (sessionId: string, text: string) => Promise<CodexSession>;
+    prompt: (sessionId: string, text: string, opts?: { model?: string; providerId?: string; images?: string[] }) => Promise<CodexSession>;
+    steer: (sessionId: string, text: string, images?: string[]) => Promise<CodexSession>;
     abort: (sessionId: string) => Promise<void>;
     delete: (sessionId: string) => Promise<void>;
     setArchived: (sessionId: string, archived: boolean) => Promise<CodexSession>;
     rename: (sessionId: string, title: string) => Promise<CodexSession>;
+    forkSession: (sessionId: string, options?: { messageId?: string | null }) => Promise<CodexSession>;
     getSessionItems: (sessionId: string, options?: { limit?: number }) => Promise<Array<{ turnId: string; item: Record<string, unknown> }>>;
+    listBackgroundProcesses: (sessionId: string) => Promise<BackgroundProcess[]>;
+    terminateBackgroundProcess: (sessionId: string, processId: string) => Promise<boolean>;
+    cleanBackgroundProcesses: (sessionId: string) => Promise<void>;
     on: (listener: (event: CodexEvent) => void) => () => void;
   }>;
 }
@@ -59,6 +68,14 @@ function optionalStringField(body: Record<string, unknown>, name: string): strin
   return typeof value === "string" ? value : undefined;
 }
 
+/** Optional list of image data URLs to attach to a turn. */
+function optionalStringArrayField(body: Record<string, unknown>, name: string): string[] | undefined {
+  const value = body[name];
+  if (!Array.isArray(value)) return undefined;
+  const items = value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
+  return items.length ? items : undefined;
+}
+
 export interface RegisterCodexRoutesOptions {
   routes: Route[];
   config: ServerConfig;
@@ -66,10 +83,23 @@ export interface RegisterCodexRoutesOptions {
   requireClientScope: RequireClientScope;
   ensureWritable: EnsureWritable;
   registry: CodexSessionRegistry;
+  /**
+   * Cross-workspace attention hub. When provided, the server exposes the
+   * attention feed that stays live regardless of which workspace the renderer
+   * is viewing.
+   */
+  attention?: CodexAttentionHub;
+  /**
+   * Fetch used when a connect-time model discovery probes a provider's
+   * `/models` endpoint. Defaults to the server's external egress; tests inject a
+   * stub. Discovery already accepts a fetch override, so this only forwards it.
+   */
+  providerDiscoveryFetch?: typeof fetch;
 }
 
 export function registerCodexRoutes(options: RegisterCodexRoutesOptions): void {
   const { routes, readJsonBody, requireClientScope, ensureWritable, registry } = options;
+  const providerDiscoveryFetch = options.providerDiscoveryFetch;
   const notFound = (message: string) => new ApiError(404, "not_found", message);
   const workspaceManager = async (workspaceId: string) => registry.getOrCreate(workspaceId);
 
@@ -123,17 +153,18 @@ export function registerCodexRoutes(options: RegisterCodexRoutesOptions): void {
     return jsonResponse({ ok: true, config });
   });
 
-  // Provider auth methods the app's provider-auth modal offers. The Sofia
-  // engine signs in to OpenAI via ChatGPT OAuth (browser or headless device
-  // code); every other provider is configured with an API key, which the app
-  // adds on its own.
+  // Provider auth methods the app's provider-auth modal offers. Derived from
+  // the shared connectable catalog (mirroring the engine's own provider
+  // registry) instead of a hardcoded list, so every provider the engine knows
+  // how to authenticate is connectable from the app. OAuth entries appear only
+  // for providers the engine can actually complete a flow for; the rest
+  // authenticate with an API key.
   addRoute(routes, "GET", "/workspace/:id/provider/auth", "client", async () => {
-    return jsonResponse({
-      openai: [
-        { type: "oauth", label: "Sign in with ChatGPT" },
-        { type: "oauth", label: "Headless device flow" },
-      ],
-    });
+    // Merge the full models.dev catalog over the static well-known list so the
+    // app offers every provider the CLI's `/connect` does, not a fixed 14. A
+    // catalog outage degrades to the static list rather than an empty modal.
+    const catalog = await listCatalogProviders({ fetchImpl: providerDiscoveryFetch }).catch(() => []);
+    return jsonResponse(providerAuthMethodsById({ catalogProviderIds: catalog.map((entry) => entry.id) }));
   });
 
   // The app pushes its connected providers (with models.dev-backed models) here
@@ -171,11 +202,13 @@ export function registerCodexRoutes(options: RegisterCodexRoutesOptions): void {
     const body = await readJsonBody(ctx.request);
     const text = optionalStringField(body, "text");
     if (!text) throw new ApiError(400, "invalid_payload", "text is required");
+    const images = optionalStringArrayField(body, "images");
     const manager = await workspaceManager(ctx.params.id);
     if (!isCodexSessionId(ctx.params.sessionId)) throw notFound("unknown codex session");
     const session = await sofiaRequest(() => manager.prompt(ctx.params.sessionId, text, {
       model: optionalStringField(body, "model"),
       providerId: optionalStringField(body, "providerId"),
+      images,
     }));
     return jsonResponse({ ok: true, session });
   });
@@ -190,10 +223,11 @@ export function registerCodexRoutes(options: RegisterCodexRoutesOptions): void {
     const body = await readJsonBody(ctx.request);
     const text = optionalStringField(body, "text");
     if (!text) throw new ApiError(400, "invalid_payload", "text is required");
+    const images = optionalStringArrayField(body, "images");
     const manager = await workspaceManager(ctx.params.id);
     if (!isCodexSessionId(ctx.params.sessionId)) throw notFound("unknown codex session");
     try {
-      const session = await manager.steer(ctx.params.sessionId, text);
+      const session = await manager.steer(ctx.params.sessionId, text, images);
       return jsonResponse({ ok: true, session });
     } catch (error) {
       if (error instanceof CodexSteerError) {
@@ -217,6 +251,38 @@ export function registerCodexRoutes(options: RegisterCodexRoutesOptions): void {
     return jsonResponse({ ok: true, items });
   });
 
+  // Background processes the agent started through unified exec. The list is
+  // the server's merged view (engine live set + tracked exit status/output), so
+  // a client that reconnects sees the same picture the stream would have built.
+  addRoute(routes, "GET", "/workspace/:id/codex/sessions/:sessionId/background-processes", "client", async (ctx) => {
+    const manager = await workspaceManager(ctx.params.id);
+    if (!isCodexSessionId(ctx.params.sessionId)) throw notFound("unknown codex session");
+    const processes = await sofiaRequest(() => manager.listBackgroundProcesses(ctx.params.sessionId));
+    return jsonResponse({ ok: true, processes });
+  });
+
+  // Stop every background process on the session's thread.
+  addRoute(routes, "POST", "/workspace/:id/codex/sessions/:sessionId/background-processes/clean", "client", async (ctx) => {
+    ensureWritable(options.config);
+    requireClientScope(ctx, "collaborator");
+    const manager = await workspaceManager(ctx.params.id);
+    if (!isCodexSessionId(ctx.params.sessionId)) throw notFound("unknown codex session");
+    await sofiaRequest(() => manager.cleanBackgroundProcesses(ctx.params.sessionId));
+    return jsonResponse({ ok: true });
+  });
+
+  // Terminate one background process. `processId` is the engine handle (never
+  // an OS pid); the manager also accepts the item id as a fallback.
+  addRoute(routes, "POST", "/workspace/:id/codex/sessions/:sessionId/background-processes/:processId/terminate", "client", async (ctx) => {
+    ensureWritable(options.config);
+    requireClientScope(ctx, "collaborator");
+    const manager = await workspaceManager(ctx.params.id);
+    if (!isCodexSessionId(ctx.params.sessionId)) throw notFound("unknown codex session");
+    const terminated = await sofiaRequest(() =>
+      manager.terminateBackgroundProcess(ctx.params.sessionId, ctx.params.processId));
+    return jsonResponse({ ok: true, terminated });
+  });
+
   addRoute(routes, "POST", "/workspace/:id/codex/sessions/:sessionId/abort", "client", async (ctx) => {
     ensureWritable(options.config);
     requireClientScope(ctx, "collaborator");
@@ -233,6 +299,18 @@ export function registerCodexRoutes(options: RegisterCodexRoutesOptions): void {
     if (!isCodexSessionId(ctx.params.sessionId)) throw notFound("unknown codex session");
     await sofiaRequest(() => manager.delete(ctx.params.sessionId));
     return jsonResponse({ ok: true });
+  });
+
+  // Branch a conversation into a new thread at a message boundary.
+  addRoute(routes, "POST", "/workspace/:id/codex/sessions/:sessionId/fork", "client", async (ctx) => {
+    ensureWritable(options.config);
+    requireClientScope(ctx, "collaborator");
+    const manager = await workspaceManager(ctx.params.id);
+    if (!isCodexSessionId(ctx.params.sessionId)) throw notFound("unknown codex session");
+    const body = await readJsonBody(ctx.request).catch(() => null);
+    const messageId = optionalStringField(body ?? {}, "messageId");
+    const session = await sofiaRequest(() => manager.forkSession(ctx.params.sessionId, { messageId }));
+    return jsonResponse({ ok: true, session });
   });
 
   for (const action of ["archive", "rename"] as const) {
@@ -253,6 +331,89 @@ export function registerCodexRoutes(options: RegisterCodexRoutesOptions): void {
     });
   }
 
+  /**
+   * Every env var name a provider's credential may be stored under.
+   *
+   * The engine resolves a single `env_key` per provider, but the catalog lists
+   * several aliases for some (`google` -> GOOGLE_API_KEY,
+   * GOOGLE_GENERATIVE_AI_API_KEY, GEMINI_API_KEY). Writing all of them means the
+   * engine finds the key whichever name its built-in registry uses.
+   */
+  async function providerEnvKeys(providerId: string): Promise<string[]> {
+    const id = providerId.trim().toLowerCase();
+    if (!id) return [];
+    const catalogEntry = await getCatalogProvider(id, { fetchImpl: providerDiscoveryFetch }).catch(() => null);
+    const keys = catalogEntry?.envKeys ?? [];
+    const known = catalogProvider(id);
+    if (known?.envKey) keys.push(known.envKey);
+    return keys;
+  }
+
+  /**
+   * Make sure a provider the user just connected exists in the engine's
+   * provider catalog (`providers.json`) and is immediately usable.
+   *
+   * Storing the credential alone is not enough: the app renders providers
+   * through their models and the engine only knows a provider that has a
+   * catalog entry, so a key written for an unknown provider produced a
+   * connection the user could never see or select. This is the registration
+   * step `/connect` performs when it writes a new provider.
+   *
+   * A provider with an empty model catalog is still invisible in the picker, so
+   * registration resolves the catalog from the provider's `/models` endpoint
+   * before returning. Discovery is best-effort: a provider that cannot be
+   * reached still gets a catalog entry and stays registered, and the deferred
+   * retry on the next config read fills it in.
+   *
+   * Existing entries are left untouched so a connected provider's already
+   * discovered models are never discarded by a key rotation.
+   */
+  async function ensureProviderRegistered(providerId: string): Promise<void> {
+    const id = providerId.trim();
+    if (!id) return;
+    const file = await readCodexProviders();
+    if (file.providers[id]) {
+      // Already registered. Still resolve an empty catalog so a provider that
+      // failed to discover earlier becomes selectable without a reconnect.
+      await resolveRegisteredProviderModels();
+      return;
+    }
+    // Prefer the models.dev entry (base URL, display name) and fall back to the
+    // static well-known list when the catalog is unavailable.
+    const catalogEntry = await getCatalogProvider(id, { fetchImpl: providerDiscoveryFetch }).catch(() => null);
+    const known = catalogProvider(id);
+    const baseUrl = catalogEntry?.baseUrl ?? known?.baseUrl ?? "";
+    file.providers[id] = {
+      api_key: "",
+      base_url: baseUrl,
+      wire_api: catalogEntry ? "chat_completions" : known?.wireApi === "responses" ? "responses" : "chat_completions",
+      name: catalogEntry?.name ?? known?.name ?? id,
+      // Seed the catalog's own model list so a provider the user connects is
+      // immediately selectable, before (or without) a live /models probe.
+      models: (catalogEntry?.models ?? []).map((model) => ({
+        id: model.id,
+        name: model.name,
+        reasoning: model.reasoning,
+        contextWindow: model.contextWindow,
+      })),
+    };
+    await writeCodexProviders(file);
+    await resolveRegisteredProviderModels();
+  }
+
+  /**
+   * Populate a freshly registered provider's model catalog from its `/models`
+   * endpoint. Never throws: a provider that cannot be reached keeps its empty
+   * catalog and is retried on the next config read.
+   */
+  async function resolveRegisteredProviderModels(): Promise<void> {
+    try {
+      await discoverProviderModels(providerDiscoveryFetch ? { fetchImpl: providerDiscoveryFetch } : undefined);
+    } catch {
+      // Discovery is best-effort; the provider stays registered regardless.
+    }
+  }
+
   // Codex auth store: the app writes the same provider API key the user enters
   // in the UI here (mirroring engine's auth API), and the codex engine reads
   // it at spawn to inject into its child env. Stored server-side in the global
@@ -267,13 +428,23 @@ export function registerCodexRoutes(options: RegisterCodexRoutesOptions): void {
       throw new ApiError(400, "invalid_payload", "key is required");
     }
     const providerId = decodeURIComponent(ctx.params.providerId);
-    // Mirror codex's `/connect`: the credential is stored under the derived
-    // `<ID>_API_KEY` name the engine resolves via config.toml's `env_key`. The
-    // app-provided name (if different) is kept too so nothing is orphaned.
-    await setCodexAuthKey(providerId, codexEnvKeyForProvider(providerId), key);
-    if (providedEnvKey && providedEnvKey !== codexEnvKeyForProvider(providerId)) {
-      await setCodexAuthKey(providerId, providedEnvKey, key);
+    // Mirror codex's `/connect`: the credential is stored under the name the
+    // engine resolves via config.toml's `env_key`. The catalog's env var is
+    // authoritative when the app did not send one; otherwise the derived
+    // `<ID>_API_KEY` name matches. Every distinct name is written so nothing is
+    // orphaned — the engine may look up any of them.
+    const names = new Set<string>();
+    for (const name of [
+      providedEnvKey,
+      ...(await providerEnvKeys(providerId)),
+      codexEnvKeyForProvider(providerId),
+    ]) {
+      if (name?.trim()) names.add(name.trim());
     }
+    for (const name of names) {
+      await setCodexAuthKey(providerId, name, key);
+    }
+    await ensureProviderRegistered(providerId);
     return jsonResponse({ ok: true });
   });
 
@@ -285,9 +456,18 @@ export function registerCodexRoutes(options: RegisterCodexRoutesOptions): void {
     const providedEnvKey = body && typeof body.envKey === "string" && body.envKey.trim()
       ? body.envKey.trim()
       : null;
-    await removeCodexAuthKey(codexEnvKeyForProvider(providerId));
-    if (providedEnvKey && providedEnvKey !== codexEnvKeyForProvider(providerId)) {
-      await removeCodexAuthKey(providedEnvKey);
+    // Mirror the PUT route: clear every env name this provider's credential may
+    // be stored under, so a disconnect never leaves a key the engine can read.
+    const names = new Set<string>();
+    for (const name of [
+      providedEnvKey,
+      ...(await providerEnvKeys(providerId)),
+      codexEnvKeyForProvider(providerId),
+    ]) {
+      if (name?.trim()) names.add(name.trim());
+    }
+    for (const name of names) {
+      await removeCodexAuthKey(name);
     }
     return jsonResponse({ ok: true });
   });
@@ -352,4 +532,76 @@ export function registerCodexRoutes(options: RegisterCodexRoutesOptions): void {
       },
     });
   });
+
+  // Cross-workspace attention feed: only the transitions that need the user,
+  // from every workspace this server observes. It is deliberately not
+  // workspace-scoped, so a background failure is seen while the renderer shows
+  // another workspace (or while the app was closed — pending events replay
+  // until acknowledged).
+  if (options.attention) {
+    const attention = options.attention;
+
+    addRoute(routes, "GET", "/codex/attention", "client", async ({ request }) => {
+      const encoder = new TextEncoder();
+      let closed = false;
+      let unsubscribe = () => {};
+      const controllerRef: { controller: ReadableStreamDefaultController<Uint8Array> | null } = { controller: null };
+
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controllerRef.controller = controller;
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "stream.ready" })}\n\n`));
+        },
+        cancel() {
+          closed = true;
+          unsubscribe();
+        },
+      });
+
+      unsubscribe = attention.on((event) => {
+        if (closed || !controllerRef.controller) return;
+        try {
+          controllerRef.controller.enqueue(encoder.encode(sseEncode(event)));
+        } catch {
+          closed = true;
+          unsubscribe();
+        }
+      });
+
+      for (const event of attention.pendingEvents()) {
+        if (closed || !controllerRef.controller) break;
+        try {
+          controllerRef.controller.enqueue(encoder.encode(sseEncode(event)));
+        } catch {
+          closed = true;
+          break;
+        }
+      }
+
+      request.signal.addEventListener("abort", () => {
+        closed = true;
+        unsubscribe();
+        try { controllerRef.controller?.close(); } catch { /* already closed */ }
+      });
+
+      return new Response(stream, {
+        headers: {
+          "content-type": "text/event-stream",
+          "cache-control": "no-cache",
+          connection: "keep-alive",
+        },
+      });
+    });
+
+    addRoute(routes, "POST", "/codex/attention/ack", "client", async (ctx) => {
+      const body = await readJsonBody(ctx.request).catch(() => null);
+      const sessionId = body && typeof body.sessionId === "string" ? body.sessionId : "";
+      const itemId = body && typeof body.itemId === "string" ? body.itemId : "";
+      if (!sessionId || !itemId) {
+        throw new ApiError(400, "invalid_payload", "sessionId and itemId are required");
+      }
+      attention.acknowledge({ sessionId, itemId });
+      return jsonResponse({ ok: true });
+    });
+  }
 }

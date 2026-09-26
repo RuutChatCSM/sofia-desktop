@@ -13,6 +13,7 @@ import type {
 import type { PanelTabStore } from "../domains/session/panel/panel-tab-store";
 import type { WorkbenchSnapshot } from "../domains/session/chat/workbench-store";
 import type { UiState } from "./ui-state-store";
+import type { BrowserPageState } from "../../app/lib/desktop-types";
 
 type SofiaContextProjectorInput = {
   route: string;
@@ -85,7 +86,7 @@ function panelTab(tab: PanelTabStore["sessions"][string]["tabs"][number]): Sofia
       kind: "browser",
       label: tab.label,
       url: tab.url,
-      status: tab.status,
+      status: panelTabStatus(tab),
     };
   }
   return {
@@ -93,6 +94,17 @@ function panelTab(tab: PanelTabStore["sessions"][string]["tabs"][number]): Sofia
     kind: "artifact",
     label: tab.label,
   };
+}
+
+function panelTabStatus(tab: { pageState: BrowserPageState }): "loading" | "ready" | "error" {
+  switch (tab.pageState.status) {
+    case "loading":
+      return "loading";
+    case "error":
+      return "error";
+    default:
+      return "ready";
+  }
 }
 
 export function buildSofiaContext(

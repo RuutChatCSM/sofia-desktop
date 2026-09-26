@@ -15,7 +15,7 @@ type ManualSessionScrollState = {
 
 export type SessionScrollState = StickyBottomSessionScrollState | ManualSessionScrollState;
 
-type SessionScrollStateById = Record<string, SessionScrollState>;
+export type SessionScrollStateById = Record<string, SessionScrollState>;
 
 const INITIAL_SESSION_SCROLL_STATE: StickyBottomSessionScrollState = {
   mode: "stickyBottom",
@@ -86,13 +86,6 @@ export function getSessionScrollState(
 ): SessionScrollState {
   if (!sessionId) return INITIAL_SESSION_SCROLL_STATE;
   return sessions[sessionId] ?? INITIAL_SESSION_SCROLL_STATE;
-}
-
-export function selectSessionIsStickyBottom(
-  sessions: SessionScrollStateById,
-  sessionId: string | null | undefined,
-): boolean {
-  return getSessionScrollState(sessions, sessionId).mode === "stickyBottom";
 }
 
 export function selectSessionTopClippedMessageId(
@@ -184,3 +177,63 @@ export const useSessionScrollStore = create<SessionScrollStore>((set) => ({
 }));
 
 useSessionScrollStore.subscribe((state) => persistSessionScrollState(state.sessions));
+
+/**
+ * Whether the user is following the tail (intent) — never "is the scrollbar
+ * near the bottom" (geometry). "stickyBottom" is the follow state.
+ */
+export function selectSessionIsFollowing(sessions: SessionScrollStateById, sessionId: string | null | undefined): boolean {
+  return getSessionScrollState(sessions, sessionId).mode === "stickyBottom";
+}
+
+/** Non-persisted, per-session tail facts. Unknown sessions read as "at tail". */
+export type SessionTailState = {
+  tailVisible: boolean;
+  hiddenUpdates: number;
+};
+
+const DEFAULT_TAIL_STATE: SessionTailState = { tailVisible: true, hiddenUpdates: 0 };
+
+type SessionTailStore = {
+  bySession: Record<string, SessionTailState>;
+  setTailVisible: (sessionId: string | null | undefined, tailVisible: boolean) => void;
+  noteHiddenUpdate: (sessionId: string | null | undefined) => void;
+  clearHiddenUpdates: (sessionId: string | null | undefined) => void;
+};
+
+export const useSessionTailStore = create<SessionTailStore>((set) => ({
+  bySession: {},
+  setTailVisible: (sessionId, tailVisible) => set((state) => {
+    if (!sessionId) return state;
+    const current = state.bySession[sessionId] ?? DEFAULT_TAIL_STATE;
+    if (current.tailVisible === tailVisible) return state;
+    return { bySession: { ...state.bySession, [sessionId]: { ...current, tailVisible } } };
+  }),
+  noteHiddenUpdate: (sessionId) => set((state) => {
+    if (!sessionId) return state;
+    const current = state.bySession[sessionId] ?? DEFAULT_TAIL_STATE;
+    return {
+      bySession: {
+        ...state.bySession,
+        [sessionId]: { ...current, hiddenUpdates: current.hiddenUpdates + 1 },
+      },
+    };
+  }),
+  clearHiddenUpdates: (sessionId) => set((state) => {
+    if (!sessionId) return state;
+    const current = state.bySession[sessionId] ?? DEFAULT_TAIL_STATE;
+    if (current.hiddenUpdates === 0) return state;
+    return { bySession: { ...state.bySession, [sessionId]: { ...current, hiddenUpdates: 0 } } };
+  }),
+}));
+
+/** The tail is assumed visible until an observer says otherwise. */
+export function selectSessionTailVisible(bySession: Record<string, SessionTailState>, sessionId: string | null | undefined): boolean {
+  if (!sessionId) return true;
+  return bySession[sessionId]?.tailVisible ?? true;
+}
+
+export function selectSessionHiddenUpdates(bySession: Record<string, SessionTailState>, sessionId: string | null | undefined): number {
+  if (!sessionId) return 0;
+  return bySession[sessionId]?.hiddenUpdates ?? 0;
+}

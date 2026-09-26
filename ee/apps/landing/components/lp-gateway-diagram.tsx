@@ -77,7 +77,7 @@ export function LpGatewayDiagram() {
           MCP GATEWAY
         </div>
         <p className="mt-3 text-[11.5px] leading-[17px] text-[var(--lp-muted)]">
-          Auth, roles, and policies applied on the way through
+          Access managed through your organization’s roles and policies
         </p>
       </div>
 
@@ -85,7 +85,7 @@ export function LpGatewayDiagram() {
 
       <div className="w-full rounded-[20px] bg-[var(--lp-tonal)] p-5 md:w-[320px] md:shrink-0">
         <div className="mb-3 text-[11px] font-bold tracking-[0.1em] text-[var(--lp-muted)]">
-          INSTANTLY SHARED WITH EVERYONE
+          SHARED WITH YOUR TEAM
         </div>
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-3 rounded-[10px] bg-white px-3.5 py-2.5 text-[13.5px] font-medium text-[var(--lp-ink)]">
@@ -96,7 +96,7 @@ export function LpGatewayDiagram() {
           </div>
           <ClientRow logo="claude" label="Claude Code" />
           <ClientRow logo="cursor" label="Cursor" />
-          <ClientRow logo="openai" label="ChatGPT — any MCP client" />
+          <ClientRow logo="openai" label="ChatGPT and compatible MCP clients" />
         </div>
       </div>
     </div>

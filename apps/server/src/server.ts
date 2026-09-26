@@ -85,6 +85,7 @@ import { addRoute, matchRoute, type AuthMode, type RequestContext, type Route } 
 import { registerSessionRoutes } from "./routes/sessions.js";
 import { registerCodexRoutes } from "./codex-routes.js";
 import { applyCodexWorkspaceMcpConfiguration, codexWorkspaceConfigFile, getOrCreateCodexSessionManager } from "./codex-registry.js";
+import { CodexAttentionHub } from "./codex-attention.js";
 import { bridgeCodexApprovals } from "./codex-approvals.js";
 import { registerWorkspaceRoutes } from "./routes/workspaces.js";
 import { registerCloudMcpRoutes } from "./routes/cloud-mcp.js";
@@ -848,7 +849,10 @@ function parseWorkspaceMount(pathname: string): { workspaceId: string; restPath:
   return { workspaceId: decodeURIComponent(workspaceId), restPath };
 }
 
-export async function startServer(config: ServerConfig): Promise<ServeResult> {
+export async function startServer(
+  config: ServerConfig,
+  hooks?: { providerDiscoveryFetch?: typeof fetch },
+): Promise<ServeResult> {
   // The composer's "How should actions be approved?" control persists to the
   // codex access-mode file, which the engine reads on every turn. Seed the host
   // approval service from that same file so a restart shows the saved choice
@@ -899,6 +903,7 @@ export async function startServer(config: ServerConfig): Promise<ServeResult> {
     engineMcpServerState,
     logger,
     cloudProviderSync,
+    hooks,
   );
 
   const serverOptions: {
@@ -1439,6 +1444,7 @@ function createRoutes(
   engineMcpServerState: EngineMcpServerState,
   logger: ServerLogger,
   cloudProviderSync: CloudProviderSync,
+  hooks?: { providerDiscoveryFetch?: typeof fetch },
 ): Route[] {
   const routes: Route[] = [];
   registerCoreRoutes({
@@ -1500,12 +1506,18 @@ function createRoutes(
 
   // Codex runtime (additive engine surface; engine routes are untouched).
   const bridgedCodexWorkspaces = new Set<string>();
+  // Cross-workspace observation: managers keep watching their engine whether or
+  // not a renderer is subscribed, and the hub surfaces attention events from
+  // all of them on one feed.
+  const codexAttention = new CodexAttentionHub();
   registerCodexRoutes({
     routes,
     config,
     readJsonBody,
     ensureWritable,
     requireClientScope,
+    providerDiscoveryFetch: hooks?.providerDiscoveryFetch,
+    attention: codexAttention,
     registry: {
       getOrCreate: async (workspaceId) => {
         const manager = await getOrCreateCodexSessionManager(config, workspaceId);
@@ -1513,6 +1525,7 @@ function createRoutes(
           bridgedCodexWorkspaces.add(workspaceId);
           bridgeCodexApprovals(manager, approvals, workspaceId);
         }
+        codexAttention.observe(workspaceId, manager);
         return manager;
       },
     },

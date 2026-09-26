@@ -11,6 +11,20 @@ export const MIN_WORKSPACE_LEFT_SIDEBAR_WIDTH = 220;
 export const MAX_WORKSPACE_LEFT_SIDEBAR_WIDTH = 420;
 export const DEFAULT_WORKSPACE_RIGHT_SIDEBAR_COLLAPSED_WIDTH = 72;
 export const DEFAULT_WORKSPACE_RIGHT_SIDEBAR_EXPANDED_WIDTH = 520;
+
+/**
+ * First-open browser width. Minimum width and default width are different
+ * concepts: 320px is the drag floor, but a browser that opens at the floor
+ * reads as a utility sidebar, so a fresh install opens at roughly 42% of the
+ * window, clamped to a useful range. A stored width always wins over this.
+ */
+export function defaultRightSidebarExpandedWidth(): number {
+  if (typeof window === "undefined") {
+    return DEFAULT_WORKSPACE_RIGHT_SIDEBAR_EXPANDED_WIDTH;
+  }
+
+  return Math.round(Math.min(Math.max(window.innerWidth * 0.42, 520), 760));
+}
 export const MIN_WORKSPACE_RIGHT_SIDEBAR_WIDTH = 320;
 export const MAX_WORKSPACE_RIGHT_SIDEBAR_WIDTH = 960;
 

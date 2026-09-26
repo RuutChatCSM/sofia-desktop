@@ -6,11 +6,15 @@ import { homeFaq } from "../lib/faq";
 import { baseOpenGraph } from "../lib/seo";
 
 export const metadata = {
+  title: "Sofia — Your work. Your tools. Meet Sofia.",
+  description: "Work with Sofia on your files, research, and everyday tasks. Choose your model, connect your tools, and bring your team along.",
   alternates: {
     canonical: "/"
   },
   openGraph: {
     ...baseOpenGraph,
+    title: "Sofia — Your work. Your tools. Meet Sofia.",
+    description: "Work with Sofia on your files, research, and everyday tasks. Choose your model, connect your tools, and bring your team along.",
     url: "https://sofia.ruut.chat"
   }
 };
@@ -20,7 +24,7 @@ const softwareApplicationSchema = {
   "@type": "SoftwareApplication",
   name: "Sofia",
   description:
-    "Open source Claude Cowork alternative. Desktop app that lets teams use 50+ LLMs, bring their own provider keys, and ship reusable agent setups with guardrails.",
+    "Sofia is a desktop app for working with AI on your files, research, and everyday tasks, with a choice of model providers and shared tools for teams.",
   url: "https://sofia.ruut.chat",
   applicationCategory: "BusinessApplication",
   operatingSystem: "macOS, Windows, Linux",

@@ -185,6 +185,38 @@ function threadDisplayTitle(thread: { name?: unknown; preview?: unknown }): stri
   return typeof thread.preview === "string" ? thread.preview.trim() : "";
 }
 
+/**
+ * A long-running command the agent started through unified exec. The engine
+ * keeps these processes alive across turns, so the manager tracks them and
+ * refuses to drop the thread subscription while any are live — a turn ending
+ * is not evidence that the thread no longer owns work.
+ *
+ * `status` mirrors the engine's `CommandExecutionStatus`; a `running` process
+ * is the only kind that retains the thread. `processId` is the engine handle
+ * used by `thread/backgroundTerminals/terminate` (never an OS pid).
+ */
+export type BackgroundProcessStatus = "running" | "completed" | "failed" | "declined";
+
+export type BackgroundProcess = {
+  itemId: string;
+  processId: string;
+  command: string;
+  /** Semantic operation title from the engine/orchestrator, when it supplies one. */
+  title?: string;
+  cwd?: string;
+  status: BackgroundProcessStatus;
+  exitCode?: number;
+  aggregatedOutput?: string;
+  durationMs?: number;
+  osPid?: number;
+  cpuPercent?: number;
+  rssKb?: number;
+};
+
+/** Only `Startup` is a new process; an `Interaction` polls/writes one that
+ * already exists and must not be registered as a background process. */
+const UNIFIED_EXEC_STARTUP_SOURCE = "unifiedExecStartup";
+
 export type CodexEvent =
   | { type: "session.created"; session: CodexSession }
   | { type: "session.updated"; session: CodexSession }
@@ -192,6 +224,8 @@ export type CodexEvent =
   | { type: "thinking.delta"; sessionId: string; threadId: string; text: string; itemId?: string }
   | { type: "item.started"; sessionId: string; threadId: string; itemType: string; item: unknown; turnId: string }
   | { type: "item.completed"; sessionId: string; threadId: string; itemType: string; item: unknown; turnId: string }
+  | { type: "backgroundProcesses"; sessionId: string; threadId: string; processes: BackgroundProcess[] }
+  | { type: "backgroundProcess.failed"; sessionId: string; threadId: string; workspaceId: string; sessionTitle: string; itemId: string; processId: string; command: string; exitCode?: number }
   | { type: "tool.output"; sessionId: string; threadId: string; itemId: string; text: string }
   | { type: "file.patch"; sessionId: string; threadId: string; itemId: string; patch: unknown }
   | { type: "turn.completed"; sessionId: string; threadId: string }
@@ -209,6 +243,58 @@ export function isCodexSessionId(sessionId: string): boolean {
   return sessionId.startsWith("codex-");
 }
 
+/**
+ * Image payloads (data URLs) map to the engine's structured image input, so a
+ * pasted image reaches the model as an image instead of base64 prompt text.
+ */
+function turnImageInputs(images?: readonly string[]): Array<{ url: string }> {
+  return (images ?? []).map((url) => ({ url }));
+}
+
+/** Terminal status carried by a completed `CommandExecution` item. */
+function backgroundStatusFromItem(item: Record<string, unknown>): BackgroundProcessStatus {
+  const status = typeof item.status === "string" ? item.status : "";
+  if (status === "failed") return "failed";
+  if (status === "declined") return "declined";
+  if (status === "completed") return "completed";
+  return "running";
+}
+
+/** A process that stopped without being asked to: an explicit failure or a non-zero exit. */
+export function isFailedBackgroundProcess(process: BackgroundProcess): boolean {
+  if (process.status === "failed" || process.status === "declined") return true;
+  return process.status === "completed" && typeof process.exitCode === "number" && process.exitCode !== 0;
+}
+
+/**
+ * Attention is for a process that *died*, or for one that outlived the turn
+ * nobody is working on any more — never for a command's exit code.
+ *
+ *   * died on its own / was declined  -> attention, whenever it happened
+ *     (a dev server that crashes mid-turn is exactly the thing the user cannot
+ *     see from wherever they are looking)
+ *   * finished with a non-zero exit   -> a *result*: `grep` finding nothing, or
+ *     a failing test run, is something the agent already saw and will report.
+ *     Only worth paging about once the turn is over and nobody is left to act.
+ */
+export function shouldNotifyBackgroundProcessFailure(input: {
+  process: BackgroundProcess;
+  turnRunning: boolean;
+}): boolean {
+  const { process, turnRunning } = input;
+  if (process.status === "failed" || process.status === "declined") return true;
+  if (turnRunning) return false;
+  return isFailedBackgroundProcess(process);
+}
+
+/** Live processes first, then most-recently-started exit history. */
+function sortBackgroundProcesses(processes: BackgroundProcess[]): BackgroundProcess[] {
+  return processes.sort((a, b) => {
+    if (a.status === b.status) return a.itemId.localeCompare(b.itemId);
+    return a.status === "running" ? -1 : 1;
+  });
+}
+
 export class CodexSessionManager {
   private engine: ManagedCodexEngine | null = null;
   private sessions = new Map<string, CodexSession>();
@@ -217,6 +303,8 @@ export class CodexSessionManager {
   private approvalQueue: { sessionId: string; threadId: string; params: unknown; resolve: () => void; reject: (reason?: unknown) => void }[] = [];
   private threadAliases: Record<string, string>;
   private loadedThreads = new Set<string>();
+  /** Unified-exec background processes per thread, keyed by item id. */
+  private backgroundProcesses = new Map<string, Map<string, BackgroundProcess>>();
   private mcpConfigSnapshot: string | null = null;
   private mcpRefresh: Promise<void> = Promise.resolve();
 
@@ -389,6 +477,52 @@ export class CodexSessionManager {
     if (!engine) return;
     void engine.unsubscribeThread(threadId).catch(() => undefined);
   }
+
+  /**
+   * Retain the engine thread while it still owns live resources.
+   *
+   * A finished turn is not evidence that the thread is done: unified exec may
+   * have left a dev server, watcher, or log tail running on it. Dropping the
+   * subscription here would let the engine unload the thread after its idle
+   * delay, which terminates every process it owns. Only once the last tracked
+   * process exits may the thread become unload-eligible again.
+   */
+  private maybeReleaseThread(threadId: string): void {
+    if (this.liveBackgroundProcesses(threadId).length > 0) return;
+    this.releaseThread(threadId);
+  }
+
+  private backgroundProcessesFor(threadId: string): Map<string, BackgroundProcess> {
+    let processes = this.backgroundProcesses.get(threadId);
+    if (!processes) {
+      processes = new Map();
+      this.backgroundProcesses.set(threadId, processes);
+    }
+    return processes;
+  }
+
+  private liveBackgroundProcesses(threadId: string): BackgroundProcess[] {
+    return [...this.backgroundProcessesFor(threadId).values()]
+      .filter((process) => process.status === "running");
+  }
+
+  /** Map a unified-exec `CommandExecution` item onto a tracked process. */
+  private backgroundProcessFromItem(item: Record<string, unknown>): BackgroundProcess | null {
+    const source = typeof item.source === "string" ? item.source : "";
+    if (source !== UNIFIED_EXEC_STARTUP_SOURCE) return null;
+    const itemId = typeof item.id === "string" ? item.id : "";
+    if (!itemId) return null;
+    const title = typeof item.description === "string" ? item.description.trim() : "";
+    return {
+      itemId,
+      processId: typeof item.processId === "string" ? item.processId : "",
+      command: typeof item.command === "string" ? item.command : "",
+      ...(title ? { title } : {}),
+      cwd: typeof item.cwd === "string" ? item.cwd : undefined,
+      status: "running",
+    };
+  }
+
 
   private setupEngineListeners(engine: ManagedCodexEngine): void {
     // Inbound server->client approval requests must be answered with a response.
@@ -659,6 +793,7 @@ export class CodexSessionManager {
     if (this.starting) return await this.starting;
     const starting = (async () => {
       this.loadedThreads.clear();
+      this.backgroundProcesses.clear();
       const engine = new ManagedCodexEngine({
         bin: this.handle.bin,        cwd: this.handle.cwd,
         codexHome: this.handle.codexHome,
@@ -668,6 +803,8 @@ export class CodexSessionManager {
       await engine.initialize();
       this.setupEngineListeners(engine);
       engine.onExit(() => {
+        // The engine owns every background process; none survive its exit.
+        this.backgroundProcesses.clear();
         // Mark running sessions as errored so the UI can surface the loss.
         for (const session of this.sessions.values()) {
           if (session.status === "running") {
@@ -839,6 +976,7 @@ export class CodexSessionManager {
     this.engine = null;
     this.starting = null;
     this.loadedThreads.clear();
+    this.backgroundProcesses.clear();
   }
 
   /** Create a thread (session) and optionally start a turn with a prompt. */
@@ -890,7 +1028,7 @@ export class CodexSessionManager {
   }
 
   /** Submit a user message to a thread and start a turn. */
-  async prompt(sessionId: string, text: string, opts?: { cwd?: string; model?: string; providerId?: string }): Promise<CodexSession> {
+  async prompt(sessionId: string, text: string, opts?: { cwd?: string; model?: string; providerId?: string; images?: string[] }): Promise<CodexSession> {
     await this.start();
     const engine = this.activeEngine();
     let session = this.sessions.get(sessionId);
@@ -926,10 +1064,18 @@ export class CodexSessionManager {
     try {
       await this.loadThread(session, engine, opts);
       if ((opts?.model && opts.model !== session.model) || (opts?.providerId && opts.providerId !== session.providerId)) {
+        // Provider and model are one selection, not two: a model id only means
+        // something relative to the provider that serves it. Sending just
+        // `modelProvider` leaves the engine's previously configured `model` in
+        // place, so the provider flips while the stale model id survives —
+        // e.g. DeepSeek receiving OpenRouter's `stealth/space-bunny-alpha`.
+        // Resolve the pair once and send it together.
+        const nextModel = opts?.model ?? session.model;
+        const nextProvider = opts?.providerId ?? session.providerId;
         await engine.updateThreadSettings({
           threadId: session.threadId,
-          ...(opts.model ? { model: opts.model } : {}),
-          ...(opts.providerId ? { modelProvider: opts.providerId } : {}),
+          ...(nextModel ? { model: nextModel } : {}),
+          ...(nextProvider ? { modelProvider: nextProvider } : {}),
         });
         if (opts.model) session.model = opts.model;
         if (opts.providerId) session.providerId = opts.providerId;
@@ -937,7 +1083,7 @@ export class CodexSessionManager {
       turnId = await engine.startTurn({
         ...codexTurnPermissions(readCodexAccessMode(this.handle.codexHome)),
         threadId: session.threadId,
-        input: [{ text: await resolveSofiaPrompt(session.cwd, text) }],
+        input: [{ text: await resolveSofiaPrompt(session.cwd, text) }, ...turnImageInputs(opts?.images)],
         cwd: session.cwd,
       });
     } catch (error) {
@@ -962,7 +1108,7 @@ export class CodexSessionManager {
   }
 
   /** Steer an in-flight turn with a follow-up message (turn/steer). */
-  async steer(sessionId: string, text: string): Promise<CodexSession> {
+  async steer(sessionId: string, text: string, images?: string[]): Promise<CodexSession> {
     await this.start();
     const session = this.sessions.get(sessionId);
     if (!session || !this.engine) throw new Error(`unknown Sofia session: ${sessionId}`);
@@ -976,7 +1122,7 @@ export class CodexSessionManager {
       steeredTurnId = await this.engine.steerTurn({
         threadId: session.threadId,
         expectedTurnId,
-        input: [{ text }],
+        input: [{ text }, ...turnImageInputs(images)],
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -998,20 +1144,28 @@ export class CodexSessionManager {
     return { ...session };
   }
 
-  /** Fork a thread into a new thread (thread/fork). Returns the new session. */
-  async forkSession(sessionId: string, prompt: string): Promise<CodexSession> {
+  /**
+   * Branch a session into a new thread (thread/fork).
+   *
+   * `messageId` is the boundary message from the transcript: the fork keeps the
+   * conversation up to but excluding that message's turn, matching the legacy
+   * engine's message-boundary fork. Without a boundary the whole thread forks.
+   */
+  async forkSession(sessionId: string, options?: { messageId?: string | null }): Promise<CodexSession> {
     await this.start();
     const session = this.sessions.get(sessionId);
     if (!session || !this.engine) throw new Error(`unknown Sofia session: ${sessionId}`);
-    const newThreadId = await this.engine.forkThread({ threadId: session.threadId, input: [{ text: prompt }] });
+    const bounds = options?.messageId
+      ? await this.forkBoundsForMessage(session, options.messageId)
+      : {};
+    const newThreadId = await this.engine.forkThread({ threadId: session.threadId, ...bounds });
     if (!newThreadId) throw new Error("thread/fork returned no threadId");
-    const created = new Date().toISOString();
     const forked: CodexSession = {
       id: codexSessionId(newThreadId),
       threadId: newThreadId,
-      title: `${session.title} (fork)`,
+      title: `${session.title} (branch)`,
       workspaceId: session.workspaceId,
-      created,
+      created: new Date().toISOString(),
       turnId: null,
       status: "idle",
       cwd: session.cwd ?? this.handle.cwd,
@@ -1019,6 +1173,34 @@ export class CodexSessionManager {
     this.sessions.set(forked.id, forked);
     this.emit({ type: "session.created", session: forked });
     return { ...forked };
+  }
+
+  /**
+   * Turn bounds that drop the boundary message's turn and everything after it.
+   * The engine has no message-level fork, so the transcript is mapped onto the
+   * turn boundary the protocol exposes.
+   */
+  private async forkBoundsForMessage(
+    session: CodexSession,
+    messageId: string,
+  ): Promise<{ lastTurnId?: string; beforeTurnId?: string }> {
+    let items: Array<{ turnId: string; item: Record<string, unknown> }>;
+    try {
+      items = await this.getSessionItems(session.id, { limit: MAX_TRANSCRIPT_ITEMS });
+    } catch {
+      return {};
+    }
+    const turnIds: string[] = [];
+    for (const entry of items) {
+      if (entry.turnId && !turnIds.includes(entry.turnId)) turnIds.push(entry.turnId);
+    }
+    const boundaryTurnId = items.find((entry) => entry.item?.id === messageId)?.turnId;
+    if (!boundaryTurnId) return {};
+    const index = turnIds.indexOf(boundaryTurnId);
+    // Branching before the first turn keeps nothing, so fork before it.
+    return index > 0
+      ? { lastTurnId: turnIds[index - 1] }
+      : { beforeTurnId: boundaryTurnId };
   }
 
   /** Archive or unarchive a session (thread/archive, thread/unarchive). */
@@ -1050,6 +1232,117 @@ export class CodexSessionManager {
     return { ...session };
   }
 
+  /** Background processes tracked for a session, live ones first. */
+  listTrackedBackgroundProcesses(sessionId: string): BackgroundProcess[] {
+    const session = this.sessions.get(sessionId);
+    if (!session) return [];
+    return sortBackgroundProcesses([...this.backgroundProcessesFor(session.threadId).values()]);
+  }
+
+  /**
+   * Merged background-process view: the server registry (which has status,
+   * exit code, output, and duration from the item stream) reconciled against
+   * the engine's live list. The engine only reports processes that are still
+   * running, so a locally running process the engine no longer lists is marked
+   * completed. Reconciliation needs the thread loaded; an unloaded thread (or
+   * an older engine) falls back to the local view without failing.
+   */
+  async listBackgroundProcesses(sessionId: string): Promise<BackgroundProcess[]> {
+    await this.start();
+    const session = this.sessions.get(sessionId);
+    const engine = this.engine;
+    if (!session || !engine) return [];
+    const tracked = this.backgroundProcessesFor(session.threadId);
+    try {
+      const live = await engine.request("thread/backgroundTerminals/list", { threadId: session.threadId });
+      const entries = isRecord(live) && Array.isArray(live.data) ? live.data : [];
+      const liveIds = new Set<string>();
+      for (const entry of entries) {
+        if (!isRecord(entry)) continue;
+        const itemId = typeof entry.itemId === "string" ? entry.itemId : "";
+        const processId = typeof entry.processId === "string" ? entry.processId : "";
+        const key = itemId || processId;
+        if (!key) continue;
+        const existing = [...tracked.values()].find((process) =>
+          (itemId && process.itemId === itemId) || (processId && process.processId === processId));
+        const target: BackgroundProcess = existing ?? { itemId: itemId || key, processId, command: "", status: "running" };
+        target.status = "running";
+        if (!target.processId && processId) target.processId = processId;
+        if (!target.itemId && itemId) target.itemId = itemId;
+        if (typeof entry.command === "string" && entry.command) target.command = entry.command;
+        if (typeof entry.cwd === "string" && entry.cwd) target.cwd = entry.cwd;
+        if (typeof entry.osPid === "number") target.osPid = entry.osPid;
+        if (typeof entry.cpuPercent === "number") target.cpuPercent = entry.cpuPercent;
+        if (typeof entry.rssKb === "number") target.rssKb = entry.rssKb;
+        if (!existing) tracked.set(target.itemId, target);
+        liveIds.add(target.itemId);
+      }
+      for (const process of tracked.values()) {
+        if (process.status === "running" && !liveIds.has(process.itemId)) process.status = "completed";
+      }
+    } catch {
+      // Thread unloaded or engine unavailable — the local view still helps.
+    }
+    return sortBackgroundProcesses([...tracked.values()]);
+  }
+
+  /**
+   * Terminate one background process (thread/backgroundTerminals/terminate).
+   * `identifier` may be the engine `processId` or the item id so the UI can
+   * address a process even when the item never carried a process id.
+   */
+  async terminateBackgroundProcess(sessionId: string, identifier: string): Promise<boolean> {
+    await this.start();
+    const session = this.sessions.get(sessionId);
+    const engine = this.engine;
+    if (!session || !engine || !identifier) return false;
+    const tracked = this.backgroundProcessesFor(session.threadId);
+    const process = [...tracked.values()].find((entry) =>
+      entry.processId === identifier || entry.itemId === identifier);
+    const processId = process?.processId || identifier;
+    const result = await engine.request("thread/backgroundTerminals/terminate", {
+      threadId: session.threadId,
+      processId,
+    }).catch(() => null);
+    const terminated = isRecord(result) && result.terminated === true;
+    if (terminated && process) {
+      process.status = "completed";
+      this.emitBackgroundProcesses(session.id);
+      if (session.status !== "running") this.maybeReleaseThread(session.threadId);
+    }
+    return terminated;
+  }
+
+  /** Stop every background process on a thread (thread/backgroundTerminals/clean). */
+  async cleanBackgroundProcesses(sessionId: string): Promise<void> {
+    await this.start();
+    const session = this.sessions.get(sessionId);
+    const engine = this.engine;
+    if (!session || !engine) return;
+    await engine.request("thread/backgroundTerminals/clean", { threadId: session.threadId }).catch(() => undefined);
+    const tracked = this.backgroundProcessesFor(session.threadId);
+    let changed = false;
+    for (const process of tracked.values()) {
+      if (process.status === "running") {
+        process.status = "completed";
+        changed = true;
+      }
+    }
+    if (changed) this.emitBackgroundProcesses(session.id);
+    if (session.status !== "running") this.maybeReleaseThread(session.threadId);
+  }
+
+  private emitBackgroundProcesses(sessionId: string): void {
+    const session = this.sessions.get(sessionId);
+    if (!session) return;
+    this.emit({
+      type: "backgroundProcesses",
+      sessionId,
+      threadId: session.threadId,
+      processes: sortBackgroundProcesses([...this.backgroundProcessesFor(session.threadId).values()]),
+    });
+  }
+
   /** Unsubscribe from a thread (thread/unsubscribe). */
   async unsubscribeSession(sessionId: string): Promise<void> {
     const session = this.sessions.get(sessionId);
@@ -1070,6 +1363,7 @@ export class CodexSessionManager {
     await this.activeEngine().deleteThread(session.threadId).catch((error: unknown) => {
       if (!isMissingRolloutError(error)) throw error;
     });
+    this.backgroundProcesses.delete(session.threadId);
     this.sessions.delete(sessionId);
   }
 
@@ -1088,6 +1382,13 @@ export class CodexSessionManager {
     const session = this.sessionFor(threadId ?? "");
     if (!session) return;
     const itemType = typeof item?.type === "string" ? item.type : "unknown";
+    if (itemType === "commandExecution" && isRecord(item)) {
+      const process = this.backgroundProcessFromItem(item);
+      if (process?.processId) {
+        this.backgroundProcessesFor(session.threadId).set(process.itemId, process);
+        this.emitBackgroundProcesses(session.id);
+      }
+    }
     this.emit({ type: "item.started", sessionId: session.id, threadId: threadId ?? "", itemType, item: item ?? null, turnId: typeof turnId === "string" ? turnId : "" });
   }
 
@@ -1143,7 +1444,40 @@ export class CodexSessionManager {
     const session = this.sessionFor(threadId ?? "");
     if (!session) return;
     const itemType = typeof item?.type === "string" ? item.type : "unknown";
+    let processExited = false;
+    if (itemType === "commandExecution" && isRecord(item)) {
+      const itemId = typeof item.id === "string" ? item.id : "";
+      const tracked = itemId ? this.backgroundProcessesFor(session.threadId).get(itemId) : undefined;
+      if (tracked) {
+        const wasRunning = tracked.status === "running";
+        tracked.status = backgroundStatusFromItem(item);
+        if (typeof item.exitCode === "number") tracked.exitCode = item.exitCode;
+        if (typeof item.aggregatedOutput === "string") tracked.aggregatedOutput = item.aggregatedOutput;
+        if (typeof item.durationMs === "number") tracked.durationMs = item.durationMs;
+        if (tracked.status === "running") tracked.status = "completed";
+        this.emitBackgroundProcesses(session.id);
+        processExited = true;
+        // A transition into failure is the attention-worthy fact. The server
+        // owns this so it is observed regardless of which workspace the user is
+        // viewing (see CodexAttentionHub).
+        if (wasRunning && shouldNotifyBackgroundProcessFailure({ process: tracked, turnRunning: session.status === "running" })) {
+          this.emit({
+            type: "backgroundProcess.failed",
+            sessionId: session.id,
+            threadId: session.threadId,
+            workspaceId: session.workspaceId,
+            sessionTitle: session.title,
+            itemId: tracked.itemId,
+            processId: tracked.processId,
+            command: tracked.command,
+            ...(typeof tracked.exitCode === "number" ? { exitCode: tracked.exitCode } : {}),
+          });
+        }
+      }
+    }
     this.emit({ type: "item.completed", sessionId: session.id, threadId: threadId ?? "", itemType, item: item ?? null, turnId: typeof turnId === "string" ? turnId : "" });
+    // An exit mid-turn must not drop the subscription a live turn still needs.
+    if (processExited && session.status !== "running") this.maybeReleaseThread(session.threadId);
   }
 
   private handleTurnStarted(params: unknown): void {
@@ -1190,9 +1524,10 @@ export class CodexSessionManager {
     session.turnId = null;
     this.emit({ type: "session.updated", session: { ...session } });
     this.emit({ type: "turn.completed", sessionId: session.id, threadId: tid });
-    // Idle now: let the engine unload the thread (and drop its writer lock)
-    // instead of holding the session exclusively until this server exits.
-    this.releaseThread(tid);
+    // Idle now — but only let the engine unload the thread (and drop its
+    // writer lock) if no background process still owns it. A dev server left
+    // running is live work, not a leak of the writer lock.
+    this.maybeReleaseThread(tid);
     void this.adoptGeneratedTitle(session, tid);
     const turnError = turn?.error as { message?: string } | undefined;
     const raw = (turnError?.message ?? (typeof error === "string" ? error : (error as { message?: string } | undefined)?.message))?.trim();

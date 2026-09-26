@@ -15,7 +15,6 @@ const organizationSchema = {
   "@context": "https://schema.org",
   "@type": "Organization",
   name: "Sofia",
-  legalName: "Different AI",
   url: "https://sofia.ruut.chat",
   logo: "https://sofia.ruut.chat/sofia-mark.svg",
   sameAs: ["https://github.com/RuutChatCSM/sofia-desktop"]
@@ -35,9 +34,9 @@ const jetbrains = JetBrains_Mono({
 
 export const metadata = {
   metadataBase: new URL("https://sofia.ruut.chat"),
-  title: "Sofia — Open source Claude Cowork alternative for teams",
+  title: "Sofia — AI for the work you do",
   description:
-    "Bring your own model and provider, wire in your tools and context, and ship reusable agent setups across your org — with guardrails built in.",
+    "Work with Sofia on your files, research, and everyday tasks. Choose your model, connect your tools, and bring your team along.",
   alternates: {
     canonical: "/"
   },

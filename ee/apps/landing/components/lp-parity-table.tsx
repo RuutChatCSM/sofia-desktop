@@ -32,9 +32,9 @@ const rows: ParityRow[] = [
   },
   { capability: "Browser automation", cowork: "limited" },
   { capability: "Anthropic-compatible plugins and skills", cowork: "check" },
-  { capability: "Instant org-wide skill and MCP sharing", cowork: "none" },
+  { capability: "Shared skills and tool connections for your team", cowork: "none" },
   {
-    capability: "MCP gateway usable from any client",
+    capability: "MCP gateway for compatible clients",
     cowork: "none",
     badge: "sofia",
     highlighted: true
@@ -95,7 +95,7 @@ function Capability({ row }: { row: ParityRow }) {
       {row.badge === "alpha" ? <LpAlphaBadge /> : null}
       {row.badge === "sofia" ? (
         <span className="rounded-full bg-[#dbeafe] px-2 py-0.5 text-[9.5px] font-bold tracking-[0.08em] text-[var(--lp-blue)]">
-          SOFIA ONLY
+          SOFIA CONNECT
         </span>
       ) : null}
     </div>
@@ -170,7 +170,7 @@ export function LpParityTable() {
 
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-1 pt-5 text-[13px] text-[var(--lp-faint)] md:px-5">
         <span>
-          Migrating from Cowork? Your SKILL.md files and MCP servers work as-is.
+          Moving your setup? Check how to bring your skills and MCP servers to Sofia.
         </span>
         <a
           href="/docs/start-here/migrate-from-claude-cowork"

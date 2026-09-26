@@ -4,7 +4,7 @@
 // from `message.delta`, and status from `item.*` / `turn.completed`.
 import { create } from "zustand";
 
-import type { CodexEvent, CodexSession, CodexSessionClient, CodexSessionStatus } from "@/app/lib/codex-session";
+import type { BackgroundProcess, CodexEvent, CodexSession, CodexSessionClient, CodexSessionStatus } from "@/app/lib/codex-session";
 import type { WorkspaceEngineSessionErrorPresentation } from "./sync/session-error";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -106,11 +106,23 @@ export type CodexTrackedItem = {
   errorPresentation?: WorkspaceEngineSessionErrorPresentation;
 };
 
+/** UI-originated turn timing: engine item metadata can be thin (or missing on a
+ * replayed/continued turn), so a locally started turn records its own clock and
+ * the renderer reconciles the two. Keyed by session, reset only on a *user*
+ * send — a server-side continuation keeps the same logical turn. */
+export type SessionTurnTiming = {
+  startedAt: number;
+  completedAt?: number;
+};
+
 export type CodexSessionEntry = {
   warning?: string;
   session: CodexSession;
+  turnTiming?: SessionTurnTiming;
   messages: CodexTranscriptMessage[];
   items: CodexTrackedItem[];
+  /** Unified-exec background processes the server tracks for this session. */
+  backgroundProcesses: BackgroundProcess[];
   /** User messages submitted locally but not yet echoed back as a
    * `userMessage` stream item. Rendered optimistically so a sent/steered
    * message appears in the transcript immediately. */
@@ -131,6 +143,7 @@ type CodexSessionActions = {
   applyThinkingDelta: (sessionId: string, text: string) => void;
   appendItemThinking: (sessionId: string, itemId: string, text: string) => void;
   upsertItem: (sessionId: string, item: CodexTrackedItem) => void;
+  setBackgroundProcesses: (sessionId: string, processes: BackgroundProcess[]) => void;
   appendItemText: (sessionId: string, itemId: string, text: string) => void;
   appendItemOutput: (sessionId: string, itemId: string, text: string) => void;
   completeItem: (sessionId: string, itemId: string, item: Record<string, unknown>) => void;
@@ -160,7 +173,7 @@ export const useCodexSessionStore = create<CodexSessionStore>((set, get) => ({
     set((state) => {
       const next: Record<string, CodexSessionEntry> = {};
       for (const session of sessions) {
-        next[session.id] = { ...(state.sessions[session.id] ?? { messages: [], items: [], pendingUserTexts: [] }), session };
+        next[session.id] = { ...(state.sessions[session.id] ?? { messages: [], items: [], backgroundProcesses: [], pendingUserTexts: [] }), session };
       }
       return { sessions: next, loaded: true };
     }),
@@ -173,7 +186,7 @@ export const useCodexSessionStore = create<CodexSessionStore>((set, get) => ({
           ...state.sessions,
           [session.id]: existing
             ? { ...existing, session }
-            : { session, messages: [], items: [], pendingUserTexts: [] },
+            : { session, messages: [], items: [], backgroundProcesses: [], pendingUserTexts: [] },
         },
       };
     }),
@@ -213,6 +226,13 @@ export const useCodexSessionStore = create<CodexSessionStore>((set, get) => ({
         ? { ...i, item, status: item.status === "failed" ? "error" as const : "done" as const, text: typeof item.text === "string" ? item.text : i.text }
         : i);
       return { sessions: { ...state.sessions, [sessionId]: { ...entry, items } } };
+    }),
+
+  setBackgroundProcesses: (sessionId, processes) =>
+    set((state) => {
+      const entry = state.sessions[sessionId];
+      if (!entry) return state;
+      return { sessions: { ...state.sessions, [sessionId]: { ...entry, backgroundProcesses: processes } } };
     }),
 
   setThreadStatus: (sessionId, status) =>
@@ -283,7 +303,17 @@ export const useCodexSessionStore = create<CodexSessionStore>((set, get) => ({
         messages[messages.length - 1] = { ...last, status: "pending" };
       }
       return {
-        sessions: { ...state.sessions, [sessionId]: { ...entry, session: { ...entry.session, status: "running" }, messages } },
+        sessions: {
+          ...state.sessions,
+          [sessionId]: {
+            ...entry,
+            session: { ...entry.session, status: "running" },
+            messages,
+            // A user send starts a new logical turn; a server-side continuation
+            // never comes through here, so the clock does not restart mid-turn.
+            turnTiming: { startedAt: Date.now() },
+          },
+        },
       };
     }),
 
@@ -295,8 +325,18 @@ export const useCodexSessionStore = create<CodexSessionStore>((set, get) => ({
         index === entry.messages.length - 1 && message.role === "assistant" ? { ...message, status: "done" as const } : message,
       );
       const items = entry.items.map((item) => item.status === "pending" ? { ...item, status: "done" as const } : item);
+      const startedAt = entry.turnTiming?.startedAt ?? Date.now();
       return {
-        sessions: { ...state.sessions, [sessionId]: { ...entry, session: { ...entry.session, status: "idle" }, messages, items } },
+        sessions: {
+          ...state.sessions,
+          [sessionId]: {
+            ...entry,
+            session: { ...entry.session, status: "idle" },
+            messages,
+            items,
+            turnTiming: { startedAt, completedAt: Date.now() },
+          },
+        },
       };
     }),
 
@@ -418,6 +458,7 @@ export async function runCodexStream(
           case "stream.ready":
             s.setStreaming(true);
             s.setError(null);
+            refreshTrackedBackgroundProcesses(workspaceId);
             break;
           case "session.created":
           case "session.updated":
@@ -469,6 +510,9 @@ export async function runCodexStream(
             }
             break;
           }
+          case "backgroundProcesses":
+            s.setBackgroundProcesses(event.sessionId, event.processes);
+            break;
           case "tool.output":
             // Command output streams live into the owning command item.
             s.appendItemOutput(event.sessionId, event.itemId, event.text);
@@ -517,4 +561,86 @@ export function useCodexSession(sessionId: string): CodexSessionEntry | null {
 
 export function useCodexSessionStatus(sessionId: string): CodexSessionStatus | null {
   return useCodexSessionStore((state) => state.sessions[sessionId]?.session.status ?? null);
+}
+
+/**
+ * One codex client per workspace, registered by `useCodexEngine`. The SSE
+ * stream stays the live source of truth; these helpers let the background
+ * process UI reconcile/terminate outside the stream.
+ */
+const codexClientsByWorkspace = new Map<string, CodexSessionClient>();
+
+export function setCodexClient(workspaceId: string, client: CodexSessionClient | null): void {
+  if (client) codexClientsByWorkspace.set(workspaceId, client);
+  else codexClientsByWorkspace.delete(workspaceId);
+}
+
+function codexClientForSession(sessionId: string): CodexSessionClient | null {
+  const entry = useCodexSessionStore.getState().sessions[sessionId];
+  if (!entry) return null;
+  return codexClientsByWorkspace.get(entry.session.workspaceId) ?? null;
+}
+
+/**
+ * Reconcile the local view with the server registry. The renderer's cache is
+ * transient (a missed stream frame, a reconnect); the server is authoritative,
+ * so session open and reconnect call this.
+ */
+export async function refreshBackgroundProcesses(sessionId: string): Promise<void> {
+  const client = codexClientForSession(sessionId);
+  if (!client) return;
+  try {
+    const { processes } = await client.backgroundProcesses(sessionId);
+    useCodexSessionStore.getState().setBackgroundProcesses(sessionId, processes);
+  } catch {
+    // Offline or reconnecting: keep the last known view.
+  }
+}
+
+/**
+ * Reconcile every session on a workspace that already tracks processes. Called
+ * on stream (re)connect so a process that exited while the renderer was offline
+ * does not stay stuck as "running".
+ */
+export function refreshTrackedBackgroundProcesses(workspaceId: string | undefined): void {
+  if (!workspaceId) return;
+  const sessions = Object.values(useCodexSessionStore.getState().sessions)
+    .filter((entry) => entry.session.workspaceId === workspaceId && entry.backgroundProcesses.length > 0);
+  for (const entry of sessions) void refreshBackgroundProcesses(entry.session.id);
+}
+
+export async function terminateBackgroundProcess(sessionId: string, processId: string): Promise<boolean> {
+  const client = codexClientForSession(sessionId);
+  if (!client) return false;
+  const { terminated } = await client.terminateBackgroundProcess(sessionId, processId);
+  await refreshBackgroundProcesses(sessionId);
+  return terminated;
+}
+
+export async function cleanBackgroundProcesses(sessionId: string): Promise<void> {
+  const client = codexClientForSession(sessionId);
+  if (!client) return;
+  await client.cleanBackgroundProcesses(sessionId);
+  await refreshBackgroundProcesses(sessionId);
+}
+
+const EMPTY_BACKGROUND_PROCESSES: BackgroundProcess[] = [];
+
+/** A background process that exited in a way the user needs to know about. */
+/** Human title for the failure notification (command + exit code when known). */
+export function backgroundProcessFailureTitle(process: BackgroundProcess): string {
+  const command = process.command.trim() || "Background process";
+  const label = command.length > 60 ? `${command.slice(0, 59)}...` : command;
+  return typeof process.exitCode === "number"
+    ? `${label} exited with code ${process.exitCode}`
+    : `${label} failed`;
+}
+
+/** Locally recorded timing for the session's current (or last) turn. */
+export function useSessionTurnTiming(sessionId: string): SessionTurnTiming | undefined {
+  return useCodexSessionStore((state) => state.sessions[sessionId]?.turnTiming);
+}
+
+export function useBackgroundProcesses(sessionId: string): BackgroundProcess[] {
+  return useCodexSessionStore((state) => state.sessions[sessionId]?.backgroundProcesses ?? EMPTY_BACKGROUND_PROCESSES);
 }

@@ -6,6 +6,7 @@ import { captureAnalyticsEvent, takeTaskRunStart } from "@/app/lib/analytics";
 import { trackTaskCompleted, trackTaskFailed } from "@/app/lib/den-telemetry";
 import { createClient, unwrap } from "@/app/lib/engine";
 import { isGeneratedSessionTitle } from "@/app/lib/session-title";
+import { partText } from "@/lib/message-part-text";
 import { normalizeEvent } from "@/app/utils";
 import { SYNTHETIC_SESSION_ERROR_MESSAGE_PREFIX, type WorkspaceEngineEvent, type PendingPermission, type PendingQuestion } from "@/app/types";
 import {
@@ -943,7 +944,7 @@ function applyEvent(entry: SyncEntry, workspaceId: string, event: WorkspaceEngin
       pending && (mapped.type === "text" || mapped.type === "reasoning")
         ? {
             ...mapped,
-            text: pending.text.length > mapped.text.length ? pending.text : mapped.text,
+            text: partText(pending).length > partText(mapped).length ? partText(pending) : partText(mapped),
             state: "streaming" as const,
           }
         : mapped;
