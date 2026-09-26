@@ -10,7 +10,7 @@
  * Parsing is separated from process execution (`GitRun`) so the formats are
  * unit-testable and the reader is exercisable against a real temporary repo.
  */
-import { mkdtemp, readFile, readdir, rm, stat } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, realpath, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { execFile } from "node:child_process";
@@ -314,10 +314,32 @@ const REPOSITORY_SCAN_SKIP = new Set([
   "storage",
 ]);
 
+/**
+ * The canonical top-level directory of the repository a directory belongs to, or
+ * null when it is not in one.
+ *
+ * `--show-toplevel` rather than a filesystem check: a worktree or submodule has
+ * `.git` as a *file*, a nested directory may sit inside a repository it does not
+ * own, and only git can say which repository a path belongs to.
+ */
+export async function resolveRepositoryRoot(directory: string): Promise<string | null> {
+  if (!directory.trim()) return null;
+  const result = await createGitRun(directory)(["rev-parse", "--show-toplevel"]);
+  if (result.code !== 0) return null;
+  const root = result.stdout.trim();
+  if (!root) return null;
+  const resolved = path.resolve(root);
+  // Symlinked roots (/var vs /private/var) must compare equal, or the same
+  // repository would be discovered twice with two different identities.
+  try {
+    return await realpath(resolved);
+  } catch {
+    return resolved;
+  }
+}
+
 export async function isGitRepository(root: string): Promise<boolean> {
-  if (!root.trim()) return false;
-  const result = await createGitRun(root)(["rev-parse", "--git-dir"]);
-  return result.code === 0;
+  return (await resolveRepositoryRoot(root)) !== null;
 }
 
 /**
@@ -330,7 +352,10 @@ export async function isGitRepository(root: string): Promise<boolean> {
  */
 export async function discoverRepositories(root: string, maxDepth = 2): Promise<string[]> {
   if (!root.trim()) return [];
-  if (await isGitRepository(root)) return [root];
+  // A directory that is itself inside a repository resolves to that repository's
+  // top level, so `repo/` and `repo/packages/foo/` are the same repository.
+  const ownRoot = await resolveRepositoryRoot(root);
+  if (ownRoot) return [ownRoot];
 
   const found: string[] = [];
   let frontier = [root];
@@ -347,13 +372,163 @@ export async function discoverRepositories(root: string, maxDepth = 2): Promise<
         if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
         if (REPOSITORY_SCAN_SKIP.has(entry.name)) continue;
         const child = path.join(directory, entry.name);
-        if (await isGitRepository(child)) found.push(child);
+        const repositoryRoot = await resolveRepositoryRoot(child);
+        if (repositoryRoot) found.push(repositoryRoot);
         else next.push(child);
       }
     }
     frontier = next;
   }
-  return found;
+  return [...new Set(found)];
+}
+
+/** A content snapshot of one repository, keyed by its canonical root. */
+export type RepositoryBaseline = {
+  repositoryId: string;
+  root: string;
+  tree: string;
+  head: string | null;
+};
+
+/**
+ * Turn-start snapshots for every repository a workspace covers.
+ *
+ * Matching is by canonical root, never by position: discovery order can differ
+ * between the start and the end of a turn, and pairing the wrong trees would
+ * attribute one repository's work to another.
+ */
+export async function snapshotWorkspaceTrees(root: string): Promise<RepositoryBaseline[]> {
+  const repositories = await discoverRepositories(root);
+  const snapshots = await Promise.all(
+    repositories.map(async (repositoryRoot) => {
+      try {
+        const { tree, head } = await snapshotWorkspaceTree(createGitRun(repositoryRoot));
+        if (!tree) return null;
+        return { repositoryId: path.basename(repositoryRoot), root: repositoryRoot, tree, head };
+      } catch {
+        // A repository we cannot snapshot is recorded as absent, not diffed.
+        return null;
+      }
+    }),
+  );
+  return snapshots.filter((snapshot): snapshot is RepositoryBaseline => snapshot !== null);
+}
+
+export type RepositoryTurnDelta = {
+  repositoryId: string;
+  root: string;
+  revision: string | null;
+  /** The content snapshots this delta is the diff of. */
+  baselineTree?: string;
+  endTree?: string;
+  headBefore?: string | null;
+  headAfter?: string | null;
+  /** Replay-grade patch for this repository, frozen alongside its files. */
+  patch?: string;
+  /** Commits that appeared in this repository between the two heads. */
+  commitsInRange?: string[];
+  files: WorkspaceFileChange[];
+  /** Set instead of files when the repository could not be reconciled. */
+  unavailable?: string;
+  /** True when the repository did not exist when the turn began. */
+  appearedDuringTurn?: boolean;
+};
+
+/**
+ * The turn's delta, per repository: `baselineTree → endTree` for every repository
+ * the turn started with, plus any that appeared while it ran.
+ */
+export async function readTurnDeltaForRoot(
+  root: string,
+  baselines: readonly RepositoryBaseline[],
+  options: { includeHunks?: boolean; includePatch?: boolean } = {},
+): Promise<{ repositories: RepositoryTurnDelta[]; files: WorkspaceFileChange[] }> {
+  const byRoot = new Map(baselines.map((baseline) => [path.resolve(baseline.root), baseline]));
+  const present = await discoverRepositories(root);
+
+  const deltas = await Promise.all(
+    present.map(async (repositoryRoot): Promise<RepositoryTurnDelta> => {
+      const canonical = path.resolve(repositoryRoot);
+      const baseline = byRoot.get(canonical);
+      const repositoryId = baseline?.repositoryId ?? path.basename(canonical);
+      if (!baseline) {
+        // Appeared during the turn: everything in it is of unknown attribution.
+        return {
+          repositoryId,
+          root: canonical,
+          revision: null,
+          files: [],
+          appearedDuringTurn: true,
+          unavailable: "the repository did not exist when the turn began",
+        };
+      }
+      byRoot.delete(canonical);
+      try {
+        const run = createGitRun(canonical);
+        const end = await snapshotWorkspaceTree(run);
+        // The head pair rides with the delta so commits the turn created are
+        // recorded per repository, not guessed from a shared checkout.
+        const heads = { headBefore: baseline.head, headAfter: end.head };
+        if (!end.tree || end.tree === baseline.tree) {
+          return {
+            repositoryId,
+            root: canonical,
+            revision: end.tree || null,
+            baselineTree: baseline.tree,
+            endTree: end.tree || baseline.tree,
+            ...heads,
+            files: [],
+          };
+        }
+        const delta = await readTurnDelta(run, {
+          baselineTree: baseline.tree,
+          endTree: end.tree,
+          includeHunks: options.includeHunks,
+          includePatch: options.includePatch,
+        });
+        const commitsInRange = await listTurnCommits(run, {
+          headBefore: baseline.head,
+          headAfter: end.head,
+        });
+        return {
+          repositoryId,
+          root: canonical,
+          revision: delta.revision,
+          baselineTree: baseline.tree,
+          endTree: end.tree,
+          ...heads,
+          files: delta.files,
+          ...(delta.patch === undefined ? {} : { patch: delta.patch }),
+          ...(commitsInRange.length > 0 ? { commitsInRange } : {}),
+        };
+      } catch (error) {
+        return {
+          repositoryId,
+          root: canonical,
+          revision: null,
+          files: [],
+          unavailable: error instanceof Error ? error.message : "reconciliation failed",
+        };
+      }
+    }),
+  );
+
+  // Baselines with no matching repository: it moved or disappeared. Never diff it
+  // against a different repository.
+  for (const baseline of byRoot.values()) {
+    deltas.push({
+      repositoryId: baseline.repositoryId,
+      root: baseline.root,
+      revision: null,
+      files: [],
+      unavailable: "the repository is no longer present",
+    });
+  }
+
+  return {
+    repositories: deltas,
+    files: deltas.flatMap((delta) => delta.files),
+  };
 }
 
 /**

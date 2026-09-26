@@ -68,6 +68,7 @@ import {
   changeSetTotals,
   fileChangeLabel,
   fileChangeNote,
+  isAttributed,
   type ChangeStatus,
   type DiffHunk,
   type DiffLine,
@@ -152,7 +153,10 @@ export function ReviewPane({
   const totals = turnTotals ?? { ...liveTotals, files: files.length, countsKnown: files.length > 0 };
   // A turn sourced from tool hints knows which files were touched and nothing
   // about their size; "+0 −0" would be a lie.
-  const showCounts = scope === "last-turn" ? Boolean(totals?.countsKnown) : true;
+  // An unattributed set is the repository's current state, not the turn's delta,
+  // so its counts must not be printed under "Last turn".
+  const turnAttributed = changeSet ? isAttributed(changeSet) : true;
+  const showCounts = scope === "last-turn" ? Boolean(totals?.countsKnown) && turnAttributed : true;
 
   return (
     <div data-review-pane={scope} className="flex h-full min-h-0 flex-col">
@@ -175,8 +179,12 @@ export function ReviewPane({
           </button>
         ))}
         <span className="ml-auto text-[11px] tabular-nums text-muted-foreground">
-          {scope === "last-turn" && changeSet ? changeSetTitle(changeSet) : `${files.length} files`}
-          {totals.countsKnown ? (
+          {scope === "last-turn" && changeSet
+            ? turnAttributed
+              ? changeSetTitle(changeSet)
+              : "Working-tree changes"
+            : `${files.length} files`}
+          {showCounts ? (
             <>
               {" "}
               <span className="text-emerald-11">+{totals.additions}</span>{" "}
@@ -221,9 +229,9 @@ export function ReviewPane({
                 <span className="min-w-0 flex-1 truncate font-mono" title={file.path}>
                   {fileChangeLabel(file)}
                 </span>
-                {file.attributedToTurn ? null : (
+                {turnAttributed && !file.attributedToTurn ? (
                   <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground/70">not Sofia</span>
-                )}
+                ) : null}
                 {showCounts ? (
                   <span className="shrink-0 tabular-nums">
                     <span className="text-emerald-11">+{file.additions}</span>{" "}

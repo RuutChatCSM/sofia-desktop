@@ -104,7 +104,22 @@ export type TurnChangeSet = {
   repositories: RepositoryChangeSet[];
   startedAt: number;
   finalizedAt?: number;
+  /**
+   * False when the set was read from the repository's current state rather than
+   * from a baseline-anchored turn delta. Such a set may list the files Sofia
+   * touched, but its numbers are the repository's, not the turn's — so it must
+   * never be presented as "Last turn +A −D". Undefined means attributed.
+   */
+  attributed?: boolean;
 };
+
+/**
+ * Whether a set may be presented as *this turn's* change. A degraded read (no
+ * baseline could be captured) is still useful, but only labelled as such.
+ */
+export function isAttributed(changeSet: TurnChangeSet): boolean {
+  return changeSet.attributed !== false;
+}
 
 /** The immutable handle a card (and a Review pane) addresses. */
 export function turnChangeSetId(sessionId: string, turnId: string): string {

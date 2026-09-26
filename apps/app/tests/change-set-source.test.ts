@@ -211,4 +211,54 @@ describe("a workspace of several repositories", () => {
     // The file lists are not merged: each repository keeps its own entry.
     expect(changeSet.repositories.every((repository) => repository.files.length === 1)).toBe(true);
   });
+
+  test("keeps each repository's own patch and commits, and never spreads an aggregate one across them", () => {
+    const changeSet = changeSetFromRepository({
+      sessionId: "s1",
+      turnId: "t32",
+      startedAt: 0,
+      baseline: null,
+      snapshot: {
+        revision: null,
+        files: [],
+        // An aggregate patch that belongs to no single checkout.
+        patch: "diff --git a/aggregate b/aggregate",
+        repositories: [
+          {
+            repositoryId: "alpha",
+            root: "/w/alpha",
+            revision: "a2",
+            baselineTree: "a-base",
+            endTree: "a-end",
+            headBefore: "a0",
+            headAfter: "a2",
+            patch: "diff --git a/src/index.ts b/src/index.ts",
+            commitsInRange: ["aaaa111"],
+            files: [{ path: "src/index.ts", status: "modified", additions: 2, deletions: 1 }],
+          },
+          {
+            repositoryId: "beta",
+            root: "/w/beta",
+            revision: "b2",
+            files: [{ path: "src/index.ts", status: "modified", additions: 5, deletions: 0 }],
+          },
+        ],
+      },
+      finalizedAt: 5_000,
+    });
+
+    const [alpha, beta] = changeSet.repositories;
+    expect(alpha).toMatchObject({
+      repositoryId: "alpha",
+      baselineTree: "a-base",
+      endTree: "a-end",
+      headBefore: "a0",
+      headAfter: "a2",
+      commitsInRange: ["aaaa111"],
+    });
+    expect(alpha?.patch).toContain("src/index.ts");
+    // beta reported no patch of its own, and the aggregate must not be lent to it.
+    expect(beta?.patch).toBeUndefined();
+    expect(beta?.commitsInRange).toBeUndefined();
+  });
 });

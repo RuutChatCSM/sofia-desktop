@@ -15,26 +15,31 @@ import {
  */
 function fakeClient(): WorkspaceChangesClient & { calls: Array<Record<string, unknown>> } {
   const calls: Array<Record<string, unknown>> = [];
-  let snapshots = 0;
   return {
     calls,
     git: {
       changes: async (params) => {
         calls.push(params as Record<string, unknown>);
+        // A snapshot read returns one baseline per repository.
         if (params.snapshot) {
-          // First snapshot is the turn's baseline, the second the tree it ended at.
-          snapshots += 1;
-          return { revision: null, files: [], tree: snapshots === 1 ? "base-tree" : "end-tree", head: "abc" };
-        }
-        if (params.baselineTree) {
           return {
-            revision: "end-tree",
-            files: [{ path: "sofia.ts", status: "added", additions: 2, deletions: 0 }],
-            patch: "diff --git a/sofia.ts b/sofia.ts",
-            commits: ["def"],
+            revision: null,
+            files: [],
+            repositories: [{ repositoryId: "ws", root: "/repo", tree: "base-tree", head: "abc" }],
           };
         }
-        return { revision: "abc", files: [{ path: "tracked.ts", status: "modified", additions: 9, deletions: 3 }] };
+        // The turn's delta is the per-repository diff of those baselines.
+        if (params.baselines?.length) {
+          const files = [{ path: "sofia.ts", status: "added" as const, additions: 2, deletions: 0 }];
+          return {
+            revision: null,
+            files,
+            patch: "diff --git a/sofia.ts b/sofia.ts",
+            commits: ["def"],
+            repositories: [{ repositoryId: "ws", root: "/repo", revision: "end-tree", files }],
+          };
+        }
+        return { revision: null, files: [] };
       },
     },
   };
@@ -58,9 +63,10 @@ describe("turn change tracking is not codex-specific", () => {
     // And the session remembers its newest set, for a transcript that has no id.
     expect(useChangeSetStore.getState().latestBySession["engine-1"]).toBe("turn:engine-1:t1");
 
-    // The delta was read between the two trees, not from the working tree.
-    const deltaCall = client.calls.find((call) => call.baselineTree);
-    expect(deltaCall).toMatchObject({ baselineTree: "base-tree", endTree: "end-tree", hunks: true, patch: true });
+    // The delta was read between the recorded baselines, not from the working tree.
+    const deltaCall = client.calls.find((call) => Array.isArray(call.baselines));
+    expect(deltaCall).toMatchObject({ hunks: true });
+    expect(deltaCall?.baselines).toEqual([{ repositoryId: "ws", root: "/repo", tree: "base-tree", head: "abc" }]);
     useChangeSetStore.getState().clear();
   });
 
@@ -80,15 +86,18 @@ describe("a session-scoped client is enough", () => {
     resetTurnBaselines();
     useChangeSetStore.getState().clear();
 
-    let snapshots = 0;
     const sessionScoped: WorkspaceChangesClient = {
       workspaceChanges: async (_sessionId, params) => {
         if (params?.snapshot) {
-          snapshots += 1;
-          return { revision: null, files: [], tree: snapshots === 1 ? "base" : "end", head: "abc" };
+          return {
+            revision: null,
+            files: [],
+            repositories: [{ repositoryId: "codex-ws", root: "/repo", tree: "base", head: "abc" }],
+          };
         }
-        if (params?.baselineTree) {
-          return { revision: "end", files: [{ path: "a.ts", status: "modified", additions: 1, deletions: 1 }] };
+        if (params?.baselines?.length) {
+          const files = [{ path: "a.ts", status: "modified" as const, additions: 1, deletions: 1 }];
+          return { revision: "end", files, repositories: [{ repositoryId: "codex-ws", root: "/repo", files }] };
         }
         return { revision: "abc", files: [] };
       },

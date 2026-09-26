@@ -26,7 +26,10 @@ import {
   createGitRun,
   listTurnCommits,
   readTurnDelta,
+  readTurnDeltaForRoot,
   readWorkspaceChangesForRoot,
+  snapshotWorkspaceTrees,
+  type RepositoryBaseline,
   snapshotWorkspaceTree,
 } from "./git-changes.js";
 import { CodexSteerError, CodexThreadBusyError, MAX_TRANSCRIPT_ITEMS, isCodexSessionId } from "./codex-sessions.js";
@@ -284,8 +287,35 @@ export function registerCodexRoutes(options: RegisterCodexRoutesOptions): void {
     // patch is the diff between the snapshot it started from and the one it ended
     // at — never "what is dirty right now", which is empty once the turn commits.
     if (ctx.url.searchParams.get("snapshot") === "1") {
-      const snapshot = await sofiaRequest(() => snapshotWorkspaceTree(createGitRun(root)));
-      return jsonResponse({ ok: true, ...snapshot });
+      // Per repository: a workspace may cover several checkouts, and matching
+      // baselines by canonical root is what keeps one repository's work from
+      // being attributed to another.
+      const repositories = await sofiaRequest(() => snapshotWorkspaceTrees(root));
+      return jsonResponse({
+        ok: true,
+        repositories,
+        ...(repositories.length === 1
+          ? { tree: repositories[0]?.tree, head: repositories[0]?.head ?? null }
+          : {}),
+      });
+    }
+
+    const baselinesParam = ctx.url.searchParams.get("baselines");
+    if (baselinesParam) {
+      let baselines: RepositoryBaseline[] = [];
+      try {
+        const parsed: unknown = JSON.parse(baselinesParam);
+        if (Array.isArray(parsed)) baselines = parsed as RepositoryBaseline[];
+      } catch {
+        return jsonResponse({ ok: false, error: "baselines must be JSON" }, 400);
+      }
+      const delta = await sofiaRequest(() =>
+        readTurnDeltaForRoot(root, baselines, {
+          includeHunks: ctx.url.searchParams.get("hunks") === "1",
+          includePatch: ctx.url.searchParams.get("patch") === "1",
+        }),
+      );
+      return jsonResponse({ ok: true, repositories: delta.repositories, files: delta.files });
     }
 
     const baselineTree = ctx.url.searchParams.get("baseline") ?? "";

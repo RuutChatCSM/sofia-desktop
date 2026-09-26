@@ -382,6 +382,7 @@ export function createCodexSessionClient(options: CodexSessionClientOptions) {
         patch?: boolean;
         headBefore?: string | null;
         headAfter?: string | null;
+        baselines?: Array<{ repositoryId: string; root: string; tree: string; head: string | null }>;
       },
     ) =>
       requestJson<WorkspaceChangesResponse>(
@@ -395,6 +396,7 @@ export function createCodexSessionClient(options: CodexSessionClientOptions) {
           ...(params?.patch ? { patch: "1" } : {}),
           ...(params?.headBefore ? { headBefore: params.headBefore } : {}),
           ...(params?.headAfter ? { headAfter: params.headAfter } : {}),
+          ...(params?.baselines?.length ? { baselines: JSON.stringify(params.baselines) } : {}),
         }).toString()}`,
         { token: options.token, hostToken: options.hostToken, timeoutMs: 20_000 },
       ),

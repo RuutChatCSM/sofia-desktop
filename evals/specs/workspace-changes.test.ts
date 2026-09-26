@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect } from "vitest";
@@ -8,8 +8,12 @@ import { test } from "@sofia/testkit";
 import {
   countUntrackedLines,
   createGitRun,
+  discoverRepositories,
   isGitRepository,
+  readTurnDeltaForRoot,
   readWorkspaceChangesForRoot,
+  resolveRepositoryRoot,
+  snapshotWorkspaceTrees,
   listTurnCommits,
   readTurnDelta,
   readWorkspaceChanges,
@@ -221,6 +225,116 @@ test("a workspace that is a folder of repositories is read per repository", asyn
     expect(
       changes.repositories.filter((repository) => repository.files.some((file) => file.path === "src-index.ts")),
     ).toHaveLength(2);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+/**
+ * The acceptance criterion for Last turn in a folder of repositories: the turn's
+ * own work is present even when it commits, and work that was already in the
+ * tree when the turn began is not attributed to it.
+ */
+test("a turn's patch is per repository, and pre-existing work is not attributed to it", async () => {
+  const root = mkdtempSync(path.join(tmpdir(), "sofia-multi-turn-"));
+  try {
+    const alpha = path.join(root, "alpha");
+    const beta = path.join(root, "beta");
+    for (const directory of [alpha, beta]) {
+      mkdirSync(directory);
+      git(directory, ["init", "-q"]);
+      git(directory, ["config", "user.email", "eval@example.com"]);
+      git(directory, ["config", "user.name", "Eval"]);
+      writeFileSync(path.join(directory, "tracked.ts"), "one\n");
+      git(directory, ["add", "-A"]);
+      git(directory, ["commit", "-q", "-m", "init"]);
+    }
+
+    // Work in flight before the turn: unstaged in alpha, staged in alpha.
+    writeFileSync(path.join(alpha, "tracked.ts"), "one\nuser unstaged\n");
+    writeFileSync(path.join(alpha, "staged.ts"), "user staged\n");
+    git(alpha, ["add", "staged.ts"]);
+
+    const baselines = await snapshotWorkspaceTrees(root);
+    expect(baselines.map((baseline) => baseline.repositoryId).sort()).toEqual(["alpha", "beta"]);
+    expect(baselines.every((baseline) => baseline.tree.length > 0)).toBe(true);
+
+    // The turn edits beta, adds a file and commits it.
+    writeFileSync(path.join(beta, "sofia.ts"), "sofia one\nsofia two\n");
+    writeFileSync(path.join(beta, "tracked.ts"), "one\nsofia line\n");
+    git(beta, ["add", "-A"]);
+    git(beta, ["commit", "-q", "-m", "sofia work"]);
+    expect(execFileSync("git", ["-C", beta, "status", "--porcelain"]).toString().trim()).toBe("");
+
+    const delta = await readTurnDeltaForRoot(root, baselines, { includeHunks: true, includePatch: true });
+    const byId = new Map(delta.repositories.map((repository) => [repository.repositoryId, repository]));
+
+    // beta: committed work is still the turn's patch.
+    expect(byId.get("beta")?.files.map((file) => file.path).sort()).toEqual(["sofia.ts", "tracked.ts"]);
+    // sofia.ts (2 lines) + tracked.ts (1 line).
+    expect(byId.get("beta")?.files.reduce((total, file) => total + file.additions, 0)).toBe(3);
+    // The turn's trees and the commit it created are recorded per repository, and
+    // the frozen patch is replay-grade (full index, so it applies against blobs).
+    expect(byId.get("beta")?.baselineTree).toBeTruthy();
+    expect(byId.get("beta")?.endTree).not.toBe(byId.get("beta")?.baselineTree);
+    expect(byId.get("beta")?.patch).toContain("diff --git");
+    expect(byId.get("beta")?.patch).toContain("index ");
+    expect(byId.get("beta")?.commitsInRange).toHaveLength(1);
+
+    // alpha: untouched by the turn, so its dirty and staged work is not the turn's.
+    expect(byId.get("alpha")?.files).toEqual([]);
+    expect(byId.get("alpha")?.unavailable).toBeUndefined();
+    // Nothing in alpha happened during the turn, so it has no patch of its own.
+    expect(byId.get("alpha")?.patch).toBeUndefined();
+    expect(byId.get("alpha")?.commitsInRange).toBeUndefined();
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("discovery resolves the canonical repository root and dedupes", async () => {
+  const root = mkdtempSync(path.join(tmpdir(), "sofia-discover-"));
+  try {
+    const repository = path.join(root, "repo");
+    mkdirSync(repository);
+    git(repository, ["init", "-q"]);
+    const nested = path.join(repository, "packages", "inner");
+    mkdirSync(nested, { recursive: true });
+
+    const canonical = realpathSync(repository);
+    // A nested directory belongs to the repository that owns it, not to itself.
+    expect(await resolveRepositoryRoot(nested)).toBe(canonical);
+    expect(await discoverRepositories(nested)).toEqual([canonical]);
+    expect(await discoverRepositories(root)).toEqual([canonical]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a linked worktree is its own repository, found by toplevel rather than by .git being a directory", async () => {
+  const root = mkdtempSync(path.join(tmpdir(), "sofia-worktree-"));
+  try {
+    const repository = path.join(root, "repo");
+    mkdirSync(repository);
+    git(repository, ["init", "-q"]);
+    git(repository, ["config", "user.email", "eval@example.com"]);
+    git(repository, ["config", "user.name", "Eval"]);
+    writeFileSync(path.join(repository, "tracked.ts"), "one\n");
+    git(repository, ["add", "-A"]);
+    git(repository, ["commit", "-q", "-m", "init"]);
+
+    const worktree = path.join(root, "repo-worktree");
+    git(repository, ["worktree", "add", "-q", worktree]);
+
+    // `.git` here is a *file* pointing at the main checkout. A filesystem check
+    // for a `.git` directory would never see this repository at all.
+    expect(statSync(path.join(worktree, ".git")).isFile()).toBe(true);
+
+    const canonicalWorktree = realpathSync(worktree);
+    expect(await resolveRepositoryRoot(worktree)).toBe(canonicalWorktree);
+    expect((await discoverRepositories(root)).sort()).toEqual(
+      [realpathSync(repository), canonicalWorktree].sort(),
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

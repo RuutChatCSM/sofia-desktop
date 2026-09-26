@@ -413,6 +413,7 @@ export function createEngineClient(options: EngineClientOptions) {
         endTree?: string;
         headBefore?: string | null;
         headAfter?: string | null;
+        baselines?: Array<{ repositoryId: string; root: string; tree: string; head: string | null }>;
       }): Promise<WorkspaceChangesResponse> {
         const query = new URLSearchParams({
           ...(params.hunks ? { hunks: "1" } : {}),
@@ -423,6 +424,7 @@ export function createEngineClient(options: EngineClientOptions) {
           ...(params.endTree ? { end: params.endTree } : {}),
           ...(params.headBefore ? { headBefore: params.headBefore } : {}),
           ...(params.headAfter ? { headAfter: params.headAfter } : {}),
+          ...(params.baselines?.length ? { baselines: JSON.stringify(params.baselines) } : {}),
         });
         const result = await request<WorkspaceChangesResponse>(
           `${workspacePath(params.workspaceId)}/changes?${query.toString()}`,

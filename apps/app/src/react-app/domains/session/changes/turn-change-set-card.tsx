@@ -12,6 +12,7 @@ import {
   changeSetTotals,
   fileChangeLabel,
   fileChangeNote,
+  isAttributed,
   type FileChange,
   type TurnChangeSet,
 } from "./turn-change-set";
@@ -55,8 +56,13 @@ export function TurnChangeSetCard({
     repository.files.map((file) => ({ repositoryId: repository.repositoryId, file })),
   );
   const showRepository = repositories.length > 1;
-  const hasTextualChange = totals.countsKnown && (totals.additions > 0 || totals.deletions > 0);
-  const binaryOnly = totals.countsKnown && !hasTextualChange;
+  // A degraded read (no baseline captured) still has counts, but they are the
+  // repository's, not this turn's. Only an attributed set may print them or
+  // offer Review — anything else would claim work the turn may not have done.
+  const attributed = isAttributed(changeSet);
+  const trusted = totals.countsKnown && attributed;
+  const hasTextualChange = trusted && (totals.additions > 0 || totals.deletions > 0);
+  const binaryOnly = trusted && !hasTextualChange;
   const visible = entries.slice(0, maxVisibleFiles);
   const hidden = entries.length - visible.length;
 
@@ -85,6 +91,13 @@ export function TurnChangeSetCard({
             <div data-changeset-binary-only className="mt-0.5 text-[10px] text-muted-foreground/60">
               Binary changes only
             </div>
+          ) : !attributed ? (
+            // No baseline was captured, so this is the repository's current
+            // state, not the turn's delta. Say so rather than implying the
+            // numbers are Sofia's work.
+            <div data-changeset-unattributed className="mt-0.5 text-[10px] text-muted-foreground/60">
+              Current working-tree changes shown. Turn attribution unavailable.
+            </div>
           ) : (
             // Absent counts must not read as "no changes": a hint-sourced set
             // knows which files were touched and nothing about their size.
@@ -101,7 +114,7 @@ export function TurnChangeSetCard({
         {/* Only a repository-backed set can be reviewed. A hint-sourced set is a
             touched-file list, and a Review button that opens an empty pane is a
             dead end. */}
-        {onReview && totals.countsKnown ? (
+        {onReview && trusted ? (
           <Button variant="outline" size="sm" onClick={() => onReview(changeSet.id)}>
             Review
           </Button>
@@ -112,10 +125,11 @@ export function TurnChangeSetCard({
           <FileChangeRow
             key={`${repositoryId}:${file.oldPath ?? ""}:${file.path}`}
             file={file}
-            showCounts={totals.countsKnown && hasTextualChange}
+            showCounts={trusted && hasTextualChange}
             onOpenFile={onOpenFile}
-            onReviewFile={onReviewFile && totals.countsKnown ? () => onReviewFile(file.path) : undefined}
+            onReviewFile={onReviewFile && trusted ? () => onReviewFile(file.path) : undefined}
             repository={showRepository ? repositoryId : undefined}
+            showTurnAttribution={attributed}
           />
         ))}
       </div>
@@ -130,10 +144,11 @@ export function TurnChangeSetCard({
               <FileChangeRow
                 key={`${repositoryId}:${file.oldPath ?? ""}:${file.path}`}
                 file={file}
-                showCounts={totals.countsKnown && hasTextualChange}
+                showCounts={trusted && hasTextualChange}
                 onOpenFile={onOpenFile}
-                onReviewFile={onReviewFile && totals.countsKnown ? () => onReviewFile(file.path) : undefined}
+                onReviewFile={onReviewFile && trusted ? () => onReviewFile(file.path) : undefined}
                 repository={showRepository ? repositoryId : undefined}
+                showTurnAttribution={attributed}
               />
             ))}
           </CollapsibleContent>
@@ -158,6 +173,7 @@ function FileChangeRow({
   onOpenFile,
   onReviewFile,
   repository,
+  showTurnAttribution,
 }: {
   file: FileChange;
   showCounts: boolean;
@@ -165,6 +181,12 @@ function FileChangeRow({
   onReviewFile?: () => void;
   /** Shown only when the turn touched more than one repository. */
   repository?: string;
+  /**
+   * False when the whole set is unattributed. The set-level note already says
+   * the changes are not known to be Sofia's, so a per-row "Not from Sofia" would
+   * overstate what is actually known.
+   */
+  showTurnAttribution: boolean;
 }) {
   const note = fileChangeNote(file);
   const label = fileChangeLabel(file);
@@ -204,7 +226,7 @@ function FileChangeRow({
           <span className="text-red-11">−{file.deletions}</span>
         </span>
       ) : null}
-      {!file.attributedToTurn ? (
+      {showTurnAttribution && !file.attributedToTurn ? (
         // Pre-existing work the turn did not make: never part of Undo.
         <span className={cn("shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground/70")}>Not from Sofia</span>
       ) : null}

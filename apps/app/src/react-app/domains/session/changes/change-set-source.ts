@@ -25,8 +25,24 @@ export type WorkspaceChangesResponse = {
   repositories?: Array<{
     repositoryId: string;
     root: string;
+    /** Present on a delta read; absent on a snapshot read, which has `tree`. */
     revision?: string | null;
-    files: WorkspaceChangeFile[];
+    files?: WorkspaceChangeFile[];
+    /** Present on a snapshot read. */
+    tree?: string;
+    head?: string | null;
+    /** The content snapshots a delta read was taken between. */
+    baselineTree?: string;
+    endTree?: string;
+    headBefore?: string | null;
+    headAfter?: string | null;
+    /** Replay-grade patch for this repository, frozen with its files. */
+    patch?: string;
+    /** Commits that appeared in this repository between the two heads. */
+    commitsInRange?: string[];
+    /** Set instead of files when a repository could not be reconciled. */
+    unavailable?: string;
+    appearedDuringTurn?: boolean;
   }>;
 };
 
@@ -96,6 +112,13 @@ export function changeSetFromRepository(input: {
   commitsInRange?: string[];
   /** Per-repository files, when the read covered more than one checkout. */
   repositories?: NonNullable<WorkspaceChangesResponse["repositories"]>;
+  /**
+   * True when this read is the repository's *current* dirtiness rather than the
+   * turn's own delta. Nothing in it may be presented as Sofia's work, so every
+   * file is marked unattributed — mislabelling yesterday's edits as this turn's
+   * is worse than showing nothing.
+   */
+  attributionUnavailable?: boolean;
   /** Content snapshots the delta was taken between, when the read used them. */
   trees?: {
     baselineTree: string;
@@ -110,17 +133,40 @@ export function changeSetFromRepository(input: {
     startedAt: input.startedAt,
   });
 
+  const repositoryReads = input.repositories ?? input.snapshot.repositories ?? [];
+  // A top-level patch/commits can only belong to a set that covers one repository;
+  // with several, splitting the aggregate would attribute one checkout's diff to
+  // another. The server reports them per repository for the multi-checkout case.
+  const soleRepository = repositoryReads.length === 1;
   const reconciled = reconcileTurnChangeSet(started, {
     source: "git",
-    repositories: (input.repositories ?? input.snapshot.repositories)?.length
-      ? (input.repositories ?? input.snapshot.repositories)!.map((repository) => ({
-          repositoryId: repository.repositoryId,
-          root: repository.root,
-          ...(repository.revision ? { baseRevision: repository.revision } : {}),
-          // A per-repository read reports what each checkout has now; nothing
-          // here is another repository's file, which is the point of the shape.
-          files: repository.files.map((file) => ({ ...file, attributedToTurn: true })),
-        }))
+    repositories: repositoryReads.length
+      ? repositoryReads.map((repository) => {
+          // The server reports the patch per repository; a top-level patch is the
+          // single-repository response shape and only safe to use when there is
+          // exactly one checkout to attach it to.
+          const patch = repository.patch ?? (soleRepository ? input.patch ?? input.snapshot.patch : undefined);
+          const commitsInRange =
+            repository.commitsInRange ??
+            (soleRepository ? input.commitsInRange ?? input.snapshot.commits : undefined);
+          return {
+            repositoryId: repository.repositoryId,
+            root: repository.root,
+            ...(repository.revision ? { baseRevision: repository.revision } : {}),
+            ...(repository.baselineTree ? { baselineTree: repository.baselineTree } : {}),
+            ...(repository.endTree ? { endTree: repository.endTree } : {}),
+            ...(repository.headBefore === undefined ? {} : { headBefore: repository.headBefore }),
+            ...(repository.headAfter === undefined ? {} : { headAfter: repository.headAfter }),
+            ...(patch ? { patch } : {}),
+            ...(commitsInRange && commitsInRange.length > 0 ? { commitsInRange } : {}),
+            // A per-repository read reports what each checkout has now; nothing
+            // here is another repository's file, which is the point of the shape.
+            files: (repository.files ?? []).map((file) => ({
+              ...file,
+              attributedToTurn: !input.attributionUnavailable,
+            })),
+          };
+        })
       : [
       {
         repositoryId: input.repositoryId ?? "workspace",
@@ -142,14 +188,23 @@ export function changeSetFromRepository(input: {
         // the turn began (it is in the baseline tree), so every file in it is the
         // turn's own change. The count-based check stays for the fallback path,
         // where the only baseline available is "which paths were dirty".
-        files: input.trees
-          ? input.snapshot.files.map((file) => ({ ...file, attributedToTurn: true }))
-          : attributeFilesToTurn({ baseline: input.baseline, files: input.snapshot.files }),
+        files: input.attributionUnavailable
+          ? input.snapshot.files.map((file) => ({ ...file, attributedToTurn: false }))
+          : input.trees
+            ? input.snapshot.files.map((file) => ({ ...file, attributedToTurn: true }))
+            : attributeFilesToTurn({ baseline: input.baseline, files: input.snapshot.files }),
       },
     ],
   });
 
   // A repository observation is a settled fact: the turn is over, so the set is
   // frozen and can never be rewritten by a later observation.
-  return { ...reconciled, finalizedAt: input.finalizedAt };
+  return {
+    ...reconciled,
+    finalizedAt: input.finalizedAt,
+    // Without a baseline the read is the repository's current state. It is kept
+    // (the touched files are still useful) but marked so the UI never prints it
+    // as the turn's own `+A −D`.
+    ...(input.attributionUnavailable ? { attributed: false } : {}),
+  };
 }

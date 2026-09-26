@@ -1,12 +1,9 @@
-import {
-  baselineFromChanges,
-  changeSetFromRepository,
-  type TurnBaseline,
-  type WorkspaceChangesResponse,
-} from "./change-set-source";
+import { changeSetFromRepository, type WorkspaceChangesResponse } from "./change-set-source";
 import { useChangeSetStore } from "./change-set-store";
 
 /** The read parameters, shared by both client shapes. */
+export type RepositoryBaseline = { repositoryId: string; root: string; tree: string; head: string | null };
+
 export type WorkspaceChangeParams = {
   hunks?: boolean;
   patch?: boolean;
@@ -15,6 +12,8 @@ export type WorkspaceChangeParams = {
   endTree?: string;
   headBefore?: string | null;
   headAfter?: string | null;
+  /** Per-repository baselines, for a workspace that covers several checkouts. */
+  baselines?: RepositoryBaseline[];
 };
 
 /**
@@ -24,7 +23,9 @@ export type WorkspaceChangeParams = {
  * engine client is not bound. Injected rather than imported, so it is testable.
  */
 export type WorkspaceChangesClient = {
-  git?: { changes?: (params: { workspaceId: string } & WorkspaceChangeParams) => Promise<WorkspaceChangesResponse> };
+  git?: {
+    changes?: (params: { workspaceId: string } & WorkspaceChangeParams) => Promise<WorkspaceChangesResponse>;
+  };
   workspaceChanges?: (sessionId: string, params?: WorkspaceChangeParams) => Promise<WorkspaceChangesResponse>;
 };
 
@@ -49,7 +50,16 @@ async function readChanges(
  * server-side continuation keeps its turn open, so the baseline is not
  * re-captured mid-turn.
  */
-const turnBaselines = new Map<string, { turnId: string; baseline: TurnBaseline; startedAt: number; closed: boolean }>();
+type SessionBaseline = {
+  turnId: string;
+  startedAt: number;
+  closed: boolean;
+  /** Per repository, matched by canonical root rather than array position. */
+  repositories: RepositoryBaseline[];
+  unavailable?: string;
+};
+
+const turnBaselines = new Map<string, SessionBaseline>();
 
 export function resetTurnBaselines(): void {
   turnBaselines.clear();
@@ -80,26 +90,30 @@ export async function captureTurnBaseline(input: {
     return;
   }
   try {
-    const [response, snapshot] = await Promise.all([
-      readChanges(client, { workspaceId: input.workspaceId, sessionId: input.sessionId, params: {} }),
-      readChanges(client, {
-        workspaceId: input.workspaceId,
-        sessionId: input.sessionId,
-        params: { snapshot: true },
-      }),
-    ]);
-    const trees = snapshot.tree ? { tree: snapshot.tree, head: snapshot.head ?? null } : null;
+    const snapshot = await readChanges(client, {
+      workspaceId: input.workspaceId,
+      sessionId: input.sessionId,
+      params: { snapshot: true },
+    });
+    // Only repositories a snapshot could resolve become baselines.
+    const repositories = (snapshot.repositories ?? []).filter(
+      (repository): repository is RepositoryBaseline =>
+        typeof repository.tree === "string" && repository.tree.length > 0,
+    );
     turnBaselines.set(input.sessionId, {
       turnId: input.turnId,
-      baseline: baselineFromChanges(response, trees),
       startedAt: Date.now(),
       closed: false,
+      repositories,
+      ...(repositories.length === 0 ? { unavailable: "no repository was found in this workspace" } : {}),
     });
     // Validation aid while the pipeline is young: one line per turn, so a
     // missing diff can be told apart from a wrong one at a glance.
     if (import.meta.env.DEV) {
       console.info(
-        `[changes] baseline captured session=${input.sessionId} turn=${input.turnId} tree=${trees?.tree ?? "none"}`,
+        `[changes] baseline captured session=${input.sessionId} turn=${input.turnId} repositories=${
+          repositories.map((repository) => `${repository.repositoryId}@${repository.tree.slice(0, 7)}`).join(",") || "none"
+        }`,
       );
     }
   } catch (error) {
@@ -132,31 +146,17 @@ export async function finalizeTurnChangeSet(input: {
   const record = turnBaselines.get(input.sessionId);
   const usable = record && record.turnId === input.turnId ? record : null;
   try {
-    const baselineTree = usable?.baseline.snapshot?.tree ?? "";
-    const end = baselineTree
-      ? await readChanges(client, { workspaceId: input.workspaceId, sessionId: input.sessionId, params: { snapshot: true } })
-      : null;
-    const trees =
-      baselineTree && end?.tree
-        ? {
-            baselineTree,
-            endTree: end.tree,
-            headBefore: usable?.baseline.snapshot?.head ?? null,
-            headAfter: end.head ?? null,
-          }
-        : undefined;
-    const snapshot = trees
+    const baselines = usable?.repositories ?? [];
+    // Per repository: baselineTree -> endTree for every checkout the turn started
+    // with. With no baseline there is nothing to attribute, so the read is the
+    // working tree and the set says so rather than claiming the turn did it.
+    const snapshot = baselines.length
       ? await readChanges(client, {
           workspaceId: input.workspaceId,
           sessionId: input.sessionId,
-          params: {
-            hunks: true,
-            patch: true,
-            baselineTree: trees.baselineTree,
-            endTree: trees.endTree,
-            headBefore: trees.headBefore,
-            headAfter: trees.headAfter,
-          },
+          // The patch is frozen with the set, replay-grade, so Undo and a
+          // historical review never re-derive it from a repository that moved on.
+          params: { hunks: true, patch: true, baselines },
         })
       : await readChanges(client, {
           workspaceId: input.workspaceId,
@@ -168,13 +168,10 @@ export async function finalizeTurnChangeSet(input: {
       sessionId: input.sessionId,
       turnId: input.turnId,
       startedAt: usable?.startedAt ?? Date.now(),
-      baseline: usable?.baseline ?? null,
+      baseline: null,
       snapshot,
       finalizedAt: Date.now(),
-      ...(trees ? { trees } : {}),
-      ...(snapshot.patch ? { patch: snapshot.patch } : {}),
-      ...(snapshot.commits ? { commitsInRange: snapshot.commits } : {}),
-      ...(snapshot.repositories?.length ? { repositories: snapshot.repositories } : {}),
+      ...(baselines.length === 0 ? { attributionUnavailable: true } : {}),
     });
     useChangeSetStore.getState().upsert(changeSet);
 
@@ -185,15 +182,15 @@ export async function finalizeTurnChangeSet(input: {
     );
     // `source=tree-delta` is the real pipeline; anything else means the turn is
     // back on a working-tree read and a committed turn will look empty.
-    const source = trees ? "tree-delta" : "working-tree";
+    const source = baselines.length ? "tree-delta" : "working-tree";
     if (import.meta.env.DEV) {
       console.info(
-        `[changes] finalized changeSet=${changeSet.id} files=${files.length} +${totals.additions} -${totals.deletions} source=${source}`,
+        `[changes] finalized changeSet=${changeSet.id} repositories=${changeSet.repositories.length} files=${files.length} +${totals.additions} -${totals.deletions} source=${source}`,
       );
     }
-    if (!trees) {
+    if (baselines.length === 0) {
       console.warn(
-        `[changes] no baseline for session=${input.sessionId} turn=${input.turnId} — cards will fall back to tool-event hints`,
+        `[changes] no per-repository baseline for session=${input.sessionId} turn=${input.turnId} — showing working-tree changes without turn attribution`,
       );
     }
     if (usable) turnBaselines.set(input.sessionId, { ...usable, closed: true });

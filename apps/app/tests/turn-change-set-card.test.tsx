@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { TurnChangeSetCard } from "../src/react-app/domains/session/changes/turn-change-set-card";
 import { changeSetFiles } from "../src/react-app/domains/session/changes/turn-change-set";
+import { changeSetFromRepository } from "../src/react-app/domains/session/changes/change-set-source";
 import { changeSetFromToolHints } from "../src/react-app/domains/session/changes/change-set-from-messages";
 import {
   beginTurnChangeSet,
@@ -192,5 +193,42 @@ describe("result card", () => {
   test("renders nothing for a turn with no changes", () => {
     const markup = renderToStaticMarkup(<TurnChangeSetCard changeSet={changeSet("git", parseNumStat(""))} />);
     expect(markup).toBe("");
+  });
+
+  test("a turn whose baseline could not be captured lists files without claiming counts", () => {
+    // The read fell back to the repository's current state. The files are still
+    // useful, but printing "+20 −3" under the turn, or offering Review, would
+    // attribute work the turn may never have done.
+    const set = changeSetFromRepository({
+      sessionId: "s1",
+      turnId: "t31",
+      startedAt: 1_000,
+      baseline: null,
+      snapshot: {
+        revision: null,
+        files: [{ path: "a.ts", status: "modified", additions: 20, deletions: 3 }],
+        repositories: [
+          {
+            repositoryId: "repo-1",
+            root: "/repo",
+            revision: "r1",
+            files: [{ path: "a.ts", status: "modified", additions: 20, deletions: 3 }],
+          },
+        ],
+      },
+      attributionUnavailable: true,
+      finalizedAt: 5_000,
+    });
+
+    const markup = renderToStaticMarkup(
+      <TurnChangeSetCard changeSet={set} onReview={() => {}} onReviewFile={() => {}} />,
+    );
+
+    expect(markup).toContain("Edited a.ts");
+    expect(markup).toContain("Turn attribution unavailable");
+    expect(markup).not.toContain("+20");
+    expect(markup).not.toContain(">Review<");
+    // The set-level note replaces a per-row claim about who made the change.
+    expect(markup).not.toContain("Not from Sofia");
   });
 });

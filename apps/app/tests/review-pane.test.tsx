@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { ReviewPane } from "../src/react-app/domains/session/changes/review-pane";
+import { changeSetFromRepository } from "../src/react-app/domains/session/changes/change-set-source";
 import { changeSetFromToolHints } from "../src/react-app/domains/session/changes/change-set-from-messages";
 import {
   beginTurnChangeSet,
@@ -163,6 +164,37 @@ describe("review pane", () => {
     expect(markup).toContain("was not read from the repository");
     // The files Sofia touched are still listed.
     expect(markup).toContain('data-review-file="session-surface.tsx"');
+  });
+
+  test("an unattributed set is not headed as the turn's own change", () => {
+    // No baseline was captured, so the read is the repository's current state.
+    // The pane must not print its counts under "Last turn".
+    const set = changeSetFromRepository({
+      sessionId: "s1",
+      turnId: "t31",
+      startedAt: 0,
+      baseline: null,
+      snapshot: {
+        revision: null,
+        files: [],
+        repositories: [
+          {
+            repositoryId: "workspace",
+            root: "/repo",
+            revision: "r1",
+            files: [{ path: "yours.ts", status: "modified", additions: 20, deletions: 3 }],
+          },
+        ],
+      },
+      attributionUnavailable: true,
+      finalizedAt: 5_000,
+    });
+
+    const markup = renderToStaticMarkup(<ReviewPane scope="last-turn" onScopeChange={() => {}} changeSet={set} />);
+
+    expect(markup).toContain("Working-tree changes");
+    expect(markup).not.toContain("+20");
+    expect(markup).toContain("was not read from the repository");
   });
 
   test("says so when a scope has nothing, and while it is loading", () => {
