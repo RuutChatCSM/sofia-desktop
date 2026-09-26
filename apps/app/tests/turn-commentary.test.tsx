@@ -112,17 +112,17 @@ describe("commentary is part of the work", () => {
 
   test("collapsed tool detail stays out of the transcript", () => {
     const collapsed = renderList([userMessage, ...turn]);
-    const expanded = renderList([userMessage, ...turn], true);
+    const running = renderList([userMessage, ...turn], false, "streaming");
 
     expect(collapsed).not.toContain("echo c1");
     expect(collapsed).not.toContain("reverting the shared background");
     expect(collapsed).not.toContain("data-tool-aggregate");
-    // Opening the block is strictly more content than the collapsed row — the
-    // narrative is inspectable, not lost.
-    expect(expanded).toContain("reverting the shared background");
+    // While it runs the block is open: strictly more content than the collapsed
+    // row, so the narrative is inspectable rather than lost.
+    expect(running).toContain("reverting the shared background");
     // The tool run is one aggregated row, not one row per command.
-    expect((expanded.match(/data-tool-aggregate/g) ?? []).length).toBeGreaterThanOrEqual(1);
-    expect(expanded.length).toBeGreaterThan(collapsed.length);
+    expect((running.match(/data-tool-aggregate/g) ?? []).length).toBeGreaterThanOrEqual(1);
+    expect(running.length).toBeGreaterThan(collapsed.length);
   });
 
   test("commentary is never mistaken for the final answer", () => {
@@ -183,15 +183,38 @@ describe("one assistant turn, one work grouping", () => {
     expect(markup).not.toContain(closing);
   });
 
-  test("expanding restores the narrative, in the order it streamed", () => {
-    const markup = renderList([userMessage, ...narrative, finalAnswer(ANSWER)], true);
+  test("the narrative streams inside the block, in the order it happened", () => {
+    const markup = renderList([userMessage, ...narrative, finalAnswer(ANSWER)], false, "streaming");
 
     expect(markup).toContain(first);
     expect(markup).toContain(second);
     expect(markup).toContain(closing);
     expect(markup.indexOf(first)).toBeLessThan(markup.indexOf(second));
     expect(markup.indexOf(second)).toBeLessThan(markup.indexOf(closing));
-    expect(markup).toContain(ANSWER);
+  });
+
+  test("the disclosure holds work rows, not nested transcript messages", () => {
+    // The regression this guards: moving commentary inside the block structurally
+    // while still rendering each entry through the transcript's message
+    // primitives, which reintroduces message-level spacing inside the disclosure.
+    const running = renderList([userMessage, ...narrative], false, "streaming");
+
+    expect(running).toContain('data-work-entry="commentary"');
+    expect(running).toContain('data-work-entry="milestone"');
+    // No assistant *message* wrappers at all while the turn has produced no
+    // answer: the narrative is rows, not messages.
+    expect((running.match(/data-message-role="assistant"/g) ?? []).length).toBe(0);
+    expect(running).not.toContain("data-final-answer");
+  });
+
+  test("the final answer is the only assistant message outside the disclosure", () => {
+    const markup = renderList([userMessage, ...narrative, finalAnswer(ANSWER)]);
+
+    expect((markup.match(/data-assistant-turn/g) ?? []).length).toBe(1);
+    expect((markup.match(/data-turn-work-header/g) ?? []).length).toBe(1);
+    expect((markup.match(/data-final-answer/g) ?? []).length).toBe(1);
+    expect((markup.match(/data-message-role="assistant"/g) ?? []).length).toBe(1);
+    expect((markup.match(/data-work-entry/g) ?? []).length).toBe(0);
   });
 
   test("a turn that never answers keeps its only reply visible", () => {

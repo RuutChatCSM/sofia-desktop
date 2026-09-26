@@ -5,6 +5,7 @@ import type { DynamicToolUIPart, UIMessage } from "ai";
 
 import { MessageList } from "../src/components/chat/message-list";
 import { MessageListProvider } from "../src/components/chat/message-list-provider";
+import type { ThreadStatus } from "../src/lib/messages";
 
 function bashPart(id: string): DynamicToolUIPart {
   return {
@@ -47,7 +48,7 @@ function withoutWindow<T>(run: () => T): T {
   }
 }
 
-function renderList(messages: UIMessage[], developerMode = false) {
+function renderList(messages: UIMessage[], developerMode = false, status: ThreadStatus = "ready") {
   return withoutWindow(() => renderToStaticMarkup(
     <MessageListProvider
       workspaceId="ws"
@@ -65,7 +66,7 @@ function renderList(messages: UIMessage[], developerMode = false) {
       onMcpReopenAuthorization={() => Promise.resolve()}
       onMcpRetry={() => {}}
     >
-      <MessageList messages={messages} status="ready" />
+      <MessageList messages={messages} status={status} />
     </MessageListProvider>
   ));
 }
@@ -125,9 +126,10 @@ describe("finished turn step fold (single Sofia engine message per turn)", () =>
     expect(markup).toContain("Done.");
 
     // The aggregate summary is the *contents* of the block: inspectable, but
-    // folded away by default (developer mode opens it).
+    // folded away once the turn finishes.
     expect(markup).not.toContain("Edited 1 file, ran 1 command");
-    expect(renderList([userMessage, assistant], true)).toContain("Edited 1 file, ran 1 command");
+    // While it runs the block is open, and the same contents are there.
+    expect(renderList([userMessage, assistant], false, "streaming")).toContain("Edited 1 file, ran 1 command");
   });
 
   test("reasoning between calls does not fragment the aggregate", () => {
@@ -137,19 +139,21 @@ describe("finished turn step fold (single Sofia engine message per turn)", () =>
       metadata: { engine: { created: 1_000, completed: 4_000 } },
       parts: [
         { type: "step-start" },
-        { type: "reasoning", text: "first", state: "done" },
+        { type: "reasoning", text: "checking the first call", state: "done" },
         bashPart("c1"),
-        { type: "reasoning", text: "second", state: "done" },
+        { type: "reasoning", text: "checking the second call", state: "done" },
         bashPart("c2"),
         { type: "text", text: "Done.", state: "done" },
       ],
     };
 
-    const markup = renderList([userMessage, assistant], true);
+    const markup = renderList([userMessage, assistant], false, "streaming");
 
     expect(markup).toContain("Ran 2 commands");
-    // Two reasoning items, one merged reasoning section: a turn's reasoning is
-    // a single object, not one "Thought" row per engine item.
-    expect((markup.match(/Thought/g) ?? []).length).toBe(1);
+    // Reasoning is narrative text inside the block, not a second disclosure: the
+    // work block is the only disclosure there is.
+    expect(markup).not.toContain("Thought");
+    expect(markup).toContain("checking the first call");
+    expect(markup).toContain("checking the second call");
   });
 });

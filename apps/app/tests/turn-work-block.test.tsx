@@ -104,7 +104,9 @@ describe("progress narration belongs to the work, not the transcript", () => {
 
   test("pre-answer narration folds into the block; the answer stays outside", () => {
     const markup = renderList([userMessage, ...continuationTurn], "ready");
-    const expanded = renderList([userMessage, ...continuationTurn], "ready", true);
+    // While it runs the block is open; the same children are what an expansion
+    // shows later, so this is how the narrative is inspected here.
+    const running = renderList([userMessage, ...continuationTurn], "streaming");
 
     // One turn, one work unit.
     expect((markup.match(/data-turn-work-header/g) ?? []).length).toBe(1);
@@ -117,7 +119,7 @@ describe("progress narration belongs to the work, not the transcript", () => {
     // ...and so does `commentary`: it is progress narration the user reads while
     // Sofia works, which means it belongs to the block and folds away with it.
     expect(markup).not.toContain("Now the core change");
-    expect(expanded).toContain("Now the core change");
+    expect(running).toContain("Now the core change");
     expect(markup).not.toContain("Sofia is working…");
   });
 
@@ -149,11 +151,11 @@ describe("progress narration belongs to the work, not the transcript", () => {
     // The block has no tool or reasoning detail here, but the turn still reports
     // its duration, and its narration is inside the disclosure with it.
     expect(markup).not.toContain("Let me check the timing path");
-    expect(renderList([userMessage, ...proseOnly], "ready", true)).toContain("Let me check the timing path");
+    expect(renderList([userMessage, ...proseOnly], "streaming")).toContain("Let me check the timing path");
   });
 
   test("the narration is preserved inside the block, not dropped", () => {
-    const markup = renderList([userMessage, ...continuationTurn], "ready", true);
+    const markup = renderList([userMessage, ...continuationTurn], "streaming");
 
     expect(markup).toContain("Let me find the evaluator banner");
     expect(markup).toContain("Now the core change");

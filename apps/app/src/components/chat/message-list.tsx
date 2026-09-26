@@ -58,7 +58,7 @@ import {
 } from "@/react-app/domains/session/changes/change-set-store"
 import { usePanelTabStore } from "@/react-app/domains/session/panel/panel-tab-store"
 import { messageTurnId, turnAnswerIndex } from "@/components/chat/turn-structure"
-import { deriveTurnPresentation } from "@/components/chat/turn-presentation"
+import { deriveTurnPresentation, workEntriesForMessage } from "@/components/chat/turn-presentation"
 import { liveActivityLabel } from "@/react-app/domains/session/activity"
 import { changeSetFiles } from "@/react-app/domains/session/changes/turn-change-set"
 import {
@@ -443,8 +443,15 @@ type AssistantMessageProps = {
   hideReasoning?: boolean
 }
 
-const AssistantMessage = React.memo(
-  ({ message, isStreaming, hideReasoning }: AssistantMessageProps) => {
+/**
+ * The parts of one assistant message, with no transcript wrapper.
+ *
+ * Split out of `AssistantMessage` so the work disclosure can render tool detail
+ * without giving every entry normal chat-message structure. A WorkBlock holding a
+ * dozen progress updates must not be a dozen little transcript messages.
+ */
+const AssistantParts = React.memo(
+  ({ message, isStreaming, hideReasoning }: Omit<AssistantMessageProps, "isLastMessage" | "isLastStep">) => {
     const { showThinking, highlightQuery } = useMessageList()
     const assistantRenderGroups = React.useMemo(
       () => {
@@ -455,13 +462,8 @@ const AssistantMessage = React.memo(
     )
 
     return (
-      <Message
-        className="mx-auto flex w-full max-w-[800px] flex-col items-start gap-2 px-2 md:px-6"
-        data-message-id={message.id}
-        data-message-role={message.role}
-      >
-        <div className="group flex w-full flex-col gap-0 space-y-2">
-          {assistantRenderGroups.map((group, index) => {
+      <div className="group flex w-full flex-col gap-0 space-y-2">
+        {assistantRenderGroups.map((group, index) => {
             if (group.kind === "text") {
               return (
                 <MessageContent
@@ -507,8 +509,23 @@ const AssistantMessage = React.memo(
                 <ToolMessage part={group.part} />
               </div>
             )
-          })}
-        </div>
+        })}
+      </div>
+    )
+  }
+)
+
+AssistantParts.displayName = "AssistantParts"
+
+const AssistantMessage = React.memo(
+  ({ message, isStreaming, hideReasoning }: AssistantMessageProps) => {
+    return (
+      <Message
+        className="mx-auto flex w-full max-w-[800px] flex-col items-start gap-2 px-2 md:px-6"
+        data-message-id={message.id}
+        data-message-role={message.role}
+      >
+        <AssistantParts message={message} isStreaming={isStreaming} hideReasoning={hideReasoning} />
       </Message>
     )
   }
@@ -986,6 +1003,67 @@ function TurnWorkBlock({
   )
 }
 
+/**
+ * A row inside the work disclosure.
+ *
+ * Deliberately not `Message`/`MessageComponent`: those give a row normal
+ * transcript-message structure — a wide container, its own vertical rhythm — which
+ * is right for the turn's answer and wrong for the dozen progress updates inside
+ * one disclosure. Work rows are compact and belong to the narrative.
+ */
+function WorkRow({
+  kind,
+  children,
+}: {
+  kind: "commentary" | "reasoning" | "milestone" | "detail"
+  children: React.ReactNode
+}) {
+  return (
+    <div data-work-entry={kind} className="mx-auto w-full max-w-[800px] px-2 md:px-6">
+      {children}
+    </div>
+  )
+}
+
+/**
+ * Progress prose and reasoning inside the disclosure: the words, not a message.
+ *
+ * Markdown only. No message shell, no per-message spacing, and no second
+ * disclosure control reading "Thought" — the work block is the only disclosure,
+ * and reasoning is one of the things it holds, at its own place in the narrative.
+ */
+function WorkProse({
+  kind,
+  message,
+  text,
+  isStreaming,
+}: {
+  kind: "commentary" | "reasoning"
+  message?: UIMessage
+  text?: string
+  isStreaming?: boolean
+}) {
+  const { highlightQuery } = useMessageList()
+  const value = text ?? getMessagesText(message ? [message] : [])
+  if (!value.trim()) return null
+
+  return (
+    <WorkRow kind={kind}>
+      <MessageContent
+        markdown
+        isStreaming={Boolean(isStreaming)}
+        highlightQuery={highlightQuery}
+        className={cn(
+          "prose w-full min-w-0 bg-transparent p-0 text-[13px] leading-6",
+          kind === "reasoning" ? "text-muted-foreground" : "text-foreground/90",
+        )}
+      >
+        {value}
+      </MessageContent>
+    </WorkRow>
+  )
+}
+
 /** Ticks while a turn is live so its header can show elapsed work time. */
 function useLiveElapsed(startedAt: number | null, active: boolean): number | null {
   const [now, setNow] = React.useState(() => Date.now())
@@ -1046,7 +1124,7 @@ function MessageGroup({
   isStreaming,
   activeLabel,
 }: AssistantMessageGroupProps) {
-  const { sessionId, onRevertToUserMessage, onForkAtMessage, showThinking, developerMode } = useMessageList()
+  const { sessionId, onRevertToUserMessage, onForkAtMessage, showThinking } = useMessageList()
   const lastItem = items[items.length - 1]
   // Branch/revert must target a real server-side message id. Synthetic
   // client-side messages (e.g. session errors) don't exist on the server and
@@ -1127,31 +1205,16 @@ function MessageGroup({
   if (firstProse && firstProse.message.role === "assistant" && !isSessionErrorMessage(firstProse.message)) {
     const split = splitTurnAtAnswer(firstProse.message)
     if (split) {
+      // The same derivation a standalone step message gets, so the split keeps the
+      // reasoning as well as the tool detail.
       workItems = [
         ...workItems,
-        { kind: "detail", key: `detail-${split.steps.id}`, item: { index: firstProse.index, message: split.steps } },
+        ...workEntriesForMessage({ index: firstProse.index, message: split.steps }, showThinking),
       ]
       proseItems = [{ index: firstProse.index, message: split.answer }, ...proseItems.slice(1)]
     }
   }
 
-  // Reasoning is work, not an answer. Every reasoning group in the turn merges
-  // into one block, so a turn that arrived as six reasoning items reads as one
-  // expandable section instead of six stacked rows.
-  const turnReasoning = items.flatMap((item) =>
-    item.message.role === "assistant" && !isSessionErrorMessage(item.message)
-      ? getAssistantRenderGroups(item.message.parts, showThinking).flatMap((group, groupIndex) =>
-        group.kind === "reasoning"
-          ? [{ key: `${item.message.id}-${groupIndex}`, text: group.text, isStreaming: group.isStreaming }]
-          : []
-      )
-      : []
-  )
-  const reasoningText = turnReasoning
-    .map((reasoning) => reasoning.text.trim())
-    .filter(Boolean)
-    .join("\n\n")
-  const reasoningStreaming = turnReasoning.some((reasoning) => reasoning.isStreaming)
   const durationMs = finishedTurnDurationMs(timing)
   // Active: the semantic operation. Finished: how long the turn took.
   const workLabel = turnWorkLabel({
@@ -1163,7 +1226,7 @@ function MessageGroup({
   // A finished turn keeps its execution disclosure even when everything it did
   // was talk: "Worked for 1m 30s" is what tells the user how long the turn took,
   // and reading it above the answer is the point.
-  const hasWork = workItems.length > 0 || Boolean(reasoningText) || durationMs !== null
+  const hasWork = workItems.length > 0 || durationMs !== null
   // The one case that must not fold away: a turn that produced commentary and no
   // answer. Collapsing it would hide the only thing Sofia said to the user, which
   // is the bug the ChatGPT reports describe.
@@ -1189,30 +1252,27 @@ function MessageGroup({
   // The narrative, rendered in the order it happened. Aggregation happened when
   // the presentation was derived, so this only has to place each entry — and a
   // milestone is already one row for a whole run of tool events.
-  const renderWorkEntry = (entry: (typeof workItems)[number], position: number) => {
+  const renderWorkEntry = (entry: (typeof workItems)[number]) => {
     if (entry.kind === "commentary") {
+      return <WorkProse key={entry.key} kind="commentary" message={entry.item.message} />
+    }
+    if (entry.kind === "reasoning") {
       return (
-        <div key={entry.key}>
-          <MessageComponent
-            message={entry.item.message}
-            isLastMessage={false}
-            isStreaming={false}
-            isLastStep={false}
-            hideReasoning
-          />
-        </div>
+        <WorkProse key={entry.key} kind="reasoning" text={entry.text} isStreaming={entry.isStreaming} />
       )
     }
     if (entry.kind === "milestone") {
       return (
-        <div key={entry.key}>
-          <Message className="mx-auto flex w-full max-w-[800px] flex-col items-start gap-2 px-2 md:px-6">
-            <ToolAggregateGroup parts={entry.parts} className="w-full" />
-          </Message>
-        </div>
+        <WorkRow key={entry.key} kind="milestone">
+          <ToolAggregateGroup parts={entry.parts} className="w-full" />
+        </WorkRow>
       )
     }
-    return renderItem(entry.item, position, true)
+    return (
+      <WorkRow key={entry.key} kind="detail">
+        <AssistantParts message={entry.item.message} isStreaming={false} hideReasoning />
+      </WorkRow>
+    )
   }
 
   return (
@@ -1233,18 +1293,15 @@ function MessageGroup({
             streaming={isLiveGroup && isStreaming}
             elapsedMs={liveElapsedMs}
             // Open while it works, and in the one case that must not hide its
-            // only user-facing prose. Developer mode keeps historical trails open.
-            defaultOpen={isLiveGroup || commentaryOnly || developerMode}
+            // only user-facing prose. Developer mode changes what expanding shows,
+            // not whether a finished turn starts expanded: "Worked for …" is the
+            // transcript's account of the turn, and it collapses.
+            defaultOpen={isLiveGroup || commentaryOnly}
           >
             {/* The disclosure owns the internal rhythm: whole-narrative rows sit
                 closer together than transcript messages do, because they are not
                 messages. */}
             <div className="flex flex-col gap-3">
-              {reasoningText ? (
-                <Message className="mx-auto flex w-full max-w-[800px] flex-col items-start gap-2 px-2 md:px-6">
-                  <ReasoningBlock text={reasoningText} isStreaming={reasoningStreaming} />
-                </Message>
-              ) : null}
               {workItems.map(renderWorkEntry)}
             </div>
           </TurnWorkBlock>
@@ -1259,7 +1316,11 @@ function MessageGroup({
         </Message>
       ))}
       {/* The answer is the one row that escapes the disclosure. */}
-      {proseItems.map((item, position) => renderItem(item, position, true))}
+      {proseItems.map((item, position) => (
+        <div key={`final-answer-${item.message.id}`} data-final-answer="">
+          {renderItem(item, position, true)}
+        </div>
+      ))}
       {/* The turn's result: one summary card for this turn's change set. */}
       {changeSet ? (
         <div className="mx-auto w-full max-w-[800px] px-2 md:px-6">

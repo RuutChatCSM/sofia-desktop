@@ -81,7 +81,7 @@ describe("turn presentation", () => {
     expect(presentation.answerItems.map((item) => item.message.id)).toEqual(["m6"]);
   });
 
-  test("reasoning and non-aggregatable detail are work, ordered with everything else", () => {
+  test("reasoning is a work entry of its own, ordered before the detail it preceded", () => {
     const items = [
       message("m1", [{ type: "reasoning", text: "thinking about it", state: "done" }, text("Working on it.")]),
       message("m2", [text("Done.")], "final_answer"),
@@ -89,10 +89,31 @@ describe("turn presentation", () => {
 
     const presentation = deriveTurnPresentation(items, true);
 
-    expect(presentation.work.map((entry) => entry.kind)).toEqual(["detail"]);
-    const detail = presentation.work[0];
+    expect(presentation.work.map((entry) => entry.kind)).toEqual(["reasoning", "detail"]);
+    const reasoning = presentation.work[0];
+    expect(reasoning?.kind === "reasoning" && reasoning.text).toBe("thinking about it");
+    const detail = presentation.work[1];
     expect(detail?.kind === "detail" && detail.item.message.id).toBe("m1");
     expect(presentation.answerItems.map((item) => item.message.id)).toEqual(["m2"]);
+  });
+
+  test("reasoning inside a run of tool events does not fragment the run", () => {
+    // A command, a thought, another command: one aggregate row, and the reasoning
+    // follows it rather than splitting it in two.
+    const items = [
+      message("m1", [bash("c1")]),
+      message("m2", [{ type: "reasoning", text: "checking", state: "done" }]),
+      message("m3", [bash("c2")]),
+      message("m4", [text("Done.")], "final_answer"),
+    ];
+
+    const presentation = deriveTurnPresentation(items, true);
+
+    expect(presentation.work.map((entry) => entry.kind)).toEqual(["milestone", "reasoning"]);
+    const milestone = presentation.work[0];
+    expect(milestone?.kind === "milestone" && milestone.parts).toHaveLength(2);
+    const reasoning = presentation.work[1];
+    expect(reasoning?.kind === "reasoning" && reasoning.text).toBe("checking");
   });
 
   test("adjacent tool events collapse into one milestone row", () => {
@@ -131,15 +152,17 @@ describe("turn presentation", () => {
       "milestone",
       "commentary",
       "milestone",
-      "detail",
+      "reasoning",
       "commentary",
     ]);
     expect(presentation.answerItems.map((item) => item.message.id)).toEqual(["m7"]);
 
     // Every intermediate message is inside the block, in order — nothing dropped.
-    const workIds = presentation.work.flatMap((entry) =>
+    const workText = presentation.work.flatMap((entry) =>
       entry.kind === "commentary" || entry.kind === "detail" ? [entry.item.message.id] : [],
     );
-    expect(workIds).toEqual(["m1", "m3", "m5", "m6"]);
+    expect(workText).toEqual(["m1", "m3", "m6"]);
+    const reasoning = presentation.work.find((entry) => entry.kind === "reasoning");
+    expect(reasoning?.kind === "reasoning" && reasoning.text).toBe("checking the canvas");
   });
 });

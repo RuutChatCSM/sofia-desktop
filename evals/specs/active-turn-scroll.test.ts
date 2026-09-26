@@ -56,7 +56,15 @@ test("an assistant turn renders as a single work block", () => {
   // The block owns the whole turn: commentary, milestones and detail all render
   // inside the disclosure, and only the answer is rendered outside it.
   expect(source).toContain("{workItems.map(renderWorkEntry)}");
-  expect(source).toContain("{proseItems.map((item, position) => renderItem(item, position, true))}");
+  expect(source).toContain('data-final-answer=""');
+  // The disclosure's children are work rows, not transcript messages: reusing
+  // `MessageComponent` inside the block is what made each progress update carry
+  // message-level layout and read as a separate message.
+  expect(source).toContain('data-work-entry={kind}');
+  expect(source).not.toContain('<WorkRow kind="commentary">\n          <MessageComponent');
+  // Reasoning is a work entry in the narrative, not a second disclosure hoisted
+  // above it.
+  expect(source).not.toContain("<ReasoningBlock text={reasoningText}");
   // The old shape — milestones and progress prose as sibling transcript rows — is
   // gone, which is the whole point: they were never transcript items.
   expect(source).not.toContain("presentation.visible.map");
