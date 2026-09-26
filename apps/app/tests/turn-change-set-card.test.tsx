@@ -50,6 +50,8 @@ describe("result card", () => {
     expect(markup).toContain("Edited 2 files");
     expect(markup).not.toContain("+0");
     expect(markup).not.toContain("−0");
+    // The absence is stated rather than left looking like a zero-sized change.
+    expect(markup).toContain("data-changeset-unmeasured");
   });
 
   test("folds the tail of a long list behind Show N more", () => {

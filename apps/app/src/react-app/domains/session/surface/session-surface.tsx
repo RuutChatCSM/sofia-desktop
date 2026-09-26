@@ -79,7 +79,10 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { useChangeSetStore } from "@/react-app/domains/session/changes/change-set-store";
+import {
+  selectTurnChangeSet,
+  useChangeSetStore,
+} from "@/react-app/domains/session/changes/change-set-store";
 import { loadRepositoryChanges } from "@/react-app/domains/session/codex-session-store";
 import type { FileChange } from "@/react-app/domains/session/changes/turn-change-set";
 import { QuestionPanel } from "@/react-app/domains/session/modals/question-modal";
@@ -2115,10 +2118,21 @@ export function SessionSurface(props: SessionSurfaceProps) {
     void captureTurnBaseline(props.sessionId, changeTurnId);
   }, [changeTurnId, chatStreaming, props.sessionId]);
 
+  const changeSetForTurn = useChangeSetStore((state) =>
+    selectTurnChangeSet(state.byId, props.sessionId, changeTurnId),
+  );
+  const changeFinalizeAttempted = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (chatStreaming || !changeTurnId) return;
+    // A repository-backed set settles the turn; anything else (a hint set, or
+    // nothing) means the read was missed — the stream boundary can fire before
+    // the turn id is known, and a single failure used to leave the card with no
+    // magnitude for the rest of the session. Retry once per turn while idle.
+    if (changeSetForTurn?.source === "git") return;
+    if (changeFinalizeAttempted.current.has(changeTurnId)) return;
+    changeFinalizeAttempted.current.add(changeTurnId);
     void finalizeTurnChangeSetFromRepo(props.sessionId, changeTurnId);
-  }, [changeTurnId, chatStreaming, props.sessionId]);
+  }, [changeSetForTurn, changeTurnId, chatStreaming, props.sessionId]);
 
   return (
     <DevProfiler id="SessionSurface">
@@ -2278,7 +2292,12 @@ export function SessionSurface(props: SessionSurfaceProps) {
           if (!open) closeReview();
         }}
       >
-        <SheetContent side="right" className="flex w-full flex-col sm:max-w-[760px]">
+        <SheetContent
+          side="right"
+          // Code is wide: a review surface squeezed into a settings-sized panel
+          // is unusable. This is a docked workspace pane, not a modal card.
+          className="flex w-full flex-col sm:max-w-[min(1100px,58vw)]"
+        >
           <SheetHeader>
             <SheetTitle>Review</SheetTitle>
             <SheetDescription>

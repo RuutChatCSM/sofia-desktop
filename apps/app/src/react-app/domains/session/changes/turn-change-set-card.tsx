@@ -60,7 +60,13 @@ export function TurnChangeSetCard({
               <span className="text-emerald-11">+{totals.additions}</span>
               <span className="text-red-11">−{totals.deletions}</span>
             </div>
-          ) : null}
+          ) : (
+            // Absent counts must not read as "no changes": a hint-sourced set
+            // knows which files were touched and nothing about their size.
+            <div data-changeset-unmeasured className="mt-0.5 text-[11px] text-muted-foreground/70">
+              Change size not measured
+            </div>
+          )}
         </div>
         {onUndo ? (
           <Button variant="ghost" size="sm" onClick={() => onUndo(changeSet.id)}>
