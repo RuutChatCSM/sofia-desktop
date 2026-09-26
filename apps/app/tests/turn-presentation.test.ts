@@ -165,4 +165,22 @@ describe("turn presentation", () => {
     const reasoning = presentation.work.find((entry) => entry.kind === "reasoning");
     expect(reasoning?.kind === "reasoning" && reasoning.text).toBe("checking the canvas");
   });
+
+  test("reasoning is always part of the narrative, at its own place in it", () => {
+    // Reasoning is never gated: it is one of the things the turn did. It sits in
+    // chronological order between the commentary and the tools it belongs to.
+    const items = [
+      message("m1", [text("Let me inspect the shared layout first.")], "commentary"),
+      message("m2", [{ type: "reasoning", text: "the wrapper is the culprit", state: "done" }]),
+      message("m3", [bash("c1")]),
+      message("m4", [text("Done.")], "final_answer"),
+    ];
+
+    const presentation = deriveTurnPresentation(items, true);
+    expect(presentation.work.map((entry) => entry.kind)).toEqual(["commentary", "reasoning", "milestone"]);
+
+    // With "show thinking" off the reasoning is not in the data at all.
+    const withoutThinking = deriveTurnPresentation(items, false);
+    expect(withoutThinking.work.map((entry) => entry.kind)).toEqual(["commentary", "milestone"]);
+  });
 });

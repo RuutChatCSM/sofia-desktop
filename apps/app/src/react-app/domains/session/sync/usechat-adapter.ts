@@ -120,7 +120,41 @@ function mapSnapshotToolParts(part: ToolPart): UIMessage["parts"] {
   return [mapped];
 }
 
+/**
+ * Temporary diagnostic for the direct-engine path.
+ *
+ * This adapter is the one that runs when no codex harness is in play, and it is
+ * the only place that can say whether the engine handed us a phase, a turn
+ * boundary or part metadata we are dropping on the floor. One deduped line per
+ * assistant message.
+ *
+ * Remove once the transcript grouping is settled.
+ */
+let lastSnapshotLog = "";
+
+function logSnapshotParts(snapshot: SofiaSessionSnapshot): void {
+  if (!import.meta.env.DEV) return;
+  const assistant = snapshot.messages.filter((message) => message.info.role === "assistant");
+  const describe = (message: SofiaSessionSnapshot["messages"][number]) => {
+    const info = message.info as { id?: string; parentID?: string; summary?: boolean };
+    const parts = message.parts.map((part) => {
+      const text = "text" in part && typeof part.text === "string" ? part.text.trim().length : 0;
+      const meta = "metadata" in part && part.metadata && typeof part.metadata === "object"
+        ? Object.keys(part.metadata).join(",")
+        : "-";
+      return `${part.type}${text ? `:${text}` : ""}(meta=${meta})`;
+    });
+    return `${String(info.id ?? "?")} parent=${String(info.parentID ?? "-")}${info.summary ? " summary" : ""} [${parts.join(" ")}]`;
+  };
+  const signature = assistant.map(describe).join("|");
+  if (signature === lastSnapshotLog) return;
+  lastSnapshotLog = signature;
+  console.info(`[transcript] snapshot messages=${snapshot.messages.length} assistant=${assistant.length}`);
+  for (const message of assistant) console.info(`[transcript]   ${describe(message)}`);
+}
+
 export function snapshotToUIMessages(snapshot: SofiaSessionSnapshot): UIMessage[] {
+  logSnapshotParts(snapshot);
   return snapshot.messages.flatMap((message) => {
     const created = message.info.time?.created;
     const time = message.info.time;

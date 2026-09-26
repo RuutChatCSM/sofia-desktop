@@ -1054,8 +1054,14 @@ function WorkProse({
         isStreaming={Boolean(isStreaming)}
         highlightQuery={highlightQuery}
         className={cn(
-          "prose w-full min-w-0 bg-transparent p-0 text-[13px] leading-6",
-          kind === "reasoning" ? "text-muted-foreground" : "text-foreground/90",
+          "prose w-full min-w-0 bg-transparent p-0",
+          // Thinking is a footnote to the work, not one of the things Sofia said
+          // to the user: smaller and quieter than commentary, so a reader coming
+          // back to the turn reads the narrative first and the reasoning as the
+          // detail behind it.
+          kind === "reasoning"
+            ? "text-[12px] leading-5 text-muted-foreground/80"
+            : "text-[13px] leading-6 text-foreground/90",
         )}
       >
         {value}
@@ -1065,6 +1071,43 @@ function WorkProse({
 }
 
 /** Ticks while a turn is live so its header can show elapsed work time. */
+/**
+ * Temporary diagnostic: what the transcript grouping actually received and what
+ * it made of it. One line per turn, deduped, so a mis-detected phase, an empty
+ * work narrative or a turn split across ids is visible without a debugger.
+ *
+ * Remove once the transcript grouping is settled.
+ */
+let lastTurnGroupLog = ""
+
+function logTurnGroup(input: {
+  items: UIMessageWithIndex[]
+  work: Array<{ kind: string }>
+  answerCount: number
+  isLiveGroup: boolean
+  commentaryOnly: boolean
+}): void {
+  if (!import.meta.env.DEV) return
+  const split = (message: UIMessage) => {
+    const engine = (message.metadata as { engine?: Record<string, unknown> } | undefined)?.engine ?? {}
+    return `${message.id}[turn=${String(engine.turnId ?? "-")} phase=${String(engine.phase ?? "-")} parts=${message.parts.map((part) => part.type).join("+")}]`
+  }
+  const answerItems = input.items.slice(input.items.length - input.answerCount)
+  const signature = [
+    input.items.map((item) => split(item.message)).join(";"),
+    input.work.map((entry) => entry.kind).join(","),
+    input.answerCount,
+    input.isLiveGroup,
+  ].join("|")
+  if (signature === lastTurnGroupLog) return
+  lastTurnGroupLog = signature
+  console.info(
+    `[transcript] turn live=${input.isLiveGroup} commentaryOnly=${input.commentaryOnly} items=${input.items.length} answers=${input.answerCount}`,
+  )
+  console.info(`[transcript]   in  ${input.items.map((item) => split(item.message)).join("  ")}`)
+  console.info(`[transcript]   out work=${input.work.map((entry) => entry.kind).join(",") || "none"} answer=${answerItems.map((item) => split(item.message)).join(",") || "none"}`)
+}
+
 function useLiveElapsed(startedAt: number | null, active: boolean): number | null {
   const [now, setNow] = React.useState(() => Date.now())
 
@@ -1209,7 +1252,10 @@ function MessageGroup({
       // reasoning as well as the tool detail.
       workItems = [
         ...workItems,
-        ...workEntriesForMessage({ index: firstProse.index, message: split.steps }, showThinking),
+        ...workEntriesForMessage(
+          { index: firstProse.index, message: split.steps },
+          showThinking,
+        ),
       ]
       proseItems = [{ index: firstProse.index, message: split.answer }, ...proseItems.slice(1)]
     }
@@ -1232,6 +1278,14 @@ function MessageGroup({
   // is the bug the ChatGPT reports describe.
   const commentaryOnly =
     proseItems.length === 0 && workItems.some((entry) => entry.kind === "commentary")
+
+  logTurnGroup({
+    items,
+    work: workItems,
+    answerCount: proseItems.length,
+    isLiveGroup,
+    commentaryOnly,
+  })
 
   const renderItem = (item: UIMessageWithIndex, groupIndex: number, hideReasoning?: boolean) => {
     const isLastMessage = item.index === messages.length - 1

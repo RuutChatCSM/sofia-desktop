@@ -113,7 +113,47 @@ function buildUIMessages(workspaceId: string, sessionId: string): UIMessage[] {
     });
   });
 
+  logCapturedItems(sessionId, entry.items, assembled);
+
   return assembled;
+}
+
+/**
+ * Temporary diagnostic: what the engine actually handed us, and what came out
+ * the other side. Kept as one line per item so a missing phase, a swallowed
+ * reasoning part or an unexpected turn boundary is visible at a glance.
+ *
+ * Remove once the transcript grouping is settled.
+ */
+let lastCapturedLog = "";
+
+function logCapturedItems(
+  sessionId: string,
+  items: Array<{ id: string; type?: string; turnId?: string; item: Record<string, unknown> }>,
+  assembled: UIMessage[],
+): void {
+  if (!import.meta.env.DEV) return;
+  const assistant = assembled.filter((message) => message.role === "assistant");
+  const lines = assistant.map((message) => {
+    const engine = (message.metadata as { engine?: Record<string, unknown> } | undefined)?.engine ?? {};
+    const phases = message.parts.reduce<Record<string, number>>((counts, part) => {
+      const key = part.type === "text"
+        ? `text:${(part as { text?: string }).text?.trim().length ?? 0}`
+        : part.type === "reasoning"
+          ? `reasoning:${((part as { text?: string }).text ?? "").trim().length}`
+          : part.type;
+      counts[key] = (counts[key] ?? 0) + 1;
+      return counts;
+    }, {});
+    return `${message.id} turn=${String(engine.turnId ?? "-")} phase=${String(engine.phase ?? "-")} parts=${Object.entries(phases).map(([key, count]) => `${key}${count > 1 ? `x${count}` : ""}`).join(",")}`;
+  });
+  const raw = items.map((item) => `${item.type ?? "?"}/phase=${String(item.item?.phase ?? "-")}/turn=${String(item.turnId ?? "-")}`);
+  const signature = `${assistant.length}|${lines.join(";")}|${raw.join(";")}`;
+  if (signature === lastCapturedLog) return;
+  lastCapturedLog = signature;
+  console.info(`[transcript] captured session=${sessionId} items=${items.length} assistant=${assistant.length}`);
+  for (const line of lines) console.info(`[transcript]   ${line}`);
+  console.info(`[transcript]   raw ${raw.join("  ")}`);
 }
 
 /** Push the current codex transcript for a session into the shared cache. */
