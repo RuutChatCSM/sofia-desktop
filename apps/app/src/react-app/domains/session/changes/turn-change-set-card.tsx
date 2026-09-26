@@ -81,7 +81,7 @@ export function TurnChangeSetCard({
             // Absent counts must not read as "no changes": a hint-sourced set
             // knows which files were touched and nothing about their size.
             <div data-changeset-unmeasured className="mt-0.5 text-[10px] text-muted-foreground/60">
-              Change size unavailable for this older turn.
+              Change details weren&rsquo;t recorded for this turn.
             </div>
           )}
         </div>
@@ -90,7 +90,10 @@ export function TurnChangeSetCard({
             Undo
           </Button>
         ) : null}
-        {onReview ? (
+        {/* Only a repository-backed set can be reviewed. A hint-sourced set is a
+            touched-file list, and a Review button that opens an empty pane is a
+            dead end. */}
+        {onReview && totals.countsKnown ? (
           <Button variant="outline" size="sm" onClick={() => onReview(changeSet.id)}>
             Review
           </Button>
@@ -103,7 +106,7 @@ export function TurnChangeSetCard({
             file={file}
             showCounts={totals.countsKnown}
             onOpenFile={onOpenFile}
-            onReviewFile={onReviewFile ? () => onReviewFile(file.path) : undefined}
+            onReviewFile={onReviewFile && totals.countsKnown ? () => onReviewFile(file.path) : undefined}
             repository={showRepository ? repositoryId : undefined}
           />
         ))}
@@ -121,7 +124,7 @@ export function TurnChangeSetCard({
                 file={file}
                 showCounts={totals.countsKnown}
                 onOpenFile={onOpenFile}
-                onReviewFile={onReviewFile ? () => onReviewFile(file.path) : undefined}
+                onReviewFile={onReviewFile && totals.countsKnown ? () => onReviewFile(file.path) : undefined}
                 repository={showRepository ? repositoryId : undefined}
               />
             ))}

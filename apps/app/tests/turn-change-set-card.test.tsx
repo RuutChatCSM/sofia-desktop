@@ -75,7 +75,7 @@ describe("result card", () => {
     expect(markup).not.toContain("−0");
     // The absence is stated rather than left looking like a zero-sized change.
     expect(markup).toContain("data-changeset-unmeasured");
-    expect(markup).toContain("Change size unavailable for this older turn.");
+    expect(markup).toContain("recorded for this turn");
   });
 
   test("folds the tail of a long list behind Show N more", () => {
@@ -109,6 +109,29 @@ describe("result card", () => {
     // Single-repository turns stay unlabelled.
     expect(renderToStaticMarkup(<TurnChangeSetCard changeSet={changeSet("git", parseNumStat("1\t1\ta.ts"))} />))
       .not.toContain("workspace/");
+  });
+
+  test("a hint-only turn is a file list, not a reviewable change set", () => {
+    // Clicking Review on a turn with no recorded details opens an empty pane —
+    // a dead end. The rows stay useful (they open the file) but nothing offers a
+    // diff that does not exist.
+    const hints = changeSetFromToolHints({
+      sessionId: "s1",
+      turnId: "t31",
+      startedAt: 0,
+      paths: ["a.ts", "b.ts"],
+    });
+    const onReview = () => {};
+    const onReviewFile = () => {};
+
+    const markup = renderToStaticMarkup(
+      <TurnChangeSetCard changeSet={hints!} onReview={onReview} onReviewFile={onReviewFile} />,
+    );
+
+    expect(markup).toContain("Edited 2 files");
+    expect(markup).not.toContain(">Review<");
+    // The rows fall back to opening the file rather than the review pane.
+    expect(markup).toContain('data-file-change="a.ts"');
   });
 
   test("shows Undo and Review only when the app can act on them", () => {
