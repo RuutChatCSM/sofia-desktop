@@ -15,6 +15,18 @@ function isMode(value: string): value is ApprovalMode {
   return value === "ask" || value === "approve" || value === "full";
 }
 
+const TRIGGER_BASE =
+  "inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 text-xs transition-colors hover:bg-dls-hover focus-visible:ring-2 focus-visible:ring-dls-accent";
+
+/**
+ * Full access is the one mode that can touch anything, so the composer chip says
+ * so in colour rather than blending in with the model picker next to it. The
+ * shield inherits `currentColor`, so one class covers icon and label.
+ */
+export function approvalModeTriggerClass(mode: ApprovalMode | null): string {
+  return `${TRIGGER_BASE} ${mode === "full" ? "text-amber-11" : "text-dls-secondary"}`;
+}
+
 export function ApprovalModeSelector({ client }: { client: CodexSessionClient | null }) {
   const [mode, setMode] = useState<ApprovalMode | null>(null);
   const [open, setOpen] = useState(false);
@@ -47,7 +59,12 @@ export function ApprovalModeSelector({ client }: { client: CodexSessionClient | 
   }
 
   return <Popover open={open} onOpenChange={setOpen}>
-    <PopoverTrigger disabled={!client || busy} className="inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 text-xs text-dls-secondary transition-colors hover:bg-dls-hover focus-visible:ring-2 focus-visible:ring-dls-accent" aria-label="Task permissions">
+    <PopoverTrigger
+      disabled={!client || busy}
+      data-approval-mode={mode ?? "unknown"}
+      className={approvalModeTriggerClass(mode)}
+      aria-label="Task permissions"
+    >
       {busy ? <LoaderCircle className="size-3.5 motion-safe:animate-spin" /> : <Shield className="size-3.5" />}
       {MODES.find((entry) => entry.mode === mode)?.title ?? "Permissions"}
       <ChevronDown className="size-3" />
