@@ -57,6 +57,11 @@ import { FilePlus2, FileMinus2, FileSymlink, FilePenLine, ImageIcon } from "luci
 
 import { cn } from "@/lib/utils";
 import {
+  highlightCode,
+  hunkSideText,
+  type HighlightedLine,
+} from "./diff-highlight";
+import {
   changeSetByRepository,
   changeSetTitle,
   changeSetTotals,
@@ -229,6 +234,8 @@ export function ReviewPane({
   );
 }
 
+type HunkHighlight = { old: HighlightedLine[]; new: HighlightedLine[] };
+
 function DiffView({
   file,
   onOpenFile,
@@ -241,10 +248,37 @@ function DiffView({
 }) {
   const note = fileChangeNote(file);
   const hunks = file.hunks ?? [];
+  const [highlighted, setHighlighted] = React.useState<HunkHighlight[] | null>(null);
+
+  // Highlight the frozen hunks, not a re-read of the repository. Until the
+  // tokens resolve the rows render as plain text, so the diff is never wrong —
+  // only uncoloured.
+  React.useEffect(() => {
+    if (hunks.length === 0) {
+      setHighlighted(null);
+      return;
+    }
+    let cancelled = false;
+    setHighlighted(null);
+    void (async () => {
+      const next = await Promise.all(
+        hunks.map(async (hunk) => ({
+          old: await highlightCode(hunkSideText(hunk, "old"), file.path),
+          new: await highlightCode(hunkSideText(hunk, "new"), file.path),
+        })),
+      );
+      if (!cancelled) setHighlighted(next);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [file, hunks]);
 
   return (
     <div className="flex min-h-0 flex-col">
-      <div className="flex items-center gap-2 border-b border-border/70 px-3 py-2">
+      {/* Stays put while a long file scrolls: the header is a flex sibling of the
+          scroller, and sticky so it also survives any future nesting. */}
+      <div className="sticky top-0 z-10 flex shrink-0 items-center gap-2 border-b border-border/70 bg-background/95 px-3 py-2 backdrop-blur">
         <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-foreground/90" title={file.path}>
           {file.path}
         </span>
@@ -271,16 +305,7 @@ function DiffView({
             <div key={`${hunk.header}-${index}`} className="min-w-max">
               <div className="bg-muted/50 px-3 text-muted-foreground/80">{hunk.header}</div>
               <UnchangedGap hunks={hunks} index={index} />
-              {toSplitDiffRows(hunk.lines).map((row) => (
-                <div
-                  key={row.key}
-                  data-diff-row
-                  className="grid grid-cols-2 border-t border-border/40 first:border-t-0"
-                >
-                  <DiffSide line={row.old} side="old" />
-                  <DiffSide line={row.new} side="new" />
-                </div>
-              ))}
+              <HunkRows hunk={hunk} highlight={highlighted?.[index]} />
             </div>
           ))}
         </div>
@@ -289,8 +314,43 @@ function DiffView({
   );
 }
 
+/**
+ * The rows of one hunk. Token lines are consumed in row order for each side, so
+ * a highlighted line always sits beside the line it came from.
+ */
+function HunkRows({ hunk, highlight }: { hunk: DiffHunk; highlight?: HunkHighlight }) {
+  const rows = React.useMemo(() => toSplitDiffRows(hunk.lines), [hunk.lines]);
+  let oldCursor = 0;
+  let newCursor = 0;
+
+  return (
+    <>
+      {rows.map((row) => {
+        const oldTokens = row.old ? highlight?.old[oldCursor] : undefined;
+        const newTokens = row.new ? highlight?.new[newCursor] : undefined;
+        if (row.old) oldCursor += 1;
+        if (row.new) newCursor += 1;
+        return (
+          <div key={row.key} data-diff-row className="grid grid-cols-2 border-t border-border/40 first:border-t-0">
+            <DiffSide line={row.old} side="old" tokens={oldTokens} />
+            <DiffSide line={row.new} side="new" tokens={newTokens} />
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
 /** One side of a side-by-side row: line number, marker, text, colour by type. */
-function DiffSide({ line, side }: { line?: DiffLine; side: "old" | "new" }) {
+function DiffSide({
+  line,
+  side,
+  tokens,
+}: {
+  line?: DiffLine;
+  side: "old" | "new";
+  tokens?: HighlightedLine;
+}) {
   if (!line) {
     return <div data-diff-blank={side} className="grid grid-cols-[2.5rem_1fr] bg-muted/20" />;
   }
@@ -310,7 +370,16 @@ function DiffSide({ line, side }: { line?: DiffLine; side: "old" | "new" }) {
       <span className="select-none px-2 text-right tabular-nums text-muted-foreground/50">
         {(side === "old" ? line.oldLine : line.newLine) ?? ""}
       </span>
-      <span className="px-2">{`${added ? "+" : removed ? "-" : " "}${line.text}`}</span>
+      <span className="px-2">
+        {added ? "+" : removed ? "-" : " "}
+        {tokens && tokens.length > 0
+          ? tokens.map((token, index) => (
+              <span key={index} style={token.color ? { color: token.color } : undefined}>
+                {token.text}
+              </span>
+            ))
+          : line.text}
+      </span>
     </div>
   );
 }
