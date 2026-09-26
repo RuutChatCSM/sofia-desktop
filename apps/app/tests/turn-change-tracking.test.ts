@@ -77,6 +77,86 @@ describe("turn change tracking is not codex-specific", () => {
     await finalizeTurnChangeSet({ client: null, workspaceId: "ws", sessionId: "s", turnId: "t" });
     expect(useChangeSetStore.getState().byId).toEqual({});
   });
+
+  test("finalize waits for a baseline read that is still in flight", async () => {
+    // Capture is fire-and-forget at turn start, so a short turn can reach
+    // finalize first. Without the wait the turn would be frozen as unattributed
+    // even though its baseline was only milliseconds away.
+    resetTurnBaselines();
+    useChangeSetStore.getState().clear();
+
+    let releaseSnapshot = () => {};
+    const gate = new Promise<void>((resolve) => {
+      releaseSnapshot = resolve;
+    });
+    const client: WorkspaceChangesClient = {
+      git: {
+        changes: async (params) => {
+          if (params.snapshot) {
+            await gate;
+            return {
+              revision: null,
+              files: [],
+              repositories: [{ repositoryId: "ws", root: "/repo", tree: "base-tree", head: "abc" }],
+            };
+          }
+          const files = [{ path: "a.ts", status: "modified" as const, additions: 1, deletions: 1 }];
+          return {
+            revision: "end",
+            files,
+            patch: "diff --git a/a.ts b/a.ts",
+            repositories: [
+              {
+                repositoryId: "ws",
+                root: "/repo",
+                revision: "end",
+                baselineTree: "base-tree",
+                endTree: "end",
+                patch: "diff --git a/a.ts b/a.ts",
+                files,
+              },
+            ],
+          };
+        },
+      },
+    };
+
+    const capturing = captureTurnBaseline({ client, workspaceId: "ws", sessionId: "race", turnId: "t1" });
+    const finalizing = finalizeTurnChangeSet({ client, workspaceId: "ws", sessionId: "race", turnId: "t1" });
+    releaseSnapshot();
+    await Promise.all([capturing, finalizing]);
+
+    const stored = useChangeSetStore.getState().byId["turn:race:t1"];
+    expect(stored?.attributed).not.toBe(false);
+    expect(stored?.repositories[0]?.baselineTree).toBe("base-tree");
+    expect(stored?.repositories[0]?.patch).toBe("diff --git a/a.ts b/a.ts");
+    useChangeSetStore.getState().clear();
+  });
+
+  test("without a baseline the set is marked unattributed, not claimed as the turn's", async () => {
+    // No capture ran for this turn, so the read is the repository's current
+    // state. Yesterday's dirtiness must never be presented as this turn's work.
+    resetTurnBaselines();
+    useChangeSetStore.getState().clear();
+    const dirty = { path: "someone-elses.ts", status: "modified" as const, additions: 40, deletions: 2 };
+    const client: WorkspaceChangesClient = {
+      git: {
+        changes: async () => ({
+          revision: "r1",
+          files: [dirty],
+          repositories: [{ repositoryId: "ws", root: "/repo", revision: "r1", files: [dirty] }],
+        }),
+      },
+    };
+
+    await finalizeTurnChangeSet({ client, workspaceId: "ws", sessionId: "unbased", turnId: "t1" });
+
+    const stored = useChangeSetStore.getState().byId["turn:unbased:t1"];
+    expect(stored?.source).toBe("git");
+    expect(stored?.attributed).toBe(false);
+    expect(stored?.repositories[0]?.files[0]?.attributedToTurn).toBe(false);
+    useChangeSetStore.getState().clear();
+  });
 });
 
 describe("a session-scoped client is enough", () => {

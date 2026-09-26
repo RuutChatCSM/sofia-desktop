@@ -61,8 +61,17 @@ type SessionBaseline = {
 
 const turnBaselines = new Map<string, SessionBaseline>();
 
+/**
+ * The in-flight baseline read per session. Capture is fire-and-forget at turn
+ * start, so a turn that ends quickly — or a snapshot of several checkouts that
+ * takes a moment — could otherwise reach finalize before its own baseline
+ * exists and be recorded as unattributed for the rest of its life.
+ */
+const turnBaselineReads = new Map<string, Promise<void>>();
+
 export function resetTurnBaselines(): void {
   turnBaselines.clear();
+  turnBaselineReads.clear();
 }
 
 /**
@@ -78,7 +87,24 @@ export async function captureTurnBaseline(input: {
 }): Promise<void> {
   const existing = turnBaselines.get(input.sessionId);
   if (existing && !existing.closed) return;
+  const pending = turnBaselineReads.get(input.sessionId);
+  if (pending) return pending;
 
+  const read = readTurnBaseline(input);
+  turnBaselineReads.set(input.sessionId, read);
+  try {
+    await read;
+  } finally {
+    turnBaselineReads.delete(input.sessionId);
+  }
+}
+
+async function readTurnBaseline(input: {
+  client: WorkspaceChangesClient | null;
+  workspaceId: string;
+  sessionId: string;
+  turnId: string;
+}): Promise<void> {
   const client = input.client;
   if (!client) {
     // Never silent: this is the case that used to leave no trace at all, which
@@ -142,6 +168,12 @@ export async function finalizeTurnChangeSet(input: {
     console.warn(`[changes] no client bound for session=${input.sessionId} turn=${input.turnId} — no change set`);
     return;
   }
+
+  // The baseline read is fire-and-forget at turn start, so a short turn can get
+  // here while it is still running. Waiting for it is what keeps the turn from
+  // being frozen as unattributed over a few milliseconds of latency.
+  const pendingBaseline = turnBaselineReads.get(input.sessionId);
+  if (pendingBaseline) await pendingBaseline.catch(() => {});
 
   const record = turnBaselines.get(input.sessionId);
   const usable = record && record.turnId === input.turnId ? record : null;
