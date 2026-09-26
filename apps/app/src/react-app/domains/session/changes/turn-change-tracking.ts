@@ -61,8 +61,18 @@ export async function captureTurnBaseline(input: {
       startedAt: Date.now(),
       closed: false,
     });
-  } catch {
-    // No baseline available; this turn simply has nothing attributable.
+    // Validation aid while the pipeline is young: one line per turn, so a
+    // missing diff can be told apart from a wrong one at a glance.
+    if (import.meta.env.DEV) {
+      console.info(
+        `[changes] baseline captured session=${input.sessionId} turn=${input.turnId} tree=${trees?.tree ?? "none"}`,
+      );
+    }
+  } catch (error) {
+    console.warn(
+      `[changes] baseline failed session=${input.sessionId} turn=${input.turnId} — this turn will be hint-only`,
+      error,
+    );
   }
 }
 
@@ -110,21 +120,39 @@ export async function finalizeTurnChangeSet(input: {
         })
       : await client.git.changes({ workspaceId: input.workspaceId, hunks: true });
 
-    useChangeSetStore.getState().upsert(
-      changeSetFromRepository({
-        sessionId: input.sessionId,
-        turnId: input.turnId,
-        startedAt: usable?.startedAt ?? Date.now(),
-        baseline: usable?.baseline ?? null,
-        snapshot,
-        finalizedAt: Date.now(),
-        ...(trees ? { trees } : {}),
-        ...(snapshot.patch ? { patch: snapshot.patch } : {}),
-        ...(snapshot.commits ? { commitsInRange: snapshot.commits } : {}),
-      }),
+    const changeSet = changeSetFromRepository({
+      sessionId: input.sessionId,
+      turnId: input.turnId,
+      startedAt: usable?.startedAt ?? Date.now(),
+      baseline: usable?.baseline ?? null,
+      snapshot,
+      finalizedAt: Date.now(),
+      ...(trees ? { trees } : {}),
+      ...(snapshot.patch ? { patch: snapshot.patch } : {}),
+      ...(snapshot.commits ? { commitsInRange: snapshot.commits } : {}),
+    });
+    useChangeSetStore.getState().upsert(changeSet);
+
+    const files = changeSet.repositories.flatMap((repository) => repository.files);
+    const totals = files.reduce(
+      (sum, file) => ({ additions: sum.additions + file.additions, deletions: sum.deletions + file.deletions }),
+      { additions: 0, deletions: 0 },
     );
+    // `source=tree-delta` is the real pipeline; anything else means the turn is
+    // back on a working-tree read and a committed turn will look empty.
+    const source = trees ? "tree-delta" : "working-tree";
+    if (import.meta.env.DEV) {
+      console.info(
+        `[changes] finalized changeSet=${changeSet.id} files=${files.length} +${totals.additions} -${totals.deletions} source=${source}`,
+      );
+    }
+    if (!trees) {
+      console.warn(
+        `[changes] no baseline for session=${input.sessionId} turn=${input.turnId} — cards will fall back to tool-event hints`,
+      );
+    }
     if (usable) turnBaselines.set(input.sessionId, { ...usable, closed: true });
-  } catch {
-    // Hint-sourced summaries remain for this turn.
+  } catch (error) {
+    console.warn(`[changes] finalize failed session=${input.sessionId} turn=${input.turnId}`, error);
   }
 }
