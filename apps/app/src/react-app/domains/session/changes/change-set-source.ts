@@ -14,6 +14,10 @@ export type WorkspaceChangesResponse = {
   /** Present when the read was a content snapshot (?snapshot=1). */
   tree?: string;
   head?: string | null;
+  /** Present when a tree delta was read with ?patch=1. */
+  patch?: string;
+  /** Commits the turn created, when the request carried both heads. */
+  commits?: string[];
 };
 
 export type WorkspaceSnapshot = {
@@ -78,6 +82,8 @@ export function changeSetFromRepository(input: {
   repositoryId?: string;
   root?: string;
   finalizedAt: number;
+  patch?: string;
+  commitsCreated?: string[];
   /** Content snapshots the delta was taken between, when the read used them. */
   trees?: {
     baselineTree: string;
@@ -106,6 +112,10 @@ export function changeSetFromRepository(input: {
               headBefore: input.trees.headBefore,
               headAfter: input.trees.headAfter,
             }
+          : {}),
+        ...(input.patch ? { patch: input.patch } : {}),
+        ...(input.commitsCreated && input.commitsCreated.length > 0
+          ? { commitsCreated: input.commitsCreated }
           : {}),
         // A tree delta already excludes everything the user had in flight before
         // the turn began (it is in the baseline tree), so every file in it is the

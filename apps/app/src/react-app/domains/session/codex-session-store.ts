@@ -704,8 +704,11 @@ export async function finalizeTurnChangeSetFromRepo(sessionId: string, turnId: s
     const snapshot = trees
       ? await client.workspaceChanges(sessionId, {
           hunks: true,
+          patch: true,
           baselineTree: trees.baselineTree,
           endTree: trees.endTree,
+          headBefore: trees.headBefore,
+          headAfter: trees.headAfter,
         })
       : await client.workspaceChanges(sessionId, { hunks: true });
 
@@ -718,6 +721,8 @@ export async function finalizeTurnChangeSetFromRepo(sessionId: string, turnId: s
         snapshot,
         finalizedAt: Date.now(),
         ...(trees ? { trees } : {}),
+        ...(snapshot.patch ? { patch: snapshot.patch } : {}),
+        ...(snapshot.commits ? { commitsCreated: snapshot.commits } : {}),
       }),
     );
     if (usable) turnBaselines.set(sessionId, { ...usable, closed: true });

@@ -24,6 +24,7 @@ import type { BackgroundProcess, CodexEvent, CodexSession } from "./codex-sessio
 import {
   countUntrackedLines,
   createGitRun,
+  listTurnCommits,
   readTurnDelta,
   readWorkspaceChanges,
   snapshotWorkspaceTree,
@@ -295,15 +296,29 @@ export function registerCodexRoutes(options: RegisterCodexRoutesOptions): void {
     const baselineTree = ctx.url.searchParams.get("baseline") ?? "";
     const endTree = ctx.url.searchParams.get("end") ?? "";
     if (baselineTree && endTree) {
+      const run = createGitRun(root);
       const delta = await sofiaRequest(() =>
-        readTurnDelta(createGitRun(root), {
+        readTurnDelta(run, {
           baselineTree,
           endTree,
           includeHunks: ctx.url.searchParams.get("hunks") === "1",
+          includePatch: ctx.url.searchParams.get("patch") === "1",
+        }),
+      );
+      const commits = await sofiaRequest(() =>
+        listTurnCommits(run, {
+          headBefore: ctx.url.searchParams.get("headBefore"),
+          headAfter: ctx.url.searchParams.get("headAfter"),
         }),
       );
       const files = await countUntrackedLines(root, delta.files);
-      return jsonResponse({ ok: true, revision: delta.revision, files });
+      return jsonResponse({
+        ok: true,
+        revision: delta.revision,
+        files,
+        ...(delta.patch === undefined ? {} : { patch: delta.patch }),
+        commits,
+      });
     }
 
     const snapshot = await sofiaRequest(() =>

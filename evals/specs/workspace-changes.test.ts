@@ -8,6 +8,7 @@ import { test } from "@sofia/testkit";
 import {
   countUntrackedLines,
   createGitRun,
+  listTurnCommits,
   readTurnDelta,
   readWorkspaceChanges,
   snapshotWorkspaceTree,
@@ -121,7 +122,16 @@ test("a committed turn is still reviewable, and the user's pre-existing work is 
       baselineTree: baseline.tree,
       endTree: end.tree,
       includeHunks: true,
+      includePatch: true,
     });
+    const commits = await listTurnCommits(createGitRun(root), {
+      headBefore: baseline.head,
+      headAfter: end.head,
+    });
+
+    // The turn created a commit, and the frozen patch is the turn's own delta.
+    expect(commits).toHaveLength(1);
+    expect(delta.patch).toContain("sofia one");
     const byPath = new Map(delta.files.map((file) => [file.path, file]));
 
     expect(byPath.get("sofia.ts")).toMatchObject({ status: "added", additions: 2, deletions: 0 });

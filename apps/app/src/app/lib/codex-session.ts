@@ -378,6 +378,10 @@ export function createCodexSessionClient(options: CodexSessionClientOptions) {
         snapshot?: boolean;
         baselineTree?: string;
         endTree?: string;
+        /** Include the raw unified patch in the delta response. */
+        patch?: boolean;
+        headBefore?: string | null;
+        headAfter?: string | null;
       },
     ) =>
       requestJson<WorkspaceChangesResponse>(
@@ -388,6 +392,9 @@ export function createCodexSessionClient(options: CodexSessionClientOptions) {
           ...(params?.snapshot ? { snapshot: "1" } : {}),
           ...(params?.baselineTree ? { baseline: params.baselineTree } : {}),
           ...(params?.endTree ? { end: params.endTree } : {}),
+          ...(params?.patch ? { patch: "1" } : {}),
+          ...(params?.headBefore ? { headBefore: params.headBefore } : {}),
+          ...(params?.headAfter ? { headAfter: params.headAfter } : {}),
         }).toString()}`,
         { token: options.token, hostToken: options.hostToken, timeoutMs: 20_000 },
       ),

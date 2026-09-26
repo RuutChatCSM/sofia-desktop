@@ -52,6 +52,8 @@ export type WorkspaceChangeSnapshot = {
   /** Short HEAD revision the working tree is measured against, when resolvable. */
   revision: string | null;
   files: WorkspaceFileChange[];
+  /** The raw unified diff, when the caller asked for it and the source is a delta. */
+  patch?: string;
 };
 
 /**
@@ -328,7 +330,7 @@ export async function snapshotWorkspaceTree(
  */
 export async function readTurnDelta(
   run: GitRun,
-  input: { baselineTree: string; endTree: string; includeHunks?: boolean },
+  input: { baselineTree: string; endTree: string; includeHunks?: boolean; includePatch?: boolean },
 ): Promise<WorkspaceChangeSnapshot> {
   const baselineTree = input.baselineTree.trim();
   const endTree = input.endTree.trim();
@@ -342,6 +344,11 @@ export async function readTurnDelta(
   const hunks = input.includeHunks
     ? parseUnifiedDiff((await run(["diff", "--unified=3", "--no-color", "--find-renames", range])).stdout)
     : null;
+  // The raw patch is frozen with the set: a historical card can then be replayed
+  // (and reversed, for Undo) without re-deriving anything from the repository.
+  const patch = input.includePatch
+    ? (await run(["diff", "--no-color", "--find-renames", range])).stdout
+    : undefined;
 
   const files: WorkspaceFileChange[] = statuses.map((entry) => {
     const stats = numstat.get(entry.path);
@@ -356,7 +363,25 @@ export async function readTurnDelta(
     };
   });
 
-  return { revision: endTree, files };
+  return { revision: endTree, files, ...(patch === undefined ? {} : { patch }) };
+}
+
+/**
+ * The commits the turn itself created: everything reachable from the end head
+ * but not the starting head. Recorded separately from the content delta, so
+ * Review can offer the commit and the turn patch as the two different facts they
+ * are (they coincide only when a turn commits exactly once, cleanly).
+ */
+export async function listTurnCommits(
+  run: GitRun,
+  input: { headBefore: string | null; headAfter: string | null },
+): Promise<string[]> {
+  const before = input.headBefore?.trim() ?? "";
+  const after = input.headAfter?.trim() ?? "";
+  if (!before || !after || before === after) return [];
+  const result = await run(["rev-list", "--no-merges", `${before}..${after}`]);
+  if (result.code !== 0) return [];
+  return result.stdout.split("\n").map((line) => line.trim()).filter(Boolean);
 }
 
 /**

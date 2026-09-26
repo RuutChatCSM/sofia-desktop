@@ -75,6 +75,13 @@ export type RepositoryChangeSet = {
   endTree?: string;
   headBefore?: string | null;
   headAfter?: string | null;
+  /**
+   * The patch itself, frozen with the set. Replaying or reversing a historical
+   * turn must never re-derive it from the repository, which may have moved on.
+   */
+  patch?: string;
+  /** Commits this turn created — a related fact, not the identity of the set. */
+  commitsCreated?: string[];
   files: FileChange[];
 };
 

@@ -5,10 +5,12 @@ import { describe, expect, test } from "bun:test";
 
 import {
   countUntrackedLines,
+  listTurnCommits,
   parseNameStatusZ,
   parseNumStatZ,
   parsePorcelainV2,
   parseUnifiedDiff,
+  readTurnDelta,
   readWorkspaceChanges,
   type GitRun,
   type GitResult,
@@ -114,6 +116,37 @@ describe("git diff --unified", () => {
     ]);
     // `+++ /dev/null` keeps the previous path so deletions still get their hunks.
     expect(hunks.get("src/gone.ts")).toHaveLength(1);
+  });
+});
+
+describe("the turn's own commits", () => {
+  test("lists what the turn created, and nothing when the head did not move", async () => {
+    const run: GitRun = async (args) =>
+      args[0] === "rev-list"
+        ? { stdout: "def456\nabc999\n", code: 0 }
+        : { stdout: "", code: 0 };
+
+    expect(await listTurnCommits(run, { headBefore: "abc123", headAfter: "def456" })).toEqual(["def456", "abc999"]);
+    // No commit: the same head, or an unborn repository before the turn.
+    expect(await listTurnCommits(run, { headBefore: "abc123", headAfter: "abc123" })).toEqual([]);
+    expect(await listTurnCommits(run, { headBefore: null, headAfter: "def456" })).toEqual([]);
+  });
+});
+
+describe("a tree delta can carry its frozen patch", () => {
+  test("the patch is returned only when asked for", async () => {
+    const run: GitRun = async (args) => {
+      if (args.includes("--name-status")) return { stdout: "M\0src/a.ts\0", code: 0 };
+      if (args.includes("--numstat")) return { stdout: "1\t1\tsrc/a.ts\0", code: 0 };
+      if (args.includes("--unified=3")) return { stdout: "", code: 0 };
+      return { stdout: "diff --git a/src/a.ts b/src/a.ts\n-old\n+new\n", code: 0 };
+    };
+
+    const withPatch = await readTurnDelta(run, { baselineTree: "base", endTree: "end", includePatch: true });
+    expect(withPatch.patch).toContain("diff --git a/src/a.ts b/src/a.ts");
+
+    const without = await readTurnDelta(run, { baselineTree: "base", endTree: "end" });
+    expect(without.patch).toBeUndefined();
   });
 });
 
