@@ -3,6 +3,7 @@ import type { UIMessage } from "ai";
 import type { FilePart, Part, ToolPart } from "@/app/lib/engine-types";
 
 import type { SofiaSessionSnapshot } from "../../../../app/lib/sofia-server";
+import { recordDevLog } from "../../../../app/lib/dev-log";
 import { SYNTHETIC_SESSION_ERROR_MESSAGE_PREFIX } from "../../../../app/types";
 import {
   parseDynamicToolUIPart,
@@ -149,8 +150,14 @@ function logSnapshotParts(snapshot: SofiaSessionSnapshot): void {
   const signature = assistant.map(describe).join("|");
   if (signature === lastSnapshotLog) return;
   lastSnapshotLog = signature;
-  console.info(`[transcript] snapshot messages=${snapshot.messages.length} assistant=${assistant.length}`);
-  for (const message of assistant) console.info(`[transcript]   ${describe(message)}`);
+  const lines = [
+    `snapshot messages=${snapshot.messages.length} assistant=${assistant.length}`,
+    ...assistant.map(describe),
+  ];
+  for (const line of lines) {
+    console.info(`[transcript] ${line}`);
+    recordDevLog(true, { level: "debug", source: "transcript.snapshot", label: line });
+  }
 }
 
 export function snapshotToUIMessages(snapshot: SofiaSessionSnapshot): UIMessage[] {

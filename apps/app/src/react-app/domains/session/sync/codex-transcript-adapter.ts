@@ -6,6 +6,7 @@
 import type { UIMessage } from "ai";
 
 import type { CodexSessionClient } from "@/app/lib/codex-session";
+import { recordDevLog } from "@/app/lib/dev-log";
 import { getReactQueryClient } from "../../../infra/query-client";
 import { statusKey, transcriptKey } from "./session-sync";
 import { useSessionActivityStore } from "@/react-app/domains/session/status/session-activity-store";
@@ -151,9 +152,15 @@ function logCapturedItems(
   const signature = `${assistant.length}|${lines.join(";")}|${raw.join(";")}`;
   if (signature === lastCapturedLog) return;
   lastCapturedLog = signature;
-  console.info(`[transcript] captured session=${sessionId} items=${items.length} assistant=${assistant.length}`);
-  for (const line of lines) console.info(`[transcript]   ${line}`);
-  console.info(`[transcript]   raw ${raw.join("  ")}`);
+  const out = [
+    `captured session=${sessionId} items=${items.length} assistant=${assistant.length}`,
+    ...lines,
+    `raw ${raw.join("  ")}`,
+  ];
+  for (const line of out) {
+    console.info(`[transcript] ${line}`);
+    recordDevLog(true, { level: "debug", source: "transcript.captured", label: line });
+  }
 }
 
 /** Push the current codex transcript for a session into the shared cache. */

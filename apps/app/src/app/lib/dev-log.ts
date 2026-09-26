@@ -17,6 +17,20 @@ type DevRoot = typeof globalThis & {
 
 const DEV_LOG_LIMIT = 1500;
 
+/**
+ * Readers that want to re-render when the buffer changes. The buffer itself
+ * lives on `globalThis` so anything can record without a provider; this is the
+ * one piece of the module that has to be live rather than polled.
+ */
+const listeners = new Set<() => void>();
+
+export const subscribeDevLogs = (listener: () => void) => {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+};
+
 const payloadText = (value: unknown) => {
   if (value === undefined) return "";
   if (typeof value === "string") return value;
@@ -58,6 +72,7 @@ export const recordDevLog = (
     logs.splice(0, logs.length - DEV_LOG_LIMIT);
   }
   root.__sofiaDevLogs = logs;
+  for (const listener of listeners) listener();
 };
 
 export const readDevLogs = (limit = 200) => {
@@ -73,6 +88,7 @@ export const clearDevLogs = () => {
   const root = globalThis as DevRoot;
   root.__sofiaDevLogs = [];
   root.__sofiaDevLogSeq = 0;
+  for (const listener of listeners) listener();
 };
 
 export const formatDevLogLine = (entry: DevLogRecord) => {

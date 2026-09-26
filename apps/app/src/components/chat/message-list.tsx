@@ -59,6 +59,7 @@ import {
 import { usePanelTabStore } from "@/react-app/domains/session/panel/panel-tab-store"
 import { messageTurnId, turnAnswerIndex } from "@/components/chat/turn-structure"
 import { deriveTurnPresentation, workEntriesForMessage } from "@/components/chat/turn-presentation"
+import { recordDevLog } from "@/app/lib/dev-log"
 import { liveActivityLabel } from "@/react-app/domains/session/activity"
 import { changeSetFiles } from "@/react-app/domains/session/changes/turn-change-set"
 import {
@@ -1101,11 +1102,14 @@ function logTurnGroup(input: {
   ].join("|")
   if (signature === lastTurnGroupLog) return
   lastTurnGroupLog = signature
-  console.info(
-    `[transcript] turn live=${input.isLiveGroup} commentaryOnly=${input.commentaryOnly} items=${input.items.length} answers=${input.answerCount}`,
-  )
-  console.info(`[transcript]   in  ${input.items.map((item) => split(item.message)).join("  ")}`)
-  console.info(`[transcript]   out work=${input.work.map((entry) => entry.kind).join(",") || "none"} answer=${answerItems.map((item) => split(item.message)).join(",") || "none"}`)
+  for (const line of [
+    `turn live=${input.isLiveGroup} commentaryOnly=${input.commentaryOnly} items=${input.items.length} answers=${input.answerCount}`,
+    `in  ${input.items.map((item) => split(item.message)).join("  ")}`,
+    `out work=${input.work.map((entry) => entry.kind).join(",") || "none"} answer=${answerItems.map((item) => split(item.message)).join(",") || "none"}`,
+  ]) {
+    console.info(`[transcript] ${line}`)
+    recordDevLog(true, { level: "debug", source: "transcript.turn", label: line })
+  }
 }
 
 function useLiveElapsed(startedAt: number | null, active: boolean): number | null {

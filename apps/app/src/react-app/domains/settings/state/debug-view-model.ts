@@ -29,6 +29,13 @@ import {
   type ElectronAlphaArtifact,
 } from "../../../../app/lib/electron-alpha";
 import { downloadTextAsFile } from "../../../../app/lib/download";
+import {
+  clearDevLogs,
+  formatDevLogLine,
+  readDevLogs,
+  recordDevLog,
+  subscribeDevLogs,
+} from "../../../../app/lib/dev-log";
 
 import {
   writeSofiaServerSettings,
@@ -45,6 +52,9 @@ import { t } from "../../../../i18n";
 import type { DebugViewProps } from "../pages/debug-view";
 import type { ReleaseChannel } from "../../../../app/types";
 import type { SofiaServerStore, SofiaServerStoreSnapshot } from "../../connections/sofia-server-store";
+
+/** How much of the dev-log buffer the Debug panel shows. */
+const DEVELOPER_LOG_LINES = 500;
 
 type DebugViewModelProps = Omit<DebugViewProps, "agentContextDiagnostics">;
 
@@ -249,6 +259,20 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
   const [nukeManifestPreview, setNukeManifestPreview] = useState<NukeManifestPreview | null>(null);
   const [developerLog, setDeveloperLog] = useState<string[]>([]);
   const [developerLogStatus, setDeveloperLogStatus] = useState<string | null>(null);
+
+  // The panel is described as the app, workspace, session and perf events
+  // captured while Developer Mode is on, but it was a local array nothing fed —
+  // so it always read "no logs captured yet". It now renders the app's dev-log
+  // buffer, which is what `perf-log` and the transcript diagnostics write to.
+  const syncDeveloperLog = useCallback(() => {
+    setDeveloperLog(readDevLogs(DEVELOPER_LOG_LINES).map(formatDevLogLine));
+  }, []);
+
+  useEffect(() => {
+    if (!developerMode) return;
+    syncDeveloperLog();
+    return subscribeDevLogs(syncDeveloperLog);
+  }, [developerMode, syncDeveloperLog]);
   const [electronMigrationUrl, setElectronMigrationUrl] = useState("");
   const [electronMigrationSha256, setElectronMigrationSha256] = useState("");
   const [electronMigrationSha512, setElectronMigrationSha512] = useState("");
@@ -361,11 +385,9 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
   }, [developerMode]);
 
   const pushDeveloperLog = useCallback((message: string) => {
-    const timestamp = new Date().toISOString();
-    setDeveloperLog((current) => {
-      const next = [...current, `${timestamp} ${message}`];
-      return next.length > 500 ? next.slice(next.length - 500) : next;
-    });
+    // Page actions are dev-log records like any other, so they land in the same
+    // buffer the panel now renders instead of a private list beside it.
+    recordDevLog(true, { level: "debug", source: "settings.debug", label: message });
   }, []);
 
   const runtimeSummary = useMemo(
@@ -456,7 +478,7 @@ export function useDebugViewModel(options: UseDebugViewModelOptions) {
   }, [runtimeDebugReportJson]);
 
   const onClearDeveloperLog = useCallback(() => {
-    setDeveloperLog([]);
+    clearDevLogs();
     setDeveloperLogStatus("Cleared developer log.");
   }, []);
 
