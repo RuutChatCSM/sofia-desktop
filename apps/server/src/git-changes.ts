@@ -313,7 +313,9 @@ export async function snapshotWorkspaceTree(
   try {
     const head = await run(["rev-parse", "--verify", "--quiet", "HEAD"]);
     const hasHead = head.code === 0 && head.stdout.trim().length > 0;
-    if (hasHead) await run(["read-tree", "HEAD"], env);
+    // A brand-new project has no HEAD to seed from; an explicitly empty index
+    // still yields a real baseline tree of whatever is on disk.
+    await run(hasHead ? ["read-tree", "HEAD"] : ["read-tree", "--empty"], env);
     await run(["add", "-A"], env);
     const written = await run(["write-tree"], env);
     return { tree: written.stdout.trim(), head: hasHead ? head.stdout.trim() : null };
@@ -344,10 +346,15 @@ export async function readTurnDelta(
   const hunks = input.includeHunks
     ? parseUnifiedDiff((await run(["diff", "--unified=3", "--no-color", "--find-renames", range])).stdout)
     : null;
-  // The raw patch is frozen with the set: a historical card can then be replayed
-  // (and reversed, for Undo) without re-deriving anything from the repository.
+  // The raw patch is frozen with the set so a historical turn can be replayed and
+  // reversed without re-deriving anything from a repository that has moved on.
+  // It is generated replay-grade, not merely readable: `--binary` so a changed
+  // image can actually be restored, `--full-index` so it applies against the
+  // exact blobs, and rename/mode/symlink/gitlink information preserved as git
+  // records it — otherwise Review could correctly report a binary change that
+  // Undo was unable to reverse.
   const patch = input.includePatch
-    ? (await run(["diff", "--no-color", "--find-renames", range])).stdout
+    ? (await run(["diff", "--no-color", "--binary", "--full-index", "--find-renames", range])).stdout
     : undefined;
 
   const files: WorkspaceFileChange[] = statuses.map((entry) => {
@@ -367,10 +374,16 @@ export async function readTurnDelta(
 }
 
 /**
- * The commits the turn itself created: everything reachable from the end head
- * but not the starting head. Recorded separately from the content delta, so
- * Review can offer the commit and the turn patch as the two different facts they
- * are (they coincide only when a turn commits exactly once, cleanly).
+ * The commits that appeared between the two heads: everything reachable from
+ * `headAfter` but not `headBefore`.
+ *
+ * Named for what it measures, not for what we would like it to mean. In a shared
+ * checkout this is the turn's own commits only while Sofia is the sole actor
+ * advancing the branch — a concurrent human commit, pull or rebase lands in the
+ * range too. See the attribution caveat on `RepositoryChangeSet`.
+ *
+ * Recorded separately from the content delta: the commit and the turn patch are
+ * two different facts that coincide only when a turn commits once, cleanly.
  */
 export async function listTurnCommits(
   run: GitRun,

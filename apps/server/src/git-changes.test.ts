@@ -134,6 +134,25 @@ describe("the turn's own commits", () => {
 });
 
 describe("a tree delta can carry its frozen patch", () => {
+  test("the patch is generated replay-grade, not merely readable", async () => {
+    let patchArgs: string[] = [];
+    const run: GitRun = async (args) => {
+      if (args.includes("--name-status")) return { stdout: "M\0src/a.ts\0", code: 0 };
+      if (args.includes("--numstat")) return { stdout: "1\t1\tsrc/a.ts\0", code: 0 };
+      if (args.includes("--unified=3")) return { stdout: "", code: 0 };
+      patchArgs = args;
+      return { stdout: "diff --git a/src/a.ts b/src/a.ts\n", code: 0 };
+    };
+
+    await readTurnDelta(run, { baselineTree: "base", endTree: "end", includePatch: true });
+
+    // Without --binary a changed image cannot be restored; without --full-index
+    // the patch may not apply against the exact blobs.
+    expect(patchArgs).toContain("--binary");
+    expect(patchArgs).toContain("--full-index");
+    expect(patchArgs).toContain("--find-renames");
+  });
+
   test("the patch is returned only when asked for", async () => {
     const run: GitRun = async (args) => {
       if (args.includes("--name-status")) return { stdout: "M\0src/a.ts\0", code: 0 };

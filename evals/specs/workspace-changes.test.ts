@@ -148,3 +148,35 @@ test("a committed turn is still reviewable, and the user's pre-existing work is 
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+/**
+ * A brand-new project has no HEAD, so a baseline that seeds from a revision
+ * cannot exist. The snapshot must still describe the files on disk, or the very
+ * first turn of a new repository would have no change set at all.
+ */
+test("an unborn repository still gets a baseline snapshot", async () => {
+  const root = mkdtempSync(path.join(tmpdir(), "sofia-unborn-"));
+  try {
+    git(root, ["init", "-q"]);
+    writeFileSync(path.join(root, "first.ts"), "one\n");
+
+    const baseline = await snapshotWorkspaceTree(createGitRun(root));
+    expect(baseline.tree).toBeTruthy();
+    expect(baseline.head).toBeNull();
+
+    writeFileSync(path.join(root, "first.ts"), "one\ntwo\n");
+    writeFileSync(path.join(root, "second.ts"), "new file\n");
+    const end = await snapshotWorkspaceTree(createGitRun(root));
+
+    const delta = await readTurnDelta(createGitRun(root), {
+      baselineTree: baseline.tree,
+      endTree: end.tree,
+    });
+    const byPath = new Map(delta.files.map((file) => [file.path, file]));
+
+    expect(byPath.get("first.ts")).toMatchObject({ status: "modified", additions: 1 });
+    expect(byPath.get("second.ts")).toMatchObject({ status: "added", additions: 1 });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

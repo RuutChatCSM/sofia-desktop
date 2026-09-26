@@ -83,7 +83,7 @@ export function changeSetFromRepository(input: {
   root?: string;
   finalizedAt: number;
   patch?: string;
-  commitsCreated?: string[];
+  commitsInRange?: string[];
   /** Content snapshots the delta was taken between, when the read used them. */
   trees?: {
     baselineTree: string;
@@ -114,8 +114,8 @@ export function changeSetFromRepository(input: {
             }
           : {}),
         ...(input.patch ? { patch: input.patch } : {}),
-        ...(input.commitsCreated && input.commitsCreated.length > 0
-          ? { commitsCreated: input.commitsCreated }
+        ...(input.commitsInRange && input.commitsInRange.length > 0
+          ? { commitsInRange: input.commitsInRange }
           : {}),
         // A tree delta already excludes everything the user had in flight before
         // the turn began (it is in the baseline tree), so every file in it is the

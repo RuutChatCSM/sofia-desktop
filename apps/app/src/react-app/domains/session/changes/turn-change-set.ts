@@ -80,8 +80,13 @@ export type RepositoryChangeSet = {
    * turn must never re-derive it from the repository, which may have moved on.
    */
   patch?: string;
-  /** Commits this turn created — a related fact, not the identity of the set. */
-  commitsCreated?: string[];
+  /**
+   * Commits that appeared between the two heads. Labelled for what it measures:
+   * these are the turn's own commits only when Sofia is the only actor advancing
+   * the branch — a concurrent human commit would land in the range too. It is a
+   * related fact, never the identity of the set.
+   */
+  commitsInRange?: string[];
   files: FileChange[];
 };
 

@@ -722,7 +722,7 @@ export async function finalizeTurnChangeSetFromRepo(sessionId: string, turnId: s
         finalizedAt: Date.now(),
         ...(trees ? { trees } : {}),
         ...(snapshot.patch ? { patch: snapshot.patch } : {}),
-        ...(snapshot.commits ? { commitsCreated: snapshot.commits } : {}),
+        ...(snapshot.commits ? { commitsInRange: snapshot.commits } : {}),
       }),
     );
     if (usable) turnBaselines.set(sessionId, { ...usable, closed: true });
