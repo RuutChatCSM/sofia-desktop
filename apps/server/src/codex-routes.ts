@@ -21,6 +21,7 @@ import {
   writeCodexProviders,
 } from "./codex-providers.js";
 import type { BackgroundProcess, CodexEvent, CodexSession } from "./codex-sessions.js";
+import { countUntrackedLines, createGitRun, readWorkspaceChanges } from "./git-changes.js";
 import { CodexSteerError, CodexThreadBusyError, MAX_TRANSCRIPT_ITEMS, isCodexSessionId } from "./codex-sessions.js";
 import type { CodexAttentionHub } from "./codex-attention.js";
 import { ApiError } from "./errors.js";
@@ -259,6 +260,24 @@ export function registerCodexRoutes(options: RegisterCodexRoutesOptions): void {
     if (!isCodexSessionId(ctx.params.sessionId)) throw notFound("unknown codex session");
     const processes = await sofiaRequest(() => manager.listBackgroundProcesses(ctx.params.sessionId));
     return jsonResponse({ ok: true, processes });
+  });
+
+  // What the turn changed, read from the workspace's repository rather than
+  // from the model's edit events: a shell command, a formatter, a script or an
+  // MCP tool can write files with no apply_patch anywhere. `?hunks=1` includes
+  // the unified diff for a review pane that renders it.
+  addRoute(routes, "GET", "/workspace/:id/codex/sessions/:sessionId/changes", "client", async (ctx) => {
+    const manager = await workspaceManager(ctx.params.id);
+    if (!isCodexSessionId(ctx.params.sessionId)) throw notFound("unknown codex session");
+    const session = manager.listSessions().find((candidate) => candidate.id === ctx.params.sessionId);
+    const root = session?.cwd?.trim() ?? "";
+    if (!root) return jsonResponse({ ok: false, error: "workspace path is unavailable for this session" }, 400);
+
+    const snapshot = await sofiaRequest(() =>
+      readWorkspaceChanges(createGitRun(root), { includeHunks: ctx.url.searchParams.get("hunks") === "1" }),
+    );
+    const files = await countUntrackedLines(root, snapshot.files);
+    return jsonResponse({ ok: true, revision: snapshot.revision, files });
   });
 
   // Stop every background process on the session's thread.
