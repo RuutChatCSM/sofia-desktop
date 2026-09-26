@@ -257,8 +257,8 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
       label: getBrowserTabLabel(title, url),
       url,
       favicon: tab.favicon ?? null,
-      canGoBack: webContents.canGoBack(),
-      canGoForward: webContents.canGoForward(),
+      canGoBack: webContents.navigationHistory.canGoBack(),
+      canGoForward: webContents.navigationHistory.canGoForward(),
       // Page health and agent health are reported separately: a page the user
       // can still read must never be described as a browser failure.
       pageState: tab.state.pageState,
@@ -1275,11 +1275,11 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
     });
     ipcMain.handle("sofia:browser:back", () => {
       const webContents = getActiveWebContents();
-      if (webContents?.canGoBack()) webContents.goBack();
+      if (webContents?.navigationHistory.canGoBack()) webContents.navigationHistory.goBack();
     });
     ipcMain.handle("sofia:browser:forward", () => {
       const webContents = getActiveWebContents();
-      if (webContents?.canGoForward()) webContents.goForward();
+      if (webContents?.navigationHistory.canGoForward()) webContents.navigationHistory.goForward();
     });
     ipcMain.handle("sofia:browser:reload", () => getActiveWebContents()?.reload());
     ipcMain.handle("sofia:browser:stop", () => getActiveWebContents()?.stop());
