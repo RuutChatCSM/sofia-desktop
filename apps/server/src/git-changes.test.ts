@@ -5,6 +5,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   countUntrackedLines,
+  parseNameStatusZ,
   parseNumStatZ,
   parsePorcelainV2,
   parseUnifiedDiff,
@@ -40,6 +41,31 @@ describe("git status --porcelain=v2 -z", () => {
   test("keeps paths containing spaces intact", () => {
     const output = ["1 .M N... 100644 100644 100644 aaaa bbbb docs/my notes.md", ""].join("\0");
     expect(parsePorcelainV2(output)[0]?.path).toBe("docs/my notes.md");
+  });
+});
+
+describe("git diff --name-status -z", () => {
+  test("reads the NUL-separated status/path fields", () => {
+    // `A\0path\0M\0path2\0D\0path3\0`
+    const output = ["A", "src/added.ts", "M", "src/modified.ts", "D", "src/deleted.ts", ""].join("\0");
+
+    expect(parseNameStatusZ(output)).toEqual([
+      { path: "src/added.ts", status: "added" },
+      { path: "src/modified.ts", status: "modified" },
+      { path: "src/deleted.ts", status: "deleted" },
+    ]);
+  });
+
+  test("reads a rename as status, old path, new path", () => {
+    const output = ["R100", "src/old.ts", "src/new.ts", ""].join("\0");
+
+    expect(parseNameStatusZ(output)).toEqual([
+      { path: "src/new.ts", oldPath: "src/old.ts", status: "renamed" },
+    ]);
+  });
+
+  test("empty output yields nothing", () => {
+    expect(parseNameStatusZ("")).toEqual([]);
   });
 });
 

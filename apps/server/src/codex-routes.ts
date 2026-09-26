@@ -21,7 +21,13 @@ import {
   writeCodexProviders,
 } from "./codex-providers.js";
 import type { BackgroundProcess, CodexEvent, CodexSession } from "./codex-sessions.js";
-import { countUntrackedLines, createGitRun, readWorkspaceChanges } from "./git-changes.js";
+import {
+  countUntrackedLines,
+  createGitRun,
+  readTurnDelta,
+  readWorkspaceChanges,
+  snapshotWorkspaceTree,
+} from "./git-changes.js";
 import { CodexSteerError, CodexThreadBusyError, MAX_TRANSCRIPT_ITEMS, isCodexSessionId } from "./codex-sessions.js";
 import type { CodexAttentionHub } from "./codex-attention.js";
 import { ApiError } from "./errors.js";
@@ -277,6 +283,28 @@ export function registerCodexRoutes(options: RegisterCodexRoutesOptions): void {
     const workspace = options.config.workspaces.find((candidate) => candidate.id === ctx.params.id);
     const root = session?.cwd?.trim() || workspace?.path?.trim() || "";
     if (!root) return jsonResponse({ ok: false, error: "workspace path is unavailable for this session" }, 400);
+
+    // A content snapshot, taken without disturbing the user's index. The turn's
+    // patch is the diff between the snapshot it started from and the one it ended
+    // at — never "what is dirty right now", which is empty once the turn commits.
+    if (ctx.url.searchParams.get("snapshot") === "1") {
+      const snapshot = await sofiaRequest(() => snapshotWorkspaceTree(createGitRun(root)));
+      return jsonResponse({ ok: true, ...snapshot });
+    }
+
+    const baselineTree = ctx.url.searchParams.get("baseline") ?? "";
+    const endTree = ctx.url.searchParams.get("end") ?? "";
+    if (baselineTree && endTree) {
+      const delta = await sofiaRequest(() =>
+        readTurnDelta(createGitRun(root), {
+          baselineTree,
+          endTree,
+          includeHunks: ctx.url.searchParams.get("hunks") === "1",
+        }),
+      );
+      const files = await countUntrackedLines(root, delta.files);
+      return jsonResponse({ ok: true, revision: delta.revision, files });
+    }
 
     const snapshot = await sofiaRequest(() =>
       readWorkspaceChanges(createGitRun(root), {

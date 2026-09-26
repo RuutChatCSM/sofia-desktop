@@ -10,7 +10,8 @@
  * Parsing is separated from process execution (`GitRun`) so the formats are
  * unit-testable and the reader is exercisable against a real temporary repo.
  */
-import { readFile, stat } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { execFile } from "node:child_process";
 
@@ -60,7 +61,7 @@ export type WorkspaceChangeSnapshot = {
 export type ChangeScope = "unstaged" | "staged";
 
 export type GitResult = { stdout: string; code: number };
-export type GitRun = (args: string[]) => Promise<GitResult>;
+export type GitRun = (args: string[], env?: Record<string, string>) => Promise<GitResult>;
 
 /** `git status --porcelain=v2 -z` → status entries, renames resolved. */
 export function parsePorcelainV2(output: string): Array<{ path: string; oldPath?: string; status: ChangeStatus }> {
@@ -109,28 +110,35 @@ function statusFromXY(xy: string): ChangeStatus {
   return "modified";
 }
 
-/** `git diff --cached --name-status -z` → status per staged path. */
+/**
+ * `git diff --name-status -z` → status per path.
+ *
+ * With `-z` git NUL-separates *every* field, including the status from the path
+ * (`A\0path\0`, `R100\0old\0new\0`) — reading it as tab-separated silently
+ * matched nothing, which is why a turn's patch came back empty.
+ */
 export function parseNameStatusZ(output: string): Array<{ path: string; oldPath?: string; status: ChangeStatus }> {
-  const entries = output.split("\0").filter(Boolean);
+  const fields = output.split("\0").filter((field) => field !== "");
   const changes: Array<{ path: string; oldPath?: string; status: ChangeStatus }> = [];
 
-  for (let index = 0; index < entries.length; index += 1) {
-    const entry = entries[index];
-    if (!entry) continue;
-    const [code, ...pathFields] = entry.split("\t");
-    const status = (code ?? "").charAt(0);
-    if (status === "R" || status === "C") {
-      const oldPath = pathFields[0] ?? "";
-      const filePath = pathFields[1] ?? "";
-      index += 1; // the rename consumes its own entry pair
-      if (filePath) changes.push({ path: filePath, ...(oldPath ? { oldPath } : {}), status: "renamed" });
+  for (let index = 0; index < fields.length; index += 1) {
+    const code = (fields[index] ?? "").charAt(0);
+    if (!code) continue;
+
+    if (code === "R" || code === "C") {
+      const oldPath = fields[index + 1] ?? "";
+      const path = fields[index + 2] ?? "";
+      index += 2;
+      if (path) changes.push({ path, ...(oldPath ? { oldPath } : {}), status: "renamed" });
       continue;
     }
-    const filePath = pathFields.join("\t");
-    if (!filePath) continue;
+
+    const path = fields[index + 1] ?? "";
+    index += 1;
+    if (!path) continue;
     changes.push({
-      path: filePath,
-      status: status === "A" ? "added" : status === "D" ? "deleted" : "modified",
+      path,
+      status: code === "A" ? "added" : code === "D" ? "deleted" : "modified",
     });
   }
 
@@ -285,6 +293,73 @@ export async function readWorkspaceChanges(
 }
 
 /**
+ * A tree hash of the *content* visible right now: tracked modifications, what is
+ * staged, and untracked (non-ignored) files, without touching the user's index.
+ *
+ * This is the only baseline that can attribute a turn correctly. A revision (or
+ * `git diff` on the working tree) misses exactly the cases that matter: text the
+ * user had already staged, files they had not added yet, and any work the turn
+ * itself commits — after which the working tree is clean and `git diff` says
+ * nothing changed.
+ */
+export async function snapshotWorkspaceTree(
+  run: GitRun,
+): Promise<{ tree: string; head: string | null }> {
+  const directory = await mkdtemp(path.join(tmpdir(), "sofia-baseline-index-"));
+  // A throwaway index: `git add -A` here never stages anything for the user.
+  const env = { GIT_INDEX_FILE: path.join(directory, "index") };
+  try {
+    const head = await run(["rev-parse", "--verify", "--quiet", "HEAD"]);
+    const hasHead = head.code === 0 && head.stdout.trim().length > 0;
+    if (hasHead) await run(["read-tree", "HEAD"], env);
+    await run(["add", "-A"], env);
+    const written = await run(["write-tree"], env);
+    return { tree: written.stdout.trim(), head: hasHead ? head.stdout.trim() : null };
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+}
+
+/**
+ * The turn's content delta: `baselineTree → endTree`. Because the baseline tree
+ * already contains whatever the user had staged, unstaged or untracked, only what
+ * happened *during* the turn appears here — whether the turn edited, staged,
+ * committed once, committed five times, or reformatted the repository.
+ */
+export async function readTurnDelta(
+  run: GitRun,
+  input: { baselineTree: string; endTree: string; includeHunks?: boolean },
+): Promise<WorkspaceChangeSnapshot> {
+  const baselineTree = input.baselineTree.trim();
+  const endTree = input.endTree.trim();
+  if (!baselineTree || !endTree) return { revision: endTree || null, files: [] };
+
+  const range = `${baselineTree}..${endTree}`;
+  const statuses = parseNameStatusZ((await run(["diff", "--name-status", "-z", "--find-renames", range])).stdout);
+  if (statuses.length === 0) return { revision: endTree, files: [] };
+
+  const numstat = parseNumStatZ((await run(["diff", "--numstat", "-z", "--find-renames", range])).stdout);
+  const hunks = input.includeHunks
+    ? parseUnifiedDiff((await run(["diff", "--unified=3", "--no-color", "--find-renames", range])).stdout)
+    : null;
+
+  const files: WorkspaceFileChange[] = statuses.map((entry) => {
+    const stats = numstat.get(entry.path);
+    const fileHunks = hunks?.get(entry.path);
+    return {
+      path: entry.path,
+      ...(entry.oldPath ? { oldPath: entry.oldPath } : {}),
+      status: stats?.binary ? "binary" : entry.status,
+      additions: stats?.additions ?? 0,
+      deletions: stats?.deletions ?? 0,
+      ...(fileHunks?.length ? { hunks: fileHunks } : {}),
+    };
+  });
+
+  return { revision: endTree, files };
+}
+
+/**
  * Untracked files never appear in `git diff`, so `readWorkspaceChanges` reports
  * zero lines for them. A repo-backed producer fills that gap from the bytes.
  */
@@ -310,9 +385,9 @@ export async function countUntrackedLines(root: string, files: WorkspaceFileChan
 
 /** Run git in a directory, never throwing on a non-zero exit. */
 export function createGitRun(root: string, timeoutMs = 15_000): GitRun {
-  return (args) =>
+  return (args, env) =>
     new Promise<GitResult>((resolve) => {
-      execFile("git", ["-C", root, ...args], { timeout: timeoutMs, maxBuffer: 32 * 1024 * 1024 }, (error, stdout) => {
+      execFile("git", ["-C", root, ...args], { timeout: timeoutMs, maxBuffer: 32 * 1024 * 1024, env: env ? { ...process.env, ...env } : undefined }, (error, stdout) => {
         const code = error && typeof (error as { code?: unknown }).code === "number" ? (error as { code: number }).code : error ? 1 : 0;
         resolve({ stdout: stdout ?? "", code });
       });

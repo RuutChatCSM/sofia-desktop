@@ -8,7 +8,9 @@ import { test } from "@sofia/testkit";
 import {
   countUntrackedLines,
   createGitRun,
+  readTurnDelta,
   readWorkspaceChanges,
+  snapshotWorkspaceTree,
 } from "../../apps/server/src/git-changes.ts";
 
 function git(root: string, args: string[]) {
@@ -72,6 +74,66 @@ test("a directory that is not a repository reports no changes rather than failin
     // "pass" this assertion for the wrong reason).
     writeFileSync(path.join(root, "loose.txt"), "not a repo\n");
     expect(await readWorkspaceChanges(createGitRun(root))).toEqual({ revision: null, files: [] });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+/**
+ * The proof that a turn's change set is an artifact of the *turn*, not of the
+ * repository's current dirtiness. Git alone cannot answer "what did this turn
+ * change": a revision misses staged/untracked pre-existing state, and a working
+ * tree diff reports nothing at all once the turn commits its own work.
+ */
+test("a committed turn is still reviewable, and the user's pre-existing work is not attributed to it", async () => {
+  const root = makeRepo();
+  try {
+    // 1. Work the user had in flight before the turn: unstaged, staged, untracked.
+    writeFileSync(path.join(root, "tracked.ts"), "one\ntwo\nthree\nUSER UNSTAGED\n");
+    writeFileSync(path.join(root, "staged.ts"), "user staged\n");
+    git(root, ["add", "staged.ts"]);
+    writeFileSync(path.join(root, "untracked.txt"), "user untracked\n");
+    const before = execFileSync("git", ["-C", root, "status", "--porcelain"]).toString();
+    expect(before).toContain("tracked.ts");
+    expect(before).toContain("staged.ts");
+    expect(before).toContain("untracked.txt");
+
+    // 2. baseline content snapshot (temp index; the user's staging is untouched)
+    const baseline = await snapshotWorkspaceTree(createGitRun(root));
+    expect(baseline.tree).toBeTruthy();
+    expect(baseline.head).toBeTruthy();
+    expect(execFileSync("git", ["-C", root, "status", "--porcelain"]).toString()).toBe(before);
+
+    // 3. Sofia edits and adds files...
+    writeFileSync(path.join(root, "sofia.ts"), "sofia one\nsofia two\n");
+    writeFileSync(path.join(root, "tracked.ts"), "one\ntwo\nthree\nUSER UNSTAGED\nsofia line\n");
+    // 4. ...and commits its work.
+    git(root, ["add", "-A"]);
+    git(root, ["commit", "-q", "-m", "sofia work"]);
+
+    // 5. The working tree is clean, so `git diff` would report nothing.
+    expect(execFileSync("git", ["-C", root, "status", "--porcelain"]).toString().trim()).toBe("");
+
+    const end = await snapshotWorkspaceTree(createGitRun(root));
+
+    // 6. Last turn still shows the turn's exact patch, with counts.
+    const delta = await readTurnDelta(createGitRun(root), {
+      baselineTree: baseline.tree,
+      endTree: end.tree,
+      includeHunks: true,
+    });
+    const byPath = new Map(delta.files.map((file) => [file.path, file]));
+
+    expect(byPath.get("sofia.ts")).toMatchObject({ status: "added", additions: 2, deletions: 0 });
+    expect(byPath.get("tracked.ts")).toMatchObject({ status: "modified", additions: 1, deletions: 0 });
+    expect(byPath.get("tracked.ts")?.hunks?.length).toBeGreaterThan(0);
+
+    // 7. The user's pre-existing work is in the baseline, so only the line Sofia
+    //    wrote moved — and untouched files do not appear at all.
+    expect(byPath.has("staged.ts")).toBe(false);
+    expect(byPath.has("untracked.txt")).toBe(false);
+    const additions = delta.files.reduce((total, file) => total + file.additions, 0);
+    expect(additions).toBe(3);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
