@@ -71,20 +71,10 @@ import { useSessionFindStore } from "./find-store";
 import { getSessionActivityStatusLabel, useSessionActivityStore, type SessionActivityStatus } from "@/react-app/domains/session/status/session-activity-store";
 import { PermissionApprovalPanel } from "@/react-app/domains/session/chat/permission-approval-modal";
 import { SessionTopRail } from "@/react-app/domains/session/surface/session-top-rail";
-import { ReviewPane, type ReviewScope } from "@/react-app/domains/session/changes/review-pane";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
 import {
   selectTurnChangeSet,
   useChangeSetStore,
 } from "@/react-app/domains/session/changes/change-set-store";
-import { loadRepositoryChanges } from "@/react-app/domains/session/codex-session-store";
-import type { FileChange } from "@/react-app/domains/session/changes/turn-change-set";
 import { QuestionPanel } from "@/react-app/domains/session/modals/question-modal";
 import { QueuedMessagesPanel } from "@/react-app/domains/session/modals/queued-messages-panel";
 import { deriveOpenTargets, selectAutoOpenTarget, type OpenTarget } from "@/react-app/domains/session/artifacts/open-target";
@@ -737,30 +727,6 @@ export function SessionSurface(props: SessionSurfaceProps) {
   const engineWarning = useCodexSessionStore((state) => state.sessions[props.sessionId]?.warning);
   // Evaluator/continuation chatter is diagnostics, not product copy.
   const sessionNotice = userFacingWarning(engineWarning, props.developerMode);
-  // The review surface reads a change set by id (never the current working tree)
-  // and, for the other scopes, a live repository read.
-  const reviewChangeSetId = useChangeSetStore((state) => state.reviewChangeSetId);
-  const reviewChangeSet = useChangeSetStore((state) =>
-    state.reviewChangeSetId ? state.byId[state.reviewChangeSetId] ?? null : null,
-  );
-  const closeReview = useChangeSetStore((state) => state.closeReview);
-  const [reviewScope, setReviewScope] = useState<ReviewScope>("last-turn");
-  const [reviewRepositoryFiles, setReviewRepositoryFiles] = useState<FileChange[] | null>(null);
-  const [reviewLoading, setReviewLoading] = useState(false);
-  useEffect(() => {
-    if (!reviewChangeSetId || reviewScope === "last-turn") return;
-    let cancelled = false;
-    setReviewLoading(true);
-    void loadRepositoryChanges(props.sessionId, reviewScope).then((files) => {
-      if (cancelled) return;
-      setReviewRepositoryFiles(files);
-      setReviewLoading(false);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [props.sessionId, reviewChangeSetId, reviewScope]);
-
   // Repository change tracking for the turn: capture the baseline when it starts
   // and read the patch from git when it ends. Tool events are only the fallback.
   const changeTurnId = useCodexSessionStore((state) => {
@@ -2286,35 +2252,6 @@ export function SessionSurface(props: SessionSurfaceProps) {
         />
       </div>
 
-      <Sheet
-        open={Boolean(reviewChangeSetId)}
-        onOpenChange={(open) => {
-          if (!open) closeReview();
-        }}
-      >
-        <SheetContent
-          side="right"
-          // Code is wide: a review surface squeezed into a settings-sized panel
-          // is unusable. This is a docked workspace pane, not a modal card.
-          className="flex w-full flex-col sm:max-w-[min(1100px,58vw)]"
-        >
-          <SheetHeader>
-            <SheetTitle>Review</SheetTitle>
-            <SheetDescription>
-              What this turn changed, and the state of the working tree.
-            </SheetDescription>
-          </SheetHeader>
-          <div className="min-h-0 flex-1">
-            <ReviewPane
-              scope={reviewScope}
-              onScopeChange={setReviewScope}
-              changeSet={reviewChangeSet}
-              repositoryFiles={reviewRepositoryFiles}
-              loading={reviewLoading}
-            />
-          </div>
-        </SheetContent>
-      </Sheet>
       <div ref={composerShellRef} className="shrink-0 px-0 pb-2 pt-2">
         {(props.providerConnectedCount ?? 0) === 0 ? (
           <button

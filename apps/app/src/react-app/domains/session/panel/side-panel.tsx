@@ -1,6 +1,6 @@
 /** @jsxImportSource react */
 import * as React from "react";
-import { Globe, Loader2, Plus, X, Maximize2, Minimize2, PictureInPicture2 } from "lucide-react";
+import { FileDiff, Globe, Loader2, Plus, X, Maximize2, Minimize2, PictureInPicture2 } from "lucide-react";
 import { useDragControls } from "motion/react";
 
 import type { SofiaServerClient } from "@/app/lib/sofia-server";
@@ -10,6 +10,10 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { cn } from "@/lib/utils";
 
 import { ArtifactIcon } from "../artifacts/artifact-icon";
+import { useChangeSetStore } from "../changes/change-set-store";
+import { ReviewPane, type ReviewScope } from "../changes/review-pane";
+import type { FileChange } from "../changes/turn-change-set";
+import { loadRepositoryChanges } from "../codex-session-store";
 import { ArtifactPanel } from "../artifacts/artifact-panel";
 import {
   type BrowserPanelTab,
@@ -121,6 +125,8 @@ function SidePanelTab({ tab, active, onSelect, onClose }: SidePanelTabProps) {
             ) : (
               <Globe />
             )
+          ) : tab.type === "changes" ? (
+            <FileDiff className="size-3.5 shrink-0" />
           ) : (
             <ArtifactIcon type={tab.preview} />
           )}
@@ -133,6 +139,44 @@ function SidePanelTab({ tab, active, onSelect, onClose }: SidePanelTabProps) {
         />
       </div>
     </PanelTabItem>
+  );
+}
+
+/**
+ * The review workspace. Unlike a modal sheet this is a docked pane inside the
+ * session's resizable split, so code has room: the file list, the side-by-side
+ * diff, and (later) hunk actions and inline comments all live here.
+ */
+function ChangesPanel({ sessionId, changeSetId }: { sessionId: string; changeSetId: string }) {
+  const changeSet = useChangeSetStore((state) => state.byId[changeSetId] ?? null);
+  const [scope, setScope] = React.useState<ReviewScope>("last-turn");
+  const [repositoryFiles, setRepositoryFiles] = React.useState<FileChange[] | null>(null);
+  const [loading, setLoading] = React.useState(false);
+
+  React.useEffect(() => {
+    if (scope === "last-turn") return;
+    let cancelled = false;
+    setLoading(true);
+    void loadRepositoryChanges(sessionId, scope).then((files) => {
+      if (cancelled) return;
+      setRepositoryFiles(files);
+      setLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [scope, sessionId]);
+
+  return (
+    <div className="min-h-0 flex-1 overflow-hidden">
+      <ReviewPane
+        scope={scope}
+        onScopeChange={setScope}
+        changeSet={changeSet}
+        repositoryFiles={repositoryFiles}
+        loading={loading}
+      />
+    </div>
   );
 }
 
@@ -402,6 +446,8 @@ export function SidePanel({
         ) : null}
         {activeTab?.type === "browser" ? (
           <BrowserView sessionId={sessionId} tab={activeTab} onClose={onClose} />
+        ) : activeTab?.type === "changes" ? (
+          <ChangesPanel sessionId={sessionId} changeSetId={activeTab.changeSetId} />
         ) : activeTab?.type === "artifact" ? (
           <div className="min-h-0 flex-1 overflow-hidden">
             <ArtifactPanel

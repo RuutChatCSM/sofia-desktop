@@ -52,6 +52,7 @@ import { useArtifacts, useOpenArtifactPath } from "@/lib/artifacts"
 import { changeSetFromToolHints } from "@/react-app/domains/session/changes/change-set-from-messages"
 import { TurnChangeSetCard } from "@/react-app/domains/session/changes/turn-change-set-card"
 import { selectTurnChangeSet, useChangeSetStore } from "@/react-app/domains/session/changes/change-set-store"
+import { usePanelTabStore } from "@/react-app/domains/session/panel/panel-tab-store"
 import { messageTurnId, turnAnswerIndex } from "@/components/chat/turn-structure"
 import { deriveTurnPresentation } from "@/components/chat/turn-presentation"
 import { liveActivityLabel } from "@/react-app/domains/session/activity"
@@ -1244,7 +1245,14 @@ function MessageGroup({
           <TurnChangeSetCard
             changeSet={changeSet}
             onOpenFile={openArtifactPath}
-            onReview={(changeSetId) => useChangeSetStore.getState().openReview(changeSetId)}
+            onReview={(changeSetId) =>
+              usePanelTabStore.getState().openTab(sessionId, {
+                id: `changes:${changeSetId}`,
+                type: "changes",
+                label: "Changes",
+                changeSetId,
+              })
+            }
           />
         </div>
       ) : null}

@@ -20,7 +20,7 @@ import {
 export const PERSISTED_PANEL_TAB_STORE_KEY = "sofia:panel-tabs:v2";
 export const LEGACY_PANEL_TAB_STORE_KEY = "sofia:panel-tabs:v1";
 
-export type PanelTabType = "artifact" | "browser";
+export type PanelTabType = "artifact" | "browser" | "changes";
 
 export type { BrowserPanelTab } from "../../../../app/lib/desktop-types";
 import type {
@@ -40,7 +40,20 @@ export type ArtifactPanelTab = {
   preview: OpenTargetPreview;
 }
 
-export type PanelTab = BrowserPanelTab | ArtifactPanelTab;
+/**
+ * A review workspace tab. It carries the *immutable* change set id it reviews, so
+ * a tab opened from an old turn keeps showing that turn's patch — never whatever
+ * is dirty in the repository now. Changes tabs are not persisted (only browser
+ * tabs are), so a reload does not resurrect a stale review.
+ */
+export type ChangesPanelTab = {
+  id: string;
+  type: "changes";
+  label: string;
+  changeSetId: string;
+};
+
+export type PanelTab = BrowserPanelTab | ArtifactPanelTab | ChangesPanelTab;
 
 export type SessionPanelState = {
   tabs: PanelTab[];
@@ -414,7 +427,9 @@ export const usePanelTabStore = create<PanelTabStore>()(
         const mergedTabs: PanelTab[] = [];
 
         for (const tab of session.tabs) {
-          if (tab.type === "artifact") {
+          // Only browser tabs are reconciled with Electron; everything else is
+          // carried through untouched.
+          if (tab.type !== "browser") {
             mergedTabs.push(tab);
             continue;
           }
