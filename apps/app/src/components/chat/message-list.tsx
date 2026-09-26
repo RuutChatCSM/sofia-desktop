@@ -51,6 +51,7 @@ import { useMessageList, useSessionErrorMessage } from "@/components/chat/messag
 import { useArtifacts, useOpenArtifactPath } from "@/lib/artifacts"
 import { changeSetFromToolHints } from "@/react-app/domains/session/changes/change-set-from-messages"
 import { TurnChangeSetCard } from "@/react-app/domains/session/changes/turn-change-set-card"
+import { selectTurnChangeSet, useChangeSetStore } from "@/react-app/domains/session/changes/change-set-store"
 import { messageTurnId, turnAnswerIndex } from "@/components/chat/turn-structure"
 import { liveActivityLabel } from "@/react-app/domains/session/activity"
 import {
@@ -1047,7 +1048,7 @@ function MessageGroup({
   const turnArtifacts = useArtifacts(items.map((item) => item.message), { includeTargetFallbacks: false })
   const openArtifactPath = useOpenArtifactPath()
   const turnId = items[0] ? messageTurnId(items[0].message) ?? items[0].message.id : null
-  const changeSet = React.useMemo(
+  const hintChangeSet = React.useMemo(
     () =>
       turnId
         ? changeSetFromToolHints({
@@ -1059,6 +1060,10 @@ function MessageGroup({
         : null,
     [sessionId, timing.startedAt, turnArtifacts, turnId],
   )
+  const repoChangeSet = useChangeSetStore((state) => selectTurnChangeSet(state.byId, sessionId, turnId))
+  // A repository-backed set (git) is authoritative; the tool-event hints only
+  // stand in until it arrives.
+  const changeSet = repoChangeSet ?? hintChangeSet
 
   if (!lastItem || isMessageEmptyGroup(items)) {
     return null;

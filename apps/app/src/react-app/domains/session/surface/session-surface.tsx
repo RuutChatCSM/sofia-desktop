@@ -1,4 +1,8 @@
-import { useCodexSessionStore } from "../codex-session-store";
+import {
+  captureTurnBaseline,
+  finalizeTurnChangeSetFromRepo,
+  useCodexSessionStore,
+} from "../codex-session-store";
 /** @jsxImportSource react */
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState, type ReactNode } from "react";
 import type { UIMessage } from "ai";
@@ -719,6 +723,12 @@ export function SessionSurface(props: SessionSurfaceProps) {
   const engineWarning = useCodexSessionStore((state) => state.sessions[props.sessionId]?.warning);
   // Evaluator/continuation chatter is diagnostics, not product copy.
   const sessionNotice = userFacingWarning(engineWarning, props.developerMode);
+  // Repository change tracking for the turn: capture the baseline when it starts
+  // and read the patch from git when it ends. Tool events are only the fallback.
+  const changeTurnId = useCodexSessionStore((state) => {
+    const items = state.sessions[props.sessionId]?.items;
+    return items && items.length > 0 ? items[items.length - 1]?.turnId ?? null : null;
+  });
   const showThinking = local.prefs.showThinking;
   const findOpen = useSessionFindStore((state) => state.open);
   const findSessionId = useSessionFindStore((state) => state.sessionId);
@@ -2062,6 +2072,18 @@ export function SessionSurface(props: SessionSurfaceProps) {
     },
   }), [props.sessionId, renderedMessages]);
   useControlAction(props.isControlTarget ? sessionReadTranscriptControlAction : null);
+
+  // Repository change tracking for the turn: capture the baseline when it starts
+  // and read the patch from git when it ends. Tool events are only the fallback.
+  useEffect(() => {
+    if (!chatStreaming || !changeTurnId) return;
+    void captureTurnBaseline(props.sessionId, changeTurnId);
+  }, [changeTurnId, chatStreaming, props.sessionId]);
+
+  useEffect(() => {
+    if (chatStreaming || !changeTurnId) return;
+    void finalizeTurnChangeSetFromRepo(props.sessionId, changeTurnId);
+  }, [changeTurnId, chatStreaming, props.sessionId]);
 
   return (
     <DevProfiler id="SessionSurface">

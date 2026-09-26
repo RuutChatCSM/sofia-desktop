@@ -4,6 +4,8 @@
 // stdio). Used when the selected engine is codex.
 import { SofiaServerError } from "./sofia-server";
 
+import type { WorkspaceChangesResponse } from "@/react-app/domains/session/changes/change-set-source";
+
 export type CodexSessionStatus = "idle" | "running" | "error";
 
 export type CodexSession = {
@@ -360,6 +362,18 @@ export function createCodexSessionClient(options: CodexSessionClientOptions) {
         options.baseUrl,
         `${workspacePath}/codex/sessions/${encodeURIComponent(sessionId)}/background-processes`,
         { token: options.token, hostToken: options.hostToken, timeoutMs: 15_000 },
+      ),
+
+    /**
+     * What the workspace's repository has changed — read from git, not from the
+     * model's edit events, so changes made by a shell command, a formatter, a
+     * script or an MCP tool are included (see apps/server/src/git-changes.ts).
+     */
+    workspaceChanges: (sessionId: string, params?: { hunks?: boolean }) =>
+      requestJson<WorkspaceChangesResponse>(
+        options.baseUrl,
+        `${workspacePath}/codex/sessions/${encodeURIComponent(sessionId)}/changes${params?.hunks ? "?hunks=1" : ""}`,
+        { token: options.token, hostToken: options.hostToken, timeoutMs: 20_000 },
       ),
 
     /** Stop one background process (`processId` is the engine handle). */

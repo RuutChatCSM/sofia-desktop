@@ -6,6 +6,12 @@ import { create } from "zustand";
 
 import type { BackgroundProcess, CodexEvent, CodexSession, CodexSessionClient, CodexSessionStatus } from "@/app/lib/codex-session";
 import type { WorkspaceEngineSessionErrorPresentation } from "./sync/session-error";
+import {
+  baselineFromChanges,
+  changeSetFromRepository,
+  type TurnBaseline,
+} from "./changes/change-set-source";
+import { useChangeSetStore } from "./changes/change-set-store";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -613,6 +619,60 @@ export function backgroundProcessFailureTitle(process: BackgroundProcess): strin
   return typeof process.exitCode === "number"
     ? `${label} exited with code ${process.exitCode}`
     : `${label} failed`;
+}
+
+/**
+ * Repository state a turn started from, kept per session until that turn is
+ * finalized. A server-side continuation keeps its turn open, so the baseline is
+ * not re-captured mid-turn.
+ */
+const turnBaselines = new Map<string, { turnId: string; baseline: TurnBaseline; startedAt: number; closed: boolean }>();
+
+/**
+ * Capture the repository state the turn starts from. Best-effort: without it a
+ * file that was already dirty cannot be told apart from one Sofia wrote, so
+ * nothing would be attributed and Undo stays disabled.
+ */
+export async function captureTurnBaseline(sessionId: string, turnId: string): Promise<void> {
+  const existing = turnBaselines.get(sessionId);
+  if (existing && !existing.closed) return;
+
+  const client = codexClientForSession(sessionId);
+  if (!client?.workspaceChanges) return;
+  try {
+    const response = await client.workspaceChanges(sessionId);
+    turnBaselines.set(sessionId, { turnId, baseline: baselineFromChanges(response), startedAt: Date.now(), closed: false });
+  } catch {
+    // No baseline available; the turn simply has nothing attributable.
+  }
+}
+
+/**
+ * Read the finished turn's patch from the repository and freeze its change set.
+ * This is the authoritative half: whatever wrote the bytes, the diff says so.
+ */
+export async function finalizeTurnChangeSetFromRepo(sessionId: string, turnId: string): Promise<void> {
+  const client = codexClientForSession(sessionId);
+  if (!client?.workspaceChanges) return;
+
+  const record = turnBaselines.get(sessionId);
+  const usable = record && record.turnId === turnId ? record : null;
+  try {
+    const snapshot = await client.workspaceChanges(sessionId, { hunks: true });
+    useChangeSetStore.getState().upsert(
+      changeSetFromRepository({
+        sessionId,
+        turnId,
+        startedAt: usable?.startedAt ?? Date.now(),
+        baseline: usable?.baseline ?? null,
+        snapshot,
+        finalizedAt: Date.now(),
+      }),
+    );
+    if (usable) turnBaselines.set(sessionId, { ...usable, closed: true });
+  } catch {
+    // Hint-sourced summaries remain for this turn.
+  }
 }
 
 export function useBackgroundProcesses(sessionId: string): BackgroundProcess[] {
