@@ -96,6 +96,54 @@ describe("review pane", () => {
     expect(markup).not.toContain("Edited 2 files");
   });
 
+  test("multiple repositories are grouped, and long unchanged stretches collapse", () => {
+    const started = beginTurnChangeSet({ sessionId: "s1", turnId: "t31", startedAt: 0 });
+    const multi = finalizeTurnChangeSet(
+      reconcileTurnChangeSet(started, {
+        source: "git",
+        repositories: [
+          {
+            repositoryId: "sofia-app",
+            root: "/a",
+            files: [
+              {
+                path: "src/index.ts",
+                status: "modified",
+                additions: 4,
+                deletions: 1,
+                attributedToTurn: true,
+                hunks: [
+                  { header: "@@ -1,3 +1,4 @@", oldStart: 1, oldLines: 3, newStart: 1, newLines: 4, lines: [
+                    { type: "context", oldLine: 1, newLine: 1, text: "keep" },
+                    { type: "add", newLine: 2, text: "added" },
+                  ] },
+                  { header: "@@ -66,2 +67,2 @@", oldStart: 66, oldLines: 2, newStart: 67, newLines: 2, lines: [
+                    { type: "delete", oldLine: 66, text: "old" },
+                    { type: "add", newLine: 67, text: "new" },
+                  ] },
+                ],
+              },
+            ],
+          },
+          { repositoryId: "sofia", root: "/b", files: [
+            { path: "src/index.ts", status: "modified", additions: 2, deletions: 0, attributedToTurn: true },
+          ] },
+        ],
+      }),
+      5_000,
+    );
+
+    const markup = renderToStaticMarkup(<ReviewPane scope="last-turn" onScopeChange={() => {}} changeSet={multi} />);
+
+    // Two repositories, both with `src/index.ts`, rendered as two groups.
+    expect(markup).toContain('data-review-repository="sofia-app"');
+    expect(markup).toContain('data-review-repository="sofia"');
+    expect((markup.match(/data-review-file="src\/index.ts"/g) ?? []).length).toBe(2);
+
+    // The 62-line stretch between the two hunks is summarised, not printed.
+    expect(markup).toContain("62 unchanged lines");
+  });
+
   test("an unmeasured turn never claims +0 -0 and explains the empty diff", () => {
     // What the pane looked like for a hint-sourced turn: every file at "+0 −0"
     // and "No textual diff available", which reads as a defect rather than "the

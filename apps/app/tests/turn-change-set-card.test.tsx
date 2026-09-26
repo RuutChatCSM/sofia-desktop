@@ -75,6 +75,7 @@ describe("result card", () => {
     expect(markup).not.toContain("−0");
     // The absence is stated rather than left looking like a zero-sized change.
     expect(markup).toContain("data-changeset-unmeasured");
+    expect(markup).toContain("Change size unavailable for this older turn.");
   });
 
   test("folds the tail of a long list behind Show N more", () => {
@@ -82,6 +83,32 @@ describe("result card", () => {
     const markup = renderToStaticMarkup(<TurnChangeSetCard changeSet={changeSet("git", parseNumStat(files))} />);
 
     expect(markup).toContain("Show 2 more");
+  });
+
+  test("a multi-repository turn labels each row", () => {
+    const started = beginTurnChangeSet({ sessionId: "s1", turnId: "t31", startedAt: 0 });
+    const multi = finalizeTurnChangeSet(
+      reconcileTurnChangeSet(started, {
+        source: "git",
+        repositories: [
+          { repositoryId: "sofia-app", root: "/a", files: [
+            { path: "src/index.ts", status: "modified", additions: 4, deletions: 1, attributedToTurn: true },
+          ] },
+          { repositoryId: "sofia", root: "/b", files: [
+            { path: "src/index.ts", status: "modified", additions: 2, deletions: 0, attributedToTurn: true },
+          ] },
+        ],
+      }),
+      5_000,
+    );
+
+    const markup = renderToStaticMarkup(<TurnChangeSetCard changeSet={multi} />);
+
+    expect(markup).toContain("sofia-app/");
+    expect(markup).toContain("sofia/");
+    // Single-repository turns stay unlabelled.
+    expect(renderToStaticMarkup(<TurnChangeSetCard changeSet={changeSet("git", parseNumStat("1\t1\ta.ts"))} />))
+      .not.toContain("workspace/");
   });
 
   test("shows Undo and Review only when the app can act on them", () => {

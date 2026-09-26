@@ -57,12 +57,13 @@ import { FilePlus2, FileMinus2, FileSymlink, FilePenLine, ImageIcon } from "luci
 
 import { cn } from "@/lib/utils";
 import {
-  changeSetFiles,
+  changeSetByRepository,
   changeSetTitle,
   changeSetTotals,
   fileChangeLabel,
   fileChangeNote,
   type ChangeStatus,
+  type DiffHunk,
   type DiffLine,
   type FileChange,
   type TurnChangeSet,
@@ -108,10 +109,18 @@ export function ReviewPane({
   onOpenFile,
   initialPath,
 }: ReviewPaneProps) {
-  const files = React.useMemo(
-    () => (scope === "last-turn" ? (changeSet ? changeSetFiles(changeSet) : []) : (repositoryFiles ?? [])),
+  // Grouped by repository: a multi-repository change set keeps two files called
+  // `src/index.ts` apart, and the headings appear only when there is more than one.
+  const groups = React.useMemo(
+    () =>
+      scope === "last-turn"
+        ? changeSet
+          ? changeSetByRepository(changeSet)
+          : []
+        : [{ repositoryId: "", root: "", files: repositoryFiles ?? [] }],
     [changeSet, repositoryFiles, scope],
   );
+  const files = React.useMemo(() => groups.flatMap((group) => group.files), [groups]);
   const [selectedPath, setSelectedPath] = React.useState<string | null>(initialPath ?? null);
 
   // Opening the pane from a file row selects that file; a later row click on the
@@ -167,9 +176,19 @@ export function ReviewPane({
       ) : (
         <div className="flex min-h-0 flex-1">
           <div data-review-files className="w-64 shrink-0 overflow-y-auto border-r border-border/70 py-1">
-            {files.map((file) => (
+            {groups.map((group) => (
+              <div key={group.repositoryId || "workspace"}>
+                {groups.length > 1 ? (
+                  <div
+                    data-review-repository={group.repositoryId}
+                    className="px-3 pb-1 pt-2 text-[10px] uppercase tracking-wide text-muted-foreground/60"
+                  >
+                    {group.repositoryId} · {group.files.length} files
+                  </div>
+                ) : null}
+                {group.files.map((file) => (
               <button
-                key={`${file.oldPath ?? ""}:${file.path}`}
+                key={`${group.repositoryId}:${file.oldPath ?? ""}:${file.path}`}
                 type="button"
                 data-review-file={file.path}
                 onClick={() => {
@@ -195,6 +214,8 @@ export function ReviewPane({
                   </span>
                 ) : null}
               </button>
+                ))}
+              </div>
             ))}
           </div>
           <div className="min-w-0 flex-1 overflow-auto">
@@ -249,6 +270,7 @@ function DiffView({
           {hunks.map((hunk, index) => (
             <div key={`${hunk.header}-${index}`} className="min-w-max">
               <div className="bg-muted/50 px-3 text-muted-foreground/80">{hunk.header}</div>
+              <UnchangedGap hunks={hunks} index={index} />
               {toSplitDiffRows(hunk.lines).map((row) => (
                 <div
                   key={row.key}
@@ -289,6 +311,23 @@ function DiffSide({ line, side }: { line?: DiffLine; side: "old" | "new" }) {
         {(side === "old" ? line.oldLine : line.newLine) ?? ""}
       </span>
       <span className="px-2">{`${added ? "+" : removed ? "-" : " "}${line.text}`}</span>
+    </div>
+  );
+}
+
+/** The stretch of file between two hunks, summarised rather than printed. */
+function UnchangedGap({ hunks, index }: { hunks: readonly DiffHunk[]; index: number }) {
+  const previous = hunks[index - 1];
+  const hunk = hunks[index];
+  if (!previous || !hunk) return null;
+  const gap = hunk.oldStart - (previous.oldStart + previous.oldLines);
+  if (gap <= 1) return null;
+  return (
+    <div
+      data-diff-gap
+      className="border-t border-border/40 bg-muted/20 px-3 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground/60"
+    >
+      {gap} unchanged lines
     </div>
   );
 }

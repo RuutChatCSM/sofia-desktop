@@ -7,7 +7,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { cn } from "@/lib/utils";
 import {
   type ChangeStatus,
-  changeSetFiles,
+  changeSetByRepository,
   changeSetTitle,
   changeSetTotals,
   fileChangeLabel,
@@ -43,12 +43,22 @@ export function TurnChangeSetCard({
   onOpenFile?: (path: string) => void;
   maxVisibleFiles?: number;
 }) {
-  const files = changeSetFiles(changeSet);
+  const repositories = changeSetByRepository(changeSet);
   const totals = changeSetTotals(changeSet);
-  const visible = files.slice(0, maxVisibleFiles);
-  const hidden = files.length - visible.length;
+  // Significance order across the whole change set; with more than one
+  // repository each row says which one it belongs to, so two repositories that
+  // both contain `src/index.ts` can never be read as one file.
+  // Kept as (repository, file) pairs rather than a path-keyed map: two
+  // repositories can both contain `src/index.ts`, and keying by path labelled
+  // both rows with whichever repository happened to be last.
+  const entries = repositories.flatMap((repository) =>
+    repository.files.map((file) => ({ repositoryId: repository.repositoryId, file })),
+  );
+  const showRepository = repositories.length > 1;
+  const visible = entries.slice(0, maxVisibleFiles);
+  const hidden = entries.length - visible.length;
 
-  if (files.length === 0) return null;
+  if (entries.length === 0) return null;
 
   return (
     <div
@@ -71,7 +81,7 @@ export function TurnChangeSetCard({
             // Absent counts must not read as "no changes": a hint-sourced set
             // knows which files were touched and nothing about their size.
             <div data-changeset-unmeasured className="mt-0.5 text-[10px] text-muted-foreground/60">
-              Change size not measured
+              Change size unavailable for this older turn.
             </div>
           )}
         </div>
@@ -87,13 +97,14 @@ export function TurnChangeSetCard({
         ) : null}
       </div>
       <div className="border-t border-border/70">
-        {visible.map((file) => (
+        {visible.map(({ repositoryId, file }) => (
           <FileChangeRow
-            key={`${file.oldPath ?? ""}:${file.path}`}
+            key={`${repositoryId}:${file.oldPath ?? ""}:${file.path}`}
             file={file}
             showCounts={totals.countsKnown}
             onOpenFile={onOpenFile}
             onReviewFile={onReviewFile ? () => onReviewFile(file.path) : undefined}
+            repository={showRepository ? repositoryId : undefined}
           />
         ))}
       </div>
@@ -104,13 +115,14 @@ export function TurnChangeSetCard({
             <ChevronRight aria-hidden="true" className="size-3 transition-transform group-data-panel-open:rotate-90" />
           </CollapsibleTrigger>
           <CollapsibleContent className="border-t border-border/70">
-            {files.slice(maxVisibleFiles).map((file) => (
+            {entries.slice(maxVisibleFiles).map(({ repositoryId, file }) => (
               <FileChangeRow
-                key={`${file.oldPath ?? ""}:${file.path}`}
+                key={`${repositoryId}:${file.oldPath ?? ""}:${file.path}`}
                 file={file}
                 showCounts={totals.countsKnown}
                 onOpenFile={onOpenFile}
                 onReviewFile={onReviewFile ? () => onReviewFile(file.path) : undefined}
+                repository={showRepository ? repositoryId : undefined}
               />
             ))}
           </CollapsibleContent>
@@ -134,11 +146,14 @@ function FileChangeRow({
   showCounts,
   onOpenFile,
   onReviewFile,
+  repository,
 }: {
   file: FileChange;
   showCounts: boolean;
   onOpenFile?: (path: string) => void;
   onReviewFile?: () => void;
+  /** Shown only when the turn touched more than one repository. */
+  repository?: string;
 }) {
   const note = fileChangeNote(file);
   const label = fileChangeLabel(file);
@@ -167,6 +182,7 @@ function FileChangeRow({
         </button>
       ) : (
         <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-foreground/90" title={file.path}>
+          {repository ? <span className="text-muted-foreground/60">{repository}/</span> : null}
           {label}
         </span>
       )}

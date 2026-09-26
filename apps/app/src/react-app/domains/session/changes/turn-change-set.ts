@@ -166,6 +166,39 @@ export function changeSetFiles(changeSet: TurnChangeSet): FileChange[] {
   return changeSet.repositories.flatMap((repository) => repository.files);
 }
 
+/**
+ * Most significant first: by churn. A change set that is alphabetically sorted
+ * buries the file the turn actually worked on, and binaries (which have no line
+ * counts) sink to the end where they belong.
+ */
+export function sortFilesByChurn(files: readonly FileChange[]): FileChange[] {
+  return [...files].sort((left, right) => {
+    const leftChurn = left.additions + left.deletions;
+    const rightChurn = right.additions + right.deletions;
+    if (leftChurn !== rightChurn) return rightChurn - leftChurn;
+    return left.path.localeCompare(right.path);
+  });
+}
+
+export type RepositoryFiles = {
+  repositoryId: string;
+  root: string;
+  files: FileChange[];
+};
+
+/**
+ * Files stay grouped by repository. Two repositories can both contain
+ * `src/index.ts`, and flattening them into one list would silently merge two
+ * different files.
+ */
+export function changeSetByRepository(changeSet: TurnChangeSet): RepositoryFiles[] {
+  return changeSet.repositories.map((repository) => ({
+    repositoryId: repository.repositoryId,
+    root: repository.root,
+    files: sortFilesByChurn(repository.files),
+  }));
+}
+
 /** Files this turn is responsible for — the only ones Undo may invert. */
 export function attributedFiles(changeSet: TurnChangeSet): FileChange[] {
   return changeSetFiles(changeSet).filter((file) => file.attributedToTurn);
