@@ -43,7 +43,7 @@ function message(id: string, parts: UIMessage["parts"], phase?: "commentary" | "
 const text = (value: string) => ({ type: "text", text: value, state: "done" }) as UIMessage["parts"][number];
 
 describe("turn presentation", () => {
-  test("milestones and commentary stay visible in turn order; detail collapses", () => {
+  test("the whole narrative stays in the work block, in turn order; only the answer escapes", () => {
     // Ran a command → commentary → read/edit → commentary → command → answer.
     const items = [
       message("m1", [bash("c1")]),
@@ -56,10 +56,10 @@ describe("turn presentation", () => {
 
     const presentation = deriveTurnPresentation(items, true);
 
-    // Visible: two commentary rows and two aggregated milestones, in order.
-    // A command run, its commentary, then the edit run, its commentary, then the
-    // final command run — each run aggregates, each commentary interrupts.
-    expect(presentation.visible.map((entry) => entry.kind)).toEqual([
+    // One ordered narrative: a command run, its commentary, the edit run, its
+    // commentary, then the final command run. Each run aggregates; commentary
+    // interrupts a run rather than joining it.
+    expect(presentation.work.map((entry) => entry.kind)).toEqual([
       "milestone",
       "commentary",
       "milestone",
@@ -68,19 +68,20 @@ describe("turn presentation", () => {
     ]);
 
     // Consecutive tool events inside a run are aggregated, not one row each.
-    const firstMilestone = presentation.visible[0];
-    expect(firstMilestone?.kind === "milestone" && firstMilestone.milestone.parts).toHaveLength(1);
-    const secondMilestone = presentation.visible[2];
-    expect(secondMilestone?.kind === "milestone" && secondMilestone.milestone.parts).toHaveLength(1);
+    const firstMilestone = presentation.work[0];
+    expect(firstMilestone?.kind === "milestone" && firstMilestone.parts).toHaveLength(1);
+    const secondMilestone = presentation.work[2];
+    expect(secondMilestone?.kind === "milestone" && secondMilestone.parts).toHaveLength(1);
 
-    // Commentary never lands in the execution trail, and never answers the turn.
-    const trailIds = presentation.workItems.map((item) => item.message.id);
-    expect(trailIds).not.toContain("m2");
-    expect(trailIds).not.toContain("m4");
+    // Commentary is part of the narrative, at its own position in it.
+    const firstCommentary = presentation.work[1];
+    expect(firstCommentary?.kind === "commentary" && firstCommentary.item.message.id).toBe("m2");
+
+    // Commentary never answers the turn.
     expect(presentation.answerItems.map((item) => item.message.id)).toEqual(["m6"]);
   });
 
-  test("reasoning and non-aggregatable detail stay in the collapsed trail", () => {
+  test("reasoning and non-aggregatable detail are work, ordered with everything else", () => {
     const items = [
       message("m1", [{ type: "reasoning", text: "thinking about it", state: "done" }, text("Working on it.")]),
       message("m2", [text("Done.")], "final_answer"),
@@ -88,8 +89,9 @@ describe("turn presentation", () => {
 
     const presentation = deriveTurnPresentation(items, true);
 
-    expect(presentation.workItems.map((item) => item.message.id)).toEqual(["m1"]);
-    expect(presentation.visible).toEqual([]);
+    expect(presentation.work.map((entry) => entry.kind)).toEqual(["detail"]);
+    const detail = presentation.work[0];
+    expect(detail?.kind === "detail" && detail.item.message.id).toBe("m1");
     expect(presentation.answerItems.map((item) => item.message.id)).toEqual(["m2"]);
   });
 
@@ -103,8 +105,41 @@ describe("turn presentation", () => {
 
     const presentation = deriveTurnPresentation(items, true);
 
-    expect(presentation.visible).toHaveLength(1);
-    const milestone = presentation.visible[0];
-    expect(milestone?.kind === "milestone" && milestone.milestone.parts).toHaveLength(3);
+    expect(presentation.work).toHaveLength(1);
+    const milestone = presentation.work[0];
+    expect(milestone?.kind === "milestone" && milestone.parts).toHaveLength(3);
+    expect(presentation.answerItems.map((item) => item.message.id)).toEqual(["m4"]);
+  });
+
+  test("commentary, milestones and detail keep their chronology inside one block", () => {
+    // The sequence the regrouping exists for: commentary, tool, commentary, tool,
+    // reasoning, commentary, answer. None of it may become a transcript sibling.
+    const items = [
+      message("m1", [text("Let me inspect the shared layout first.")], "commentary"),
+      message("m2", [bash("c1")]),
+      message("m3", [text("The mismatch comes from the Settings wrapper.")], "commentary"),
+      message("m4", [edit("e1")]),
+      message("m5", [{ type: "reasoning", text: "checking the canvas", state: "done" }]),
+      message("m6", [text("The layout now matches. Running validation.")], "commentary"),
+      message("m7", [text("Done. Removed the shared background.")], "final_answer"),
+    ];
+
+    const presentation = deriveTurnPresentation(items, true);
+
+    expect(presentation.work.map((entry) => entry.kind)).toEqual([
+      "commentary",
+      "milestone",
+      "commentary",
+      "milestone",
+      "detail",
+      "commentary",
+    ]);
+    expect(presentation.answerItems.map((item) => item.message.id)).toEqual(["m7"]);
+
+    // Every intermediate message is inside the block, in order — nothing dropped.
+    const workIds = presentation.work.flatMap((entry) =>
+      entry.kind === "commentary" || entry.kind === "detail" ? [entry.item.message.id] : [],
+    );
+    expect(workIds).toEqual(["m1", "m3", "m5", "m6"]);
   });
 });

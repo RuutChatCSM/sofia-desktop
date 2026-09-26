@@ -130,8 +130,7 @@ import { collectLatestAssistantToolParts } from "@/lib/latest-assistant-tool-par
 import { getActiveToolLabel } from "@/lib/tool-activity"
 import { faviconUrlForHref } from "@/lib/favicon"
 import { cn } from "@/lib/utils"
-import { groupMessages, isMessageGroup, getLastTextPart, getAggregateOnlyParts, getAssistantRenderGroups, getFileTitle, getMediaBadge, getMessageCompleted, getMessageCreated, formatMessageTimestamp, splitTurnAtAnswer, type UIMessageWithIndex, getMessagesText, getSafeFileDownloadUrl, getSafeFileRevealPath } from "./utils"
-import type { AnyToolPart } from "@/lib/tool-aggregate"
+import { groupMessages, isMessageGroup, getLastTextPart, getAssistantRenderGroups, getFileTitle, getMediaBadge, getMessageCompleted, getMessageCreated, formatMessageTimestamp, splitTurnAtAnswer, type UIMessageWithIndex, getMessagesText, getSafeFileDownloadUrl, getSafeFileRevealPath } from "./utils"
 
 const SEARCH_HIGHLIGHT_MARK_CLASS = "rounded px-0.5 bg-amber-4/70 text-current"
 
@@ -919,9 +918,13 @@ function getRenderableMessage(message: UIMessage) {
  * subagent runs — and those are transport boundaries, not UX boundaries.
  * Rendering each one as its own row made a long turn explode vertically
  * ("Thought, Thought, Thought…"). The whole turn is therefore one collapsible
- * object: collapsed while it works *and* after it finishes, so the transcript
- * stays a record of outcomes. While the work is live the header is the
- * semantic Activity title; once finished it becomes the duration summary.
+ * object holding its entire narrative: commentary, aggregated tool milestones,
+ * and tool/reasoning detail, in the order they happened.
+ *
+ * Open while the turn runs, because then the work *is* the transcript. When the
+ * final answer arrives the same block becomes "Worked for …" and collapses, so
+ * the transcript settles into a record of outcomes; expanding it restores the
+ * narrative exactly as it streamed.
  */
 function TurnWorkBlock({
   label,
@@ -939,6 +942,13 @@ function TurnWorkBlock({
   children: React.ReactNode
 }) {
   const [open, setOpen] = React.useState(defaultOpen)
+  // Follow the turn's lifecycle rather than only its first render: `active` flips
+  // when the answer lands, which is exactly when the trail should fold away. A
+  // manual toggle in between survives, because `defaultOpen` does not change again
+  // until the turn's own state does.
+  React.useEffect(() => {
+    setOpen(defaultOpen)
+  }, [defaultOpen])
 
   return (
     <Collapsible open={open} onOpenChange={setOpen} className="flex w-full flex-col gap-2">
@@ -1103,12 +1113,11 @@ function MessageGroup({
   const mcpAppParts = collectMcpAppParts(items)
 
   // Sofia emits narration, reasoning, and tool calls as separate items.
-  // Fold all activity before the final answer, including progress prose.
-  // How the turn reads: the execution trail stays collapsed, aggregated tool
-  // milestones and `phase: "commentary"` progress prose stay visible, and the
-  // answer ends it. See turn-presentation.ts.
+  // Every one of those is the turn's work, including `phase: "commentary"`
+  // progress prose, and all of it lives inside the one work disclosure. Only the
+  // answer escapes it. See turn-presentation.ts.
   const presentation = deriveTurnPresentation(items, showThinking)
-  let stepItems = presentation.workItems
+  let workItems = presentation.work
   let proseItems = presentation.answerItems
   // The engine can also deliver a whole turn as one assistant message with the
   // steps and the answer interleaved in its parts. Split that first prose
@@ -1118,7 +1127,10 @@ function MessageGroup({
   if (firstProse && firstProse.message.role === "assistant" && !isSessionErrorMessage(firstProse.message)) {
     const split = splitTurnAtAnswer(firstProse.message)
     if (split) {
-      stepItems = [...stepItems, { index: firstProse.index, message: split.steps }]
+      workItems = [
+        ...workItems,
+        { kind: "detail", key: `detail-${split.steps.id}`, item: { index: firstProse.index, message: split.steps } },
+      ]
       proseItems = [{ index: firstProse.index, message: split.answer }, ...proseItems.slice(1)]
     }
   }
@@ -1150,8 +1162,13 @@ function MessageGroup({
   })
   // A finished turn keeps its execution disclosure even when everything it did
   // was talk: "Worked for 1m 30s" is what tells the user how long the turn took,
-  // and reading it above the visible progress prose is the point.
-  const hasWork = stepItems.length > 0 || Boolean(reasoningText) || durationMs !== null
+  // and reading it above the answer is the point.
+  const hasWork = workItems.length > 0 || Boolean(reasoningText) || durationMs !== null
+  // The one case that must not fold away: a turn that produced commentary and no
+  // answer. Collapsing it would hide the only thing Sofia said to the user, which
+  // is the bug the ChatGPT reports describe.
+  const commentaryOnly =
+    proseItems.length === 0 && workItems.some((entry) => entry.kind === "commentary")
 
   const renderItem = (item: UIMessageWithIndex, groupIndex: number, hideReasoning?: boolean) => {
     const isLastMessage = item.index === messages.length - 1
@@ -1169,42 +1186,39 @@ function MessageGroup({
     )
   }
 
-  // Consecutive step messages that contain nothing but command/edit/read/
-  // search tool calls merge into one aggregate line (Paper "Recurring
-  // actions"); any prose, reasoning, or other tool breaks the run.
-  const renderItems = (slice: UIMessageWithIndex[], offset: number, hideReasoning?: boolean) => {
-    const nodes: React.ReactNode[] = []
-    let run: { parts: AnyToolPart[]; key: string } | null = null
-    const flush = () => {
-      if (!run) return
-      nodes.push(
-        <div key={`aggregate-${run.key}`}>
+  // The narrative, rendered in the order it happened. Aggregation happened when
+  // the presentation was derived, so this only has to place each entry — and a
+  // milestone is already one row for a whole run of tool events.
+  const renderWorkEntry = (entry: (typeof workItems)[number], position: number) => {
+    if (entry.kind === "commentary") {
+      return (
+        <div key={entry.key}>
+          <MessageComponent
+            message={entry.item.message}
+            isLastMessage={false}
+            isStreaming={false}
+            isLastStep={false}
+            hideReasoning
+          />
+        </div>
+      )
+    }
+    if (entry.kind === "milestone") {
+      return (
+        <div key={entry.key}>
           <Message className="mx-auto flex w-full max-w-[800px] flex-col items-start gap-2 px-2 md:px-6">
-            <ToolAggregateGroup parts={run.parts} className="w-full" />
+            <ToolAggregateGroup parts={entry.parts} className="w-full" />
           </Message>
         </div>
       )
-      run = null
     }
-    slice.forEach((item, sliceIndex) => {
-      const aggregateParts =
-        item.message.role === "assistant" && !isSessionErrorMessage(item.message)
-          ? getAggregateOnlyParts(item.message, showThinking)
-          : null
-      if (aggregateParts) {
-        if (!run) run = { parts: [], key: item.message.id }
-        run.parts.push(...aggregateParts)
-        return
-      }
-      flush()
-      nodes.push(renderItem(item, offset + sliceIndex, hideReasoning))
-    })
-    flush()
-    return nodes
+    return renderItem(entry.item, position, true)
   }
 
   return (
-      <div className="flex flex-col gap-2 group/message-group">
+      // One outer grouping per assistant turn: the work disclosure plus the answer
+      // it produced. Nothing about the turn's interior becomes a transcript sibling.
+      <div data-assistant-turn="" className="flex flex-col gap-2 group/message-group">
       {/* The scroll area keeps the same 8px rhythm the parts inside a single
           message use, so a step row is spaced identically whether or not a
           message boundary happens to fall between it and the previous row. */}
@@ -1218,39 +1232,24 @@ function MessageGroup({
             active={isLiveGroup}
             streaming={isLiveGroup && isStreaming}
             elapsedMs={liveElapsedMs}
-            defaultOpen={developerMode}
+            // Open while it works, and in the one case that must not hide its
+            // only user-facing prose. Developer mode keeps historical trails open.
+            defaultOpen={isLiveGroup || commentaryOnly || developerMode}
           >
-            <div className="flex flex-col gap-2">
+            {/* The disclosure owns the internal rhythm: whole-narrative rows sit
+                closer together than transcript messages do, because they are not
+                messages. */}
+            <div className="flex flex-col gap-3">
               {reasoningText ? (
                 <Message className="mx-auto flex w-full max-w-[800px] flex-col items-start gap-2 px-2 md:px-6">
                   <ReasoningBlock text={reasoningText} isStreaming={reasoningStreaming} />
                 </Message>
               ) : null}
-              {renderItems(stepItems, 0, true)}
+              {workItems.map(renderWorkEntry)}
             </div>
           </TurnWorkBlock>
         </div>
       ) : null}
-      {/* Visible milestones and progress prose, in turn order. */}
-      {presentation.visible.map((entry) =>
-        entry.kind === "commentary" ? (
-          <div key={entry.key}>
-            <MessageComponent
-              message={entry.item.message}
-              isLastMessage={false}
-              isStreaming={false}
-              isLastStep={false}
-              hideReasoning
-            />
-          </div>
-        ) : (
-          <div key={entry.key}>
-            <Message className="mx-auto flex w-full max-w-[800px] flex-col items-start gap-2 px-2 md:px-6">
-              <ToolAggregateGroup parts={entry.milestone.parts} className="w-full" />
-            </Message>
-          </div>
-        ),
-      )}
       {mcpAppParts.map((part) => (
         <Message
           key={`mcp-app-${part.toolCallId}`}
@@ -1259,7 +1258,8 @@ function MessageGroup({
           <McpAppFrame part={part} />
         </Message>
       ))}
-      {renderItems(proseItems, stepItems.length, true)}
+      {/* The answer is the one row that escapes the disclosure. */}
+      {proseItems.map((item, position) => renderItem(item, position, true))}
       {/* The turn's result: one summary card for this turn's change set. */}
       {changeSet ? (
         <div className="mx-auto w-full max-w-[800px] px-2 md:px-6">

@@ -53,8 +53,14 @@ test("an assistant turn renders as a single work block", () => {
   // The per-item fold label and the separate completed-run component are gone.
   expect(source).not.toContain("CompletedStepRun");
   expect(source).not.toContain("COLLAPSED_STEP_RUN_MIN_ROWS");
-  // Reasoning is owned by the block, so prose messages never re-render it.
-  expect(source).toContain("renderItems(proseItems, stepItems.length, true)");
+  // The block owns the whole turn: commentary, milestones and detail all render
+  // inside the disclosure, and only the answer is rendered outside it.
+  expect(source).toContain("{workItems.map(renderWorkEntry)}");
+  expect(source).toContain("{proseItems.map((item, position) => renderItem(item, position, true))}");
+  // The old shape — milestones and progress prose as sibling transcript rows — is
+  // gone, which is the whole point: they were never transcript items.
+  expect(source).not.toContain("presentation.visible.map");
+  expect(source).not.toContain("stepItems");
 
   // One clock for the whole logical turn: never derived from the reasoning/tool
   // subset, or a prose-only / continued turn loses its duration.

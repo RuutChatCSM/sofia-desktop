@@ -104,6 +104,7 @@ describe("progress narration belongs to the work, not the transcript", () => {
 
   test("pre-answer narration folds into the block; the answer stays outside", () => {
     const markup = renderList([userMessage, ...continuationTurn], "ready");
+    const expanded = renderList([userMessage, ...continuationTurn], "ready", true);
 
     // One turn, one work unit.
     expect((markup.match(/data-turn-work-header/g) ?? []).length).toBe(1);
@@ -113,9 +114,10 @@ describe("progress narration belongs to the work, not the transcript", () => {
     // An earlier `final_answer` followed by more work is not this turn's answer,
     // so it stays inside the work block...
     expect(markup).not.toContain("Let me find the evaluator banner");
-    // ...while `commentary` is a visible channel: progress narration the user is
-    // meant to read while Sofia works.
-    expect(markup).toContain("Now the core change");
+    // ...and so does `commentary`: it is progress narration the user reads while
+    // Sofia works, which means it belongs to the block and folds away with it.
+    expect(markup).not.toContain("Now the core change");
+    expect(expanded).toContain("Now the core change");
     expect(markup).not.toContain("Sofia is working…");
   });
 
@@ -144,9 +146,10 @@ describe("progress narration belongs to the work, not the transcript", () => {
     expect(markup).toContain("Worked for 1m 30s");
     expect(markup).not.toContain("Worked<");
     expect(markup).toContain("The clock now belongs to the whole turn.");
-    // The block has nothing to disclose here (no tools, no reasoning) but the
-    // turn still reports its duration, and its commentary stays visible.
-    expect(markup).toContain("Let me check the timing path");
+    // The block has no tool or reasoning detail here, but the turn still reports
+    // its duration, and its narration is inside the disclosure with it.
+    expect(markup).not.toContain("Let me check the timing path");
+    expect(renderList([userMessage, ...proseOnly], "ready", true)).toContain("Let me check the timing path");
   });
 
   test("the narration is preserved inside the block, not dropped", () => {
@@ -177,7 +180,7 @@ describe("progress narration belongs to the work, not the transcript", () => {
 });
 
 describe("one work unit per turn", () => {
-  test("a live turn is one collapsed block headed by the semantic activity", () => {
+  test("a live turn is one open block headed by the semantic activity", () => {
     const assistant: UIMessage = {
       id: "assistant-1",
       role: "assistant",
@@ -194,7 +197,7 @@ describe("one work unit per turn", () => {
     expect(markup).toContain('data-turn-work-header="active"');
     expect(markup).toContain("Running the app tests");
     expect(markup).toContain("1m 24s");
-    // Collapsed while live: reasoning is inspectable, not 6 stacked "Thought" rows.
+    // Reasoning stays in the block: never 6 stacked "Thought" rows of its own.
     expect(markup).not.toContain("Thought");
     // The generic fallback never coexists with a work block.
     expect(markup).not.toContain("Sofia is working…");
