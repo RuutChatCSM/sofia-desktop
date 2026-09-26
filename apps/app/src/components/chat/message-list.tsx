@@ -52,7 +52,8 @@ import { useArtifacts, useOpenArtifactPath } from "@/lib/artifacts"
 import { changeSetFromToolHints } from "@/react-app/domains/session/changes/change-set-from-messages"
 import { TurnChangeSetCard } from "@/react-app/domains/session/changes/turn-change-set-card"
 import { selectTurnChangeSet, useChangeSetStore } from "@/react-app/domains/session/changes/change-set-store"
-import { messagePhase, messageTurnId, turnAnswerIndex } from "@/components/chat/turn-structure"
+import { messageTurnId, turnAnswerIndex } from "@/components/chat/turn-structure"
+import { deriveTurnPresentation } from "@/components/chat/turn-presentation"
 import { liveActivityLabel } from "@/react-app/domains/session/activity"
 import {
   finishedTurnDurationMs,
@@ -1081,24 +1082,12 @@ function MessageGroup({
 
   // Sofia emits narration, reasoning, and tool calls as separate items.
   // Fold all activity before the final answer, including progress prose.
-  // Progress narration is a *channel*, not execution detail. The protocol marks
-  // it `phase: "commentary"` because it is written to be read while Sofia works;
-  // folding it into the collapsed work block turned a working session into
-  // silence followed by a result. Reasoning and tool execution stay in the block.
-  const isCommentaryItem = (item: UIMessageWithIndex) =>
-    item.message.role === "assistant"
-    && !isSessionErrorMessage(item.message)
-    && messagePhase(item.message) === "commentary"
-  const commentaryItems = items.filter(isCommentaryItem)
-  const workItems = items.filter((item) => !isCommentaryItem(item))
-
-  const answerIndex = turnAnswerIndex(workItems.map((item) => item.message))
-  let stepItems = answerIndex >= 0 ? workItems.slice(0, answerIndex) : workItems
-  let proseItems = answerIndex >= 0 ? workItems.slice(answerIndex) : []
-  if (commentaryItems.length > 0) {
-    // Visible progress prose keeps its place in the turn, before the answer.
-    proseItems = [...commentaryItems, ...proseItems].sort((left, right) => left.index - right.index)
-  }
+  // How the turn reads: the execution trail stays collapsed, aggregated tool
+  // milestones and `phase: "commentary"` progress prose stay visible, and the
+  // answer ends it. See turn-presentation.ts.
+  const presentation = deriveTurnPresentation(items, showThinking)
+  let stepItems = presentation.workItems
+  let proseItems = presentation.answerItems
   // The engine can also deliver a whole turn as one assistant message with the
   // steps and the answer interleaved in its parts. Split that first prose
   // message so its leading steps fold with the rest instead of pinning the run
@@ -1115,7 +1104,7 @@ function MessageGroup({
   // Reasoning is work, not an answer. Every reasoning group in the turn merges
   // into one block, so a turn that arrived as six reasoning items reads as one
   // expandable section instead of six stacked rows.
-  const turnReasoning = [...stepItems, ...proseItems].flatMap((item) =>
+  const turnReasoning = items.flatMap((item) =>
     item.message.role === "assistant" && !isSessionErrorMessage(item.message)
       ? getAssistantRenderGroups(item.message.parts, showThinking).flatMap((group, groupIndex) =>
         group.kind === "reasoning"
@@ -1220,6 +1209,26 @@ function MessageGroup({
           </TurnWorkBlock>
         </div>
       ) : null}
+      {/* Visible milestones and progress prose, in turn order. */}
+      {presentation.visible.map((entry) =>
+        entry.kind === "commentary" ? (
+          <div key={entry.key}>
+            <MessageComponent
+              message={entry.item.message}
+              isLastMessage={false}
+              isStreaming={false}
+              isLastStep={false}
+              hideReasoning
+            />
+          </div>
+        ) : (
+          <div key={entry.key}>
+            <Message className="mx-auto flex w-full max-w-[800px] flex-col items-start gap-2 px-2 md:px-6">
+              <ToolAggregateGroup parts={entry.milestone.parts} className="w-full" />
+            </Message>
+          </div>
+        ),
+      )}
       {mcpAppParts.map((part) => (
         <Message
           key={`mcp-app-${part.toolCallId}`}
