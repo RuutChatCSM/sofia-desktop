@@ -147,7 +147,15 @@ function SidePanelTab({ tab, active, onSelect, onClose }: SidePanelTabProps) {
  * session's resizable split, so code has room: the file list, the side-by-side
  * diff, and (later) hunk actions and inline comments all live here.
  */
-function ChangesPanel({ sessionId, changeSetId }: { sessionId: string; changeSetId: string }) {
+function ChangesPanel({
+  sessionId,
+  changeSetId,
+  filePath,
+}: {
+  sessionId: string;
+  changeSetId: string;
+  filePath?: string;
+}) {
   const changeSet = useChangeSetStore((state) => state.byId[changeSetId] ?? null);
   const [scope, setScope] = React.useState<ReviewScope>("last-turn");
   const [repositoryFiles, setRepositoryFiles] = React.useState<FileChange[] | null>(null);
@@ -175,6 +183,7 @@ function ChangesPanel({ sessionId, changeSetId }: { sessionId: string; changeSet
         changeSet={changeSet}
         repositoryFiles={repositoryFiles}
         loading={loading}
+        initialPath={filePath}
       />
     </div>
   );
@@ -447,7 +456,11 @@ export function SidePanel({
         {activeTab?.type === "browser" ? (
           <BrowserView sessionId={sessionId} tab={activeTab} onClose={onClose} />
         ) : activeTab?.type === "changes" ? (
-          <ChangesPanel sessionId={sessionId} changeSetId={activeTab.changeSetId} />
+          <ChangesPanel
+            sessionId={sessionId}
+            changeSetId={activeTab.changeSetId}
+            filePath={activeTab.filePath}
+          />
         ) : activeTab?.type === "artifact" ? (
           <div className="min-h-0 flex-1 overflow-hidden">
             <ArtifactPanel

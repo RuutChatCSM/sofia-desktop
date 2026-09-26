@@ -1,11 +1,12 @@
 /** @jsxImportSource react */
 import * as React from "react";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, FileDiff } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
 import {
+  type ChangeStatus,
   changeSetFiles,
   changeSetTitle,
   changeSetTotals,
@@ -28,12 +29,15 @@ const DEFAULT_VISIBLE_FILES = 3;
 export function TurnChangeSetCard({
   changeSet,
   onReview,
+  onReviewFile,
   onUndo,
   onOpenFile,
   maxVisibleFiles = DEFAULT_VISIBLE_FILES,
 }: {
   changeSet: TurnChangeSet;
   onReview?: (changeSetId: string) => void;
+  /** Open the review pane on a specific file (a row click). */
+  onReviewFile?: (path: string) => void;
   onUndo?: (changeSetId: string) => void;
   /** Opens the file (preview/editor) — the job the old FILES chips did. */
   onOpenFile?: (path: string) => void;
@@ -53,6 +57,9 @@ export function TurnChangeSetCard({
       className="my-2 w-full overflow-hidden rounded-xl border border-border/70 bg-muted/30"
     >
       <div className="flex items-center gap-3 px-3 py-2">
+        <span className="flex size-7 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-background/60">
+          <FileDiff className="size-3.5 text-muted-foreground" aria-hidden="true" />
+        </span>
         <div className="min-w-0 flex-1">
           <div className="truncate text-[13px] font-medium text-foreground">{changeSetTitle(changeSet)}</div>
           {totals.countsKnown ? (
@@ -63,7 +70,7 @@ export function TurnChangeSetCard({
           ) : (
             // Absent counts must not read as "no changes": a hint-sourced set
             // knows which files were touched and nothing about their size.
-            <div data-changeset-unmeasured className="mt-0.5 text-[11px] text-muted-foreground/70">
+            <div data-changeset-unmeasured className="mt-0.5 text-[10px] text-muted-foreground/60">
               Change size not measured
             </div>
           )}
@@ -86,6 +93,7 @@ export function TurnChangeSetCard({
             file={file}
             showCounts={totals.countsKnown}
             onOpenFile={onOpenFile}
+            onReviewFile={onReviewFile ? () => onReviewFile(file.path) : undefined}
           />
         ))}
       </div>
@@ -102,6 +110,7 @@ export function TurnChangeSetCard({
                 file={file}
                 showCounts={totals.countsKnown}
                 onOpenFile={onOpenFile}
+                onReviewFile={onReviewFile ? () => onReviewFile(file.path) : undefined}
               />
             ))}
           </CollapsibleContent>
@@ -111,23 +120,46 @@ export function TurnChangeSetCard({
   );
 }
 
+/** `+` added, `−` removed, `→` renamed, `~` changed, `▣` binary — as in a diff stat. */
+function statusMarker(status: ChangeStatus): string {
+  if (status === "added") return "+";
+  if (status === "deleted") return "−";
+  if (status === "renamed") return "→";
+  if (status === "binary") return "▣";
+  return "~";
+}
+
 function FileChangeRow({
   file,
   showCounts,
   onOpenFile,
+  onReviewFile,
 }: {
   file: FileChange;
   showCounts: boolean;
   onOpenFile?: (path: string) => void;
+  onReviewFile?: () => void;
 }) {
   const note = fileChangeNote(file);
   const label = fileChangeLabel(file);
   return (
-    <div data-file-change={file.path} className="flex items-center gap-3 px-3 py-1.5">
-      {onOpenFile ? (
+    <div data-file-change={file.path} className="flex items-center gap-3 px-3 py-1">
+      <span
+        aria-hidden="true"
+        className={cn(
+          "w-3 shrink-0 text-center font-mono text-[10px]",
+          file.status === "added" && "text-emerald-11",
+          file.status === "deleted" && "text-red-11",
+          file.status === "renamed" && "text-amber-11",
+          (file.status === "modified" || file.status === "binary") && "text-muted-foreground/70",
+        )}
+      >
+        {statusMarker(file.status)}
+      </span>
+      {onReviewFile || onOpenFile ? (
         <button
           type="button"
-          onClick={() => onOpenFile(file.path)}
+          onClick={() => (onReviewFile ? onReviewFile() : onOpenFile?.(file.path))}
           title={file.path}
           className="min-w-0 flex-1 cursor-pointer truncate text-left font-mono text-[11px] text-foreground/90 transition-colors hover:text-foreground"
         >

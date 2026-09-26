@@ -95,6 +95,8 @@ export type ReviewPaneProps = {
   repositoryFiles?: FileChange[] | null;
   loading?: boolean;
   onOpenFile?: (path: string) => void;
+  /** File to select when the pane opens (from a card row click). */
+  initialPath?: string;
 };
 
 export function ReviewPane({
@@ -104,12 +106,19 @@ export function ReviewPane({
   repositoryFiles,
   loading = false,
   onOpenFile,
+  initialPath,
 }: ReviewPaneProps) {
   const files = React.useMemo(
     () => (scope === "last-turn" ? (changeSet ? changeSetFiles(changeSet) : []) : (repositoryFiles ?? [])),
     [changeSet, repositoryFiles, scope],
   );
-  const [selectedPath, setSelectedPath] = React.useState<string | null>(null);
+  const [selectedPath, setSelectedPath] = React.useState<string | null>(initialPath ?? null);
+
+  // Opening the pane from a file row selects that file; a later row click on the
+  // same open tab moves the selection instead of reopening anything.
+  React.useEffect(() => {
+    if (initialPath) setSelectedPath(initialPath);
+  }, [initialPath]);
 
   // Keep a valid selection as the scope's file list changes.
   const selected = files.find((file) => file.path === selectedPath) ?? files[0] ?? null;

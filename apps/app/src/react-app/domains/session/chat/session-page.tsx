@@ -730,6 +730,15 @@ export function SessionPage(props: SessionPageProps) {
       toggleCurrentSidePanel("panel");
     }
   }, [artifactFileTargets, hasArtifactTargets, openTab, panelRailActive, props.selectedSessionId, selectTab, sessionPanelState, setCurrentSidePanel, toggleCurrentSidePanel]);
+  // A review tab is opened from the transcript's change card, and the rail owns
+  // visibility — without this the tab lands in a hidden panel and "Review" looks
+  // like it did nothing.
+  useEffect(() => {
+    if (panelRailActive) return;
+    const active = sessionPanelState.tabs.find((tab) => tab.id === sessionPanelState.activeTabId);
+    if (active?.type !== "changes") return;
+    toggleCurrentSidePanel("panel");
+  }, [panelRailActive, sessionPanelState.activeTabId, sessionPanelState.tabs, toggleCurrentSidePanel]);
   const openVoiceRailPane = useCallback(() => {
     toggleCurrentSidePanel("voice");
   }, [toggleCurrentSidePanel]);

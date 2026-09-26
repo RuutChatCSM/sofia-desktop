@@ -51,6 +51,8 @@ export type ChangesPanelTab = {
   type: "changes";
   label: string;
   changeSetId: string;
+  /** The file to select when the pane opens (a row click, not just Review). */
+  filePath?: string;
 };
 
 export type PanelTab = BrowserPanelTab | ArtifactPanelTab | ChangesPanelTab;

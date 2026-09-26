@@ -1251,6 +1251,15 @@ function MessageGroup({
         <div className="mx-auto w-full max-w-[800px] px-2 md:px-6">
           <TurnChangeSetCard
             changeSet={changeSet}
+            onReviewFile={(path) =>
+              usePanelTabStore.getState().openTab(sessionId, {
+                id: `changes:${changeSet.id}`,
+                type: "changes",
+                label: "Changes",
+                changeSetId: changeSet.id,
+                filePath: path,
+              })
+            }
             onOpenFile={openArtifactPath}
             onReview={(changeSetId) =>
               usePanelTabStore.getState().openTab(sessionId, {
