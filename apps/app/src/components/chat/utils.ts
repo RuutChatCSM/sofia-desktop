@@ -103,19 +103,37 @@ function getMessageWorkspaceEngineMetadata(message: UIMessage): object | null {
   return engine && typeof engine === "object" ? engine : null
 }
 
+function getMessageLocalMetadata(message: UIMessage): object | null {
+  const metadata: unknown = message.metadata
+  if (!metadata || typeof metadata !== "object" || !("local" in metadata)) return null
+
+  const local: unknown = metadata.local
+  return local && typeof local === "object" ? local : null
+}
+
 export function getMessageCreated(message: UIMessage): number | null {
   const engine = getMessageWorkspaceEngineMetadata(message)
-  if (!engine || !("created" in engine)) return null
-  const created: unknown = engine.created
-  return typeof created === "number" ? created : null
+  if (engine && "created" in engine) {
+    const created: unknown = engine.created
+    if (typeof created === "number") return created
+  }
+  const local = getMessageLocalMetadata(message)
+  if (!local || !("createdAt" in local)) return null
+  const createdAt: unknown = local.createdAt
+  return typeof createdAt === "number" ? createdAt : null
 }
 
 /** When the assistant finished the turn (server timestamp), if known. */
 export function getMessageCompleted(message: UIMessage): number | null {
   const engine = getMessageWorkspaceEngineMetadata(message)
-  if (!engine || !("completed" in engine)) return null
-  const completed: unknown = engine.completed
-  return typeof completed === "number" ? completed : null
+  if (engine && "completed" in engine) {
+    const completed: unknown = engine.completed
+    if (typeof completed === "number") return completed
+  }
+  const local = getMessageLocalMetadata(message)
+  if (!local || !("completedAt" in local)) return null
+  const completedAt: unknown = local.completedAt
+  return typeof completedAt === "number" ? completedAt : null
 }
 
 export function formatMessageTimestamp(timestampMs: number): string {

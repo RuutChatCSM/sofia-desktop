@@ -96,6 +96,13 @@ export type CodexTrackedItem = {
   id: string;
   type: string;
   turnId: string;      // groups items of one user exchange into a single turn
+  /**
+   * UI-recorded clock for this item. Engine items carry no `created`/`completed`
+   * on the codex wire, so without these a turn had to be timed from a session
+   * clock that reset on every new item — a long turn reported as "Worked for 2s".
+   */
+  createdAt?: number;
+  completedAt?: number;
   item: Record<string, unknown>;
   text: string;        // accumulated agentMessage/command output
   thinking: string;    // accumulated reasoning
@@ -106,19 +113,9 @@ export type CodexTrackedItem = {
   errorPresentation?: WorkspaceEngineSessionErrorPresentation;
 };
 
-/** UI-originated turn timing: engine item metadata can be thin (or missing on a
- * replayed/continued turn), so a locally started turn records its own clock and
- * the renderer reconciles the two. Keyed by session, reset only on a *user*
- * send — a server-side continuation keeps the same logical turn. */
-export type SessionTurnTiming = {
-  startedAt: number;
-  completedAt?: number;
-};
-
 export type CodexSessionEntry = {
   warning?: string;
   session: CodexSession;
-  turnTiming?: SessionTurnTiming;
   messages: CodexTranscriptMessage[];
   items: CodexTrackedItem[];
   /** Unified-exec background processes the server tracks for this session. */
@@ -196,9 +193,10 @@ export const useCodexSessionStore = create<CodexSessionStore>((set, get) => ({
       const entry = state.sessions[sessionId];
       if (!entry) return state;
       const existing = entry.items.find((i) => i.id === item.id);
+      const now = Date.now();
       const items = existing
-        ? entry.items.map((i) => (i.id === item.id ? { ...i, ...item, text: i.text || item.text, thinking: i.thinking || item.thinking, output: i.output || item.output } : i))
-        : [...entry.items, item];
+        ? entry.items.map((i) => (i.id === item.id ? { ...i, ...item, createdAt: i.createdAt ?? now, text: i.text || item.text, thinking: i.thinking || item.thinking, output: i.output || item.output } : i))
+        : [...entry.items, { ...item, createdAt: item.createdAt ?? now }];
       return { sessions: { ...state.sessions, [sessionId]: { ...entry, items } } };
     }),
 
@@ -222,8 +220,9 @@ export const useCodexSessionStore = create<CodexSessionStore>((set, get) => ({
     set((state) => {
       const entry = state.sessions[sessionId];
       if (!entry) return state;
+      const now = Date.now();
       const items = entry.items.map((i) => i.id === itemId
-        ? { ...i, item, status: item.status === "failed" ? "error" as const : "done" as const, text: typeof item.text === "string" ? item.text : i.text }
+        ? { ...i, item, createdAt: i.createdAt ?? now, completedAt: now, status: item.status === "failed" ? "error" as const : "done" as const, text: typeof item.text === "string" ? item.text : i.text }
         : i);
       return { sessions: { ...state.sessions, [sessionId]: { ...entry, items } } };
     }),
@@ -303,17 +302,7 @@ export const useCodexSessionStore = create<CodexSessionStore>((set, get) => ({
         messages[messages.length - 1] = { ...last, status: "pending" };
       }
       return {
-        sessions: {
-          ...state.sessions,
-          [sessionId]: {
-            ...entry,
-            session: { ...entry.session, status: "running" },
-            messages,
-            // A user send starts a new logical turn; a server-side continuation
-            // never comes through here, so the clock does not restart mid-turn.
-            turnTiming: { startedAt: Date.now() },
-          },
-        },
+        sessions: { ...state.sessions, [sessionId]: { ...entry, session: { ...entry.session, status: "running" }, messages } },
       };
     }),
 
@@ -325,18 +314,8 @@ export const useCodexSessionStore = create<CodexSessionStore>((set, get) => ({
         index === entry.messages.length - 1 && message.role === "assistant" ? { ...message, status: "done" as const } : message,
       );
       const items = entry.items.map((item) => item.status === "pending" ? { ...item, status: "done" as const } : item);
-      const startedAt = entry.turnTiming?.startedAt ?? Date.now();
       return {
-        sessions: {
-          ...state.sessions,
-          [sessionId]: {
-            ...entry,
-            session: { ...entry.session, status: "idle" },
-            messages,
-            items,
-            turnTiming: { startedAt, completedAt: Date.now() },
-          },
-        },
+        sessions: { ...state.sessions, [sessionId]: { ...entry, session: { ...entry.session, status: "idle" }, messages, items } },
       };
     }),
 
@@ -634,11 +613,6 @@ export function backgroundProcessFailureTitle(process: BackgroundProcess): strin
   return typeof process.exitCode === "number"
     ? `${label} exited with code ${process.exitCode}`
     : `${label} failed`;
-}
-
-/** Locally recorded timing for the session's current (or last) turn. */
-export function useSessionTurnTiming(sessionId: string): SessionTurnTiming | undefined {
-  return useCodexSessionStore((state) => state.sessions[sessionId]?.turnTiming);
 }
 
 export function useBackgroundProcesses(sessionId: string): BackgroundProcess[] {

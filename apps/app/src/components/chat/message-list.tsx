@@ -50,12 +50,10 @@ import { WebfetchTool } from "@/components/tools/webfetch"
 import { WebsearchTool } from "@/components/tools/websearch"
 import { useMessageList, useSessionErrorMessage } from "@/components/chat/message-list-provider"
 import { liveActivityLabel } from "@/react-app/domains/session/activity"
-import { useSessionTurnTiming } from "@/react-app/domains/session/codex-session-store"
 import {
   finishedTurnDurationMs,
   resolveTurnTiming,
   turnWorkLabel,
-  type LocalTurnTiming,
 } from "@/components/chat/turn-timing"
 import { useSessionActivities } from "@/react-app/domains/session/use-session-activities"
 import { ArtifactList } from "@/components/chat/artifact"
@@ -1002,8 +1000,6 @@ interface AssistantMessageGroupProps {
   isStreaming: boolean
   /** Semantic Activity title for the live turn, e.g. "Running the app tests". */
   activeLabel?: string | null
-  /** UI-recorded turn clock, used when engine item metadata is thin. */
-  localTurnTiming?: LocalTurnTiming
 }
 
 function collectMcpAppParts(items: UIMessageWithIndex[]): DynamicToolUIPart[] {
@@ -1028,7 +1024,6 @@ function MessageGroup({
   messages,
   isStreaming,
   activeLabel,
-  localTurnTiming,
 }: AssistantMessageGroupProps) {
   const { onRevertToUserMessage, onForkAtMessage, showThinking, developerMode } = useMessageList()
   const lastItem = items[items.length - 1]
@@ -1040,7 +1035,7 @@ function MessageGroup({
   // Timing belongs to the whole logical turn — narration, an earlier premature
   // answer, resumed work and the trailing answer all count (see turn-timing.ts).
   // The ticking clock is a hook, so it must run before the early return below.
-  const timing = resolveTurnTiming(items.map((item) => item.message), localTurnTiming)
+  const timing = resolveTurnTiming(items.map((item) => item.message))
   const liveElapsedMs = useLiveElapsed(timing.startedAt, isLiveGroup)
 
   if (!lastItem || isMessageEmptyGroup(items)) {
@@ -1237,7 +1232,6 @@ export function shouldShowMessageListLoading(status: ThreadStatus, messageCount:
 
 export function MessageList({ messages, status, retryStatus }: MessageListProps) {
   const { sessionId, showThinking } = useMessageList()
-  const localTurnTiming = useSessionTurnTiming(sessionId)
   const isStreaming = status === "streaming" || status === "retrying"
   const showLoading = shouldShowMessageListLoading(status, messages.length)
   const items = React.useMemo(() => groupMessages(messages, status), [messages, status]);
@@ -1272,7 +1266,6 @@ export function MessageList({ messages, status, retryStatus }: MessageListProps)
               messages={messages}
               isStreaming={isStreaming}
               activeLabel={liveActionLabel}
-              localTurnTiming={localTurnTiming}
             />
           )
         }

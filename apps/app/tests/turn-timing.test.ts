@@ -7,6 +7,11 @@ import {
   turnWorkLabel,
 } from "../src/components/chat/turn-timing";
 import { formatToolCallDuration } from "../src/lib/tool-call-duration";
+import { getMessageCompleted, getMessageCreated } from "../src/components/chat/utils";
+import {
+  useCodexSessionStore,
+  type CodexTrackedItem,
+} from "../src/react-app/domains/session/codex-session-store";
 
 function assistant(id: string, engine: Record<string, unknown>): UIMessage {
   return {
@@ -84,6 +89,37 @@ describe("one clock per logical assistant turn", () => {
     expect(label(null, true, null)).toBe("Working");
   });
 
+  test("codex items are timed from the locally observed clock", () => {
+    // The codex wire carries no created/completed, so the adapter forwards the
+    // clock the store stamped when each item first appeared.
+    const local = (createdAt: number, completedAt: number): UIMessage =>
+      ({
+        id: `i-${createdAt}`,
+        role: "assistant",
+        metadata: { engine: { turnId: "t1" }, local: { createdAt, completedAt } },
+        parts: [{ type: "text", text: "…", state: "done" }],
+      }) as UIMessage;
+
+    const turn = [local(0, 40_000), local(41_000, 95_000)];
+
+    expect(getMessageCreated(turn[0])).toBe(0);
+    expect(getMessageCompleted(turn[1])).toBe(95_000);
+    expect(finishedTurnDurationMs(resolveTurnTiming(turn))).toBe(95_000);
+    expect(label(finishedTurnDurationMs(resolveTurnTiming(turn)))).toBe("Worked for 1m 35s");
+  });
+
+  test("an engine timestamp still wins over the locally observed one", () => {
+    const message = {
+      id: "a",
+      role: "assistant",
+      metadata: { engine: { created: 10, completed: 20 }, local: { createdAt: 1_000, completedAt: 9_000 } },
+      parts: [],
+    } as UIMessage;
+
+    expect(getMessageCreated(message)).toBe(10);
+    expect(getMessageCompleted(message)).toBe(20);
+  });
+
   test("user messages never contribute timing", () => {
     const timing = resolveTurnTiming([
       { id: "u", role: "user", metadata: { engine: { created: 1 } }, parts: [] } as UIMessage,
@@ -91,5 +127,51 @@ describe("one clock per logical assistant turn", () => {
     ]);
 
     expect(timing.startedAt).toBe(3_000);
+  });
+});
+
+describe("the item clock is stamped once and never reset", () => {
+  function tracked(id: string): CodexTrackedItem {
+    return { id, type: "reasoning", turnId: "t1", item: {}, text: "", thinking: "", output: "", status: "pending" };
+  }
+
+  test("a later item starting does not move an earlier item's start", () => {
+    // Regression: the codex stream calls startTurn on *every* item.started, and
+    // the renderer had to fall back to that session clock — so a 95s turn whose
+    // last item started 2s before the end read "Worked for 2s".
+    const store = useCodexSessionStore.getState();
+    store.clear();
+    store.replaceSessions([
+      { id: "codex-t1", threadId: "t1", title: "x", workspaceId: "ws", created: "2026-01-01", turnId: null, status: "idle" },
+    ]);
+
+    store.upsertItem("codex-t1", tracked("i1"));
+    const firstStart = useCodexSessionStore.getState().sessions["codex-t1"]?.items[0]?.createdAt;
+    expect(typeof firstStart).toBe("number");
+
+    store.startTurn("codex-t1");
+    store.upsertItem("codex-t1", tracked("i2"));
+    store.startTurn("codex-t1");
+    store.completeItem("codex-t1", "i2", { status: "completed" });
+
+    const items = useCodexSessionStore.getState().sessions["codex-t1"]?.items ?? [];
+    expect(items.find((item) => item.id === "i1")?.createdAt).toBe(firstStart);
+    expect(typeof items.find((item) => item.id === "i2")?.completedAt).toBe("number");
+
+    // Re-upserting an item (engine echoes it again) keeps its original start.
+    store.upsertItem("codex-t1", tracked("i1"));
+    expect(useCodexSessionStore.getState().sessions["codex-t1"]?.items.find((item) => item.id === "i1")?.createdAt).toBe(firstStart);
+
+    useCodexSessionStore.getState().clear();
+  });
+
+  test("the whole turn reads from its first and last item, not its last stretch", () => {
+    const messages = [
+      { id: "i1", role: "assistant", metadata: { local: { createdAt: 0, completedAt: 40_000 } }, parts: [] },
+      { id: "i2", role: "assistant", metadata: { local: { createdAt: 93_000, completedAt: 95_000 } }, parts: [] },
+    ] as UIMessage[];
+
+    // A 95s turn, not the 2s of its final item.
+    expect(finishedTurnDurationMs(resolveTurnTiming(messages))).toBe(95_000);
   });
 });

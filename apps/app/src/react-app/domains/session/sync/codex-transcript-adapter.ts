@@ -77,10 +77,18 @@ function buildUIMessages(workspaceId: string, sessionId: string): UIMessage[] {
   const assembled: UIMessage[] = [];
   for (const item of entry.items) {
     const phase = item.item.phase;
-    const metadata = { engine: {
-      turnId: item.turnId,
-      ...(phase === "commentary" || phase === "final_answer" ? { phase } : {}),
-    } };
+    const metadata = {
+      engine: {
+        turnId: item.turnId,
+        ...(phase === "commentary" || phase === "final_answer" ? { phase } : {}),
+      },
+      // Locally observed clock. Codex items carry no `created`/`completed`, so
+      // this is what lets a turn be timed at all (see getMessageCreated).
+      local: {
+        ...(typeof item.createdAt === "number" ? { createdAt: item.createdAt } : {}),
+        ...(typeof item.completedAt === "number" ? { completedAt: item.completedAt } : {}),
+      },
+    };
     if (item.type === "userMessage") {
       const content = Array.isArray(item.item.content)
         ? item.item.content.map((part) => isRecord(part) && typeof part.text === "string" ? part.text : "").join("")
