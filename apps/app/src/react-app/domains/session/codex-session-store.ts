@@ -641,8 +641,17 @@ export async function captureTurnBaseline(sessionId: string, turnId: string): Pr
   const client = codexClientForSession(sessionId);
   if (!client?.workspaceChanges) return;
   try {
-    const response = await client.workspaceChanges(sessionId);
-    turnBaselines.set(sessionId, { turnId, baseline: baselineFromChanges(response), startedAt: Date.now(), closed: false });
+    const [response, snapshot] = await Promise.all([
+      client.workspaceChanges(sessionId),
+      client.workspaceChanges(sessionId, { snapshot: true }),
+    ]);
+    const trees = snapshot.tree ? { tree: snapshot.tree, head: snapshot.head ?? null } : null;
+    turnBaselines.set(sessionId, {
+      turnId,
+      baseline: baselineFromChanges(response, trees),
+      startedAt: Date.now(),
+      closed: false,
+    });
   } catch {
     // No baseline available; the turn simply has nothing attributable.
   }
@@ -677,7 +686,29 @@ export async function finalizeTurnChangeSetFromRepo(sessionId: string, turnId: s
   const record = turnBaselines.get(sessionId);
   const usable = record && record.turnId === turnId ? record : null;
   try {
-    const snapshot = await client.workspaceChanges(sessionId, { hunks: true });
+    // The turn's patch is the diff between the content snapshot it started from
+    // and the one it ended at — so a turn that commits its own work is still
+    // reviewable, and work the user already had staged or untracked is not
+    // attributed to Sofia.
+    const baselineTree = usable?.baseline.snapshot?.tree ?? "";
+    const end = baselineTree ? await client.workspaceChanges(sessionId, { snapshot: true }) : null;
+    const trees =
+      baselineTree && end?.tree
+        ? {
+            baselineTree,
+            endTree: end.tree,
+            headBefore: usable?.baseline.snapshot?.head ?? null,
+            headAfter: end.head ?? null,
+          }
+        : undefined;
+    const snapshot = trees
+      ? await client.workspaceChanges(sessionId, {
+          hunks: true,
+          baselineTree: trees.baselineTree,
+          endTree: trees.endTree,
+        })
+      : await client.workspaceChanges(sessionId, { hunks: true });
+
     useChangeSetStore.getState().upsert(
       changeSetFromRepository({
         sessionId,
@@ -686,6 +717,7 @@ export async function finalizeTurnChangeSetFromRepo(sessionId: string, turnId: s
         baseline: usable?.baseline ?? null,
         snapshot,
         finalizedAt: Date.now(),
+        ...(trees ? { trees } : {}),
       }),
     );
     if (usable) turnBaselines.set(sessionId, { ...usable, closed: true });

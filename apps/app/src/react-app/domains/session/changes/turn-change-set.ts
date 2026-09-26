@@ -65,6 +65,16 @@ export type RepositoryChangeSet = {
   root: string;
   /** Revision the turn started from, when a repository source could resolve one. */
   baseRevision?: string;
+  /**
+   * The content snapshots the patch is the diff of. Recorded so the change set
+   * describes the *turn* rather than the repository's current state: a turn that
+   * commits, or one that begins with work already staged and untracked, is still
+   * exactly representable.
+   */
+  baselineTree?: string;
+  endTree?: string;
+  headBefore?: string | null;
+  headAfter?: string | null;
   files: FileChange[];
 };
 

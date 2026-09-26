@@ -369,12 +369,25 @@ export function createCodexSessionClient(options: CodexSessionClientOptions) {
      * model's edit events, so changes made by a shell command, a formatter, a
      * script or an MCP tool are included (see apps/server/src/git-changes.ts).
      */
-    workspaceChanges: (sessionId: string, params?: { hunks?: boolean; scope?: "unstaged" | "staged" }) =>
+    workspaceChanges: (
+      sessionId: string,
+      params?: {
+        hunks?: boolean;
+        scope?: "unstaged" | "staged";
+        /** Read a content snapshot (`{tree, head}`) instead of a file list. */
+        snapshot?: boolean;
+        baselineTree?: string;
+        endTree?: string;
+      },
+    ) =>
       requestJson<WorkspaceChangesResponse>(
         options.baseUrl,
         `${workspacePath}/codex/sessions/${encodeURIComponent(sessionId)}/changes?${new URLSearchParams({
           ...(params?.hunks ? { hunks: "1" } : {}),
           ...(params?.scope === "staged" ? { scope: "staged" } : {}),
+          ...(params?.snapshot ? { snapshot: "1" } : {}),
+          ...(params?.baselineTree ? { baseline: params.baselineTree } : {}),
+          ...(params?.endTree ? { end: params.endTree } : {}),
         }).toString()}`,
         { token: options.token, hostToken: options.hostToken, timeoutMs: 20_000 },
       ),

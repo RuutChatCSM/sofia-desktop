@@ -137,3 +137,38 @@ describe("the store keeps a turn's patch immutable", () => {
     useChangeSetStore.getState().clear();
   });
 });
+
+describe("a tree delta is the turn's own change", () => {
+  test("every file in a snapshot delta is attributed, and the trees are recorded", () => {
+    // The baseline tree already contains the user's staged/unstaged/untracked
+    // work, so anything in the delta happened during the turn — including work
+    // the turn committed, which leaves the working tree clean.
+    const changeSet = changeSetFromRepository({
+      sessionId: "s1",
+      turnId: "t31",
+      startedAt: 1_000,
+      baseline: baselineFromChanges({ revision: "abc", files: [] }, { tree: "base-tree", head: "abc" }),
+      snapshot: {
+        revision: "end-tree",
+        files: [{ path: "sofia.ts", status: "added", additions: 2, deletions: 0 }],
+      },
+      trees: {
+        baselineTree: "base-tree",
+        endTree: "end-tree",
+        headBefore: "abc",
+        headAfter: "def",
+      },
+      finalizedAt: 5_000,
+    });
+
+    const repository = changeSet.repositories[0];
+    expect(repository).toMatchObject({
+      baselineTree: "base-tree",
+      endTree: "end-tree",
+      headBefore: "abc",
+      headAfter: "def",
+    });
+    expect(repository?.files[0]).toMatchObject({ path: "sofia.ts", attributedToTurn: true });
+    expect(changeSetTotals(changeSet)).toEqual({ files: 1, additions: 2, deletions: 0, countsKnown: true });
+  });
+});
