@@ -3,8 +3,10 @@ import { describe, expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { ReviewPane } from "../src/react-app/domains/session/changes/review-pane";
+import { changeSetFromToolHints } from "../src/react-app/domains/session/changes/change-set-from-messages";
 import {
   beginTurnChangeSet,
+  type TurnChangeSet as TurnChangeSetType,
   finalizeTurnChangeSet,
   reconcileTurnChangeSet,
   type FileChange,
@@ -92,6 +94,27 @@ describe("review pane", () => {
     expect(markup).toContain('data-review-file="loose.ts"');
     // A live scope has no turn summary to show.
     expect(markup).not.toContain("Edited 2 files");
+  });
+
+  test("an unmeasured turn never claims +0 -0 and explains the empty diff", () => {
+    // What the pane looked like for a hint-sourced turn: every file at "+0 −0"
+    // and "No textual diff available", which reads as a defect rather than "the
+    // repository was not read".
+    const hints = changeSetFromToolHints({
+      sessionId: "s1",
+      turnId: "t31",
+      startedAt: 0,
+      paths: ["session-surface.tsx"],
+    });
+    const markup = renderToStaticMarkup(
+      <ReviewPane scope="last-turn" onScopeChange={() => {}} changeSet={hints as TurnChangeSetType} />,
+    );
+
+    expect(markup).not.toContain("+0");
+    expect(markup).not.toContain("−0");
+    expect(markup).toContain("was not read from the repository");
+    // The files Sofia touched are still listed.
+    expect(markup).toContain('data-review-file="session-surface.tsx"');
   });
 
   test("says so when a scope has nothing, and while it is loading", () => {

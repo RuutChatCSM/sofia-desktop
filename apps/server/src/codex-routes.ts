@@ -271,7 +271,11 @@ export function registerCodexRoutes(options: RegisterCodexRoutesOptions): void {
     const manager = await workspaceManager(ctx.params.id);
     if (!isCodexSessionId(ctx.params.sessionId)) throw notFound("unknown codex session");
     const session = manager.listSessions().find((candidate) => candidate.id === ctx.params.sessionId);
-    const root = session?.cwd?.trim() ?? "";
+    // A session may not carry a cwd (it inherits the workspace), and without a
+    // root there is nothing to inspect — which is how the review pane ended up
+    // permanently empty.
+    const workspace = options.config.workspaces.find((candidate) => candidate.id === ctx.params.id);
+    const root = session?.cwd?.trim() || workspace?.path?.trim() || "";
     if (!root) return jsonResponse({ ok: false, error: "workspace path is unavailable for this session" }, 400);
 
     const snapshot = await sofiaRequest(() =>

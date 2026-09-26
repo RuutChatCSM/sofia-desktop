@@ -124,6 +124,9 @@ export function ReviewPane({
   const selected = files.find((file) => file.path === selectedPath) ?? files[0] ?? null;
 
   const totals = changeSet && scope === "last-turn" ? changeSetTotals(changeSet) : null;
+  // A turn sourced from tool hints knows which files were touched and nothing
+  // about their size; "+0 −0" would be a lie.
+  const showCounts = scope === "last-turn" ? Boolean(totals?.countsKnown) : true;
 
   return (
     <div data-review-pane={scope} className="flex h-full min-h-0 flex-col">
@@ -185,15 +188,19 @@ export function ReviewPane({
                 {file.attributedToTurn ? null : (
                   <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground/70">not Sofia</span>
                 )}
-                <span className="shrink-0 tabular-nums">
-                  <span className="text-emerald-11">+{file.additions}</span>{" "}
-                  <span className="text-red-11">−{file.deletions}</span>
-                </span>
+                {showCounts ? (
+                  <span className="shrink-0 tabular-nums">
+                    <span className="text-emerald-11">+{file.additions}</span>{" "}
+                    <span className="text-red-11">−{file.deletions}</span>
+                  </span>
+                ) : null}
               </button>
             ))}
           </div>
           <div className="min-w-0 flex-1 overflow-auto">
-            {selected ? <DiffView file={selected} onOpenFile={onOpenFile} /> : null}
+            {selected ? (
+              <DiffView file={selected} onOpenFile={onOpenFile} counted={showCounts} />
+            ) : null}
           </div>
         </div>
       )}
@@ -201,7 +208,16 @@ export function ReviewPane({
   );
 }
 
-function DiffView({ file, onOpenFile }: { file: FileChange; onOpenFile?: (path: string) => void }) {
+function DiffView({
+  file,
+  onOpenFile,
+  counted,
+}: {
+  file: FileChange;
+  onOpenFile?: (path: string) => void;
+  /** False when the source could not read the repository for this turn. */
+  counted: boolean;
+}) {
   const note = fileChangeNote(file);
   const hunks = file.hunks ?? [];
 
@@ -223,7 +239,10 @@ function DiffView({ file, onOpenFile }: { file: FileChange; onOpenFile?: (path: 
       </div>
       {hunks.length === 0 ? (
         <div className="px-3 py-4 text-[12px] text-muted-foreground">
-          {note ?? "No textual diff available for this file."}
+          {note
+            ?? (counted
+              ? "No textual diff available for this file."
+              : "Diff unavailable: this turn was not read from the repository, so only the files Sofia touched are known.")}
         </div>
       ) : (
         <div data-review-hunks className="min-h-0 flex-1 overflow-auto py-1 font-mono text-[11px] leading-5">
