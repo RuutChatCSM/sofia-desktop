@@ -1,4 +1,57 @@
 /** @jsxImportSource react */
+/**
+ * Side-by-side rows.
+ *
+ * A hunk arrives as a flat, ordered run of context/deletes/adds. Code is wide, so
+ * the default desktop view pairs the old and new sides: context appears on both,
+ * a run of deletions is paired row-by-row with the additions that replaced it,
+ * and an unbalanced run leaves blank cells rather than shifting the columns.
+ */
+export type SplitDiffRow = {
+  key: string;
+  old?: DiffLine;
+  new?: DiffLine;
+};
+
+export function toSplitDiffRows(lines: readonly DiffLine[]): SplitDiffRow[] {
+  const rows: SplitDiffRow[] = [];
+  let index = 0;
+
+  while (index < lines.length) {
+    const line = lines[index];
+    if (!line) break;
+    if (line.type === "context") {
+      rows.push({ key: `context-${line.oldLine}-${line.newLine}`, old: line, new: line });
+      index += 1;
+      continue;
+    }
+
+    const deletes: DiffLine[] = [];
+    const adds: DiffLine[] = [];
+    while (index < lines.length && lines[index]?.type === "delete") {
+      deletes.push(lines[index] as DiffLine);
+      index += 1;
+    }
+    while (index < lines.length && lines[index]?.type === "add") {
+      adds.push(lines[index] as DiffLine);
+      index += 1;
+    }
+
+    const height = Math.max(deletes.length, adds.length);
+    for (let row = 0; row < height; row += 1) {
+      const removed = deletes[row];
+      const added = adds[row];
+      rows.push({
+        key: `change-${removed?.oldLine ?? "x"}-${added?.newLine ?? "x"}`,
+        ...(removed ? { old: removed } : {}),
+        ...(added ? { new: added } : {}),
+      });
+    }
+  }
+
+  return rows;
+}
+
 import * as React from "react";
 import { FilePlus2, FileMinus2, FileSymlink, FilePenLine, ImageIcon } from "lucide-react";
 
@@ -10,6 +63,7 @@ import {
   fileChangeLabel,
   fileChangeNote,
   type ChangeStatus,
+  type DiffLine,
   type FileChange,
   type TurnChangeSet,
 } from "./turn-change-set";
@@ -167,30 +221,46 @@ function DiffView({ file, onOpenFile }: { file: FileChange; onOpenFile?: (path: 
           {hunks.map((hunk, index) => (
             <div key={`${hunk.header}-${index}`} className="min-w-max">
               <div className="bg-muted/50 px-3 text-muted-foreground/80">{hunk.header}</div>
-              {hunk.lines.map((line, lineIndex) => (
+              {toSplitDiffRows(hunk.lines).map((row) => (
                 <div
-                  key={`${lineIndex}-${line.type}-${line.oldLine ?? ""}-${line.newLine ?? ""}`}
-                  data-diff-line={line.type}
-                  className={cn(
-                    "grid grid-cols-[2.5rem_2.5rem_1fr] whitespace-pre",
-                    line.type === "add" && "bg-emerald-3/40 text-emerald-11",
-                    line.type === "delete" && "bg-red-3/40 text-red-11",
-                    line.type === "context" && "text-muted-foreground",
-                  )}
+                  key={row.key}
+                  data-diff-row
+                  className="grid grid-cols-2 border-t border-border/40 first:border-t-0"
                 >
-                  <span className="select-none px-2 text-right tabular-nums text-muted-foreground/50">
-                    {line.oldLine ?? ""}
-                  </span>
-                  <span className="select-none px-2 text-right tabular-nums text-muted-foreground/50">
-                    {line.newLine ?? ""}
-                  </span>
-                  <span className="px-2">{`${line.type === "add" ? "+" : line.type === "delete" ? "-" : " "}${line.text}`}</span>
+                  <DiffSide line={row.old} side="old" />
+                  <DiffSide line={row.new} side="new" />
                 </div>
               ))}
             </div>
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/** One side of a side-by-side row: line number, marker, text, colour by type. */
+function DiffSide({ line, side }: { line?: DiffLine; side: "old" | "new" }) {
+  if (!line) {
+    return <div data-diff-blank={side} className="grid grid-cols-[2.5rem_1fr] bg-muted/20" />;
+  }
+  const removed = line.type === "delete";
+  const added = line.type === "add";
+  return (
+    <div
+      data-diff-side={side}
+      data-diff-line={line.type}
+      className={cn(
+        "grid grid-cols-[2.5rem_1fr] whitespace-pre",
+        added && "bg-emerald-3/40 text-emerald-11",
+        removed && "bg-red-3/40 text-red-11",
+        !added && !removed && "text-muted-foreground",
+      )}
+    >
+      <span className="select-none px-2 text-right tabular-nums text-muted-foreground/50">
+        {(side === "old" ? line.oldLine : line.newLine) ?? ""}
+      </span>
+      <span className="px-2">{`${added ? "+" : removed ? "-" : " "}${line.text}`}</span>
     </div>
   );
 }

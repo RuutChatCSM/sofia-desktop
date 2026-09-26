@@ -64,15 +64,19 @@ describe("review pane", () => {
     // Pre-existing work is labelled, not silently claimed.
     expect(markup).toContain("not Sofia");
 
-    // The diff itself, with real line numbers on both sides.
+    // The diff itself, side by side, with real line numbers on both sides.
     expect(markup).toContain("@@ -184,3 +184,4 @@");
+    expect(markup).toContain('data-diff-side="old"');
+    expect(markup).toContain('data-diff-side="new"');
     expect(markup).toContain('data-diff-line="add"');
     expect(markup).toContain('data-diff-line="delete"');
     expect(markup).toContain('data-diff-line="context"');
-    // Old side line 185 is the removal; the new side starts the addition at 185.
+    // Old line 185 (the removal) is paired with new line 185 (its replacement);
+    // the extra addition has a blank old side.
     expect(markup).toContain(">185<");
     expect(markup).toContain(">186<");
     expect(markup).toContain("+added");
+    expect(markup).toContain("data-diff-blank");
   });
 
   test("the other scopes read the live working tree instead of a turn", () => {
