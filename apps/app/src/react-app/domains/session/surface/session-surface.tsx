@@ -1,8 +1,8 @@
+import { useCodexSessionStore } from "../codex-session-store";
 import {
   captureTurnBaseline,
-  finalizeTurnChangeSetFromRepo,
-  useCodexSessionStore,
-} from "../codex-session-store";
+  finalizeTurnChangeSet,
+} from "@/react-app/domains/session/changes/turn-change-tracking";
 /** @jsxImportSource react */
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState, type ReactNode } from "react";
 import type { UIMessage } from "ai";
@@ -72,6 +72,7 @@ import { getSessionActivityStatusLabel, useSessionActivityStore, type SessionAct
 import { PermissionApprovalPanel } from "@/react-app/domains/session/chat/permission-approval-modal";
 import { SessionTopRail } from "@/react-app/domains/session/surface/session-top-rail";
 import {
+  selectLatestChangeSetForSession,
   selectTurnChangeSet,
   useChangeSetStore,
 } from "@/react-app/domains/session/changes/change-set-store";
@@ -2079,26 +2080,48 @@ export function SessionSurface(props: SessionSurfaceProps) {
 
   // Repository change tracking for the turn: capture the baseline when it starts
   // and read the patch from git when it ends. Tool events are only the fallback.
+  // Engine-driven sessions carry no codex item turn id, so a turn gets a local
+  // key while it streams. The change set is stored against it either way.
+  const changeTurnKeyRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!chatStreaming || !changeTurnId) return;
-    void captureTurnBaseline(props.sessionId, changeTurnId);
-  }, [changeTurnId, chatStreaming, props.sessionId]);
+    if (chatStreaming) {
+      changeTurnKeyRef.current ??= `${props.sessionId}:${Date.now()}`;
+      return;
+    }
+    changeTurnKeyRef.current = null;
+  }, [chatStreaming, props.sessionId]);
+  const changeTurnKey = changeTurnId ?? changeTurnKeyRef.current;
+  useEffect(() => {
+    if (!chatStreaming || !changeTurnKey) return;
+    void captureTurnBaseline({
+      client: engineClient,
+      workspaceId: props.workspaceId,
+      sessionId: props.sessionId,
+      turnId: changeTurnKey,
+    });
+  }, [changeTurnKey, chatStreaming, engineClient, props.sessionId, props.workspaceId]);
 
   const changeSetForTurn = useChangeSetStore((state) =>
-    selectTurnChangeSet(state.byId, props.sessionId, changeTurnId),
+    selectTurnChangeSet(state.byId, props.sessionId, changeTurnKey) ??
+    selectLatestChangeSetForSession(state.byId, state.latestBySession, props.sessionId),
   );
   const changeFinalizeAttempted = useRef<Set<string>>(new Set());
   useEffect(() => {
-    if (chatStreaming || !changeTurnId) return;
+    if (chatStreaming || !changeTurnKey) return;
     // A repository-backed set settles the turn; anything else (a hint set, or
     // nothing) means the read was missed — the stream boundary can fire before
     // the turn id is known, and a single failure used to leave the card with no
     // magnitude for the rest of the session. Retry once per turn while idle.
     if (changeSetForTurn?.source === "git") return;
-    if (changeFinalizeAttempted.current.has(changeTurnId)) return;
-    changeFinalizeAttempted.current.add(changeTurnId);
-    void finalizeTurnChangeSetFromRepo(props.sessionId, changeTurnId);
-  }, [changeSetForTurn, changeTurnId, chatStreaming, props.sessionId]);
+    if (changeFinalizeAttempted.current.has(changeTurnKey)) return;
+    changeFinalizeAttempted.current.add(changeTurnKey);
+    void finalizeTurnChangeSet({
+      client: engineClient,
+      workspaceId: props.workspaceId,
+      sessionId: props.sessionId,
+      turnId: changeTurnKey,
+    });
+  }, [changeSetForTurn, changeTurnKey, chatStreaming, engineClient, props.sessionId, props.workspaceId]);
 
   return (
     <DevProfiler id="SessionSurface">

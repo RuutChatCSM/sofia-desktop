@@ -274,17 +274,12 @@ export function registerCodexRoutes(options: RegisterCodexRoutesOptions): void {
   // MCP tool can write files with no apply_patch anywhere. `?scope=staged` reads
   // the index instead of the working tree, and `?hunks=1` includes the unified
   // diff for a review pane that renders it.
-  addRoute(routes, "GET", "/workspace/:id/codex/sessions/:sessionId/changes", "client", async (ctx) => {
-    const manager = await workspaceManager(ctx.params.id);
-    if (!isCodexSessionId(ctx.params.sessionId)) throw notFound("unknown codex session");
-    const session = manager.listSessions().find((candidate) => candidate.id === ctx.params.sessionId);
-    // A session may not carry a cwd (it inherits the workspace), and without a
-    // root there is nothing to inspect — which is how the review pane ended up
-    // permanently empty.
-    const workspace = options.config.workspaces.find((candidate) => candidate.id === ctx.params.id);
-    const root = session?.cwd?.trim() || workspace?.path?.trim() || "";
-    if (!root) return jsonResponse({ ok: false, error: "workspace path is unavailable for this session" }, 400);
-
+  // The read itself, shared by both routes: what changed in a workspace's
+  // repository. Extracted because a repository change is a fact about the
+  // *workspace*, not about a chat session — the codex-scoped route below only
+  // existed because the client that needed it was session-scoped.
+  type ChangesContext = Parameters<Route["handler"]>[0];
+  const workspaceChangesHandler = async (ctx: ChangesContext, root: string): Promise<Response> => {
     // A content snapshot, taken without disturbing the user's index. The turn's
     // patch is the diff between the snapshot it started from and the one it ended
     // at — never "what is dirty right now", which is empty once the turn commits.
@@ -329,7 +324,28 @@ export function registerCodexRoutes(options: RegisterCodexRoutesOptions): void {
     );
     const files = await countUntrackedLines(root, snapshot.files);
     return jsonResponse({ ok: true, revision: snapshot.revision, files });
+  };
+
+  addRoute(routes, "GET", "/workspace/:id/codex/sessions/:sessionId/changes", "client", async (ctx) => {
+    const manager = await workspaceManager(ctx.params.id);
+    if (!isCodexSessionId(ctx.params.sessionId)) throw notFound("unknown codex session");
+    const session = manager.listSessions().find((candidate) => candidate.id === ctx.params.sessionId);
+    const workspace = options.config.workspaces.find((candidate) => candidate.id === ctx.params.id);
+    const root = session?.cwd?.trim() || workspace?.path?.trim() || "";
+    if (!root) return jsonResponse({ ok: false, error: "workspace path is unavailable for this session" }, 400);
+    return workspaceChangesHandler(ctx, root);
   });
+
+  // Workspace-scoped, so a session driven by the engine (rather than the codex
+  // app-server) can read its own turn's changes too — without it, capture and
+  // finalize had no client to call and every card stayed hint-only.
+  addRoute(routes, "GET", "/workspace/:id/changes", "client", async (ctx) => {
+    const workspace = options.config.workspaces.find((candidate) => candidate.id === ctx.params.id);
+    const root = workspace?.path?.trim() ?? "";
+    if (!root) return jsonResponse({ ok: false, error: "workspace path is unavailable" }, 400);
+    return workspaceChangesHandler(ctx, root);
+  });
+
 
   // Stop every background process on the session's thread.
   addRoute(routes, "POST", "/workspace/:id/codex/sessions/:sessionId/background-processes/clean", "client", async (ctx) => {

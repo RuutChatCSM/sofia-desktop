@@ -63,6 +63,7 @@ import {
 } from "./diff-highlight";
 import {
   changeSetByRepository,
+  type RepositoryFiles,
   changeSetTitle,
   changeSetTotals,
   fileChangeLabel,
@@ -122,7 +123,7 @@ export function ReviewPane({
         ? changeSet
           ? changeSetByRepository(changeSet)
           : []
-        : [{ repositoryId: "", root: "", files: repositoryFiles ?? [] }],
+        : ([{ repositoryId: "", root: "", files: repositoryFiles ?? [] }] satisfies RepositoryFiles[]),
     [changeSet, repositoryFiles, scope],
   );
   const files = React.useMemo(() => groups.flatMap((group) => group.files), [groups]);

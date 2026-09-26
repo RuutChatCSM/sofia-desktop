@@ -12,6 +12,12 @@ import { turnChangeSetId, type TurnChangeSet } from "./turn-change-set";
  */
 type ChangeSetStore = {
   byId: Record<string, TurnChangeSet>;
+  /**
+   * The newest set per session. A turn's id is not always carried by the
+   * transcript (engine-driven sessions have no codex item turn id), so the card
+   * needs a way to find the turn that just finished.
+   */
+  latestBySession: Record<string, string>;
   upsert: (changeSet: TurnChangeSet) => void;
   clear: () => void;
 };
@@ -38,15 +44,32 @@ function changeSetSignature(changeSet: TurnChangeSet): string {
 
 export const useChangeSetStore = create<ChangeSetStore>((set) => ({
   byId: {},
+  latestBySession: {},
   upsert: (changeSet) =>
     set((state) => {
       const existing = state.byId[changeSet.id];
       if (existing?.finalizedAt !== undefined) return state;
       if (existing && changeSetSignature(existing) === changeSetSignature(changeSet)) return state;
-      return { byId: { ...state.byId, [changeSet.id]: changeSet } };
+      return {
+        byId: { ...state.byId, [changeSet.id]: changeSet },
+        latestBySession:
+          changeSet.finalizedAt === undefined
+            ? state.latestBySession
+            : { ...state.latestBySession, [changeSet.sessionId]: changeSet.id },
+      };
     }),
-  clear: () => set({ byId: {} }),
+  clear: () => set({ byId: {}, latestBySession: {} }),
 }));
+
+/** The most recently finalized set for a session, if any. */
+export function selectLatestChangeSetForSession(
+  byId: Record<string, TurnChangeSet>,
+  latestBySession: Record<string, string>,
+  sessionId: string,
+): TurnChangeSet | null {
+  const id = latestBySession[sessionId];
+  return id ? byId[id] ?? null : null;
+}
 
 export function selectTurnChangeSet(
   byId: Record<string, TurnChangeSet>,

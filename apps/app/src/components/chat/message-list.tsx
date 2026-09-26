@@ -51,7 +51,11 @@ import { useMessageList, useSessionErrorMessage } from "@/components/chat/messag
 import { useArtifacts, useOpenArtifactPath } from "@/lib/artifacts"
 import { changeSetFromToolHints } from "@/react-app/domains/session/changes/change-set-from-messages"
 import { TurnChangeSetCard } from "@/react-app/domains/session/changes/turn-change-set-card"
-import { selectTurnChangeSet, useChangeSetStore } from "@/react-app/domains/session/changes/change-set-store"
+import {
+  selectLatestChangeSetForSession,
+  selectTurnChangeSet,
+  useChangeSetStore,
+} from "@/react-app/domains/session/changes/change-set-store"
 import { usePanelTabStore } from "@/react-app/domains/session/panel/panel-tab-store"
 import { messageTurnId, turnAnswerIndex } from "@/components/chat/turn-structure"
 import { deriveTurnPresentation } from "@/components/chat/turn-presentation"
@@ -1063,7 +1067,13 @@ function MessageGroup({
         : null,
     [sessionId, timing.startedAt, turnArtifacts, turnId],
   )
-  const repoChangeSet = useChangeSetStore((state) => selectTurnChangeSet(state.byId, sessionId, turnId))
+  // Exact turn first; engine-driven turns carry no id the transcript knows, so a
+  // group that is the last one falls back to the session's newest set.
+  const isLatestGroup = lastItem !== undefined && lastItem.index === messages.length - 1
+  const repoChangeSet = useChangeSetStore((state) =>
+    selectTurnChangeSet(state.byId, sessionId, turnId)
+    ?? (isLatestGroup ? selectLatestChangeSetForSession(state.byId, state.latestBySession, sessionId) : null),
+  )
   // A repository-backed set (git) is authoritative — but only when it actually
   // found something. An empty read is what a turn that *commits* its work looks
   // like from the working tree, and letting that empty set win hid the card for a

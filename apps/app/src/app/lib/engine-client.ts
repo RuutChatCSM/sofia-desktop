@@ -49,6 +49,8 @@ export type EngineMcpServerStatus =
 
 export type EngineMcpStatusMap = Record<string, EngineMcpServerStatus>;
 
+import type { WorkspaceChangesResponse } from "@/react-app/domains/session/changes/change-set-source";
+
 export type EngineClientOptions = {
   baseUrl: string;
   directory?: string;
@@ -395,6 +397,43 @@ export function createEngineClient(options: EngineClientOptions) {
   }
 
   const client = {
+    /**
+     * Repository changes for a workspace. Deliberately not session-scoped: what
+     * a turn changed is a fact about the repository, and sessions driven by the
+     * engine rather than the codex app-server need it too.
+     */
+    git: {
+      async changes(params: {
+        workspaceId: string;
+        hunks?: boolean;
+        patch?: boolean;
+        snapshot?: boolean;
+        scope?: "unstaged" | "staged";
+        baselineTree?: string;
+        endTree?: string;
+        headBefore?: string | null;
+        headAfter?: string | null;
+      }): Promise<WorkspaceChangesResponse> {
+        const query = new URLSearchParams({
+          ...(params.hunks ? { hunks: "1" } : {}),
+          ...(params.patch ? { patch: "1" } : {}),
+          ...(params.snapshot ? { snapshot: "1" } : {}),
+          ...(params.scope === "staged" ? { scope: "staged" } : {}),
+          ...(params.baselineTree ? { baseline: params.baselineTree } : {}),
+          ...(params.endTree ? { end: params.endTree } : {}),
+          ...(params.headBefore ? { headBefore: params.headBefore } : {}),
+          ...(params.headAfter ? { headAfter: params.headAfter } : {}),
+        });
+        const result = await request<WorkspaceChangesResponse>(
+          `${workspacePath(params.workspaceId)}/changes?${query.toString()}`,
+          { timeoutMs: 20_000 },
+        );
+        if (!result.ok || !result.data) {
+          throw new Error(typeof result.error === "string" ? result.error : "Could not read the workspace changes.");
+        }
+        return result.data;
+      },
+    },
     session: {
       async list(
         params: { directory?: string; roots?: boolean; start?: number; search?: string; limit?: number } = {},

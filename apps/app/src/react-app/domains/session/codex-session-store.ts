@@ -623,43 +623,9 @@ export function backgroundProcessFailureTitle(process: BackgroundProcess): strin
 }
 
 /**
- * Repository state a turn started from, kept per session until that turn is
- * finalized. A server-side continuation keeps its turn open, so the baseline is
- * not re-captured mid-turn.
- */
-const turnBaselines = new Map<string, { turnId: string; baseline: TurnBaseline; startedAt: number; closed: boolean }>();
-
-/**
- * Capture the repository state the turn starts from. Best-effort: without it a
- * file that was already dirty cannot be told apart from one Sofia wrote, so
- * nothing would be attributed and Undo stays disabled.
- */
-export async function captureTurnBaseline(sessionId: string, turnId: string): Promise<void> {
-  const existing = turnBaselines.get(sessionId);
-  if (existing && !existing.closed) return;
-
-  const client = codexClientForSession(sessionId);
-  if (!client?.workspaceChanges) return;
-  try {
-    const [response, snapshot] = await Promise.all([
-      client.workspaceChanges(sessionId),
-      client.workspaceChanges(sessionId, { snapshot: true }),
-    ]);
-    const trees = snapshot.tree ? { tree: snapshot.tree, head: snapshot.head ?? null } : null;
-    turnBaselines.set(sessionId, {
-      turnId,
-      baseline: baselineFromChanges(response, trees),
-      startedAt: Date.now(),
-      closed: false,
-    });
-  } catch {
-    // No baseline available; the turn simply has nothing attributable.
-  }
-}
-
-/**
- * Read the working tree / index for the review pane's other scopes. Unlike a
- * turn's change set these are *live* views: they are meant to change.
+ * Live repository read for the review pane's Unstaged/Staged scopes — the scopes
+ * that are *supposed* to change. Turn patches no longer go through here: those
+ * come from the workspace-scoped snapshot diff in changes/turn-change-tracking.
  */
 export async function loadRepositoryChanges(
   sessionId: string,
@@ -672,62 +638,6 @@ export async function loadRepositoryChanges(
     return response.files.map((file) => ({ ...file, attributedToTurn: true }));
   } catch {
     return null;
-  }
-}
-
-/**
- * Read the finished turn's patch from the repository and freeze its change set.
- * This is the authoritative half: whatever wrote the bytes, the diff says so.
- */
-export async function finalizeTurnChangeSetFromRepo(sessionId: string, turnId: string): Promise<void> {
-  const client = codexClientForSession(sessionId);
-  if (!client?.workspaceChanges) return;
-
-  const record = turnBaselines.get(sessionId);
-  const usable = record && record.turnId === turnId ? record : null;
-  try {
-    // The turn's patch is the diff between the content snapshot it started from
-    // and the one it ended at — so a turn that commits its own work is still
-    // reviewable, and work the user already had staged or untracked is not
-    // attributed to Sofia.
-    const baselineTree = usable?.baseline.snapshot?.tree ?? "";
-    const end = baselineTree ? await client.workspaceChanges(sessionId, { snapshot: true }) : null;
-    const trees =
-      baselineTree && end?.tree
-        ? {
-            baselineTree,
-            endTree: end.tree,
-            headBefore: usable?.baseline.snapshot?.head ?? null,
-            headAfter: end.head ?? null,
-          }
-        : undefined;
-    const snapshot = trees
-      ? await client.workspaceChanges(sessionId, {
-          hunks: true,
-          patch: true,
-          baselineTree: trees.baselineTree,
-          endTree: trees.endTree,
-          headBefore: trees.headBefore,
-          headAfter: trees.headAfter,
-        })
-      : await client.workspaceChanges(sessionId, { hunks: true });
-
-    useChangeSetStore.getState().upsert(
-      changeSetFromRepository({
-        sessionId,
-        turnId,
-        startedAt: usable?.startedAt ?? Date.now(),
-        baseline: usable?.baseline ?? null,
-        snapshot,
-        finalizedAt: Date.now(),
-        ...(trees ? { trees } : {}),
-        ...(snapshot.patch ? { patch: snapshot.patch } : {}),
-        ...(snapshot.commits ? { commitsInRange: snapshot.commits } : {}),
-      }),
-    );
-    if (usable) turnBaselines.set(sessionId, { ...usable, closed: true });
-  } catch {
-    // Hint-sourced summaries remain for this turn.
   }
 }
 
