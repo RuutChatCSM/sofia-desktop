@@ -16,12 +16,33 @@ type ChangeSetStore = {
   clear: () => void;
 };
 
+/**
+ * Enough to tell whether a re-registration changed anything. The hint-sourced
+ * registration runs from a render-adjacent effect and rebuilds its object every
+ * render, so a new object must not be treated as a change: notifying subscribers
+ * there is a render loop.
+ */
+function changeSetSignature(changeSet: TurnChangeSet): string {
+  return [
+    changeSet.id,
+    changeSet.source,
+    changeSet.finalizedAt ?? "",
+    ...changeSet.repositories.flatMap((repository) =>
+      repository.files.map(
+        (file) =>
+          `${file.path}:${file.additions}:${file.deletions}:${file.attributedToTurn ? 1 : 0}`,
+      ),
+    ),
+  ].join("|");
+}
+
 export const useChangeSetStore = create<ChangeSetStore>((set) => ({
   byId: {},
   upsert: (changeSet) =>
     set((state) => {
       const existing = state.byId[changeSet.id];
       if (existing?.finalizedAt !== undefined) return state;
+      if (existing && changeSetSignature(existing) === changeSetSignature(changeSet)) return state;
       return { byId: { ...state.byId, [changeSet.id]: changeSet } };
     }),
   clear: () => set({ byId: {} }),

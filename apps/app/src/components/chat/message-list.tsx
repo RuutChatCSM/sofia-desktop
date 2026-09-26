@@ -1066,12 +1066,19 @@ function MessageGroup({
   // A repository-backed set (git) is authoritative; the tool-event hints only
   // stand in until it arrives.
   const changeSet = repoChangeSet ?? hintChangeSet
+  // Keyed by content, not object identity: the hint set is rebuilt on every
+  // render, and depending on the object made this effect (and therefore a store
+  // write, and therefore a render) fire forever.
+  const hintChangeSetKey = hintChangeSet
+    ? `${hintChangeSet.id}|${hintChangeSet.repositories[0]?.files.map((file) => file.path).join(",") ?? ""}`
+    : null
   React.useEffect(() => {
     // Register a hint-sourced set so Review can open it by id. Without this the
     // pane looked up an id that was never stored and reported "0 files" beside a
     // card that claimed six.
-    if (hintChangeSet) useChangeSetStore.getState().upsert(hintChangeSet)
-  }, [hintChangeSet])
+    if (!hintChangeSet) return
+    useChangeSetStore.getState().upsert(hintChangeSet)
+  }, [hintChangeSetKey])
 
   if (!lastItem || isMessageEmptyGroup(items)) {
     return null;

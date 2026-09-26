@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { changeSetFromToolHints } from "../src/react-app/domains/session/changes/change-set-from-messages";
 import {
   attributeFilesToTurn,
   baselineFromChanges,
@@ -65,6 +66,40 @@ describe("a finished turn's change set comes from the repository", () => {
     expect(changeSet.repositories[0]?.baseRevision).toBe("after");
     expect(changeSetTotals(changeSet)).toEqual({ files: 2, additions: 54, deletions: 19, countsKnown: true });
     expect(changeSetTotals(changeSet).countsKnown).toBe(true);
+  });
+});
+
+describe("re-registering the same set must not notify", () => {
+  test("a rebuilt but identical hint set is a no-op", () => {
+    // Regression: the hint registration runs from a render-adjacent effect and
+    // rebuilds its object every render. Treating that as a change notified
+    // subscribers, which re-rendered, which rebuilt the object — a render loop
+    // that crashed the session view.
+    const store = useChangeSetStore.getState();
+    store.clear();
+    let notifications = 0;
+    const unsubscribe = useChangeSetStore.subscribe(() => {
+      notifications += 1;
+    });
+
+    const build = () =>
+      changeSetFromToolHints({
+        sessionId: "s1",
+        turnId: "t31",
+        startedAt: 1_000,
+        paths: ["a.ts", "b.ts"],
+      });
+
+    useChangeSetStore.getState().upsert(build()!);
+    const afterFirst = useChangeSetStore.getState().byId["turn:s1:t31"];
+    useChangeSetStore.getState().upsert(build()!);
+    useChangeSetStore.getState().upsert(build()!);
+
+    expect(notifications).toBe(1);
+    expect(useChangeSetStore.getState().byId["turn:s1:t31"]).toBe(afterFirst);
+
+    unsubscribe();
+    useChangeSetStore.getState().clear();
   });
 });
 
