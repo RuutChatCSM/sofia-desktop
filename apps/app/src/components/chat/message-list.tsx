@@ -1,6 +1,5 @@
 "use memo";
 
-import { turnAnswerIndex } from "./turn-structure"
 import * as React from "react"
 import {
   AlertTriangle,
@@ -49,6 +48,10 @@ import { TodoWriteTool } from "@/components/tools/todowrite"
 import { WebfetchTool } from "@/components/tools/webfetch"
 import { WebsearchTool } from "@/components/tools/websearch"
 import { useMessageList, useSessionErrorMessage } from "@/components/chat/message-list-provider"
+import { useArtifacts, useOpenArtifactPath } from "@/lib/artifacts"
+import { changeSetFromToolHints } from "@/react-app/domains/session/changes/change-set-from-messages"
+import { TurnChangeSetCard } from "@/react-app/domains/session/changes/turn-change-set-card"
+import { messageTurnId, turnAnswerIndex } from "@/components/chat/turn-structure"
 import { liveActivityLabel } from "@/react-app/domains/session/activity"
 import {
   finishedTurnDurationMs,
@@ -1025,7 +1028,7 @@ function MessageGroup({
   isStreaming,
   activeLabel,
 }: AssistantMessageGroupProps) {
-  const { onRevertToUserMessage, onForkAtMessage, showThinking, developerMode } = useMessageList()
+  const { sessionId, onRevertToUserMessage, onForkAtMessage, showThinking, developerMode } = useMessageList()
   const lastItem = items[items.length - 1]
   // Branch/revert must target a real server-side message id. Synthetic
   // client-side messages (e.g. session errors) don't exist on the server and
@@ -1037,6 +1040,25 @@ function MessageGroup({
   // The ticking clock is a hook, so it must run before the early return below.
   const timing = resolveTurnTiming(items.map((item) => item.message))
   const liveElapsedMs = useLiveElapsed(timing.startedAt, isLiveGroup)
+  // What the turn changed, as its own durable object — separate from what it did
+  // (the work block) and from what Sofia is doing now (Activity). Hints only for
+  // now: there is no repository-backed producer yet, so this is explicitly
+  // `source: "tool-events"` and carries no line counts.
+  const turnArtifacts = useArtifacts(items.map((item) => item.message), { includeTargetFallbacks: false })
+  const openArtifactPath = useOpenArtifactPath()
+  const turnId = items[0] ? messageTurnId(items[0].message) ?? items[0].message.id : null
+  const changeSet = React.useMemo(
+    () =>
+      turnId
+        ? changeSetFromToolHints({
+            sessionId,
+            turnId,
+            startedAt: timing.startedAt ?? 0,
+            paths: turnArtifacts.map((artifact) => artifact.path),
+          })
+        : null,
+    [sessionId, timing.startedAt, turnArtifacts, turnId],
+  )
 
   if (!lastItem || isMessageEmptyGroup(items)) {
     return null;
@@ -1178,11 +1200,12 @@ function MessageGroup({
         </Message>
       ))}
       {renderItems(proseItems, stepItems.length, true)}
-      {/* Paper artifact strip: one FILES row per turn, at the end. */}
-      <ArtifactList
-        messages={items.map((item) => item.message)}
-        includeTargetFallbacks={false}
-      />
+      {/* The turn's result: one summary card for this turn's change set. */}
+      {changeSet ? (
+        <div className="mx-auto w-full max-w-[800px] px-2 md:px-6">
+          <TurnChangeSetCard changeSet={changeSet} onOpenFile={openArtifactPath} />
+        </div>
+      ) : null}
       {lastTextMessage && !isStreaming && (
         <div className="mx-auto flex w-full max-w-[800px] flex-wrap items-center gap-2 px-2 opacity-0 transition-opacity duration-150 group-hover/message-group:opacity-100 max-lg:opacity-100 pointer-coarse:opacity-100 md:px-8">
           <MessageActions className="flex gap-0">
