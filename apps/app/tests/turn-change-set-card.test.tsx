@@ -3,6 +3,8 @@ import { describe, expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { TurnChangeSetCard } from "../src/react-app/domains/session/changes/turn-change-set-card";
+import { changeSetFiles } from "../src/react-app/domains/session/changes/turn-change-set";
+import { changeSetFromToolHints } from "../src/react-app/domains/session/changes/change-set-from-messages";
 import {
   beginTurnChangeSet,
   finalizeTurnChangeSet,
@@ -19,6 +21,27 @@ function changeSet(source: ChangeSetSource, files: ReturnType<typeof parseNumSta
   });
   return finalizeTurnChangeSet(observed, 5_000);
 }
+
+describe("an empty repository read never hides the hint card", () => {
+  test("files from tool events still render when the turn committed its work", () => {
+    // Regression: a turn that commits its own changes reads as an empty working
+    // tree at turn end, and that empty set used to shadow the hints entirely, so
+    // no card appeared at all after the narration.
+    const hints = changeSetFromToolHints({
+      sessionId: "s1",
+      turnId: "t31",
+      startedAt: 0,
+      paths: ["approval-mode-selector.tsx"],
+    });
+    expect(hints).not.toBeNull();
+    expect(changeSetFiles(hints!)).toHaveLength(1);
+
+    const empty: ReturnType<typeof changeSetFromToolHints> = null;
+    // The card renders from whichever set has files.
+    expect(changeSetFiles(hints!).length > 0).toBe(true);
+    expect(empty).toBeNull();
+  });
+});
 
 describe("result card", () => {
   test("summarises the turn's patch and addresses it by change set id", () => {

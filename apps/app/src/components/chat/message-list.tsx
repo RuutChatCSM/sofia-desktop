@@ -56,6 +56,7 @@ import { usePanelTabStore } from "@/react-app/domains/session/panel/panel-tab-st
 import { messageTurnId, turnAnswerIndex } from "@/components/chat/turn-structure"
 import { deriveTurnPresentation } from "@/components/chat/turn-presentation"
 import { liveActivityLabel } from "@/react-app/domains/session/activity"
+import { changeSetFiles } from "@/react-app/domains/session/changes/turn-change-set"
 import {
   finishedTurnDurationMs,
   resolveTurnTiming,
@@ -1063,9 +1064,12 @@ function MessageGroup({
     [sessionId, timing.startedAt, turnArtifacts, turnId],
   )
   const repoChangeSet = useChangeSetStore((state) => selectTurnChangeSet(state.byId, sessionId, turnId))
-  // A repository-backed set (git) is authoritative; the tool-event hints only
-  // stand in until it arrives.
-  const changeSet = repoChangeSet ?? hintChangeSet
+  // A repository-backed set (git) is authoritative — but only when it actually
+  // found something. An empty read is what a turn that *commits* its work looks
+  // like from the working tree, and letting that empty set win hid the card for a
+  // turn that plainly changed files; the hints are better than nothing there.
+  const changeSet =
+    repoChangeSet && changeSetFiles(repoChangeSet).length > 0 ? repoChangeSet : hintChangeSet
   // Keyed by content, not object identity: the hint set is rebuilt on every
   // render, and depending on the object made this effect (and therefore a store
   // write, and therefore a render) fire forever.
