@@ -8,11 +8,13 @@ import { SessionTopRail } from "../src/react-app/domains/session/surface/session
 describe("session top rail", () => {
   test("stays out of the layout when there is nothing session-level to say", () => {
     expect(renderToStaticMarkup(<SessionTopRail />)).toBe("");
-    expect(renderToStaticMarkup(<SessionTopRail notice="   " />)).toBe("");
+    expect(renderToStaticMarkup(<SessionTopRail notice={{ kind: "warning", message: "   " }} />)).toBe("");
   });
 
   test("hosts session-level conditions", () => {
-    const markup = renderToStaticMarkup(<SessionTopRail notice="This task is open elsewhere." />);
+    const markup = renderToStaticMarkup(
+      <SessionTopRail notice={{ kind: "warning", message: "This task is open elsewhere." }} />,
+    );
 
     expect(markup).toContain("data-session-top-rail");
     expect(markup).toContain("data-session-notice");

@@ -54,7 +54,7 @@ import { parseSlashCommandInvocation } from "./composer/slash-command";
 import { connectSkillPrompt, parseConnectSkillToken } from "./composer/connect-skill-token";
 import { createPastedTextChip, createPastedTextFile, resolvePastedTextPlaceholders } from "./composer/pasted-text";
 import { sanitizePromptText } from "@/lib/embedded-data-urls";
-import { userFacingWarning } from "@/lib/session-warning";
+import { sessionNotice, type SessionNotice as SessionNoticeModel } from "@/lib/session-warning";
 import { DevProfiler } from "@/react-app/shell/dev-profiler";
 import { PaperGrainGradient } from "@sofia/ui/react";
 import { useShellConfig } from "@/react-app/shell/shell-config";
@@ -71,6 +71,7 @@ import { useSessionFindStore } from "./find-store";
 import { getSessionActivityStatusLabel, useSessionActivityStore, type SessionActivityStatus } from "@/react-app/domains/session/status/session-activity-store";
 import { PermissionApprovalPanel } from "@/react-app/domains/session/chat/permission-approval-modal";
 import { SessionTopRail } from "@/react-app/domains/session/surface/session-top-rail";
+import { claimNoticeSurfacing } from "@/react-app/domains/session/chat/session-notice-state";
 import {
   selectLatestChangeSetForSession,
   selectTurnChangeSet,
@@ -375,6 +376,8 @@ export type SessionSurfaceProps = {
   onOpenTarget?: (target: OpenTarget, options?: OpenTargetOptions, sessionId?: string) => void;
   environmentRuntimeKey?: string | null;
   onApplyEnvironmentChanges?: () => Promise<ApplyEnvironmentChangesResult>;
+  /** Start a fresh conversation — offered by an advisory about a long one. */
+  onStartNewChat?: () => void;
 };
 
 function messageToReadableText(message: UIMessage) {
@@ -726,8 +729,27 @@ export function SessionSurface(props: SessionSurfaceProps) {
   const local = useLocal();
   const { config: shellConfig } = useShellConfig();
   const engineWarning = useCodexSessionStore((state) => state.sessions[props.sessionId]?.warning);
-  // Evaluator/continuation chatter is diagnostics, not product copy.
-  const sessionNotice = userFacingWarning(engineWarning, props.developerMode);
+  // Evaluator/continuation chatter is diagnostics, not product copy, and a
+  // long-thread advisory is informational rather than an incident.
+  const sessionNoticeForEngine = sessionNotice(engineWarning, props.developerMode);
+  // Surface each distinct notice once per conversation. The engine re-sends the
+  // long-thread advisory after every compaction and the store clears the warning
+  // on the next prompt, so without this the same sentence would be re-announced
+  // for the rest of the session — and a dismissal would not hold.
+  const [visibleNotice, setVisibleNotice] = useState<SessionNoticeModel | null>(null);
+  const noticeKey = sessionNoticeForEngine?.message ?? null;
+  useEffect(() => {
+    if (!noticeKey) {
+      setVisibleNotice(null);
+      return;
+    }
+    // Already said once: leave the current state alone, so a repeat neither
+    // re-announces the notice nor resurrects one the user dismissed.
+    if (!claimNoticeSurfacing(props.sessionId, noticeKey)) return;
+    setVisibleNotice(sessionNoticeForEngine);
+    // `noticeKey` is the notice's identity; the object itself changes every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.sessionId, noticeKey]);
   // Repository change tracking for the turn: capture the baseline when it starts
   // and read the patch from git when it ends. Tool events are only the fallback.
   const changeTurnId = useCodexSessionStore((state) => {
@@ -2139,7 +2161,11 @@ export function SessionSurface(props: SessionSurfaceProps) {
         </div>
       ) : null}
 
-      <SessionTopRail notice={sessionNotice} />
+      <SessionTopRail
+        notice={visibleNotice}
+        {...(visibleNotice ? { onDismiss: () => setVisibleNotice(null) } : {})}
+        {...(props.onStartNewChat ? { onStartNewChat: props.onStartNewChat } : {})}
+      />
       <div className="relative min-h-0 flex-1">
         <div
           ref={scrollRef}

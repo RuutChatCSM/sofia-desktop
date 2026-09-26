@@ -1,6 +1,7 @@
 /** @jsxImportSource react */
 import type { ReactNode } from "react";
 
+import type { SessionNotice as SessionNoticeModel } from "@/lib/session-warning";
 import { SessionNotice } from "@/react-app/domains/session/chat/session-notice";
 
 /**
@@ -19,13 +20,27 @@ import { SessionNotice } from "@/react-app/domains/session/chat/session-notice";
  *
  * It renders nothing when there is nothing session-level to say.
  */
-export function SessionTopRail({ notice, children }: { notice?: string | null; children?: ReactNode }) {
-  const noticeText = notice?.trim();
-  if (!noticeText && !children) return null;
+export function SessionTopRail({
+  notice,
+  onDismiss,
+  onStartNewChat,
+  children,
+}: {
+  notice?: SessionNoticeModel | null;
+  onDismiss?: () => void;
+  onStartNewChat?: () => void;
+  children?: ReactNode;
+}) {
+  // A notice with no text is not a notice; the classifier already drops empties,
+  // and this keeps the rail honest for any caller that constructs one directly.
+  const shown = notice?.message.trim() ? notice : null;
+  if (!shown && !children) return null;
 
   return (
     <div data-session-top-rail className="flex shrink-0 flex-col">
-      {noticeText ? <SessionNotice message={noticeText} /> : null}
+      {shown ? (
+        <SessionNotice notice={shown} onDismiss={onDismiss} onStartNewChat={onStartNewChat} />
+      ) : null}
       {children}
     </div>
   );

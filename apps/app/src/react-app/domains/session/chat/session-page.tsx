@@ -1457,6 +1457,7 @@ export function SessionPage(props: SessionPageProps) {
                         respondQuestion={props.respondQuestion}
                         safeStringify={props.safeStringify}
                         onOpenTarget={openTarget}
+                        onStartNewChat={() => props.sidebar.onCreateTaskInWorkspace(props.runtimeWorkspaceId!)}
                       />
                     </ResizablePanel>
                     {canRenderSplitSurface ? (

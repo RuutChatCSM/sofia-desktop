@@ -34,7 +34,14 @@ describe("task held by another Sofia process", () => {
   });
 
   test("the notice renders the explanation above the transcript", () => {
-    const markup = renderToStaticMarkup(<SessionNotice message="This task is open elsewhere. Close it there and retry before continuing here." />);
+    const markup = renderToStaticMarkup(
+      <SessionNotice
+        notice={{
+          kind: "warning",
+          message: "This task is open elsewhere. Close it there and retry before continuing here.",
+        }}
+      />,
+    );
     expect(markup).toContain("data-session-notice");
     expect(markup).toContain("open elsewhere");
   });
