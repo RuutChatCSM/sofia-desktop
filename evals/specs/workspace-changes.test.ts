@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect } from "vitest";
@@ -8,6 +8,8 @@ import { test } from "@sofia/testkit";
 import {
   countUntrackedLines,
   createGitRun,
+  isGitRepository,
+  readWorkspaceChangesForRoot,
   listTurnCommits,
   readTurnDelta,
   readWorkspaceChanges,
@@ -176,6 +178,49 @@ test("an unborn repository still gets a baseline snapshot", async () => {
 
     expect(byPath.get("first.ts")).toMatchObject({ status: "modified", additions: 1 });
     expect(byPath.get("second.ts")).toMatchObject({ status: "added", additions: 1 });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+/**
+ * A workspace may *be* a repository, or a folder of them. Assuming the root is a
+ * repository is why a multi-checkout workspace produced no diff at all: every git
+ * call failed at the root and the turn fell back to a list of touched files.
+ */
+test("a workspace that is a folder of repositories is read per repository", async () => {
+  const root = mkdtempSync(path.join(tmpdir(), "sofia-workspace-root-"));
+  try {
+    const alpha = path.join(root, "alpha");
+    const beta = path.join(root, "beta");
+    for (const directory of [alpha, beta]) {
+      mkdirSync(directory);
+      git(directory, ["init", "-q"]);
+      git(directory, ["config", "user.email", "eval@example.com"]);
+      git(directory, ["config", "user.name", "Eval"]);
+      writeFileSync(path.join(directory, "src-index.ts"), "one\n");
+      git(directory, ["add", "-A"]);
+      git(directory, ["commit", "-q", "-m", "init"]);
+    }
+
+    // The workspace root itself is not a repository.
+    expect(await isGitRepository(root)).toBe(false);
+
+    writeFileSync(path.join(alpha, "src-index.ts"), "one\ntwo\n");
+    writeFileSync(path.join(beta, "src-index.ts"), "one\ntwo\nthree\n");
+
+    const changes = await readWorkspaceChangesForRoot(root, { includeHunks: true });
+
+    expect(changes.repositories.map((repository) => repository.repositoryId).sort()).toEqual(["alpha", "beta"]);
+    expect(changes.repositories.find((repository) => repository.repositoryId === "alpha")?.files[0]).toMatchObject({
+      path: "src-index.ts",
+      status: "modified",
+      additions: 1,
+    });
+    // Both checkouts contain the same path, and they stay separate files.
+    expect(
+      changes.repositories.filter((repository) => repository.files.some((file) => file.path === "src-index.ts")),
+    ).toHaveLength(2);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

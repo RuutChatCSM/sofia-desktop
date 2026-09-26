@@ -13,7 +13,7 @@ import {
   type ChangeSetSource,
 } from "../src/react-app/domains/session/changes/turn-change-set";
 
-function changeSet(source: ChangeSetSource, files: ReturnType<typeof parseNumStat>) {
+function changeSet(source: ChangeSetSource, files: Array<ReturnType<typeof parseNumStat>[number]>) {
   const started = beginTurnChangeSet({ sessionId: "s1", turnId: "t31", startedAt: 1_000 });
   const observed = reconcileTurnChangeSet(started, {
     source,
@@ -109,6 +109,26 @@ describe("result card", () => {
     // Single-repository turns stay unlabelled.
     expect(renderToStaticMarkup(<TurnChangeSetCard changeSet={changeSet("git", parseNumStat("1\t1\ta.ts"))} />))
       .not.toContain("workspace/");
+  });
+
+  test("a binary-only turn says so instead of claiming +0 -0", () => {
+    const binary = {
+      path: "hero.png",
+      status: "binary" as const,
+      additions: 0,
+      deletions: 0,
+      attributedToTurn: true,
+    };
+
+    const markup = renderToStaticMarkup(
+      <TurnChangeSetCard changeSet={changeSet("git", [binary])} onReview={() => {}} />,
+    );
+
+    expect(markup).toContain("Binary changes only");
+    expect(markup).not.toContain("+0");
+    expect(markup).not.toContain("−0");
+    // A binary change is still reviewable — it is a repository-backed set.
+    expect(markup).toContain("Review");
   });
 
   test("a hint-only turn is a file list, not a reviewable change set", () => {

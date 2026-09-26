@@ -72,3 +72,32 @@ describe("turn change tracking is not codex-specific", () => {
     expect(useChangeSetStore.getState().byId).toEqual({});
   });
 });
+
+describe("a session-scoped client is enough", () => {
+  test("falls back to the codex client when no workspace client is bound", async () => {
+    // The engine client is not bound for every session; without this fallback
+    // those sessions logged nothing at all and silently stayed hint-only.
+    resetTurnBaselines();
+    useChangeSetStore.getState().clear();
+
+    let snapshots = 0;
+    const sessionScoped: WorkspaceChangesClient = {
+      workspaceChanges: async (_sessionId, params) => {
+        if (params?.snapshot) {
+          snapshots += 1;
+          return { revision: null, files: [], tree: snapshots === 1 ? "base" : "end", head: "abc" };
+        }
+        if (params?.baselineTree) {
+          return { revision: "end", files: [{ path: "a.ts", status: "modified", additions: 1, deletions: 1 }] };
+        }
+        return { revision: "abc", files: [] };
+      },
+    };
+
+    await captureTurnBaseline({ client: sessionScoped, workspaceId: "ws", sessionId: "codex-1", turnId: "t9" });
+    await finalizeTurnChangeSet({ client: sessionScoped, workspaceId: "ws", sessionId: "codex-1", turnId: "t9" });
+
+    expect(useChangeSetStore.getState().byId["turn:codex-1:t9"]?.source).toBe("git");
+    useChangeSetStore.getState().clear();
+  });
+});

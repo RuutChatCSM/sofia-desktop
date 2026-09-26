@@ -10,7 +10,7 @@
  * Parsing is separated from process execution (`GitRun`) so the formats are
  * unit-testable and the reader is exercisable against a real temporary repo.
  */
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { execFile } from "node:child_process";
@@ -292,6 +292,100 @@ export async function readWorkspaceChanges(
   }
 
   return { revision, files };
+}
+
+export type RepositoryChanges = {
+  repositoryId: string;
+  root: string;
+  revision: string | null;
+  files: WorkspaceFileChange[];
+};
+
+/** Directories never worth descending into while looking for checkouts. */
+const REPOSITORY_SCAN_SKIP = new Set([
+  "node_modules",
+  "target",
+  "dist",
+  "build",
+  "vendor",
+  "tmp",
+  "log",
+  "public",
+  "storage",
+]);
+
+export async function isGitRepository(root: string): Promise<boolean> {
+  if (!root.trim()) return false;
+  const result = await createGitRun(root)(["rev-parse", "--git-dir"]);
+  return result.code === 0;
+}
+
+/**
+ * The repositories a workspace covers.
+ *
+ * A workspace may *be* a repository, or a directory of them — a folder holding
+ * several checkouts, which is how this app is used locally. Assuming the root is
+ * a repository is why a multi-repo workspace never produced a diff: every git
+ * call failed at the root and the turn fell back to "which files were touched".
+ */
+export async function discoverRepositories(root: string, maxDepth = 2): Promise<string[]> {
+  if (!root.trim()) return [];
+  if (await isGitRepository(root)) return [root];
+
+  const found: string[] = [];
+  let frontier = [root];
+  for (let depth = 0; depth < maxDepth && frontier.length > 0; depth += 1) {
+    const next: string[] = [];
+    for (const directory of frontier) {
+      let entries;
+      try {
+        entries = await readdir(directory, { withFileTypes: true });
+      } catch {
+        continue;
+      }
+      for (const entry of entries) {
+        if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
+        if (REPOSITORY_SCAN_SKIP.has(entry.name)) continue;
+        const child = path.join(directory, entry.name);
+        if (await isGitRepository(child)) found.push(child);
+        else next.push(child);
+      }
+    }
+    frontier = next;
+  }
+  return found;
+}
+
+/**
+ * Changes across every repository a workspace covers, reported per repository so
+ * two checkouts containing `src/index.ts` are never merged into one file.
+ */
+export async function readWorkspaceChangesForRoot(
+  root: string,
+  options: { includeHunks?: boolean } = {},
+): Promise<{ revision: string | null; files: WorkspaceFileChange[]; repositories: RepositoryChanges[] }> {
+  const repositories = await discoverRepositories(root);
+  if (repositories.length === 0) return { revision: null, files: [], repositories: [] };
+
+  const read = await Promise.all(
+    repositories.map(async (repositoryRoot) => {
+      const run = createGitRun(repositoryRoot);
+      const snapshot = await readWorkspaceChanges(run, options);
+      const files = await countUntrackedLines(repositoryRoot, snapshot.files);
+      return {
+        repositoryId: path.basename(repositoryRoot),
+        root: repositoryRoot,
+        revision: snapshot.revision,
+        files,
+      } satisfies RepositoryChanges;
+    }),
+  );
+
+  return {
+    revision: read.length === 1 ? read[0]?.revision ?? null : null,
+    files: read.flatMap((repository) => repository.files),
+    repositories: read,
+  };
 }
 
 /**

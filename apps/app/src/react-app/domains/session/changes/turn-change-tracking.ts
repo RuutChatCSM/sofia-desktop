@@ -6,21 +6,43 @@ import {
 } from "./change-set-source";
 import { useChangeSetStore } from "./change-set-store";
 
-/** The slice of the engine client this needs — injected, so it is testable. */
-export type WorkspaceChangesClient = {
-  git: {
-    changes: (params: {
-      workspaceId: string;
-      hunks?: boolean;
-      patch?: boolean;
-      snapshot?: boolean;
-      baselineTree?: string;
-      endTree?: string;
-      headBefore?: string | null;
-      headAfter?: string | null;
-    }) => Promise<WorkspaceChangesResponse>;
-  };
+/** The read parameters, shared by both client shapes. */
+export type WorkspaceChangeParams = {
+  hunks?: boolean;
+  patch?: boolean;
+  snapshot?: boolean;
+  baselineTree?: string;
+  endTree?: string;
+  headBefore?: string | null;
+  headAfter?: string | null;
 };
+
+/**
+ * Either client works: the workspace-scoped one (`git.changes`) is preferred
+ * because it does not care which engine drives a session, and the codex
+ * session-scoped one (`workspaceChanges`) is the fallback for a session whose
+ * engine client is not bound. Injected rather than imported, so it is testable.
+ */
+export type WorkspaceChangesClient = {
+  git?: { changes?: (params: { workspaceId: string } & WorkspaceChangeParams) => Promise<WorkspaceChangesResponse> };
+  workspaceChanges?: (sessionId: string, params?: WorkspaceChangeParams) => Promise<WorkspaceChangesResponse>;
+};
+
+/** Whichever read this client can perform. Throws rather than pretending. */
+async function readChanges(
+  client: WorkspaceChangesClient,
+  input: { workspaceId: string; sessionId: string; params: WorkspaceChangeParams },
+): Promise<WorkspaceChangesResponse> {
+  const workspaceScoped = client.git?.changes;
+  if (typeof workspaceScoped === "function") {
+    return workspaceScoped({ workspaceId: input.workspaceId, ...input.params });
+  }
+  const sessionScoped = client.workspaceChanges;
+  if (typeof sessionScoped === "function") {
+    return sessionScoped(input.sessionId, input.params);
+  }
+  throw new Error("no change client is bound to this session");
+}
 
 /**
  * Repository baselines, keyed by session, held while a turn is open. A
@@ -48,11 +70,23 @@ export async function captureTurnBaseline(input: {
   if (existing && !existing.closed) return;
 
   const client = input.client;
-  if (!client?.git) return;
+  if (!client) {
+    // Never silent: this is the case that used to leave no trace at all, which
+    // made "the pipeline did not run" indistinguishable from "it ran and found
+    // nothing".
+    console.warn(
+      `[changes] no client bound for session=${input.sessionId} turn=${input.turnId} — change tracking is off for this turn`,
+    );
+    return;
+  }
   try {
     const [response, snapshot] = await Promise.all([
-      client.git.changes({ workspaceId: input.workspaceId }),
-      client.git.changes({ workspaceId: input.workspaceId, snapshot: true }),
+      readChanges(client, { workspaceId: input.workspaceId, sessionId: input.sessionId, params: {} }),
+      readChanges(client, {
+        workspaceId: input.workspaceId,
+        sessionId: input.sessionId,
+        params: { snapshot: true },
+      }),
     ]);
     const trees = snapshot.tree ? { tree: snapshot.tree, head: snapshot.head ?? null } : null;
     turnBaselines.set(input.sessionId, {
@@ -90,14 +124,17 @@ export async function finalizeTurnChangeSet(input: {
   turnId: string;
 }): Promise<void> {
   const client = input.client;
-  if (!client?.git) return;
+  if (!client) {
+    console.warn(`[changes] no client bound for session=${input.sessionId} turn=${input.turnId} — no change set`);
+    return;
+  }
 
   const record = turnBaselines.get(input.sessionId);
   const usable = record && record.turnId === input.turnId ? record : null;
   try {
     const baselineTree = usable?.baseline.snapshot?.tree ?? "";
     const end = baselineTree
-      ? await client.git.changes({ workspaceId: input.workspaceId, snapshot: true })
+      ? await readChanges(client, { workspaceId: input.workspaceId, sessionId: input.sessionId, params: { snapshot: true } })
       : null;
     const trees =
       baselineTree && end?.tree
@@ -109,16 +146,23 @@ export async function finalizeTurnChangeSet(input: {
           }
         : undefined;
     const snapshot = trees
-      ? await client.git.changes({
+      ? await readChanges(client, {
           workspaceId: input.workspaceId,
-          hunks: true,
-          patch: true,
-          baselineTree: trees.baselineTree,
-          endTree: trees.endTree,
-          headBefore: trees.headBefore,
-          headAfter: trees.headAfter,
+          sessionId: input.sessionId,
+          params: {
+            hunks: true,
+            patch: true,
+            baselineTree: trees.baselineTree,
+            endTree: trees.endTree,
+            headBefore: trees.headBefore,
+            headAfter: trees.headAfter,
+          },
         })
-      : await client.git.changes({ workspaceId: input.workspaceId, hunks: true });
+      : await readChanges(client, {
+          workspaceId: input.workspaceId,
+          sessionId: input.sessionId,
+          params: { hunks: true },
+        });
 
     const changeSet = changeSetFromRepository({
       sessionId: input.sessionId,
@@ -130,6 +174,7 @@ export async function finalizeTurnChangeSet(input: {
       ...(trees ? { trees } : {}),
       ...(snapshot.patch ? { patch: snapshot.patch } : {}),
       ...(snapshot.commits ? { commitsInRange: snapshot.commits } : {}),
+      ...(snapshot.repositories?.length ? { repositories: snapshot.repositories } : {}),
     });
     useChangeSetStore.getState().upsert(changeSet);
 

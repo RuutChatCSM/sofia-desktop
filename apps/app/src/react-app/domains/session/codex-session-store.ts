@@ -561,7 +561,9 @@ export function setCodexClient(workspaceId: string, client: CodexSessionClient |
   else codexClientsByWorkspace.delete(workspaceId);
 }
 
-function codexClientForSession(sessionId: string): CodexSessionClient | null {
+/** The codex client bound to a session's workspace, if any — the fallback for
+ * change tracking when no engine client is available. */
+export function codexClientForSession(sessionId: string): CodexSessionClient | null {
   const entry = useCodexSessionStore.getState().sessions[sessionId];
   if (!entry) return null;
   return codexClientsByWorkspace.get(entry.session.workspaceId) ?? null;

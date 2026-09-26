@@ -55,6 +55,8 @@ export function TurnChangeSetCard({
     repository.files.map((file) => ({ repositoryId: repository.repositoryId, file })),
   );
   const showRepository = repositories.length > 1;
+  const hasTextualChange = totals.countsKnown && (totals.additions > 0 || totals.deletions > 0);
+  const binaryOnly = totals.countsKnown && !hasTextualChange;
   const visible = entries.slice(0, maxVisibleFiles);
   const hidden = entries.length - visible.length;
 
@@ -72,10 +74,16 @@ export function TurnChangeSetCard({
         </span>
         <div className="min-w-0 flex-1">
           <div className="truncate text-[13px] font-medium text-foreground">{changeSetTitle(changeSet)}</div>
-          {totals.countsKnown ? (
+          {hasTextualChange ? (
             <div className="mt-0.5 flex items-center gap-2 text-[11px] tabular-nums text-muted-foreground">
               <span className="text-emerald-11">+{totals.additions}</span>
               <span className="text-red-11">−{totals.deletions}</span>
+            </div>
+          ) : binaryOnly ? (
+            // A repository-backed set whose only changes are binary has counts,
+            // but "+0 −0" would read exactly like nothing happened.
+            <div data-changeset-binary-only className="mt-0.5 text-[10px] text-muted-foreground/60">
+              Binary changes only
             </div>
           ) : (
             // Absent counts must not read as "no changes": a hint-sourced set
@@ -104,7 +112,7 @@ export function TurnChangeSetCard({
           <FileChangeRow
             key={`${repositoryId}:${file.oldPath ?? ""}:${file.path}`}
             file={file}
-            showCounts={totals.countsKnown}
+            showCounts={totals.countsKnown && hasTextualChange}
             onOpenFile={onOpenFile}
             onReviewFile={onReviewFile && totals.countsKnown ? () => onReviewFile(file.path) : undefined}
             repository={showRepository ? repositoryId : undefined}
@@ -122,7 +130,7 @@ export function TurnChangeSetCard({
               <FileChangeRow
                 key={`${repositoryId}:${file.oldPath ?? ""}:${file.path}`}
                 file={file}
-                showCounts={totals.countsKnown}
+                showCounts={totals.countsKnown && hasTextualChange}
                 onOpenFile={onOpenFile}
                 onReviewFile={onReviewFile && totals.countsKnown ? () => onReviewFile(file.path) : undefined}
                 repository={showRepository ? repositoryId : undefined}

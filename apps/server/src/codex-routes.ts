@@ -26,7 +26,7 @@ import {
   createGitRun,
   listTurnCommits,
   readTurnDelta,
-  readWorkspaceChanges,
+  readWorkspaceChangesForRoot,
   snapshotWorkspaceTree,
 } from "./git-changes.js";
 import { CodexSteerError, CodexThreadBusyError, MAX_TRANSCRIPT_ITEMS, isCodexSessionId } from "./codex-sessions.js";
@@ -317,13 +317,18 @@ export function registerCodexRoutes(options: RegisterCodexRoutesOptions): void {
     }
 
     const snapshot = await sofiaRequest(() =>
-      readWorkspaceChanges(createGitRun(root), {
+      readWorkspaceChangesForRoot(root, {
         includeHunks: ctx.url.searchParams.get("hunks") === "1",
-        scope: ctx.url.searchParams.get("scope") === "staged" ? "staged" : "unstaged",
       }),
     );
-    const files = await countUntrackedLines(root, snapshot.files);
-    return jsonResponse({ ok: true, revision: snapshot.revision, files });
+    // `repositories` is the shape a multi-checkout workspace needs; `files` stays
+    // for the single-repository case and older clients.
+    return jsonResponse({
+      ok: true,
+      revision: snapshot.revision,
+      files: snapshot.files,
+      repositories: snapshot.repositories,
+    });
   };
 
   addRoute(routes, "GET", "/workspace/:id/codex/sessions/:sessionId/changes", "client", async (ctx) => {

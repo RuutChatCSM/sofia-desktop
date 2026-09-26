@@ -10,7 +10,11 @@ import {
   selectTurnChangeSet,
   useChangeSetStore,
 } from "../src/react-app/domains/session/changes/change-set-store";
-import { changeSetTotals, isFrozen } from "../src/react-app/domains/session/changes/turn-change-set";
+import {
+  changeSetByRepository,
+  changeSetTotals,
+  isFrozen,
+} from "../src/react-app/domains/session/changes/turn-change-set";
 
 const DIRTY_BEFORE = { path: "yours.ts", status: "modified" as const, additions: 20, deletions: 0 };
 
@@ -170,5 +174,41 @@ describe("a tree delta is the turn's own change", () => {
     });
     expect(repository?.files[0]).toMatchObject({ path: "sofia.ts", attributedToTurn: true });
     expect(changeSetTotals(changeSet)).toEqual({ files: 1, additions: 2, deletions: 0, countsKnown: true });
+  });
+});
+
+describe("a workspace of several repositories", () => {
+  test("builds one set holding every repository, keeping same-named files apart", () => {
+    const changeSet = changeSetFromRepository({
+      sessionId: "s1",
+      turnId: "t31",
+      startedAt: 0,
+      baseline: null,
+      snapshot: {
+        revision: null,
+        files: [],
+        repositories: [
+          {
+            repositoryId: "alpha",
+            root: "/w/alpha",
+            revision: "a1",
+            files: [{ path: "src/index.ts", status: "modified", additions: 2, deletions: 1 }],
+          },
+          {
+            repositoryId: "beta",
+            root: "/w/beta",
+            revision: "b1",
+            files: [{ path: "src/index.ts", status: "modified", additions: 5, deletions: 0 }],
+          },
+        ],
+      },
+      finalizedAt: 5_000,
+    });
+
+    expect(changeSetByRepository(changeSet).map((repository) => repository.repositoryId)).toEqual(["alpha", "beta"]);
+    expect(changeSetTotals(changeSet)).toMatchObject({ files: 2, additions: 7, deletions: 1, countsKnown: true });
+    expect(changeSet.repositories[0]?.files[0]?.attributedToTurn).toBe(true);
+    // The file lists are not merged: each repository keeps its own entry.
+    expect(changeSet.repositories.every((repository) => repository.files.length === 1)).toBe(true);
   });
 });

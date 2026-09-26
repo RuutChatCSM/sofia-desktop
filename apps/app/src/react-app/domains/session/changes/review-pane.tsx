@@ -138,7 +138,18 @@ export function ReviewPane({
   // Keep a valid selection as the scope's file list changes.
   const selected = files.find((file) => file.path === selectedPath) ?? files[0] ?? null;
 
-  const totals = changeSet && scope === "last-turn" ? changeSetTotals(changeSet) : null;
+  const turnTotals = changeSet && scope === "last-turn" ? changeSetTotals(changeSet) : null;
+  // Live scopes compute their own aggregate: Unstaged/Staged were showing a file
+  // count with no sense of magnitude.
+  const liveTotals = React.useMemo(
+    () =>
+      files.reduce(
+        (sum, file) => ({ additions: sum.additions + file.additions, deletions: sum.deletions + file.deletions }),
+        { additions: 0, deletions: 0 },
+      ),
+    [files],
+  );
+  const totals = turnTotals ?? { ...liveTotals, files: files.length, countsKnown: files.length > 0 };
   // A turn sourced from tool hints knows which files were touched and nothing
   // about their size; "+0 −0" would be a lie.
   const showCounts = scope === "last-turn" ? Boolean(totals?.countsKnown) : true;
@@ -165,7 +176,7 @@ export function ReviewPane({
         ))}
         <span className="ml-auto text-[11px] tabular-nums text-muted-foreground">
           {scope === "last-turn" && changeSet ? changeSetTitle(changeSet) : `${files.length} files`}
-          {totals?.countsKnown ? (
+          {totals.countsKnown ? (
             <>
               {" "}
               <span className="text-emerald-11">+{totals.additions}</span>{" "}

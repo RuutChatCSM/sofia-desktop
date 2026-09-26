@@ -18,6 +18,16 @@ export type WorkspaceChangesResponse = {
   patch?: string;
   /** Commits the turn created, when the request carried both heads. */
   commits?: string[];
+  /**
+   * Per-repository files. A workspace may be a directory of checkouts, in which
+   * case this is the only shape that can describe it.
+   */
+  repositories?: Array<{
+    repositoryId: string;
+    root: string;
+    revision?: string | null;
+    files: WorkspaceChangeFile[];
+  }>;
 };
 
 export type WorkspaceSnapshot = {
@@ -84,6 +94,8 @@ export function changeSetFromRepository(input: {
   finalizedAt: number;
   patch?: string;
   commitsInRange?: string[];
+  /** Per-repository files, when the read covered more than one checkout. */
+  repositories?: NonNullable<WorkspaceChangesResponse["repositories"]>;
   /** Content snapshots the delta was taken between, when the read used them. */
   trees?: {
     baselineTree: string;
@@ -100,7 +112,16 @@ export function changeSetFromRepository(input: {
 
   const reconciled = reconcileTurnChangeSet(started, {
     source: "git",
-    repositories: [
+    repositories: (input.repositories ?? input.snapshot.repositories)?.length
+      ? (input.repositories ?? input.snapshot.repositories)!.map((repository) => ({
+          repositoryId: repository.repositoryId,
+          root: repository.root,
+          ...(repository.revision ? { baseRevision: repository.revision } : {}),
+          // A per-repository read reports what each checkout has now; nothing
+          // here is another repository's file, which is the point of the shape.
+          files: repository.files.map((file) => ({ ...file, attributedToTurn: true })),
+        }))
+      : [
       {
         repositoryId: input.repositoryId ?? "workspace",
         root: input.root ?? "",

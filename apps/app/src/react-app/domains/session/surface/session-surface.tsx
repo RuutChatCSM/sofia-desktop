@@ -1,4 +1,4 @@
-import { useCodexSessionStore } from "../codex-session-store";
+import { codexClientForSession, useCodexSessionStore } from "../codex-session-store";
 import {
   captureTurnBaseline,
   finalizeTurnChangeSet,
@@ -2094,7 +2094,7 @@ export function SessionSurface(props: SessionSurfaceProps) {
   useEffect(() => {
     if (!chatStreaming || !changeTurnKey) return;
     void captureTurnBaseline({
-      client: engineClient,
+      client: engineClient ?? codexClientForSession(props.sessionId),
       workspaceId: props.workspaceId,
       sessionId: props.sessionId,
       turnId: changeTurnKey,
@@ -2116,7 +2116,7 @@ export function SessionSurface(props: SessionSurfaceProps) {
     if (changeFinalizeAttempted.current.has(changeTurnKey)) return;
     changeFinalizeAttempted.current.add(changeTurnKey);
     void finalizeTurnChangeSet({
-      client: engineClient,
+      client: engineClient ?? codexClientForSession(props.sessionId),
       workspaceId: props.workspaceId,
       sessionId: props.sessionId,
       turnId: changeTurnKey,
