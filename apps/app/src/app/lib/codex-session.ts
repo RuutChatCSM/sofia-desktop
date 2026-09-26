@@ -369,10 +369,13 @@ export function createCodexSessionClient(options: CodexSessionClientOptions) {
      * model's edit events, so changes made by a shell command, a formatter, a
      * script or an MCP tool are included (see apps/server/src/git-changes.ts).
      */
-    workspaceChanges: (sessionId: string, params?: { hunks?: boolean }) =>
+    workspaceChanges: (sessionId: string, params?: { hunks?: boolean; scope?: "unstaged" | "staged" }) =>
       requestJson<WorkspaceChangesResponse>(
         options.baseUrl,
-        `${workspacePath}/codex/sessions/${encodeURIComponent(sessionId)}/changes${params?.hunks ? "?hunks=1" : ""}`,
+        `${workspacePath}/codex/sessions/${encodeURIComponent(sessionId)}/changes?${new URLSearchParams({
+          ...(params?.hunks ? { hunks: "1" } : {}),
+          ...(params?.scope === "staged" ? { scope: "staged" } : {}),
+        }).toString()}`,
         { token: options.token, hostToken: options.hostToken, timeoutMs: 20_000 },
       ),
 

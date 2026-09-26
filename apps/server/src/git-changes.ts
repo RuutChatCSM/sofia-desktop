@@ -40,6 +40,12 @@ export type WorkspaceChangeSnapshot = {
   files: WorkspaceFileChange[];
 };
 
+/**
+ * Which slice of the repository to read. `unstaged` is the working tree (what a
+ * turn typically leaves behind, untracked files included); `staged` is the index.
+ */
+export type ChangeScope = "unstaged" | "staged";
+
 export type GitResult = { stdout: string; code: number };
 export type GitRun = (args: string[]) => Promise<GitResult>;
 
@@ -88,6 +94,34 @@ function statusFromXY(xy: string): ChangeStatus {
   if (xy.includes("D")) return "deleted";
   if (xy.includes("A")) return "added";
   return "modified";
+}
+
+/** `git diff --cached --name-status -z` → status per staged path. */
+export function parseNameStatusZ(output: string): Array<{ path: string; oldPath?: string; status: ChangeStatus }> {
+  const entries = output.split("\0").filter(Boolean);
+  const changes: Array<{ path: string; oldPath?: string; status: ChangeStatus }> = [];
+
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index];
+    if (!entry) continue;
+    const [code, ...pathFields] = entry.split("\t");
+    const status = (code ?? "").charAt(0);
+    if (status === "R" || status === "C") {
+      const oldPath = pathFields[0] ?? "";
+      const filePath = pathFields[1] ?? "";
+      index += 1; // the rename consumes its own entry pair
+      if (filePath) changes.push({ path: filePath, ...(oldPath ? { oldPath } : {}), status: "renamed" });
+      continue;
+    }
+    const filePath = pathFields.join("\t");
+    if (!filePath) continue;
+    changes.push({
+      path: filePath,
+      status: status === "A" ? "added" : status === "D" ? "deleted" : "modified",
+    });
+  }
+
+  return changes;
 }
 
 /** `git diff --numstat -z` → additions/deletions per path (`-` means binary). */
@@ -182,18 +216,25 @@ export function parseUnifiedDiff(output: string): Map<string, DiffHunk[]> {
  */
 export async function readWorkspaceChanges(
   run: GitRun,
-  options: { includeHunks?: boolean } = {},
+  options: { includeHunks?: boolean; scope?: ChangeScope } = {},
 ): Promise<WorkspaceChangeSnapshot> {
   const revision = await run(["rev-parse", "--short", "HEAD"]).then(
     (result) => (result.code === 0 ? result.stdout.trim() || null : null),
   );
 
-  const status = await run(["status", "--porcelain=v2", "-z", "--untracked-files=all"]);
-  const entries = parsePorcelainV2(status.stdout);
+  const staged = options.scope === "staged";
+  // Unstaged covers the whole working tree (including untracked files); staged is
+  // the index, which is what a commit would record.
+  const entries = staged
+    ? parseNameStatusZ((await run(["diff", "--cached", "--name-status", "-z"])).stdout)
+    : parsePorcelainV2((await run(["status", "--porcelain=v2", "-z", "--untracked-files=all"])).stdout);
   if (entries.length === 0) return { revision, files: [] };
 
-  const numstat = parseNumStatZ((await run(["diff", "--numstat", "-z"])).stdout);
-  const hunks = options.includeHunks ? parseUnifiedDiff((await run(["diff", "--unified=3", "--no-color"])).stdout) : null;
+  const diffPrefix = staged ? ["diff", "--cached"] : ["diff"];
+  const numstat = parseNumStatZ((await run([...diffPrefix, "--numstat", "-z"])).stdout);
+  const hunks = options.includeHunks
+    ? parseUnifiedDiff((await run([...diffPrefix, "--unified=3", "--no-color"])).stdout)
+    : null;
 
   const files: WorkspaceFileChange[] = [];
   for (const entry of entries) {

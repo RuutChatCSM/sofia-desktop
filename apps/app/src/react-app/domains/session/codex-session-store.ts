@@ -11,6 +11,7 @@ import {
   changeSetFromRepository,
   type TurnBaseline,
 } from "./changes/change-set-source";
+import type { FileChange } from "./changes/turn-change-set";
 import { useChangeSetStore } from "./changes/change-set-store";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -644,6 +645,24 @@ export async function captureTurnBaseline(sessionId: string, turnId: string): Pr
     turnBaselines.set(sessionId, { turnId, baseline: baselineFromChanges(response), startedAt: Date.now(), closed: false });
   } catch {
     // No baseline available; the turn simply has nothing attributable.
+  }
+}
+
+/**
+ * Read the working tree / index for the review pane's other scopes. Unlike a
+ * turn's change set these are *live* views: they are meant to change.
+ */
+export async function loadRepositoryChanges(
+  sessionId: string,
+  scope: "unstaged" | "staged",
+): Promise<FileChange[] | null> {
+  const client = codexClientForSession(sessionId);
+  if (!client?.workspaceChanges) return null;
+  try {
+    const response = await client.workspaceChanges(sessionId, { hunks: true, scope });
+    return response.files.map((file) => ({ ...file, attributedToTurn: true }));
+  } catch {
+    return null;
   }
 }
 

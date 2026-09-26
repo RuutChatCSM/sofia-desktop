@@ -1208,7 +1208,11 @@ function MessageGroup({
       {/* The turn's result: one summary card for this turn's change set. */}
       {changeSet ? (
         <div className="mx-auto w-full max-w-[800px] px-2 md:px-6">
-          <TurnChangeSetCard changeSet={changeSet} onOpenFile={openArtifactPath} />
+          <TurnChangeSetCard
+            changeSet={changeSet}
+            onOpenFile={openArtifactPath}
+            onReview={(changeSetId) => useChangeSetStore.getState().openReview(changeSetId)}
+          />
         </div>
       ) : null}
       {lastTextMessage && !isStreaming && (

@@ -12,7 +12,11 @@ import { turnChangeSetId, type TurnChangeSet } from "./turn-change-set";
  */
 type ChangeSetStore = {
   byId: Record<string, TurnChangeSet>;
+  /** The change set whose review pane is open, if any. */
+  reviewChangeSetId: string | null;
   upsert: (changeSet: TurnChangeSet) => void;
+  openReview: (changeSetId: string) => void;
+  closeReview: () => void;
   clear: () => void;
 };
 
@@ -24,7 +28,10 @@ export const useChangeSetStore = create<ChangeSetStore>((set) => ({
       if (existing?.finalizedAt !== undefined) return state;
       return { byId: { ...state.byId, [changeSet.id]: changeSet } };
     }),
-  clear: () => set({ byId: {} }),
+  reviewChangeSetId: null,
+  openReview: (changeSetId) => set({ reviewChangeSetId: changeSetId }),
+  closeReview: () => set({ reviewChangeSetId: null }),
+  clear: () => set({ byId: {}, reviewChangeSetId: null }),
 }));
 
 export function selectTurnChangeSet(
