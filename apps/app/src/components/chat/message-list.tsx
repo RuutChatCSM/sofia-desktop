@@ -52,7 +52,7 @@ import { useArtifacts, useOpenArtifactPath } from "@/lib/artifacts"
 import { changeSetFromToolHints } from "@/react-app/domains/session/changes/change-set-from-messages"
 import { TurnChangeSetCard } from "@/react-app/domains/session/changes/turn-change-set-card"
 import { selectTurnChangeSet, useChangeSetStore } from "@/react-app/domains/session/changes/change-set-store"
-import { messageTurnId, turnAnswerIndex } from "@/components/chat/turn-structure"
+import { messagePhase, messageTurnId, turnAnswerIndex } from "@/components/chat/turn-structure"
 import { liveActivityLabel } from "@/react-app/domains/session/activity"
 import {
   finishedTurnDurationMs,
@@ -1064,6 +1064,12 @@ function MessageGroup({
   // A repository-backed set (git) is authoritative; the tool-event hints only
   // stand in until it arrives.
   const changeSet = repoChangeSet ?? hintChangeSet
+  React.useEffect(() => {
+    // Register a hint-sourced set so Review can open it by id. Without this the
+    // pane looked up an id that was never stored and reported "0 files" beside a
+    // card that claimed six.
+    if (hintChangeSet) useChangeSetStore.getState().upsert(hintChangeSet)
+  }, [hintChangeSet])
 
   if (!lastItem || isMessageEmptyGroup(items)) {
     return null;
@@ -1075,9 +1081,24 @@ function MessageGroup({
 
   // Sofia emits narration, reasoning, and tool calls as separate items.
   // Fold all activity before the final answer, including progress prose.
-  const answerIndex = turnAnswerIndex(items.map((item) => item.message))
-  let stepItems = answerIndex >= 0 ? items.slice(0, answerIndex) : items
-  let proseItems = answerIndex >= 0 ? items.slice(answerIndex) : []
+  // Progress narration is a *channel*, not execution detail. The protocol marks
+  // it `phase: "commentary"` because it is written to be read while Sofia works;
+  // folding it into the collapsed work block turned a working session into
+  // silence followed by a result. Reasoning and tool execution stay in the block.
+  const isCommentaryItem = (item: UIMessageWithIndex) =>
+    item.message.role === "assistant"
+    && !isSessionErrorMessage(item.message)
+    && messagePhase(item.message) === "commentary"
+  const commentaryItems = items.filter(isCommentaryItem)
+  const workItems = items.filter((item) => !isCommentaryItem(item))
+
+  const answerIndex = turnAnswerIndex(workItems.map((item) => item.message))
+  let stepItems = answerIndex >= 0 ? workItems.slice(0, answerIndex) : workItems
+  let proseItems = answerIndex >= 0 ? workItems.slice(answerIndex) : []
+  if (commentaryItems.length > 0) {
+    // Visible progress prose keeps its place in the turn, before the answer.
+    proseItems = [...commentaryItems, ...proseItems].sort((left, right) => left.index - right.index)
+  }
   // The engine can also deliver a whole turn as one assistant message with the
   // steps and the answer interleaved in its parts. Split that first prose
   // message so its leading steps fold with the rest instead of pinning the run
@@ -1116,7 +1137,10 @@ function MessageGroup({
     durationMs,
     formatDuration: formatToolCallDuration,
   })
-  const hasWork = stepItems.length > 0 || Boolean(reasoningText)
+  // A finished turn keeps its execution disclosure even when everything it did
+  // was talk: "Worked for 1m 30s" is what tells the user how long the turn took,
+  // and reading it above the visible progress prose is the point.
+  const hasWork = stepItems.length > 0 || Boolean(reasoningText) || durationMs !== null
 
   const renderItem = (item: UIMessageWithIndex, groupIndex: number, hideReasoning?: boolean) => {
     const isLastMessage = item.index === messages.length - 1

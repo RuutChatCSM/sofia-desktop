@@ -110,9 +110,12 @@ describe("progress narration belongs to the work, not the transcript", () => {
     expect(markup).toContain("Worked for");
     // The final answer is transcript content...
     expect(markup).toContain("All done.");
-    // ...and the narration is not: it belongs to the work.
+    // An earlier `final_answer` followed by more work is not this turn's answer,
+    // so it stays inside the work block...
     expect(markup).not.toContain("Let me find the evaluator banner");
-    expect(markup).not.toContain("Now the core change");
+    // ...while `commentary` is a visible channel: progress narration the user is
+    // meant to read while Sofia works.
+    expect(markup).toContain("Now the core change");
     expect(markup).not.toContain("Sofia is working…");
   });
 
@@ -141,7 +144,9 @@ describe("progress narration belongs to the work, not the transcript", () => {
     expect(markup).toContain("Worked for 1m 30s");
     expect(markup).not.toContain("Worked<");
     expect(markup).toContain("The clock now belongs to the whole turn.");
-    expect(markup).not.toContain("Let me check the timing path");
+    // The block has nothing to disclose here (no tools, no reasoning) but the
+    // turn still reports its duration, and its commentary stays visible.
+    expect(markup).toContain("Let me check the timing path");
   });
 
   test("the narration is preserved inside the block, not dropped", () => {
