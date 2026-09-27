@@ -61,6 +61,12 @@ async function startFakeBridgeWithPage() {
     port: 0,
     fetch(req, srv) {
       const url = new URL(req.url);
+      // The page's `webSocketDebuggerUrl` points back here, so the CDP socket has
+      // to be a real upgrade. Answering `/devtools/*` with JSON refuses the
+      // handshake and the page read fails with "page ws error".
+      if (url.pathname.startsWith("/devtools/")) {
+        return srv.upgrade(req) ? undefined : new Response("upgrade refused", { status: 500 });
+      }
       if (url.pathname === "/json/version") {
         return Response.json({ webSocketDebuggerUrl: `ws://127.0.0.1:${srv.port}/devtools/browser/BROWSER-1` });
       }
@@ -83,8 +89,16 @@ async function startFakeBridgeWithPage() {
         let msg: any;
         try { msg = JSON.parse(String(raw)); } catch { return; }
         methods.push(String(msg.method ?? ""));
-        if (msg.method === "Runtime.evaluate") expressions.push(String(msg.params?.expression ?? ""));
-        // `runAct`/`snapshot` read `.result.value`; a centre is all this page has.
+        const expression = String(msg.params?.expression ?? "");
+        if (msg.method === "Runtime.evaluate") expressions.push(expression);
+        // `waitForLoad` polls `document.readyState` and only settles once the page
+        // reports "complete", so the fake has to report it or every navigation
+        // waits out the full 12s deadline. Everything else answers with the page
+        // centre, which is all `runAct`/`snapshot` read.
+        if (expression === "document.readyState") {
+          ws.send(JSON.stringify({ id: msg.id, result: { result: { type: "string", value: "complete" } } }));
+          return;
+        }
         ws.send(JSON.stringify({ id: msg.id, result: { result: { type: "object", value: { ok: true, x: 40, y: 60 }, description: "Object" } } }));
       },
     },
@@ -95,7 +109,9 @@ async function startFakeBridgeWithPage() {
     expressions,
     methods,
     moves: () => expressions.filter((e) => e.includes("__sofiaAgentCursor.moveTo(")),
-    fades: () => expressions.filter((e) => e.includes("fade")),
+    // Match the fade call itself: the injected overlay script also defines
+    // `fade()`, so a bare "fade" substring matches the install and never fails.
+    fades: () => expressions.filter((e) => e.includes("(c.fade || c.hide).call(c)")),
     cursorExpressions: () => expressions.filter((e) => e.includes("__sofiaAgentCursor")),
   };
 }
@@ -207,13 +223,17 @@ describe("sofia browser Node REPL", () => {
     expect(page.moves()[0]).toContain("moveTo(14, 40)");
     expect(page.moves()[1]).toContain("moveTo(40, 60)");
 
-    const before = page.moves().length;
+    // The hover and the navigation share one runtime on purpose. The cursor
+    // belongs to the page connection, and a fresh `setupBrowserRuntime` opens a
+    // new one, so a navigation in a later call has no cursor left to fade.
     const nav = await repl.request(4, "tools/call", {
       name: "js",
-      arguments: { code: "const b = await setupBrowserRuntime(); const t = (await b.browsers.get('iab').tabs.list())[0]; await t.goto('https://example.com/next'); return 'nav'", },
+      arguments: { code: "const b = await setupBrowserRuntime(); const t = (await b.browsers.get('iab').tabs.list())[0]; await t.hover({ role: 'button' }); await t.goto('https://example.com/next'); return 'nav';", },
     });
     expect(nav.error).toBeUndefined();
-    expect(page.fades().length).toBeGreaterThanOrEqual(1);
-    expect(page.moves().length).toBe(before);
+    expect(page.fades().length).toBe(1);
+    // The fade is the last thing the cursor does: a navigation must not carry
+    // the pointer into the document that replaced it.
+    expect(page.cursorExpressions().at(-1)).toContain("(c.fade || c.hide).call(c)");
   });
 });
