@@ -46,7 +46,7 @@ const SAFE_X_RESPONSE_HEADERS = new Set(["x-content-type-options"]);
  *
  * We reflect those origins, and make that safe by stripping the cookie header
  * from the forwarded request: an instance-origin call is authenticated by its
- * bearer token alone and can never ride the viewer's sofia-app.ruut.chat
+ * bearer token alone and can never ride the viewer's sofia.ruut.chat
  * session. A hostile page on some other origin therefore gains nothing from the
  * reflection - it has no bearer token and its cookies are discarded.
  *

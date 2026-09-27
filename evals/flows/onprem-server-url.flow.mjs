@@ -6,8 +6,8 @@ const vo = await loadVoiceoverParagraphs("onprem-server-url");
 
 const ORG_URL = "https://sofia.acme-example.com";
 const ORG_HOST = "sofia.acme-example.com";
-const DEFAULT_DEN_BASE_URL = "https://sofia-app.ruut.chat";
-const DEFAULT_DEN_API_BASE_URL = "https://sofia-app.ruut.chat/api/den";
+const DEFAULT_DEN_BASE_URL = "https://sofia.ruut.chat";
+const DEFAULT_DEN_API_BASE_URL = "https://sofia.ruut.chat/api/den";
 const PROJECT_DIR = process.cwd();
 
 async function setDesktopBootstrapConfig(ctx, config) {

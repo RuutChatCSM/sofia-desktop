@@ -121,10 +121,10 @@ for (const command of exactCommands) {
 
 assert.ok(cloudDocs.includes(serverUrl), "Cloud MCP docs are missing the public endpoint");
 assert.ok(
-  cloudDocs.includes("`sofia-app.ruut.chat/api/den` is an internal same-origin desktop proxy"),
-  "Cloud MCP docs must describe sofia-app.ruut.chat/api/den as an internal same-origin desktop proxy",
+  cloudDocs.includes("`sofia.ruut.chat/api/den` is an internal same-origin desktop proxy"),
+  "Cloud MCP docs must describe sofia.ruut.chat/api/den as an internal same-origin desktop proxy",
 );
-assert.ok(cloudDocs.includes("https://sofia-app.ruut.chat/api/auth"), "Cloud MCP docs are missing the auth server origin");
+assert.ok(cloudDocs.includes("https://sofia.ruut.chat/api/auth"), "Cloud MCP docs are missing the auth server origin");
 assert.ok(cloudDocs.includes("RFC9728"), "Cloud MCP docs are missing RFC9728 discovery guidance");
 assert.ok(cloudDocs.includes("PKCE") && cloudDocs.includes("S256"), "Cloud MCP docs are missing PKCE S256 guidance");
 assert.ok(cloudDocs.includes("OAuth authorize and token requests must include exactly one"), "Cloud MCP docs are missing exact resource guidance");

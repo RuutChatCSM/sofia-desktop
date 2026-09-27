@@ -9,7 +9,7 @@ import { loadVoiceoverParagraphs } from "../runner/voiceover.mjs";
 const FLOW_ID = "desktop-upgrade-preserves-server-url";
 const vo = await loadVoiceoverParagraphs(FLOW_ID);
 const ORG_URL = "http://sofia.example-manufacturing.internal:48765";
-const HOSTED_URL = "https://sofia-app.ruut.chat";
+const HOSTED_URL = "https://sofia.ruut.chat";
 const CANONICAL_BOOTSTRAP = "C:\\Users\\Administrator\\AppData\\Local\\sofia\\desktop-bootstrap.json";
 const LEGACY_BOOTSTRAP = "C:\\Users\\Administrator\\.config\\sofia\\desktop-bootstrap.json";
 const DOWNLOAD_BUNDLE = "C:\\Users\\Administrator\\Downloads\\Example Manufacturing Upgrade";

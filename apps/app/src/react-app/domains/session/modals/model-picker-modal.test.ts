@@ -13,7 +13,7 @@ describe("resolveModelPickerEmptyState", () => {
       query: "",
       organizationModelsEmpty: true,
       restrictToCloud: true,
-      organizationModelsSettingsUrl: "https://sofia-app.ruut.chat/dashboard/custom-llm-providers",
+      organizationModelsSettingsUrl: "https://sofia.ruut.chat/dashboard/custom-llm-providers",
     });
 
     expect(state?.messageKey).toBe("models.organization_models_empty");

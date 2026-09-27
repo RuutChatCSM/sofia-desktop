@@ -644,7 +644,7 @@ export function denOriginComparisonKey(input: string | null | undefined): string
 
 /**
  * True when the effective Den control plane is not the hosted Organization cloud
- * (sofia-app.ruut.chat). Self-hosted deployments point the app at their own
+ * (sofia.ruut.chat). Self-hosted deployments point the app at their own
  * control plane via VITE_DEN_BASE_URL or the desktop bootstrap config, so
  * hosted-only surfaces (e.g. Hosted models upsells) should stay hidden.
  */
@@ -749,7 +749,7 @@ export function getDenMcpUrl(): string {
 
 /**
  * Detects MCP URLs written by older builds that pointed `/mcp` at the bare
- * web-app origin (e.g. `https://sofia-app.ruut.chat/mcp`). Nothing serves
+ * web-app origin (e.g. `https://sofia.ruut.chat/mcp`). Nothing serves
  * MCP there — those entries fail with a 404 and must be reconfigured.
  */
 export function isLegacyWebAppMcpUrl(input: string | null | undefined): boolean {
@@ -765,7 +765,7 @@ export function isLegacyWebAppMcpUrl(input: string | null | undefined): boolean 
 /**
  * Resolve the URL the cloud MCP entry should connect to from a minted
  * token's `resource`. Older den-api builds mint the bare web-app origin
- * (`https://sofia-app.ruut.chat/mcp`) where nothing serves MCP — heal
+ * (`https://sofia.ruut.chat/mcp`) where nothing serves MCP — heal
  * those to the `/api/den` proxy on the same origin instead of trusting
  * them verbatim. Returns null when the resource is unusable so callers
  * can keep their bootstrap-derived URL.

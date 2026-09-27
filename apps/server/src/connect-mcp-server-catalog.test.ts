@@ -107,11 +107,11 @@ describe("Sofia Connect MCP server catalog", () => {
   test("keeps hosted api-origin provider proxies on the credential-bound app gateway origin", async () => {
     const index = await readSofiaConnectMcpServerIndex({
       type: "remote",
-      url: "https://sofia-app.ruut.chat/api/den/mcp/agent",
+      url: "https://sofia.ruut.chat/api/den/mcp/agent",
     }, "Bearer private-app-host-token", indexFetcher([]));
 
     expect(index?.servers[0]?.url).toBe(
-      "https://sofia-app.ruut.chat/api/den/mcp/agent/connections/emc_01k28e8q8pf8r9sff9mhyqxved",
+      "https://sofia.ruut.chat/api/den/mcp/agent/connections/emc_01k28e8q8pf8r9sff9mhyqxved",
     );
   });
 
@@ -313,7 +313,7 @@ describe("Sofia Connect MCP server catalog", () => {
     const result = await reconcileSofiaConnectMcpServers({
       config,
       workspace: config.workspaces[0]!,
-      cloudMcp: { type: "remote", url: "https://sofia-app.ruut.chat/api/den/mcp/agent" },
+      cloudMcp: { type: "remote", url: "https://sofia.ruut.chat/api/den/mcp/agent" },
       appHostAuthorization: "Bearer private-app-host-token",
       fetcher: indexFetcher([], [{
         connectionId: "emc_01crossorigin",

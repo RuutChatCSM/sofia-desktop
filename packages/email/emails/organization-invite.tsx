@@ -8,7 +8,7 @@ export default function OrganizationInvitePreview(props: OrganizationInviteEmail
 }
 
 OrganizationInvitePreview.PreviewProps = {
-  inviteLink: "https://sofia-app.ruut.chat/join-org?invite=invitation_preview",
+  inviteLink: "https://sofia.ruut.chat/join-org?invite=invitation_preview",
   invitedByName: "Ada Lovelace",
   invitedByEmail: "ada@example.com",
   organizationName: "Sofia Preview",

@@ -1,6 +1,6 @@
 # Sofia Cloud App (`ee/apps/den-web`)
 
-Frontend for `sofia-app.ruut.chat`.
+Frontend for `sofia.ruut.chat`.
 
 ## What it does
 
@@ -10,7 +10,7 @@ Frontend for `sofia-app.ruut.chat`.
 - Sends users to the organization billing page for subscription management.
 - Offers desktop handoff actions so users can open the generated worker directly in Sofia or copy the connect credentials manually.
 - Uses a Next.js proxy route (`/api/den/*`) to reach `sofia-api.ruut.chat` without browser CORS issues.
-- Uses a same-origin auth proxy (`/api/auth/*`) so GitHub OAuth callbacks can land on `sofia-app.ruut.chat`.
+- Uses a same-origin auth proxy (`/api/auth/*`) so GitHub OAuth callbacks can land on `sofia.ruut.chat`.
 
 ## Current hosted user flow
 
@@ -86,4 +86,4 @@ These commands should be configured in the Vercel dashboard rather than committe
 
 Then assign custom domain:
 
-- `sofia-app.ruut.chat`
+- `sofia.ruut.chat`

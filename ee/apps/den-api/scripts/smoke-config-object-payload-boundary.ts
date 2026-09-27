@@ -3,12 +3,12 @@
  * Smoke test for the config-object version payload boundary against a deployed Den API.
  *
  * Required env (env only; never hardcode secrets):
- *   DEN_API_BASE_URL       Den API root that serves /v1, e.g. https://sofia-app.ruut.chat/api/den
+ *   DEN_API_BASE_URL       Den API root that serves /v1, e.g. https://sofia.ruut.chat/api/den
  *   DEN_API_BEARER_TOKEN   Bearer token from an authenticated Den session with config-object edit access
  *   DEN_CONFIG_OBJECT_ID   Explicit target configObjectId (cob_...) to receive new immutable versions
  *
  * Usage:
- *   DEN_API_BASE_URL=https://sofia-app.ruut.chat/api/den \
+ *   DEN_API_BASE_URL=https://sofia.ruut.chat/api/den \
  *   DEN_API_BEARER_TOKEN=<session bearer token> \
  *   DEN_CONFIG_OBJECT_ID=cob_... \
  *   pnpm --filter @sofia-ee/den-api run smoke:config-object-payload-boundary -- --dry-run
@@ -66,7 +66,7 @@ const SMOKE_REASON = "smoke: config object payload boundary check"
 const requiredEnv: EnvDoc[] = [
   {
     name: "DEN_API_BASE_URL",
-    description: "Use the deployed Den API root that serves /v1, for example https://sofia-app.ruut.chat/api/den.",
+    description: "Use the deployed Den API root that serves /v1, for example https://sofia.ruut.chat/api/den.",
   },
   {
     name: "DEN_API_BEARER_TOKEN",

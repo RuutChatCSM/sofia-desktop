@@ -15,10 +15,10 @@ type Tool = {
 
 const destinations: Record<string, string> = {
   home: "/",
-  download: "https://sofia-app.ruut.chat?mode=sign-up",
+  download: "https://sofia.ruut.chat?mode=sign-up",
   pricing: "/pricing",
   enterprise: "/enterprise",
-  cloud: "https://sofia-app.ruut.chat",
+  cloud: "https://sofia.ruut.chat",
   docs: "/docs",
   trust: "/trust",
   feedback: "/feedback",
@@ -36,7 +36,7 @@ const pricingSummary = {
         "macOS and Linux downloads",
         "Bring your own provider keys",
       ],
-      cta: { label: "Get Started for free", href: "https://sofia-app.ruut.chat?mode=sign-up" },
+      cta: { label: "Get Started for free", href: "https://sofia.ruut.chat?mode=sign-up" },
     },
     {
       id: "team-starter",
@@ -49,7 +49,7 @@ const pricingSummary = {
         "Extension Marketplace",
         "Bring your own LLM keys, distributed to your team",
       ],
-      cta: { label: "Start team plan", href: "https://sofia-app.ruut.chat/dashboard/billing" },
+      cta: { label: "Start team plan", href: "https://sofia.ruut.chat/dashboard/billing" },
     },
     {
       id: "enterprise",
@@ -72,18 +72,18 @@ const pricingSummary = {
 }
 
 const downloadLinks = {
-  page: "https://sofia-app.ruut.chat?mode=sign-up",
+  page: "https://sofia.ruut.chat?mode=sign-up",
   platforms: {
     macos: {
-      page: "https://sofia-app.ruut.chat?mode=sign-up",
+      page: "https://sofia.ruut.chat?mode=sign-up",
       note: "Sign up for Sofia Cloud first, then use the guided desktop app access flow.",
     },
     windows: {
-      page: "https://sofia-app.ruut.chat?mode=sign-up",
+      page: "https://sofia.ruut.chat?mode=sign-up",
       note: "Sign up for Sofia Cloud first, then use the guided desktop app access flow.",
     },
     linux: {
-      page: "https://sofia-app.ruut.chat?mode=sign-up",
+      page: "https://sofia.ruut.chat?mode=sign-up",
       note: "Sign up for Sofia Cloud first, then use the guided desktop app access flow.",
     },
   },

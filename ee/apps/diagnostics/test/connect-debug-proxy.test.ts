@@ -51,7 +51,7 @@ function fault(slug: string, pathname: string, now = 1_000) {
 describe("Connect debug proxy configuration", () => {
   test("accepts only encoded origins whose host is allowlisted", () => {
     delete process.env.VERCEL
-    process.env.DEBUG_PROXY_DEFAULT_UPSTREAM = "https://sofia-app.ruut.chat"
+    process.env.DEBUG_PROXY_DEFAULT_UPSTREAM = "https://sofia.ruut.chat"
     process.env.DEBUG_PROXY_ALLOWED_UPSTREAMS = "sofia-staging.ruut.chat,http://127.0.0.1:4545"
     const config = connectDebugProxyConfig()
     expect(allowedUpstreamOverride(encodeUpstreamParameter("https://sofia-staging.ruut.chat"), config)).toBe("https://sofia-staging.ruut.chat")
@@ -138,9 +138,9 @@ describe("Connect debug proxy rewriting and streaming", () => {
   })
 
   test("keeps the desktop auth handoff on the selected proxy base", async () => {
-    const upstreamUrl = new URL("https://sofia-app.ruut.chat/api/den/v1/auth/desktop-handoff")
+    const upstreamUrl = new URL("https://sofia.ruut.chat/api/den/v1/auth/desktop-handoff")
     const proxyBase = "https://proxy.example/via/default/access-key"
-    const upstreamDenBaseUrl = "https://sofia-app.ruut.chat/api/den"
+    const upstreamDenBaseUrl = "https://sofia.ruut.chat/api/den"
     const deepLink = `sofia://den-auth?grant=one-time-grant&denBaseUrl=${encodeURIComponent(upstreamDenBaseUrl)}`
 
     expect(rewriteLocationHeader(deepLink, upstreamUrl, proxyBase)).toBe(
@@ -176,7 +176,7 @@ describe("Connect debug proxy rewriting and streaming", () => {
   test("sets a short-lived browser route without exposing it to Den", async () => {
     delete process.env.VERCEL
     process.env.DEBUG_PROXY_ACCESS_KEY = "debug-access-key-1234"
-    process.env.DEBUG_PROXY_DEFAULT_UPSTREAM = "https://sofia-app.ruut.chat"
+    process.env.DEBUG_PROXY_DEFAULT_UPSTREAM = "https://sofia.ruut.chat"
     let forwardedCookie = ""
     const response = await proxyConnectDebugRequest({
       pathSegments: ["debug-access-key-1234"],
@@ -284,7 +284,7 @@ describe("Connect debug proxy rewriting and streaming", () => {
       upstream: Response.json({ jsonrpc: "2.0", id: 1, result: { protocolVersion: "2025-06-18" } }, {
         headers: { "mcp-protocol-version": "2025-06-18" },
       }),
-      upstreamRequestUrl: new URL("https://sofia-app.ruut.chat/api/den/mcp/agent"),
+      upstreamRequestUrl: new URL("https://sofia.ruut.chat/api/den/mcp/agent"),
     })
     expect(response.headers.get("mcp-protocol-version")).toBe("1900-01-01")
     expect(await response.text()).toContain("1900-01-01")
@@ -295,7 +295,7 @@ describe("Connect debug proxy request handling", () => {
   test("preserves credentials in transit but retains only redacted request metadata", async () => {
     delete process.env.VERCEL
     process.env.DEBUG_PROXY_ACCESS_KEY = "debug-access-key-1234"
-    process.env.DEBUG_PROXY_DEFAULT_UPSTREAM = "https://sofia-app.ruut.chat"
+    process.env.DEBUG_PROXY_DEFAULT_UPSTREAM = "https://sofia.ruut.chat"
     let forwardedAuthorization = ""
     let forwardedCookie = ""
     let forwardedBody = ""

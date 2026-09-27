@@ -3,7 +3,7 @@
 Regression proof for the multi-origin protected-resource fix: den-api serves
 MCP on a direct API origin (127.0.0.1:8790 here, sofia-api.ruut.chat in prod)
 while browser auth lives on the den-web origin (localhost:3005 here,
-sofia-app.ruut.chat in prod). Before the fix, RFC 9728 metadata on the API
+sofia.ruut.chat in prod). Before the fix, RFC 9728 metadata on the API
 origin declared the web-app origin's resource, so spec-strict clients (Cursor)
 refused to connect. The flow plays a Cursor-like client: discovery, dynamic
 client registration, PKCE browser OAuth with a loopback callback, token

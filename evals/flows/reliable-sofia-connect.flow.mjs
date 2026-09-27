@@ -2403,7 +2403,7 @@ export default {
                     && bodyText.includes('429 rate limit')
                     && bodyText.includes('Retry-After'),
                   hasRequestId: bodyText.includes('X-Request-Id') && bodyText.includes('referenceId') && bodyText.includes('reference_id'),
-                  hasInternalProxyWarning: bodyText.includes('sofia-app.ruut.chat/api/den') && bodyText.includes('internal same-origin desktop proxy') && bodyText.includes('Do not paste it into external MCP clients'),
+                  hasInternalProxyWarning: bodyText.includes('sofia.ruut.chat/api/den') && bodyText.includes('internal same-origin desktop proxy') && bodyText.includes('Do not paste it into external MCP clients'),
                   hasOrganizationSwitching: bodyText.includes('The organization you choose in the browser is pinned into the token') && bodyText.includes('logout/auth') && bodyText.includes('logout/login'),
                   hasStaleSevenDayClaim: /\b(?:7|seven)[ -]?day\b/i.test(bodyText),
                   hasOpaqueAccessTokenClaim: bodyText.includes('opaque bearer tokens') || bodyText.includes('Access tokens are opaque'),

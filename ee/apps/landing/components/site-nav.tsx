@@ -42,7 +42,7 @@ export function SiteNav(props: Props) {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
   const callHref = props.callUrl || "/enterprise#book";
-  const cloudSignupHref = "https://sofia-app.ruut.chat?mode=sign-up";
+  const cloudSignupHref = "https://sofia.ruut.chat?mode=sign-up";
   const mobilePrimaryHref = props.mobilePrimaryHref || cloudSignupHref;
   const mobilePrimaryLabel = props.mobilePrimaryLabel || "Get Started for free";
   const callExternal = /^https?:\/\//.test(callHref);

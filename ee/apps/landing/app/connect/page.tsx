@@ -9,7 +9,7 @@ import { SiteFooter } from "../../components/site-footer";
 import { SiteNav } from "../../components/site-nav";
 import { getGithubData } from "../../lib/github";
 
-const CLOUD_SIGNUP_URL = "https://sofia-app.ruut.chat";
+const CLOUD_SIGNUP_URL = "https://sofia.ruut.chat";
 const GATEWAY_URL = "https://sofia-api.ruut.chat/mcp/agent";
 
 export const metadata: Metadata = {

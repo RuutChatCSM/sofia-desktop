@@ -26,7 +26,7 @@ import {
 import type { SofiaConnectClientId } from "./sofia-connect-installer-config";
 
 const DOCS_URL = "https://sofia.ruut.chat/docs/cloud/run-in-the-cloud/cloud-mcp#connect-mcp-install-engine";
-const SIGNUP_URL = "https://sofia-app.ruut.chat?mode=sign-up";
+const SIGNUP_URL = "https://sofia.ruut.chat?mode=sign-up";
 
 type CopyMethod = "clipboard" | "execCommand" | "none";
 type ClientId = SofiaConnectClientId;

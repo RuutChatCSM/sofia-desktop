@@ -88,8 +88,8 @@ try {
       requireSignin: false,
       prepared: { orgId: "org_test", orgName: "Test Org", skillId: "cob_test", skillTitle: "Test Skill", skillPath: "/tmp/skill.md" },
       claimLinks: [
-        { id: "wcl_owner", role: "owner", token: "test-owner-token", url: "https://sofia-app.ruut.chat/workspace-claim?token=test-owner-token", expiresAt: "2030-01-01T00:00:00.000Z" },
-        { id: "wcl_member", role: "member", token: "test-member-token", url: "https://sofia-app.ruut.chat/workspace-claim?token=test-member-token", expiresAt: "2030-01-01T00:00:00.000Z" },
+        { id: "wcl_owner", role: "owner", token: "test-owner-token", url: "https://sofia.ruut.chat/workspace-claim?token=test-owner-token", expiresAt: "2030-01-01T00:00:00.000Z" },
+        { id: "wcl_member", role: "member", token: "test-member-token", url: "https://sofia.ruut.chat/workspace-claim?token=test-member-token", expiresAt: "2030-01-01T00:00:00.000Z" },
       ],
     }),
     "utf8",
@@ -110,7 +110,7 @@ try {
   const claimLinkByRoleJson = JSON.parse(claimLinkByRole.stdout)
   assert.equal(claimLinkByRoleJson.claimLinks.length, 1)
   assert.equal(claimLinkByRoleJson.claimLinks[0].role, "owner")
-  assert.equal(claimLinkByRoleJson.claimLinks[0].url, "https://sofia-app.ruut.chat/workspace-claim?token=test-owner-token")
+  assert.equal(claimLinkByRoleJson.claimLinks[0].url, "https://sofia.ruut.chat/workspace-claim?token=test-owner-token")
 
   const claimLinkMissingRole = spawnSync(process.execPath, [cli, "cloud", "claim-link", "--desktop-bootstrap-path", bootstrapPath, "--role", "admin"], {
     encoding: "utf8",

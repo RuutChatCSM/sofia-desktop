@@ -10,7 +10,7 @@ Sofia works best when customer IT approves outbound access by component. The can
 For a practical Sofia Cloud desktop install, allow TCP 443 to these hosts:
 
 ```text
-sofia-app.ruut.chat
+sofia.ruut.chat
 sofia-api.ruut.chat
 github.com
 release-assets.githubusercontent.com
@@ -29,10 +29,10 @@ Common misses:
 
 | Host | Requirement | Why it is reached | What breaks when blocked |
 | --- | --- | --- | --- |
-| `sofia-app.ruut.chat` | Required for Sofia Cloud | Hosted Cloud web origin. The desktop uses one base URL and derives Den API/MCP calls through `/api/den/...`. | Cloud sign-in, org settings, Collections, and remote workspace flows cannot load. |
+| `sofia.ruut.chat` | Required for Sofia Cloud | Hosted Cloud web origin. The desktop uses one base URL and derives Den API/MCP calls through `/api/den/...`. | Cloud sign-in, org settings, Collections, and remote workspace flows cannot load. |
 | `sofia-api.ruut.chat` | Required for hosted install and Sofia Connect | Hosted public API and Sofia Connect MCP endpoint used by install and external-client flows. | Hosted install checks and public Sofia Connect fail. |
 | `app.sofia.software`, `api.sofia.software` | Required only for legacy hosted configurations | Older desktop configurations may still derive Cloud and Sofia Connect traffic from these legacy hosted origins. | Legacy configurations cannot reconcile Sofia Connect or native MCP Apps until moved to the current hosted origins. |
-| Your self-hosted Den web origin | Required for self-hosted desktop | Replaces `sofia-app.ruut.chat` for signed-in desktop traffic. In the single-origin shape, API and MCP use `/api/den/...` on the same origin. | The desktop cannot sign in or reach Den. |
+| Your self-hosted Den web origin | Required for self-hosted desktop | Replaces `sofia.ruut.chat` for signed-in desktop traffic. In the single-origin shape, API and MCP use `/api/den/...` on the same origin. | The desktop cannot sign in or reach Den. |
 | Your separate Den API origin, if configured | Required only for that topology | Used by one-time install-link exchange and external MCP clients when `DEN_API_PUBLIC_URL` points at a separate origin. | Install-link handoff or external MCP clients cannot complete. |
 | `github.com` | Required in practice unless mirrored | Installer/updater release URLs, GitHub issue links, and GitHub plugin source URLs. | Install/update downloads cannot start; GitHub links may not open. |
 | `release-assets.githubusercontent.com` | Required in practice unless mirrored | Current GitHub release-asset redirect target. | Downloads start from `github.com` and fail partway through. |

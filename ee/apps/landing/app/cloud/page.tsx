@@ -9,7 +9,7 @@ import { SiteFooter } from "../../components/site-footer";
 import { SiteNav } from "../../components/site-nav";
 import { getGithubData } from "../../lib/github";
 
-const CLOUD_SIGNUP_URL = "https://sofia-app.ruut.chat";
+const CLOUD_SIGNUP_URL = "https://sofia.ruut.chat";
 
 export const metadata: Metadata = {
   title: "Sofia Cloud — the dashboard for your whole org",
@@ -94,7 +94,7 @@ export default async function CloudPage() {
               <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white"><Globe className="h-5 w-5 text-[var(--lp-ink)]" strokeWidth={1.75} /></span>
               <h2 className="mt-8 flex items-center gap-2 text-[16.5px] font-semibold">Sofia Web <LpAlphaBadge /></h2>
               <p className="mt-3 text-[14px] leading-[22px] text-[var(--lp-body)]">The whole workspace — and this dashboard — in the browser. Nothing to install.</p>
-              <div className="mt-auto pt-6"><LpArrowLink href="https://sofia-app.ruut.chat">Open in browser</LpArrowLink></div>
+              <div className="mt-auto pt-6"><LpArrowLink href="https://sofia.ruut.chat">Open in browser</LpArrowLink></div>
             </LpTonalCard>
             <LpTonalCard className="flex flex-col p-7">
               <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white"><Layers className="h-5 w-5 text-[var(--lp-ink)]" strokeWidth={1.75} /></span>

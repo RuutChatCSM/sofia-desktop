@@ -7,7 +7,7 @@ description: "Connect the desktop app to your organization for Collections, mana
 Sofia Cloud is optional. The local desktop app stays free, requires no Cloud sign-in, and supports your own providers, skills, plugins, and custom MCP servers. Use Cloud when an organization needs to assign and manage those resources for a team.
 </Note>
 
-Sofia Cloud is available at [sofia-app.ruut.chat](https://sofia-app.ruut.chat/). It is for teams that want shared identity, Collections, managed connections and models, desktop policies, or hosted workspaces.
+Sofia Cloud is available at [sofia.ruut.chat](https://sofia.ruut.chat/). It is for teams that want shared identity, Collections, managed connections and models, desktop policies, or hosted workspaces.
 
 First, create or join an organization and connect the desktop app to it.
 
@@ -15,7 +15,7 @@ First, create or join an organization and connect the desktop app to it.
   ![Sofia Cloud org settings with organization identity, allowed email domains, and desktop restrictions](/images/cloud-org-settings.png)
 </Frame>
 
-1. Open [sofia-app.ruut.chat](https://sofia-app.ruut.chat/) in your browser.
+1. Open [sofia.ruut.chat](https://sofia.ruut.chat/) in your browser.
 2. Click `Create organization`.
 3. Enter your org name.
 4. Finish checkout if Sofia Cloud asks for billing.
@@ -27,7 +27,7 @@ Once you're there, you can configure the settings for the organization.
 
 <Note>Only the organization owner can change these settings.</Note>
 
-1. Open the `dashboard/org_settings` [page](https://sofia-app.ruut.chat/dashboard/org-settings) in the cloud app.
+1. Open the `dashboard/org_settings` [page](https://sofia.ruut.chat/dashboard/org-settings) in the cloud app.
 2. Set the name for your organization.
 3. Optional: enable `Restrict allowed email domains` and add the approved domains.
 4. Optional: change any `Desktop restrictions` that should apply after people sign in from the desktop app.
@@ -46,7 +46,7 @@ Next, you want to make sure you can sign in the desktop app.
 ## Cloud URL used by the desktop app
 
 The desktop app uses a single Cloud URL: the Den web `baseUrl`. The hosted
-default is `https://sofia-app.ruut.chat`.
+default is `https://sofia.ruut.chat`.
 
 All Cloud API and MCP traffic is derived from that one URL through the web app
 proxy:
@@ -56,7 +56,7 @@ proxy:
 
 The desktop app does not store or read a separate API URL. On startup it reads
 the Cloud URL from `desktop-bootstrap.json`; if that file is missing, it falls
-back to `https://sofia-app.ruut.chat`. When you change the Cloud URL in
+back to `https://sofia.ruut.chat`. When you change the Cloud URL in
 `Settings > Account`, Sofia writes the new `baseUrl` back to the bootstrap
 file so the next launch uses the same source of truth.
 

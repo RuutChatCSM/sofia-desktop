@@ -53,15 +53,15 @@ describe("Automation runner credentials", () => {
   test("binds a Den Web proxied credential to its trusted public route", () => {
     const request = new Request("http://sofia-api.ruut.chat/v1/automation-runners/token", {
       headers: {
-        "x-forwarded-host": "sofia-app.ruut.chat",
+        "x-forwarded-host": "sofia.ruut.chat",
         "x-forwarded-proto": "https",
         "x-forwarded-prefix": "/api/den",
       },
     })
 
     expect(automationRunnerAudienceFromRequest(request, {
-      trustedOrigins: ["https://sofia-app.ruut.chat"],
-    })).toBe("https://sofia-app.ruut.chat/api/den")
+      trustedOrigins: ["https://sofia.ruut.chat"],
+    })).toBe("https://sofia.ruut.chat/api/den")
   })
 
   test("binds a rotated preview hostname covered by a trusted wildcard", () => {
@@ -119,7 +119,7 @@ describe("Automation runner credentials", () => {
     })
 
     expect(automationRunnerAudienceFromRequest(request, {
-      trustedOrigins: ["https://sofia-app.ruut.chat"],
+      trustedOrigins: ["https://sofia.ruut.chat"],
     })).toBe("https://sofia-api.ruut.chat")
   })
 

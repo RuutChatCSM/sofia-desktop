@@ -14,8 +14,8 @@ function firstPartyTokenResource(headers: HeadersInit = {}) {
 
 describe("deriveDenMcpResource", () => {
   test("routes hosted web-app origins through the /api/den proxy", () => {
-    expect(deriveDenMcpResource("https://sofia-app.ruut.chat", [])).toBe(
-      "https://sofia-app.ruut.chat/api/den/mcp",
+    expect(deriveDenMcpResource("https://sofia.ruut.chat", [])).toBe(
+      "https://sofia.ruut.chat/api/den/mcp",
     )
     expect(deriveDenMcpResource("https://app.sofia.software", [])).toBe(
       "https://app.sofia.software/api/den/mcp",
@@ -50,8 +50,8 @@ describe("deriveDenMcpResource", () => {
   })
 
   test("strips trailing slashes before appending the path", () => {
-    expect(deriveDenMcpResource("https://sofia-app.ruut.chat/", [])).toBe(
-      "https://sofia-app.ruut.chat/api/den/mcp",
+    expect(deriveDenMcpResource("https://sofia.ruut.chat/", [])).toBe(
+      "https://sofia.ruut.chat/api/den/mcp",
     )
     expect(deriveDenMcpResource("https://sofia-api.ruut.chat//", [])).toBe(
       "https://sofia-api.ruut.chat/mcp",
@@ -61,7 +61,7 @@ describe("deriveDenMcpResource", () => {
 
 describe("isHostedWebAppHost", () => {
   test("matches app.* and *.run.app hosts", () => {
-    expect(isHostedWebAppHost("sofia-app.ruut.chat", [])).toBe(true)
+    expect(isHostedWebAppHost("sofia.ruut.chat", [])).toBe(true)
     expect(isHostedWebAppHost("APP.SOFIA.SOFTWARE", [])).toBe(true)
     expect(isHostedWebAppHost("den-web-abc.run.app", [])).toBe(true)
   })

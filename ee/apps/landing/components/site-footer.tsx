@@ -31,7 +31,7 @@ export function SiteFooter() {
             Desktop
           </Link>
           <a
-            href="https://sofia-app.ruut.chat"
+            href="https://sofia.ruut.chat"
             target="_blank"
             rel="noreferrer"
             className="whitespace-nowrap transition-colors hover:text-gray-800"

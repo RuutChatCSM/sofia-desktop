@@ -309,7 +309,7 @@ If both SSO and SCIM provide the same attribute:
 Each org should have a stable sign-in URL:
 
 ```text
-https://sofia-app.ruut.chat/sso/:orgSlug
+https://sofia.ruut.chat/sso/:orgSlug
 ```
 
 The route should render a minimal page or immediately redirect.

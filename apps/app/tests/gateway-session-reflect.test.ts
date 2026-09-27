@@ -61,7 +61,7 @@ describe("gateway Den session reflection", () => {
     await initializeDenBootstrapConfig();
 
     writeDenSettings({
-      baseUrl: "https://sofia-app.ruut.chat",
+      baseUrl: "https://sofia.ruut.chat",
       authToken: "tok_gateway_session",
       activeOrgId: null,
       activeOrgSlug: null,
@@ -133,7 +133,7 @@ describe("gateway Den session reflection", () => {
     expect(second).toBe(first);
 
     writeDenSettings({
-      baseUrl: "https://sofia-app.ruut.chat",
+      baseUrl: "https://sofia.ruut.chat",
       authToken: "tok_gateway_session",
       activeOrgId: null,
       activeOrgSlug: null,

@@ -37,7 +37,7 @@ type Props = {
   isMobileVisitor: boolean;
 };
 
-const CLOUD_SIGNUP_URL = "https://sofia-app.ruut.chat";
+const CLOUD_SIGNUP_URL = "https://sofia.ruut.chat";
 const GATEWAY_URL = "https://sofia-api.ruut.chat/mcp/agent";
 
 type ProviderLogoName =
@@ -407,7 +407,7 @@ export function LandingHome(props: Props) {
                     from your browser.
                   </p>
                   <a
-                    href="https://sofia-app.ruut.chat"
+                    href="https://sofia.ruut.chat"
                     className="lp-pill-secondary lp-pill-sm mt-5"
                   >
                     Open in browser

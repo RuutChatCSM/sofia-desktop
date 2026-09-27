@@ -10,4 +10,4 @@
 
 5. When a request is malformed, unauthorized, expired, concurrently refreshed, or rate-limited, Sofia returns a standards-compliant response with a useful error and support reference instead of failing silently.
 
-6. The documentation matches the shipped behavior: one public API endpoint, accurate OAuth discovery and token lifetimes, explicit client instructions, organization switching, troubleshooting, support status, and a clear note that `sofia-app.ruut.chat/api/den` is an internal desktop proxy.
+6. The documentation matches the shipped behavior: one public API endpoint, accurate OAuth discovery and token lifetimes, explicit client instructions, organization switching, troubleshooting, support status, and a clear note that `sofia.ruut.chat/api/den` is an internal desktop proxy.

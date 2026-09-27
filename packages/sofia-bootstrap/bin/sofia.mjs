@@ -87,7 +87,7 @@ function printHelp() {
     "Options:",
     "  --web-base-url   Browser-facing origin written into --prepare-desktop's",
     "                   config (used for the app's Sign In button and claim",
-    "                   links). Defaults to https://sofia-app.ruut.chat when",
+    "                   links). Defaults to https://sofia.ruut.chat when",
     "                   --base-url is the hosted API (sofia-api.ruut.chat);",
     "                   set explicitly for self-hosted/custom deployments.",
     "  --json           Print machine-readable JSON",
@@ -154,7 +154,7 @@ function deriveWebBaseUrl(apiBaseUrl) {
   try {
     const url = new URL(apiBaseUrl)
     if (url.hostname === "sofia-api.ruut.chat") {
-      return "https://sofia-app.ruut.chat"
+      return "https://sofia.ruut.chat"
     }
     // Local/self-hosted dev: den-web commonly proxies the API at a different
     // port on the same host (see ee/apps/den-web's /api/den proxy). Callers

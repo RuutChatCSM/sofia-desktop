@@ -14,9 +14,9 @@ const home = `# Sofia
 ## Primary calls-to-action
 
 - **Download for free** — [Desktop](https://sofia.ruut.chat/download)
-- **Open in your browser** — [Sofia Web](https://sofia-app.ruut.chat)
+- **Open in your browser** — [Sofia Web](https://sofia.ruut.chat)
 - **Team plans** — [Pricing](https://sofia.ruut.chat/pricing) (first 5 seats free, then \\$10 per seat/mo)
-- **Sign in to the hosted workspace** — [Cloud](https://sofia-app.ruut.chat)
+- **Sign in to the hosted workspace** — [Cloud](https://sofia.ruut.chat)
 - **SSO / audit / procurement** — [Enterprise](https://sofia.ruut.chat/enterprise)
 - **Docs** — [sofia.ruut.chat/docs](https://sofia.ruut.chat/docs)
 - **Migrate from Claude Cowork** — [Migration guide](https://sofia.ruut.chat/docs/start-here/migrate-from-claude-cowork)
@@ -61,7 +61,7 @@ const pricing = `# Sofia pricing — free, team, and enterprise
 - macOS and Linux downloads
 - Bring your own provider keys
 - Free forever
-- CTA: [Get Started for free](https://sofia-app.ruut.chat?mode=sign-up)
+- CTA: [Get Started for free](https://sofia.ruut.chat?mode=sign-up)
 
 ## Team Starter — \\$10 / seat / month
 
@@ -69,7 +69,7 @@ const pricing = `# Sofia pricing — free, team, and enterprise
 - API access
 - Extension Marketplace
 - Bring your own LLM keys, distributed to your team
-- CTA: [Start team plan](https://sofia-app.ruut.chat/dashboard/billing)
+- CTA: [Start team plan](https://sofia.ruut.chat/dashboard/billing)
 
 ## Enterprise — Custom pricing
 
@@ -162,7 +162,7 @@ const glm52 = `# GLM 5.2 is now in Sofia — with 2x usage
 
 ## How it works
 
-1. **Sign up** — [Get Started for free](https://sofia-app.ruut.chat?mode=sign-up&intent=models)
+1. **Sign up** — [Get Started for free](https://sofia.ruut.chat?mode=sign-up&intent=models)
 2. **Subscribe** — Sofia Models at $10/user/mo includes GLM 5.2 with 2x usage
 3. **Open the app** — switch to GLM 5.2 from the model picker
 
@@ -172,7 +172,7 @@ Open Sofia, switch to GLM 5.2, and ask the chat to organize your tasks.
 
 ## Links
 
-- [Try GLM 5.2 in Sofia](https://sofia-app.ruut.chat?mode=sign-up&intent=models)
+- [Try GLM 5.2 in Sofia](https://sofia.ruut.chat?mode=sign-up&intent=models)
 - [Download the app](https://sofia.ruut.chat/download)
 - [Full changelog](https://sofia.ruut.chat/docs/changelog)
 `
@@ -183,7 +183,7 @@ const download = `# Get Started with Sofia
 
 ## Start here
 
-- [Get Started for free](https://sofia-app.ruut.chat?mode=sign-up)
+- [Get Started for free](https://sofia.ruut.chat?mode=sign-up)
 - Create or select your workspace.
 - Follow the Cloud app's desktop app access flow.
 
@@ -205,7 +205,7 @@ const connect = `# Sofia Connect
 - Org-level authentication, roles, allowlists, and audit apply to every call
 - Works in Sofia and any MCP-compatible client
 - First 5 seats are free
-- [Get started free](https://sofia-app.ruut.chat?mode=sign-up)
+- [Get started free](https://sofia.ruut.chat?mode=sign-up)
 - [Read the docs](https://sofia.ruut.chat/docs)
 `
 
@@ -217,7 +217,7 @@ const cloud = `# Sofia Cloud
 - Deploy skills and MCP servers to every seat
 - Manage members, policies, usage, and audit
 - Sofia Web and the Connect MCP gateway are built in
-- [Get started free](https://sofia-app.ruut.chat?mode=sign-up)
+- [Get started free](https://sofia.ruut.chat?mode=sign-up)
 - [Explore Connect](https://sofia.ruut.chat/connect)
 `
 

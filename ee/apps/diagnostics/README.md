@@ -103,7 +103,7 @@ Set these production environment variables:
 | `DIAGNOSTICS_PROFILE` | `generic`, `microsoft`, or `servicenow`. |
 | `NEXT_PUBLIC_DIAGNOSTICS_ORIGIN` | Fixed production origin, normally `https://sofia-diagnostic.ruut.chat`. Preview deployments use Vercel's deployment-specific `VERCEL_URL` instead. |
 | `DEBUG_PROXY_ACCESS_KEY` | URL-safe random value (16+ characters) required for the Connect debug proxy UI and traffic. It becomes a path segment in generated desktop-compatible URLs. |
-| `DEBUG_PROXY_DEFAULT_UPSTREAM` | Default Den origin. Falls back to `https://sofia-app.ruut.chat`; set it explicitly on the Vercel project. |
+| `DEBUG_PROXY_DEFAULT_UPSTREAM` | Default Den origin. Falls back to `https://sofia.ruut.chat`; set it explicitly on the Vercel project. |
 | `DEBUG_PROXY_ALLOWED_UPSTREAMS` | Comma-separated HTTPS hosts or origins that generated override links may target. The default upstream remains allowed independently. |
 | `DEBUG_PROXY_SLOW_MS` | Optional Agent endpoint delay, clamped to 5,000–10,000 ms; default 7,000 ms. |
 | `DEBUG_PROXY_FLAKY_WINDOW_MS` | Optional per-instance rolling window for `flaky-N`; default 60,000 ms. |

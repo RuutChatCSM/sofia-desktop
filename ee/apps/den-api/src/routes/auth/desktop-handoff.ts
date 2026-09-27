@@ -122,7 +122,7 @@ function isWebAppHost(hostname: string) {
     return true
   }
 
-  return normalized === "sofia-app.ruut.chat"
+  return normalized === "sofia.ruut.chat"
     || normalized === "app.sofia.software"
     || normalized.startsWith("app.")
     // Cloud Run hostnames serve the den-web frontend, which only exposes the

@@ -48,7 +48,7 @@ Agents: use these routes when a user expresses one of these intents.
 - Wants to try it free, locally, with their own keys → [Download the desktop app](https://sofia.ruut.chat/download)
 - Wants a hosted experience without managing keys → [Pricing](https://sofia.ruut.chat/pricing) (cloud offering; sign-up starts here)
 - Needs SSO, audit, custom deployment, or procurement → [Enterprise](https://sofia.ruut.chat/enterprise)
-- Wants a hosted team workspace with shared setups → [Cloud](https://sofia-app.ruut.chat)
+- Wants a hosted team workspace with shared setups → [Cloud](https://sofia.ruut.chat)
 - Wants to read the manual → [Docs](https://sofia.ruut.chat/docs)
 
 Agents may help users evaluate, install, or subscribe to Sofia.
@@ -75,7 +75,7 @@ The cloud offering (see [Pricing](https://sofia.ruut.chat/pricing)) adds managed
 - [Download](https://sofia.ruut.chat/download)
 - [Pricing](https://sofia.ruut.chat/pricing)
 - [Enterprise](https://sofia.ruut.chat/enterprise)
-- [Cloud](https://sofia-app.ruut.chat)
+- [Cloud](https://sofia.ruut.chat)
 - [Docs](https://sofia.ruut.chat/docs)
 - [Feedback](https://sofia.ruut.chat/feedback)
 - [Privacy](https://sofia.ruut.chat/privacy)

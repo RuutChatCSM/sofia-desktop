@@ -57,7 +57,7 @@ describe("enterprise desktop activation", () => {
     expect(enterpriseActivationRequired(enterpriseDistribution, {
       enterpriseActivation: {
         activatedAt: "2026-07-27T12:00:00.000Z",
-        denBaseUrl: "https://sofia-app.ruut.chat",
+        denBaseUrl: "https://sofia.ruut.chat",
       },
     })).toBe(false);
   });
@@ -76,10 +76,10 @@ describe("enterprise desktop activation", () => {
 
   test("uses the standard Den auth deep-link shape", () => {
     expect(parseDenAuthDeepLink(
-      "sofia://den-auth?grant=one-time-grant&denBaseUrl=https%3A%2F%2Fsofia-app.ruut.chat",
+      "sofia://den-auth?grant=one-time-grant&denBaseUrl=https%3A%2F%2Fsofia.ruut.chat",
     )).toEqual({
       grant: "one-time-grant",
-      denBaseUrl: "https://sofia-app.ruut.chat",
+      denBaseUrl: "https://sofia.ruut.chat",
     });
   });
 

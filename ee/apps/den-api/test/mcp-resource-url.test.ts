@@ -234,22 +234,22 @@ describe("getMcpResourceUrl", () => {
 
   test("honors an additional direct API-origin resource", () => {
     runMcpResourceProbe({
-      betterAuthUrl: "https://sofia-app.ruut.chat",
+      betterAuthUrl: "https://sofia.ruut.chat",
       additionalResources: " https://sofia-api.ruut.chat/mcp/ ",
       requestUrl: "https://sofia-api.ruut.chat/mcp/agent",
       expectedResource: "https://sofia-api.ruut.chat/mcp",
       metadataUrl: "https://sofia-api.ruut.chat/mcp/agent",
       expectedMetadataResource: "https://sofia-api.ruut.chat/mcp",
-      expectedAuthorizationServer: "https://sofia-app.ruut.chat/api/auth",
+      expectedAuthorizationServer: "https://sofia.ruut.chat/api/auth",
     })
   })
 
   test("falls back to the configured resource when the request origin is not allowlisted", () => {
     runMcpResourceProbe({
-      betterAuthUrl: "https://sofia-app.ruut.chat",
+      betterAuthUrl: "https://sofia.ruut.chat",
       route: "agent",
       requestUrl: "https://sofia-api.ruut.chat/mcp/agent",
-      expectedResource: "https://sofia-app.ruut.chat/api/den/mcp/agent",
+      expectedResource: "https://sofia.ruut.chat/api/den/mcp/agent",
     })
   })
 
@@ -280,14 +280,14 @@ describe("resolveMcpResourceFromRequest", () => {
     expect(resolveMcpResourceFromRequest(
       "https://sofia-api.ruut.chat/mcp/agent",
       ["https://sofia-api.ruut.chat/mcp"],
-      "https://sofia-app.ruut.chat/api/den/mcp",
+      "https://sofia.ruut.chat/api/den/mcp",
     )).toBe("https://sofia-api.ruut.chat/mcp")
 
     expect(resolveMcpResourceFromRequest(
       "https://sofia-api.ruut.chat/mcp/agent",
-      ["https://sofia-app.ruut.chat/api/den/mcp"],
-      "https://sofia-app.ruut.chat/api/den/mcp",
-    )).toBe("https://sofia-app.ruut.chat/api/den/mcp")
+      ["https://sofia.ruut.chat/api/den/mcp"],
+      "https://sofia.ruut.chat/api/den/mcp",
+    )).toBe("https://sofia.ruut.chat/api/den/mcp")
 
     expect(resolveMcpResourceFromRequest(
       "https://app.example.com/.well-known/oauth-protected-resource/mcp/agent",
@@ -299,8 +299,8 @@ describe("resolveMcpResourceFromRequest", () => {
 
 describe("deriveDenMcpResource", () => {
   test("keeps hosted web-app and direct API origin behavior unchanged", () => {
-    expect(deriveDenMcpResource("https://sofia-app.ruut.chat", [])).toBe(
-      "https://sofia-app.ruut.chat/api/den/mcp",
+    expect(deriveDenMcpResource("https://sofia.ruut.chat", [])).toBe(
+      "https://sofia.ruut.chat/api/den/mcp",
     )
     expect(deriveDenMcpResource("https://sofia-api.ruut.chat", [])).toBe(
       "https://sofia-api.ruut.chat/mcp",

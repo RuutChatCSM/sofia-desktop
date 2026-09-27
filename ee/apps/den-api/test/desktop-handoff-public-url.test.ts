@@ -90,7 +90,7 @@ describe("desktop handoff public URL", () => {
       orgMode: "multi_org",
       gatewayOrigin: "https://sofia-web.ruut.chat",
       signedPreviewUrls: [],
-      returnUrl: "https://sofia-app.ruut.chat/signin",
+      returnUrl: "https://sofia.ruut.chat/signin",
     })).toBeNull()
   })
 
@@ -110,7 +110,7 @@ describe("desktop handoff public URL", () => {
 
     expect(await resolveApprovedWebHandoffReturnUrl({
       activeOrganizationId: null,
-      returnUrl: "https://sofia-app.ruut.chat/signin",
+      returnUrl: "https://sofia.ruut.chat/signin",
     })).toBeNull()
   })
 

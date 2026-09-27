@@ -18,7 +18,7 @@ const BOOTSTRAP = {
       id: "wcl_01h2xcejqtf2nbrexx3vqjhp41",
       role: "owner",
       token: "eval-token-not-real",
-      url: "https://sofia-app.ruut.chat/workspace-claim?token=eval-token-not-real",
+      url: "https://sofia.ruut.chat/workspace-claim?token=eval-token-not-real",
       expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
     },
   ],

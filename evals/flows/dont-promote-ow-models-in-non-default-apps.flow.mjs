@@ -10,8 +10,8 @@ import { loadVoiceoverParagraphs } from "../runner/voiceover.mjs";
 const FLOW_ID = "dont-promote-ow-models-in-non-default-apps";
 const vo = await loadVoiceoverParagraphs(FLOW_ID);
 
-const DEFAULT_DEN_BASE_URL = "https://sofia-app.ruut.chat";
-const DEFAULT_DEN_API_BASE_URL = "https://sofia-app.ruut.chat/api/den";
+const DEFAULT_DEN_BASE_URL = "https://sofia.ruut.chat";
+const DEFAULT_DEN_API_BASE_URL = "https://sofia.ruut.chat/api/den";
 const CUSTOM_TOKEN = "custom-den-eval-token";
 const CUSTOM_ORG = { id: "org_custom_den_eval", slug: "custom-den-eval", name: "Custom Den Eval Org", role: "owner" };
 const CUSTOM_USER = { id: "usr_custom_den_eval", email: "owner@custom-den-eval.test", name: "Custom Den Eval Owner" };

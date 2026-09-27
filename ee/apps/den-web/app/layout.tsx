@@ -45,7 +45,7 @@ export async function generateMetadata(): Promise<Metadata> {
     metadataBase: metadataBaseFromOrigin(metadataOrigin),
     title: "Sofia Cloud",
     description:
-      "Share your Sofia setup with your team, manage billing, and use Sofia Cloud from sofia-app.ruut.chat.",
+      "Share your Sofia setup with your team, manage billing, and use Sofia Cloud from sofia.ruut.chat.",
     openGraph: {
       title: "Sofia Cloud",
       description:
@@ -56,7 +56,7 @@ export async function generateMetadata(): Promise<Metadata> {
       card: "summary_large_image",
       title: "Sofia Cloud",
       description:
-        "Share your Sofia setup with your team and manage Sofia Cloud from sofia-app.ruut.chat.",
+        "Share your Sofia setup with your team and manage Sofia Cloud from sofia.ruut.chat.",
       images: ["/opengraph-image"]
     },
     icons: {

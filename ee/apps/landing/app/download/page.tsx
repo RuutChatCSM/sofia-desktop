@@ -72,7 +72,7 @@ export default async function Download() {
           <p className="max-w-md text-[13px] text-gray-500">
             Joining a team?{" "}
             <a
-              href="https://sofia-app.ruut.chat"
+              href="https://sofia.ruut.chat"
               className="text-gray-700 underline underline-offset-2"
             >
               Sign in

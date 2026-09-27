@@ -3,7 +3,7 @@ import { loadVoiceoverParagraphs } from "../runner/voiceover.ts";
 
 const FLOW_ID = "den-gateway";
 const DEFAULT_FLOW_BASE_URL = "https://sofia-web.ruut.chat";
-const DEFAULT_DEN_WEB_URL = "https://sofia-app.ruut.chat";
+const DEFAULT_DEN_WEB_URL = "https://sofia.ruut.chat";
 const MARKER_PATH = `cloud-workspace-overlay-${Date.now()}.txt`;
 const MARKER_CONTENT = `cloud workspace overlay proof ${Date.now()}`;
 

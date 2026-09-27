@@ -88,7 +88,7 @@ describe("Sofia capabilities knowledge plugin", () => {
     });
 
     expect(read).toContain("https://sofia-api.ruut.chat/mcp/agent");
-    expect(read).toContain("sofia-app.ruut.chat/api/den");
+    expect(read).toContain("sofia.ruut.chat/api/den");
     expect(read).toContain("internal same-origin desktop proxy");
     expect(read).toContain("X-Request-Id");
     expect(read).toContain("reference_id");

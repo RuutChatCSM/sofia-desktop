@@ -22,13 +22,13 @@ export const CONNECT_MCP_APP_HOST_CAPABILITY = "mcp-app-host-v1";
 const BUILTIN_APP_HOST_CLOUD_ORIGINS = new Set([
   "https://sofia-api.ruut.chat",
   "https://sofia.ruut.chat",
-  "https://sofia-app.ruut.chat",
+  "https://sofia.ruut.chat",
   "https://api.sofia.software",
   "https://app.sofia.software",
 ]);
 
 const BUILTIN_APP_HOST_GATEWAY_PROXY_ORIGINS = new Map([
-  ["https://sofia-app.ruut.chat", "https://sofia-api.ruut.chat"],
+  ["https://sofia.ruut.chat", "https://sofia-api.ruut.chat"],
   ["https://app.sofia.software", "https://api.sofia.software"],
 ]);
 

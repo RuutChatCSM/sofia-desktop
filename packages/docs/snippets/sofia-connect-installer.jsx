@@ -195,7 +195,7 @@ engine mcp auth sofia`;
           </div>
         ) : null}
         <div className="mt-4 flex items-center justify-between gap-3">
-          <p className="m-0 text-xs text-gray-500">Works with your Sofia account — <a href="https://sofia-app.ruut.chat?mode=sign-up" className="font-medium underline">create one free</a>.</p>
+          <p className="m-0 text-xs text-gray-500">Works with your Sofia account — <a href="https://sofia.ruut.chat?mode=sign-up" className="font-medium underline">create one free</a>.</p>
           <button type="button" aria-label="Copy the Sofia MCP install command" onClick={() => copy(activeInstall.id, activeInstall.copyText)} className="shrink-0 rounded-lg bg-[#011627] px-4 py-2 text-xs font-medium text-white">
             {copied === activeInstall.id ? "Copied" : copied === "error" ? "Couldn't copy" : "Copy"}
           </button>

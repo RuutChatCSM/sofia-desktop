@@ -91,7 +91,7 @@ The devcontainer's `docker-compose.yml` includes MySQL. If you're using Daytona'
 
 Just point the app to the production Den:
 1. Open the app via noVNC
-2. Sign in normally (uses production `sofia-app.ruut.chat`)
+2. Sign in normally (uses production `sofia.ruut.chat`)
 3. All cloud features work
 
 ### Option B: Daytona sandbox + local Den

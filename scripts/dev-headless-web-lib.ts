@@ -42,7 +42,7 @@ export function buildDetachedRespawnArgs(argv: string[]): string[] {
 
 /** Normalizes a Den control-plane target to a bare origin. */
 export function normalizeDenTarget(value: string | undefined): string {
-  const raw = (value ?? "https://sofia-app.ruut.chat").trim();
+  const raw = (value ?? "https://sofia.ruut.chat").trim();
   const withProtocol = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
   return new URL(withProtocol).origin;
 }

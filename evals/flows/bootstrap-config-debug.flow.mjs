@@ -7,7 +7,7 @@ import { loadVoiceoverParagraphs } from "../runner/voiceover.mjs";
 const FLOW_ID = "bootstrap-config-debug";
 const vo = await loadVoiceoverParagraphs(FLOW_ID);
 
-const INITIAL_BASE_URL = "https://sofia-app.ruut.chat";
+const INITIAL_BASE_URL = "https://sofia.ruut.chat";
 const SAVED_BASE_URL = "https://bootstrap-debug.example.test";
 const SAVED_ORG_SERVER_TEXT = `Current organization server: ${SAVED_BASE_URL}`;
 const DEFAULT_ORG_SERVER_TEXT = "Using standard Sofia Cloud.";

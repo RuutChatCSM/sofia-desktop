@@ -19,7 +19,7 @@ Sofia desktop app, use
 
 Your client opens a browser, you sign in to Sofia, choose the organization to authorize, and the client stores the OAuth token for that organization.
 
-`sofia-app.ruut.chat/api/den` is an internal same-origin desktop proxy used by Sofia first-party flows. Do not paste it into external MCP clients.
+`sofia.ruut.chat/api/den` is an internal same-origin desktop proxy used by Sofia first-party flows. Do not paste it into external MCP clients.
 
 <SofiaConnectInstaller />
 
@@ -169,7 +169,7 @@ Sofia Connect is a remote Streamable HTTP MCP server with OAuth:
 
 - The protected resource is exactly `https://sofia-api.ruut.chat/mcp/agent`.
 - Clients discover OAuth metadata with RFC9728 protected-resource discovery.
-- The authorization server and browser sign-in origin is `https://sofia-app.ruut.chat/api/auth`.
+- The authorization server and browser sign-in origin is `https://sofia.ruut.chat/api/auth`.
 - OAuth authorize and token requests must include exactly one `resource` value: `https://sofia-api.ruut.chat/mcp/agent`.
 - Clients that need registration use dynamic client registration as a fallback during discovery.
 - PKCE is required for public/dynamic clients, and only the `S256` code challenge method is supported.
@@ -179,7 +179,7 @@ Sofia Connect is a remote Streamable HTTP MCP server with OAuth:
 
 Clients normally refresh automatically. The values matter when diagnosing reconnects:
 
-- Public OAuth access tokens are JWTs signed and validated with EdDSA. The issuer is exactly `https://sofia-app.ruut.chat/api/auth`, the audience is exactly `https://sofia-api.ruut.chat/mcp/agent`, and access tokens expire after 45 minutes.
+- Public OAuth access tokens are JWTs signed and validated with EdDSA. The issuer is exactly `https://sofia.ruut.chat/api/auth`, the audience is exactly `https://sofia-api.ruut.chat/mcp/agent`, and access tokens expire after 45 minutes.
 - Refresh tokens are opaque rotating grants with a 30-day inactivity window and a 30-second rotation overlap for near-simultaneous refreshes.
 - Each refresh revokes the previous refresh grant; because Sofia stores only token hashes, a replay during the overlap can issue another successor instead of returning prior plaintext.
 - Successor grants remain normal rotating grants. If an old refresh grant is replayed after the overlap, expired, or revoked, the client may receive `invalid_grant` and the client/user refresh-token family is revoked. Reconnect by logging out of the MCP entry and authenticating again.

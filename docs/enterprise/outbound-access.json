@@ -64,7 +64,7 @@
       "override": "desktop base URL (self-hosted Den replaces this host)"
     },
     {
-      "host": "sofia-app.ruut.chat",
+      "host": "sofia.ruut.chat",
       "kind": "fetched",
       "components": ["desktop", "renderer", "bootstrap"],
       "purpose": "Hosted Sofia Cloud web origin; the desktop derives Den API and MCP calls from this base URL.",

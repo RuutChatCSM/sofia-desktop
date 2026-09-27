@@ -168,7 +168,7 @@ describe("dev-headless-web helpers", () => {
       runtimeManifestPath: "/repo/tmp/dev-headless-web.json",
       webLogPath: "/repo/tmp/dev-web.log",
       headlessLogPath: "/repo/tmp/dev-headless.log",
-      denTarget: "https://sofia-app.ruut.chat",
+      denTarget: "https://sofia.ruut.chat",
       pid: 42,
       webPid: 43,
       sofiaServerPid: 44,
@@ -177,7 +177,7 @@ describe("dev-headless-web helpers", () => {
 
     expect(manifest.mode).toBe("local-server");
     expect(manifest.healthUrl).toBe("http://127.0.0.1:8778/health");
-    expect(manifest.denTarget).toBe("https://sofia-app.ruut.chat");
+    expect(manifest.denTarget).toBe("https://sofia.ruut.chat");
     expect(manifest.denApiUrl).toBe("http://127.0.0.1:5178/api/den");
     expect(manifest.token).toBe("client-token");
     expect(manifest.notes).toContain("same-origin");
@@ -203,13 +203,13 @@ describe("dev-headless-web helpers", () => {
   });
 
   test("normalizes Den targets to origins", () => {
-    expect(normalizeDenTarget("https://sofia-app.ruut.chat/api/den")).toBe(
-      "https://sofia-app.ruut.chat",
+    expect(normalizeDenTarget("https://sofia.ruut.chat/api/den")).toBe(
+      "https://sofia.ruut.chat",
     );
     expect(normalizeDenTarget("http://127.0.0.1:3005")).toBe(
       "http://127.0.0.1:3005",
     );
-    expect(normalizeDenTarget(undefined)).toBe("https://sofia-app.ruut.chat");
+    expect(normalizeDenTarget(undefined)).toBe("https://sofia.ruut.chat");
   });
 
   test("detached respawn forwards args except --detach", () => {

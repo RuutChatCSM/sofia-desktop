@@ -356,11 +356,11 @@ test("explicit desktop bootstrap path never inherits legacy activation state", a
     const explicitPath = path.join(root, "isolated", "desktop-bootstrap.json");
     process.env.SOFIA_DESKTOP_BOOTSTRAP_PATH = explicitPath;
     await writeBootstrapConfig(legacyPath, {
-      baseUrl: "https://sofia-app.ruut.chat",
+      baseUrl: "https://sofia.ruut.chat",
       requireSignin: true,
       enterpriseActivation: {
         activatedAt: "2026-07-27T13:30:23.342Z",
-        denBaseUrl: "https://sofia-app.ruut.chat/api/den",
+        denBaseUrl: "https://sofia.ruut.chat/api/den",
       },
     });
 
@@ -390,7 +390,7 @@ test("explicit desktop bootstrap path still reads its configured bootstrap", asy
 test("desktop bootstrap prefers an older legacy organization config over a newer canonical hosted default", async () => {
   await withIsolatedBootstrapStore(async ({ store, canonicalPath, legacyPath }) => {
     await writeBootstrapConfig(canonicalPath, {
-      baseUrl: "https://sofia-app.ruut.chat/api/den/",
+      baseUrl: "https://sofia.ruut.chat/api/den/",
       apiBaseUrl: "https://api.unrelated.example",
       requireSignin: false,
       writtenAt: "2026-07-10T13:00:00.000Z",
@@ -539,12 +539,12 @@ test("enterprise activation is preserved, required activation is overrideable, a
       forceRequireSignin: true,
     });
     await store.setDesktopBootstrapConfig({
-      baseUrl: "https://sofia-app.ruut.chat",
+      baseUrl: "https://sofia.ruut.chat",
       requireSignin: false,
       requireActivation: false,
       enterpriseActivation: {
         activatedAt: "2026-07-27T12:00:00.000Z",
-        denBaseUrl: "https://sofia-app.ruut.chat",
+        denBaseUrl: "https://sofia.ruut.chat",
       },
     });
 
@@ -553,7 +553,7 @@ test("enterprise activation is preserved, required activation is overrideable, a
     assert.equal(config.requireActivation, false);
     assert.deepEqual(config.enterpriseActivation, {
       activatedAt: "2026-07-27T12:00:00.000Z",
-      denBaseUrl: "https://sofia-app.ruut.chat",
+      denBaseUrl: "https://sofia.ruut.chat",
     });
     const persisted = JSON.parse(await readFile(canonicalPath, "utf8"));
     assert.equal(persisted.requireSignin, true);
@@ -567,7 +567,7 @@ test("enterprise activation is preserved, required activation is overrideable, a
 test("an omitted requireActivation is never materialized into the shared bootstrap file", async () => {
   await withIsolatedBootstrapStore(async ({ store, canonicalPath }) => {
     await store.setDesktopBootstrapConfig({
-      baseUrl: "https://sofia-app.ruut.chat",
+      baseUrl: "https://sofia.ruut.chat",
       requireSignin: true,
     });
 

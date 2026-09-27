@@ -11,18 +11,18 @@ import {
 describe("resolveDenBaseUrls", () => {
   test("adds the API proxy path to an explicit API base URL", () => {
     const resolved = resolveDenBaseUrls({
-      baseUrl: "https://sofia-app.ruut.chat",
-      apiBaseUrl: "https://sofia-app.ruut.chat",
+      baseUrl: "https://sofia.ruut.chat",
+      apiBaseUrl: "https://sofia.ruut.chat",
     });
-    expect(resolved.apiBaseUrl).toBe("https://sofia-app.ruut.chat/api/den");
+    expect(resolved.apiBaseUrl).toBe("https://sofia.ruut.chat/api/den");
   });
 
   test("keeps an explicit API origin independent from the web base URL", () => {
     const resolved = resolveDenBaseUrls({
-      baseUrl: "https://sofia-app.ruut.chat",
+      baseUrl: "https://sofia.ruut.chat",
       apiBaseUrl: "https://api.example.com",
     });
-    expect(resolved.baseUrl).toBe("https://sofia-app.ruut.chat");
+    expect(resolved.baseUrl).toBe("https://sofia.ruut.chat");
     expect(resolved.apiBaseUrl).toBe("https://api.example.com/api/den");
   });
 
@@ -52,12 +52,12 @@ describe("getDenMcpUrl", () => {
 
 describe("isLegacyWebAppMcpUrl", () => {
   test("flags the legacy bare web-app MCP URL", () => {
-    expect(isLegacyWebAppMcpUrl("https://sofia-app.ruut.chat/mcp")).toBe(true);
+    expect(isLegacyWebAppMcpUrl("https://sofia.ruut.chat/mcp")).toBe(true);
     expect(isLegacyWebAppMcpUrl("https://app.sofia.software/mcp/")).toBe(true);
   });
 
   test("accepts valid MCP URLs", () => {
-    expect(isLegacyWebAppMcpUrl("https://sofia-app.ruut.chat/api/den/mcp")).toBe(false);
+    expect(isLegacyWebAppMcpUrl("https://sofia.ruut.chat/api/den/mcp")).toBe(false);
     expect(isLegacyWebAppMcpUrl("http://127.0.0.1:8787/mcp")).toBe(false);
   });
 
@@ -69,8 +69,8 @@ describe("isLegacyWebAppMcpUrl", () => {
 
 describe("resolveCloudMcpResourceUrl", () => {
   test("heals a minted legacy web-app resource through the /api/den proxy", () => {
-    expect(resolveCloudMcpResourceUrl("https://sofia-app.ruut.chat/mcp")).toBe(
-      "https://sofia-app.ruut.chat/api/den/mcp",
+    expect(resolveCloudMcpResourceUrl("https://sofia.ruut.chat/mcp")).toBe(
+      "https://sofia.ruut.chat/api/den/mcp",
     );
     expect(resolveCloudMcpResourceUrl("https://app.sofia.software/mcp/")).toBe(
       "https://app.sofia.software/api/den/mcp",
@@ -78,8 +78,8 @@ describe("resolveCloudMcpResourceUrl", () => {
   });
 
   test("keeps healthy resources verbatim", () => {
-    expect(resolveCloudMcpResourceUrl("https://sofia-app.ruut.chat/api/den/mcp")).toBe(
-      "https://sofia-app.ruut.chat/api/den/mcp",
+    expect(resolveCloudMcpResourceUrl("https://sofia.ruut.chat/api/den/mcp")).toBe(
+      "https://sofia.ruut.chat/api/den/mcp",
     );
     expect(resolveCloudMcpResourceUrl("http://127.0.0.1:8787/mcp")).toBe(
       "http://127.0.0.1:8787/mcp",
@@ -91,7 +91,7 @@ describe("resolveCloudMcpResourceUrl", () => {
     expect(resolveCloudMcpResourceUrl("")).toBeNull();
     expect(resolveCloudMcpResourceUrl("   ")).toBeNull();
     expect(resolveCloudMcpResourceUrl("not a url")).toBeNull();
-    expect(resolveCloudMcpResourceUrl("ftp://sofia-app.ruut.chat/mcp")).toBeNull();
+    expect(resolveCloudMcpResourceUrl("ftp://sofia.ruut.chat/mcp")).toBeNull();
   });
 });
 

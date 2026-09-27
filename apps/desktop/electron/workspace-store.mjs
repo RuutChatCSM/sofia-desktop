@@ -160,7 +160,7 @@ const DEFAULT_DESKTOP_BOOTSTRAP_PATH = resolveDesktopBootstrapPath({ homeDir: os
 const LEGACY_DESKTOP_BOOTSTRAP_PATH = resolveLegacyDesktopBootstrapPath({ homeDir: os.homedir() });
 const HOSTED_DESKTOP_ORIGINS = new Set([
   "https://sofia.ruut.chat",
-  "https://sofia-app.ruut.chat",
+  "https://sofia.ruut.chat",
   "https://sofia-api.ruut.chat",
 ]);
 

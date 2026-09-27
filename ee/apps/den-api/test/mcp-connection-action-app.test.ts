@@ -36,7 +36,7 @@ const needsSignInStatus: ExternalConnectionStatus = {
     label: "Connect Gmail",
     surface: "sofia_your_connections",
     retry: "search_capabilities",
-    url: "https://sofia-app.ruut.chat/dashboard/connections/emc_gmail",
+    url: "https://sofia.ruut.chat/dashboard/connections/emc_gmail",
   },
 }
 
@@ -112,7 +112,7 @@ test("connection status payloads carry the exact human action and same-server la
       type: "connect",
       label: "Connect Gmail",
       surface: "sofia_your_connections",
-      url: "https://sofia-app.ruut.chat/dashboard/connections/emc_gmail",
+      url: "https://sofia.ruut.chat/dashboard/connections/emc_gmail",
     },
   })
   expect(connectionActionLaunch(payload)).toEqual({
@@ -123,7 +123,7 @@ test("connection status payloads carry the exact human action and same-server la
   const fallback = connectionActionTextFallback(payload)
   expect(fallback).toContain("# Connection needs attention: Gmail")
   expect(fallback).toContain("Action: Connect Gmail")
-  expect(fallback).toContain("Open: https://sofia-app.ruut.chat/dashboard/connections/emc_gmail")
+  expect(fallback).toContain("Open: https://sofia.ruut.chat/dashboard/connections/emc_gmail")
 
   const connected = connectedConnectionActionPayload({ connectionId: "emc_gmail", connectionName: "Gmail" })
   expect(connected.state).toBe("connected")

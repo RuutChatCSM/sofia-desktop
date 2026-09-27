@@ -18,7 +18,7 @@ const pricingSchema = {
       name: "Solo",
       price: "0",
       priceCurrency: "USD",
-      url: "https://sofia-app.ruut.chat?mode=sign-up",
+      url: "https://sofia.ruut.chat?mode=sign-up",
       availability: "https://schema.org/InStock",
       description: "Free forever. Open source desktop app with bring-your-own-keys."
     },
@@ -27,7 +27,7 @@ const pricingSchema = {
       name: "Team Starter",
       price: "10",
       priceCurrency: "USD",
-      url: "https://sofia-app.ruut.chat/dashboard/billing",
+      url: "https://sofia.ruut.chat/dashboard/billing",
       availability: "https://schema.org/InStock",
       priceSpecification: {
         "@type": "UnitPriceSpecification",

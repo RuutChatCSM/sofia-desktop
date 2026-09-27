@@ -112,7 +112,7 @@ describe("enterpriseActivationComplete", () => {
     assert.equal(enterpriseActivationComplete({
       enterpriseActivation: {
         activatedAt: "2026-07-27T10:00:00.000Z",
-        denBaseUrl: "https://sofia-app.ruut.chat",
+        denBaseUrl: "https://sofia.ruut.chat",
       },
     }), true);
   });
