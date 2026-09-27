@@ -1563,7 +1563,23 @@ export class CodexSessionManager {
     }
   }
 
-  private async handleTurnCompleted(params: unknown): Promise<void> {
+  /**
+   * Finalizing a turn reads a git baseline per repository root, so it is
+   * deliberately off the completion path: the session must settle to idle
+   * before any of that I/O, or a prompt/steer reply that races the engine's
+   * completion still observes a running turn. Best-effort like the title
+   * adoption — the changes card simply stays absent.
+   */
+  private async finalizeTurnChanges(session: CodexSession, turnId: string): Promise<void> {
+    try {
+      const changes = await this.turnChanges.finalizeTurn(session.id, turnId);
+      this.emit({ type: "turn.changes", sessionId: session.id, changes });
+    } catch {
+      // The turn itself is done; unreadable baselines are not a turn failure.
+    }
+  }
+
+  private handleTurnCompleted(params: unknown): void {
     const { threadId, thread_id, turn, error } = params as {
       threadId?: string;
       thread_id?: string;
@@ -1575,10 +1591,6 @@ export class CodexSessionManager {
     if (!session) return;
     if (turn?.id && session.turnId && turn.id !== session.turnId) return;
     const completedTurnId = turn?.id ?? session.turnId;
-    if (completedTurnId) {
-      const changes = await this.turnChanges.finalizeTurn(session.id, completedTurnId);
-      this.emit({ type: "turn.changes", sessionId: session.id, changes });
-    }
     session.status = turn?.status === "failed" || turn?.error || error ? "error" : "idle";
     session.turnId = null;
     this.emit({ type: "session.updated", session: { ...session } });
@@ -1588,6 +1600,7 @@ export class CodexSessionManager {
     // running is live work, not a leak of the writer lock.
     this.maybeReleaseThread(tid);
     void this.adoptGeneratedTitle(session, tid);
+    if (completedTurnId) void this.finalizeTurnChanges(session, completedTurnId);
     const turnError = turn?.error as { message?: string } | undefined;
     const raw = (turnError?.message ?? (typeof error === "string" ? error : (error as { message?: string } | undefined)?.message))?.trim();
     if (raw || session.status === "error") {
