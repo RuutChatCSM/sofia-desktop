@@ -167,6 +167,7 @@ const MODEL_DETAILS: Record<string, { bestFor: string; monogram: string } | unde
   "tencent/hy3-preview": { bestFor: "Long documents", monogram: "TC" },
   "moonshotai/kimi-k2.6": { bestFor: "Everyday drafting", monogram: "MS" },
   "deepseek/deepseek-v4-flash": { bestFor: "Quick summaries", monogram: "DS" },
+  "deepseek/deepseek-v4-flash-vision-exp": { bestFor: "Image-aware summaries", monogram: "DS" },
   "minimax/minimax-m2.7": { bestFor: "Tools & integrations", monogram: "MM" },
   "minimax/minimax-m3": { bestFor: "Images & screenshots", monogram: "MM" },
   "z-ai/glm-5.1": { bestFor: "Balanced default", monogram: "ZA" },
