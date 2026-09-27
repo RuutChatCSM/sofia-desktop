@@ -14,7 +14,10 @@ const repoRoot = path.resolve(dirname, "..", "..", "..");
  * Runs the driver against an isolated HOME so the operator's real
  * `~/.sofia/app-release.env` cannot supply credentials or a source path, and
  * against placeholder signing inputs so the credential gates are satisfied
- * without a real Developer ID certificate.
+ * without a real Developer ID certificate. The build root is redirected too:
+ * a release that ran on this machine leaves a real provenance record in
+ * dist-electron, and the driver reads that record back, so a `--no-build` dry
+ * run would answer for the last release instead of the checkout under test.
  */
 function runDriver(args) {
   const home = mkdtempSync(path.join(tmpdir(), "sofia-release-driver-"));
@@ -28,6 +31,7 @@ function runDriver(args) {
         ...process.env,
         HOME: home,
         SOFIA_SOURCE_DIR: "",
+        SOFIA_DIST_DIR: path.join(home, "dist-electron"),
         CSC_LINK: path.join(home, "signing.p12"),
         CSC_KEY_PASSWORD: "unused",
         APPLE_API_KEY_PATH: key,

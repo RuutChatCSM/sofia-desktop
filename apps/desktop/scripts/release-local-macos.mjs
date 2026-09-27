@@ -14,6 +14,7 @@
 //   APPLE_API_KEY_PATH, APPLE_API_KEY, APPLE_API_ISSUER,
 //   AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_ENDPOINT_URL,
 //   SOFIA_R2_BUCKET (optional AWS_REGION)
+//   SOFIA_DIST_DIR (optional; build output root, default apps/desktop/dist-electron)
 //
 // Flags: --version X.Y.Z  --repo OWNER/REPO  --prefix NAME  --target TRIPLE
 //        --env-file PATH  --no-build  --no-github  --no-mirror  --dry-run
@@ -30,7 +31,12 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..", "..", "..");
 const desktopRoot = path.resolve(__dirname, "..");
-const distDir = path.join(desktopRoot, "dist-electron");
+// The build root is overridable so a dry run can be pointed at a scratch
+// directory; left alone, a real release's dist-electron (and the provenance it
+// recorded) is what `--no-build` would republish.
+const distDir = process.env.SOFIA_DIST_DIR
+  ? path.resolve(process.env.SOFIA_DIST_DIR)
+  : path.join(desktopRoot, "dist-electron");
 
 const options = {
   version: "",
