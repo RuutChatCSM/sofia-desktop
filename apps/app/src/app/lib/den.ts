@@ -662,9 +662,11 @@ export function getDenInferenceUrl(baseUrl?: string | null): string {
 
 function isHostedWebAppHost(hostname: string): boolean {
   const host = hostname.trim().toLowerCase();
-  // The hosted web app answers on `app.<apex>` and on the Sofia-branded
-  // `sofia-app.<apex>`; nothing else is a bare web-app MCP origin.
-  return host.startsWith("app.") || host.startsWith("sofia-app.");
+  // The hosted web app answers on `app.<apex>`, on the Sofia-branded
+  // `sofia.<apex>`, and on the pre-rename `sofia-app.<apex>`; nothing else is a
+  // bare web-app MCP origin. The retired brand stays listed because older builds
+  // minted resources against it, and those entries still need healing.
+  return host.startsWith("app.") || host.startsWith("sofia.") || host.startsWith("sofia-app.");
 }
 
 function stripDenApiBasePath(input: string | null | undefined): string | null {
