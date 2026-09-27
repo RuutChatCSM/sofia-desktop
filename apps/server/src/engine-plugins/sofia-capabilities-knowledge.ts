@@ -82,11 +82,9 @@ Here is what you can help users with:
 - \`Settings > Library\` and custom MCP commands/URLs are also for a custom or local MCP server that is not available through Sofia Cloud.
 
 ## Using Sofia Connect from an external MCP client
-- Sofia Connect's public hosted endpoint is \`https://sofia-api.ruut.chat/mcp/agent\`. \`sofia-app.ruut.chat/api/den\` is an internal same-origin desktop proxy, not an external-client URL.
-- Sofia engine is verified with native remote MCP OAuth. Codex is setup-only until native proof is rerun on this exact branch, but its add/login/reconnect commands remain: \`codex mcp add sofia --url https://sofia-api.ruut.chat/mcp/agent\`, \`codex mcp login sofia\`, and \`codex mcp logout sofia\` then \`codex mcp login sofia\`. Cursor, ChatGPT Desktop, Claude Code, VS Code, and other clients have setup guides only.
-- Cursor setup covers Cursor Desktop and Cursor Web/Agents. Cursor Web/Agents use HTTPS OAuth callbacks; Cursor Desktop OAuth uses \`cursor://anysphere.cursor-mcp/oauth/callback\`, which Sofia accepts through an exact private-use allowlist with PKCE S256 enforced. For ChatGPT, use ChatGPT Settings > MCP servers.
-- Sofia Connect OAuth uses RFC9728 discovery, authorization/browser sign-in at \`https://sofia-app.ruut.chat/api/auth\`, the exact resource \`https://sofia-api.ruut.chat/mcp/agent\`, dynamic client registration fallback, and PKCE S256. For Sofia engine, add the remote config then run \`opencode mcp auth sofia\`; reconnect or switch orgs with \`opencode mcp logout sofia\` then \`opencode mcp auth sofia\`. The organization chosen in the browser is pinned into the token.
-- \`/mcp/agent\` exposes \`search_capabilities\` and \`execute_capability\`; available capabilities are governed by org membership, roles, policies, and exposure allowlists. Public OAuth access tokens are JWTs signed and validated with EdDSA, exact issuer \`https://sofia-app.ruut.chat/api/auth\`, exact audience \`https://sofia-api.ruut.chat/mcp/agent\`, and a 45-minute expiry. Refresh tokens are opaque rotating grants with a 30-day inactivity window plus a 30-second rotation overlap for near-simultaneous refreshes; because Sofia stores only token hashes, replay during overlap can issue another successor, while replay after the overlap returns \`invalid_grant\` and revokes the client/user family. Support requests should include \`X-Request-Id\` plus MCP \`referenceId\` or OAuth \`reference_id\`. For setup details, read packages/docs/cloud/run-in-the-cloud/cloud-mcp.mdx.
+- The Sofia Cloud service is hosted at \`https://sofia.ruut.chat\`. Its MCP endpoint is \`https://sofia.ruut.chat/mcp/agent\`; desktop compatibility routes are under \`/api/den\` on the same origin.
+- Desktop sign-in opens the Cloud browser flow and exchanges a short-lived, one-time grant for a session-bound API token. The session selects an organization and can switch to another organization the user belongs to.
+- \`/mcp/agent\` exposes \`search_capabilities\`, \`execute_capability\`, and skill resources. Access is scoped to the signed-in user's organization, membership, and grants. Rails provides OAuth discovery, authorization code with PKCE, dynamic client registration, opaque access tokens, rotating refresh tokens, and revocation. Verify external MCP client setup against the current Rails endpoints before giving client-specific commands; the retired service's JWT and origin details do not apply.
 
 ## Voice Mode
 - Available as a side panel in sessions when the Sofia Voice extension is enabled.
@@ -118,7 +116,7 @@ Here is what you can help users with:
 - Answer only from the returned transcript. If the returned transcript is limited or missing older context, say that directly instead of guessing.
 
 ## Sofia Cloud
-- Users sign up at the Den portal (accessible from the status bar "Sign in" button).
+- Users sign up at Sofia Cloud (accessible from the status bar "Sign in" button).
 - Cloud features: managed AI models, team workspaces, shared skills, Collections, org provisioning, and the hosted Sofia Cloud MCP server.
 - Organization owners and admins can use desktop policies to control desktop app capabilities for the whole org, specific members, or teams. For setup details, read packages/docs/cloud/share-with-your-team/desktop-policies.mdx.
 - After signing in, cloud-provisioned providers and extensions appear automatically.

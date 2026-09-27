@@ -1,3 +1,4 @@
+import { TurnChangeTracker, type TurnChangeRecord } from "./turn-changes.js";
 import { parseMcpStatusPage, type NativeMcpServer } from "./codex-mcp-status.js";
 import { resolveSofiaPrompt } from "./sofia-commands.js";
 // Codex session manager: owns a ManagedCodexEngine and exposes a small,
@@ -179,10 +180,55 @@ function isPendingTaskTitle(value: string | null | undefined): boolean {
 
 /** The engine exposes its own generated title only as `preview`, so prefer a
  * real user/engine name and fall back to the first user message. */
+/** Longest title we keep before cutting on a word boundary. */
+export const THREAD_TITLE_MAX_LENGTH = 72;
+
+/**
+ * The engine titles a task from its first user message, verbatim — so a pasted
+ * diff, a `//` comment banner, a stack trace or a wall of markdown all arrive as
+ * the title, and the session header ends up rendering a fragment of code. A
+ * title has to read as a title: keep the first line that carries words, drop the
+ * markdown and comment noise around it, collapse whitespace, and cut on a word
+ * boundary so it never ends mid-word (or starts on the halves the engine left).
+ */
+export function threadTitleFromEngineText(text: unknown): string {
+  const raw = typeof text === "string" ? text : "";
+  let inFence = false;
+  for (const rawLine of raw.split(/\r?\n/)) {
+    if (/^\s*```/.test(rawLine)) {
+      inFence = !inFence;
+      continue;
+    }
+    if (inFence) continue;
+    const line = rawLine
+      .replace(/^\s*>+\s*/, "")                    // blockquote
+      .replace(/^\s*(?:[-*+]|\d+[.)])\s+/, "")     // list marker
+      .replace(/^\s*#{1,6}\s*/, "")                // heading
+      .replace(/^\s*\/\/+\s*/, "")                 // line comment
+      .replace(/^\s*\/\*+\s*/, "")                // block comment opener
+      .replace(/\*\/\s*$/, "")                    // …and its closer
+      // A pasted `//` banner ends the sentence the user actually wrote.
+      .replace(/(?<!:)\/\/(?=\s|$).*$/, " ")
+      .replace(/`{1,3}/g, "")                       // code span
+      .replace(/\*{1,3}(?=\S)|(?<=\S)\*{1,3}/g, "")  // emphasis markers
+      .replace(/^(?:\.{2,}|…)\s*\S*\s+/, "")       // the half-word a truncation left
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!line) continue;
+    if (!/[\p{L}\p{N}]/u.test(line)) continue;
+    if (line.length <= THREAD_TITLE_MAX_LENGTH) return line;
+    const cut = line.slice(0, THREAD_TITLE_MAX_LENGTH);
+    const boundary = cut.lastIndexOf(" ");
+    const head = boundary > 24 ? cut.slice(0, boundary) : cut;
+    return `${head.replace(/[\s,;:.!?/-]+$/, "")}…`;
+  }
+  return "";
+}
+
 function threadDisplayTitle(thread: { name?: unknown; preview?: unknown }): string {
   const name = typeof thread.name === "string" ? thread.name.trim() : "";
-  if (name && !isPendingTaskTitle(name)) return name;
-  return typeof thread.preview === "string" ? thread.preview.trim() : "";
+  if (name && !isPendingTaskTitle(name)) return threadTitleFromEngineText(name);
+  return threadTitleFromEngineText(thread.preview);
 }
 
 /**
@@ -228,6 +274,7 @@ export type CodexEvent =
   | { type: "backgroundProcess.failed"; sessionId: string; threadId: string; workspaceId: string; sessionTitle: string; itemId: string; processId: string; command: string; exitCode?: number }
   | { type: "tool.output"; sessionId: string; threadId: string; itemId: string; text: string }
   | { type: "file.patch"; sessionId: string; threadId: string; itemId: string; patch: unknown }
+  | { type: "turn.changes"; sessionId: string; changes: TurnChangeRecord }
   | { type: "turn.completed"; sessionId: string; threadId: string }
   | { type: "approval.requested"; sessionId: string; threadId: string; params: unknown }
   | { type: "thread.status"; sessionId: string; threadId: string; status: unknown }
@@ -296,6 +343,7 @@ function sortBackgroundProcesses(processes: BackgroundProcess[]): BackgroundProc
 }
 
 export class CodexSessionManager {
+  private readonly turnChanges: TurnChangeTracker;
   private engine: ManagedCodexEngine | null = null;
   private sessions = new Map<string, CodexSession>();
   private events = new EventEmitter();
@@ -582,6 +630,11 @@ export class CodexSessionManager {
     private enableLegacyImport = false,
   ) {
     this.threadAliases = this.readThreadAliases();
+    this.turnChanges = new TurnChangeTracker(handle.codexHome ? join(handle.codexHome, "sofia-turn-changes") : null);
+  }
+
+  getTurnChanges(sessionId: string): Promise<TurnChangeRecord[]> {
+    return this.turnChanges.list(sessionId);
   }
 
   on(listener: (event: CodexEvent) => void): () => void {
@@ -711,7 +764,7 @@ export class CodexSessionManager {
             const content = Array.isArray(payload.content)
               ? (payload.content as unknown[]).map((c) => isRecord(c) && typeof c.text === "string" ? c.text : "").filter(Boolean)
               : [];
-            out.push({ turnId: currentTurn, item: { type: "agentMessage", id, text: content.join("\n") } });
+            out.push({ turnId: currentTurn, item: { type: "agentMessage", id, text: content.join("\n"), ...(payload.phase === "commentary" || payload.phase === "final_answer" ? { phase: payload.phase } : {}) } });
           } else if (itemType === "function_call") {
             out.push({
               turnId: currentTurn,
@@ -1080,6 +1133,7 @@ export class CodexSessionManager {
         if (opts.model) session.model = opts.model;
         if (opts.providerId) session.providerId = opts.providerId;
       }
+      await this.turnChanges.beginTurn(session.id, session.cwd);
       turnId = await engine.startTurn({
         ...codexTurnPermissions(readCodexAccessMode(this.handle.codexHome)),
         threadId: session.threadId,
@@ -1509,7 +1563,7 @@ export class CodexSessionManager {
     }
   }
 
-  private handleTurnCompleted(params: unknown): void {
+  private async handleTurnCompleted(params: unknown): Promise<void> {
     const { threadId, thread_id, turn, error } = params as {
       threadId?: string;
       thread_id?: string;
@@ -1520,6 +1574,11 @@ export class CodexSessionManager {
     const session = this.sessionFor(tid);
     if (!session) return;
     if (turn?.id && session.turnId && turn.id !== session.turnId) return;
+    const completedTurnId = turn?.id ?? session.turnId;
+    if (completedTurnId) {
+      const changes = await this.turnChanges.finalizeTurn(session.id, completedTurnId);
+      this.emit({ type: "turn.changes", sessionId: session.id, changes });
+    }
     session.status = turn?.status === "failed" || turn?.error || error ? "error" : "idle";
     session.turnId = null;
     this.emit({ type: "session.updated", session: { ...session } });

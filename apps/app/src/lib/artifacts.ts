@@ -200,7 +200,9 @@ function openTargetFromArtifactPath(
   };
 }
 
-function parseApplyPatchPaths(patchText: string) {
+function parseApplyPatchPaths(patchText: unknown) {
+  if (typeof patchText !== "string") return [];
+
   const paths: string[] = [];
 
   for (const line of patchText.split("\n")) {
@@ -285,6 +287,12 @@ function getArtifactPathsFromMessage(message: UIMessage) {
       continue;
     }
     if (isApplyPatchToolPart(part)) {
+      // An apply_patch part may carry the file outright instead of a patch
+      // document — a codex `fileChange` item does. This runs during the
+      // MessageGroup render, where a throw (e.g. `split` of an absent
+      // `patchText`) unmounts the whole app, so read it defensively.
+      const filePath = part.input.filePath;
+      if (typeof filePath === "string") paths.push(filePath);
       paths.push(...parseApplyPatchPaths(part.input.patchText));
     }
   }

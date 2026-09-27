@@ -1,3 +1,5 @@
+import type { RecordedTurnChanges } from "@/app/lib/codex-session";
+import { changeSetFromRepository } from "./change-set-source";
 import { create } from "zustand";
 
 import { turnChangeSetId, type TurnChangeSet } from "./turn-change-set";
@@ -78,4 +80,12 @@ export function selectTurnChangeSet(
 ): TurnChangeSet | null {
   if (!turnId) return null;
   return byId[turnChangeSetId(sessionId, turnId)] ?? null;
+}
+
+export function restoreRecordedTurnChanges(record: RecordedTurnChanges): void {
+  useChangeSetStore.getState().upsert(changeSetFromRepository({
+    sessionId: record.sessionId, turnId: record.turnId, startedAt: record.startedAt,
+    finalizedAt: record.finalizedAt, baseline: null, snapshot: record.snapshot,
+    attributionUnavailable: Boolean(record.unavailable),
+  }));
 }

@@ -26,9 +26,11 @@ export function codexItemToToolPart(item: Record<string, unknown>, sessionId: st
   const id = str(item.id);
   const tool = type === "commandExecution"
     ? String(item.command ?? "shell")
-    : type === "mcpToolCall" || type === "dynamicToolCall"
-      ? str(item.tool)
-      : "";
+    : type === "fileChange"
+      ? "apply_patch"
+      : type === "mcpToolCall" || type === "dynamicToolCall"
+        ? str(item.tool)
+        : "";
   if (!id || !tool) return null;
 
   // Canonical engine toolName so getToolFamily classifies it (bash/edit/
@@ -45,11 +47,16 @@ export function codexItemToToolPart(item: Record<string, unknown>, sessionId: st
   const failed = status === "failed" || status === "declined" || item.success === false || Boolean(item.error);
   const start = Date.now();
 
-  // Unified-exec startup is a long-running background process, not a one-shot
-  // shell call. Keep it distinct so the transcript says "started a background
-  // process" instead of flattening it into an ordinary `$ command` card.
+  // Unified exec reports every command through its startup event, so the source
+  // alone says nothing about how long it lives: in one real session all 857
+  // command items were "startup" calls that had already exited. Only a process
+  // that is still running is the long-lived thing the transcript calls a
+  // background process. A finished one is an ordinary shell call — which is
+  // what aggregates into "Ran 12 commands" — and hiding those as background
+  // activity left the work narrative with no tools in it at all.
   const source = str(item.source);
-  const isBackgroundProcess = isCommand && source === "unifiedExecStartup";
+  const settled = completed || failed;
+  const isBackgroundProcess = isCommand && source === "unifiedExecStartup" && !settled;
   const resolvedToolName = isBackgroundProcess ? "background_process" : toolName;
 
   // The agent/orchestrator's own words for the operation, when it supplies
@@ -139,16 +146,25 @@ export function codexItemToParts(
   }
 
   if (type === "fileChange") {
-    const changes = Array.isArray(item.changes) ? item.changes : [];
-    const files = changes.map((c) => (isRecord(c) ? str(c.path) : "")).filter(Boolean);
-    return [{
-      id: id || `${messageId}:filechange`,
-      sessionID: sessionId,
-      messageID: messageId,
-      type: "patch" as const,
-      hash: id,
-      files,
-    }];
+    // One canonical edit marker per changed file. A `patch` part used to be
+    // emitted here, which the render-group classifier has no case for: the edit
+    // rendered as nothing, and it broke every surrounding aggregate run, so
+    // "Edited files" never formed. `apply_patch` is the same marker
+    // `commandExecution`→`bash` and edit-named tools already produce, and the
+    // aggregator counts unique paths, so one item touching three files must not
+    // collapse to a single call.
+    const changes = Array.isArray(item.changes) ? item.changes.filter(isRecord) : [];
+    return changes
+      .map((change, index) => {
+        const filePath = str(change.path);
+        if (!filePath) return null;
+        return codexItemToToolPart(
+          { ...item, type: "fileChange", path: filePath },
+          sessionId,
+          `${id || `${messageId}:filechange`}:${index}`,
+        ) as unknown as Part | null;
+      })
+      .filter((part): part is Part => part !== null);
   }
 
   if (type === "plan") {

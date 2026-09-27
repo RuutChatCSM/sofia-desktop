@@ -23,7 +23,7 @@ const originalServerUrl = process.env.SOFIA_SERVER_URL;
 const originalServerToken = process.env.SOFIA_SERVER_TOKEN;
 
 const UNCHANGED_EXTENSION_DISCOVERY_INSTRUCTION =
-  "If the user asks for something you cannot do with obvious built-in tools, check Sofia extensions before saying the capability is unavailable. Use sofia_query with id extension.actions to inspect available extension actions, then sofia_execute with id extension.call for the matching action.";
+  "Infer capabilities from the user's task; they do not need to name a tool, skill, or plugin. Consider built-in tools, enabled MCP servers, apps, plugin-provided tools, and local or Cloud skills. When a relevant capability is not directly visible, use tool_search if available; use sofia_query with id extension.actions to inspect Sofia extension actions. Use sofia_execute with id extension.call for a matching action. Check availability before saying a capability is unavailable, and report connection failures rather than guessing.";
 
 beforeEach(() => {
   resetSofiaExtensionDiscoveryInstructionCacheForTests();

@@ -57,7 +57,7 @@ const initialState: UiState = {
   workspaceLeftSidebarWidth: DEFAULT_WORKSPACE_LEFT_SIDEBAR_WIDTH,
   workspaceLeftSidebarResizing: false,
   workspaceRightSidebarExpanded: false,
-  workspaceRightSidebarExpandedWidth: DEFAULT_WORKSPACE_RIGHT_SIDEBAR_EXPANDED_WIDTH,
+  workspaceRightSidebarExpandedWidth: defaultRightSidebarExpandedWidth(),
 };
 
 function clampNumber(value: number, min: number, max: number) {
@@ -77,7 +77,9 @@ function readLegacyNumber(key: string, min: number, max: number) {
     return null;
   }
 
-  const parsed = Number(window.localStorage.getItem(key));
+  const raw = window.localStorage.getItem(key);
+  if (raw === null || !raw.trim()) return null;
+  const parsed = Number(raw);
   if (!Number.isFinite(parsed)) {
     return null;
   }

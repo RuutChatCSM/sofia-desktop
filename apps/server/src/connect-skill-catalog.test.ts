@@ -6,6 +6,8 @@ import { join } from "node:path";
 import {
   readMcpSkillIndex,
   readSofiaConnectSkillCatalog,
+  readSofiaConnectSkillCatalogStatus,
+  renderSofiaConnectSkillCatalogInstruction,
   renderSofiaConnectSkillInstruction,
   resetSofiaConnectSkillCatalogCacheForTests,
   type SofiaConnectSkill,
@@ -114,7 +116,7 @@ describe("Sofia Connect skill catalog", () => {
     expect(instruction).not.toContain("# Customer Briefing");
   });
 
-  test("renders every authorized skill beyond the former count and character limits", () => {
+  test("bounds large skill catalogs while keeping further skills discoverable", () => {
     const skills: SofiaConnectSkill[] = Array.from({ length: 150 }, (_, index) => ({
       name: `marketplace-skill-${index}`,
       type: "skill-md",
@@ -128,10 +130,11 @@ describe("Sofia Connect skill catalog", () => {
 
     const instruction = renderSofiaConnectSkillInstruction(skills);
 
-    expect(instruction.length).toBeGreaterThan(32_000);
-    expect(instruction.match(/  <skill>/g)).toHaveLength(150);
-    expect(instruction).toContain("<title>Marketplace Skill 149</title>");
-    expect(instruction).toContain("<capability>plugin:plg_149:cob_149</capability>");
+    expect(instruction.length).toBeLessThanOrEqual(12_000);
+    expect(instruction.match(/  <skill>/g)?.length).toBeGreaterThan(0);
+    expect(instruction.match(/  <skill>/g)?.length).toBeLessThan(150);
+    expect(instruction).toContain("more remote skills are available");
+    expect(instruction).toContain("Search sofia-cloud capabilities by task keywords");
   });
 
   test("keeps older skill indexes compatible by falling back from title to name", () => {
@@ -151,6 +154,16 @@ describe("Sofia Connect skill catalog", () => {
 
   test("omits the prompt block when no authorized skills exist", () => {
     expect(renderSofiaConnectSkillInstruction([])).toBe("");
+  });
+
+  test("distinguishes an unavailable catalog from an empty authorized catalog", async () => {
+    const config = await serverConfig();
+    expect(await readSofiaConnectSkillCatalogStatus(config)).toEqual({ status: "not_connected", skills: [] });
+    await writeConnectCloudMcp(config, { type: "remote", url: "https://connect.example/mcp/agent", enabled: true });
+    const failed = await readSofiaConnectSkillCatalogStatus(config, async () => new Response(null, { status: 503 }));
+    expect(failed).toEqual({ status: "unavailable", skills: [] });
+    expect(renderSofiaConnectSkillCatalogInstruction(failed)).toContain("Do not infer that no skills exist");
+    expect(renderSofiaConnectSkillCatalogInstruction({ status: "available", skills: [] })).toBe("");
   });
 
   test("reads the standards-shaped index through an authenticated MCP resource", async () => {

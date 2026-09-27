@@ -7,6 +7,7 @@ import {
   BROWSER_SURROUND_BACKGROUND_DARK,
   BROWSER_SURROUND_BACKGROUND_LIGHT,
   RESPONSIVE_FRAME_MARGIN_PX,
+  browserPeekLayoutZoom,
   browserViewBackground,
   effectiveBrowserViewport,
   createAgentLeaseRegistry,
@@ -160,6 +161,38 @@ describe("viewport plans", () => {
     assert.deepEqual(narrow.bounds, { x: 0, y: 0, width: 600, height: 920 });
   });
 
+  it("peeks a panel tab through page zoom, not device emulation", () => {
+    // A floating card cannot clip a native surface, so Peek must not hand the
+    // page a screen of its own: `fill` did that and the page spilled over the
+    // whole app. Zooming keeps the same 1280px layout inside the card.
+    assert.equal(browserPeekLayoutZoom({ x: 0, y: 0, width: 440, height: 275 }), 440 / 1280);
+    assert.equal(browserPeekLayoutZoom({ x: 0, y: 0, width: 420, height: 560 }), 420 / 1280);
+    // A card that has not been measured yet renders at 100%, never at 0%.
+    assert.equal(browserPeekLayoutZoom(null), 1);
+    assert.equal(browserPeekLayoutZoom({ width: 0, height: 0 }), 1);
+
+    // That path plans no emulation at all — `emulation: null` means "the page
+    // viewport is the view", which is exactly what contains the page.
+    const bounds = { x: 685, y: 93, width: 440, height: 275 };
+    const plan = resolveViewportPlan({
+      viewport: { mode: "panel" },
+      zoom: { mode: "custom", scale: browserPeekLayoutZoom(bounds) },
+      panelBounds: bounds,
+    });
+    assert.equal(plan.emulation, null);
+    assert.deepEqual(plan.bounds, bounds);
+    assert.deepEqual(plan.overflow, { x: 0, y: 0 });
+    // …and the zoom is what the page is really rendered at.
+    assert.equal(
+      resolvePageZoomFactor({ mode: "custom", scale: 440 / 1280 }, { mode: "panel" }),
+      440 / 1280,
+    );
+    // The 34% zoom of a 440px card lays a desktop page out at 1280×800, so the
+    // page fills the card and the card is the page.
+    assert.equal(440 / (440 / 1280), 1280);
+    assert.equal(275 / (440 / 1280), 800);
+  });
+
   it("keeps the fitted device frame inside the panel on every edge", () => {
     const bounds = { x: 0, y: 0, width: 900, height: 920 };
     const plan = resolveViewportPlan({ viewport: RESPONSIVE_1440, zoom: { mode: "fit" }, panelBounds: bounds });
@@ -207,7 +240,7 @@ describe("viewport plans", () => {
 describe("overflowing viewports", () => {
   const NARROW_PANEL = { x: 0, y: 0, width: 700, height: 500 };
 
-  it("actual size overflows the canvas and pans without shrinking the page", () => {
+  it("actual size overflows the canvas without shrinking the page, and keeps the frame on screen", () => {
     const atOrigin = resolveViewportPlan({
       viewport: RESPONSIVE_1440,
       zoom: { mode: "actual" },
@@ -232,8 +265,12 @@ describe("overflowing viewports", () => {
     });
 
     assert.deepEqual(panned.pan, { x: 200, y: 120 });
-    assert.equal(panned.emulation?.positionX, -200);
-    assert.equal(panned.emulation?.positionY, -120);
+    // Chromium requires the emulated view's origin to be *on* its screen
+    // (`0 ≤ position ≤ screen`), so the pan is tab state and the origin stays at
+    // the screen's edge. A negative position is rejected outright, and rejecting
+    // it rejects the whole override with it.
+    assert.equal(panned.emulation?.positionX, 0);
+    assert.equal(panned.emulation?.positionY, 0);
     assert.equal(panned.emulation?.scale, 1);
 
     const beyondTheEnd = resolveViewportPlan({
@@ -244,7 +281,50 @@ describe("overflowing viewports", () => {
     });
 
     assert.deepEqual(beyondTheEnd.pan, { x: 740, y: 400 });
-    assert.equal(beyondTheEnd.emulation?.positionX, -740);
+    assert.equal(beyondTheEnd.emulation?.positionX, 0);
+    assert.equal(beyondTheEnd.emulation?.positionY, 0);
+  });
+
+  it("keeps the emulated frame on its own screen for every panel and viewport", () => {
+    // Regression: `fit` bottoms out at MIN_ZOOM_VALUE, so a narrow panel fitted
+    // the frame in *emulated* px while the screen was reported in native device
+    // px — the frame landed past the end of a screen reported several times too
+    // small. Chromium answered "View position should be on the screen" and
+    // rejected the entire override, so no emulation applied at all and the page
+    // fell back to panel-width layout. Expanding the browser resizes the panel,
+    // which is exactly when the canvas is briefly narrow, so the page came back
+    // unemulated instead of resized.
+    const viewports = [
+      RESPONSIVE_1440,
+      { mode: "responsive", width: 390, height: 844, deviceScaleFactor: 3 },
+      { mode: "responsive", width: 1280, height: 800, deviceScaleFactor: 1 },
+    ];
+    let checked = 0;
+
+    for (let width = 48; width <= 1710; width += 2) {
+      for (const height of [120, 500, 900]) {
+        for (const viewport of viewports) {
+          for (const zoom of [{ mode: "fit" }, { mode: "actual" }]) {
+            for (const pan of [{ x: 0, y: 0 }, { x: 10_000, y: 10_000 }]) {
+              const { emulation } = resolveViewportPlan({
+                viewport,
+                zoom,
+                panelBounds: { x: 0, y: 0, width, height },
+                pan,
+              });
+              if (!emulation) continue;
+              checked += 1;
+              const where = `${width}x${height} viewport ${viewport.width}x${viewport.height} ${zoom.mode} pan ${pan.x}`;
+              assert.ok(emulation.screenWidth >= 1 && emulation.screenHeight >= 1, `empty screen: ${where}`);
+              assert.ok(emulation.positionX >= 0 && emulation.positionX <= emulation.screenWidth, `x origin off screen: ${where}`);
+              assert.ok(emulation.positionY >= 0 && emulation.positionY <= emulation.screenHeight, `y origin off screen: ${where}`);
+            }
+          }
+        }
+      }
+    }
+
+    assert.ok(checked > 1000, `expected a real sweep, checked ${checked}`);
   });
 
   it("a fitted viewport never overflows, so a stale pan cannot nudge it", () => {
@@ -270,7 +350,7 @@ describe("overflowing viewports", () => {
     assert.ok((plan.emulation?.positionY ?? 0) > 0);
   });
 
-  it("reports the pan to CDP instead of rewriting the tab viewport", async () => {
+  it("reports the viewport to CDP instead of rewriting the tab viewport", async () => {
     const { controller, commands } = createRecordingController();
     const base = {
       tabId: "tab_a",
@@ -283,7 +363,9 @@ describe("overflowing viewports", () => {
     await controller.apply(base);
     await controller.apply({ ...base, pan: { x: 350, y: 0 } });
 
-    assert.deepEqual(commands.map((entry) => entry.params.positionX), [0, -350]);
+    // The pan cannot reach CDP: it is only expressible as an origin off the
+    // screen, which Chromium refuses. It stays tab state.
+    assert.deepEqual(commands.map((entry) => entry.params.positionX), [0, 0]);
     assert.deepEqual(commands.map((entry) => entry.params.width), [1440, 1440]);
     assert.deepEqual(commands.map((entry) => entry.params.scale), [1, 1]);
   });

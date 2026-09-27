@@ -22,6 +22,15 @@ export type CodexSession = {
   cwd?: string;
 };
 
+export type RecordedTurnChanges = {
+  sessionId: string;
+  turnId: string;
+  startedAt: number;
+  finalizedAt: number;
+  snapshot: WorkspaceChangesResponse;
+  unavailable?: string;
+};
+
 export type CodexEvent =
   | { type: "session.created"; session: CodexSession }
   | { type: "session.updated"; session: CodexSession }
@@ -33,6 +42,7 @@ export type CodexEvent =
   | { type: "backgroundProcess.failed"; sessionId: string; threadId: string; workspaceId: string; sessionTitle: string; itemId: string; processId: string; command: string; exitCode?: number }
   | { type: "tool.output"; sessionId: string; threadId: string; itemId: string; text: string }
   | { type: "file.patch"; sessionId: string; threadId: string; itemId: string; patch: unknown }
+  | { type: "turn.changes"; sessionId: string; changes: RecordedTurnChanges }
   | { type: "turn.completed"; sessionId: string; threadId: string }
   | { type: "approval.requested"; sessionId: string; threadId: string; params: unknown }
   | { type: "thread.status"; sessionId: string; threadId: string; status: unknown }
@@ -350,7 +360,7 @@ export function createCodexSessionClient(options: CodexSessionClientOptions) {
       ),
 
     items: (sessionId: string) =>
-      requestJson<{ ok: boolean; items: Array<{ turnId: string; item: Record<string, unknown> }> }>(
+      requestJson<{ ok: boolean; changes?: RecordedTurnChanges[]; items: Array<{ turnId: string; item: Record<string, unknown> }> }>(
         options.baseUrl,
         `${workspacePath}/codex/sessions/${encodeURIComponent(sessionId)}/items`,
         { token: options.token, hostToken: options.hostToken, timeoutMs: 30_000 },

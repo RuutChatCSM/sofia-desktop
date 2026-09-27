@@ -242,7 +242,14 @@ export interface SkillMetadata extends ToolMetadata {
 }
 
 export interface ApplyPatchInput {
-  patchText: string;
+  /**
+   * The raw `apply_patch` document, when the tool call carries one. A codex
+   * `fileChange` item does not: it reports the file (and its diff) directly,
+   * so it arrives as `filePath` instead.
+   */
+  patchText?: string;
+  /** The file this patch applies to, when the source knows it outright. */
+  filePath?: string;
 }
 
 export type ApplyPatchFileType = "add" | "update" | "delete" | "move";

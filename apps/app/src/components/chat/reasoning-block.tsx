@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { ChevronDown } from "lucide-react"
 
 import {
@@ -15,6 +15,13 @@ type ReasoningBlockProps = {
   text: string
   isStreaming: boolean
   className?: string
+  /**
+   * Open on mount, and follow that role as it changes. Used for the reasoning
+   * phase Sofia is in *now*: it opens while she is thinking about this step and
+   * folds the moment she moves on to commentary or work, so the reader never
+   * inherits a stack of expanded thoughts.
+   */
+  defaultOpen?: boolean
 }
 
 /**
@@ -22,8 +29,14 @@ type ReasoningBlockProps = {
  * line with a chevron; the full reasoning renders as markdown only
  * when the user opens it.
  */
-export function ReasoningBlock({ text, isStreaming, className }: ReasoningBlockProps) {
-  const [open, setOpen] = useState(false)
+export function ReasoningBlock({ text, isStreaming, className, defaultOpen = false }: ReasoningBlockProps) {
+  const [open, setOpen] = useState(defaultOpen)
+
+  // Follow the phase's role rather than only its first render. A manual toggle
+  // in between survives, because `defaultOpen` changes only when the phase does.
+  useEffect(() => {
+    setOpen(defaultOpen)
+  }, [defaultOpen])
 
   return (
     <Collapsible open={open} onOpenChange={setOpen} className={cn("w-full", className)} data-reasoning-block="">

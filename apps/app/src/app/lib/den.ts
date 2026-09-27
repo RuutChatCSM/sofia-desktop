@@ -1,3 +1,4 @@
+import { buildCloudAuthUrl } from "./cloud-auth-url";
 import {
   normalizeDesktopConfig,
   type DesktopConfig as SharedDesktopConfig,
@@ -76,7 +77,7 @@ export const DEFAULT_DEN_AUTH_NAME = "Sofia User";
 const BUILD_DEN_BASE_URL =
   (typeof import.meta !== "undefined" && typeof import.meta.env?.VITE_DEN_BASE_URL === "string"
     ? import.meta.env.VITE_DEN_BASE_URL
-    : "").trim() || "https://sofia-app.ruut.chat";
+    : "").trim() || "https://sofia.ruut.chat";
 const BUILD_DEN_REQUIRE_SIGNIN =
   (typeof import.meta !== "undefined" && typeof import.meta.env?.VITE_DEN_REQUIRE_SIGNIN === "string"
     ? /^(1|true|yes|on)$/i.test(import.meta.env.VITE_DEN_REQUIRE_SIGNIN.trim())
@@ -100,9 +101,9 @@ function readForceEnvDenSettings(): boolean {
     : false);
 }
 
-export const HOSTED_DEFAULT_DEN_BASE_URL = "https://sofia-app.ruut.chat";
+export const HOSTED_DEFAULT_DEN_BASE_URL = "https://sofia.ruut.chat";
 export const DEFAULT_DEN_BASE_URL = BUILD_DEN_BASE_URL;
-export const DEN_INFERENCE_PATH = "/dashboard/inference";
+export const DEN_INFERENCE_PATH = "/models";
 
 // Den wire types moved to den-types.ts (leaf module); re-exported here so
 // the many existing den.ts importers keep working.
@@ -1027,23 +1028,7 @@ function canUseCloudWebAuthReturn(origin: string): boolean {
 }
 
 export function buildDenAuthUrl(baseUrl: string, mode: "sign-in" | "sign-up"): string {
-  const target = new URL(resolveDenBaseUrls(baseUrl).baseUrl);
-  target.searchParams.set("mode", mode);
-  const webReturnOrigin =
-    isWebDeployment() && typeof window !== "undefined" ? window.location.origin : null;
-  if (
-    isDesktopDeployment()
-    || (webReturnOrigin !== null && !canUseCloudWebAuthReturn(webReturnOrigin))
-  ) {
-    // Desktop app, or local/dev web that cannot receive an approved webAuth
-    // redirect: Den shows the copyable sofia:// / grant handoff instead.
-    target.searchParams.set("desktopAuth", "1");
-    target.searchParams.set("desktopScheme", "sofia");
-  } else if (webReturnOrigin !== null) {
-    target.searchParams.set("webAuth", "1");
-    target.searchParams.set("webAuthReturn", webReturnOrigin);
-  }
-  return target.toString();
+  return buildCloudAuthUrl(resolveDenBaseUrls(baseUrl).baseUrl, mode);
 }
 
 function resolveRequestBaseUrl(baseUrls: DenBaseUrls, path: string): string {

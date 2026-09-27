@@ -2,7 +2,12 @@ import { describe, expect, test } from "bun:test";
 
 import {
   BROWSER_PEEK_HEIGHT,
+  BROWSER_PEEK_VIEWPORT,
   BROWSER_PEEK_WIDTH,
+  MAX_BROWSER_PEEK_HEIGHT,
+  MAX_BROWSER_PEEK_WIDTH,
+  MIN_BROWSER_PEEK_HEIGHT,
+  MIN_BROWSER_PEEK_WIDTH,
   PERSISTED_BROWSER_PRESENTATION_KEY,
   MAX_BROWSER_EXPANDED_WIDTH,
   MIN_BROWSER_EXPANDED_WIDTH,
@@ -10,6 +15,7 @@ import {
   browserAttentionHost,
   browserExpandedWidth,
   browserPeekSize,
+  browserPeekViewport,
   browserPresentationVisible,
   clampDockedWidth,
   clampPeekPosition,
@@ -161,6 +167,71 @@ describe("browser presentation policy", () => {
     expect(browserPeekSize()).toEqual({ width: BROWSER_PEEK_WIDTH, height: BROWSER_PEEK_HEIGHT });
     expect(browserPeekSize()).toEqual(browserPeekSize());
     expect(browserAttentionHost("https://www.example.com/x")).toBe("example.com");
+  });
+
+  test("the peek card hugs the shape of the content it holds", () => {
+    // A panel tab renders at Peek's desktop breakpoint, and 440 × 800/1280 is
+    // exactly the 16:10 card the preview has always used.
+    expect(browserPeekViewport({ mode: "panel" })).toEqual({
+      width: BROWSER_PEEK_VIEWPORT.width,
+      height: BROWSER_PEEK_VIEWPORT.height,
+    });
+    expect(browserPeekSize({ mode: "panel" })).toEqual({
+      width: BROWSER_PEEK_WIDTH,
+      height: BROWSER_PEEK_HEIGHT,
+    });
+
+    // Every preset the browser ships offers a device's real shape, so each one
+    // gets a card of that shape: the page fills the card instead of sitting in
+    // a letterbox inside a 16:10 box that was never its shape to begin with.
+    const tablet = { mode: "responsive" as const, width: 768, height: 1024, deviceScaleFactor: 2 };
+    const phone = { mode: "responsive" as const, width: 390, height: 844, deviceScaleFactor: 3 };
+    expect(browserPeekViewport(tablet)).toEqual({ width: 768, height: 1024 });
+    expect(browserPeekSize(tablet)).toEqual({ width: 420, height: 560 });
+    expect(browserPeekSize(phone)).toEqual({ width: 259, height: 560 });
+
+    for (const viewport of [
+      { mode: "responsive" as const, width: 1440, height: 900, deviceScaleFactor: 1 },
+      { mode: "responsive" as const, width: 1280, height: 800, deviceScaleFactor: 1 },
+      tablet,
+      phone,
+      { mode: "responsive" as const, width: 1024, height: 768, deviceScaleFactor: 2 },
+      { mode: "responsive" as const, width: 640, height: 480, deviceScaleFactor: 1 },
+    ]) {
+      const card = browserPeekSize(viewport);
+      // The card is the content's own aspect, to the pixel we can round to.
+      expect(card.width / card.height).toBeCloseTo(viewport.width / viewport.height, 2);
+      // …and never bigger than the footprint, unless the floor grew it.
+      expect(card.width).toBeLessThanOrEqual(Math.max(BROWSER_PEEK_WIDTH, MIN_BROWSER_PEEK_WIDTH));
+      expect(card.height).toBeLessThanOrEqual(MAX_BROWSER_PEEK_HEIGHT);
+    }
+  });
+
+  test("an extreme preset stops at the card's floor and ceiling", () => {
+    // 390×844 at the default width would be 952 tall, so the card stops at the
+    // ceiling and narrows instead — a phone preview is tall, not wide.
+    const phone = { mode: "responsive" as const, width: 390, height: 844, deviceScaleFactor: 3 };
+    expect(browserPeekSize(phone).height).toBe(MAX_BROWSER_PEEK_HEIGHT);
+    expect(browserPeekSize(phone).width).toBeLessThan(BROWSER_PEEK_WIDTH);
+
+    // An ultrawide preset is the opposite case: the floor keeps the card tall
+    // enough to grab, which widens it past the default rather than flattening it.
+    const ultrawide = { mode: "responsive" as const, width: 3840, height: 1080, deviceScaleFactor: 1 };
+    const card = browserPeekSize(ultrawide);
+    expect(card.height).toBe(MIN_BROWSER_PEEK_HEIGHT);
+    expect(card.width).toBeGreaterThan(BROWSER_PEEK_WIDTH);
+
+    // Position maths uses the hugged card, so a narrower card still lands
+    // fully inside the workspace instead of hanging off the right edge.
+    const surface = { width: 1200, height: 800 };
+    expect(defaultPeekPosition(surface, browserPeekSize(phone))).toEqual({
+      x: 1200 - 259 - 20,
+      y: 64,
+    });
+    expect(clampPeekPosition({ x: 0, y: 500 }, surface, browserPeekSize(phone))).toEqual({
+      x: 16,
+      y: 800 - MAX_BROWSER_PEEK_HEIGHT - 16,
+    });
   });
 
   test("presentation decides visibility, and never hides the conversation", () => {

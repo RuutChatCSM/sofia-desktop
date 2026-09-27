@@ -10,23 +10,13 @@ describe("Sofia capabilities knowledge plugin", () => {
     await plugin["experimental.chat.system.transform"]({}, output);
 
     const knowledge = output.system.join("\n");
-    expect(knowledge).toContain("https://sofia-api.ruut.chat/mcp/agent");
-    expect(knowledge).toContain("sofia-app.ruut.chat/api/den");
-    expect(knowledge).toContain("internal same-origin desktop proxy");
-    expect(knowledge).toContain("Sofia engine is verified");
-    expect(knowledge).toContain("Codex is setup-only");
-    expect(knowledge).toContain("cursor://anysphere.cursor-mcp/oauth/callback");
-    expect(knowledge).toContain("Settings > MCP servers");
-    expect(knowledge).toContain("https://sofia-app.ruut.chat/api/auth");
-    expect(knowledge).toContain("RFC9728 discovery");
-    expect(knowledge).toContain("PKCE S256");
-    expect(knowledge).toContain("opencode mcp auth sofia");
-    expect(knowledge).toContain("codex mcp login sofia");
+    expect(knowledge).toContain("https://sofia.ruut.chat/mcp/agent");
+    expect(knowledge).toContain("/api/den");
+    expect(knowledge).toContain("one-time grant");
+    expect(knowledge).toContain("session-bound API token");
     expect(knowledge).toContain("search_capabilities");
     expect(knowledge).toContain("execute_capability");
-    expect(knowledge).toContain("JWTs signed and validated with EdDSA");
-    expect(knowledge).toContain("30-day inactivity window");
-    expect(knowledge).toContain("reference_id");
+    expect(knowledge).toContain("Rails provides OAuth discovery, authorization code with PKCE");
     expect(knowledge).toContain("Sofia documentation tools answer product questions. Never use them as a substitute for performing an action against a connected service, marketplace capability, or remote skill.");
     expect(knowledge).toContain("require the user to sign in to Sofia first");
     expect(knowledge).toContain("Runtime steering from the Sofia extensions plugin is the source of truth");
@@ -38,8 +28,7 @@ describe("Sofia capabilities knowledge plugin", () => {
     expect(knowledge).toContain("Settings > Library");
     expect(knowledge).toContain("Settings > Debug");
     expect(knowledge).toContain("custom or local MCP server");
-    expect(knowledge).not.toContain("Access tokens are opaque");
-    expect(knowledge).not.toContain("https://sofia-api.ruut.chat/mcp`");
+    expect(knowledge).not.toContain("https://sofia-api.ruut.chat/mcp/agent");
     expect(knowledge).not.toContain("sofia-ui-mcp");
     expect(knowledge).not.toContain("sofia_extensions_export");
   });

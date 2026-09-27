@@ -29,7 +29,7 @@ const tmpDir = path.join(cwd, "tmp");
 
 const DEFAULT_WEB_PORT = "5178";
 const DEFAULT_SERVER_PORT = "8778";
-const DEFAULT_DEN_TARGET = "https://sofia-app.ruut.chat";
+const DEFAULT_DEN_TARGET = "https://sofia.ruut.chat";
 
 const ensureTmp = async () => {
   await mkdir(tmpDir, { recursive: true });

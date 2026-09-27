@@ -1,196 +1,91 @@
-/**
- * Turn-owned change tracking.
- *
- * The invariant: **every completed turn owns zero or one immutable ChangeSet,
- * and that association is persisted with the turn itself.**
- *
- *   turn begins  → snapshot the workspace  → turnRecord.baselineTree
- *   turn runs    → anything may write files
- *   turn ends    → snapshot again → freeze the delta → turnRecord.changeSetId
- *
- * Owning this on the server rather than in the renderer removes two fragile
- * things at once: capture/finalize no longer depends on a mounted surface, and
- * the turn↔ChangeSet association is no longer "the newest one this session saw".
- *
- * Nothing here may block or fail a turn. If git is unavailable, or there is no
- * repository, the turn still runs and the record simply has no ChangeSet — the
- * UI can then honestly present a hint-only card.
- */
-import {
-  readTurnDelta,
-  snapshotWorkspaceTree,
-  type GitRun,
-  type WorkspaceFileChange,
-} from "./git-changes.js";
+import { createHash } from "node:crypto";
+import { mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { readTurnDeltaForRoot, snapshotWorkspaceTrees, type RepositoryBaseline, type RepositoryTurnDelta } from "./git-changes.js";
 
-/** Persisted with the turn, so a historical card stays deterministic. */
 export type TurnChangeRecord = {
+  sessionId: string;
   turnId: string;
-  /** When the logical turn started and (once it is over) completed. */
   startedAt: number;
-  completedAt?: number;
-  baselineTree?: string;
-  endTree?: string;
-  headBefore?: string | null;
-  headAfter?: string | null;
-  /** Zero or one ChangeSet per completed turn. */
-  changeSetId?: string;
-  files: WorkspaceFileChange[];
-  additions: number;
-  deletions: number;
-  patch?: string;
-  commitsInRange?: string[];
-  /** Why there is no ChangeSet, when there is none. */
+  finalizedAt: number;
+  snapshot: { revision: null; files: []; repositories: RepositoryTurnDelta[] };
   unavailable?: string;
 };
 
-export function turnChangeSetId(sessionId: string, turnId: string): string {
-  return `turn:${sessionId}:${turnId}`;
-}
+type Baseline = { root: string; startedAt: number; repositories: RepositoryBaseline[] };
 
-type OpenTurn = {
-  turnId: string;
-  startedAt: number;
-  baselineTree?: string;
-  headBefore?: string | null;
-  baselineError?: string;
-};
-
-export type TurnChangesOptions = {
-  sessionId: string;
-  /** Resolve a git runner for a directory, or null when there is none. */
-  gitFor: (sessionId: string) => GitRun | null;
-  /** Where the records live (a session map, a store, anything). */
-  records: Map<string, TurnChangeRecord>;
-  now?: () => number;
-  log?: (line: string) => void;
-};
-
-/**
- * One tracker per session. `beginTurn` is called once per *logical* turn — a new
- * user prompt — and `finalizeTurn` on completion. A continuation that the engine
- * starts on its own does not call `beginTurn`, so the logical turn keeps its
- * original baseline and its single ChangeSet covers the whole thing.
- */
+/** Captured before the engine can write; frozen before the next prompt can start. */
 export class TurnChangeTracker {
-  private readonly open = new Map<string, OpenTurn>();
+  private baselines = new Map<string, Baseline>();
+  private records = new Map<string, Map<string, TurnChangeRecord>>();
 
-  constructor(private readonly options: TurnChangesOptions) {}
+  constructor(private directory: string | null) {}
 
-  /** A new logical turn began. Never throws, never blocks the turn. */
-  async beginTurn(turnId: string): Promise<void> {
-    const now = this.options.now?.() ?? Date.now();
-    this.options.log?.(`[changes] turn-start session=${this.options.sessionId} turn=${turnId}`);
-    const existing = this.open.get(this.options.sessionId);
-    if (existing && existing.turnId === turnId) return;
-
-    const open: OpenTurn = { turnId, startedAt: now };
-    this.open.set(this.options.sessionId, open);
-
-    const run = this.options.gitFor(this.options.sessionId);
-    if (!run) {
-      open.baselineError = "no repository access";
-      return;
-    }
+  async beginTurn(sessionId: string, root: string): Promise<void> {
+    const startedAt = Date.now();
+    // Do not leave an earlier baseline available if this capture fails.
+    this.baselines.delete(sessionId);
     try {
-      const snapshot = await snapshotWorkspaceTree(run);
-      open.baselineTree = snapshot.tree;
-      open.headBefore = snapshot.head;
-      this.options.log?.(
-        `[changes] baseline captured session=${this.options.sessionId} turn=${turnId} tree=${snapshot.tree || "none"}`,
-      );
+      this.baselines.set(sessionId, { root, startedAt, repositories: await snapshotWorkspaceTrees(root) });
     } catch (error) {
-      open.baselineError = error instanceof Error ? error.message : "baseline failed";
+      console.warn("[changes] baseline unavailable", sessionId, error);
     }
   }
 
-  /**
-   * The turn completed. Freezes the delta if a baseline exists; otherwise records
-   * why not. Always leaves a record, so the UI never has to guess.
-   */
-  async finalizeTurn(turnId: string): Promise<TurnChangeRecord> {
-    const now = this.options.now?.() ?? Date.now();
-    this.options.log?.(`[changes] turn-complete session=${this.options.sessionId} turn=${turnId}`);
-    const open = this.open.get(this.options.sessionId);
-    const record = this.recordFor(turnId, open);
-    record.completedAt = now;
-
-    const run = this.options.gitFor(this.options.sessionId);
-    if (!run) {
-      record.unavailable = open?.baselineError ?? "no repository access";
-      this.options.records.set(turnId, record);
-      return record;
-    }
-
-    if (!open?.baselineTree) {
-      // Explicit degradation: no baseline means no counts, never invented ones.
-      record.unavailable = open?.baselineError ?? "no baseline was captured for this turn";
-      this.options.records.set(turnId, record);
-      this.options.log?.(
-        `[changes] finalized turn=${turnId} changeSet=none source=unavailable reason=${record.unavailable}`,
-      );
-      return record;
-    }
-
-    try {
-      const end = await snapshotWorkspaceTree(run);
-      record.baselineTree = open.baselineTree;
-      record.endTree = end.tree;
-      record.headBefore = open.headBefore ?? null;
-      record.headAfter = end.head;
-
-      if (end.tree && end.tree !== open.baselineTree) {
-        const delta = await readTurnDelta(run, {
-          baselineTree: open.baselineTree,
-          endTree: end.tree,
-          includeHunks: true,
-          includePatch: true,
-        });
-        record.files = delta.files;
-        record.additions = delta.files.reduce((total, file) => total + file.additions, 0);
-        record.deletions = delta.files.reduce((total, file) => total + file.deletions, 0);
-        if (delta.patch !== undefined) record.patch = delta.patch;
-        record.commitsInRange =
-          open.headBefore && end.head && open.headBefore !== end.head
-            ? await this.commitsBetween(run, open.headBefore, end.head)
-            : [];
-      }
-
-      record.changeSetId = turnChangeSetId(this.options.sessionId, turnId);
-      this.options.records.set(turnId, record);
-      this.options.log?.(
-        `[changes] finalized turn=${turnId} changeSet=${record.changeSetId} files=${record.files.length} +${record.additions} -${record.deletions} source=tree-delta`,
-      );
-      return record;
-    } catch (error) {
-      record.unavailable = error instanceof Error ? error.message : "finalize failed";
-      this.options.records.set(turnId, record);
-      this.options.log?.(
-        `[changes] finalized turn=${turnId} changeSet=none source=unavailable reason=${record.unavailable}`,
-      );
-      return record;
-    }
-  }
-
-  getRecord(turnId: string): TurnChangeRecord | null {
-    return this.options.records.get(turnId) ?? null;
-  }
-
-  private recordFor(turnId: string, open: OpenTurn | undefined): TurnChangeRecord {
-    const existing = this.options.records.get(turnId);
+  async finalizeTurn(sessionId: string, turnId: string): Promise<TurnChangeRecord> {
+    const existing = this.records.get(sessionId)?.get(turnId);
     if (existing) return existing;
-    return {
-      turnId,
-      startedAt: open?.startedAt ?? this.options.now?.() ?? Date.now(),
-      files: [],
-      additions: 0,
-      deletions: 0,
+    const baseline = this.baselines.get(sessionId);
+    this.baselines.delete(sessionId);
+    const record: TurnChangeRecord = {
+      sessionId, turnId, startedAt: baseline?.startedAt ?? Date.now(), finalizedAt: Date.now(),
+      snapshot: { revision: null, files: [], repositories: [] },
     };
+    try {
+      if (!baseline?.repositories.length) record.unavailable = "No repository baseline was captured.";
+      else {
+        const delta = await readTurnDeltaForRoot(baseline.root, baseline.repositories, { includeHunks: true, includePatch: true });
+        record.snapshot.repositories = delta.repositories;
+      }
+    } catch (error) {
+      record.unavailable = error instanceof Error ? error.message : "Could not read turn changes.";
+    }
+    const records = this.records.get(sessionId) ?? new Map<string, TurnChangeRecord>();
+    records.set(turnId, record);
+    this.records.set(sessionId, records);
+    if (this.directory) {
+      try {
+        const directory = join(this.directory, this.key(sessionId));
+        await mkdir(directory, { recursive: true });
+        const path = join(directory, `${this.key(turnId)}.json`);
+        await writeFile(`${path}.tmp`, JSON.stringify(record), { mode: 0o600 });
+        await rename(`${path}.tmp`, path);
+      } catch (error) {
+        console.warn("[changes] could not persist turn changes", sessionId, turnId, error);
+      }
+    }
+    return record;
   }
 
-  private async commitsBetween(run: GitRun, before: string, after: string): Promise<string[]> {
-    const result = await run(["rev-list", "--no-merges", `${before}..${after}`]);
-    if (result.code !== 0) return [];
-    return result.stdout.split("\n").map((line) => line.trim()).filter(Boolean);
+  async list(sessionId: string): Promise<TurnChangeRecord[]> {
+    const records = this.records.get(sessionId) ?? new Map<string, TurnChangeRecord>();
+    if (this.directory) {
+      const directory = join(this.directory, this.key(sessionId));
+      for (const file of await readdir(directory).catch(() => [])) {
+        if (!file.endsWith(".json")) continue;
+        try {
+          const value = JSON.parse(await readFile(join(directory, file), "utf8"));
+          if (value.sessionId === sessionId && typeof value.turnId === "string" && Array.isArray(value.snapshot?.repositories)) {
+            if (!records.has(value.turnId)) records.set(value.turnId, value);
+          }
+        } catch { /* A damaged record must not prevent opening the conversation. */ }
+      }
+    }
+    this.records.set(sessionId, records);
+    return [...records.values()].sort((a, b) => a.startedAt - b.startedAt);
+  }
+
+  private key(id: string): string {
+    return createHash("sha256").update(id).digest("hex");
   }
 }

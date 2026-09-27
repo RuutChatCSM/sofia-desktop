@@ -168,7 +168,7 @@ export const MCP_QUICK_CONNECT: McpDirectoryInfo[] = [
       try {
         return `${getDenMcpUrl()}/agent`;
       } catch {
-        return "https://sofia-app.ruut.chat/api/den/mcp/agent";
+        return "https://sofia.ruut.chat/api/den/mcp/agent";
       }
     },
     type: "remote",

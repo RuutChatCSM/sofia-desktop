@@ -95,6 +95,7 @@ import {
 import { useLocal } from "@/react-app/kernel/local-provider";
 import { usePlatform } from "@/react-app/kernel/platform";
 import { SessionPage, type OpenSessionTab } from "@/react-app/domains/session/chat/session-page";
+import { SessionSurfaceBoundary } from "@/react-app/shell/session-surface-boundary";
 import { useCodexEngine } from "@/react-app/domains/session/use-codex-engine";
 import { useCodexSessionStore } from "@/react-app/domains/session/codex-session-store";
 import { useCodexApprovals } from "@/react-app/domains/session/codex/use-codex-approvals";
@@ -2863,6 +2864,8 @@ export function SessionRoute() {
         onSessionDeleted={handleRuntimeSessionDeleted}
       />
     ) : null}
+  
+    <SessionSurfaceBoundary>
     <SessionPage
       sessionNumberShortcuts={sessionNumberShortcuts}
       selectedSessionId={selectedSessionId}
@@ -2895,7 +2898,6 @@ export function SessionRoute() {
         abort: codexEngine.abort!,
         deleteSession: codexEngine.deleteSession!,
       } : null}
-      headerStatus={canCreateTask ? t("status.connected") : (modelUnavailableMessage ?? t("session.loading_detail"))}
       busyHint={organizationModelsEmpty ? t("models.organization_models_empty") : effectiveLoading ? t("session.loading_detail") : null}
       startupPhase={effectiveLoading ? "nativeInit" : "ready"}
       providerConnectedIds={providerConnectedIds}
@@ -3147,6 +3149,7 @@ export function SessionRoute() {
       extensionsActive={extensionsMainOpen}
       onAccessibleTargetsChange={setPaletteAccessibleTargets}
     />
+    </SessionSurfaceBoundary>
     <CreateWorkspaceModal
       open={createWorkspaceOpen}
       onClose={() => {

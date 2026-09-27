@@ -9,14 +9,14 @@ export type PromptHarnessContext = {
   cwd: string;
 };
 
-/** Build factual host context without changing the engine's behavior policy. */
+/** Give the engine Sofia host context and one concise capability-routing rule. */
 export function buildSofiaDeveloperInstructions(context: PromptHarnessContext): string {
   return [
     "<sofia_context>",
     "Sofia is running this thread and displaying it in the Sofia app.",
     `Workspace id: ${context.workspaceId}`,
     `Working directory: ${context.cwd}`,
-    "Use the runtime capabilities and skills that are available in this thread.",
+    "Infer the needed capability from the user's task; they do not need to name a tool or plugin. Consider built-in tools, enabled MCP servers, apps, plugin-provided tools, and local or Cloud skills. If a relevant tool is not directly visible, use tool_search when available before concluding it is unavailable. Use only capabilities confirmed callable in this turn, and report a missing or failed connection rather than guessing.",
     "</sofia_context>",
   ].join("\n");
 }

@@ -49,6 +49,57 @@ async function startStubBridge() {
   return { url: `http://127.0.0.1:${address.port}`, requests };
 }
 
+/**
+ * Stand-in for the desktop broker *and* one of its pages, so a test can see the
+ * exact CDP traffic a semantic browser action produces. HTTP answers the two
+ * discovery endpoints; the websocket answers CDP and records what it was asked.
+ */
+async function startFakeBridgeWithPage() {
+  const expressions: string[] = [];
+  const methods: string[] = [];
+  const server = Bun.serve({
+    port: 0,
+    fetch(req, srv) {
+      const url = new URL(req.url);
+      if (url.pathname === "/json/version") {
+        return Response.json({ webSocketDebuggerUrl: `ws://127.0.0.1:${srv.port}/devtools/browser/BROWSER-1` });
+      }
+      if (url.pathname === "/json/list") {
+        return Response.json([
+          {
+            id: "PAGE-1",
+            type: "page",
+            title: "Fake page",
+            url: `data:text/html,${encodeURIComponent("sofia-browser-tab:tab_test_1")}`,
+            webSocketDebuggerUrl: `ws://127.0.0.1:${srv.port}/devtools/page/PAGE-1`,
+          },
+        ]);
+      }
+      return Response.json([]);
+    },
+    websocket: {
+      open() {},
+      message(ws, raw) {
+        let msg: any;
+        try { msg = JSON.parse(String(raw)); } catch { return; }
+        methods.push(String(msg.method ?? ""));
+        if (msg.method === "Runtime.evaluate") expressions.push(String(msg.params?.expression ?? ""));
+        // `runAct`/`snapshot` read `.result.value`; a centre is all this page has.
+        ws.send(JSON.stringify({ id: msg.id, result: { result: { type: "object", value: { ok: true, x: 40, y: 60 }, description: "Object" } } }));
+      },
+    },
+  });
+  servers.push({ close: (cb: () => void) => { void server.stop(true); cb?.(); } } as unknown as Server);
+  return {
+    url: `http://127.0.0.1:${server.port}`,
+    expressions,
+    methods,
+    moves: () => expressions.filter((e) => e.includes("__sofiaAgentCursor.moveTo(")),
+    fades: () => expressions.filter((e) => e.includes("fade")),
+    cursorExpressions: () => expressions.filter((e) => e.includes("__sofiaAgentCursor")),
+  };
+}
+
 function startRepl(options: { brokerUrl?: string; sofiaHome: string } ) {
   const child = spawn("node", [join(import.meta.dir, "sofia-browser-repl.mjs")], {
     env: {
@@ -129,5 +180,40 @@ describe("sofia browser Node REPL", () => {
     });
     expect(response.result.content).toEqual([{ type: "text", text: "[]" }]);
     expect(bridge.requests).toContain("/json/list");
+  });
+
+  test("semantic browser actions drive the virtual cursor", async () => {
+    // The cursor is presentation state: a hover moves it, a read does not, and a
+    // navigation fades it. None of this may depend on which transport performed
+    // the page interaction.
+    const page = await startFakeBridgeWithPage();
+    const repl = startRepl({ brokerUrl: "http://127.0.0.1:2", sofiaHome: await isolatedHome({ url: page.url }) });
+    await repl.request(1, "initialize");
+
+    const read = await repl.request(2, "tools/call", {
+      name: "js",
+      arguments: { code: "const b = await setupBrowserRuntime(); const t = (await b.browsers.get('iab').tabs.list())[0]; await t.see(); return 'read'", },
+    });
+    expect(read.error).toBeUndefined();
+    expect(page.cursorExpressions()).toEqual([]);
+
+    const hover = await repl.request(3, "tools/call", {
+      name: "js",
+      arguments: { code: "const b = await setupBrowserRuntime(); const t = (await b.browsers.get('iab').tabs.list())[0]; await t.hover({ role: 'button' }); return 'hover'", },
+    });
+    expect(hover.error).toBeUndefined();
+    expect(page.moves().length).toBeGreaterThanOrEqual(2);
+    // A cursor that was not on screen arrives from nearby, then lands on target.
+    expect(page.moves()[0]).toContain("moveTo(14, 40)");
+    expect(page.moves()[1]).toContain("moveTo(40, 60)");
+
+    const before = page.moves().length;
+    const nav = await repl.request(4, "tools/call", {
+      name: "js",
+      arguments: { code: "const b = await setupBrowserRuntime(); const t = (await b.browsers.get('iab').tabs.list())[0]; await t.goto('https://example.com/next'); return 'nav'", },
+    });
+    expect(nav.error).toBeUndefined();
+    expect(page.fades().length).toBeGreaterThanOrEqual(1);
+    expect(page.moves().length).toBe(before);
   });
 });

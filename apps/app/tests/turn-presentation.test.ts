@@ -81,7 +81,7 @@ describe("turn presentation", () => {
     expect(presentation.answerItems.map((item) => item.message.id)).toEqual(["m6"]);
   });
 
-  test("reasoning is a work entry of its own, ordered before the detail it preceded", () => {
+  test("one message is projected per part: reasoning, then the prose it precedes", () => {
     const items = [
       message("m1", [{ type: "reasoning", text: "thinking about it", state: "done" }, text("Working on it.")]),
       message("m2", [text("Done.")], "final_answer"),
@@ -89,11 +89,14 @@ describe("turn presentation", () => {
 
     const presentation = deriveTurnPresentation(items, true);
 
-    expect(presentation.work.map((entry) => entry.kind)).toEqual(["reasoning", "detail"]);
-    const reasoning = presentation.work[0];
-    expect(reasoning?.kind === "reasoning" && reasoning.text).toBe("thinking about it");
-    const detail = presentation.work[1];
-    expect(detail?.kind === "detail" && detail.item.message.id).toBe("m1");
+    // The thought and the prose in the same message are two channels, so the
+    // narrative can place each where it belongs rather than calling the whole
+    // message one opaque "detail".
+    expect(presentation.work.map((entry) => entry.kind)).toEqual(["thought", "commentary"]);
+    const thought = presentation.work[0];
+    expect(thought?.kind === "thought" && thought.text).toBe("thinking about it");
+    const commentary = presentation.work[1];
+    expect(commentary?.kind === "commentary" && commentary.item.message.id).toBe("m1");
     expect(presentation.answerItems.map((item) => item.message.id)).toEqual(["m2"]);
   });
 
@@ -109,11 +112,11 @@ describe("turn presentation", () => {
 
     const presentation = deriveTurnPresentation(items, true);
 
-    expect(presentation.work.map((entry) => entry.kind)).toEqual(["milestone", "reasoning"]);
+    expect(presentation.work.map((entry) => entry.kind)).toEqual(["milestone", "thought"]);
     const milestone = presentation.work[0];
     expect(milestone?.kind === "milestone" && milestone.parts).toHaveLength(2);
-    const reasoning = presentation.work[1];
-    expect(reasoning?.kind === "reasoning" && reasoning.text).toBe("checking");
+    const thought = presentation.work[1];
+    expect(thought?.kind === "thought" && thought.text).toBe("checking");
   });
 
   test("adjacent tool events collapse into one milestone row", () => {
@@ -152,7 +155,7 @@ describe("turn presentation", () => {
       "milestone",
       "commentary",
       "milestone",
-      "reasoning",
+      "thought",
       "commentary",
     ]);
     expect(presentation.answerItems.map((item) => item.message.id)).toEqual(["m7"]);
@@ -162,13 +165,14 @@ describe("turn presentation", () => {
       entry.kind === "commentary" || entry.kind === "detail" ? [entry.item.message.id] : [],
     );
     expect(workText).toEqual(["m1", "m3", "m6"]);
-    const reasoning = presentation.work.find((entry) => entry.kind === "reasoning");
-    expect(reasoning?.kind === "reasoning" && reasoning.text).toBe("checking the canvas");
+    const thought = presentation.work.find((entry) => entry.kind === "thought");
+    expect(thought?.kind === "thought" && thought.text).toBe("checking the canvas");
   });
 
-  test("reasoning is always part of the narrative, at its own place in it", () => {
-    // Reasoning is never gated: it is one of the things the turn did. It sits in
-    // chronological order between the commentary and the tools it belongs to.
+  test("reasoning sits at its own place in the narrative", () => {
+    // Reasoning is never gated behind a mode: it is one of the things the turn
+    // did, and it sits in chronological order between the commentary and the
+    // tools it belongs to. Whether it is *shown* is the renderer's business.
     const items = [
       message("m1", [text("Let me inspect the shared layout first.")], "commentary"),
       message("m2", [{ type: "reasoning", text: "the wrapper is the culprit", state: "done" }]),
@@ -177,10 +181,79 @@ describe("turn presentation", () => {
     ];
 
     const presentation = deriveTurnPresentation(items, true);
-    expect(presentation.work.map((entry) => entry.kind)).toEqual(["commentary", "reasoning", "milestone"]);
+    expect(presentation.work.map((entry) => entry.kind)).toEqual(["commentary", "thought", "milestone"]);
+  });
+});
 
-    // With "show thinking" off the reasoning is not in the data at all.
-    const withoutThinking = deriveTurnPresentation(items, false);
-    expect(withoutThinking.work.map((entry) => entry.kind)).toEqual(["commentary", "milestone"]);
+const thinking = (id: string, value: string, state: "done" | "streaming" = "done") =>
+  message(id, [{ type: "reasoning", text: value, state }]);
+
+const workTexts = (work: Array<{ kind: string } & Record<string, unknown>>) =>
+  work.map((entry) => (entry.kind === "thought" ? (entry.text as string) : entry.kind));
+
+describe("a thought is a reasoning phase, not a reasoning packet", () => {
+  test("consecutive packets become one row", () => {
+    // The stream arrives in packets — one per model step. The reader should see
+    // one reasoning phase, not the runtime's chunk boundaries.
+    const items = [
+      thinking("m1", "first"),
+      thinking("m2", "second"),
+      thinking("m3", "third"),
+      message("m4", [text("Looking at the shared wrapper now.")], "commentary"),
+      message("m5", [text("Done.")], "final_answer"),
+    ];
+
+    const presentation = deriveTurnPresentation(items, true);
+
+    expect(presentation.work.map((entry) => entry.kind)).toEqual(["thought", "commentary"]);
+    expect(workTexts(presentation.work)).toEqual(["first\n\nsecond\n\nthird", "commentary"]);
+  });
+
+  test("commentary, a tool run and the answer each close the phase", () => {
+    const items = [
+      thinking("m1", "a"),
+      thinking("m2", "b"),
+      message("m3", [bash("c1")]),
+      thinking("m4", "c"),
+      message("m5", [text("Running the validation now.")], "commentary"),
+      thinking("m6", "d"),
+      thinking("m7", "e"),
+      message("m8", [text("Done.")], "final_answer"),
+    ];
+
+    const presentation = deriveTurnPresentation(items, true);
+
+    // One phase per run of packets, each at its own place in the narrative:
+    // never one row per packet, and never hoisted out of chronological order.
+    expect(workTexts(presentation.work)).toEqual([
+      "a\n\nb",
+      "milestone",
+      "c",
+      "commentary",
+      "d\n\ne",
+    ]);
+  });
+
+  test("only the phase she is in now is current", () => {
+    const midThought = deriveTurnPresentation([
+      message("m1", [text("Checking the renderer state.")], "commentary"),
+      thinking("m2", "still working through it", "streaming"),
+    ], true);
+    const open = midThought.work.at(-1);
+    expect(open?.kind === "thought" && open.isCurrent).toBe(true);
+
+    // A thought she has moved on from is history: a later tool, a later line of
+    // prose, or the answer itself all close the phase.
+    const movedOn = deriveTurnPresentation([
+      thinking("m1", "checking"),
+      message("m2", [bash("c1")]),
+    ], true);
+    expect(movedOn.work.some((entry) => entry.kind === "thought" && entry.isCurrent)).toBe(false);
+
+    const answered = deriveTurnPresentation([
+      thinking("m1", "checking", "streaming"),
+      message("m2", [text("Done.")], "final_answer"),
+    ], true);
+    expect(answered.work.some((entry) => entry.kind === "thought" && entry.isCurrent)).toBe(false);
   });
 });

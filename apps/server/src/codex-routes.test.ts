@@ -59,6 +59,7 @@ describe("codex routes", () => {
       setArchived: async () => session,
       rename: async () => session,
       getSessionItems: async () => [],
+      getTurnChanges: async () => [],
       forkSession: async () => session,
       listBackgroundProcesses: async () => [],
       terminateBackgroundProcess: async () => false,

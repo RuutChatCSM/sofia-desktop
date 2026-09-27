@@ -19,7 +19,7 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
-import type { BrowserPresentationMode } from "../../../../app/lib/desktop-types";
+import type { BrowserPresentationMode, BrowserViewport } from "../../../../app/lib/desktop-types";
 
 export const PERSISTED_BROWSER_PRESENTATION_KEY = "sofia:browser-presentation:v1";
 
@@ -94,8 +94,11 @@ export const MAX_BROWSER_DOCKED_WIDTH = 1600;
 
 /**
  * A small floating preview must not turn the page mobile, so Peek renders a
- * normal desktop breakpoint scaled into the card. This is presentation-derived
- * emulation: it is never written back into `BrowserPanelTab.viewport`.
+ * normal desktop breakpoint scaled into the card. The panel achieves that with
+ * page *zoom* rather than with a virtual screen: a virtual screen is painted by
+ * the native view, and a card cannot clip a native surface. This layout is
+ * presentation-derived and is never written back into `BrowserPanelTab.viewport`
+ * or `BrowserPanelTab.zoom`.
  */
 export const BROWSER_PEEK_VIEWPORT = {
   mode: "responsive",
@@ -106,12 +109,23 @@ export const BROWSER_PEEK_VIEWPORT = {
 
 /**
  * Peek geometry belongs to the presentation, not to whatever the page is doing.
- * A navigation, a tab switch, a title change or a viewport change can never
- * resize the card, because nothing derives its size from page state.
+ * A navigation, a tab switch or a title change can never resize the card,
+ * because nothing derives its size from page state. The one thing the card does
+ * follow is the shape of the content it holds: a card that is not the shape of
+ * its page is a card with dead space in it.
  */
 export const BROWSER_PEEK_WIDTH = 440;
 export const BROWSER_PEEK_ASPECT = 16 / 10;
 export const BROWSER_PEEK_HEIGHT = Math.round(BROWSER_PEEK_WIDTH / BROWSER_PEEK_ASPECT);
+/**
+ * The largest card Peek will ask for, in each direction independently: enough
+ * for a desktop page at the default width, and enough for a tablet in portrait.
+ */
+export const MAX_BROWSER_PEEK_WIDTH = BROWSER_PEEK_WIDTH;
+export const MAX_BROWSER_PEEK_HEIGHT = 560;
+/** …and the smallest, so a hug never leaves an unreadable or hard-to-grab card. */
+export const MIN_BROWSER_PEEK_WIDTH = 200;
+export const MIN_BROWSER_PEEK_HEIGHT = 150;
 export const BROWSER_PEEK_RADIUS = 12;
 /** The card never comes closer than this to the edges of the workspace it floats over. */
 export const BROWSER_PEEK_MARGIN = 16;
@@ -193,19 +207,62 @@ export function clampDockedWidth(width: number): number {
   return Math.min(Math.max(Math.round(numeric), MIN_BROWSER_DOCKED_WIDTH), MAX_BROWSER_DOCKED_WIDTH);
 }
 
-/** The one rectangle the floating preview ever occupies. */
-export function browserPeekSize() {
-  return { width: BROWSER_PEEK_WIDTH, height: BROWSER_PEEK_HEIGHT };
+/**
+ * The viewport a tab renders at while it is Peek-ed. Mirrors the desktop rule:
+ * an explicit responsive preset always wins, and a `panel` tab gets a normal
+ * desktop breakpoint so a small card cannot make the page render as a phone.
+ */
+export function browserPeekViewport(tabViewport?: BrowserViewport | null) {
+  if (tabViewport && tabViewport.mode === "responsive") {
+    return { width: tabViewport.width, height: tabViewport.height };
+  }
+  return { width: BROWSER_PEEK_VIEWPORT.width, height: BROWSER_PEEK_VIEWPORT.height };
+}
+
+/**
+ * The one rectangle the floating preview ever occupies — the card hugs the
+ * content it holds.
+ *
+ * The card is contained in the default footprint box at the content's *exact*
+ * aspect, then grown to a floor on both axes so a hug can never produce an
+ * unreadable sliver. Containing at the content's own aspect is the whole point:
+ * a 16:10 panel tab, a 390×844 phone preset and anything in between each get a
+ * card of their own shape, and the page fills every pixel of it — no letterbox,
+ * no dead strip, nothing to hide behind the card's frame.
+ *
+ * Only the shape of the content is read, and only the *viewport* — never the
+ * page, its title, its URL or its health, so nothing a navigation does can
+ * resize a card the user is looking at.
+ */
+export function browserPeekSize(tabViewport?: BrowserViewport | null) {
+  const viewport = browserPeekViewport(tabViewport);
+  const contained = Math.min(
+    MAX_BROWSER_PEEK_WIDTH / viewport.width,
+    MAX_BROWSER_PEEK_HEIGHT / viewport.height,
+  );
+  const floor = Math.max(
+    MIN_BROWSER_PEEK_WIDTH / (viewport.width * contained),
+    MIN_BROWSER_PEEK_HEIGHT / (viewport.height * contained),
+    1,
+  );
+  return {
+    width: Math.round(viewport.width * contained * floor),
+    height: Math.round(viewport.height * contained * floor),
+  };
 }
 
 /** Top-right resting place, used until the user drags the card somewhere else. */
-export function defaultPeekPosition(surface: BrowserSurfaceSize): BrowserPeekPosition {
+export function defaultPeekPosition(
+  surface: BrowserSurfaceSize,
+  size = browserPeekSize(),
+): BrowserPeekPosition {
   return clampPeekPosition(
     {
-      x: surface.width - BROWSER_PEEK_WIDTH - BROWSER_PEEK_DEFAULT_RIGHT,
+      x: surface.width - size.width - BROWSER_PEEK_DEFAULT_RIGHT,
       y: BROWSER_PEEK_DEFAULT_TOP,
     },
     surface,
+    size,
   );
 }
 

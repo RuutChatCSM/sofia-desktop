@@ -1016,7 +1016,7 @@ function WorkRow({
   kind,
   children,
 }: {
-  kind: "commentary" | "reasoning" | "milestone" | "detail"
+  kind: "commentary" | "thought" | "milestone" | "detail"
   children: React.ReactNode
 }) {
   return (
@@ -1027,11 +1027,12 @@ function WorkRow({
 }
 
 /**
- * Progress prose and reasoning inside the disclosure: the words, not a message.
+ * Progress prose inside the disclosure: the words, not a message.
  *
- * Markdown only. No message shell, no per-message spacing, and no second
- * disclosure control reading "Thought" — the work block is the only disclosure,
- * and reasoning is one of the things it holds, at its own place in the narrative.
+ * Markdown only. No message shell and no per-message spacing — a dozen progress
+ * updates inside one disclosure must not be a dozen little transcript messages.
+ * Reasoning is the one thing here that keeps its own collapsed control: it is
+ * the detail behind the narrative rather than part of it.
  */
 function WorkProse({
   kind,
@@ -1039,7 +1040,7 @@ function WorkProse({
   text,
   isStreaming,
 }: {
-  kind: "commentary" | "reasoning"
+  kind: "commentary"
   message?: UIMessage
   text?: string
   isStreaming?: boolean
@@ -1055,14 +1056,7 @@ function WorkProse({
         isStreaming={Boolean(isStreaming)}
         highlightQuery={highlightQuery}
         className={cn(
-          "prose w-full min-w-0 bg-transparent p-0",
-          // Thinking is a footnote to the work, not one of the things Sofia said
-          // to the user: smaller and quieter than commentary, so a reader coming
-          // back to the turn reads the narrative first and the reasoning as the
-          // detail behind it.
-          kind === "reasoning"
-            ? "text-[12px] leading-5 text-muted-foreground/80"
-            : "text-[13px] leading-6 text-foreground/90",
+          "prose w-full min-w-0 bg-transparent p-0 text-[13px] leading-6 text-foreground/90",
         )}
       >
         {value}
@@ -1071,47 +1065,43 @@ function WorkProse({
   )
 }
 
-/** Ticks while a turn is live so its header can show elapsed work time. */
 /**
- * Temporary diagnostic: what the transcript grouping actually received and what
- * it made of it. One line per turn, deduped, so a mis-detected phase, an empty
- * work narrative or a turn split across ids is visible without a debugger.
+ * One line for the turn on screen, so "do tools aggregate?" is read off the
+ * presentation instead of inferred from a screenshot: `tools=12 milestones=0`
+ * means the run never collapsed, `milestones=2` with nothing visible means the
+ * renderer dropped it. Deduped by shape, so it reports when the mix changes
+ * rather than on every streamed token.
  *
- * Remove once the transcript grouping is settled.
+ * Temporary: remove once the work block is settled.
  */
-let lastTurnGroupLog = ""
+let lastPresentationLog = ""
 
-function logTurnGroup(input: {
-  items: UIMessageWithIndex[]
-  work: Array<{ kind: string }>
-  answerCount: number
-  isLiveGroup: boolean
-  commentaryOnly: boolean
+function logPresentation(input: {
+  turnId: string
+  commentary: number
+  reasoning: number
+  thoughts: number
+  tools: number
+  milestones: number
+  answers: number
 }): void {
   if (!import.meta.env.DEV) return
-  const split = (message: UIMessage) => {
-    const engine = (message.metadata as { engine?: Record<string, unknown> } | undefined)?.engine ?? {}
-    return `${message.id}[turn=${String(engine.turnId ?? "-")} phase=${String(engine.phase ?? "-")} parts=${message.parts.map((part) => part.type).join("+")}]`
-  }
-  const answerItems = input.items.slice(input.items.length - input.answerCount)
-  const signature = [
-    input.items.map((item) => split(item.message)).join(";"),
-    input.work.map((entry) => entry.kind).join(","),
-    input.answerCount,
-    input.isLiveGroup,
-  ].join("|")
-  if (signature === lastTurnGroupLog) return
-  lastTurnGroupLog = signature
-  for (const line of [
-    `turn live=${input.isLiveGroup} commentaryOnly=${input.commentaryOnly} items=${input.items.length} answers=${input.answerCount}`,
-    `in  ${input.items.map((item) => split(item.message)).join("  ")}`,
-    `out work=${input.work.map((entry) => entry.kind).join(",") || "none"} answer=${answerItems.map((item) => split(item.message)).join(",") || "none"}`,
-  ]) {
-    console.info(`[transcript] ${line}`)
-    recordDevLog(true, { level: "debug", source: "transcript.turn", label: line })
-  }
+  const line = [
+    `turn=${input.turnId}`,
+    `commentary=${input.commentary}`,
+    `reasoning=${input.reasoning}`,
+    `thoughts=${input.thoughts}`,
+    `tools=${input.tools}`,
+    `milestones=${input.milestones}`,
+    `answers=${input.answers}`,
+  ].join(" ")
+  if (line === lastPresentationLog) return
+  lastPresentationLog = line
+  console.info(`[presentation] ${line}`)
+  recordDevLog(true, { level: "debug", source: "presentation", label: line })
 }
 
+/** Ticks while a turn is live so its header can show elapsed work time. */
 function useLiveElapsed(startedAt: number | null, active: boolean): number | null {
   const [now, setNow] = React.useState(() => Date.now())
 
@@ -1202,12 +1192,10 @@ function MessageGroup({
         : null,
     [sessionId, timing.startedAt, turnArtifacts, turnId],
   )
-  // Exact turn first; engine-driven turns carry no id the transcript knows, so a
-  // group that is the last one falls back to the session's newest set.
-  const isLatestGroup = lastItem !== undefined && lastItem.index === messages.length - 1
+  // Never borrow another turn's edits for a new reply, even while its own set is loading.
   const repoChangeSet = useChangeSetStore((state) =>
     selectTurnChangeSet(state.byId, sessionId, turnId)
-    ?? (isLatestGroup ? selectLatestChangeSetForSession(state.byId, state.latestBySession, sessionId) : null),
+
   )
   // A repository-backed set (git) is authoritative — but only when it actually
   // found something. An empty read is what a turn that *commits* its work looks
@@ -1242,26 +1230,23 @@ function MessageGroup({
   // progress prose, and all of it lives inside the one work disclosure. Only the
   // answer escapes it. See turn-presentation.ts.
   const presentation = deriveTurnPresentation(items, showThinking)
+  // Reasoning is one of the things the work disclosure holds, at its own place
+  // in the narrative — never a second disclosure beside the work. Two nested
+  // "expand to see" controls made the reader learn a concept the turn does not
+  // have; the "Thought" row was the work block's own content rendered as a
+  // sibling of it.
   let workItems = presentation.work
   let proseItems = presentation.answerItems
-  // The engine can also deliver a whole turn as one assistant message with the
-  // steps and the answer interleaved in its parts. Split that first prose
-  // message so its leading steps fold with the rest instead of pinning the run
-  // open and hiding the "Worked for …" summary.
-  const firstProse = proseItems[0]
-  if (firstProse && firstProse.message.role === "assistant" && !isSessionErrorMessage(firstProse.message)) {
-    const split = splitTurnAtAnswer(firstProse.message)
-    if (split) {
-      // The same derivation a standalone step message gets, so the split keeps the
-      // reasoning as well as the tool detail.
-      workItems = [
-        ...workItems,
-        ...workEntriesForMessage(
-          { index: firstProse.index, message: split.steps },
-          showThinking,
-        ),
-      ]
-      proseItems = [{ index: firstProse.index, message: split.answer }, ...proseItems.slice(1)]
+  // A finished turn whose only prose is commentary — no explicit final answer —
+  // must still show the one thing Sofia said. Promote that terminal note to the
+  // answer instead of leaving the whole execution trace expanded to find it; a
+  // failed guess at the answer is not a reason to open the disclosure.
+  if (!isLiveGroup && proseItems.length === 0) {
+    const lastCommentary = workItems.findLastIndex((entry) => entry.kind === "commentary")
+    const promoted = lastCommentary >= 0 ? workItems[lastCommentary] : undefined
+    if (promoted?.kind === "commentary") {
+      proseItems = [promoted.item]
+      workItems = workItems.filter((_, index) => index !== lastCommentary)
     }
   }
 
@@ -1277,19 +1262,34 @@ function MessageGroup({
   // was talk: "Worked for 1m 30s" is what tells the user how long the turn took,
   // and reading it above the answer is the point.
   const hasWork = workItems.length > 0 || durationMs !== null
-  // The one case that must not fold away: a turn that produced commentary and no
-  // answer. Collapsing it would hide the only thing Sofia said to the user, which
-  // is the bug the ChatGPT reports describe.
-  const commentaryOnly =
-    proseItems.length === 0 && workItems.some((entry) => entry.kind === "commentary")
 
-  logTurnGroup({
-    items,
-    work: workItems,
-    answerCount: proseItems.length,
-    isLiveGroup,
-    commentaryOnly,
-  })
+  // The turn on screen is the only one still making claims; a settled turn's mix
+  // is history.
+  if (isLiveGroup) {
+    const engine = (items[0]?.message.metadata as { engine?: Record<string, unknown> } | undefined)?.engine ?? {}
+    logPresentation({
+      turnId: String(engine.turnId ?? "-"),
+      commentary: workItems.filter((entry) => entry.kind === "commentary").length,
+      // Packets in, phases out: the two numbers side by side are what says
+      // whether clustering happened, without reading the DOM.
+      reasoning: items.reduce(
+        (count, item) => count + item.message.parts.filter((part) => part.type === "reasoning").length,
+        0,
+      ),
+      thoughts: workItems.filter((entry) => entry.kind === "thought").length,
+      tools: workItems.reduce(
+        (count, entry) =>
+          entry.kind === "milestone"
+            ? count + entry.parts.length
+            : entry.kind === "detail"
+              ? count + 1
+              : count,
+        0,
+      ),
+      milestones: workItems.filter((entry) => entry.kind === "milestone").length,
+      answers: proseItems.length,
+    })
+  }
 
   const renderItem = (item: UIMessageWithIndex, groupIndex: number, hideReasoning?: boolean) => {
     const isLastMessage = item.index === messages.length - 1
@@ -1311,13 +1311,24 @@ function MessageGroup({
   // the presentation was derived, so this only has to place each entry — and a
   // milestone is already one row for a whole run of tool events.
   const renderWorkEntry = (entry: (typeof workItems)[number]) => {
+    if (entry.kind === "thought") {
+      // One row per reasoning *phase*, not per packet. Behind a detail inside the
+      // work block: the narrative is commentary and milestones, and thinking is
+      // the reasoning behind them. The phase Sofia is in now stays open, so the
+      // reader can see her think; every earlier phase is folded, so nothing
+      // inherits a stack of expanded thoughts.
+      return (
+        <WorkRow key={entry.key} kind="thought">
+          <ReasoningBlock
+            text={entry.text}
+            isStreaming={isLiveGroup && entry.isStreaming}
+            defaultOpen={isLiveGroup && entry.isCurrent}
+          />
+        </WorkRow>
+      )
+    }
     if (entry.kind === "commentary") {
       return <WorkProse key={entry.key} kind="commentary" message={entry.item.message} />
-    }
-    if (entry.kind === "reasoning") {
-      return (
-        <WorkProse key={entry.key} kind="reasoning" text={entry.text} isStreaming={entry.isStreaming} />
-      )
     }
     if (entry.kind === "milestone") {
       return (
@@ -1350,11 +1361,10 @@ function MessageGroup({
             active={isLiveGroup}
             streaming={isLiveGroup && isStreaming}
             elapsedMs={liveElapsedMs}
-            // Open while it works, and in the one case that must not hide its
-            // only user-facing prose. Developer mode changes what expanding shows,
-            // not whether a finished turn starts expanded: "Worked for …" is the
-            // transcript's account of the turn, and it collapses.
-            defaultOpen={isLiveGroup || commentaryOnly}
+            // Open only while it works. A finished turn collapses whatever its
+            // answer detection concluded: developer mode changes what expanding
+            // shows, not whether a finished turn starts expanded.
+            defaultOpen={isLiveGroup}
           >
             {/* The disclosure owns the internal rhythm: whole-narrative rows sit
                 closer together than transcript messages do, because they are not
@@ -1379,8 +1389,11 @@ function MessageGroup({
           {renderItem(item, position, true)}
         </div>
       ))}
-      {/* The turn's result: one summary card for this turn's change set. */}
-      {changeSet ? (
+      {/* The turn's result: one summary card for this turn's change set. A turn
+          still working has no result yet — showing the card the moment a file is
+          touched puts a "what changed" summary inside the work it summarises, and
+          it rewrites itself on every edit. It belongs to the settled turn. */}
+      {changeSet && !isLiveGroup ? (
         <div className="mx-auto w-full max-w-[800px] px-2 md:px-6">
           <TurnChangeSetCard
             changeSet={changeSet}

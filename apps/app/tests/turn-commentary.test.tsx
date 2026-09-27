@@ -217,15 +217,19 @@ describe("one assistant turn, one work grouping", () => {
     expect((markup.match(/data-work-entry/g) ?? []).length).toBe(0);
   });
 
-  test("a turn that never answers keeps its only reply visible", () => {
-    // A completed turn whose only prose is commentary: folding it into a collapsed
-    // "Worked for …" would hide the sole thing Sofia said, which is the failure
-    // the ChatGPT reports describe. The block stays open instead.
+  test("a turn that never answers promotes its terminal note instead of opening the trace", () => {
+    // A completed turn whose only prose is commentary. The last thing Sofia said
+    // is promoted to the answer so it cannot be hidden, while the earlier
+    // progress notes fold away with the rest of the narrative — leaving a
+    // 75-item execution trace expanded to find one sentence is the alternative,
+    // and it is worse.
     const markup = renderList([userMessage, ...narrative]);
 
     expect((markup.match(/data-assistant-turn/g) ?? []).length).toBe(1);
-    expect(markup).toContain(first);
-    expect(markup).toContain(second);
     expect(markup).toContain(closing);
+    expect(markup).not.toContain(first);
+    expect(markup).not.toContain(second);
+    // Collapsed, like any finished turn, rather than forced open.
+    expect(markup).toContain('data-turn-work-header="done"');
   });
 });

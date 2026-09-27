@@ -21,6 +21,7 @@ import {
   writeCodexProviders,
 } from "./codex-providers.js";
 import type { BackgroundProcess, CodexEvent, CodexSession } from "./codex-sessions.js";
+import type { TurnChangeRecord } from "./turn-changes.js";
 import {
   countUntrackedLines,
   createGitRun,
@@ -56,6 +57,7 @@ export interface CodexSessionRegistry {
     rename: (sessionId: string, title: string) => Promise<CodexSession>;
     forkSession: (sessionId: string, options?: { messageId?: string | null }) => Promise<CodexSession>;
     getSessionItems: (sessionId: string, options?: { limit?: number }) => Promise<Array<{ turnId: string; item: Record<string, unknown> }>>;
+    getTurnChanges: (sessionId: string) => Promise<TurnChangeRecord[]>;
     listBackgroundProcesses: (sessionId: string) => Promise<BackgroundProcess[]>;
     terminateBackgroundProcess: (sessionId: string, processId: string) => Promise<boolean>;
     cleanBackgroundProcesses: (sessionId: string) => Promise<void>;
@@ -259,7 +261,7 @@ export function registerCodexRoutes(options: RegisterCodexRoutesOptions): void {
     // The engine pages ~100 items at a time; the manager follows the cursors so
     // opening a task shows its whole transcript, not just the beginning.
     const items = await sofiaRequest(() => manager.getSessionItems(ctx.params.sessionId, { limit: MAX_TRANSCRIPT_ITEMS }));
-    return jsonResponse({ ok: true, items });
+    return jsonResponse({ ok: true, items, changes: await manager.getTurnChanges(ctx.params.sessionId) });
   });
 
   // Background processes the agent started through unified exec. The list is

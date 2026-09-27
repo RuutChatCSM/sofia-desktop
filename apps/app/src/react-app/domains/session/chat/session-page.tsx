@@ -221,7 +221,6 @@ export type SessionPageProps = {
   developerMode: boolean;
   /** When the selected engine is codex, codex sessions replace engine sessions. */
   codexEngine?: SessionPageCodexEngine | null;
-  headerStatus: string;
   busyHint: string | null;
   startupPhase: BootPhase;
   providerConnectedIds: string[];
@@ -510,6 +509,8 @@ export function SessionPage(props: SessionPageProps) {
   });
   const [browserPanelDefaultWidth, setBrowserPanelDefaultWidth] = useState(browserPanelWidth);
   const browserPanelGroupRef = useRef<HTMLDivElement>(null);
+  /** The last width this effect asked the panel for. See the sizing effect. */
+  const browserPanelAppliedTargetRef = useRef<number | null>(null);
   const [browserPanelAvailableWidth, setBrowserPanelAvailableWidth] = useState(0);
   // Expanded sizes the browser against the workspace it is splitting, so the
   // share stays ~60/40 instead of "as wide as the window allows".
@@ -533,13 +534,27 @@ export function SessionPage(props: SessionPageProps) {
     props.onAccessibleTargetsChange?.(accessibleTargets);
   }, [accessibleTargets, props.onAccessibleTargetsChange]);
   const commitBrowserPanelWidth = useCallback(() => {
-    const size = browserPanelRef.current?.getSize();
-    if (!size?.inPixels) return;
-    const width = Math.round(size.inPixels);
+    // A layout callback can fire for a panel whose layout the group has already
+    // dropped — the rail is opening or closing, so the panel is mid-mount or
+    // mid-removal — and `getSize()` throws "Layout not found for Panel" rather
+    // than reporting nothing. A throw here unmounted the whole app: expanding
+    // the browser blanked the window.
+    let sizeInPixels: number;
+    try {
+      sizeInPixels = browserPanelRef.current?.getSize().inPixels ?? 0;
+    } catch {
+      return;
+    }
+    if (!sizeInPixels) return;
+    const width = Math.round(sizeInPixels);
+    // Committing the width the panel already has would rewrite its own
+    // `defaultSize` and resize it again, so a layout that merely rounds
+    // differently must never become a state change.
+    if (width === browserPanelWidth) return;
     setBrowserPanelWidth(width);
     // Docked width is durable user intent: it is what Restore returns to.
     dispatchBrowserPresentation({ type: "preference-docked-width", value: width });
-  }, [browserPanelRef, setBrowserPanelWidth]);
+  }, [browserPanelRef, browserPanelWidth, setBrowserPanelWidth]);
 
   // Docked and expanded are the same panel at two widths; the mode picks one.
   // The panel is also the host for artifacts and other destinations, so the
@@ -551,12 +566,46 @@ export function SessionPage(props: SessionPageProps) {
       ? browserExpandedWidth(browserPanelAvailableWidth)
       : browserDockedWidth;
   useEffect(() => {
-    if (isMobile || browserPanelTargetWidth === null || !sidePanelOpen) return;
+    if (isMobile || browserPanelTargetWidth === null || !sidePanelOpen) {
+      browserPanelAppliedTargetRef.current = null;
+      return;
+    }
     const panel = browserPanelRef.current;
     if (!panel) return;
     const target = Math.round(browserPanelTargetWidth);
-    if (Math.abs(panel.getSize().inPixels - target) < 1) return;
-    panel.resize(`${target}px`);
+    // Apply each target once. A resize is not idempotent: it changes the layout,
+    // the layout change is measured back as a new width, and the two chase each
+    // other until React stops the loop with "Maximum update depth exceeded" —
+    // which blanked the window. Comparing against the last *applied* target
+    // instead of the measured size lets the group settle.
+    if (browserPanelAppliedTargetRef.current === target) return;
+    browserPanelAppliedTargetRef.current = target;
+    // Docked and expanded are the same panel at two widths, and switching
+    // between them remounts the split surface — so this can run while the group
+    // has no layout for the panel it has just mounted. `getSize()` throws
+    // "Layout not found for Panel" rather than reporting nothing, and a throw in
+    // this effect unmounted the whole app: expanding the browser blanked the
+    // window. Wait for the layout instead of reading it blindly, but not
+    // forever — a panel that never registers keeps the size it mounted with.
+    let attempts = 0;
+    let frame = 0;
+    const applyTargetWidth = () => {
+      let currentPx: number;
+      try {
+        currentPx = panel.getSize().inPixels;
+      } catch {
+        frame = attempts++ < 60 ? window.requestAnimationFrame(applyTargetWidth) : 0;
+        return;
+      }
+      frame = 0;
+      if (Math.abs(currentPx - target) < 1) return;
+      panel.resize(`${target}px`);
+    };
+    applyTargetWidth();
+    return () => {
+      if (frame) window.cancelAnimationFrame(frame);
+      frame = 0;
+    };
   }, [browserPanelTargetWidth, browserPanelRef, isMobile, sidePanelOpen]);
   const browserUrlForTarget = useCallback((target: OpenTarget) => {
     if (/^wss?:\/\//i.test(target.value)) return target.value.replace(/^ws:/i, "http:").replace(/^wss:/i, "https:");
@@ -1226,11 +1275,6 @@ export function SessionPage(props: SessionPageProps) {
                   ? t("session.create_or_connect_workspace")
                   : selectedSessionTitle || t("session.default_title")}
               </h1>
-              {props.developerMode ? (
-                <span className="hidden text-[12px] text-dls-secondary lg:inline">
-                  {props.headerStatus}
-                </span>
-              ) : null}
               {props.busyHint ? (
                 <span className="hidden text-[12px] text-dls-secondary lg:inline">
                   {props.busyHint}
@@ -1336,22 +1380,6 @@ export function SessionPage(props: SessionPageProps) {
                   ) : null}
                 </DropdownMenuContent>
               </DropdownMenu>
-              {props.developerMode ? (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="hidden lg:inline-flex"
-                  onClick={() => {
-                    try {
-                      window.localStorage.removeItem("sofia.acknowledgedProviders");
-                      window.localStorage.removeItem("sofia.orgOnboardingSeen");
-                    } catch {}
-                  }}
-                  title="Clears acknowledged providers + org onboarding so they trigger again"
-                >
-                  Reset notifications
-                </Button>
-              ) : null}
             </div>
           </header>
 
@@ -1602,7 +1630,17 @@ export function SessionPage(props: SessionPageProps) {
                 />
                 <ResizablePanel
                   panelRef={browserPanelRef}
-                  defaultSize={`${activeSidePanel === "extensions" ? Math.max(browserPanelDefaultWidth, 480) : browserPanelDefaultWidth}px`}
+                  // The width this panel mounts at and the width this component
+                  // asks it for have to be the same number. When they disagreed,
+                  // the group re-applied its own default, the resize callback
+                  // committed the result, and the two chased each other through
+                  // React's nested-update limit — "Maximum update depth
+                  // exceeded" — the moment the rail mounted (the sidebar's
+                  // browser button).
+                  defaultSize={`${Math.round(
+                    browserPanelTargetWidth ??
+                      (activeSidePanel === "extensions" ? Math.max(browserPanelDefaultWidth, 480) : browserPanelDefaultWidth),
+                  )}px`}
                   minSize={activeSidePanel === "extensions" ? "420px" : "320px"}
                   maxSize="70%"
                   className="min-h-0 overflow-hidden pl-2 lg:flex lg:flex-col"

@@ -1,3 +1,4 @@
+import { restoreRecordedTurnChanges } from "./changes/change-set-store";
 // Sofia session store: holds codex engine sessions and their transcripts as
 // accumulated from the SSE stream. Mirrors the engine session surface enough
 // to drive the existing transcript UI: each session accumulates a text body
@@ -505,6 +506,9 @@ export async function runCodexStream(
             break;
           case "thread.status":
             s.setThreadStatus(event.sessionId, event.status);
+            break;
+          case "turn.changes":
+            restoreRecordedTurnChanges(event.changes);
             break;
           case "turn.completed":
             s.completeTurn(event.sessionId);

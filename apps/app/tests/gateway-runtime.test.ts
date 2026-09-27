@@ -173,27 +173,27 @@ describe("gateway runtime mode", () => {
 
   test("keeps Den web on the configured origin and Den API calls on the gateway origin", () => {
     const storage = installWindow({ origin: "https://gw.example", gateway: true });
-    storage.setItem("sofia.den.baseUrl", "https://sofia-app.ruut.chat");
+    storage.setItem("sofia.den.baseUrl", "https://sofia.ruut.chat");
     storage.setItem("sofia.den.authToken", "den-session-token");
 
     expect(resolveDenBaseUrls("https://gw.example")).toEqual({
-      baseUrl: "https://sofia-app.ruut.chat",
+      baseUrl: "https://sofia.ruut.chat",
       apiBaseUrl: "https://gw.example/api/den",
     });
-    expect(readDenSettings().baseUrl).toBe("https://sofia-app.ruut.chat");
+    expect(readDenSettings().baseUrl).toBe("https://sofia.ruut.chat");
     expect(readDenSettings().apiBaseUrl).toBe("https://gw.example/api/den");
     expect(readDenSettings().authToken).toBe("den-session-token");
   });
 
-  test("builds web auth URLs on the Den web origin with the gateway return origin", () => {
+  test("builds Sofia Cloud registration URL on the web origin", () => {
     installWindow({ origin: "https://gw.example", gateway: true });
 
     const authUrl = new URL(buildDenAuthUrl(readDenSettings().baseUrl, "sign-up"));
 
-    expect(authUrl.origin).toBe("https://sofia-app.ruut.chat");
-    expect(authUrl.searchParams.get("mode")).toBe("sign-up");
-    expect(authUrl.searchParams.get("webAuth")).toBe("1");
-    expect(authUrl.searchParams.get("webAuthReturn")).toBe("https://gw.example");
+    expect(authUrl.origin).toBe("https://sofia.ruut.chat");
+    expect(authUrl.pathname).toBe("/registration/new");
+    expect(authUrl.searchParams.get("desktopAuth")).toBe("1");
+    expect(authUrl.searchParams.get("webAuthReturn")).toBeNull();
   });
 
   test("routes Den auth API paths to Den web and v1 paths through the gateway API", async () => {
@@ -218,7 +218,7 @@ describe("gateway runtime mode", () => {
     await client.getSession();
 
     expect(requestedUrls).toEqual([
-      "https://sofia-app.ruut.chat/api/auth/sign-in/email",
+      "https://sofia.ruut.chat/api/auth/sign-in/email",
       "https://gw.example/api/den/v1/me",
     ]);
   });
@@ -236,7 +236,7 @@ describe("gateway runtime mode", () => {
     const second = readDenBootstrapConfig();
 
     expect(second).toBe(first);
-    expect(first.baseUrl).toBe("https://sofia-app.ruut.chat");
+    expect(first.baseUrl).toBe("https://sofia.ruut.chat");
     expect(first.apiBaseUrl).toBe("https://sofia-web.ruut.chat/api/den");
   });
 
@@ -462,20 +462,20 @@ describe("non-gateway connection modes", () => {
 
     try {
       const settings = readDenSettings();
-      expect(settings.baseUrl).toBe("https://sofia-app.ruut.chat");
+      expect(settings.baseUrl).toBe("https://sofia.ruut.chat");
       expect(settings.apiBaseUrl).toBe("http://127.0.0.1:5178/api/den");
 
       // Every Den client derives its API base the same way, so requests go
       // through the same-origin proxy even when created from the web base.
       const client = createDenClient({ baseUrl: settings.baseUrl, token: "den-token" });
       expect(client.baseUrls.apiBaseUrl).toBe("http://127.0.0.1:5178/api/den");
-      expect(client.baseUrls.baseUrl).toBe("https://sofia-app.ruut.chat");
+      expect(client.baseUrls.baseUrl).toBe("https://sofia.ruut.chat");
 
       // Sign-in still opens the real Den web app, not the proxy origin.
       // Loopback cannot use webAuth return URLs against hosted Den, so the
       // URL uses desktopAuth (copy link / paste grant) instead.
       const authUrl = new URL(buildDenAuthUrl(settings.baseUrl, "sign-in"));
-      expect(authUrl.origin).toBe("https://sofia-app.ruut.chat");
+      expect(authUrl.origin).toBe("https://sofia.ruut.chat");
       expect(authUrl.searchParams.get("desktopAuth")).toBe("1");
       expect(authUrl.searchParams.get("webAuth")).toBeNull();
     } finally {
@@ -488,9 +488,9 @@ describe("non-gateway connection modes", () => {
 
     const authUrl = new URL(buildDenAuthUrl(readDenSettings().baseUrl, "sign-in"));
 
-    expect(authUrl.origin).toBe("https://sofia-app.ruut.chat");
+    expect(authUrl.origin).toBe("https://sofia.ruut.chat");
     expect(authUrl.searchParams.get("desktopAuth")).toBe("1");
-    expect(authUrl.searchParams.get("desktopScheme")).toBe("sofia");
+    expect(authUrl.pathname).toBe("/desktop/authorize");
     expect(authUrl.searchParams.get("webAuth")).toBeNull();
     expect(authUrl.searchParams.get("webAuthReturn")).toBeNull();
   });
@@ -504,7 +504,7 @@ describe("non-gateway connection modes", () => {
     try {
       await initializeDenBootstrapConfig();
       expect(storage.getItem("sofia.den.baseUrl")).toBeNull();
-      expect(readDenSettings().baseUrl).toBe("https://sofia-app.ruut.chat");
+      expect(readDenSettings().baseUrl).toBe("https://sofia.ruut.chat");
     } finally {
       restoreEnv("VITE_SOFIA_FORCE_ENV_SETTINGS", previous);
     }

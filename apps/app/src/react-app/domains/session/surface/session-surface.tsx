@@ -8,7 +8,7 @@ import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState, type
 import type { UIMessage } from "ai";
 import { useQuery } from "@tanstack/react-query";
 import type { SessionStatus } from "@/app/lib/engine-types";
-import { Check, Globe, Minimize2 } from "lucide-react";
+import { Check, Minimize2 } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 
 import { captureAnalyticsEvent } from "@/app/lib/analytics";
@@ -81,9 +81,7 @@ import { QuestionPanel } from "@/react-app/domains/session/modals/question-modal
 import { QueuedMessagesPanel } from "@/react-app/domains/session/modals/queued-messages-panel";
 import { deriveOpenTargets, selectAutoOpenTarget, type OpenTarget } from "@/react-app/domains/session/artifacts/open-target";
 import { usePanelTabStore } from "@/react-app/domains/session/panel/panel-tab-store";
-import { useSessionPanelState } from "@/react-app/domains/session/panel/panel-tab-store";
 import { ActivityStatus } from "@/react-app/domains/session/surface/activity-status";
-import { dispatchBrowserPresentation } from "@/react-app/domains/session/panel/browser-presentation";
 import {
   markSessionSnapshotFetchStart,
   seedSessionState,
@@ -548,48 +546,6 @@ function TodoPanel(props: { todos: TodoItem[] }) {
           </div>
         ) : null}
     </div>
-  );
-}
-
-function browserHost(url: string): string {
-  try {
-    return new URL(url).hostname.replace(/^www\./, "");
-  } catch {
-    return "";
-  }
-}
-
-/**
- * Chat browser-use indicator: a slim pill above the composer that appears when
- * the built-in browser has open tabs, so it is always visible that a browser is
- * in use and what page the agent is on. Read-only (the panel is toggled from
- * the session rail); derives entirely from the shared panel-tab store.
- */
-function BrowserUseIndicator({ sessionId }: { sessionId: string }) {
-  const { tabs, activeTabId } = useSessionPanelState(sessionId);
-  const browserTabs = tabs.filter((tab) => tab.type === "browser");
-  if (browserTabs.length === 0) return null;
-  const activeTab = browserTabs.find((tab) => tab.id === activeTabId) ?? browserTabs[0];
-  const host = activeTab && "url" in activeTab ? browserHost(String((activeTab as { url?: string }).url ?? "")) : "";
-  return (
-    // The pill is the persistent browser access point; Peek is only its visual
-    // representation, so clicking here reopens the preview after a Hide.
-    <button
-      type="button"
-      onClick={() => dispatchBrowserPresentation({ type: "user-open-browser" })}
-      title="Show the browser preview"
-      className="mx-3 mb-2 flex w-fit max-w-[calc(100%-1.5rem)] items-center gap-2 rounded-lg border border-border/70 bg-muted/40 px-3 py-1.5 text-left text-[11px] text-muted-foreground hover:bg-muted/60 focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none"
-    >
-      <span className="relative flex size-1.5" aria-hidden="true">
-        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
-        <span className="relative inline-flex size-1.5 rounded-full bg-emerald-500" />
-      </span>
-      <Globe className="size-3" />
-      <span className="truncate font-medium text-foreground/90">
-        Browser · {browserTabs.length} {browserTabs.length === 1 ? "tab" : "tabs"}
-      </span>
-      {host ? <span className="truncate">· {host}</span> : null}
-    </button>
   );
 }
 
@@ -2100,50 +2056,6 @@ export function SessionSurface(props: SessionSurfaceProps) {
   }), [props.sessionId, renderedMessages]);
   useControlAction(props.isControlTarget ? sessionReadTranscriptControlAction : null);
 
-  // Repository change tracking for the turn: capture the baseline when it starts
-  // and read the patch from git when it ends. Tool events are only the fallback.
-  // Engine-driven sessions carry no codex item turn id, so a turn gets a local
-  // key while it streams. The change set is stored against it either way.
-  const changeTurnKeyRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (chatStreaming) {
-      changeTurnKeyRef.current ??= `${props.sessionId}:${Date.now()}`;
-      return;
-    }
-    changeTurnKeyRef.current = null;
-  }, [chatStreaming, props.sessionId]);
-  const changeTurnKey = changeTurnId ?? changeTurnKeyRef.current;
-  useEffect(() => {
-    if (!chatStreaming || !changeTurnKey) return;
-    void captureTurnBaseline({
-      client: engineClient ?? codexClientForSession(props.sessionId),
-      workspaceId: props.workspaceId,
-      sessionId: props.sessionId,
-      turnId: changeTurnKey,
-    });
-  }, [changeTurnKey, chatStreaming, engineClient, props.sessionId, props.workspaceId]);
-
-  const changeSetForTurn = useChangeSetStore((state) =>
-    selectTurnChangeSet(state.byId, props.sessionId, changeTurnKey) ??
-    selectLatestChangeSetForSession(state.byId, state.latestBySession, props.sessionId),
-  );
-  const changeFinalizeAttempted = useRef<Set<string>>(new Set());
-  useEffect(() => {
-    if (chatStreaming || !changeTurnKey) return;
-    // A repository-backed set settles the turn; anything else (a hint set, or
-    // nothing) means the read was missed — the stream boundary can fire before
-    // the turn id is known, and a single failure used to leave the card with no
-    // magnitude for the rest of the session. Retry once per turn while idle.
-    if (changeSetForTurn?.source === "git") return;
-    if (changeFinalizeAttempted.current.has(changeTurnKey)) return;
-    changeFinalizeAttempted.current.add(changeTurnKey);
-    void finalizeTurnChangeSet({
-      client: engineClient ?? codexClientForSession(props.sessionId),
-      workspaceId: props.workspaceId,
-      sessionId: props.sessionId,
-      turnId: changeTurnKey,
-    });
-  }, [changeSetForTurn, changeTurnKey, chatStreaming, engineClient, props.sessionId, props.workspaceId]);
 
   return (
     <DevProfiler id="SessionSurface">
@@ -2313,7 +2225,6 @@ export function SessionSurface(props: SessionSurfaceProps) {
           </button>
         ) : null}
         <DevProfiler id="SessionComposer">
-        <BrowserUseIndicator sessionId={props.sessionId} />
         <ActivityStatus sessionId={props.sessionId} turnActive={chatStreaming} />
         {props.cloudMcpSubmissionState.status === "failed" ? (
           <div

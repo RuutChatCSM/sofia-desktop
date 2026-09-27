@@ -1103,7 +1103,7 @@ if (extraLaunchArgs) {
   }
 }
 configureFakeMediaForTests(app, envFlagEnabled("SOFIA_ELECTRON_FAKE_MEDIA"));
-const DEFAULT_DEN_BASE_URL = "https://sofia-app.ruut.chat";
+const DEFAULT_DEN_BASE_URL = "https://sofia.ruut.chat";
 const DEFAULT_LOCAL_BASE_URL = "http://127.0.0.1:4096";
 const FORCE_DESKTOP_REQUIRE_SIGNIN =
   DESKTOP_DISTRIBUTION.requireSignin || envFlagEnabled("SOFIA_FORCE_SIGNIN");

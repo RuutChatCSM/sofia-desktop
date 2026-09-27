@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { CodexSessionManager, codexSessionId, isCodexSessionId, isMissingRolloutError, isThreadWriterConflict, threadBelongsToWorkspace } from "./codex-sessions.js";
+import { CodexSessionManager, codexSessionId, isCodexSessionId, isMissingRolloutError, isThreadWriterConflict, threadBelongsToWorkspace, threadTitleFromEngineText, THREAD_TITLE_MAX_LENGTH } from "./codex-sessions.js";
 
 const roots: string[] = [];
 
@@ -573,5 +573,59 @@ describe("CodexSessionManager", () => {
     } finally {
       await manager.close();
     }
+  });
+});
+
+describe("engine-derived task titles", () => {
+  test("keeps a plain single-line title verbatim", () => {
+    expect(threadTitleFromEngineText("launch and navigate ruut.chat")).toBe("launch and navigate ruut.chat");
+    expect(threadTitleFromEngineText("review the release driver")).toBe("review the release driver");
+    expect(threadTitleFromEngineText("  tidy   the   header  ")).toBe("tidy the header");
+  });
+
+  test("skips pasted code and comment banners instead of rendering them", () => {
+    // The first user message often *is* code; the header must not show it raw.
+    expect(threadTitleFromEngineText("```ts\nconst a = 1;\n```\nFix the browser pill")).toBe("Fix the browser pill");
+    expect(threadTitleFromEngineText("// A throw must not reach the root")).toBe("A throw must not reach the root");
+    expect(threadTitleFromEngineText("/* a comment banner */")).toBe("a comment banner");
+    expect(threadTitleFromEngineText("> quoted line\n\n- the real request")).toBe("quoted line");
+    expect(threadTitleFromEngineText("\n\n# Fix the header\nmore text")).toBe("Fix the header");
+  });
+
+  test("drops the markdown the engine left inside the title", () => {
+    expect(
+      threadTitleFromEngineText("I agree, but **presentation is the problem**"),
+    ).toBe("I agree, but presentation is the problem");
+    expect(threadTitleFromEngineText("fix the `browser pill` and ship")).toBe("fix the browser pill and ship");
+    // Underscores belong to identifiers; they are not emphasis to strip.
+    expect(threadTitleFromEngineText("set SOFIA_HOME before the run")).toBe("set SOFIA_HOME before the run");
+  });
+
+  test("repairs the halves an engine truncation leaves behind", () => {
+    expect(threadTitleFromEngineText("…n these screenshots Sofia feels mor…")).toBe("these screenshots Sofia feels mor…");
+  });
+
+  test("cuts a long message on a word boundary, never mid-word", () => {
+    // A pasted `//` banner ends the sentence the user actually wrote.
+    expect(
+      threadTitleFromEngineText(
+        "let also get rid of this browser indicator widget// A throw inside the session surface must not reach the root without a boundary",
+      ),
+    ).toBe("let also get rid of this browser indicator widget");
+
+    // With no banner to cut at it truncates on a word boundary, and says so.
+    const long = threadTitleFromEngineText(
+      "please rework the session header so the title it shows is the operation the agent is running rather than a slice of whatever the user pasted",
+    );
+    expect(long.endsWith("…")).toBe(true);
+    expect(long.length).toBeLessThanOrEqual(THREAD_TITLE_MAX_LENGTH + 1);
+    expect(long.includes(" ")).toBe(true);
+    expect(long).not.toMatch(/\s…$/);
+  });
+
+  test("answers with nothing when there are no words to show", () => {
+    expect(threadTitleFromEngineText("   \n```\n```\n   ")).toBe("");
+    expect(threadTitleFromEngineText(undefined)).toBe("");
+    expect(threadTitleFromEngineText("```\n…```")).toBe("");
   });
 });

@@ -17,6 +17,7 @@ import {
 } from "./browser-peek-shield.mjs";
 import {
   effectiveBrowserViewport,
+  browserPeekLayoutZoom,
   browserViewBackground,
   createAgentLeaseRegistry,
   createBrowserTabRuntimeState,
@@ -764,13 +765,18 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
   // emulation, which is derived from tab state alone.
   const agentLeases = createAgentLeaseRegistry();
 
-  function sendTabCdpCommand(tabId, method, params) {
+  async function sendTabCdpCommand(tabId, method, params) {
     const tab = getBrowserTab(tabId);
     if (!tab || tab.view.webContents.isDestroyed()) return undefined;
     const debuggerApi = tab.view.webContents.debugger;
     try {
       if (!debuggerApi.isAttached()) debuggerApi.attach("1.3");
-      return debuggerApi.sendCommand(method, params ?? {});
+      // `sendCommand` reports its failures by rejecting, so the await has to be
+      // inside the try: a target that closes while a command is in flight
+      // rejects with "target closed while handling command", and returning the
+      // bare promise let that rejection escape this catch and fail the whole
+      // viewport apply instead.
+      return await debuggerApi.sendCommand(method, params ?? {});
     } catch (error) {
       // A DevTools or agent CDP client can already hold this target. Emulation
       // is best effort: losing it must never break navigation or agent control.
@@ -979,8 +985,22 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
       return undefined;
     }
 
+    // Presentation-derived: a Peek of a `panel` tab renders desktop while
+    // `tab.state.viewport` and `tab.state.zoom` stay exactly what the user
+    // chose. Peek keeps that breakpoint through page *zoom*, never through
+    // device emulation: emulation gives the page a screen of its own, and the
+    // native view paints that screen wherever it lands, so a card smaller than
+    // the emulated screen lets the page spill over the whole app. Zoom lays the
+    // same page out at the same breakpoint inside the card's own bounds.
+    const peekZoom =
+      browserPresentation === "peek" && tab.state.viewport?.mode !== "responsive"
+        ? { mode: "custom", scale: browserPeekLayoutZoom(panelBounds) }
+        : null;
+
     try {
-      tab.view.webContents.setZoomFactor(resolvePageZoomFactor(tab.state.zoom, tab.state.viewport));
+      tab.view.webContents.setZoomFactor(
+        resolvePageZoomFactor(peekZoom ?? tab.state.zoom, peekZoom ? { mode: "panel" } : tab.state.viewport),
+      );
     } catch {
       // View already closing; the plan below will bail out the same way.
     }
@@ -989,10 +1009,10 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
     return viewportController
       .apply({
         tabId,
-        // Presentation-derived: a Peek of a `panel` tab renders desktop while
-        // `tab.state.viewport` stays exactly what the user chose.
-        viewport: effectiveBrowserViewport(tab.state.viewport, browserPresentation),
-        zoom: browserPresentation === "peek" ? { mode: "fit" } : tab.state.zoom,
+        viewport: peekZoom
+          ? { mode: "panel" }
+          : effectiveBrowserViewport(tab.state.viewport, browserPresentation),
+        zoom: peekZoom ?? (browserPresentation === "peek" ? { mode: "fit" } : tab.state.zoom),
         panelBounds,
         pan: browserPresentation === "peek" ? { x: 0, y: 0 } : tab.state.pan,
         force,

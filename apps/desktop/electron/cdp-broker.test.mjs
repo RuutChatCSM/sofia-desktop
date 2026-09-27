@@ -290,7 +290,11 @@ describe("createCdpBroker", () => {
     }
   });
 
-  it("shows the ghost cursor on non-Input page activity (navigate/evaluate)", async () => {
+  it("never moves the pointer for non-Input page activity (navigate/evaluate)", async () => {
+    // The broker only sees raw CDP traffic, so it cannot tell a read from an
+    // action. It therefore keeps the overlay installed and moves nothing: where
+    // the cursor appears is decided by Sofia's semantic cursor, not by whether a
+    // snapshot happened to touch the page.
     const upstream = await startFakeUpstream();
     const broker = await createCdpBroker({
       upstreamBaseUrl: `http://127.0.0.1:${upstream.port}`,
@@ -318,11 +322,16 @@ describe("createCdpBroker", () => {
       const res = await response;
       assert.equal(res.id, 9);
 
-      const presents = upstream.recorded.evaluate.filter((p) =>
-        p.params?.expression?.includes("__sofiaAgentCursor.present"),
+      // It still guarantees the overlay exists for the next document…
+      assert.ok(
+        upstream.recorded.addScript.some((p) => p.sessionId === "PAGE-SESSION-1"),
+        "activity should keep the cursor script installed",
       );
-      assert.ok(presents.length >= 1, "cursor should present on page activity");
-      assert.equal(presents[0].sessionId, "PAGE-SESSION-1");
+      // …and manufactures no pointer movement of its own.
+      const moves = upstream.recorded.evaluate.filter((p) =>
+        /__sofiaAgentCursor\.(moveTo|flash|present)/.test(String(p.params?.expression ?? "")),
+      );
+      assert.deepEqual(moves, [], "activity must not move or present the cursor");
     } finally {
       await broker.close();
       upstream.wss.close();

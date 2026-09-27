@@ -8,7 +8,7 @@ import {
   writeConnectState,
 } from "../connect-state.js";
 import type { CloudMcpLiveStatusObserver } from "../cloud-mcp-health.js";
-import { readSofiaConnectSkillCatalog, renderSofiaConnectSkillInstruction } from "../connect-skill-catalog.js";
+import { readSofiaConnectSkillCatalogStatus, renderSofiaConnectSkillCatalogInstruction } from "../connect-skill-catalog.js";
 import { readSofiaAutomationCatalog, renderSofiaAutomationInstruction } from "../connect-automation-catalog.js";
 import { EnvStoreReadError, InvalidEnvKeyError, isValidEnvKey, type EnvService } from "../env-file.js";
 import { syncManagedProviderAuth } from "../managed-provider-auth.js";
@@ -285,12 +285,13 @@ export function registerCoreRoutes(options: RegisterCoreRoutesOptions): void {
 
   addRoute(routes, "GET", "/experimental/connect/skills", "client", async (_ctx) => {
     // Connect skills are server/account-scoped (sofia-cloud on the host), not per-workspace.
-    const skills = await readSofiaConnectSkillCatalog(config);
+    const catalog = await readSofiaConnectSkillCatalogStatus(config);
     return jsonResponse({
       ok: true,
       schemaVersion: 1,
-      skills,
-      instruction: renderSofiaConnectSkillInstruction(skills),
+      skills: catalog.skills,
+      status: catalog.status,
+      instruction: renderSofiaConnectSkillCatalogInstruction(catalog),
     });
   });
 

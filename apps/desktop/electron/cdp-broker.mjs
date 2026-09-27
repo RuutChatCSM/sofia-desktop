@@ -204,7 +204,6 @@ export function createCdpBroker({ upstreamBaseUrl, port = 0, stepMs = 28, debug 
       // commands through a sessionId; direct page connections use no sessionId.
       lastKnown: new Map(), // sessionId -> { x, y }
       cursorInjected: new Set(), // sessionIds that have the ghost cursor script
-      presented: new Set(), // sessionIds whose center-present already happened
       pendingSynthetic: new Map(), // syntheticId -> resolve
       clientReady: false,
       clientBuffer: [],
@@ -248,24 +247,6 @@ export function createCdpBroker({ upstreamBaseUrl, port = 0, stepMs = 28, debug 
         expression: "window.__sofiaAgentCursor && window.__sofiaAgentCursor.flash(" +
           `${Math.round(x)},${Math.round(y)});`,
       }, sessionId).catch(() => {});
-    }
-
-    // Show the ghost cursor at the page center so the user can always see where
-    // the agent is working, even when it only navigates/snapshots/evaluates.
-    // Resolves to the center coordinates so the first mouse move can glide
-    // from center to its target.
-    function presentCursor(sessionId) {
-      return sendSynthetic("Runtime.evaluate", {
-        expression: "window.__sofiaAgentCursor && window.__sofiaAgentCursor.present()",
-        returnByValue: true,
-      }, sessionId).then(({ result }) => {
-        const value = result?.result?.value;
-        if (typeof value === "string") {
-          const [cx, cy] = value.split(",").map(Number);
-          if (Number.isFinite(cx) && Number.isFinite(cy)) return { x: cx, y: cy };
-        }
-        return null;
-      }).catch(() => null);
     }
 
     function sendSynthetic(method, params, sessionId) {
@@ -320,18 +301,13 @@ export function createCdpBroker({ upstreamBaseUrl, port = 0, stepMs = 28, debug 
         if (lastKnown && dist(lastKnown, target) > 12) {
           await injectCursor(sessionId);
           await replayMotion(lastKnown, target);
-        } else if (!lastKnown && !state.presented.has(key)) {
-          // First move on this page: glide from the page center (where the
-          // ghost cursor is presented) to the target so the user sees the
-          // cursor arrive on the element before any click lands.
-          state.presented.add(key);
+        } else if (!lastKnown) {
+          // First move on this page. The broker only sees raw CDP Input, so this
+          // is all it knows: move where the client asked. Sofia's own semantic
+          // cursor (apps/server/src/browser-cursor.mjs) is what decides where a
+          // hover/click should appear.
           await injectCursor(sessionId);
-          const center = await presentCursor(sessionId);
-          if (center && dist(center, target) > 12) {
-            await replayMotion(center, target);
-          } else {
-            void moveCursor(x, y, sessionId);
-          }
+          void moveCursor(x, y, sessionId);
         } else {
           void moveCursor(x, y, sessionId);
         }
@@ -389,20 +365,12 @@ export function createCdpBroker({ upstreamBaseUrl, port = 0, stepMs = 28, debug 
         }
       } else if (msg.method && pageSessionKey(msg) !== undefined) {
         // Non-Input activity on a page (navigate, snapshot, evaluate, etc.).
-        // Only present the ghost cursor once per page (first activity) and
-        // again after a navigation — never on every snapshot/eval, which would
-        // constantly yank the cursor back to the page center.
+        // Activity keeps the overlay installed for the next document, and does
+        // nothing else: a snapshot or an evaluate must never move the pointer.
+        // The broker cannot tell a read from an action, so it leaves the whole
+        // question of where the cursor is to the semantic path.
         if (isActivityMethod(msg.method)) {
-          const sessionId = pageSessionKey(msg);
-          const key = String(sessionId ?? "");
-          const isNavigation = NAVIGATION_METHOD_RE.test(msg.method);
-          if (isNavigation || !state.presented.has(key)) {
-            state.presented.add(key);
-            await injectCursor(sessionId);
-            void presentCursor(sessionId);
-          } else {
-            await injectCursor(sessionId);
-          }
+          await injectCursor(pageSessionKey(msg));
         }
       }
       forwardToUpstream(JSON.stringify(msg));
@@ -410,7 +378,6 @@ export function createCdpBroker({ upstreamBaseUrl, port = 0, stepMs = 28, debug 
 
     // Domains that reflect "the agent is doing something in the page".
     const ACTIVITY_METHOD_RE = /^(Page|DOM|Runtime|Accessibility|Network|Log|Emulation|Input)\./;
-    const NAVIGATION_METHOD_RE = /^(Page\.(navigate|reload|goBack|goForward|navigateToHistoryEntry))$/;
     function isActivityMethod(method) {
       return ACTIVITY_METHOD_RE.test(method) && method !== "Input.dispatchMouseEvent";
     }

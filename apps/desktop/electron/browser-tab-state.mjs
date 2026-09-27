@@ -163,6 +163,28 @@ export function normalizePanelBounds(input) {
 }
 
 /**
+ * Peek's desktop breakpoint, expressed as page zoom.
+ *
+ * Device-metrics emulation is the wrong tool for a floating card. It hands the
+ * page a *screen* of its own, and the native view paints that screen wherever
+ * it lands — a DOM card cannot clip a native surface, so a card smaller than
+ * the emulated screen lets the page spill over the whole app. Zooming the page
+ * instead keeps the same desktop breakpoint (a 440px card at 34.375% lays out
+ * as 1280px) while the page stays inside the card's own bounds.
+ */
+export const BROWSER_PEEK_LAYOUT_WIDTH = 1280;
+
+/**
+ * @param {unknown} bounds The card, in the same renderer pixels as a panel.
+ * @returns {number} Page zoom that lays a desktop page out inside that card.
+ */
+export function browserPeekLayoutZoom(bounds) {
+  const resolved = normalizePanelBounds(bounds);
+  if (!resolved) return 1;
+  return clampZoomValue(resolved.width / BROWSER_PEEK_LAYOUT_WIDTH, 1);
+}
+
+/**
  * Scale that maps an emulated viewport into the available panel. `fit` is the
  * default so a desktop breakpoint stays usable inside a narrow side panel, and
  * it always leaves `RESPONSIVE_FRAME_MARGIN_PX` of letterbox on each side.
@@ -226,6 +248,20 @@ export function resolveViewportPlan({ viewport, zoom, panelBounds, pan }) {
   const offsetX = Math.max((bounds.width / scale - resolvedViewport.width) / 2, 0);
   const offsetY = Math.max((bounds.height / scale - resolvedViewport.height) / 2, 0);
 
+  // `screenWidth`/`screenHeight` and `positionX`/`positionY` share one space —
+  // the emulated page's own DIP, where the view is `width × height` — and
+  // Chromium requires the view's origin to be *on* that screen:
+  // `0 ≤ position ≤ screen`. Reporting the screen in native device px while the
+  // position was in emulated px made both halves wrong together: `fit` bottoms
+  // out at MIN_ZOOM_VALUE, so a 200px panel showing a 390px viewport produced a
+  // centred position past the end of a screen reported five times too small.
+  // Chromium answered "View position should be on the screen" and rejected the
+  // whole override, so no emulation applied at all — the page fell back to
+  // panel-width layout instead of being resized, which is what made expanding
+  // the browser look like a crash.
+  const screenWidth = Math.max(Math.round(bounds.width / scale), 1);
+  const screenHeight = Math.max(Math.round(bounds.height / scale), 1);
+
   return {
     bounds,
     pan: clampedPan,
@@ -236,12 +272,26 @@ export function resolveViewportPlan({ viewport, zoom, panelBounds, pan }) {
       deviceScaleFactor: resolvedViewport.deviceScaleFactor,
       mobile: false,
       scale,
-      positionX: Math.round(offsetX - clampedPan.x / scale),
-      positionY: Math.round(offsetY - clampedPan.y / scale),
-      screenWidth: bounds.width,
-      screenHeight: bounds.height,
+      // A pan can only be expressed while the view's origin stays on the screen:
+      // Chromium rejects a negative position outright, and `viewport` is
+      // documented as a screenshot-only offset. An overflowing view therefore
+      // keeps its pan state but never an off-screen origin.
+      positionX: onScreen(Math.round(offsetX - clampedPan.x / scale), screenWidth),
+      positionY: onScreen(Math.round(offsetY - clampedPan.y / scale), screenHeight),
+      screenWidth,
+      screenHeight,
     },
   };
+}
+
+/**
+ * The emulated view has to sit on its screen, which Chromium enforces before it
+ * accepts any of the override.
+ * @param {number} value
+ * @param {number} size
+ */
+function onScreen(value, size) {
+  return Math.min(Math.max(value, 0), size);
 }
 
 /** @typedef {{ sendCommand: (tabId: string, method: string, params: object) => unknown, setBounds: (tabId: string, bounds: BrowserRect | null) => void, release?: (tabId: string) => void }} ViewportControllerOptions */

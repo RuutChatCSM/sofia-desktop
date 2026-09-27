@@ -8,9 +8,11 @@
 // Three rules make the card feel like a floating piece of content rather than a
 // window that happens to be small:
 //
-//   geometry   the card is one fixed rectangle owned by the presentation. Page
-//              loads, tab switches, titles and viewports cannot resize it, and
-//              it never changes the conversation's layout.
+//   geometry   the card is one rectangle owned by the presentation, sized to
+//              the shape of the content it holds so the page fills it edge to
+//              edge. Page loads, tab switches and titles cannot resize it (the
+//              viewport it *renders at* can), and it never changes the
+//              conversation's layout.
 //   chrome     title, agent status and controls live in the native Peek shield
 //              (see `apps/desktop/electron/browser-peek-shield.mjs`) because a
 //              native page cannot be painted over by the DOM.
@@ -75,11 +77,14 @@ export function BrowserPeek({ tab, tabCount, onExpand, onHide }: BrowserPeekProp
   const storedPosition = useBrowserPresentationStore((state) => state.state.runtime.peekPosition);
   const dark = React.useSyncExternalStore(subscribeToTheme, getResolvedThemeMode, getResolvedThemeMode) === "dark";
 
-  const size = browserPeekSize();
+  // The card is the shape of the content it holds, so its size follows the
+  // viewport this tab renders at while peeked — never the page's own state.
+  const size = React.useMemo(() => browserPeekSize(tab.viewport), [tab.viewport]);
   const available = surface ?? NO_SURFACE;
   const restingPosition = clampPeekPosition(
-    storedPosition ?? defaultPeekPosition(available),
+    storedPosition ?? defaultPeekPosition(available, size),
     available,
+    size,
   );
   const position = drag ? peekDragPosition(drag, available) : restingPosition;
   positionRef.current = position;
@@ -109,10 +114,10 @@ export function BrowserPeek({ tab, tabCount, onExpand, onHide }: BrowserPeekProp
   // position is the one that gets corrected, so the fix survives a re-render.
   React.useEffect(() => {
     if (!surface || !storedPosition) return;
-    const clamped = clampPeekPosition(storedPosition, surface);
+    const clamped = clampPeekPosition(storedPosition, surface, size);
     if (clamped.x === storedPosition.x && clamped.y === storedPosition.y) return;
     dispatchBrowserPresentation({ type: "user-move-peek", position: clamped });
-  }, [surface, storedPosition]);
+  }, [size, surface, storedPosition]);
 
   // Report the page slot to Electron. Exactly one host reports bounds at a time,
   // because the presentation renders either the docked panel or the card.

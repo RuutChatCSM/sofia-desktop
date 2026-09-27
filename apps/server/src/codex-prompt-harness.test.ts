@@ -18,7 +18,7 @@ async function createRoot(): Promise<string> {
 }
 
 describe("codex-prompt-harness", () => {
-  test("builds factual host context without overriding Codex behavior", () => {
+  test("routes natural requests through callable tools and plugin capabilities", () => {
     const instructions = buildSofiaDeveloperInstructions({
       workspaceId: "ws_1",
       cwd: "/repo",
@@ -26,6 +26,10 @@ describe("codex-prompt-harness", () => {
     expect(instructions).toContain("Sofia is running this thread");
     expect(instructions).toContain("Workspace id: ws_1");
     expect(instructions).toContain("Working directory: /repo");
+    expect(instructions).toContain("do not need to name a tool or plugin");
+    expect(instructions).toContain("plugin-provided tools");
+    expect(instructions).toContain("use tool_search when available");
+    expect(instructions).toContain("confirmed callable in this turn");
     expect(instructions).not.toContain("Make a short plan");
     expect(instructions).not.toContain("EXECUTE it back-to-back");
   });

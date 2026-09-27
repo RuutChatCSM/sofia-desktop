@@ -150,10 +150,72 @@ describe("finished turn step fold (single Sofia engine message per turn)", () =>
     const markup = renderList([userMessage, assistant], false, "streaming");
 
     expect(markup).toContain("Ran 2 commands");
-    // Reasoning is narrative text inside the block, not a second disclosure: the
-    // work block is the only disclosure there is.
-    expect(markup).not.toContain("Thought");
-    expect(markup).toContain("checking the first call");
-    expect(markup).toContain("checking the second call");
+    // Two commands are still one row: a thought between them does not split the
+    // run.
+    expect((markup.match(/Ran 2 commands/g) ?? []).length).toBe(1);
+    // The thoughts are a collapsed detail inside the work disclosure — one per
+    // part, at their place in the narrative — and collapsed by default, so the
+    // narrative reads as commentary and milestones rather than as the reasoning
+    // behind them.
+    expect((markup.match(/>Thought</g) ?? []).length).toBe(2);
+  });
+});
+
+/** Whether each reasoning block is open, read from its trigger, in order. */
+function reasoningBlockStates(markup: string): string[] {
+  return markup
+    .split("data-reasoning-block")
+    .slice(1)
+    .map((chunk) => chunk.slice(0, 400))
+    .map((chunk) =>
+      chunk.includes('aria-expanded="true"')
+        ? "open"
+        : chunk.includes('aria-expanded="false"')
+          ? "closed"
+          : "unknown",
+    );
+}
+
+describe("a thought is a reasoning phase, not a reasoning packet", () => {
+  test("the phase in progress is open, and the phases behind it are folded", () => {
+    const assistant: UIMessage = {
+      id: "assistant-live",
+      role: "assistant",
+      metadata: { engine: { created: 1_000, turnId: "t1" } },
+      parts: [
+        { type: "step-start" },
+        { type: "reasoning", text: "checking the renderer", state: "done" },
+        bashPart("c1"),
+        { type: "reasoning", text: "and now the wrapper underneath it", state: "streaming" },
+      ],
+    };
+
+    const markup = renderList([userMessage, assistant], false, "streaming");
+
+    // She is mid-thought about the second thing, so that phase is open; the one
+    // she has already acted on is history and stays folded.
+    expect(reasoningBlockStates(markup)).toEqual(["closed", "open"]);
+  });
+
+  test("a finished turn leaves every phase folded", () => {
+    const assistant: UIMessage = {
+      id: "assistant-done",
+      role: "assistant",
+      metadata: { engine: { created: 1_000, completed: 80_000, turnId: "t1" } },
+      parts: [
+        { type: "step-start" },
+        { type: "reasoning", text: "checking the renderer", state: "done" },
+        bashPart("c1"),
+        { type: "reasoning", text: "and now the wrapper underneath it", state: "done" },
+        { type: "text", text: "Done.", state: "done" },
+      ],
+    };
+
+    const markup = renderList([userMessage, assistant]);
+
+    // The disclosure is folded, so no phase inside it can be open: a finished
+    // turn never drops the reader back into yesterday's thinking.
+    expect(markup).toContain("Worked for");
+    expect(reasoningBlockStates(markup)).not.toContain("open");
   });
 });

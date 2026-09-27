@@ -27,6 +27,7 @@ const BEARER = /^Bearer [A-Za-z0-9\-._~+/]+=*$/;
 const REQUEST_ID = /^[A-Za-z0-9_.:-]{1,128}$/;
 const REQUIRED_TERMINAL_PATH = "/mcp/agent";
 const DEFAULT_TRUSTED_ORIGINS = new Set([
+  "https://sofia.ruut.chat",
   "https://sofia-app.ruut.chat",
   "https://sofia-api.ruut.chat",
 ]);
