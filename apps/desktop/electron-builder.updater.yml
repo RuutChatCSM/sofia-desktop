@@ -1,0 +1,21 @@
+# Emits the electron-updater manifests without ever publishing them.
+#
+# electron-builder only writes `latest*.yml` when it can resolve a publish
+# config (see `getPublishConfigsForUpdateInfo` in app-builder-lib). With
+# `publish: null` and no `repository` field in package.json it resolves
+# nothing, so the updater manifest is silently skipped and the release ships
+# installers with no feed. The client reads that manifest to discover the
+# newest version, so a release built without it can never auto-update.
+#
+# `provider: github` here is only used to derive the manifest's file names
+# and metadata. Nothing is pushed: every build passes `--publish never`,
+# and both release paths upload assets themselves.
+#
+# Extend electron-builder.yml (not the base config) so `artifactName` matches
+# the installers: the manifest's file URLs must be the names the release
+# actually publishes, or the client resolves a 404 on download.
+extends: ./electron-builder.yml
+publish:
+  provider: github
+  owner: RuutChatCSM
+  repo: sofia-desktop

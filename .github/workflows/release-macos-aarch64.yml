@@ -488,7 +488,7 @@ jobs:
           - platform: macos-15
             os_type: macos
             artifact: electron-macos-arm64
-            builder_config: electron-builder.yml
+            builder_config: electron-builder.updater.yml
             asset_prefix: sofia
             manifest_pattern: latest*.yml
             electron_args: "--mac --arm64"
@@ -496,7 +496,7 @@ jobs:
           - platform: macos-15
             os_type: macos
             artifact: electron-macos-x64
-            builder_config: electron-builder.yml
+            builder_config: electron-builder.updater.yml
             asset_prefix: sofia
             manifest_pattern: latest*.yml
             electron_args: "--mac --x64"
@@ -504,7 +504,7 @@ jobs:
           - platform: ubuntu-22.04
             os_type: linux
             artifact: electron-linux-x64
-            builder_config: electron-builder.yml
+            builder_config: electron-builder.updater.yml
             asset_prefix: sofia
             manifest_pattern: latest*.yml
             electron_args: "--linux --x64"
@@ -515,7 +515,7 @@ jobs:
           - platform: ubuntu-22.04
             os_type: linux
             artifact: electron-linux-arm64
-            builder_config: electron-builder.yml
+            builder_config: electron-builder.updater.yml
             asset_prefix: sofia
             manifest_pattern: latest*.yml
             electron_args: "--linux --arm64"
@@ -919,7 +919,7 @@ jobs:
           - platform: windows-2025
             os_type: windows
             artifact: electron-windows-x64
-            builder_config: electron-builder.yml
+            builder_config: electron-builder.updater.yml
             asset_prefix: sofia
             manifest_pattern: latest*.yml
             electron_args: "--win --x64"
@@ -930,7 +930,7 @@ jobs:
           - platform: windows-2025
             os_type: windows
             artifact: electron-windows-arm64
-            builder_config: electron-builder.yml
+            builder_config: electron-builder.updater.yml
             asset_prefix: sofia
             manifest_pattern: latest*.yml
             electron_args: "--win --arm64"

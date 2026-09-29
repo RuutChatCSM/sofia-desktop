@@ -228,7 +228,9 @@ if (options.build) {
   log(`Stamping version ${options.version}`);
   run(process.execPath, [path.join(repoRoot, "scripts", "release", "stamp-version.mjs"), "--version", options.version]);
   log(`Building Sofia ${options.version} (${options.target})`);
-  run("pnpm", ["--filter", "@sofia/desktop", "package:electron"], {
+  // The updater config emits `latest*.yml`; the default config cannot,
+  // because it declares no publish target (see electron-builder.updater.yml).
+  run("pnpm", ["--filter", "@sofia/desktop", "package:electron:updater"], {
     SOFIA_SOURCE_DIR: process.env.SOFIA_SOURCE_DIR,
     TARGET: options.target,
     MACOS_NOTARIZE: "true",
