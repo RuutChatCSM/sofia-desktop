@@ -70,4 +70,14 @@ describe("local macOS release driver", () => {
     assert.equal(result.status, 0);
     assert.match(result.stderr, /no build provenance/);
   });
+
+  // A release that ships only the DMG/ZIP leaves the generic updater feed
+  // 404ing, so no client ever discovers the version. The manifest must be
+  // part of every published asset set.
+  it("publishes the updater manifest alongside the installers", () => {
+    const result = runDriver(["--version", "9.9.9", "--no-build", "--no-mirror", "--dry-run"]);
+
+    assert.equal(result.status, 0);
+    assert.match(result.stderr, /latest-mac-arm64\.yml/);
+  });
 });

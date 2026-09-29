@@ -23,7 +23,7 @@
 //        written by the build that produced it.
 
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, mkdirSync, mkdtempSync, rmSync, chmodSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, mkdirSync, mkdtempSync, rmSync, chmodSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -191,6 +191,29 @@ const artifacts = [
   `sofia-mac-${arch}-${options.version}.zip.blockmap`,
 ].map((name) => path.join(distDir, name));
 
+// The updater reads a generic-provider manifest (`latest*.yml`) to discover
+// the newest version. Without it the feed 404s and auto-update silently
+// never fires, so these ship alongside the installers. electron-builder
+// names them per-arch (latest-mac.yml, latest-mac-arm64.yml); publish every
+// one it emitted for this platform rather than guessing a single name.
+function updaterManifests() {
+  if (options.dryRun) {
+    return [path.join(distDir, "latest-mac.yml"), path.join(distDir, "latest-mac-arm64.yml")];
+  }
+  return readdirSync(distDir)
+    .filter((name) => /^latest.*\.yml$/.test(name))
+    .sort()
+    .map((name) => path.join(distDir, name));
+}
+
+function updaterArtifacts() {
+  const manifests = updaterManifests();
+  if (!options.dryRun && manifests.length === 0) {
+    die(`no updater manifest (latest*.yml) in ${distDir}; electron-builder did not emit one, so auto-update would never find a release`);
+  }
+  return manifests;
+}
+
 const p12 = process.env.CSC_LINK;
 const p8 = process.env.APPLE_API_KEY_PATH;
 if (!p12) die("CSC_LINK is required (path or base64 .p12)");
@@ -264,7 +287,8 @@ else log(`Skipping DMG signing: CSC_LINK is not a local .p12 (${p12})`);
 // ---------------------------------------------------------------------------
 function githubRelease() {
   log(`Publishing GitHub Release ${tag} (${options.repo})`);
-  const assets = artifacts.filter((artifact) => options.dryRun || existsSync(artifact));
+  const assets = [...artifacts, ...updaterArtifacts()]
+    .filter((artifact) => options.dryRun || existsSync(artifact));
   const exists = !options.dryRun && spawnSync("gh", ["release", "view", tag, "--repo", options.repo], { stdio: "ignore" }).status === 0;
   if (exists) {
     run("gh", ["release", "upload", tag, "--repo", options.repo, "--clobber", ...assets]);
@@ -280,7 +304,7 @@ function mirror() {
   const endpoint = process.env.AWS_ENDPOINT_URL;
   if (!bucket || !endpoint) die("SOFIA_R2_BUCKET and AWS_ENDPOINT_URL are required to mirror");
   log(`Mirroring to s3://${bucket}/${options.prefix}/releases/${options.version}/`);
-  for (const artifact of artifacts) {
+  for (const artifact of [...artifacts, ...updaterArtifacts()]) {
     if (!options.dryRun && !existsSync(artifact)) continue;
     run("aws", ["s3", "cp", artifact, `s3://${bucket}/${options.prefix}/releases/${options.version}/${path.basename(artifact)}`, "--endpoint-url", endpoint, "--only-show-errors"]);
   }
