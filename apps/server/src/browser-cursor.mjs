@@ -10,8 +10,8 @@
 //
 // Non-spatial work (snapshot, DOM read, evaluate, scrolling, key presses) must
 // not move the pointer at all, and a navigation must not teleport it anywhere:
-// the document goes away, the cursor fades, and the next spatial action glides
-// it into place.
+// the connected-session overlay is restored by the desktop broker on the next
+// document. Spatial actions then glide it into place.
 //
 // The overlay keeps the element id and the `window.__sofiaAgentCursor` API the
 // desktop CDP broker's raw-Input fallback drives, so an external CDP client and
@@ -41,7 +41,7 @@ export const BROWSER_CURSOR_SCRIPT = `(() => {
     st.margin = "0"; st.padding = "0"; st.border = "0";
     st.zIndex = "2147483647"; st.pointerEvents = "none";
     st.transform = "translate(0px,0px)"; st.opacity = "0";
-    st.transition = "transform 130ms cubic-bezier(.2,.7,.3,1), opacity 200ms ease-out";
+    st.transition = "transform 130ms cubic-bezier(.2,.7,.3,1)";
     st.willChange = "transform, opacity";
     el.innerHTML =
       '<style>' +
@@ -67,7 +67,7 @@ export const BROWSER_CURSOR_SCRIPT = `(() => {
   const burst = (x, y) => {
     const e = ensure();
     e.style.opacity = "1";
-    e.style.transition = "transform 120ms cubic-bezier(.2,.6,.3,1), opacity 260ms ease-out";
+    e.style.transition = "transform 120ms cubic-bezier(.2,.6,.3,1)";
     e.style.transform = "translate(" + (Math.round(x) - S / 2) + "px," + (Math.round(y) - S / 2) + "px) scale(0.7)";
     requestAnimationFrame(() => {
       e.style.transform = "translate(" + (Math.round(x) - S / 2) + "px," + (Math.round(y) - S / 2) + "px) scale(1.22)";

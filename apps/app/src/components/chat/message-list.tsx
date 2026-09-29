@@ -57,6 +57,7 @@ import {
   useChangeSetStore,
 } from "@/react-app/domains/session/changes/change-set-store"
 import { usePanelTabStore } from "@/react-app/domains/session/panel/panel-tab-store"
+import { MESSAGE_REFERENCE_PATTERN, parseMessageReference } from "@/react-app/domains/session/surface/composer/message-reference"
 import { messageTurnId, turnAnswerIndex } from "@/components/chat/turn-structure"
 import { deriveTurnPresentation, workEntriesForMessage } from "@/components/chat/turn-presentation"
 import { recordDevLog } from "@/app/lib/dev-log"
@@ -636,7 +637,29 @@ function renderPlainTextWithLinks(text: string, highlightQuery: string | undefin
   return nodes
 }
 
-function renderUserTextWithSkillChips(text: string, highlightQuery: string | undefined) {
+function renderUserTextWithSkillChips(text: string, highlightQuery: string | undefined): React.ReactNode {
+  const matches = [...text.matchAll(MESSAGE_REFERENCE_PATTERN)]
+  if (!matches.length) return renderUserTextWithoutReferences(text, highlightQuery)
+  const nodes: React.ReactNode[] = []
+  let cursor = 0
+  for (const match of matches) {
+    const reference = parseMessageReference(match[0])
+    if (!reference) continue
+    nodes.push(<React.Fragment key={`before-${match.index}`}>{renderUserTextWithoutReferences(text.slice(cursor, match.index), highlightQuery)}</React.Fragment>)
+    nodes.push(
+      <span key={`reference-${match.index}`} title={reference.path} data-message-reference={reference.kind}
+        className="mx-1 inline-flex max-w-full items-center gap-1.5 rounded-full border border-border bg-background/40 px-2.5 py-0.5 align-middle text-sm">
+        {reference.kind === "file" ? <FileIcon className="size-3.5 shrink-0" /> : <FolderOpen className="size-3.5 shrink-0" />}
+        <span className="break-all">{reference.label}</span>
+      </span>,
+    )
+    cursor = match.index + match[0].length
+  }
+  nodes.push(<React.Fragment key="remaining">{renderUserTextWithoutReferences(text.slice(cursor), highlightQuery)}</React.Fragment>)
+  return nodes
+}
+
+function renderUserTextWithoutReferences(text: string, highlightQuery: string | undefined) {
   if (!USER_SKILL_TOKEN_RE.test(text)) return renderPlainTextWithLinks(text, highlightQuery, "text")
   let offset = 0
   return text.split(USER_SKILL_TOKEN_RE).map((segment) => {

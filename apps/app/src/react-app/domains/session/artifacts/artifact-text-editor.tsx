@@ -3,7 +3,7 @@ import { useEffect, useRef } from "react";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { EditorState } from "@codemirror/state";
-import { EditorView, keymap, lineNumbers } from "@codemirror/view";
+import { EditorView, drawSelection, keymap, lineNumbers } from "@codemirror/view";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -12,6 +12,7 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { cn } from "@/lib/utils";
+import { sourceHighlighting } from "./source-highlighting";
 import { markdownLivePreview } from "./markdown-live-preview";
 
 const LINE_PREFIX_PATTERN = /^(#{1,6}\s+|>\s+|[-*+]\s+(\[[ xX]\]\s+)?|\d+[.)]\s+)/;
@@ -48,6 +49,7 @@ function wrapSelection(view: EditorView, marker: string) {
 
 type ArtifactTextEditorProps = {
   className?: string;
+  filePath?: string;
   value: string;
   language: "markdown" | "text";
   onChange: (value: string) => void;
@@ -75,7 +77,14 @@ export function ArtifactTextEditor(props: ArtifactTextEditorProps) {
         doc: props.value,
         extensions: [
           props.language === "markdown" ? [] : lineNumbers(),
+          props.filePath ? sourceHighlighting(props.filePath) : [],
           history(),
+          drawSelection(),
+          EditorView.theme({
+            ".cm-content": { caretColor: "var(--foreground)" },
+            ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--foreground)", borderLeftWidth: "2px" },
+            "&.cm-focused .cm-selectionBackground, .cm-selectionBackground": { backgroundColor: "color-mix(in srgb, var(--foreground) 20%, transparent)" },
+          }),
           keymap.of([...defaultKeymap, ...historyKeymap]),
           // GFM base so tables, strikethrough and task lists parse; the
           // CommonMark default never produces Table nodes to render.
@@ -120,7 +129,7 @@ export function ArtifactTextEditor(props: ArtifactTextEditorProps) {
         delete (window as unknown as { __artifactEditorView?: EditorView }).__artifactEditorView;
       }
     };
-  }, [props.language]);
+  }, [props.language, props.filePath]);
 
   useEffect(() => {
     const view = viewRef.current;

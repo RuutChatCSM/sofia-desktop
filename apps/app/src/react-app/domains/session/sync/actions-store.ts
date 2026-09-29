@@ -16,7 +16,6 @@ import {
   listCommands as listCommandsTyped,
   revertSession,
   shellInSession,
-  unrevertSession,
 } from "../../../../app/lib/engine-session";
 import { finishPerf, perfNow, recordPerfLog } from "../../../../app/lib/perf-log";
 import { toSessionTransportDirectory } from "../../../../app/lib/session-scope";
@@ -142,7 +141,7 @@ export function createSessionActionsStore(options: {
     const parts: PartInput[] = [];
     // Send-time invariant: encoded binary never enters the prompt as text.
     const text = sanitizePromptText(draft.resolvedText ?? draft.text);
-    parts.push({ type: "text", text } as TextPartInput);
+    parts.push({ type: "text", text, ...(draft.references?.length ? { metadata: { sofiaReferences: draft.references } } : {}) } satisfies TextPartInput);
 
     const root = options.runtimeWorkspaceRoot().trim() || options.selectedWorkspaceRoot().trim();
     const toAbsolutePath = (path: string) => {
@@ -741,8 +740,10 @@ export function createSessionActionsStore(options: {
     });
 
     if (!next) {
-      const session = await unrevertSession(c, sessionID);
-      options.upsertLocalSession(session);
+      // No later user message to redo, so this would need to un-revert back
+      // to the first user turn. The engine keeps no restore point, so drop the
+      // local revert cursor and let the user resend instead of failing.
+      console.warn("[redo] cannot un-revert to the first message; no restore point on the engine");
       options.setPrompt("");
       return;
     }

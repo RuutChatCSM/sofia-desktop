@@ -27,11 +27,13 @@ import {
   BROWSER_PEEK_RADIUS,
   beginPeekDrag,
   browserPeekSize,
+  browserPresentationState,
   clampPeekPosition,
   defaultPeekPosition,
   dispatchBrowserPresentation,
   movePeekDrag,
   peekDragPosition,
+  snapPeekPosition,
   useBrowserPresentationStore,
   type BrowserPeekDragState,
   type BrowserPeekPosition,
@@ -66,6 +68,7 @@ export function BrowserPeek({ tab, tabCount, onExpand, onHide }: BrowserPeekProp
   const surfaceRef = React.useRef<BrowserSurfaceSize>(NO_SURFACE);
   const dragRef = React.useRef<BrowserPeekDragState | null>(null);
   const positionRef = React.useRef<BrowserPeekPosition>(RESTING_ORIGIN);
+  const sizeRef = React.useRef(browserPeekSize());
   const expandRef = React.useRef(onExpand);
   const hideRef = React.useRef(onHide);
   expandRef.current = onExpand;
@@ -86,8 +89,9 @@ export function BrowserPeek({ tab, tabCount, onExpand, onHide }: BrowserPeekProp
     available,
     size,
   );
-  const position = drag ? peekDragPosition(drag, available) : restingPosition;
+  const position = drag ? peekDragPosition(drag, available, size) : restingPosition;
   positionRef.current = position;
+  sizeRef.current = size;
   surfaceRef.current = available;
   pageFailedRef.current = tab.pageState.status === "error";
 
@@ -138,7 +142,7 @@ export function BrowserPeek({ tab, tabCount, onExpand, onHide }: BrowserPeekProp
         bounds.width < MIN_VISIBLE_BROWSER_CANVAS_PX ||
         bounds.height < MIN_VISIBLE_BROWSER_CANVAS_PX;
 
-      if (pageFailedRef.current || tooSmall || hasNativeBrowserOccluder()) {
+      if (pageFailedRef.current || tooSmall || hasNativeBrowserOccluder(page)) {
         if (last) {
           void browser.hide?.();
           last = null;
@@ -157,7 +161,9 @@ export function BrowserPeek({ tab, tabCount, onExpand, onHide }: BrowserPeekProp
     frame = window.requestAnimationFrame(tick);
     return () => {
       if (frame != null) window.cancelAnimationFrame(frame);
-      void browser.hide?.();
+      // Docking mounts a new browser host in the same commit. Its show may
+      // precede this cleanup, so a stale Peek must not hide the docked page.
+      if (browserPresentationState().runtime.mode === "peek") void browser.hide?.();
     };
   }, []);
 
@@ -171,7 +177,7 @@ export function BrowserPeek({ tab, tabCount, onExpand, onHide }: BrowserPeekProp
         setDrag(next);
         return;
       }
-      const current = dragRef.current;
+      let current = dragRef.current;
       if (pointer.phase === "move") {
         if (!current) return;
         const next = movePeekDrag(current, pointer.dx, pointer.dy);
@@ -179,19 +185,29 @@ export function BrowserPeek({ tab, tabCount, onExpand, onHide }: BrowserPeekProp
         setDrag(next);
         return;
       }
+      if (current && pointer.phase === "up") current = movePeekDrag(current, pointer.dx, pointer.dy);
       dragRef.current = null;
-      setDrag(null);
       if (current?.dragging) {
-        // A drag is a position, never an activation.
+        // Even a cancelled native pointer capture must retain the last visible
+        // position. Reverting to the origin makes the card jump during a drag.
+        const lastPosition = peekDragPosition(current, surfaceRef.current, sizeRef.current);
         dispatchBrowserPresentation({
           type: "user-move-peek",
-          position: peekDragPosition(current, surfaceRef.current),
+          position: pointer.phase === "cancel"
+            ? lastPosition
+            : snapPeekPosition(lastPosition, surfaceRef.current, sizeRef.current),
         });
+        setDrag(null);
         return;
       }
+      setDrag(null);
+      if (pointer.phase === "cancel") return;
       expandRef.current();
     });
-    const unsubscribeExpand = browser?.onBrowserPeekActivated?.(() => expandRef.current());
+    const unsubscribeExpand = browser?.onBrowserPeekActivated?.((intent) => {
+      if (intent === "expand") dispatchBrowserPresentation({ type: "user-expand-browser" });
+      else expandRef.current();
+    });
     const unsubscribeHide = browser?.onBrowserPeekHidden?.(() => hideRef.current());
     return () => {
       unsubscribePointer?.();

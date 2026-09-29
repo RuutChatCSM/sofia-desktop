@@ -255,11 +255,12 @@ export async function listAssignedConnectCapabilities(input: {
       .filter((marketplace) => marketplace.status === "active")
       .filter((marketplace) => assignedMarketplaceIds.has(marketplace.id))
       .sort((left, right) => left.name.localeCompare(right.name));
-  const resolvedMarketplaces = await Promise.all(
+  const marketplaceResults = await Promise.allSettled(
     marketplaces.map((marketplace) =>
       input.client.getOrgMarketplaceResolved(input.organizationId, marketplace.id)
     ),
   );
+  const resolvedMarketplaces = marketplaceResults.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
 
   const plugins = new Map<string, MarketplacePlugin>();
   for (const resolved of resolvedMarketplaces) {
@@ -281,12 +282,13 @@ export async function listAssignedConnectCapabilities(input: {
   }
   if (plugins.size === 0) return EMPTY_CONNECT_CAPABILITY_INVENTORY;
 
-  const resolvedPlugins = await Promise.all(
+  const pluginResults = await Promise.allSettled(
     [...plugins.values()].map(async ({ marketplace, plugin }) => ({
       marketplace,
       resolved: await input.client.getOrgPluginResolved(input.organizationId, plugin),
     })),
   );
+  const resolvedPlugins = pluginResults.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
 
   const skills: SkillCard[] = [];
   const pluginsById = new Map<string, ConnectPluginCard>();

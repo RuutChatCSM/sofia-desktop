@@ -22,6 +22,7 @@ import {
   $isTextNode,
   COMMAND_PRIORITY_CRITICAL,
   COMMAND_PRIORITY_HIGH,
+  COPY_COMMAND,
   KEY_ARROW_LEFT_COMMAND,
   KEY_ARROW_RIGHT_COMMAND,
   KEY_BACKSPACE_COMMAND,
@@ -35,6 +36,7 @@ import {
 } from "lexical";
 import type { InitialConfigType } from "@lexical/react/LexicalComposer.js";
 import { decodeComposerMentionValue, encodeComposerMentionValue, type ComposerMentionKind } from "./mention-encoding";
+import { createMessageReference, serializeMessageReference, parseMessageReference, MESSAGE_REFERENCE_PATTERN } from "./message-reference";
 import { parseConnectSkillToken } from "./connect-skill-token";
 import { shouldCollapsePastedText, splitPastedText } from "./pasted-text";
 import { insertPastedText } from "./pasted-text-insertion";
@@ -106,7 +108,8 @@ const MENTION_PILL_CLASS: Record<ComposerMentionKind, string> = {
 };
 
 function mentionPillText(value: string, kind: ComposerMentionKind) {
-  return `@${kind === "file" ? value.split(/[\\/]/).pop() || value : value}`;
+  if (kind === "file") return value.replace(/[\\/]+$/, "").split(/[\\/]/).pop() || value;
+  return `@${value}`;
 }
 
 class ComposerMentionNode extends TextNode {
@@ -118,15 +121,19 @@ class ComposerMentionNode extends TextNode {
   }
 
   static override clone(node: ComposerMentionNode) {
-    return new ComposerMentionNode(node.__value, node.__kind, node.__key);
+    const clone = new ComposerMentionNode(node.__value, node.__kind, node.__key);
+    clone.__text = node.__text;
+    return clone;
   }
 
   static override importJSON(serializedNode: SerializedComposerMentionNode) {
-    return $createComposerMentionNode(serializedNode.mentionValue, serializedNode.mentionKind);
+    const node = $createComposerMentionNode(serializedNode.mentionValue, serializedNode.mentionKind);
+    if (parseMessageReference(serializedNode.text)) node.setTextContent(serializedNode.text);
+    return node;
   }
 
   constructor(value = "", kind: ComposerMentionKind = "file", key?: NodeKey) {
-    super(`@${encodeComposerMentionValue(value)}`, key);
+    super(kind === "file" ? serializeMessageReference(createMessageReference(value)) : `@${encodeComposerMentionValue(value)}`, key);
     this.__value = value;
     this.__kind = kind;
   }
@@ -147,7 +154,8 @@ class ComposerMentionNode extends TextNode {
     dom.textContent = mentionPillText(this.__value, this.__kind);
     dom.contentEditable = "false";
     dom.setAttribute("spellcheck", "false");
-    dom.title = `@${this.__value}`;
+    dom.title = this.__kind === "file" ? this.__value : `@${this.__value}`;
+    if (this.__kind === "file") dom.setAttribute("data-composer-reference", /[\\/]$/.test(this.__value) ? "folder" : "file");
     return dom;
   }
 
@@ -155,7 +163,7 @@ class ComposerMentionNode extends TextNode {
     if (prevNode.__value !== this.__value || prevNode.__kind !== this.__kind) {
       dom.className = MENTION_PILL_CLASS[this.__kind];
       dom.textContent = mentionPillText(this.__value, this.__kind);
-      dom.title = `@${this.__value}`;
+      dom.title = this.__kind === "file" ? this.__value : `@${this.__value}`;
     }
     return false;
   }
@@ -460,7 +468,18 @@ function createAttachmentChipDom(attachment: ComposerAttachmentToken) {
   dom.dataset.attachmentId = attachment.id;
   dom.dataset.attachmentStatus = "ready";
 
-  if (attachment.kind === "image" && attachment.previewUrl) {
+  if (attachment.id.startsWith("annotation-")) {
+    const chip = document.createElement("span");
+    chip.className = "inline-flex h-10 items-center gap-1.5 rounded-full border border-border/70 bg-muted/40 px-3 text-xs font-medium text-foreground";
+    const icon = document.createElement("span");
+    icon.textContent = "▤";
+    icon.setAttribute("aria-hidden", "true");
+    const label = document.createElement("span");
+    label.className = "truncate";
+    label.textContent = attachment.name;
+    chip.append(icon, label);
+    dom.append(chip);
+  } else if (attachment.kind === "image" && attachment.previewUrl) {
     const img = document.createElement("img");
     img.src = attachment.previewUrl;
     img.alt = attachment.name;
@@ -733,11 +752,16 @@ function setPrompt(
     value = slashMatch[2] ?? "";
   }
 
-  const segments = value.split(/(\[attachment [^\]]+\]|\[pasted text [^\]]+\]|\[connect-skill [^\]]+\]|\[skill [^\]]+\]|@[^\s@]+)/);
+  const segments = value.split(/(\[(?:File|Folder|Repository): "(?:[^"\\]|\\.)*"\]|\[attachment [^\]]+\]|\[pasted text [^\]]+\]|\[connect-skill [^\]]+\]|\[skill [^\]]+\]|@[^\s@]+)/);
   const pastedTextByLabel = new Map((pastedText ?? []).map((item) => [item.label, item]));
   const attachmentsById = new Map((attachments ?? []).map((item) => [item.id, item]));
   for (const segment of segments) {
     if (!segment) continue;
+    const reference = parseMessageReference(segment);
+    if (reference) {
+      paragraph.append($createComposerMentionNode(reference.path, "file").setTextContent(segment));
+      continue;
+    }
     const attachmentMatch = segment.match(/^\[attachment (.+)\]$/);
     if (attachmentMatch?.[1]) {
       const target = attachmentsById.get(attachmentMatch[1]);
@@ -954,10 +978,31 @@ function PasteChipPlugin(props: { onPasteText?: (text: string) => void }) {
   }, [props.onPasteText]);
 
   useEffect(() => {
-    return editor.registerCommand(
+    const unregisterCopy = editor.registerCommand(COPY_COMMAND, (event: ClipboardEvent | null) => {
+      const selection = $getSelection();
+      if (!event?.clipboardData || !selection) return false;
+      const text = selection.getTextContent();
+      if (![...text.matchAll(MESSAGE_REFERENCE_PATTERN)].length) return false;
+      event.preventDefault();
+      event.clipboardData.setData("application/x-sofia-reference-text", text);
+      event.clipboardData.setData("text/plain", text.replace(MESSAGE_REFERENCE_PATTERN, (token) => parseMessageReference(token)?.label ?? token));
+      return true;
+    }, COMMAND_PRIORITY_CRITICAL);
+    const unregisterPaste = editor.registerCommand(
       PASTE_COMMAND,
       (event: ClipboardEvent) => {
         if (event.defaultPrevented) return false;
+        const referenceText = event.clipboardData?.getData("application/x-sofia-reference-text");
+        const selection = $getSelection();
+        if (referenceText && $isRangeSelection(selection)) {
+          event.preventDefault();
+          const segments = referenceText.split(/(\[(?:File|Folder|Repository): "(?:[^"\\]|\\.)*"\])/);
+          selection.insertNodes(segments.filter(Boolean).map((segment) => {
+            const reference = parseMessageReference(segment);
+            return reference ? $createComposerMentionNode(reference.path, "file").setTextContent(segment) : $createTextNode(segment);
+          }));
+          return true;
+        }
         // Only handle plain-text pastes; files and URI lists are handled in the React onPaste.
         const files = event.clipboardData?.files;
         if (files && files.length > 0) return false;
@@ -976,6 +1021,7 @@ function PasteChipPlugin(props: { onPasteText?: (text: string) => void }) {
       },
       COMMAND_PRIORITY_CRITICAL,
     );
+    return () => { unregisterCopy(); unregisterPaste(); };
   }, [editor]);
 
   return null;

@@ -72,6 +72,7 @@ function readyEngineClient(): WorkspaceEngineClient {
       async promptAsync() { return ok({}); },
       async abort() { return ok({}); },
       async delete() { return ok({}); },
+      async revert() { return unavailable(); },
     },
     provider: {
       async list() { return ok(providerList); },

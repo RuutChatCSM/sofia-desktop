@@ -23,7 +23,7 @@ import { sanitizePromptText } from "@/lib/embedded-data-urls";
 import { downloadTextAsFile } from "@/app/lib/download";
 import { canCreateWorkspaces } from "@/app/lib/workspace-creation-policy";
 import { createClient, unwrap } from "@/app/lib/engine";
-import { abortSessionSafe, forkSession, listCommands, revertSession, setSessionArchived, shellInSession, unrevertSession } from "@/app/lib/engine-session";
+import { abortSessionSafe, forkSession, listCommands, revertSession, setSessionArchived, shellInSession } from "@/app/lib/engine-session";
 import { PENDING_SESSION_TITLE } from "@/app/lib/session-title";
 import { useSessionManagementStore as sessionManagementStore } from "@/react-app/domains/session/sidebar/session-management-store";
 import {
@@ -1619,14 +1619,12 @@ export function SessionRoute() {
                   useSessionModelStore.getState().setModel(targetSessionId, sendModel, sendVariant ?? null);
                 }
               },
+              // Rollback is best-effort: the engine keeps no restore point, so
+              // a failed resend cannot un-revert. Clear the cursor locally so
+              // the composer is not left in a reverted state.
               unrevert: async () => {
-                try {
-                  await unrevertSession(engineClient, targetSessionId);
-                } finally {
-                  applySessionUnrevert(selectedWorkspaceId, targetSessionId);
-                }
+                applySessionUnrevert(selectedWorkspaceId, targetSessionId);
               },
-              onUnrevertError: (error) => console.warn("[edit-resend] rollback failed", error),
             });
           },
         });
@@ -1682,19 +1680,6 @@ export function SessionRoute() {
         } catch (error) {
           console.warn("[revert] failed", error);
           toast.error(t("session.revert_failed"));
-          return false;
-        }
-      },
-      onRestoreRevertedSession: async (sessionId: string) => {
-        const targetSessionId = sessionId.trim() || selectedSessionId;
-        if (!targetSessionId) return false;
-        try {
-          await unrevertSession(engineClient, targetSessionId);
-          applySessionUnrevert(selectedWorkspaceId, targetSessionId);
-          return true;
-        } catch (error) {
-          console.warn("[unrevert] failed", error);
-          toast.error(t("session.restore_failed"));
           return false;
         }
       },
@@ -1800,6 +1785,7 @@ export function SessionRoute() {
     return {
       client,
       workspaceId: selectedWorkspaceId || null,
+      workspaceRoot: selectedWorkspaceRoot,
       selectedModel: local.prefs.defaultModel ?? { providerID: "", modelID: "" },
       modelOptions: organizationAssignedModelOptions,
       modelUnavailable: selectedModelUnavailable,

@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { Agent } from "@/app/lib/engine-types";
-import { AppWindowMac, ArrowLeft, ArrowUp, Check, ChevronDown, ChevronRight, FileText, LoaderCircle, Paperclip, Plus, RefreshCw, Settings, Square, Terminal, X, Zap } from "lucide-react";
+import { AppWindowMac, ArrowLeft, ArrowUp, Check, ChevronDown, ChevronRight, FileText, FolderOpen, LoaderCircle, Paperclip, Plus, RefreshCw, Settings, Square, Terminal, X, Zap } from "lucide-react";
 import fuzzysort from "fuzzysort";
 import { toast } from "@/components/ui/sonner";
 import type { CloudImportedPlugin, CloudImportedPluginFile } from "@/app/cloud/import-state";
@@ -1219,17 +1219,19 @@ export function ReactSessionComposer(props: ComposerProps) {
                     <Zap size={14} className="mt-0.5 shrink-0 text-gray-9" />
                   ) : item.kind === "app" ? (
                     <AppWindowMac size={14} className="mt-0.5 shrink-0 text-gray-9" />
+                  ) : /[\\/]$/.test(item.value) ? (
+                    <FolderOpen size={14} className="mt-0.5 shrink-0 text-gray-9" />
                   ) : (
                     <FileText size={14} className="mt-0.5 shrink-0 text-gray-9" />
                   )}
                   <div className="min-w-0">
-                    <div className="truncate text-xs font-semibold">@{item.label}</div>
+                    <div className="truncate text-xs font-semibold">{item.kind === "file" ? item.label.replace(/[\\/]+$/, "") : `@${item.label}`}</div>
                     <div className="truncate text-xs text-gray-10">
                       {item.kind === "agent"
                         ? t("composer.agent_label")
                         : item.kind === "app"
                           ? t("composer.app_kind")
-                          : t("composer.file_kind")}
+                          : /[\\/]$/.test(item.value) ? "Folder" : t("composer.file_kind")}
                     </div>
                   </div>
                 </button>
@@ -1449,8 +1451,11 @@ export function ReactSessionComposer(props: ComposerProps) {
                     >
                       <div className="flex min-h-0 min-w-0 w-full flex-col">
                         {toolMenuSection === "home" ? <div className="flex flex-col overflow-y-auto p-1.5">
+                          <button type="button" className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm text-gray-11 hover:bg-gray-3" onClick={() => { setToolMenuOpen(false); props.onDraftChange(`${props.draft}${props.draft && !/\s$/.test(props.draft) ? " " : ""}@`); requestAnimationFrame(() => rootRef.current?.querySelector<HTMLElement>("[contenteditable='true']")?.focus()); }}>
+                            <FileText size={15} />Files and folders
+                          </button>
                           <button type="button" disabled={!props.attachmentsEnabled} className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm text-gray-11 hover:bg-gray-3 disabled:opacity-50" onClick={() => { setToolMenuOpen(false); fileInput?.click(); }}>
-                            <Paperclip size={15} />{t("composer.attach_files")}
+                            <Paperclip size={15} />Upload files
                           </button>
                           <div className="my-1 border-t border-dls-border" />
                           {([

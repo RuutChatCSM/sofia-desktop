@@ -19,13 +19,9 @@ import type {
 export const DEFAULT_BROWSER_VIEWPORT: BrowserViewport = { mode: "panel" };
 export const DEFAULT_BROWSER_ZOOM: BrowserZoom = { mode: "fit" };
 
-/**
- * Window presets. Deliberately named by size class rather than by device: only
- * the layout viewport is emulated today, so calling one "iPhone" would promise
- * touch, DPR, and user-agent behaviour that does not exist yet.
- */
+/** Viewport sizes only; these presets do not change user agent or touch support. */
 export type BrowserViewportPreset = {
-  id: "desktop" | "laptop" | "tablet" | "phone";
+  id: string;
   label: string;
   width: number;
   height: number;
@@ -36,6 +32,13 @@ export const BROWSER_VIEWPORT_PRESETS: readonly BrowserViewportPreset[] = [
   { id: "laptop", label: "Laptop", width: 1280, height: 800 },
   { id: "tablet", label: "Tablet", width: 768, height: 1024 },
   { id: "phone", label: "Phone", width: 390, height: 844 },
+  { id: "4k", label: "4K", width: 3840, height: 2160 },
+  { id: "ipad-air", label: "iPad Air", width: 820, height: 1180 },
+  { id: "ipad-mini", label: "iPad Mini", width: 768, height: 1024 },
+  { id: "iphone-15-pro", label: "iPhone 15 Pro", width: 393, height: 852 },
+  { id: "iphone-15-pro-max", label: "iPhone 15 Pro Max", width: 430, height: 932 },
+  { id: "pixel-8", label: "Pixel 8", width: 412, height: 915 },
+  { id: "iphone-se", label: "iPhone SE", width: 375, height: 667 },
 ];
 
 /** Preset zoom steps. Custom values can be typed later; these are enough now. */

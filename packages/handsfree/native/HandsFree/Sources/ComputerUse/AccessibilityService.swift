@@ -3,7 +3,6 @@ import ApplicationServices
 import ScreenCaptureKit
 
 final class AccessibilityService: @unchecked Sendable {
-    private let screenshotImageWidth: CGFloat = 768
     private let maxElements = 1000
     private let maxVisitedNodes = 5000
     private let maxDepth = 22
@@ -49,9 +48,11 @@ final class AccessibilityService: @unchecked Sendable {
         )
     }
 
-    func snapshot(target: WindowTarget, strictMode: Bool, backgroundActivated: Bool) async throws -> AppSnapshot {
-        let tree = target.axWindow.map(semanticRecords(window:)) ?? AXRecordCollection()
-        let (data, meta) = try await captureScreenshot(target: target)
+    func snapshot(target: WindowTarget, strictMode: Bool, backgroundActivated: Bool, crop: CGRect? = nil, imageWidth: Int = 768, waitFor: String? = nil, waitMilliseconds: Int = 2000) async throws -> AppSnapshot {
+        let tree = try await Self.awaitReady(waitFor: waitFor, waitMilliseconds: waitMilliseconds) {
+            target.axWindow.map(self.semanticRecords(window:)) ?? AXRecordCollection()
+        }
+        let (data, meta) = try await captureScreenshot(target: target, crop: crop, imageWidth: imageWidth)
 
         return AppSnapshot(
             id: "",
@@ -71,6 +72,26 @@ final class AccessibilityService: @unchecked Sendable {
             addedLabels: [],
             removedLabels: []
         )
+    }
+
+    static func awaitReady(waitFor: String?, waitMilliseconds: Int, collect: () -> AXRecordCollection) async throws -> AXRecordCollection {
+        var tree = collect()
+        // Bounded, read-only readiness polling; never replay input to wake a tree.
+        let attempts = max(0, min(waitMilliseconds, 5000)) / 150
+        for _ in 0..<attempts {
+            let ready: Bool
+            if let waitFor, !waitFor.isEmpty {
+                ready = tree.records.contains { "\($0.semantic.label) \($0.semantic.value ?? "")".localizedCaseInsensitiveContains(waitFor) }
+            } else { ready = tree.records.count > 3 }
+            if ready { break }
+            try await Task.sleep(nanoseconds: 150_000_000)
+            tree = collect()
+        }
+        if let waitFor, !waitFor.isEmpty,
+           !tree.records.contains(where: { "\($0.semantic.label) \($0.semantic.value ?? "")".localizedCaseInsensitiveContains(waitFor) }) {
+            throw ComputerUseError.staleSnapshot("Timed out waiting for AX control: \(waitFor). Recapture before acting; no input was sent.")
+        }
+        return tree
     }
 
     func records(target: WindowTarget) -> [AXElementRecord] {
@@ -379,11 +400,14 @@ final class AccessibilityService: @unchecked Sendable {
         return candidates.first
     }
 
-    private func captureScreenshot(target: WindowTarget) async throws -> (Data, ScreenshotMetadata) {
+    private func captureScreenshot(target: WindowTarget, crop: CGRect?, imageWidth: Int) async throws -> (Data, ScreenshotMetadata) {
         let cgImage = await screenCaptureKitImage(target: target) ?? legacyCaptureImage(target: target)
         guard let cgImage else { throw ComputerUseError.screenshotFailed }
 
-        return try encodeScreenshot(cgImage, capturedBounds: target.bounds)
+        let bounds = try ScreenshotCrop.bounds(window: target.bounds, requested: crop)
+        let pixels = ScreenshotCrop.pixels(window: target.bounds, crop: bounds, width: cgImage.width, height: cgImage.height)
+        guard let image = cgImage.cropping(to: pixels) else { throw ComputerUseError.screenshotFailed }
+        return try encodeScreenshot(image, capturedBounds: bounds, imageWidth: imageWidth)
     }
 
     private func legacyCaptureImage(target: WindowTarget) -> CGImage? {
@@ -409,6 +433,7 @@ final class AccessibilityService: @unchecked Sendable {
             configuration.width = max(1, Int(target.bounds.width * scale))
             configuration.height = max(1, Int(target.bounds.height * scale))
             configuration.showsCursor = false
+            configuration.ignoreShadowsSingleWindow = true
             let filter = SCContentFilter(desktopIndependentWindow: window)
             return try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: configuration)
         } catch {
@@ -417,26 +442,27 @@ final class AccessibilityService: @unchecked Sendable {
     }
 
     private func screenScale(for bounds: CGRect) -> CGFloat {
-        NSScreen.screens.first(where: { $0.frame.intersects(bounds) })?.backingScaleFactor
-            ?? NSScreen.main?.backingScaleFactor
-            ?? 2
+        // AX/CG window bounds use a top-left origin; NSScreen.frame does not.
+        let matching = NSScreen.screens.filter { screen in
+            guard let number = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber else { return false }
+            return CGDisplayBounds(CGDirectDisplayID(number.uint32Value)).intersects(bounds)
+        }
+        return matching.map(\.backingScaleFactor).max() ?? NSScreen.main?.backingScaleFactor ?? 2
     }
 
-    private func encodeScreenshot(_ cgImage: CGImage, capturedBounds: CGRect) throws -> (Data, ScreenshotMetadata) {
+    func encodeScreenshot(_ cgImage: CGImage, capturedBounds: CGRect, imageWidth: Int) throws -> (Data, ScreenshotMetadata) {
         let rawWidth = CGFloat(cgImage.width)
         let rawHeight = CGFloat(cgImage.height)
-        let targetWidth = min(screenshotImageWidth, rawWidth)
+        let targetWidth = min(CGFloat(max(256, min(imageWidth, 2048))), rawWidth)
         let targetHeight = rawHeight * (targetWidth / rawWidth)
 
-        let source = NSImage(cgImage: cgImage, size: NSSize(width: rawWidth, height: rawHeight))
-        let resized = NSImage(size: NSSize(width: targetWidth, height: targetHeight))
-        resized.lockFocus()
-        source.draw(in: NSRect(x: 0, y: 0, width: targetWidth, height: targetHeight))
-        resized.unlockFocus()
-
-        guard let tiff = resized.tiffRepresentation,
-              let rep = NSBitmapImageRep(data: tiff),
-              let jpeg = rep.representation(using: .jpeg, properties: [.compressionFactor: 0.45]) else {
+        guard let context = CGContext(data: nil, width: Int(targetWidth), height: Int(targetHeight), bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else {
+            throw ComputerUseError.screenshotFailed
+        }
+        context.interpolationQuality = .high
+        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: targetWidth, height: targetHeight))
+        guard let image = context.makeImage(),
+              let jpeg = NSBitmapImageRep(cgImage: image).representation(using: .jpeg, properties: [.compressionFactor: 0.7]) else {
             throw ComputerUseError.screenshotFailed
         }
 

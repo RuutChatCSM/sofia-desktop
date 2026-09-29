@@ -108,7 +108,10 @@ async function parseMultipartFormData(request: Request): Promise<FormData> {
 
 export function isSupportedWorkspaceTextFilePath(relativePath: string): boolean {
   const lowered = relativePath.toLowerCase();
+  if (["dockerfile", "gemfile", "rakefile", "makefile", ".gitignore", ".env"].includes(basename(lowered))) return true;
   return [
+    ".rb", ".py", ".rs", ".go", ".sh", ".bash", ".zsh", ".sql",
+    ".c", ".h", ".cpp", ".hpp", ".java", ".kt", ".swift", ".vue", ".svelte", ".ini", ".conf",
     ".md",
     ".mdx",
     ".markdown",
@@ -166,9 +169,19 @@ function decodeArtifactId(id: string): string {
   }
 }
 
+function contentDisposition(mode: "inline" | "attachment", path: string): string {
+  const name = basename(path);
+  const fallback = name.replace(/[^\x20-\x7E]/g, "_").replace(/["\\]/g, "\\$&");
+  const encoded = encodeURIComponent(name).replace(/['()*]/g, (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`);
+  return `${mode}; filename="${fallback}"; filename*=UTF-8''${encoded}`;
+}
+
 function contentTypeForPath(path: string): string {
   const lowered = path.toLowerCase();
   if (lowered.endsWith(".html") || lowered.endsWith(".htm")) return "text/html; charset=utf-8";
+  const mediaTypes: Record<string, string> = { avif: "image/avif", bmp: "image/bmp", ico: "image/x-icon", mp3: "audio/mpeg", wav: "audio/wav", ogg: "audio/ogg", opus: "audio/ogg", m4a: "audio/mp4", aac: "audio/aac", flac: "audio/flac", mp4: "video/mp4", webm: "video/webm", mov: "video/quicktime", m4v: "video/mp4", ogv: "video/ogg" };
+  const extension = lowered.split(".").pop() ?? "";
+  if (mediaTypes[extension]) return mediaTypes[extension];
   if (lowered.endsWith(".svg")) return "image/svg+xml";
   if (lowered.endsWith(".png")) return "image/png";
   if (lowered.endsWith(".jpg") || lowered.endsWith(".jpeg")) return "image/jpeg";
@@ -596,7 +609,7 @@ export function registerFileRoutes(options: RegisterFileRoutesOptions): void {
     const headers = new Headers();
     headers.set("Content-Type", "application/octet-stream");
     headers.set("Content-Length", String(info.size));
-    headers.set("Content-Disposition", `attachment; filename=\"${basename(relativePath)}\"`);
+    headers.set("Content-Disposition", contentDisposition("attachment", relativePath));
     const stream = Readable.toWeb(createReadStream(absPath)) as unknown as ReadableStream;
     return new Response(stream, { status: 200, headers });
   });
@@ -686,7 +699,7 @@ export function registerFileRoutes(options: RegisterFileRoutesOptions): void {
     const headers = new Headers();
     headers.set("Content-Type", "application/octet-stream");
     headers.set("Content-Length", String(info.size));
-    headers.set("Content-Disposition", `attachment; filename="${basename(relativePath)}"`);
+    headers.set("Content-Disposition", contentDisposition("attachment", relativePath));
     const stream = Readable.toWeb(createReadStream(absPath)) as unknown as ReadableStream;
     return new Response(stream, { status: 200, headers });
   });
@@ -1052,6 +1065,19 @@ export function registerFileRoutes(options: RegisterFileRoutesOptions): void {
     return jsonResponse({ items, cursor: events.cursor });
   });
 
+  addRoute(routes, "GET", "/workspace/:id/files/directory", "client", async (ctx) => {
+    const workspace = await resolveWorkspace(config, ctx.params.id);
+    const requested = ctx.url.searchParams.get("path") ?? "";
+    const directory = requested ? normalizeWorkspaceRelativePath(requested, { allowSubdirs: true }) : "";
+    const absolute = directory ? resolveSafeChildPath(workspace.path, directory) : workspace.path;
+    const children = await readdir(absolute, { withFileTypes: true });
+    const items = children.filter((entry) => entry.isDirectory() || entry.isFile()).map((entry) => ({
+      path: directory ? `${directory}/${entry.name}` : entry.name,
+      kind: entry.isDirectory() ? "dir" : "file",
+    }));
+    return jsonResponse({ items });
+  });
+
   addRoute(routes, "GET", "/workspace/:id/files/search", "client", async (ctx) => {
     const workspace = await resolveWorkspace(config, ctx.params.id);
     const rawLimit = Number(ctx.url.searchParams.get("limit") ?? 50);
@@ -1121,7 +1147,7 @@ export function registerFileRoutes(options: RegisterFileRoutesOptions): void {
     const headers = new Headers();
     headers.set("Content-Type", contentTypeForPath(relativePath));
     headers.set("Content-Length", String(info.size));
-    headers.set("Content-Disposition", `inline; filename="${basename(relativePath)}"`);
+    headers.set("Content-Disposition", contentDisposition("inline", relativePath));
     const stream = Readable.toWeb(createReadStream(absPath)) as unknown as ReadableStream;
     return new Response(stream, { status: 200, headers });
   });

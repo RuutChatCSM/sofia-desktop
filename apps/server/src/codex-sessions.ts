@@ -49,6 +49,38 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * keep their most recent items; the engine has no "load older" API yet.
  */
 export const MAX_TRANSCRIPT_ITEMS = 2000;
+
+/**
+ * Resolve the `beforeTurnId` that reverts a transcript to `messageId`.
+ *
+ * The engine reverts at a turn boundary only, so a message-level click is
+ * mapped onto the turn that contains it: that turn and every later turn are
+ * dropped. Returns null when nothing would remain — the message sits in the
+ * first turn, is missing from the transcript, or there is no later turn to
+ * anchor on (the message is in the newest turn, so there is nothing to drop).
+ */
+export function resolveRevertBoundary(
+  items: Array<{ turnId: string; item: Record<string, unknown> }>,
+  messageId: string,
+): string | null {
+  const turnIds: string[] = [];
+  for (const entry of items) {
+    if (entry.turnId && !turnIds.includes(entry.turnId)) turnIds.push(entry.turnId);
+  }
+  const boundaryTurnId = items.find((entry) => entry.item?.id === messageId)?.turnId;
+  if (!boundaryTurnId) return null;
+  const index = turnIds.indexOf(boundaryTurnId);
+  if (index < 0) return null;
+  // The engine drops `beforeTurnId` and everything after it, so anchor on the
+  // boundary turn itself — it is excluded along with all later turns.
+  //
+  // A message in the first turn would leave no prefix at all. The engine keeps
+  // no restore point (there is no unrevert primitive), so that would silently
+  // destroy the whole transcript. Refuse instead: a thread with one turn has
+  // nothing to rewind to.
+  if (index === 0) return null;
+  return boundaryTurnId;
+}
 /** Items requested per `thread/items/list` page; the engine caps this near 100. */
 const TRANSCRIPT_PAGE_SIZE = 100;
 /** Page budget so a pathological thread cannot spin the read forever. */
@@ -1255,6 +1287,36 @@ export class CodexSessionManager {
     return index > 0
       ? { lastTurnId: turnIds[index - 1] }
       : { beforeTurnId: boundaryTurnId };
+  }
+
+  /**
+   * Revert a session to the history before one message's turn (thread/revert).
+   *
+   * `messageId` is the boundary message from the transcript: the session keeps
+   * the conversation up to but excluding that message's turn, so the user
+   * message and everything the assistant said after it are dropped. Like
+   * fork, the transcript is mapped onto the turn boundary the protocol
+   * exposes, because the engine has no message-level revert.
+   */
+  async revertSession(sessionId: string, options: { messageId: string }): Promise<CodexSession> {
+    await this.start();
+    const session = this.sessions.get(sessionId);
+    if (!session || !this.engine) throw new Error(`unknown Sofia session: ${sessionId}`);
+    let items: Array<{ turnId: string; item: Record<string, unknown> }>;
+    try {
+      items = await this.getSessionItems(session.id, { limit: MAX_TRANSCRIPT_ITEMS });
+    } catch (error) {
+      throw new Error(`failed to read transcript for revert: ${String(error)}`);
+    }
+    const beforeTurnId = resolveRevertBoundary(items, options.messageId);
+    if (!beforeTurnId) throw new Error("nothing to revert at this message");
+    await this.engine.revertThread({ threadId: session.threadId, beforeTurnId });
+    // The engine points the thread at a replacement rollout, so the cached
+    // transcript is now stale; the client re-reads the rewound history.
+    session.turnId = null;
+    session.status = "idle";
+    this.emit({ type: "session.updated", session: { ...session } });
+    return { ...session };
   }
 
   /** Archive or unarchive a session (thread/archive, thread/unarchive). */

@@ -167,7 +167,7 @@ function connectPage(wsUrl) {
   });
   const send = (method, params = {}, timeout = 12000) => new Promise((res, rej) => {
     const i = id++; const t = setTimeout(() => { pending.delete(i); rej(new Error(`timeout ${method}`)); }, timeout);
-    pending.set(i, { res: (v) => { clearTimeout(t); res(v); }, rej: (e) => { clearTimeout(t); rej(e); } });
+    pending.set(i, { res: (v) => { clearTimeout(t); if (v?.exceptionDetails) rej(new Error(v.exceptionDetails.exception?.description || v.exceptionDetails.text || "Page JavaScript failed")); else res(v); }, rej: (e) => { clearTimeout(t); rej(e); } });
     ws.send(JSON.stringify({ id: i, method, params }));
   });
   return { ws, send, ready, events };
@@ -177,20 +177,10 @@ function connectPage(wsUrl) {
 // Drive real Input.dispatchMouseEvent (eased, jittered) instead of native
 // el.click(). Real events register with React-controlled inputs AND resemble a
 // human user, which lowers bot-detection scores.
-let lastMouse = null;
-async function moveMouseHuman(s, targetX, targetY) {
-  const sx = lastMouse?.x ?? (targetX - 60);
-  const sy = lastMouse?.y ?? (targetY + 40);
-  const steps = 8;
-  for (let i = 1; i <= steps; i++) {
-    const t = i / steps;
-    const ease = t * t * (3 - 2 * t); // smoothstep
-    const x = Math.round(sx + (targetX - sx) * ease + (i === steps ? 0 : (Math.random() - 0.5) * 3));
-    const y = Math.round(sy + (targetY - sy) * ease + (i === steps ? 0 : (Math.random() - 0.5) * 3));
-    await s("Input.dispatchMouseEvent", { type: "mouseMoved", x, y, button: "none" }).catch(() => {});
-    await new Promise((r) => setTimeout(r, 12 + Math.random() * 18));
-  }
-  lastMouse = { x: targetX, y: targetY };
+async function moveMouseHuman(send, x, y) {
+  // The broker owns the native motion path. Replaying a second path here
+  // multiplies latency and can turn one click into dozens of nested moves.
+  await send("Input.dispatchMouseEvent", { type: "mouseMoved", x, y, button: "none" });
 }
 async function humanClick(s, x, y) {
   await moveMouseHuman(s, x, y);
@@ -204,8 +194,10 @@ async function humanClick(s, x, y) {
 // `RESOLVE` is a JS function (run in the page) that maps a target spec
 // ({selector|index|text|role|label|placeholder|testid}) to a DOM element. Every
 // action runs it and then operates on the returned node.
-const SAFE_LABEL = `function(e){const tag=(e.tagName||'').toLowerCase();const type=String(e.type||'').toLowerCase();const autocomplete=String(e.getAttribute?.('autocomplete')||'').toLowerCase();const protectedField=tag==='input'&&(type==='password'||/(?:current|new)-password|cc-csc/.test(autocomplete));return e.getAttribute?.('aria-label')||e.getAttribute?.('title')||e.innerText||(!protectedField?e.value:'')||e.getAttribute?.('placeholder')||'';}`;
-const RESOLVE = `function(t){t=t||{};const safeLabel=${SAFE_LABEL};const coll=()=>Array.from(document.querySelectorAll('a,button,input,select,textarea,label,[role],[aria-label],[data-testid]')).filter(e=>{const vis=e.getClientRects().length>0&&getComputedStyle(e).visibility!=='hidden';const l=safeLabel(e);return vis&&l&&l.trim();});const c=[];let e;if(t.selector){e=document.querySelector(t.selector);if(e)c.push(e);}if(t.index!=null){c.push(coll()[t.index]);}const txt=(t.text||'').trim().toLowerCase();if(txt){const m=coll().find(x=>safeLabel(x).trim().toLowerCase().includes(txt));if(m)c.push(m);}if(t.role){const r=t.role.toLowerCase();const m=coll().find(x=>(x.getAttribute('role')||x.tagName.toLowerCase())===r);if(m)c.push(m);}if(t.placeholder){e=document.querySelector('input[placeholder="'+t.placeholder+'"],textarea[placeholder="'+t.placeholder+'"]');if(e)c.push(e);}if(t.testid){e=document.querySelector('[data-testid="'+t.testid+'"]');if(e)c.push(e);}if(t.label){const m=coll().find(x=>(x.textContent||'').trim()===t.label);if(m)c.push(m);}return c.find(Boolean)||null;}`;
+const ELEMENT_ROLE = `function(e){const explicit=e.getAttribute('role');if(explicit)return explicit;const tag=e.tagName.toLowerCase();if(tag==='input'){if(e.type==='checkbox'||e.type==='radio')return e.type;if(e.type==='button'||e.type==='submit'||e.type==='reset')return 'button';if(e.type==='number')return 'spinbutton';if(e.type==='search')return 'searchbox';return 'textbox';}if(tag==='textarea')return 'textbox';if(tag==='select')return 'combobox';if(tag==='a')return 'link';return tag;}`;
+const SAFE_LABEL = `function(e){const referenced=(e.getAttribute('aria-labelledby')||'').split(/\\s+/).filter(Boolean).map(id=>document.getElementById(id)?.textContent||'').join(' ');const associated=Array.from(e.labels||[]).map(label=>label.textContent||'').join(' ');return e.getAttribute('aria-label')||referenced||associated||e.getAttribute('title')||e.innerText||e.getAttribute('placeholder')||'';}`;
+const ELEMENTS_EXPR = `Array.from(document.querySelectorAll('a,button,input:not([type="hidden"]),select,textarea,label,[role],[aria-label],[data-testid]')).filter(e=>e.getClientRects().length>0&&getComputedStyle(e).visibility!=='hidden'&&(e.matches('input,textarea,select')||(${SAFE_LABEL})(e).trim()))`;
+const RESOLVE = `function(t){t=t||{};const safeLabel=${SAFE_LABEL};const role=${ELEMENT_ROLE};const coll=()=>${ELEMENTS_EXPR};if(t.selector){const e=document.querySelector(t.selector);return e&&e.getClientRects().length>0?e:null;}if(t.index!=null)return coll()[t.index]||null;let matches=coll();if(t.role)matches=matches.filter(e=>role(e)===t.role.toLowerCase());if(t.text)matches=matches.filter(e=>safeLabel(e).trim().toLowerCase().includes(t.text.trim().toLowerCase()));if(t.placeholder)matches=matches.filter(e=>e.getAttribute('placeholder')===t.placeholder);if(t.testid)matches=matches.filter(e=>e.getAttribute('data-testid')===t.testid);if(t.label){matches=matches.filter(e=>safeLabel(e).trim()===t.label);const control=matches.find(e=>e.matches('input,textarea,select'));if(control)return control;const label=matches.find(e=>e.tagName==='LABEL'&&e.control);if(label)return label.control;}return matches[0]||null;}`;
 const runAct = (target, action) => `(() => { const e=(${RESOLVE})(${JSON.stringify(target)}); if(!e) return {ok:false,error:'not found'}; try{e.scrollIntoView({block:'center'});}catch{} e.focus(); ${action} })()`;
 
 // Throws when the bridge is unreachable: an empty list would read as "no tabs
@@ -281,7 +273,20 @@ function stealthCheckObj() {
 
 // The canonical interactive-element collection used by both `snapshot` and
 // `click({index})`, so a snapshot's element `index` always maps to the same node.
-const ELEMENTS_EXPR = `Array.from(document.querySelectorAll('a,button,input,select,textarea,label,[role],[aria-label],[data-testid]')).filter((e)=>{const vis=e.getClientRects().length>0&&getComputedStyle(e).visibility!=='hidden';const label=(${SAFE_LABEL})(e);return vis&&label&&label.trim();})`;
+
+
+const FRAME_METADATA = `Array.from(document.querySelectorAll('iframe')).map((frame,index)=>{let readable=false;try{readable=!!frame.contentDocument;}catch{}return {index,title:frame.title,name:frame.name,url:frame.src||'about:srcdoc',sandbox:frame.getAttribute('sandbox'),hasSrcdoc:frame.hasAttribute('srcdoc'),readable};})`;
+function validateObservationOptions(options) {
+  if (!options || typeof options !== "object" || Array.isArray(options)) throw new Error("Observation options must be an object");
+  for (const key of Object.keys(options)) if (!['includeText', 'maxText'].includes(key)) throw new Error(`Unsupported observation option: ${key}. Supported: includeText, maxText`);
+  if (options.includeText !== undefined && typeof options.includeText !== 'boolean') throw new Error("includeText must be boolean");
+  if (options.maxText !== undefined && (!Number.isInteger(options.maxText) || options.maxText < 1 || options.maxText > 20000)) throw new Error("maxText must be an integer between 1 and 20000");
+}
+function observe(value) {
+  const output = callOutput.getStore();
+  if (output) output.observation = value;
+  return value;
+}
 
 // --- Build agent.browsers ------------------------------------------------------
 function makeTab(tabEntry) {
@@ -298,9 +303,9 @@ function makeTab(tabEntry) {
     await cursor.ready();
     return cursor;
   };
-  const centreOf = async (send, target) => {
+  const centreOf = async (send, target, requirePointer = false) => {
     const r = await send("Runtime.evaluate", {
-      expression: runAct(target, "const b=e.getBoundingClientRect(); return {ok:true, x:Math.round(b.x+b.width/2), y:Math.round(b.y+b.height/2)};"),
+      expression: runAct(target, `const b=e.getBoundingClientRect();const x=Math.round(b.x+b.width/2),y=Math.round(b.y+b.height/2);if(${requirePointer}){if(e.disabled||e.getAttribute('aria-disabled')==='true')return {ok:false,error:'Target is disabled'};const hit=document.elementFromPoint(x,y);if(!hit||!(hit===e||e.contains(hit)))return {ok:false,error:'Target is covered or outside the viewport'};}return {ok:true,x,y};`),
       returnByValue: true,
     });
     return r?.result?.value;
@@ -317,6 +322,7 @@ function makeTab(tabEntry) {
       if (!stealthApplied) {
         stealthApplied = true;
         try {
+          await page.send("Runtime.enable", {});
           await page.send("Network.enable", {});
           await page.send("Page.enable", {});
           await page.send("Network.setUserAgentOverride", {
@@ -335,41 +341,58 @@ function makeTab(tabEntry) {
   };
   const tab = {
     id: tabEntry.id,
+    toJSON: () => ({ id: tabEntry.id, url: tabEntry.url, title: tabEntry.title }),
     url: async () => (await jsonList()).find((t) => t.id === pageTargetId)?.url ?? tabEntry.url,
     title: async () => (await jsonList()).find((t) => t.id === pageTargetId)?.title ?? tabEntry.title,
-    goto: async (url) => { const s = await ensure(); if (cursor) await cursor.fade(); await s("Page.navigate", { url }); await waitForLoad(s); return true; },
-    back: async () => { const s = await ensure(); if (cursor) await cursor.fade(); try { const h = await s("Page.getNavigationHistory", {}); const cur = h?.currentIndex ?? 0; if (cur > 0) { await s("Page.navigateToHistoryEntry", { entryId: h.entries[cur - 1].id }); return true; } return true; } catch { await s("Page.goBack", {}).catch(() => {}); return true; } },
-    forward: async () => { const s = await ensure(); if (cursor) await cursor.fade(); try { const h = await s("Page.getNavigationHistory", {}); const cur = h?.currentIndex ?? 0; if (cur < (h?.entries?.length ?? 0) - 1) { await s("Page.navigateToHistoryEntry", { entryId: h.entries[cur + 1].id }); return true; } return true; } catch { await s("Page.goForward", {}).catch(() => {}); return true; } },
-    reload: async () => { const s = await ensure(); if (cursor) await cursor.fade(); await s("Page.reload", {}); return true; },
+    goto: async (url) => { const s = await ensure(); await s("Page.navigate", { url }); await waitForLoad(s); return true; },
+    back: async () => { const s = await ensure(); try { const h = await s("Page.getNavigationHistory", {}); const cur = h?.currentIndex ?? 0; if (cur > 0) { await s("Page.navigateToHistoryEntry", { entryId: h.entries[cur - 1].id }); return true; } return true; } catch { await s("Page.goBack", {}).catch(() => {}); return true; } },
+    forward: async () => { const s = await ensure(); try { const h = await s("Page.getNavigationHistory", {}); const cur = h?.currentIndex ?? 0; if (cur < (h?.entries?.length ?? 0) - 1) { await s("Page.navigateToHistoryEntry", { entryId: h.entries[cur + 1].id }); return true; } return true; } catch { await s("Page.goForward", {}).catch(() => {}); return true; } },
+    reload: async () => { const s = await ensure(); await s("Page.reload", {}); return true; },
     close: async () => { await (await ensure())("Target.closeTarget", { targetId: pageTargetId }); page?.ws.close(); return true; },
-    screenshot: async () => { const s = await ensure(); const r = await s("Page.captureScreenshot", { format: "png", captureBeyondViewport: true }, 15000); return { data: r?.data ?? "", mimeType: "image/png" }; },
+    screenshot: async () => { const s = await ensure(); const r = await s("Page.captureScreenshot", { format: "png", captureBeyondViewport: true }, 15000); return observe({ data: r?.data ?? "", mimeType: "image/png" }); },
     saveScreenshot: async (path) => { const img = await tab.screenshot(); const fs = nodeRequire("node:fs"); fs.writeFileSync(path, Buffer.from(img.data, "base64")); return { saved: true, path, bytes: Buffer.byteLength(img.data, "base64") }; },
     elementScreenshot: async (target) => { try { const s = await ensure(); const r = await s("Runtime.evaluate", { expression: runAct(target, `const b=e.getBoundingClientRect();return {ok:true,clip:{x:Math.max(0,b.x),y:Math.max(0,b.y),width:b.width,height:b.height}};`), returnByValue: true }); const clip = r?.result?.value?.clip; if (!clip) return { ok: false, error: "not found" }; const shot = await s("Page.captureScreenshot", { format: "png", clip, captureBeyondViewport: true }, 15000); return { data: shot?.data ?? "", mimeType: "image/png" }; } catch { const img = await tab.screenshot(); return img; } },
-    snapshot: async () => { const s = await ensure(); const expr = `(() => { const els=${ELEMENTS_EXPR}; const safeLabel=${SAFE_LABEL}; const elements=els.map((el,index)=>{const tag=el.tagName.toLowerCase();const role=el.getAttribute('role')||tag;const label=safeLabel(el);return {index,role,tag,label:label.trim().slice(0,120)};}); return JSON.stringify({title:document.title,url:location.href,elements}); })()`; const r = await s("Runtime.evaluate", { expression: expr, returnByValue: true }); return { text: r?.result?.value ?? "" }; },
-    // The agent's single "look": title, url, and the interactive elements
-    // (index/role/label) in one call, so it never chains snapshot+ax.
-    see: async () => { const t = await tab.snapshot(); let s = null; try { s = JSON.parse(t.text); } catch { s = { title: "", url: "", elements: [] }; } return { title: s.title ?? "", url: s.url ?? "", elements: s.elements ?? [], ax: null }; },
+    snapshot: async (options = {}) => {
+      validateObservationOptions(options);
+      const { includeText = true, maxText = 8000 } = options;
+      const send = await ensure();
+      const expression = `(() => {const els=${ELEMENTS_EXPR};const safeLabel=${SAFE_LABEL};const elements=els.map((el,index)=>{const tag=el.tagName.toLowerCase();const role=(${ELEMENT_ROLE})(el);const label=safeLabel(el);const state={};if(el.matches('input,textarea,select')){if(el.type!=='password')state.value=el.value;state.disabled=!!el.disabled;state.readOnly=!!el.readOnly;state.valid=el.validity.valid;state.validationMessage=el.validationMessage;if(el.type==='checkbox'||el.type==='radio')state.checked=el.checked;}return {index,role,tag,label:label.trim().slice(0,120),...state};});const fullText=${includeText}?(document.body?.innerText||''):'';return JSON.stringify({title:document.title,url:location.href,elements,text:fullText.slice(0,${maxText}),textTruncated:fullText.length>${maxText},frames:${FRAME_METADATA}});})()`;
+      const result = await send("Runtime.evaluate", { expression, returnByValue: true });
+      return observe({ text: result.result.value });
+    },
+    see: async (options = {}) => { const snapshot = await tab.snapshot(options); return observe({ ...JSON.parse(snapshot.text), ax: null }); },
     domSnapshot: async () => { const s = await ensure(); const r = await s("Runtime.evaluate", { expression: `JSON.stringify({title:document.title,url:location.href,html:document.documentElement.outerHTML.slice(0,20000)})`, returnByValue: true }); return { text: r?.result?.value ?? "" }; },
-    evaluate: async (script) => { const s = await ensure(); const r = await s("Runtime.evaluate", { expression: script, returnByValue: true, awaitPromise: true }); return r?.result?.value ?? r?.result?.description ?? null; },
+    evaluate: async (script) => { if (typeof script !== "string") throw new Error('tab.evaluate expects a JavaScript string, e.g. await tab.evaluate("document.body.innerText"); functions and {expression} objects are not supported'); const s = await ensure(); const r = await s("Runtime.evaluate", { expression: script, returnByValue: true, awaitPromise: true }); return r?.result?.value ?? r?.result?.description ?? null; },
     waitForLoadState: async () => { const s = await ensure(); return await waitForLoad(s); },
     waitForTimeout: async (ms = 1000) => { await new Promise((r) => setTimeout(r, ms)); return true; },
     waitFor: async (target, { state = "visible", timeout = 8000 } = {}) => { const s = await ensure(); const deadline = Date.now() + timeout; while (Date.now() < deadline) { const r = await s("Runtime.evaluate", { expression: `(() => { const e=(${RESOLVE})(${JSON.stringify(target)}); if(!e) return false; const vis=e.getClientRects().length>0&&getComputedStyle(e).visibility!=='hidden'; const present=document.documentElement.contains(e); return ${JSON.stringify(state)==='visible' ? 'vis' : JSON.stringify(state)==='attached' ? 'present' : 'vis'}; })()`, returnByValue: true }); if (r?.result?.value) return true; await new Promise((r) => setTimeout(r, 200)); } return false; },
     getByText: async (text, { exact } = {}) => { const s = await ensure(); const r = await s("Runtime.evaluate", { expression: `(() => { const els=${ELEMENTS_EXPR}; const safeLabel=${SAFE_LABEL}; const needle=${JSON.stringify(String(text).toLowerCase())}; const i=els.findIndex(e=>{const val=safeLabel(e).trim();return ${exact ? 'val.toLowerCase()===needle' : 'val.toLowerCase().includes(needle)'};}); if(i<0) return {ok:false}; const e=els[i]; return {ok:true,index:i,tag:e.tagName.toLowerCase(),label:(e.textContent||'').trim().slice(0,80)}; })()`, returnByValue: true }); return r?.result?.value ?? { ok: false }; },
-    getByRole: async (role) => { const s = await ensure(); const r = await s("Runtime.evaluate", { expression: `(() => { const els=${ELEMENTS_EXPR}; const mapf=(e)=>{const r=e.getAttribute('role');if(r)return r;const tag=e.tagName.toLowerCase();if(tag==='a')return 'link';if(tag==='button'||e.type==='button'||e.type==='submit')return 'button';if(tag==='input')return e.type==='checkbox'?'checkbox':e.type==='radio'?'radio':e.type==='file'?'button':'textbox';if(tag==='select')return 'combobox';if(tag==='textarea')return 'textbox';if(tag==='img')return 'img';if(/^h[1-6]$/.test(tag))return 'heading';return tag;}; const needle=${JSON.stringify(String(role).toLowerCase())}; const i=els.findIndex(e=>mapf(e)===needle); if(i<0) return {ok:false}; const e=els[i]; return {ok:true,index:i,tag:e.tagName.toLowerCase(),role:mapf(e),label:(e.textContent||'').trim().slice(0,80)}; })()`, returnByValue: true }); return r?.result?.value ?? { ok: false }; },
-    getByLabel: async (label) => { const s = await ensure(); const r = await s("Runtime.evaluate", { expression: `(() => { const els=${ELEMENTS_EXPR}; const needle=${JSON.stringify(String(label))}; const i=els.findIndex(e=>(e.getAttribute('aria-label')||'').trim()===needle||(e.textContent||'').trim()===needle); if(i<0) return {ok:false}; const e=els[i]; return {ok:true,index:i,tag:e.tagName.toLowerCase(),label:(e.textContent||e.getAttribute('aria-label')||'').trim().slice(0,80)}; })()`, returnByValue: true }); return r?.result?.value ?? { ok: false }; },
+    getByRole: async (role) => { const s = await ensure(); const r = await s("Runtime.evaluate", { expression: `(() => { const els=${ELEMENTS_EXPR}; const mapf=${ELEMENT_ROLE}; const needle=${JSON.stringify(String(role).toLowerCase())}; const i=els.findIndex(e=>mapf(e)===needle); if(i<0) return {ok:false}; const e=els[i]; return {ok:true,index:i,tag:e.tagName.toLowerCase(),role:mapf(e),label:(e.textContent||'').trim().slice(0,80)}; })()`, returnByValue: true }); return r?.result?.value ?? { ok: false }; },
+    getByLabel: async (label) => { const s = await ensure(); const r = await s("Runtime.evaluate", { expression: `(() => { const els=${ELEMENTS_EXPR}; const needle=${JSON.stringify(String(label))}; const i=els.findIndex(e=>(${SAFE_LABEL})(e).trim()===needle&&e.matches('input,textarea,select,button')); if(i<0) return {ok:false}; const e=els[i]; return {ok:true,index:i,tag:e.tagName.toLowerCase(),label:(e.textContent||e.getAttribute('aria-label')||'').trim().slice(0,80)}; })()`, returnByValue: true }); return r?.result?.value ?? { ok: false }; },
     getByPlaceholder: async (placeholder) => { const s = await ensure(); const r = await s("Runtime.evaluate", { expression: `(() => { const els=${ELEMENTS_EXPR}; const needle=${JSON.stringify(String(placeholder))}; const i=els.findIndex(e=>(e.getAttribute('placeholder')||'')===needle); if(i<0) return {ok:false}; const e=els[i]; return {ok:true,index:i,tag:e.tagName.toLowerCase(),label:e.getAttribute('placeholder')||''}; })()`, returnByValue: true }); return r?.result?.value ?? { ok: false }; },
     getByTestId: async (testid) => { const s = await ensure(); const r = await s("Runtime.evaluate", { expression: `(() => { const els=${ELEMENTS_EXPR}; const needle=${JSON.stringify(String(testid))}; const i=els.findIndex(e=>(e.getAttribute('data-testid')||'')===needle); if(i<0) return {ok:false}; const e=els[i]; return {ok:true,index:i,tag:e.tagName.toLowerCase(),label:(e.textContent||'').trim().slice(0,80)}; })()`, returnByValue: true }); return r?.result?.value ?? { ok: false }; },
     querySelector: async (selector) => { const s = await ensure(); const r = await s("Runtime.evaluate", { expression: `(() => { const e=document.querySelector(${JSON.stringify(selector)}); if(!e) return {ok:false}; return {ok:true,tag:e.tagName.toLowerCase(),text:(e.textContent||'').trim().slice(0,120)}; })()`, returnByValue: true }); return r?.result?.value ?? { ok: false }; },
     locator: async (selector) => { const s = await ensure(); const r = await s("Runtime.evaluate", { expression: `(() => { const els=Array.from(document.querySelectorAll(${JSON.stringify(selector)})).filter(e=>e.getClientRects().length>0); return els.map((e,i)=>({index:i,tag:e.tagName.toLowerCase(),text:(e.textContent||'').trim().slice(0,80)})); })()`, returnByValue: true }); return r?.result?.value ?? []; },
-    click: async (target = {}) => { const s = await ensure(); const hasTarget = target && (target.selector != null || target.index != null || target.text != null || target.role != null || target.label != null || target.placeholder != null || target.testid != null); if (hasTarget) { const c = await centreOf(s, target); if (!c?.ok) return { ok: false, error: "target not found" }; await (await cursorFor(s)).click(c.x, c.y); return await humanClick(s, c.x, c.y); } const x = Number(target?.x) || 0, y = Number(target?.y) || 0; if (!(target?.x != null && target?.y != null)) return { ok: false, error: "no target and no coordinates" }; await (await cursorFor(s)).click(x, y); return await humanClick(s, x, y); },
-    dblclick: async (target) => { const s = await ensure(); const r = await s("Runtime.evaluate", { expression: runAct(target, `const b=e.getBoundingClientRect(); const o={bubbles:true,cancelable:true,view:window}; e.dispatchEvent(new MouseEvent('dblclick',o)); e.click(); e.click(); return {ok:true, x:Math.round(b.x+b.width/2), y:Math.round(b.y+b.height/2)};`), returnByValue: true }); const v = r?.result?.value; if (v?.ok) await (await cursorFor(s)).doubleClick(v.x, v.y); return v ?? { ok: false }; },
-    hover: async (target) => { const s = await ensure(); const r = await s("Runtime.evaluate", { expression: runAct(target, `const b=e.getBoundingClientRect(); const o={bubbles:true,cancelable:true,view:window}; e.dispatchEvent(new MouseEvent('mouseover',o)); e.dispatchEvent(new MouseEvent('mouseenter',o)); e.dispatchEvent(new MouseEvent('mousemove',o)); return {ok:true, x:Math.round(b.x+b.width/2), y:Math.round(b.y+b.height/2)};`), returnByValue: true }); const v = r?.result?.value; if (v?.ok) await (await cursorFor(s)).move(v.x, v.y); return v ?? { ok: false }; },
-    fill: async (target, value) => { const s = await ensure(); const r = await s("Runtime.evaluate", { expression: runAct(target, `const b=e.getBoundingClientRect(); const v=${JSON.stringify(value)}; const setter=Object.getOwnPropertyDescriptor(e.__proto__||e,'value')?.set||((x)=>{e.value=x;}); try{setter.call(e,v);}catch(_){e.value=v;} e.dispatchEvent(new Event('input',{bubbles:true})); e.dispatchEvent(new Event('change',{bubbles:true})); return {ok:true, x:Math.round(b.x+b.width/2), y:Math.round(b.y+b.height/2)};`), returnByValue: true }); const v = r?.result?.value; if (v?.ok) await (await cursorFor(s)).click(v.x, v.y); return v ?? { ok: false, error: "fill failed" }; },
+    click: async (target = {}) => { const s = await ensure(); const hasTarget = target && (target.selector != null || target.index != null || target.text != null || target.role != null || target.label != null || target.placeholder != null || target.testid != null); if (hasTarget) { const c = await centreOf(s, target, true); if (!c?.ok) throw new Error(c?.error || "Click target not found"); await (await cursorFor(s)).click(c.x, c.y); return await humanClick(s, c.x, c.y); } const x = Number(target?.x) || 0, y = Number(target?.y) || 0; if (!(target?.x != null && target?.y != null)) return { ok: false, error: "no target and no coordinates" }; await (await cursorFor(s)).click(x, y); return await humanClick(s, x, y); },
+    dblclick: async (target) => { const send = await ensure(); const point = await centreOf(send, target, true); if (!point?.ok) throw new Error(point?.error || "Double-click target not found"); await (await cursorFor(send)).doubleClick(point.x, point.y); await humanClick(send, point.x, point.y); await send("Input.dispatchMouseEvent", { type: "mousePressed", x: point.x, y: point.y, button: "left", clickCount: 2 }); await send("Input.dispatchMouseEvent", { type: "mouseReleased", x: point.x, y: point.y, button: "left", clickCount: 2 }); return { ok: true }; },
+    hover: async (target) => { const send = await ensure(); const point = await centreOf(send, target); if (!point?.ok) throw new Error("Hover target not found"); await (await cursorFor(send)).move(point.x, point.y); await moveMouseHuman(send, point.x, point.y); return { ok: true }; },
+    inputValue: async (target) => { const send = await ensure(); const result = await send("Runtime.evaluate", { expression: `(() => {const e=(${RESOLVE})(${JSON.stringify(target)});if(!e||!e.matches('input,textarea,select'))return {error:'Target is not a form control'};if(e.type==='password')return {error:'Password values are not exposed'};return {value:e.value};})()`, returnByValue: true }); const state = result?.result?.value; if (!state || state.error) throw new Error(state?.error || "Could not read field"); return state.value; },
+    fill: async (target, value) => {
+      const send = await ensure();
+      const resolved = await send("Runtime.evaluate", { expression: runAct(target, `if(!e.matches('input,textarea')&&!e.isContentEditable)return {ok:false,error:'target is not an editable field'};if(e.disabled||e.readOnly)return {ok:false,error:'field is disabled or read-only'};if(e.matches('input')&&['checkbox','radio','file','button','submit','reset'].includes(e.type))return {ok:false,error:'field cannot be filled'};const b=e.getBoundingClientRect();if(e.isContentEditable){const range=document.createRange();range.selectNodeContents(e);const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);}else e.select();return {ok:true,x:Math.round(b.x+b.width/2),y:Math.round(b.y+b.height/2)};`), returnByValue: true });
+      const field = resolved?.result?.value;
+      if (!field?.ok) throw new Error(field?.error || "Fill target not found");
+      await (await cursorFor(send)).move(field.x, field.y);
+      await send("Input.insertText", { text: String(value) });
+      const verified = await send("Runtime.evaluate", { expression: `(() => {const e=document.activeElement;return !!e&&(e.isContentEditable?e.textContent:e.value)===${JSON.stringify(String(value))};})()`, returnByValue: true });
+      if (!verified?.result?.value) throw new Error("Field did not retain the entered value; inspect the page before retrying");
+      return { ok: true };
+    },
     select: async (target, value) => { const s = await ensure(); const r = await s("Runtime.evaluate", { expression: runAct(target, `if(e.tagName!=='SELECT') return {ok:false,error:'not a select'}; const b=e.getBoundingClientRect(); e.value=${JSON.stringify(value)}; e.dispatchEvent(new Event('change',{bubbles:true})); return {ok:true, value:e.value, x:Math.round(b.x+b.width/2), y:Math.round(b.y+b.height/2)};`), returnByValue: true }); const v = r?.result?.value; if (v?.ok) await (await cursorFor(s)).click(v.x, v.y); return v ?? { ok: false }; },
-    check: async (target) => { const s = await ensure(); const r = await s("Runtime.evaluate", { expression: runAct(target, `const b=e.getBoundingClientRect(); if(e.type==='checkbox'||e.getAttribute('role')==='checkbox'){e.checked=!e.checked; e.dispatchEvent(new Event('change',{bubbles:true}));} e.click(); return {ok:true, checked:!!e.checked, x:Math.round(b.x+b.width/2), y:Math.round(b.y+b.height/2)};`), returnByValue: true }); const v = r?.result?.value; if (v?.ok) await (await cursorFor(s)).click(v.x, v.y); return v ?? { ok: false }; },
-    press: async (target, key) => { const s = await ensure(); const r = await s("Runtime.evaluate", { expression: runAct(target, `const o={bubbles:true,cancelable:true,key:${JSON.stringify(key)},code:${JSON.stringify(key)},which:${JSON.stringify(key.length===1?key.charCodeAt(0):0)}}; e.dispatchEvent(new KeyboardEvent('keydown',o)); e.dispatchEvent(new KeyboardEvent('keypress',o)); e.dispatchEvent(new KeyboardEvent('keyup',o)); return {ok:true};`), returnByValue: true }); return r?.result?.value ?? { ok: false }; },
-    type: async ({ text } = {}) => { const s = await ensure(); const r = await s("Runtime.evaluate", { expression: `(() => { const el=document.activeElement; if(!el) return {ok:false}; const cur=(el.value||''); const v=cur+${JSON.stringify(text || '')}; const setter=Object.getOwnPropertyDescriptor(el.__proto__||el,'value')?.set||((x)=>{el.value=x;}); try{setter.call(el,v);}catch(_){el.value=v;} el.dispatchEvent(new Event('input',{bubbles:true})); el.dispatchEvent(new Event('change',{bubbles:true})); return {ok:true}; })()`, returnByValue: true }); if (!r?.result?.value?.ok) await s("Input.insertText", { text }); return { ok: true }; },
-    keypress: async ({ combo }) => { const s = await ensure(); const c = String(combo || "").split("+"); const [mod, key] = c.length > 1 ? [c[0], c.slice(1).join("+")] : [null, c[0]]; const mods = { command: "Meta", cmd: "Meta", meta: "Meta", ctrl: "Control", control: "Control", alt: "Alt", option: "Alt", shift: "Shift" }; const modifiers = mod ? (mods[mod.toLowerCase()] ?? mod) : null; const rawKey = { control: "Control", ctrl: "Control", command: "Meta", meta: "Meta", alt: "Alt", option: "Alt", shift: "Shift", return: "Enter", enter: "Enter", escape: "Escape", tab: "Tab", space: " ", " ": " " }[key.toLowerCase()] ?? key; await s("Input.dispatchKeyEvent", { type: "rawKeyDown", key: rawKey, code: rawKey, windowsVirtualKeyCode: key.length === 1 ? key.toUpperCase().charCodeAt(0) : 0, modifiers: modifiers ? { "Meta": 4, "Control": 2, "Alt": 1, "Shift": 8 }[modifiers] ?? 0 : 0 }); await s("Input.dispatchKeyEvent", { type: "keyUp", key: rawKey, code: rawKey }); return true; },
+    check: async (target) => { const send = await ensure(); const read = async () => { const result = await send("Runtime.evaluate", { expression: `(() => {const e=(${RESOLVE})(${JSON.stringify(target)});if(!e||!(e.type==='checkbox'||e.type==='radio'||e.getAttribute('role')==='checkbox'))return {error:'Target is not a checkbox or radio'};return {checked:e.matches('input')?e.checked:e.getAttribute('aria-checked')==='true'};})()`, returnByValue: true }); const state = result?.result?.value; if (!state || state.error) throw new Error(state?.error || "Check target not found"); return state.checked; }; if (!await read()) await tab.click(target); if (!await read()) throw new Error("Checkbox did not become checked"); return { ok: true, checked: true }; },
+    press: async (target, key) => { const send = await ensure(); const result = await send("Runtime.evaluate", { expression: runAct(target, "return {ok:true};"), returnByValue: true }); if (!result?.result?.value?.ok) throw new Error("Key target not found"); return await tab.keypress({ combo: key }); },
+    type: async ({ text } = {}) => { const send = await ensure(); const result = await send("Runtime.evaluate", { expression: "(() => {const e=document.activeElement;return !!e&&(e.matches('input,textarea')||e.isContentEditable)&&!e.disabled&&!e.readOnly;})()", returnByValue: true }); if (!result?.result?.value) throw new Error("Focus an editable field before typing"); await send("Input.insertText", { text: String(text ?? '') }); return { ok: true }; },
+    keypress: async ({ combo }) => { const s = await ensure(); const c = String(combo || "").split("+"); const [mod, key] = c.length > 1 ? [c[0], c.slice(1).join("+")] : [null, c[0]]; const mods = { command: "Meta", cmd: "Meta", meta: "Meta", ctrl: "Control", control: "Control", alt: "Alt", option: "Alt", shift: "Shift" }; const modifiers = mod ? (mods[mod.toLowerCase()] ?? mod) : null; const rawKey = { control: "Control", ctrl: "Control", command: "Meta", meta: "Meta", alt: "Alt", option: "Alt", shift: "Shift", return: "Enter", enter: "Enter", escape: "Escape", tab: "Tab", space: " ", " ": " " }[key.toLowerCase()] ?? key; await s("Input.dispatchKeyEvent", { type: rawKey === "Enter" && !modifiers ? "keyDown" : "rawKeyDown", ...(rawKey === "Enter" && !modifiers ? { text: "\r", unmodifiedText: "\r" } : {}), key: rawKey, code: rawKey, windowsVirtualKeyCode: { Enter: 13, Tab: 9, Escape: 27, Backspace: 8, Delete: 46, ArrowLeft: 37, ArrowUp: 38, ArrowRight: 39, ArrowDown: 40, " ": 32 }[rawKey] ?? (key.length === 1 ? key.toUpperCase().charCodeAt(0) : 0), modifiers: modifiers ? { "Meta": 4, "Control": 2, "Alt": 1, "Shift": 8 }[modifiers] ?? 0 : 0 }); await s("Input.dispatchKeyEvent", { type: "keyUp", key: rawKey, code: rawKey }); return true; },
     ax: {
       get: async () => { const s = await ensure(); try { await s("Accessibility.enable", {}).catch(() => {}); const { nodes } = await s("Accessibility.getFullAXTree", {}, 15000); const interactive = ["button","link","textbox","checkbox","radio","combobox","menuitem","menuitemcheckbox","tab","heading","img","listitem","option","switch","slider","spinbutton"]; return (nodes ?? []).filter((n) => n.role?.value && interactive.includes(n.role.value)).map((n) => ({ ref: n.backendDOMNodeId ?? n.nodeId, role: n.role.value, name: n.name?.value ?? "" })).slice(0, 200); } catch { return []; } },
       click: async ({ ref }) => { const t = await tab.ax.get(); const found = t.find((x) => String(x.ref) === String(ref)); if (!found?.name) return { ok: false, error: "ax ref not found" }; return await tab.click({ text: found.name }); },
@@ -394,7 +417,22 @@ function makeTab(tabEntry) {
       dismiss: async () => { const s = await ensure(); await s("Page.handleJavaScriptDialog", { accept: false }).catch(() => {}); return true; },
     },
     frames: {
-      list: async () => { const s = await ensure(); const r = await s("Runtime.evaluate", { expression: `JSON.stringify(Array.from(document.querySelectorAll('iframe')).map((f,i)=>({index:i,src:f.src,name:f.name})))`, returnByValue: true }); try { return JSON.parse(r?.result?.value ?? "[]"); } catch { return []; } },
+      list: async () => { const send = await ensure(); const result = await send("Runtime.evaluate", { expression: FRAME_METADATA, returnByValue: true }); return observe(result.result.value); },
+      read: async ({ index, maxText = 8000 } = {}) => {
+        if (!Number.isInteger(index) || index < 0) throw new Error("frames.read expects {index: nonnegative frame index from see() or frames.list()}");
+        validateObservationOptions({ maxText });
+        const send = await ensure();
+        const result = await send("Runtime.evaluate", { expression: `(() => {
+          const frame=document.querySelectorAll('iframe')[${index}];if(!frame)throw new Error('Frame not found; refresh frames.list()');
+          let doc=null;try{doc=frame.contentDocument;}catch{}let source='live';
+          if(!doc){const srcdoc=frame.getAttribute('srcdoc');if(srcdoc===null)throw new Error('Frame is cross-origin or sandboxed without srcdoc; its content cannot be read through this API');doc=new DOMParser().parseFromString(srcdoc,'text/html');source='srcdoc';doc.querySelectorAll('script,style,template').forEach(e=>e.remove());}
+          const text=source==='live'?(doc.body?.innerText||''):(doc.body?.textContent||'').replace(/\\s+/g,' ').trim();
+          const base=doc.querySelector('base[href]')?.getAttribute('href');const baseUrl=base?new URL(base,frame.src||location.href).href:(source==='srcdoc'?location.href:doc.URL);
+          const links=Array.from(doc.querySelectorAll('a[href]')).map(a=>({text:(a.textContent||'').trim(),href:new URL(a.getAttribute('href'),baseUrl).href}));
+          return {index:${index},title:frame.title,url:frame.src||'about:srcdoc',source,text:text.slice(0,${maxText}),textTruncated:text.length>${maxText},links};
+        })()`, returnByValue: true });
+        return observe(result.result.value);
+      },
     },
     visibility: { get: async () => true, set: async () => true },
     cdp: { send: async (method, params) => { const s = await ensure(); return await s(method, params ?? {}); } },
@@ -404,15 +442,23 @@ function makeTab(tabEntry) {
       check: async () => { const s = await ensure(); const r = await s("Runtime.evaluate", { expression: `(() => { const txt=(document.body.innerText||'').toLowerCase(); const has = /captcha|verify you are human|are you a robot|unusual traffic|security check|turnstile|challenge/i.test(txt) || !!document.querySelector('iframe[src*="captcha"],iframe[src*="turnstile"],iframe[src*="recaptcha"],iframe[src*="challenge"],iframe[src*="hcaptcha"]'); return { captcha: has, text: has ? (document.body.innerText||'').match(/captcha|verify you are human|unusual traffic|security check/i)?.[0]||'captcha' : null }; })()`, returnByValue: true }); return r?.result?.value ?? { captcha: false, text: null }; },
       report: async () => { return { ok: true, reported: true, advice: "A CAPTCHA/human-verification wall was hit. Stop and hand off to the user — do not retry in this session. Recommend the user completes it in a normal browser." }; },
     },
-    documentation: async () => tabDoc(),
+    documentation: async () => observe(tabDoc()),
   };
   return tab;
 }
 
-function makeBrowser(browserId) {  const browser = {
+function makeBrowser(browserId) {
+  const getTab = async (id) => {
+    const entry = (await jsonList()).find((entry) => entry.id === id && entry.type === "page" && !isSofiaApp(entry.url));
+    if (!entry) throw new Error(`Browser tab ${id} is unavailable; call browser.tabs.list() and choose an existing tab before acting`);
+    return makeTab({ id: entry.id, targetId: entry.id, url: entry.url, title: entry.title });
+  };
+  const browser = {
     id: browserId,
     tabs: {
-      list: async () => { const list = await jsonList(); return list.filter((t) => t.type === "page" && !isSofiaApp(t.url)).map((t) => makeTab({ id: t.id, targetId: t.id, url: t.url, title: t.title })); },
+      get: getTab,
+      attach: getTab,
+      list: async () => { const list = await jsonList(); return observe(list.filter((t) => t.type === "page" && !isSofiaApp(t.url)).map((t) => ({ id: t.id, url: t.url, title: t.title }))); },
       openTabs: async () => await browser.tabs.list(),
       open: async (url = "about:blank") => {
         await waitBrowser();
@@ -425,7 +471,7 @@ function makeBrowser(browserId) {  const browser = {
       },
     },
     user: { openTabs: async () => await browser.tabs.list() },
-    documentation: async () => browserDoc(),
+    documentation: async () => observe(browserDoc()),
   };
   return browser;
 }
@@ -455,13 +501,15 @@ globalThis.setupBrowserRuntime = async function setupBrowserRuntime() { await br
 function browserDoc() {
   return `# In-App Browser
 
-const agent = await setupBrowserRuntime();
-const browser = agent.browsers.get("iab");
+globalThis.agent = await setupBrowserRuntime();
+globalThis.browser = agent.browsers.get("iab");
 await agent.browsers.getDefault();             // runtime-selected browser
 await agent.browsers.getForUrl("https://…");  // browser suitable for a URL
 await browser.user.openTabs();                 // tabs in this user session
-const tab = await browser.tabs.open("https://…");   // open a visible tab
-const view = await tab.see();                        // {url, title, elements[{index,role,label}]}
+globalThis.tab = await browser.tabs.get("id from tabs.list()"); // reattach without navigation
+// Only when a new tab is needed: globalThis.tab = await browser.tabs.open("https://…");
+globalThis.tabId = tab.id;                           // retain exact identity
+await tab.see();                                     // page text, fields, frame metadata
 await tab.click({index:0});                          // act by index/text/role
 await tab.see();                                     // verify changed state
 await tab.fill({role:"textbox"}, "value");
@@ -472,23 +520,29 @@ Reliable browser protocol:
 - Read this documentation once per fresh session.
 - Inspect with tab.see() (or tab.ax.get()) before choosing an action.
 - Use index/text/role from the latest snapshot.
-- After navigation or any action that changes page state, inspect again before choosing the next action.
+- After navigation or any action that changes page state, inspect again before choosing the next action. see() exposes non-password field value, validity, disabled/readOnly and checked state; inputValue(target) reads a field explicitly. Verify submission by a changed page or response, never just an action returning ok. Use network.responses() and dev.logs() when submission stalls; do not assume the cause.
 - Batch actions only when they are independent and the required state is already known.
+- see() includes bounded page text by default; see({includeText:false}) omits it, and maxText (1–20000) controls truncation. Unknown options throw. If a message body is missing, inspect the returned frames, then frames.read({index}); sandboxed srcdoc is parsed as inert source and marked source:"srcdoc". Cross-origin frames without srcdoc report an explicit limitation.
+- evaluate accepts a JavaScript STRING, not a function or {expression}; use await tab.evaluate("document.body.innerText"). Page exceptions throw.
+- Bare awaited see(), snapshot(), frames.read(), tabs.list(), and screenshot() return their observation when no explicit output was printed. Use console.log(value) for text and display(await tab.screenshot()) for images when combining reads.
 - Screenshot ONLY when the a11y tree is ambiguous; otherwise read the tree.
 - Re-use the open tab; don't open new tabs repeatedly.
+- browser.tabs.list() returns plain {id,url,title} metadata, not tab handles. Use tabs.get(metadata.id) before actions; never choose the first tab as a recovery fallback. browser.tabs.get(id) reacquires an existing tab without reloading; tabs.attach(id) is an alias.
+- Tool-call local const/let variables do NOT survive the call. Store reusable handles on globalThis.tab/globalThis.iab, or reacquire by ID. After MCP restart, reacquire the existing tab; do not reload a partially completed form.
+- ReferenceError or an unknown method is a JavaScript/API error, not proof of a disconnected bridge.
 - If a call reports "in-app browser bridge is not answering", the app window that owns the bridge has probably restarted. Report that to the user; never reconnect to Chromium over raw CDP by hand.
 - CAPTCHA? Call tab.botDetection.check() once. If .captcha is true, STOP, report, hand off — never loop.`;
 }
 function tabDoc() {
   return `# Tab
-see() -> {url,title,elements[{index,role,label}]}      // the agent's single "look"
+see({includeText,maxText}?) -> {url,title,text,textTruncated,frames,elements[{index,role,label}]}      // the agent's single "look"
 url() title() goto(url) back() forward() reload() close()
-screenshot() saveScreenshot(path) snapshot() evaluate(js)
+screenshot() saveScreenshot(path) snapshot() inputValue(target) evaluate(js)
 click({index|text|role|label|selector}) dblclick hover fill({target},value) select check press
 type({text}) keypress({combo}) waitFor({text},{state}) waitForTimeout(ms)
 ax.get() ax.click({ref}) ax.setValue({ref},v) ax.pressKey ax.typeText ax.scroll
 clipboard.readText() clipboard.writeText(v) content.export() dev.logs()
-dialog.get() dialog.accept(text) dialog.dismiss() frames.list()
+dialog.get() dialog.accept(text) dialog.dismiss() frames.list() frames.read({index,maxText?})
 cdp.send(method, params) stealth() botDetection.get() botDetection.report()`;
 }
 
@@ -524,8 +578,9 @@ async function handleRequest(id, method, params) {
 function jsTool() {
   return {
     name: "js",
-    description: `Drive the visible, signed-in Sofia browser by running JavaScript. Initialize with setupBrowserRuntime(), read browser.documentation() before first use, inspect the latest page state with tab.see() or tab.ax.get(), then act by index/text/role. Re-inspect after navigation or state-changing actions before deciding what to do next. Pattern:
-const browser = (await setupBrowserRuntime()).browsers.get("iab"); await browser.documentation(); const tab = await browser.tabs.open("url"); const view = await tab.see(); await tab.click({index:view.elements[0].index}); await tab.see();
+    description: `Drive the visible, signed-in Sofia browser by running JavaScript. Initialize with setupBrowserRuntime(), read browser.documentation() before first use, reuse the current tab with browser.tabs.list() then browser.tabs.get(id) across calls (tabs.open creates a NEW tab every time; a missing local binding is not a lost page), inspect the latest page state with tab.see() or tab.ax.get(), then act by index/text/role. Re-inspect after navigation or state-changing actions before deciding what to do next. Pattern:
+globalThis.browser = (await setupBrowserRuntime()).browsers.get("iab"); await browser.documentation(); console.log(await browser.tabs.list()); // select the intended id
+globalThis.tab = await browser.tabs.get("chosen id"); globalThis.tabId = tab.id; await tab.see();
 Use tab.getByText/getByRole/fill/select/check/waitFor; use screenshots when the semantic tree is ambiguous.
 If a call reports "in-app browser bridge is not answering", the app window that owns the bridge has restarted: say so and stop, never reconnect over raw CDP by hand.
 CAPTCHA: if tab.botDetection.check().captcha is true, STOP — call tab.botDetection.report() and hand control to the user. Never loop or retry a captcha.`,
@@ -571,10 +626,16 @@ const runtimeContext = vm.createContext(runtimeSandbox, {
 
 async function runJs(code) {
   return callOutput.run([], async () => {
-    const value = await vm.runInContext(`(async()=>{ ${code} })()`, runtimeContext, { timeout: 1000 });
+    let value;
+    try {
+      value = await vm.runInContext(`(async()=>{ ${code} })()`, runtimeContext, { timeout: 1000 });
+    } catch (error) {
+      if (error?.name === "ReferenceError") throw new Error(`${error.message}. Local const/let bindings do not persist across calls. Reuse globalThis bindings or reacquire the existing tab with browser.tabs.list() and browser.tabs.get(id); do not reload the form.`);
+      throw error;
+    }
     const output = callOutput.getStore();
     if (value !== undefined) output.push(...mcpContent(value));
-    return output.length ? output : mcpContent("done");
+    return output.length ? output : mcpContent(output.observation ?? "done");
   });
 }
 

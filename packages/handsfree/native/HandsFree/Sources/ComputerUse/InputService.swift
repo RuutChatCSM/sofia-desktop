@@ -12,7 +12,7 @@ final class InputService: @unchecked Sendable {
         event.post(tap: .cghidEventTap)
     }
 
-    func click(point: CGPoint, doubleClick: Bool = false) async throws {
+    func click(point: CGPoint, doubleClick: Bool = false, rightClick: Bool = false) async throws {
         guard let source = CGEventSource(stateID: .combinedSessionState) else {
             throw ComputerUseError.eventSourceFailed
         }
@@ -24,8 +24,8 @@ final class InputService: @unchecked Sendable {
 
         let count = doubleClick ? 2 : 1
         for clickState in 1...count {
-            guard let down = CGEvent(mouseEventSource: source, mouseType: .leftMouseDown, mouseCursorPosition: point, mouseButton: .left),
-                  let up = CGEvent(mouseEventSource: source, mouseType: .leftMouseUp, mouseCursorPosition: point, mouseButton: .left) else {
+            guard let down = CGEvent(mouseEventSource: source, mouseType: rightClick ? .rightMouseDown : .leftMouseDown, mouseCursorPosition: point, mouseButton: rightClick ? .right : .left),
+                  let up = CGEvent(mouseEventSource: source, mouseType: rightClick ? .rightMouseUp : .leftMouseUp, mouseCursorPosition: point, mouseButton: rightClick ? .right : .left) else {
                 throw ComputerUseError.eventCreationFailed
             }
             down.setIntegerValueField(.mouseEventClickState, value: Int64(clickState))
@@ -39,20 +39,20 @@ final class InputService: @unchecked Sendable {
         guard let source = CGEventSource(stateID: .combinedSessionState) else {
             throw ComputerUseError.eventSourceFailed
         }
-        let units = Array(text.utf16)
-        for start in stride(from: 0, to: units.count, by: 20) {
-            let end = min(start + 20, units.count)
-            let chunk = Array(units[start..<end])
-            guard let event = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true) else {
+        for chunk in UnicodeInput.chunks(text) {
+            guard let down = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true),
+                  let up = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false) else {
                 throw ComputerUseError.eventCreationFailed
             }
-            event.keyboardSetUnicodeString(stringLength: chunk.count, unicodeString: chunk)
-            event.post(tap: .cghidEventTap)
+            for event in [down, up] {
+                event.keyboardSetUnicodeString(stringLength: chunk.count, unicodeString: chunk)
+                event.post(tap: .cghidEventTap)
+            }
             Thread.sleep(forTimeInterval: 0.01)
         }
     }
 
-    func pressKey(_ combo: String) throws {
+    func pressKey(_ combo: String, milliseconds: Int = 0) throws {
         let parsed = try BackgroundInputDispatcher.parseCombo(combo)
         guard let source = CGEventSource(stateID: .combinedSessionState) else {
             throw ComputerUseError.eventSourceFailed
@@ -64,6 +64,7 @@ final class InputService: @unchecked Sendable {
         down.flags = parsed.flags
         up.flags = parsed.flags
         down.post(tap: .cghidEventTap)
+        Thread.sleep(forTimeInterval: Double(max(0, min(milliseconds, 5000))) / 1000)
         up.post(tap: .cghidEventTap)
     }
 

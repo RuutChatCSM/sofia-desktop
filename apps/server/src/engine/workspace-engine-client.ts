@@ -107,6 +107,7 @@ export type WorkspaceEngineClient = {
     }): Promise<EngineResult<Record<string, never>>>;
     abort(input: { sessionID: string }): Promise<EngineResult<Record<string, never>>>;
     delete(input: { sessionID: string }): Promise<EngineResult<Record<string, never>>>;
+    revert(input: { sessionID: string; messageID: string }): Promise<EngineResult<EngineSessionInfo>>;
   };
   provider: {
     list(input?: { directory?: string }): Promise<EngineResult<EngineProviderList>>;
@@ -319,6 +320,19 @@ export function createWorkspaceEngineClient(
         try {
           await (await manager()).delete(input.sessionID);
           return ok<Record<string, never>>({});
+        } catch (error) {
+          return fail(error);
+        }
+      },
+
+      async revert(input) {
+        try {
+          const engine = await manager();
+          if (!engine.getSession(input.sessionID)) {
+            return fail({ code: 404, message: "session_not_found" }, 404);
+          }
+          const session = await engine.revertSession(input.sessionID, { messageId: input.messageID });
+          return ok(toSessionInfo(session));
         } catch (error) {
           return fail(error);
         }

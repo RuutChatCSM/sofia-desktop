@@ -158,7 +158,7 @@ describe("viewport plans", () => {
     assert.equal(narrow.emulation?.width, 1440);
     assert.equal(narrow.emulation?.height, 900);
     assert.equal(narrow.emulation?.scale, (600 - RESPONSIVE_FRAME_MARGIN_PX * 2) / 1440);
-    assert.deepEqual(narrow.bounds, { x: 0, y: 0, width: 600, height: 920 });
+    assert.deepEqual(narrow.bounds, { x: 16, y: 283, width: 568, height: 355 });
   });
 
   it("peeks a panel tab through page zoom, not device emulation", () => {
@@ -167,6 +167,7 @@ describe("viewport plans", () => {
     // whole app. Zooming keeps the same 1280px layout inside the card.
     assert.equal(browserPeekLayoutZoom({ x: 0, y: 0, width: 440, height: 275 }), 440 / 1280);
     assert.equal(browserPeekLayoutZoom({ x: 0, y: 0, width: 420, height: 560 }), 420 / 1280);
+    assert.equal(browserPeekLayoutZoom({ x: 0, y: 0, width: 166, height: 360 }, 390), 166 / 390);
     // A card that has not been measured yet renders at 100%, never at 0%.
     assert.equal(browserPeekLayoutZoom(null), 1);
     assert.equal(browserPeekLayoutZoom({ width: 0, height: 0 }), 1);
@@ -182,6 +183,14 @@ describe("viewport plans", () => {
     assert.equal(plan.emulation, null);
     assert.deepEqual(plan.bounds, bounds);
     assert.deepEqual(plan.overflow, { x: 0, y: 0 });
+    const phoneBounds = { x: 10, y: 20, width: 166, height: 360 };
+    const phonePlan = resolveViewportPlan({
+      viewport: { mode: "panel" },
+      zoom: { mode: "custom", scale: browserPeekLayoutZoom(phoneBounds, 390) },
+      panelBounds: phoneBounds,
+    });
+    assert.equal(phonePlan.emulation, null);
+    assert.deepEqual(phonePlan.bounds, phoneBounds);
     // …and the zoom is what the page is really rendered at.
     assert.equal(
       resolvePageZoomFactor({ mode: "custom", scale: 440 / 1280 }, { mode: "panel" }),
@@ -197,8 +206,8 @@ describe("viewport plans", () => {
     const bounds = { x: 0, y: 0, width: 900, height: 920 };
     const plan = resolveViewportPlan({ viewport: RESPONSIVE_1440, zoom: { mode: "fit" }, panelBounds: bounds });
     const scale = plan.emulation?.scale ?? 0;
-    const offsetX = (plan.emulation?.positionX ?? 0) * scale;
-    const offsetY = (plan.emulation?.positionY ?? 0) * scale;
+    const offsetX = plan.bounds.x - bounds.x;
+    const offsetY = plan.bounds.y - bounds.y;
     const frameWidth = 1440 * scale;
     const frameHeight = 900 * scale;
 
@@ -346,8 +355,8 @@ describe("overflowing viewports", () => {
     });
     assert.equal(plan.emulation?.positionX, unpanNudged.emulation?.positionX);
     assert.equal(plan.emulation?.positionY, unpanNudged.emulation?.positionY);
-    assert.ok((plan.emulation?.positionX ?? 0) > 0);
-    assert.ok((plan.emulation?.positionY ?? 0) > 0);
+    assert.ok(plan.bounds.x > NARROW_PANEL.x);
+    assert.ok(plan.bounds.y > NARROW_PANEL.y);
   });
 
   it("reports the viewport to CDP instead of rewriting the tab viewport", async () => {

@@ -9,6 +9,7 @@ import type {
 } from "@/app/lib/engine-types";
 import type { createClient } from "./lib/engine";
 import type { WorkspaceInfo } from "./lib/desktop-types";
+import type { MessageReference } from "@/react-app/domains/session/surface/composer/message-reference";
 
 export type Client = ReturnType<typeof createClient>;
 
@@ -111,6 +112,7 @@ export type ComposerAttachment = {
   kind: "image" | "file";
   file: File;
   previewUrl?: string;
+  annotationContext?: string;
 };
 
 export type SlashCommandOption = {
@@ -124,6 +126,7 @@ export type ComposerDraft = {
   mode: PromptMode;
   parts: ComposerPart[];
   attachments: ComposerAttachment[];
+  references?: MessageReference[];
   /** Editor-visible text (may include collapsed paste placeholders). */
   text: string;
   /**

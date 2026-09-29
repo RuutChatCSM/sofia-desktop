@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { CodexSessionManager, codexSessionId, isCodexSessionId, isMissingRolloutError, isThreadWriterConflict, threadBelongsToWorkspace, threadTitleFromEngineText, THREAD_TITLE_MAX_LENGTH } from "./codex-sessions.js";
+import { CodexSessionManager, codexSessionId, isCodexSessionId, isMissingRolloutError, isThreadWriterConflict, threadBelongsToWorkspace, threadTitleFromEngineText, resolveRevertBoundary, THREAD_TITLE_MAX_LENGTH } from "./codex-sessions.js";
 
 const roots: string[] = [];
 
@@ -627,5 +627,42 @@ describe("engine-derived task titles", () => {
     expect(threadTitleFromEngineText("   \n```\n```\n   ")).toBe("");
     expect(threadTitleFromEngineText(undefined)).toBe("");
     expect(threadTitleFromEngineText("```\n…```")).toBe("");
+  });
+});
+
+describe("resolveRevertBoundary", () => {
+  const items = [
+    { turnId: "t1", item: { id: "m1" } },
+    { turnId: "t1", item: { id: "a1" } },
+    { turnId: "t2", item: { id: "m2" } },
+    { turnId: "t2", item: { id: "a2" } },
+    { turnId: "t3", item: { id: "m3" } },
+    { turnId: "t3", item: { id: "a3" } },
+  ];
+
+  test("anchors on the turn holding the clicked message", () => {
+    // Reverting to m2 drops t2 and t3, keeping only t1.
+    expect(resolveRevertBoundary(items, "m2")).toBe("t2");
+  });
+
+  test("reverting the first turn has no prefix to keep", () => {
+    // Anchoring on t1 would wipe the whole transcript, so there is no boundary.
+    expect(resolveRevertBoundary(items, "m1")).toBeNull();
+  });
+
+  test("reverting the newest turn keeps everything earlier", () => {
+    expect(resolveRevertBoundary(items, "m3")).toBe("t3");
+  });
+
+  test("resolves an assistant message to its own turn", () => {
+    expect(resolveRevertBoundary(items, "a2")).toBe("t2");
+  });
+
+  test("returns null for a message that is not in the transcript", () => {
+    expect(resolveRevertBoundary(items, "missing")).toBeNull();
+  });
+
+  test("returns null for an empty transcript", () => {
+    expect(resolveRevertBoundary([], "m1")).toBeNull();
   });
 });

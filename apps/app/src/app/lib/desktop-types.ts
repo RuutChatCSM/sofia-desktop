@@ -107,7 +107,7 @@ export type BrowserPeekChrome = {
 
 /** Pointer motion on the preview, relative to where the drag started. */
 export type BrowserPeekPointer = {
-  phase: "down" | "move" | "up";
+  phase: "down" | "move" | "up" | "cancel";
   dx: number;
   dy: number;
 };

@@ -113,7 +113,7 @@ function PaletteButton({ testId, selected, onClick, children }: PaletteButtonPro
       onClick={onClick}
       className={cn(
         "h-6 gap-1 rounded-md px-2 text-[11px] font-normal",
-        selected ? "bg-foreground/10 text-foreground" : "text-muted-foreground hover:bg-foreground/5",
+        selected ? "bg-foreground/5 ring-1 ring-inset ring-border text-foreground" : "text-muted-foreground hover:bg-foreground/5",
       )}
     >
       {selected ? <Check className="size-3" /> : null}
@@ -153,6 +153,7 @@ export function BrowserViewportPalette({ viewport, onSelect }: BrowserViewportPa
         >
           Panel
         </PaletteButton>
+        <span aria-hidden="true" className="mx-1 h-4 border-l border-border" />
         {BROWSER_VIEWPORT_PRESETS.map((preset) => (
           <PaletteButton
             key={preset.id}

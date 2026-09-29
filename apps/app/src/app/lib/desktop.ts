@@ -47,6 +47,7 @@ import type {
   AgentBrowserLeaseAction,
   AgentBrowserLeaseRequest,
   BrowserAgentState,
+  BrowserRect,
   BrowserPanOffset,
   BrowserPeekChrome,
   BrowserPeekPointer,
@@ -208,8 +209,14 @@ declare global {
         ) => Promise<BrowserAgentState>;
         setProxy?: (proxy?: string | null) => Promise<BrowserProxyState>;
         getProxy?: () => Promise<BrowserProxyState>;
-        showToolbarMenu?: (tabId: string, kind: "browser" | "viewport" | "zoom", point: { x: number; y: number }) => Promise<void>;
+        showToolbarMenu?: (tabId: string, kind: "browser" | "viewport" | "zoom" | "extensions", point: { x: number; y: number }) => Promise<void>;
+        listExtensions?: () => Promise<Array<{ id: string; name: string; version: string; path: string }>>;
+        installExtension?: () => Promise<{ id: string; name: string; version: string; path: string } | null>;
+        removeExtension?: (extensionId: string) => Promise<boolean>;
+        onExtensionsChanged?: (callback: (extensions: Array<{ id: string; name: string; version: string; path: string }>) => void) => () => void;
         find?: (tabId: string, text: string, forward?: boolean) => Promise<number | void>;
+        annotationCapture?: (tabId: string) => Promise<string>;
+        annotationTarget?: (tabId: string, x: number, y: number) => Promise<{ boundingBox: BrowserRect; selector: string; text: string; role?: string } | null>;
         onControlsChange?: (callback: (state: { tabId: string; viewport: BrowserViewport; zoom: BrowserZoom }) => void) => () => void;
         onFindRequested?: (callback: (state: { tabId: string }) => void) => () => void;
         onPresentationRequested?: (callback: (mode: BrowserPresentationMode) => void) => () => void;
@@ -221,7 +228,7 @@ declare global {
         /** Every tab is gone (closed or destroyed). */
         onBrowserTabsClosed?: (callback: () => void) => () => void;
         /** A human clicked the floating preview; agent CDP input never fires this. */
-        onBrowserPeekActivated?: (callback: () => void) => () => void;
+        onBrowserPeekActivated?: (callback: (intent?: "expand") => void) => () => void;
         /** A human dismissed the floating preview. The browser itself keeps running. */
         onBrowserPeekHidden?: (callback: () => void) => () => void;
         /**
@@ -503,6 +510,7 @@ export async function evalRelaunchDesktopApp(): Promise<EvalRelaunchResult> {
 }
 
 export type DesktopApplication = {
+  isDefault?: boolean;
   name: string;
   appPath: string;
   icon: string | null;

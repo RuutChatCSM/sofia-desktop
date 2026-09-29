@@ -183,7 +183,17 @@ contextBridge.exposeInMainWorld("__SOFIA_ELECTRON__", {
     setProxy(proxy) { return ipcRenderer.invoke("sofia:browser:setProxy", proxy); },
     getProxy() { return ipcRenderer.invoke("sofia:browser:getProxy"); },
     showToolbarMenu(tabId, kind, point) { return ipcRenderer.invoke("sofia:browser:toolbarMenu", tabId, kind, point); },
+    listExtensions() { return ipcRenderer.invoke("sofia:browser:extensions:list"); },
+    installExtension() { return ipcRenderer.invoke("sofia:browser:extensions:install"); },
+    removeExtension(extensionId) { return ipcRenderer.invoke("sofia:browser:extensions:remove", extensionId); },
+    onExtensionsChanged(callback) {
+      const handler = (_event, extensions) => callback(extensions);
+      ipcRenderer.on("sofia:browser:extensions-changed", handler);
+      return () => ipcRenderer.removeListener("sofia:browser:extensions-changed", handler);
+    },
     find(tabId, text, forward) { return ipcRenderer.invoke("sofia:browser:find", tabId, text, forward); },
+    annotationCapture(tabId) { return ipcRenderer.invoke("sofia:browser:annotationCapture", tabId); },
+    annotationTarget(tabId, x, y) { return ipcRenderer.invoke("sofia:browser:annotationTarget", tabId, x, y); },
     onControlsChange(callback) {
       const handler = (_event, state) => callback(state);
       ipcRenderer.on("sofia:browser:controls-changed", handler);
@@ -219,7 +229,7 @@ contextBridge.exposeInMainWorld("__SOFIA_ELECTRON__", {
     },
     /** A human activated the read-only Peek surface (the agent's CDP input never does). */
     onBrowserPeekActivated(callback) {
-      const handler = () => callback();
+      const handler = (_event, payload) => callback(payload?.intent);
       ipcRenderer.on("sofia:browser:peek-activated", handler);
       return () => ipcRenderer.removeListener("sofia:browser:peek-activated", handler);
     },

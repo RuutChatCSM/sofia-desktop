@@ -1,3 +1,4 @@
+import { getCapabilityCallSentence } from "./capability-call"
 import type { DynamicToolUIPart, ToolUIPart } from "ai"
 import {
   isApplyPatchToolPart,
@@ -103,6 +104,8 @@ export function getToolActivityLabel(part: AnyToolPart): string {
     return activityTitleForCommand(input.command?.trim() ?? "", input.description?.trim() ?? "")
   }
   if (part.type === "dynamic-tool") {
+    const sentence = getCapabilityCallSentence(part)
+    if (sentence.service === "Browser") return sentence.present
     return `Running ${part.toolName.replace(/[_-]+/g, " ")}`
   }
   return "Working"

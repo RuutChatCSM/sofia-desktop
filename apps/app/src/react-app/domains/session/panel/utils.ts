@@ -140,16 +140,25 @@ const NATIVE_BROWSER_OCCLUDER_SELECTOR = [
   '[data-slot="popover-content"]',
 ].join(", ");
 
-export function hasNativeBrowserOccluder() {
+export function hasNativeBrowserOccluder(canvas?: HTMLElement | null) {
+  const canvasBounds = canvas?.getBoundingClientRect();
   const overlays = document.querySelectorAll(NATIVE_BROWSER_OCCLUDER_SELECTOR);
   for (const overlay of overlays) {
     if (!(overlay instanceof HTMLElement)) {
       continue;
     }
 
-    if (overlay.offsetParent !== null || overlay.getClientRects().length > 0) {
-      return true;
-    }
+    if (overlay.offsetParent === null && overlay.getClientRects().length === 0) continue;
+    // Dialog backdrops dim the whole window, even when the dialog body is not
+    // directly above the browser. Menus and popovers only need to displace the
+    // native page when their visible bounds actually cross the page canvas.
+    if (overlay.matches('[role="dialog"], [role="alertdialog"]')) return true;
+    if (!canvasBounds) return true;
+    const bounds = overlay.getBoundingClientRect();
+    if (
+      bounds.left < canvasBounds.right && bounds.right > canvasBounds.left &&
+      bounds.top < canvasBounds.bottom && bounds.bottom > canvasBounds.top
+    ) return true;
   }
   return false;
 }

@@ -78,7 +78,7 @@ function PanelTabClose({
       variant="ghost"
       size="icon-xs"
       className={cn(
-        "absolute right-1 top-1/2 -translate-y-1/2 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover:opacity-100 focus:opacity-100",
+        "absolute z-10 right-1 top-1/2 -translate-y-1/2 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover/panel-tab:opacity-100 group-focus-within/panel-tab:opacity-100 focus:opacity-100",
         active && "text-foreground hover:bg-muted hover:text-foreground",
         className,
       )}

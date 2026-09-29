@@ -3,6 +3,8 @@ import { test } from "@sofia/testkit";
 
 import {
   createBrowserPresentationState,
+  browserPeekSize,
+  snapPeekPosition,
   reduceBrowserPresentation,
   type BrowserPresentationEvent,
   type BrowserPresentationState,
@@ -44,7 +46,25 @@ test("presentation policy decides what the user sees, not the agent", async ({ e
   );
 });
 
-test("Expand returns to exactly where it came from", async ({ evidence }) => {
+test("Peek stays compact at device aspect ratios and snaps to the nearest edge", async ({ evidence }) => {
+  const desktop = browserPeekSize({ mode: "panel" });
+  const phone = browserPeekSize({ mode: "responsive", width: 390, height: 844, deviceScaleFactor: 3 });
+  expect(desktop).toEqual({ width: 320, height: 200 });
+  expect(phone.height).toBeLessThanOrEqual(320);
+  expect(Math.abs(phone.width / phone.height - 390 / 844)).toBeLessThan(0.005);
+
+  const surface = { width: 1200, height: 800 };
+  expect(snapPeekPosition({ x: 19, y: 300 }, surface, desktop)).toEqual({ x: 16, y: 300 });
+  expect(snapPeekPosition({ x: 870, y: 590 }, surface, desktop)).toEqual({ x: 864, y: 584 });
+  expect(snapPeekPosition({ x: 500, y: 320 }, surface, desktop)).toEqual({ x: 500, y: 320 });
+  evidence.recordAssertionEvidence(
+    "Peek preserves content aspect, caps portrait height, and snaps only near workspace edges",
+    "Desktop is 320×200; 390×844 remains proportional under 320px tall. A dragged card snaps within 32px of an edge but retains a free interior position.",
+    true,
+  );
+});
+
+test("Minimize returns to split with the saved width", async ({ evidence }) => {
   const docked684 = run([
     { type: "agent-browser-started" },
     { type: "user-dock-browser", width: 684 },
@@ -58,12 +78,24 @@ test("Expand returns to exactly where it came from", async ({ evidence }) => {
   expect(restored.preferences.dockedWidth).toBe(684);
 
   const fromPeek = run([{ type: "agent-browser-started" }, { type: "user-expand-browser" }]);
-  expect(reduceBrowserPresentation(fromPeek, { type: "user-restore-browser" }).runtime.mode).toBe("peek");
+  expect(reduceBrowserPresentation(fromPeek, { type: "user-restore-browser" }).runtime.mode).toBe("docked");
   evidence.recordAssertionEvidence(
     "Restore returns to the previous presentation, including its docked width",
-    "A 684px docked panel that expands restores to docked at 684px, and a Peek that expands restores to Peek.",
+    "A 684px docked panel that expands restores at 684px; expanding from Peek then minimizing opens the normal split.",
     true,
   );
+});
+
+test("user browser choices survive subsequent agent activity", async ({ evidence }) => {
+  const split = run([{ type: "agent-browser-started" }, { type: "user-open-browser" }]);
+  expect(split.runtime.mode).toBe("docked");
+  expect(reduceBrowserPresentation(split, { type: "agent-browser-started" })).toEqual(split);
+  const peek = reduceBrowserPresentation(split, { type: "user-show-peek" });
+  expect(peek.runtime.mode).toBe("peek");
+  expect(reduceBrowserPresentation(peek, { type: "user-open-browser" }).runtime.mode).toBe("docked");
+  const hidden = reduceBrowserPresentation(peek, { type: "user-hide-peek" });
+  expect(reduceBrowserPresentation(hidden, { type: "agent-browser-started" }).runtime.mode).toBe("hidden");
+  evidence.recordAssertionEvidence("Agent activity never overrides a user's browser layout", "User open and Peek click resolve to split, demotion resolves to Peek, and hidden remains hidden after agent activity.", true);
 });
 
 test("Peek renders a desktop breakpoint without rewriting the tab's viewport", async ({ evidence }) => {

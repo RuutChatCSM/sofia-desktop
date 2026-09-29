@@ -25,7 +25,7 @@ export const PEEK_SHIELD_ACTION_CHANNEL = "sofia:browser:peek-shield:action";
 export const PEEK_SHIELD_DOCUMENT = `<!doctype html>
 <html><head><meta charset="utf-8"><style>
   :root {
-    --peek-radius: 12px;
+    --peek-radius: 6px;
     --peek-frame: #f0f0f3;
     --peek-ring: rgba(15, 23, 42, 0.10);
   }
@@ -148,7 +148,7 @@ export const PEEK_SHIELD_DOCUMENT = `<!doctype html>
 
       body.addEventListener("pointermove", function (event) {
         if (!pressed) showChrome(false);
-        if (!pressed) return;
+        if (!pressed || event.pointerId !== pressed.pointerId) return;
         api && api.pointer({
           phase: "move",
           dx: event.screenX - pressed.x,
@@ -157,7 +157,7 @@ export const PEEK_SHIELD_DOCUMENT = `<!doctype html>
       });
       body.addEventListener("pointerleave", hideChrome);
       body.addEventListener("pointerdown", function (event) {
-        if (event.button !== 0) return;
+        if (event.button !== 0 || pressed) return;
         if (event.target && event.target.closest && event.target.closest("[data-action]")) return;
         event.preventDefault();
         pressed = { pointerId: event.pointerId, x: event.screenX, y: event.screenY };
@@ -168,10 +168,19 @@ export const PEEK_SHIELD_DOCUMENT = `<!doctype html>
       });
       body.addEventListener("pointerup", function (event) {
         if (!pressed || event.pointerId !== pressed.pointerId) return;
+        var delta = { dx: event.screenX - pressed.x, dy: event.screenY - pressed.y };
         pressed = null;
         body.removeAttribute("data-pressing");
         showChrome(false);
-        api && api.pointer({ phase: "up" });
+        api && api.pointer({ phase: "up", dx: delta.dx, dy: delta.dy });
+      });
+      body.addEventListener("pointercancel", function (event) {
+        if (!pressed || event.pointerId !== pressed.pointerId) return;
+        var delta = { dx: event.screenX - pressed.x, dy: event.screenY - pressed.y };
+        pressed = null;
+        body.removeAttribute("data-pressing");
+        hideChrome();
+        api && api.pointer({ phase: "cancel", dx: delta.dx, dy: delta.dy });
       });
       body.addEventListener("click", function (event) {
         var target = event.target && event.target.closest ? event.target.closest("[data-action]") : null;
@@ -194,7 +203,7 @@ export const PEEK_SHIELD_DOCUMENT = `<!doctype html>
  */
 export function peekPointerReport(payload, zoom) {
   const scale = Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
-  const phase = payload?.phase === "down" || payload?.phase === "up" ? payload.phase : "move";
+  const phase = payload?.phase === "down" || payload?.phase === "up" || payload?.phase === "cancel" ? payload.phase : "move";
   return {
     phase,
     dx: Math.round(Number(payload?.dx ?? 0) / scale),

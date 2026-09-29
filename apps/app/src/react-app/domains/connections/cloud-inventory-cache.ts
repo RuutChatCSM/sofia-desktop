@@ -174,7 +174,7 @@ export async function loadSessionConnectCapabilities(): Promise<ConnectCapabilit
   try {
     return await loadConnectCapabilities({ client: denClientForCurrentSession(), scope });
   } catch {
-    return EMPTY_CONNECT_CAPABILITY_INVENTORY;
+    return readCachedConnectCapabilities(scope) ?? EMPTY_CONNECT_CAPABILITY_INVENTORY;
   }
 }
 

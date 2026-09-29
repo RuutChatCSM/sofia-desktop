@@ -108,9 +108,10 @@ describe("codex-runtime-mcp", () => {
     expect(codexDirectToolNamespacesToml([])).toBe("");
   });
 
-  test("the browser skill tells the agent to stop when its tool is missing", () => {
+  test("the browser skill checks discovery before declaring its tool unavailable", () => {
     const skill = codexRuntimeSkill("browser");
-    expect(skill).toContain("say so and stop");
+    expect(skill).toContain("use the runtime tool discovery/search facility");
+    expect(skill).toContain("A tool missing from the initial list does not prove the bridge failed");
     expect(skill).toContain("Never substitute a separate browser process");
   });
 

@@ -49,6 +49,7 @@ import { ReactSessionComposer } from "./composer/composer";
 import { useSessionModelSelection } from "./session-model-store";
 import type { ProviderCatalog } from "./use-model-behavior";
 import { decodeComposerMentionValue, encodeComposerMentionValue, type ComposerMentionKind } from "./composer/mention-encoding";
+import { createMessageReference, serializeMessageReference, messageReferences, parseMessageReference } from "./composer/message-reference";
 import { desktopBridge, openDesktopUrl } from "@/app/lib/desktop";
 import { parseSlashCommandInvocation } from "./composer/slash-command";
 import { connectSkillPrompt, parseConnectSkillToken } from "./composer/connect-skill-token";
@@ -226,7 +227,7 @@ function createMarkdownMathEvalMessages(sessionId: string, stage: number) {
  * sentence-style capability calls, aggregated tool runs, collapsed
  * thinking, linkified bare URLs with favicons, and the FILES strip.
  */
-function createChatTranscriptEvalMessages(sessionId: string) {
+function createChatTranscriptEvalMessages(sessionId: string, userText = "Plan tomorrow around my calendar and check https://linear.app for open issues.") {
   const now = Date.now();
   const messages: UIMessage[] = [
     {
@@ -234,7 +235,7 @@ function createChatTranscriptEvalMessages(sessionId: string) {
       role: "user",
       parts: [{
         type: "text",
-        text: "Plan tomorrow around my calendar and check https://linear.app for open issues.",
+        text: userText,
       }],
       metadata: { engine: { created: now } },
     },
@@ -369,7 +370,6 @@ export type SessionSurfaceProps = {
   providerConnectedCount?: number;
   onOpenSettingsSection?: ((section: ComposerSettingsSection) => void) | undefined;
   onRevertToMessage?: (messageId: string, sessionId: string) => Promise<boolean>;
-  onRestoreRevertedSession?: (sessionId: string) => Promise<boolean>;
   onForkAtMessage?: (messageId: string | null, sessionId: string) => void;
   onOpenTarget?: (target: OpenTarget, options?: OpenTargetOptions, sessionId?: string) => void;
   environmentRuntimeKey?: string | null;
@@ -630,7 +630,12 @@ function SessionErrorCard({ error, onDismiss, onChangeModel, onOpenModelPicker }
   );
 }
 
-function RevertedMessagesBanner(props: { hiddenCount: number; restoring: boolean; onRestore: () => void }) {
+/**
+ * Notice that history was rewound. The engine replaces the thread's rollout in
+ * place and keeps no restore point, so there is deliberately no way back: the
+ * dropped turns are gone from durable history.
+ */
+function RevertedMessagesBanner(props: { hiddenCount: number }) {
   return (
     <div
       className="mb-3 flex items-center gap-3 rounded-2xl border border-amber-7/40 bg-amber-2/30 px-4 py-3 text-sm text-amber-11"
@@ -640,14 +645,6 @@ function RevertedMessagesBanner(props: { hiddenCount: number; restoring: boolean
       <span className="min-w-0 flex-1 font-medium">
         {t("session.reverted_messages_hidden", { count: props.hiddenCount })}
       </span>
-      <button
-        type="button"
-        className="shrink-0 rounded-full border border-amber-7/50 bg-dls-surface px-3 py-1.5 text-xs font-medium text-dls-text transition-colors hover:bg-dls-hover disabled:opacity-50"
-        disabled={props.restoring}
-        onClick={props.onRestore}
-      >
-        {props.restoring ? t("session.restoring") : t("session.restore")}
-      </button>
     </div>
   );
 }
@@ -781,7 +778,6 @@ export function SessionSurface(props: SessionSurfaceProps) {
     props.onModelClick(props.sessionId);
   }, [props.onModelClick, props.sessionId]);
   const [error, setError] = useState<SessionError | null>(null);
-  const [restoringRevertedMessages, setRestoringRevertedMessages] = useState(false);
   const [showDelayedLoading, setShowDelayedLoading] = useState(false);
   const [awaitingAssistantBaseline, setAwaitingAssistantBaseline] = useState<number | null>(null);
   const [rendered, setRendered] = useState<{ sessionId: string; snapshot: SofiaSessionSnapshot } | null>(null);
@@ -851,7 +847,6 @@ export function SessionSurface(props: SessionSurfaceProps) {
     hydratedKeyRef.current = null;
     setSteering(false);
     setError(null);
-    setRestoringRevertedMessages(false);
     setShowDelayedLoading(false);
     setAwaitingAssistantBaseline(null);
     // Composer draft state lives in the shared store keyed by session id, so
@@ -1027,8 +1022,9 @@ export function SessionSurface(props: SessionSurfaceProps) {
       description: "Dev-only eval hook that renders a deterministic transcript with capability calls, aggregated tools, thinking, links, and file chips.",
       sideEffect: "mutation",
       disabled: !props.sessionId,
-      execute: () => {
-        const seeded = createChatTranscriptEvalMessages(props.sessionId);
+      execute: (args) => {
+        const userText = typeof args === "object" && args !== null && "userText" in args && typeof args.userText === "string" ? args.userText : undefined;
+        const seeded = createChatTranscriptEvalMessages(props.sessionId, userText);
         setEvalMarkdownMessages(seeded.messages);
         return { ok: true, messageCount: seeded.messages.length };
       },
@@ -1143,12 +1139,14 @@ export function SessionSurface(props: SessionSurfaceProps) {
   });
 
   const buildDraft = useCallback((text: string, nextAttachments: ComposerAttachment[]): ComposerDraft => {
-    const parts: ComposerPart[] = text.split(/(\[attachment [^\]]+\]|\[pasted text [^\]]+\]|\[connect-skill [^\]]+\]|\[skill [^\]]+\]|@[^\s@]+)/).flatMap((segment) => {
+    const parts: ComposerPart[] = text.split(/(\[(?:File|Folder|Repository): "(?:[^"\\]|\\.)*"\]|\[attachment [^\]]+\]|\[pasted text [^\]]+\]|\[connect-skill [^\]]+\]|\[skill [^\]]+\]|@[^\s@]+)/).flatMap((segment) => {
       if (!segment) return [] as ComposerDraft["parts"];
+      const reference = parseMessageReference(segment, props.workspaceId);
+      if (reference) return reference.kind === "file" ? [{ type: "file", path: reference.path, label: reference.label } satisfies ComposerPart] : [];
       const attachmentMatch = segment.match(/^\[attachment (.+)\]$/);
       if (attachmentMatch) {
-        // Attachment chips are visual tokens only; bytes travel via draft.attachments.
-        return [] as ComposerDraft["parts"];
+        const context = nextAttachments.find((attachment) => attachment.id === attachmentMatch[1])?.annotationContext;
+        return context ? [{ type: "text", text: context } satisfies ComposerDraft["parts"][number]] : [] as ComposerDraft["parts"];
       }
       const pasteMatch = segment.match(/^\[pasted text (.+)\]$/);
       if (pasteMatch) {
@@ -1169,7 +1167,7 @@ export function SessionSurface(props: SessionSurfaceProps) {
         const value = decodeComposerMentionValue(segment.slice(1));
         const kind = mentions[value];
         if (kind === "agent") return [{ type: "agent", name: value } satisfies ComposerDraft["parts"][number]];
-        if (kind === "file") return [{ type: "file", path: value, label: value } satisfies ComposerDraft["parts"][number]];
+        if (kind === "file") return value.endsWith("/") ? [] : [{ type: "file", path: value, label: value } satisfies ComposerDraft["parts"][number]];
         if (kind === "app") return [{ type: "app", name: value } satisfies ComposerDraft["parts"][number]];
       }
       return [{ type: "text", text: segment } satisfies ComposerDraft["parts"][number]];
@@ -1179,26 +1177,31 @@ export function SessionSurface(props: SessionSurfaceProps) {
     let resolved = resolvePastedTextPlaceholders(text, pasteParts);
     // Never let encoded binary ride the prompt as text.
     resolved = sanitizePromptText(resolved);
-    resolved = resolved.replace(/\[attachment [^\]]+\]/g, "");
+    resolved = resolved.replace(/\[attachment ([^\]]+)\]/g, (_match, id: string) =>
+      nextAttachments.find((attachment) => attachment.id === id)?.annotationContext ?? "");
     resolved = resolved.replace(/\[connect-skill [^\]]+\]/g, (match) => {
       const token = parseConnectSkillToken(match);
       return token ? connectSkillPrompt(token) : match;
     });
     resolved = resolved.replace(/\[skill ([^\]]+)\]/g, (_match, name: string) => `the \"${name}\" skill`);
     for (const value of Object.keys(mentions)) {
-      resolved = resolved.replaceAll(`@${encodeComposerMentionValue(value)}`, `@${value}`);
+      const label = mentions[value] === "file"
+        ? serializeMessageReference(createMessageReference(value, props.workspaceId, props.workspaceRoot))
+        : `@${value}`;
+      resolved = resolved.replaceAll(`@${encodeComposerMentionValue(value)}`, label);
     }
     const slashCommand = parseSlashCommandInvocation(resolved);
     return {
       mode: "prompt",
       parts,
       attachments: nextAttachments,
+      references: messageReferences(resolved, props.workspaceId),
       text,
       resolvedText: resolved,
       command: slashCommand ?? undefined,
       revertMessageId: getComposerRevertMessageId(useComposerStateStore.getState(), props.sessionId) ?? undefined,
     };
-  }, [mentions, pasteParts, props.sessionId]);
+  }, [mentions, pasteParts, props.sessionId, props.workspaceId, props.workspaceRoot]);
 
   const handleComposerDraftChange = useCallback((value: string) => {
     setComposerDraft(props.sessionId, value);
@@ -1511,7 +1514,8 @@ export function SessionSurface(props: SessionSurfaceProps) {
       toast.success(t("composer.agent_selected", { agent: value }));
       return;
     }
-    setComposerDraft(props.sessionId, draft.replace(/@([^\s@]*)$/, `@${encodeComposerMentionValue(value)} `));
+    const token = kind === "file" ? serializeMessageReference(createMessageReference(value, props.workspaceId, props.workspaceRoot)) : `@${encodeComposerMentionValue(value)}`;
+    setComposerDraft(props.sessionId, draft.replace(/@([^\s@]*)$/, `${token} `));
     setComposerMentions(props.sessionId, { ...mentions, [value]: kind });
     // Pre-flight Computer Use permissions when an app is mentioned so missing
     // Accessibility / Screen Recording grants surface before send, not as a
@@ -1579,6 +1583,36 @@ export function SessionSurface(props: SessionSurfaceProps) {
     replaceComposerDraft(props.sessionId, text, revertMessageId);
     await waitForControl(40);
   }, [props.sessionId, replaceComposerDraft]);
+
+  useEffect(() => {
+    const handleBrowserAnnotation = (event: Event) => {
+      if (!(event instanceof CustomEvent) || typeof event.detail?.text !== "string" || event.detail.sessionId !== props.sessionId) return;
+      const existing = getComposerDraft(useComposerStateStore.getState(), props.sessionId);
+      const image = typeof event.detail.image === "string" ? event.detail.image : null;
+      if (image?.startsWith("data:image/")) {
+        void fetch(image).then((response) => response.blob()).then((blob) => {
+          const attachment: ComposerAttachment = {
+            id: `annotation-${Date.now().toString(36)}`,
+            name: "1 annotation",
+            mimeType: blob.type || "image/png",
+            size: blob.size,
+            kind: "image",
+            file: new File([blob], "annotation.png", { type: blob.type || "image/png" }),
+            previewUrl: image,
+            annotationContext: event.detail.text,
+          };
+          const current = getComposerAttachments(useComposerStateStore.getState(), props.sessionId);
+          setComposerAttachments(props.sessionId, [...current, attachment]);
+          setComposerDraft(props.sessionId, `${existing}${existing && !existing.endsWith("\n") ? "\n" : ""}[attachment ${attachment.id}]`);
+        }).catch(() => setComposerDraft(props.sessionId, `${existing}${event.detail.text}`));
+      } else {
+        setComposerDraft(props.sessionId, `${existing}${event.detail.text}`);
+      }
+      window.dispatchEvent(new Event("sofia:focusPrompt"));
+    };
+    window.addEventListener("sofia:browser-annotation", handleBrowserAnnotation);
+    return () => window.removeEventListener("sofia:browser-annotation", handleBrowserAnnotation);
+  }, [props.sessionId, setComposerAttachments, setComposerDraft]);
 
   useEffect(() => {
     const handleVoiceTranscript = (event: Event) => {
@@ -1970,13 +2004,6 @@ export function SessionSurface(props: SessionSurfaceProps) {
     void typeComposerText(text, messageId);
   }, [typeComposerText]);
 
-  const handleRestoreRevertedSession = useCallback(() => {
-    if (!props.onRestoreRevertedSession || restoringRevertedMessages) return;
-    setRestoringRevertedMessages(true);
-    void props.onRestoreRevertedSession(props.sessionId)
-      .finally(() => setRestoringRevertedMessages(false));
-  }, [props.onRestoreRevertedSession, props.sessionId, restoringRevertedMessages]);
-
   const sessionScrollTopControlAction = useMemo<SofiaControlAction>(() => ({
     id: "session.scroll_top",
     label: "Go to the top of the session",
@@ -2112,11 +2139,7 @@ export function SessionSurface(props: SessionSurfaceProps) {
                keep a comfortable reading width and don't feel "too big". */}
           <div ref={contentRef} className="mx-auto w-full max-w-[800px]">
             {revertMessageId ? (
-              <RevertedMessagesBanner
-                hiddenCount={revertedMessageCount}
-                restoring={restoringRevertedMessages}
-                onRestore={handleRestoreRevertedSession}
-              />
+              <RevertedMessagesBanner hiddenCount={revertedMessageCount} />
             ) : null}
             {error && snapshot && snapshot.messages.length > 0 ? (
               <SessionErrorCard

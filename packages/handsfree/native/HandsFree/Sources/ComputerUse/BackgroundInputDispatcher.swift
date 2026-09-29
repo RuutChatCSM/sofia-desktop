@@ -5,15 +5,15 @@ enum BackgroundInputDispatcher {
     private static let privateWindowField = CGEventField(rawValue: 51)
     private static let privateRouteField = CGEventField(rawValue: 58)
 
-    static func click(pid: pid_t, windowNumber: Int, point: CGPoint, doubleClick: Bool = false) async throws {
+    static func click(pid: pid_t, windowNumber: Int, point: CGPoint, doubleClick: Bool = false, rightClick: Bool = false) async throws {
         guard let source = CGEventSource(stateID: .combinedSessionState) else {
             throw ComputerUseError.eventSourceFailed
         }
 
         let clickCount = doubleClick ? 2 : 1
         for clickState in 1...clickCount {
-            guard let down = CGEvent(mouseEventSource: source, mouseType: .leftMouseDown, mouseCursorPosition: point, mouseButton: .left),
-                  let up = CGEvent(mouseEventSource: source, mouseType: .leftMouseUp, mouseCursorPosition: point, mouseButton: .left) else {
+            guard let down = CGEvent(mouseEventSource: source, mouseType: rightClick ? .rightMouseDown : .leftMouseDown, mouseCursorPosition: point, mouseButton: rightClick ? .right : .left),
+                  let up = CGEvent(mouseEventSource: source, mouseType: rightClick ? .rightMouseUp : .leftMouseUp, mouseCursorPosition: point, mouseButton: rightClick ? .right : .left) else {
                 throw ComputerUseError.eventCreationFailed
             }
 
@@ -52,22 +52,21 @@ enum BackgroundInputDispatcher {
             throw ComputerUseError.eventSourceFailed
         }
 
-        let units = Array(text.utf16)
-        let chunkSize = 20
-        for start in stride(from: 0, to: units.count, by: chunkSize) {
-            let end = min(start + chunkSize, units.count)
-            let chunk = Array(units[start..<end])
-            guard let event = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true) else {
+        for chunk in UnicodeInput.chunks(text) {
+            guard let down = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true),
+                  let up = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false) else {
                 throw ComputerUseError.eventCreationFailed
             }
-            event.setIntegerValueField(.eventTargetUnixProcessID, value: Int64(pid))
-            event.keyboardSetUnicodeString(stringLength: chunk.count, unicodeString: chunk)
-            event.postToPid(pid)
+            for event in [down, up] {
+                event.keyboardSetUnicodeString(stringLength: chunk.count, unicodeString: chunk)
+                event.setIntegerValueField(.eventTargetUnixProcessID, value: Int64(pid))
+                event.postToPid(pid)
+            }
             Thread.sleep(forTimeInterval: 0.01)
         }
     }
 
-    static func pressKey(pid: pid_t, combo: String) throws {
+    static func pressKey(pid: pid_t, combo: String, milliseconds: Int = 0) throws {
         let parsed = try parseCombo(combo)
         guard let source = CGEventSource(stateID: .combinedSessionState) else {
             throw ComputerUseError.eventSourceFailed
@@ -89,7 +88,7 @@ enum BackgroundInputDispatcher {
         }
 
         try postKey(source: source, pid: pid, keyCode: parsed.keyCode, keyDown: true, flags: parsed.flags)
-        Thread.sleep(forTimeInterval: 0.01)
+        Thread.sleep(forTimeInterval: Double(max(0, min(milliseconds, 5000))) / 1000)
         try postKey(source: source, pid: pid, keyCode: parsed.keyCode, keyDown: false, flags: parsed.flags)
 
         for modifier in activeModifiers.reversed() {

@@ -8,9 +8,11 @@ import {
   ArrowLeft,
   ArrowRight,
   Check,
-  ChevronDown,
   Globe,
+  MessageCircle,
   Monitor,
+  MousePointer2,
+  MoreHorizontal,
   RotateCw,
   X,
 } from "lucide-react";
@@ -21,14 +23,11 @@ import {
   browserPanThumbLength,
   browserToolbarDensity,
   browserUrlParts,
-  browserViewportLabel,
   browserViewportPresetId,
-  browserZoomLabel,
   formatBrowserScalePercent,
   normalizeBrowserViewport,
-  type BrowserToolbarDensity,
 } from "@/app/lib/browser-tab-state";
-import type { BrowserRect, BrowserViewport, BrowserZoom } from "@/app/lib/desktop-types";
+import type { BrowserAnnotationTarget, BrowserRect, BrowserViewport, BrowserZoom } from "@/app/lib/desktop-types";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -49,14 +48,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
-import {
-  type BrowserPalette,
-  BrowserViewportPalette,
-  BrowserViewportTrigger,
-  BrowserZoomPalette,
-  BrowserZoomTrigger,
-} from "./browser-view-menus";
-import { type BrowserPanelTab } from "./panel-tab-store";
+import { type BrowserPanelTab, usePanelTabStore } from "./panel-tab-store";
+import { browserPresentationState } from "./browser-presentation";
 import { useSetBrowserViewport, useSetBrowserZoom } from "./use-side-panel-tabs";
 import { getElectronBrowser, hasNativeBrowserOccluder, nativeBrowserBoundsFor, sameBounds } from "./utils";
 
@@ -72,16 +65,25 @@ type BrowserViewProps = {
 export function BrowserView({
   sessionId,
   tab,
-  onClose,
+  onClose: _onClose,
 }: BrowserViewProps) {
   const isAvailable = Boolean(getElectronBrowser());
   const setBrowserViewport = useSetBrowserViewport();
   const setBrowserZoom = useSetBrowserZoom();
+  const addBrowserAnnotation = usePanelTabStore((state) => state.addBrowserAnnotation);
+  const setBrowserInteractionMode = usePanelTabStore((state) => state.setBrowserInteractionMode);
 
   const [urlInput, setUrlInput] = React.useState(tab.url);
   const [urlFocused, setUrlFocused] = React.useState(false);
   const [panelWidth, setPanelWidth] = React.useState(0);
-  const [palette, setPalette] = React.useState<BrowserPalette>(null);
+  const [responsiveControlsOpen, setResponsiveControlsOpen] = React.useState(false);
+  const [findOpen, setFindOpen] = React.useState(false);
+  const [findQuery, setFindQuery] = React.useState("");
+  const [annotationImage, setAnnotationImage] = React.useState<string | null>(null);
+  const [annotationTarget, setAnnotationTarget] = React.useState<BrowserAnnotationTarget | null>(null);
+  const [annotationComment, setAnnotationComment] = React.useState("");
+  const [annotationError, setAnnotationError] = React.useState<string | null>(null);
+  const findInputRef = React.useRef<HTMLInputElement>(null);
   const canvasRef = React.useRef<HTMLDivElement>(null);
   const urlInputRef = React.useRef<HTMLInputElement>(null);
   const shownRef = React.useRef(false);
@@ -121,7 +123,52 @@ export function BrowserView({
   // be z-ordered under React. The error shell is therefore only reachable if
   // the view steps aside, which the bounds loop below enforces every frame.
   const suppressedRef = React.useRef(false);
-  suppressedRef.current = pageFailed;
+  suppressedRef.current = pageFailed || annotationImage !== null;
+
+  const closeAnnotation = React.useCallback(() => {
+    setAnnotationImage(null);
+    setAnnotationTarget(null);
+    setAnnotationComment("");
+    setAnnotationError(null);
+    setBrowserInteractionMode(sessionId, tab.id, "browse");
+  }, [sessionId, setBrowserInteractionMode, tab.id]);
+
+  const toggleAnnotation = React.useCallback(async () => {
+    if (annotationImage) {
+      closeAnnotation();
+      return;
+    }
+    try {
+      const image = await getElectronBrowser()?.annotationCapture?.(tab.id);
+      if (!image) throw new Error("The page could not be captured.");
+      setAnnotationImage(image);
+      setAnnotationError(null);
+      setBrowserInteractionMode(sessionId, tab.id, "annotate");
+    } catch (error) {
+      setAnnotationError(error instanceof Error ? error.message : String(error));
+    }
+  }, [annotationImage, closeAnnotation, sessionId, setBrowserInteractionMode, tab.id]);
+
+  const saveAnnotation = React.useCallback(() => {
+    if (!annotationTarget || !annotationComment.trim()) return;
+    const comment = annotationComment.trim();
+    const annotation = {
+      id: crypto.randomUUID(),
+      page: { url: tab.url, pathname: (() => { try { return new URL(tab.url).pathname; } catch { return ""; } })() },
+      target: annotationTarget,
+      comment,
+      createdAt: Date.now(),
+      status: "attached" as const,
+    };
+    addBrowserAnnotation(sessionId, tab.id, annotation);
+    const targetDescription = annotationTarget.type === "element"
+      ? `${annotationTarget.selector ?? "element"}${annotationTarget.text ? ` — ${annotationTarget.text}` : ""}`
+      : `region at ${Math.round(annotationTarget.boundingBox.x)}, ${Math.round(annotationTarget.boundingBox.y)} (${Math.round(annotationTarget.boundingBox.width)} × ${Math.round(annotationTarget.boundingBox.height)})`;
+    window.dispatchEvent(new CustomEvent("sofia:browser-annotation", {
+      detail: { sessionId, text: `On ${tab.url}, look at ${targetDescription}. ${comment}`, image: annotationImage },
+    }));
+    closeAnnotation();
+  }, [addBrowserAnnotation, annotationComment, annotationImage, annotationTarget, closeAnnotation, sessionId, tab.id, tab.url]);
 
   React.useEffect(() => {
     if (!urlFocused) {
@@ -168,6 +215,28 @@ export function BrowserView({
     void getElectronBrowser()?.stop?.();
   }, []);
 
+  React.useEffect(() => {
+    return getElectronBrowser()?.onFindRequested?.(({ tabId }) => {
+      if (tabId !== tab.id) return;
+      setFindOpen(true);
+      window.requestAnimationFrame(() => findInputRef.current?.focus());
+    });
+  }, [tab.id]);
+
+  const showToolbarMenu = React.useCallback((kind: "browser" | "extensions", event: React.MouseEvent<HTMLButtonElement>) => {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    void getElectronBrowser()?.showToolbarMenu?.(tab.id, kind, {
+      x: bounds.right - 310,
+      y: bounds.bottom + 4,
+    });
+  }, [tab.id]);
+
+  const closeFind = React.useCallback(() => {
+    setFindOpen(false);
+    setFindQuery("");
+    void getElectronBrowser()?.find?.(tab.id, "", true);
+  }, [tab.id]);
+
   const handleUrlKeyDown = React.useCallback((event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Enter") {
       event.preventDefault();
@@ -183,10 +252,6 @@ export function BrowserView({
 
   // Reading mode and editing mode are different: the resting address bar shows
   // host/path hierarchy as text, and focusing it swaps in the real editable URL.
-  const togglePalette = React.useCallback((kind: "viewport" | "zoom") => {
-    setPalette((current) => (current === kind ? null : kind));
-  }, []);
-
   const focusUrl = React.useCallback(() => {
     setUrlFocused(true);
     window.requestAnimationFrame(() => {
@@ -260,7 +325,7 @@ export function BrowserView({
       const degenerate =
         !bounds || bounds.width < MIN_VISIBLE_CANVAS_PX || bounds.height < MIN_VISIBLE_CANVAS_PX;
 
-      if (degenerate || suppressedRef.current || hasNativeBrowserOccluder()) {
+      if (degenerate || suppressedRef.current || hasNativeBrowserOccluder(canvas)) {
         if (shownRef.current) {
           browser.hide?.();
           shownRef.current = false;
@@ -307,7 +372,7 @@ export function BrowserView({
         boundsFrameRef.current = null;
       }
 
-      browser.hide?.();
+      if (browserPresentationState().runtime.mode !== "peek") browser.hide?.();
       shownRef.current = false;
       lastBoundsRef.current = null;
     };
@@ -315,9 +380,10 @@ export function BrowserView({
 
   return (
     <>
-      <div className="flex h-10 shrink-0 items-center gap-1 border-b border-border bg-dls-canvas px-2 mac:bg-dls-canvas/80 mac:backdrop-blur-2xl mac:backdrop-saturate-150">
+      <div data-testid="browser-toolbar" className="flex h-12 shrink-0 items-center gap-2 border-b border-border bg-dls-canvas px-2 [&_svg]:size-4 [&_svg]:stroke-[1.5]">
         {isAvailable ? (
           <>
+            <div data-testid="browser-navigation" className="flex h-8 shrink-0 items-center rounded-full bg-muted/60 px-1">
             <Tooltip>
               <TooltipTrigger
                 render={(
@@ -365,8 +431,20 @@ export function BrowserView({
               />
               <TooltipContent>{pageLoading ? "Stop" : "Reload"}</TooltipContent>
             </Tooltip>
+            </div>
+            <Button
+              variant={annotationImage ? "secondary" : "ghost"}
+              size="sm"
+              data-testid="browser-annotate"
+              aria-pressed={annotationImage !== null}
+              onClick={() => void toggleAnnotation()}
+              className="h-8 shrink-0 gap-1.5 rounded-full bg-muted/60 px-3 text-xs"
+            >
+              <MousePointer2 className="size-3.5" />
+              {density === "full" ? "Annotate" : null}
+            </Button>
             {urlFocused ? (
-              <InputGroup className="mx-1 h-7 flex-1 rounded-md">
+              <InputGroup className="h-8 min-w-0 flex-1 rounded-full bg-muted/60">
                 <InputGroupAddon align="inline-start" className="ps-2">
                   <Globe />
                 </InputGroupAddon>
@@ -390,7 +468,7 @@ export function BrowserView({
                 type="button"
                 onClick={focusUrl}
                 aria-label="Address"
-                className="mx-1 flex h-7 min-w-0 flex-1 items-center gap-1 rounded-md px-2 text-left text-xs hover:bg-foreground/5 focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none"
+                className="flex h-8 min-w-0 flex-1 items-center justify-center gap-1 rounded-full bg-muted/60 px-3 text-center text-xs hover:bg-muted focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none"
               >
                 {urlParts ? (
                   <>
@@ -407,12 +485,23 @@ export function BrowserView({
                 )}
               </button>
             )}
-            <BrowserViewportTrigger
-              viewport={tab.viewport}
-              density={density}
-              open={palette === "viewport"}
-              onToggle={() => togglePalette("viewport")}
-            />
+            <Button variant="ghost" size="icon-sm" data-testid="browser-viewport-trigger"
+              aria-label="Responsive controls" aria-expanded={responsiveControlsOpen}
+              className="text-muted-foreground hover:text-foreground"
+              onClick={() => { setResponsiveControlsOpen(current => !current); }}>
+              <Monitor />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              data-testid="browser-menu-trigger"
+              className="text-muted-foreground hover:text-foreground"
+              title="Browser menu"
+              aria-label="Browser menu"
+              onClick={(event) => showToolbarMenu("browser", event)}
+            >
+              <MoreHorizontal />
+            </Button>
             {agentDisconnected ? (
               <Tooltip>
                 <TooltipTrigger
@@ -434,52 +523,71 @@ export function BrowserView({
             Browser panel is only available in the desktop app.
           </p>
         )}
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={onClose}
-          title="Close panel"
-          aria-label="Close panel"
-        >
-          <X />
-        </Button>
+
       </div>
-      {isAvailable && responsiveViewport ? (
+      {annotationError ? <p role="alert" className="px-3 py-1 text-xs text-destructive">{annotationError}</p> : null}
+      {isAvailable && findOpen ? (
+        <div className="flex h-9 shrink-0 items-center gap-2 border-b border-border bg-dls-canvas px-2">
+          <Input
+            ref={findInputRef}
+            data-testid="browser-find-input"
+            aria-label="Find in page"
+            className="h-7 min-w-0 flex-1 text-xs"
+            value={findQuery}
+            onChange={(event) => {
+              setFindQuery(event.target.value);
+              void getElectronBrowser()?.find?.(tab.id, event.target.value, true);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") closeFind();
+              if (event.key === "Enter") void getElectronBrowser()?.find?.(tab.id, findQuery, !event.shiftKey);
+            }}
+            placeholder="Find in page"
+          />
+          <Button variant="ghost" size="icon-sm" aria-label="Close find" onClick={closeFind}>
+            <X />
+          </Button>
+        </div>
+      ) : null}
+      {isAvailable && responsiveControlsOpen ? (
         <BrowserResponsiveBar
           viewport={tab.viewport}
           zoom={tab.zoom}
           appliedScale={tab.appliedViewport?.scale ?? null}
-          density={density}
-          palette={palette}
-          onTogglePalette={togglePalette}
-        />
-      ) : null}
-      {/* Palettes live above the canvas: a floating menu would sit under the
-          native page, and detaching the page to show one blanks the browser. */}
-      {palette === "viewport" ? (
-        <BrowserViewportPalette
-          viewport={tab.viewport}
-          onSelect={(viewport) => {
-            setBrowserViewport(sessionId, tab.id, viewport);
-            setPalette(null);
-          }}
-        />
-      ) : null}
-      {palette === "zoom" && responsiveViewport ? (
-        <BrowserZoomPalette
-          zoom={tab.zoom}
-          appliedScale={tab.appliedViewport?.scale ?? null}
-          onSelect={(zoom) => {
-            setBrowserZoom(sessionId, tab.id, zoom);
-            setPalette(null);
-          }}
+          onViewportChange={(viewport) => setBrowserViewport(sessionId, tab.id, viewport)}
+          onZoomChange={(zoom) => setBrowserZoom(sessionId, tab.id, zoom)}
+          onClose={() => { setResponsiveControlsOpen(false); }}
         />
       ) : null}
       <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
         <div className="flex min-h-0 flex-1">
           <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
             {isAvailable ? (
-              <div ref={canvasRef} data-testid="browser-canvas" className="h-full overflow-hidden" />
+              <div ref={canvasRef} data-testid="browser-canvas" className={cn("h-full overflow-hidden", responsiveViewport && "bg-muted/50")} />
+            ) : null}
+            {annotationImage ? (
+              <BrowserAnnotationOverlay
+                image={annotationImage}
+                target={annotationTarget}
+                comment={annotationComment}
+                onCommentChange={setAnnotationComment}
+                onSelect={async (selection) => {
+                  if (selection.width > 8 || selection.height > 8) {
+                    setAnnotationTarget({ type: "region", boundingBox: selection });
+                    return;
+                  }
+                  try {
+                    const element = await getElectronBrowser()?.annotationTarget?.(tab.id, selection.x, selection.y);
+                    setAnnotationTarget(element
+                      ? { type: "element", ...element }
+                      : { type: "region", boundingBox: { ...selection, width: 1, height: 1 } });
+                  } catch {
+                    setAnnotationTarget({ type: "region", boundingBox: { ...selection, width: 1, height: 1 } });
+                  }
+                }}
+                onSave={saveAnnotation}
+                onCancel={closeAnnotation}
+              />
             ) : null}
             {isAvailable && pageFailed ? <BrowserPageError tab={tab} onReload={reload} /> : null}
           </div>
@@ -519,62 +627,150 @@ function browserHost(url: string): string {
   }
 }
 
+function BrowserAnnotationOverlay({
+  image,
+  target,
+  comment,
+  onCommentChange,
+  onSelect,
+  onSave,
+  onCancel,
+}: {
+  image: string;
+  target: BrowserAnnotationTarget | null;
+  comment: string;
+  onCommentChange: (value: string) => void;
+  onSelect: (rect: BrowserRect) => void;
+  onSave: () => void;
+  onCancel: () => void;
+}) {
+  const surfaceRef = React.useRef<HTMLDivElement>(null);
+  const originRef = React.useRef<{ x: number; y: number } | null>(null);
+  const stopTrackingRef = React.useRef<(() => void) | null>(null);
+  const [draftRect, setDraftRect] = React.useState<BrowserRect | null>(null);
+  const [dragging, setDragging] = React.useState(false);
+  const selection = draftRect ?? target?.boundingBox ?? null;
+  const point = (clientX: number, clientY: number) => {
+    const bounds = surfaceRef.current?.getBoundingClientRect();
+    if (!bounds) return { x: 0, y: 0 };
+    return {
+      x: Math.min(Math.max(clientX - bounds.left, 0), bounds.width),
+      y: Math.min(Math.max(clientY - bounds.top, 0), bounds.height),
+    };
+  };
+  const rectangle = (start: { x: number; y: number }, end: { x: number; y: number }): BrowserRect => ({
+    x: Math.min(start.x, end.x),
+    y: Math.min(start.y, end.y),
+    width: Math.abs(end.x - start.x),
+    height: Math.abs(end.y - start.y),
+  });
+  React.useEffect(() => () => stopTrackingRef.current?.(), []);
+
+  return (
+    <div className="absolute inset-0 z-10 overflow-hidden bg-dls-canvas" data-testid="browser-annotation-overlay" data-dragging={dragging}>
+      <img src={image} alt="Frozen browser page for annotation" className="pointer-events-none absolute inset-0 h-full w-full" />
+      <div
+        ref={surfaceRef}
+        className="absolute inset-0 cursor-crosshair select-none"
+        onMouseDown={(event) => {
+          if (event.button !== 0) return;
+          event.preventDefault();
+          originRef.current = point(event.clientX, event.clientY);
+          setDragging(true);
+          setDraftRect(null);
+          stopTrackingRef.current?.();
+          const move = (moveEvent: MouseEvent) => {
+            if (originRef.current) setDraftRect(rectangle(originRef.current, point(moveEvent.clientX, moveEvent.clientY)));
+          };
+          const up = (upEvent: MouseEvent) => {
+            const start = originRef.current;
+            originRef.current = null;
+            setDragging(false);
+            setDraftRect(null);
+            stopTrackingRef.current?.();
+            stopTrackingRef.current = null;
+            if (start) onSelect(rectangle(start, point(upEvent.clientX, upEvent.clientY)));
+          };
+          window.addEventListener("mousemove", move);
+          window.addEventListener("mouseup", up, { once: true });
+          stopTrackingRef.current = () => {
+            window.removeEventListener("mousemove", move);
+            window.removeEventListener("mouseup", up);
+          };
+        }}
+      />
+      {selection ? (
+        <div
+          className="pointer-events-none absolute rounded-sm border-2 border-blue-500 bg-blue-500/15"
+          style={{ left: selection.x, top: selection.y, width: Math.max(selection.width, 4), height: Math.max(selection.height, 4) }}
+        />
+      ) : null}
+      {target && selection ? (
+        <div
+          className="absolute z-20 flex w-[min(340px,calc(100%-24px))] items-center gap-1.5 rounded-full border border-border bg-dls-canvas/95 p-1.5 shadow-xl backdrop-blur"
+          style={{
+            left: Math.max(12, Math.min(selection.x, (surfaceRef.current?.clientWidth ?? 360) - 352)),
+            top: selection.y > 58 ? selection.y - 52 : selection.y + selection.height + 8,
+          }}
+          data-testid="browser-annotation-controls"
+        >
+          <MessageCircle className="ml-2 size-4 shrink-0 text-primary" />
+          <Input aria-label="Annotation note" autoFocus placeholder="Add a comment…" value={comment} onChange={(event) => onCommentChange(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") onSave(); if (event.key === "Escape") onCancel(); }} className="h-8 min-w-0 flex-1 border-0 bg-transparent text-xs shadow-none focus-visible:ring-0" />
+          <Button size="icon-sm" disabled={!comment.trim()} aria-label="Add annotation to task" onClick={onSave} className="shrink-0 rounded-full"><Check /></Button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 type BrowserResponsiveBarProps = {
   viewport: BrowserViewport;
   zoom: BrowserZoom;
   appliedScale: number | null;
-  density: BrowserToolbarDensity;
-  palette: BrowserPalette;
-  onTogglePalette: (palette: "viewport" | "zoom") => void;
+  onViewportChange: (viewport: BrowserViewport) => void;
+  onZoomChange: (zoom: BrowserZoom) => void;
+  onClose: () => void;
 };
 
-/**
- * Secondary row, revealed only for a virtual viewport. Ordinary browsing keeps
- * the full panel height. Its controls open the palettes rather than popovers,
- * because a popover would be painted underneath the native page.
- */
-function BrowserResponsiveBar({
-  viewport,
-  zoom,
-  appliedScale,
-  density,
-  palette,
-  onTogglePalette,
-}: BrowserResponsiveBarProps) {
-  const compactLabel = viewport.mode === "responsive"
-    ? `${viewport.width}×${viewport.height}`
-    : browserViewportLabel(viewport);
-
+function BrowserResponsiveBar({ viewport, zoom, appliedScale, onViewportChange, onZoomChange, onClose }: BrowserResponsiveBarProps) {
+  const responsive = viewport.mode === "responsive";
+  const [width, setWidth] = React.useState(responsive ? String(viewport.width) : "1440");
+  const [height, setHeight] = React.useState(responsive ? String(viewport.height) : "900");
+  React.useEffect(() => {
+    setWidth(viewport.mode === "responsive" ? String(viewport.width) : "1440");
+    setHeight(viewport.mode === "responsive" ? String(viewport.height) : "900");
+  }, [viewport]);
+  const commitDimensions = () => {
+    const w = Number(width), h = Number(height);
+    if (!Number.isFinite(w) || !Number.isFinite(h) || w < 64 || h < 64) {
+      setWidth(responsive ? String(viewport.width) : "1440");
+      setHeight(responsive ? String(viewport.height) : "900");
+      return;
+    }
+    onViewportChange(normalizeBrowserViewport({ mode: "responsive", width: w, height: h }));
+  };
+  const controlClass = "h-7 min-w-0 rounded-md border-0 bg-muted/60 px-2 text-xs text-foreground shadow-none focus-visible:outline focus-visible:outline-1 focus-visible:outline-ring";
   return (
-    <div className="flex h-8 shrink-0 items-center gap-2 border-b border-border/60 bg-muted/30 px-2.5 text-[11px] text-muted-foreground">
-      {density === "full" ? (
-        <span className="flex shrink-0 items-center gap-1 font-medium text-foreground/80">
-          <Monitor className="size-3" />
-          Responsive
-        </span>
-      ) : null}
-      <Button
-        variant="ghost"
-        size="sm"
-        aria-label="Viewport size"
-        aria-expanded={palette === "viewport"}
-        data-testid="browser-viewport-size-trigger"
-        onClick={() => onTogglePalette("viewport")}
-        className={cn(
-          "h-6 shrink-0 gap-1 px-2 text-[11px] font-normal tabular-nums",
-          palette === "viewport" && "bg-foreground/10 text-foreground",
-        )}
-      >
-        {density === "full" ? browserViewportLabel(viewport) : compactLabel}
-        <ChevronDown className={cn("size-3 transition-transform", palette === "viewport" && "rotate-180")} />
-      </Button>
-      <BrowserZoomTrigger
-        zoom={zoom}
-        appliedScale={appliedScale}
-        density={density}
-        open={palette === "zoom"}
-        onToggle={() => onTogglePalette("zoom")}
-      />
+    <div data-testid="browser-responsive-controls" className="flex h-10 shrink-0 items-center gap-2 border-b border-border/60 bg-dls-canvas px-2.5 text-xs text-muted-foreground">
+      <span className="hidden shrink-0 @min-[600px]:inline">Dimensions:</span>
+      <select aria-label="Viewport device" data-testid="browser-viewport-size-trigger" className={cn(controlClass, "w-40")} value={responsive ? browserViewportPresetId(viewport) ?? "custom" : "panel"} onChange={(event) => {
+        if (event.target.value === "panel") { onViewportChange({ mode: "panel" }); return; }
+        const preset = BROWSER_VIEWPORT_PRESETS.find((item) => item.id === event.target.value);
+        onViewportChange({ mode: "responsive", width: preset?.width ?? Number(width), height: preset?.height ?? Number(height), deviceScaleFactor: 1 });
+      }}>
+        <option value="panel">Fit to panel</option>
+        <option value="custom">Responsive</option>
+        <optgroup label="Viewport presets">{BROWSER_VIEWPORT_PRESETS.map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}</optgroup>
+      </select>
+      <input aria-label="Viewport width" type="number" min={64} max={7680} value={width} onChange={(event) => setWidth(event.target.value)} onBlur={commitDimensions} onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }} className={cn(controlClass, "w-16 tabular-nums")} />
+      <span aria-hidden="true">×</span>
+      <input aria-label="Viewport height" type="number" min={64} max={7680} value={height} onChange={(event) => setHeight(event.target.value)} onBlur={commitDimensions} onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }} className={cn(controlClass, "w-16 tabular-nums")} />
+      <Button variant="ghost" size="icon-sm" className="size-7 shrink-0" aria-label="Rotate viewport" disabled={!responsive} onClick={() => { if (responsive) onViewportChange({ ...viewport, width: viewport.height, height: viewport.width }); }}><RotateCw className="size-3.5" /></Button>
+      <select aria-label="Viewport scale" className={cn(controlClass, "w-24")} value={zoom.mode === "fit" ? "fit" : zoom.mode === "actual" ? "1" : String(zoom.scale)} onChange={(event) => onZoomChange(event.target.value === "fit" ? { mode: "fit" } : { mode: "custom", scale: Number(event.target.value) })}>
+        <option value="fit">Fit{appliedScale === null ? "" : ` · ${formatBrowserScalePercent(appliedScale)}`}</option>
+        {BROWSER_ZOOM_STEPS.map((scale) => <option key={scale} value={scale}>{formatBrowserScalePercent(scale)}</option>)}
+      </select>
+      <Button variant="ghost" size="icon-sm" className="ml-auto size-6 shrink-0" aria-label="Close responsive controls" onClick={onClose}><X className="size-3.5" /></Button>
     </div>
   );
 }
@@ -733,4 +929,3 @@ function BrowserPageError({ tab, onReload }: BrowserPageErrorProps) {
     </div>
   );
 }
-

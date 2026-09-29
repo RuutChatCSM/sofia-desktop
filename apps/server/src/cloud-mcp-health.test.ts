@@ -238,6 +238,9 @@ function createMockEngineClient(baseUrl: string): WorkspaceEngineClient {
       async delete() {
         return ok({});
       },
+      async revert() {
+        return ok<EngineSessionInfo>({ id: "sess", title: "t" } as EngineSessionInfo);
+      },
     },
     provider: {
       async list() {

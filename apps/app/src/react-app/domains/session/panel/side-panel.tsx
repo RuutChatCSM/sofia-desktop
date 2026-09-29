@@ -1,6 +1,6 @@
 /** @jsxImportSource react */
 import * as React from "react";
-import { FileDiff, Globe, Loader2, Plus, X, Maximize2, Minimize2, PictureInPicture2 } from "lucide-react";
+import { FileDiff, Globe, Loader2, Plus, X, Maximize2, Minimize2, PictureInPicture2, FolderOpen } from "lucide-react";
 import { useDragControls } from "motion/react";
 
 import type { SofiaServerClient } from "@/app/lib/sofia-server";
@@ -24,7 +24,9 @@ import {
 } from "./panel-tab-store";
 import { useControlAction, type SofiaControlAction } from "../../../shell/control/control-provider";
 import type { OpenTarget } from "../artifacts/open-target";
-import { dispatchBrowserPresentation, useBrowserPresentationStore } from "./browser-presentation";
+import { dispatchBrowserPresentation } from "./browser-presentation";
+import { FileTypeIcon } from "./file-type-icon";
+import { WorkspaceFiles } from "./workspace-files";
 import { BrowserView } from "./browser-view";
 import { useSidePanelTabs } from "./use-side-panel-tabs";
 import { handlePanelEscape, PanelEmpty } from "./panel-empty";
@@ -38,6 +40,8 @@ type SidePanelProps = {
   workspaceRoot: string;
   isRemoteWorkspace?: boolean;
   onClose: () => void;
+  expanded?: boolean;
+  onToggleExpand?: () => void;
   onOpenExtensions?: () => void;
   onOpenVoice?: () => void;
 };
@@ -94,7 +98,7 @@ function SidePanelTab({ tab, active, onSelect, onClose }: SidePanelTabProps) {
         showBrowserTabContextMenu({ clientX: event.clientX, clientY: event.clientY });
       } : undefined}
     >
-      <div ref={tabRef} className="relative">
+      <div ref={tabRef} className="group/panel-tab relative">
         <PanelTab
           active={active}
           data-testid={`panel-tab-${tab.id}`}
@@ -127,8 +131,12 @@ function SidePanelTab({ tab, active, onSelect, onClose }: SidePanelTabProps) {
             )
           ) : tab.type === "changes" ? (
             <FileDiff className="size-3.5 shrink-0" />
-          ) : (
+          ) : tab.type === "artifact" ? (
             <ArtifactIcon type={tab.preview} />
+          ) : tab.type === "files" && tab.path ? (
+            <FileTypeIcon path={tab.path} />
+          ) : (
+            <FolderOpen />
           )}
           <span className="min-w-0 flex-1 truncate text-left">{tab.label}</span>
         </PanelTab>
@@ -151,10 +159,12 @@ function ChangesPanel({
   sessionId,
   changeSetId,
   filePath,
+  onOpenFile,
 }: {
   sessionId: string;
   changeSetId: string;
   filePath?: string;
+  onOpenFile: (path: string) => void;
 }) {
   const changeSet = useChangeSetStore((state) => state.byId[changeSetId] ?? null);
   const [scope, setScope] = React.useState<ReviewScope>("last-turn");
@@ -184,6 +194,7 @@ function ChangesPanel({
         repositoryFiles={repositoryFiles}
         loading={loading}
         initialPath={filePath}
+        onOpenFile={onOpenFile}
       />
     </div>
   );
@@ -196,15 +207,31 @@ export function SidePanel({
   workspaceRoot,
   isRemoteWorkspace = false,
   onClose,
+  expanded = false,
+  onToggleExpand,
   onOpenExtensions,
   onOpenVoice,
 }: SidePanelProps) {
-  const mode = useBrowserPresentationStore((store) => store.state.runtime.mode);
   const { tabs } = useSessionPanelState(sessionId);
   const activeTab = useActivePanelTab(sessionId);
   const isBrowserAvailable = Boolean(getElectronBrowser());
 
-  const { createTab, closeTab, selectTab, reorderTabs } = useSidePanelTabs(sessionId);
+  const { closeTab, selectTab, reorderTabs } = useSidePanelTabs(sessionId);
+  const openBrowserPage = async (url?: string) => {
+    const browser = getElectronBrowser();
+    const created = await browser?.createTab?.(url);
+    const state = await browser?.getState?.();
+    if (!created || !state) return;
+    const store = usePanelTabStore.getState();
+    store.syncBrowserTabs(sessionId, state.tabs ?? [], created.tabId);
+    store.selectTab(sessionId, created.tabId);
+  };
+  const openPanelTab = (type: "start" | "files", path?: string) => {
+    const id = type === "files" ? `workspace-files:${sessionId}` : `start:${crypto.randomUUID()}`;
+    const store = usePanelTabStore.getState();
+    store.openTab(sessionId, { id, type, label: type === "files" ? path ? path.split("/").pop() ?? path : "Files" : "New tab", path });
+    store.selectTab(sessionId, id);
+  };
 
   const seedArtifactOverflowControlAction = React.useMemo<SofiaControlAction | null>(() => {
     if (!import.meta.env.DEV) return null;
@@ -390,8 +417,8 @@ export function SidePanel({
           event.stopPropagation();
         }}
       >
-        <div className="shrink-0 border-b border-border bg-dls-canvas mac:bg-dls-canvas/80 mac:backdrop-blur-2xl mac:backdrop-saturate-150">
-          <div className="flex h-10 items-center gap-1 border-b border-border/60 px-2">
+        <div className="shrink-0 border-b border-border bg-dls-canvas">
+          <div className="flex h-10 items-center gap-1 px-2 [&_svg]:size-4 [&_svg]:stroke-[1.5]">
             <div className="no-scrollbar min-w-0 flex-1 overflow-x-auto">
               <PanelTabList
                 values={tabs.map((tab) => tab.id)}
@@ -408,25 +435,31 @@ export function SidePanel({
                 ))}
               </PanelTabList>
             </div>
-            {activeTab?.type === "browser" ? <>
-              <Button variant="ghost" size="icon-sm" aria-label={mode === "expanded" ? "Restore browser" : "Expand browser"}
-                data-testid="browser-expand" onClick={() => dispatchBrowserPresentation({ type: mode === "expanded" ? "user-restore-browser" : "user-expand-browser" })}>
-                {mode === "expanded" ? <Minimize2 /> : <Maximize2 />}
+            {onToggleExpand ? (
+              <Button variant="ghost" size="icon-sm" aria-label={expanded ? "Restore panel" : "Expand panel"}
+                className="order-2 text-muted-foreground" data-testid="side-panel-expand" onClick={onToggleExpand}>
+                {expanded ? <Minimize2 /> : <Maximize2 />}
               </Button>
+            ) : null}
+            <Button variant="ghost" size="icon-sm" aria-label="Close panel" title="Close panel"
+              className="order-4 text-muted-foreground" onClick={onClose}><X /></Button>
+            {activeTab?.type === "browser" ? (
               <Button variant="ghost" size="icon-sm" aria-label="Peek browser" data-testid="browser-show-peek"
-                onClick={() => dispatchBrowserPresentation({ type: "user-open-browser" })}><PictureInPicture2 /></Button>
-            </> : null}
+                className="order-3 text-muted-foreground"
+                onClick={() => dispatchBrowserPresentation({ type: "user-show-peek" })}><PictureInPicture2 /></Button>
+            ) : null}
             {!activeTab ? <span className="sr-only">Panel destinations</span> : null}
-            {activeTab && isBrowserAvailable ? (
+            {(
               <Tooltip>
                 <TooltipTrigger
                   render={(
                     <Button
                       variant="ghost"
                       size="icon-sm"
-                      onClick={() => createTab()}
+                      onClick={() => openPanelTab("start")}
                       aria-label="New tab"
                       data-testid="browser-new-tab"
+                      className="order-1 text-muted-foreground"
                     >
                       <Plus />
                     </Button>
@@ -434,32 +467,30 @@ export function SidePanel({
                 />
                 <TooltipContent>New tab</TooltipContent>
               </Tooltip>
-            ) : !activeTab ? (
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={onClose}
-                aria-label="Close panel"
-              >
-                <X />
-              </Button>
-            ) : null}
+            )}
           </div>
         </div>
-        {!activeTab ? (
+        {!activeTab || activeTab.type === "start" ? (
           <PanelEmpty
-            onOpenBrowser={isBrowserAvailable ? createTab : undefined}
+            onOpenBrowser={isBrowserAvailable ? () => void openBrowserPage() : undefined}
+            onNavigate={isBrowserAvailable ? (url) => void openBrowserPage(url) : undefined}
+            recentPages={tabs.filter((tab) => tab.type === "browser").map((tab) => ({ id: tab.id, label: tab.label, url: tab.url }))}
+            onSelectRecent={selectTab}
+            onOpenFiles={() => openPanelTab("files")}
             onOpenExtensions={onOpenExtensions}
             onOpenVoice={onOpenVoice}
           />
         ) : null}
-        {activeTab?.type === "browser" ? (
+        {activeTab?.type === "files" ? (
+          <WorkspaceFiles key={activeTab.id} client={client} workspaceId={workspaceId} workspaceRoot={workspaceRoot} remote={isRemoteWorkspace} initialPath={activeTab.path} onSelectPath={(path) => usePanelTabStore.getState().openTab(sessionId, { ...activeTab, path, label: path.split("/").pop() ?? path })} />
+        ) : activeTab?.type === "browser" ? (
           <BrowserView sessionId={sessionId} tab={activeTab} onClose={onClose} />
         ) : activeTab?.type === "changes" ? (
           <ChangesPanel
             sessionId={sessionId}
             changeSetId={activeTab.changeSetId}
             filePath={activeTab.filePath}
+            onOpenFile={(path) => openPanelTab("files", path)}
           />
         ) : activeTab?.type === "artifact" ? (
           <div className="min-h-0 flex-1 overflow-hidden">

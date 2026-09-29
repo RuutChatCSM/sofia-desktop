@@ -37,6 +37,9 @@ function computerUseHelperAppPath() {
 }
 
 function getComputerUseMcpCommand() {
+  // Enable Chromium's native AX bridge when the user connects Computer Use.
+  // A renderer can otherwise remain invisible to macOS assistive clients.
+  app.setAccessibilitySupportEnabled(true);
   const helperExecutable = computerUseHelperExecutablePath();
   if (helperExecutable) return [helperExecutable, "mcp"];
 
@@ -90,7 +93,9 @@ async function checkComputerUsePermissions() {
   if (!bin) {
     return { ok: false, accessibility: false, screenRecording: false, error: "Helper binary not found. Run pnpm dev to build it." };
   }
-  return spawnCheckPermissions(bin);
+  const permissions = await spawnCheckPermissions(bin);
+  if (permissions.ok) app.setAccessibilitySupportEnabled(true);
+  return permissions;
 }
 
 function spawnCheckPermissions(bin) {

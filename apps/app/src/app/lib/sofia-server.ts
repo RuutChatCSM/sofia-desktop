@@ -2185,6 +2185,12 @@ export function createSofiaServerClient(options: { baseUrl: string; token?: stri
         { token, hostToken, timeoutMs: timeouts.binary },
       ),
 
+    listWorkspaceEntries: async (workspaceId: string, path = "") => {
+      const result = await requestJson<{ items: Array<{ path: string; kind: "file" | "dir" }> }>(baseUrl,
+        `/workspace/${encodeURIComponent(workspaceId)}/files/directory?path=${encodeURIComponent(path)}`, { token, hostToken });
+      return result.items;
+    },
+
     readWorkspaceFile: (workspaceId: string, path: string) =>
       requestJson<SofiaWorkspaceFileContent>(
         baseUrl,

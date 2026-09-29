@@ -145,6 +145,11 @@ export function getCapabilityCallSentence(
   options?: { includeQuery?: boolean },
 ): CapabilityCallSentence {
   const toolName = part.toolName
+  const argumentsInput = isRecord(part.input) && isRecord(part.input.arguments) ? part.input.arguments : part.input
+  const browserCode = isRecord(argumentsInput) && typeof argumentsInput.code === "string" && /setupBrowserRuntime\s*\(|browsers\.get\s*\(["']iab["']\)/.test(argumentsInput.code)
+  if ((toolName === "js" && browserCode) || toolName === "node_repl_js" || toolName === "mcp__node_repl__js") {
+    return { service: "Browser", present: "Using Browser", past: "Used Browser" }
+  }
   const query = options?.includeQuery === false ? null : extractQuery(part.input)
   const quoted = query ? ` “${query}”` : ""
 

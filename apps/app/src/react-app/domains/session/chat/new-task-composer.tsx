@@ -10,6 +10,7 @@ import { t } from "@/i18n";
 import type { ComposerSettingsSection } from "@/react-app/domains/settings/library";
 import { ReactSessionComposer } from "@/react-app/domains/session/surface/composer/composer";
 import { encodeComposerMentionValue, type ComposerMentionKind } from "@/react-app/domains/session/surface/composer/mention-encoding";
+import { createMessageReference, serializeMessageReference } from "@/react-app/domains/session/surface/composer/message-reference";
 import {
   createPastedTextChip,
   createPastedTextFile,
@@ -33,6 +34,7 @@ import { resolveAttachmentFileMetadata } from "@/react-app/domains/session/sync/
 export type NewTaskComposerContext = {
   client: SofiaServerClient | null;
   workspaceId: string | null;
+  workspaceRoot?: string;
   selectedModel: ModelRef;
   modelOptions?: readonly ModelOption[];
   modelUnavailable?: boolean;
@@ -177,7 +179,8 @@ export function NewTaskComposer(props: NewTaskComposerProps) {
       context?.onSelectAgent(value);
       return;
     }
-    props.onDraftChange(props.draft.replace(/@([^\s@]*)$/, `@${encodeComposerMentionValue(value)} `));
+    const token = kind === "file" ? serializeMessageReference(createMessageReference(value, workspaceId ?? "", context?.workspaceRoot)) : `@${encodeComposerMentionValue(value)}`;
+    props.onDraftChange(props.draft.replace(/@([^\s@]*)$/, `${token} `));
     setMentions((previous) => ({ ...previous, [value]: kind }));
   };
 

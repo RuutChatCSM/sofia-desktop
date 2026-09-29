@@ -4,8 +4,9 @@ import { fileURLToPath } from "node:url";
 
 const scriptsDir = dirname(fileURLToPath(import.meta.url));
 const serverRoot = resolve(scriptsDir, "..");
-const source = resolve(serverRoot, "src", "sofia-browser-repl.mjs");
-const destination = resolve(serverRoot, "dist", "sofia-browser-repl.mjs");
-
-await mkdir(dirname(destination), { recursive: true });
-await copyFile(source, destination);
+for (const name of ["sofia-browser-repl.mjs", "browser-cursor.mjs"]) {
+  const source = resolve(serverRoot, "src", name);
+  const destination = resolve(serverRoot, "dist", name);
+  await mkdir(dirname(destination), { recursive: true });
+  await copyFile(source, destination);
+}

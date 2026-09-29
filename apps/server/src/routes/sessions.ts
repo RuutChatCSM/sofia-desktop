@@ -311,6 +311,60 @@ export function registerSessionRoutes(options: RegisterSessionRoutesOptions): vo
     return jsonResponse({ ok: true });
   });
 
+  addRoute(routes, "POST", "/workspace/:id/sessions/:sessionId/revert", "client", async (ctx) => {
+    ensureWritable(config);
+    requireClientScope(ctx, "collaborator");
+    const workspace = await resolveWorkspace(config, ctx.params.id);
+    const sessionId = ctx.params.sessionId?.trim();
+    if (!sessionId) throw new ApiError(400, "invalid_payload", "sessionId is required");
+    const body = await readJsonBody(ctx.request);
+    const messageId = typeof body.messageId === "string" ? body.messageId.trim() : "";
+    if (!messageId) throw new ApiError(400, "invalid_payload", "messageId is required");
+    await readWorkspaceSession(workspace, sessionId);
+    console.info("[sofia-server] revert", {
+      phase: "start",
+      source: "workspace.sessions.revert_route",
+      initiator: "user",
+      reason: "client requested session revert through Sofia server route",
+      workspaceId: workspace.id,
+      sessionID: sessionId,
+      messageID: messageId,
+      actorType: ctx.actor?.type ?? "unknown",
+    });
+    const result = await createWorkspaceWorkspaceEngineClient(config, workspace, { sessionId }).session.revert({
+      sessionID: sessionId,
+      messageID: messageId,
+    });
+    if (result.error !== undefined) {
+      console.info("[sofia-server] revert", {
+        phase: "error",
+        source: "workspace.sessions.revert_route",
+        initiator: "user",
+        workspaceId: workspace.id,
+        sessionID: sessionId,
+        messageID: messageId,
+        actorType: ctx.actor?.type ?? "unknown",
+      });
+      throw new ApiError(502, "engine_request_failed", "Sofia engine revert failed");
+    }
+    console.info("[sofia-server] revert", {
+      phase: "done",
+      source: "workspace.sessions.revert_route",
+      initiator: "user",
+      workspaceId: workspace.id,
+      sessionID: sessionId,
+      messageID: messageId,
+      actorType: ctx.actor?.type ?? "unknown",
+    });
+    // Report the revert cursor so the client rewinds the transcript at once
+    // instead of waiting for a full refetch. It is the clicked message:
+    // everything from it onward is what the engine just dropped.
+    return jsonResponse({
+      ok: true,
+      session: result.data ? { ...result.data, revert: { messageID: messageId } } : null,
+    });
+  });
+
   addRoute(routes, "GET", "/workspace/:id/sessions", "client", async (ctx) => {
     const workspace = await resolveWorkspace(config, ctx.params.id);
     const items = await listWorkspaceSessions(workspace, {

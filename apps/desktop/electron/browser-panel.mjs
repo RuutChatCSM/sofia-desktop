@@ -2,10 +2,10 @@
 // proxy configuration, and browser IPC registrations. Extracted from
 // main.mjs as a factory so the main process only owns window creation.
 import path from "node:path";
-import { writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
-import { app, WebContentsView, clipboard, dialog, nativeTheme, session, shell } from "electron";
+import { app, View, WebContentsView, clipboard, dialog, nativeTheme, session, shell } from "electron";
 
 import {
   PEEK_SHIELD_ACTION_CHANNEL,
@@ -46,6 +46,7 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
   const browserTabs = new Map();
   let browserTabOrder = [];
   let activeBrowserTabId = null;
+  const peekCursorVisibility = new Map();
   let browserViewVisible = false;
   // Last browser panel bounds reported by the renderer, in renderer CSS pixels.
   // Converted to window device-independent pixels at every setBounds call.
@@ -53,6 +54,8 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
   let browserTabCounter = 0;
   // Active proxy for the built-in browser session: { rules, username, password }.
   let browserProxy = null;
+  const installedExtensionPaths = new Set();
+  let extensionRestorePromise = null;
   let menuOverlayView = null;
   let menuOverlayRequest = null;
   let menuOverlayReady = false;
@@ -264,6 +267,8 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
       // can still read must never be described as a browser failure.
       pageState: tab.state.pageState,
       agentState: agentLeases.statusFor(tabId),
+      viewport: tab.state.viewport,
+      zoom: tab.state.zoom,
       appliedViewport: tab.state.appliedViewport,
       appliedBounds: tab.state.appliedBounds,
     };
@@ -282,8 +287,89 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
   function browserStatePayload() {
     return {
       activeTabId: activeBrowserTabId,
+      viewVisible: browserViewVisible,
       tabs: listBrowserTabs(),
     };
+  }
+
+  function browserExtensions() {
+    return session.fromPartition(BROWSER_SESSION_PARTITION).extensions;
+  }
+
+  function extensionManifestPath() {
+    return path.join(app.getPath("userData"), "browser-extensions.json");
+  }
+
+  async function restoreBrowserExtensions() {
+    try {
+      const saved = JSON.parse(await readFile(extensionManifestPath(), "utf8"));
+      if (!Array.isArray(saved)) return;
+      for (const extensionPath of saved) {
+        if (typeof extensionPath !== "string" || !path.isAbsolute(extensionPath)) continue;
+        try {
+          await browserExtensions().loadExtension(extensionPath);
+          installedExtensionPaths.add(extensionPath);
+        } catch (error) {
+          console.warn("[browser] could not restore extension", extensionPath, error);
+        }
+      }
+    } catch (error) {
+      if (error?.code !== "ENOENT") console.warn("[browser] could not read extensions", error);
+    }
+  }
+
+  function ensureBrowserExtensionsRestored() {
+    if (!extensionRestorePromise) {
+      extensionRestorePromise = app.whenReady().then(restoreBrowserExtensions);
+    }
+    return extensionRestorePromise;
+  }
+
+  async function listBrowserExtensions() {
+    await ensureBrowserExtensionsRestored();
+    return browserExtensions().getAllExtensions().map(({ id, name, version, path: extensionPath }) => ({
+      id, name, version, path: extensionPath,
+    }));
+  }
+
+  async function persistBrowserExtensions() {
+    await writeFile(extensionManifestPath(), JSON.stringify([...installedExtensionPaths], null, 2));
+  }
+
+  async function installBrowserExtension() {
+    await ensureBrowserExtensionsRestored();
+    const result = await dialog.showOpenDialog(window(), {
+      title: "Load unpacked browser extension",
+      properties: ["openDirectory"],
+    });
+    if (result.canceled || !result.filePaths[0]) return null;
+    const extensionPath = path.resolve(result.filePaths[0]);
+    try {
+      const extension = await browserExtensions().loadExtension(extensionPath);
+      installedExtensionPaths.add(extensionPath);
+      await persistBrowserExtensions();
+      sendToRenderer("sofia:browser:extensions-changed", await listBrowserExtensions());
+      return { id: extension.id, name: extension.name, version: extension.version, path: extension.path };
+    } catch (error) {
+      await dialog.showMessageBox(window(), {
+        type: "error",
+        title: "Could not load extension",
+        message: "Sofia could not load this unpacked extension.",
+        detail: error instanceof Error ? error.message : String(error),
+      });
+      return null;
+    }
+  }
+
+  async function removeBrowserExtension(extensionId) {
+    await ensureBrowserExtensionsRestored();
+    const extension = browserExtensions().getExtension(String(extensionId));
+    if (!extension) return false;
+    browserExtensions().removeExtension(extension.id);
+    installedExtensionPaths.delete(path.resolve(extension.path));
+    await persistBrowserExtensions();
+    sendToRenderer("sofia:browser:extensions-changed", await listBrowserExtensions());
+    return true;
   }
 
   function browserTabUrl(tab) {
@@ -401,6 +487,10 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
   function bringNativeViewToTop(view) {
     const mainWindow = window();
     if (!mainWindow) return;
+    // Reparenting a view that is already on top interrupts its active pointer
+    // stream. Peek updates its bounds throughout a drag, so this must be a
+    // no-op once the shield has the right z-order.
+    if (mainWindow.contentView.children.at(-1) === view) return;
     try {
       if (mainWindow.contentView.children.includes(view)) {
         mainWindow.contentView.removeChildView(view);
@@ -437,28 +527,51 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
 
   async function showBrowserToolbarMenu(tabId, kind, point) {
     const tab = requireBrowserTab(tabId);
-    if (!["browser", "viewport", "zoom"].includes(kind)) throw new Error("Unknown browser menu");
+    if (!["browser", "viewport", "zoom", "extensions"].includes(kind)) throw new Error("Unknown browser menu");
+    const extensions = kind === "extensions" ? await listBrowserExtensions() : [];
+    const items = kind === "extensions"
+      ? [
+          { id: "extensions-heading", label: `Extensions (${extensions.length})`, disabled: true },
+          { id: "load-extension", label: "Load unpacked extension…" },
+          ...extensions.map((extension) => ({ id: `remove-extension:${extension.id}`, label: `Remove ${extension.name}`, separatorBefore: true })),
+        ]
+      : kind === "zoom"
+        ? [
+            { id: "zoom-out", label: "Zoom out" },
+            { id: "zoom-reset", label: "Reset to 100%" },
+            { id: "zoom-in", label: "Zoom in" },
+          ]
+        : kind === "viewport"
+          ? [
+              { id: "viewport-panel", label: "Follow panel size" },
+              { id: "viewport-desktop", label: "Desktop · 1440 × 900" },
+              { id: "viewport-laptop", label: "Laptop · 1280 × 800" },
+              { id: "viewport-tablet", label: "Tablet · 768 × 1024" },
+              { id: "viewport-phone", label: "Phone · 390 × 844" },
+            ]
+          : [
+              { id: "find", label: "Find in page" },
+              { id: "print", label: "Print…" },
+              { id: "zoom", label: "Zoom", separatorBefore: true },
+              { id: "viewport", label: "Device toolbar" },
+              { id: "screenshot", label: "Take a screenshot" },
+              { id: "extensions", label: "Extensions", separatorBefore: true },
+              { id: "copy-url", label: "Copy URL", disabled: !browserTabUrl(tab) },
+              { id: "open-external", label: "Open in default browser", disabled: !isHttpUrl(browserTabUrl(tab)) },
+              { id: "peek", label: "Show in Peek", separatorBefore: true },
+              { id: "docked", label: "Dock beside conversation" },
+              { id: "expanded", label: "Expand browser" },
+            ];
     return showMenuOverlay({
       id: `browser-menu:${tab.tabId}:${Date.now()}`,
       source: kind,
       tabId: tab.tabId,
       url: browserTabUrl(tab),
-      bounds: menuOverlayBounds(scaleRendererPoint(point), 300, kind === "viewport" ? 410 : kind === "zoom" ? 400 : 390),
+      bounds: menuOverlayBounds(scaleRendererPoint(point), 300, Math.min(600, Math.max(90, items.length * 40 + 16))),
       viewport: tab.state.viewport,
       zoom: tab.state.zoom,
       appliedScale: tab.state.appliedViewport?.scale ?? null,
-      items: [
-        { id: "find", label: "Find in page", shortcut: "⌘F" },
-        { id: "print", label: "Print…" },
-        { id: "zoom", label: "Zoom", separatorBefore: true },
-        { id: "viewport", label: "Show device toolbar" },
-        { id: "screenshot", label: "Take a screenshot" },
-        { id: "copy-url", label: "Copy URL", disabled: !browserTabUrl(tab), separatorBefore: true },
-        { id: "open-external", label: "Open in default browser", disabled: !browserTabUrl(tab) },
-        { id: "peek", label: "Show in peek", separatorBefore: true },
-        { id: "docked", label: "Dock beside conversation" },
-        { id: "expanded", label: "Expand browser" },
-      ],
+      items,
     });
   }
 
@@ -507,7 +620,38 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
         break;
       case "viewport":
       case "zoom":
+      case "extensions":
         if (tab) await showBrowserToolbarMenu(tab.tabId, payload.itemId, { x: request.bounds.x / mainWindowZoomFactor(), y: request.bounds.y / mainWindowZoomFactor() });
+        break;
+      case "viewport-panel":
+      case "viewport-desktop":
+      case "viewport-laptop":
+      case "viewport-tablet":
+      case "viewport-phone": {
+        if (!tab) break;
+        const preset = {
+          "viewport-desktop": { width: 1440, height: 900 },
+          "viewport-laptop": { width: 1280, height: 800 },
+          "viewport-tablet": { width: 768, height: 1024 },
+          "viewport-phone": { width: 390, height: 844 },
+        }[payload.itemId];
+        const viewport = preset ? { mode: "responsive", ...preset, deviceScaleFactor: 1 } : { mode: "panel" };
+        setBrowserTabViewport(tab.tabId, viewport);
+        sendToRenderer("sofia:browser:controls-changed", { tabId: tab.tabId, viewport: tab.state.viewport, zoom: tab.state.zoom });
+        break;
+      }
+      case "zoom-in":
+      case "zoom-out":
+      case "zoom-reset": {
+        if (!tab) break;
+        const current = tab.state.zoom.mode === "custom" ? tab.state.zoom.scale : 1;
+        const scale = payload.itemId === "zoom-reset" ? 1 : Math.max(0.25, Math.min(3, Math.round((current + (payload.itemId === "zoom-in" ? 0.25 : -0.25)) * 100) / 100));
+        setBrowserTabZoom(tab.tabId, { mode: "custom", scale });
+        sendToRenderer("sofia:browser:controls-changed", { tabId: tab.tabId, viewport: tab.state.viewport, zoom: tab.state.zoom });
+        break;
+      }
+      case "load-extension":
+        await installBrowserExtension();
         break;
       case "find":
         sendToRenderer("sofia:browser:find-requested", { tabId: request.tabId });
@@ -538,6 +682,11 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
         break;
       case "close-all-tabs":
         closeAllBrowserTabs();
+        break;
+      default:
+        if (typeof payload.itemId === "string" && payload.itemId.startsWith("remove-extension:")) {
+          await removeBrowserExtension(payload.itemId.slice("remove-extension:".length));
+        }
         break;
     }
   }
@@ -615,7 +764,14 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
     });
     // `state` is the durable, user-owned part of the tab (viewport, zoom, page
     // and agent health). Agent leases are layered on top, never stored here.
-    const tab = { tabId, view, favicon: null, state: createBrowserTabRuntimeState(tabId) };
+    // Keep Chromium's emulated compositor inside a native parent. DOM overflow
+    // cannot clip a WebContentsView, and device metrics can change its surface.
+    const container = new View();
+    // A positive radius installs Electron's native clip path; zero clears it.
+    // One pixel keeps the workspace visually square while clipping children.
+    container.setBorderRadius(1);
+    container.addChildView(view);
+    const tab = { tabId, view, container, favicon: null, state: createBrowserTabRuntimeState(tabId) };
     browserTabs.set(tabId, tab);
     browserTabOrder.push(tabId);
     // Load about:blank immediately to preempt persistent-session restore.
@@ -666,9 +822,10 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
       sendToRenderer("sofia:browser:tab-activated", { tabId });
     });
     view.webContents.on("did-navigate", () => {
+      syncPeekCursorVisibility(tabId, { force: true });
       // Navigations can drop the renderer's metrics override; re-assert the
       // tab's own viewport. Detaching an agent never does this.
-      if (tab.state.viewport.mode === "responsive") {
+      if (tab.state.viewport.mode === "responsive" || browserPresentation === "peek") {
         void applyTabViewport(tabId, { force: true });
       }
       sendBrowserState();
@@ -684,6 +841,7 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
       sendBrowserState();
     });
     view.webContents.on("did-stop-loading", () => {
+      syncPeekCursorVisibility(tabId, { force: true });
       tab.state.pageState = transitionPageState(tab.state.pageState, "stop");
       sendBrowserState();
     });
@@ -698,6 +856,7 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
       sendBrowserState();
     });
     view.webContents.once("destroyed", () => {
+      detachBrowserView(view);
       agentLeases.releaseTab(tabId);
       viewportController.forget(tabId);
       browserTabs.delete(tabId);
@@ -720,9 +879,10 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
   function detachBrowserView(view) {
     const mainWindow = window();
     if (!mainWindow || !view) return;
+    const root = Array.from(browserTabs.values()).find((tab) => tab.view === view)?.container ?? view;
     try {
-      if (mainWindow.contentView.children.includes(view)) {
-        mainWindow.contentView.removeChildView(view);
+      if (mainWindow.contentView.children.includes(root)) {
+        mainWindow.contentView.removeChildView(root);
       }
     } catch {
       // already removed
@@ -791,7 +951,10 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
     setBounds: (tabId, bounds) => {
       if (!bounds) return;
       const tab = getBrowserTab(tabId);
-      if (tab && !tab.view.webContents.isDestroyed()) tab.view.setBounds(bounds);
+      if (tab && !tab.view.webContents.isDestroyed()) {
+        tab.container.setBounds(bounds);
+        tab.view.setBounds({ x: 0, y: 0, width: bounds.width, height: bounds.height });
+      }
     },
   });
 
@@ -839,6 +1002,19 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
   /** @type {"hidden" | "peek" | "docked" | "expanded"} */
   let browserPresentation = "docked";
 
+  // Peek's native shield has its own pointer surface. Hide the page's animated
+  // ghost there so a compact preview cannot show a second pointer.
+  function syncPeekCursorVisibility(tabId = activeBrowserTabId, { force = false } = {}) {
+    const tab = getBrowserTab(tabId);
+    if (!tab || tab.view.webContents.isDestroyed()) return;
+    const hidden = browserPresentation === "peek" && tabId === activeBrowserTabId;
+    if (!force && peekCursorVisibility.get(tabId) === hidden) return;
+    peekCursorVisibility.set(tabId, hidden);
+    void tab.view.webContents.executeJavaScript(
+      `document.documentElement.toggleAttribute("data-sofia-browser-peek", ${hidden})`,
+    ).catch(() => undefined);
+  }
+
   /**
    * @param {unknown} mode
    * @returns {"hidden" | "peek" | "docked" | "expanded"}
@@ -851,6 +1027,7 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
     const next = normalizeBrowserPresentation(mode);
     if (next === browserPresentation) return next;
     browserPresentation = next;
+    syncPeekCursorVisibility();
     if (next === "hidden") {
       // Hiding is a presentation change: tabs, page and agent all keep running.
       hideBrowserView();
@@ -931,7 +1108,7 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
 
   function handlePeekShieldAction(action) {
     if (action === "hide") sendToRenderer("sofia:browser:peek-hidden");
-    else if (action === "expand") sendToRenderer("sofia:browser:peek-activated");
+    else if (action === "expand") sendToRenderer("sofia:browser:peek-activated", { intent: "expand" });
   }
 
   /** Track the Peek page slot with the page itself, so the shield always covers it. */
@@ -953,7 +1130,11 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
       detachPeekShield();
       return;
     }
-    view.setBounds(bounds);
+    const currentBounds = view.getBounds();
+    if (currentBounds.x !== bounds.x || currentBounds.y !== bounds.y ||
+        currentBounds.width !== bounds.width || currentBounds.height !== bounds.height) {
+      view.setBounds(bounds);
+    }
     bringNativeViewToTop(view);
   }
 
@@ -974,6 +1155,7 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
   function applyTabViewport(tabId, { force = false } = {}) {
     const tab = getBrowserTab(tabId);
     if (!tab) return undefined;
+    syncPeekCursorVisibility(tabId);
     const panelBounds = lastBrowserBounds ? scaleRendererBounds(lastBrowserBounds) : null;
 
     // A collapsed panel is not a place to render a page. Detaching is the only
@@ -992,10 +1174,12 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
     // native view paints that screen wherever it lands, so a card smaller than
     // the emulated screen lets the page spill over the whole app. Zoom lays the
     // same page out at the same breakpoint inside the card's own bounds.
-    const peekZoom =
-      browserPresentation === "peek" && tab.state.viewport?.mode !== "responsive"
-        ? { mode: "custom", scale: browserPeekLayoutZoom(panelBounds) }
-        : null;
+    const peekZoom = browserPresentation === "peek"
+      ? { mode: "custom", scale: browserPeekLayoutZoom(
+          panelBounds,
+          tab.state.viewport?.mode === "responsive" ? tab.state.viewport.width : undefined,
+        ) }
+      : null;
 
     try {
       tab.view.webContents.setZoomFactor(
@@ -1060,24 +1244,28 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
     if (!mainWindow || !browserViewVisible) return;
     const view = getActiveBrowserView();
     if (!view) return;
+    const container = getBrowserTab().container;
     for (const tab of browserTabs.values()) {
       if (tab.view !== view) detachBrowserView(tab.view);
     }
-    if (!mainWindow.contentView.children.includes(view)) {
+    if (!mainWindow.contentView.children.includes(container)) {
       // Size and emulate before the view becomes visible, so a responsive tab
       // never flashes at panel width on the way in.
       if (lastBrowserBounds && lastBrowserBounds.width > 0 && lastBrowserBounds.height > 0) {
         void applyTabViewport(activeBrowserTabId, { force: true });
       }
-      mainWindow.contentView.addChildView(view);
+      mainWindow.contentView.addChildView(container);
     }
   }
 
   function selectBrowserTab(tabId) {
     if (!browserTabs.has(tabId)) throw new Error(`Unknown browser tab: ${tabId}`);
     hideMenuOverlay();
+    const previousTabId = activeBrowserTabId;
     const previousView = getActiveBrowserView();
     activeBrowserTabId = tabId;
+    if (previousTabId && previousTabId !== tabId) syncPeekCursorVisibility(previousTabId);
+    syncPeekCursorVisibility(tabId);
     if (previousView && previousView !== getActiveBrowserView()) {
       detachBrowserView(previousView);
     }
@@ -1286,6 +1474,7 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
   }
 
   function registerIpc(ipcMain) {
+    void ensureBrowserExtensionsRestored();
     ipcMain.handle("sofia:browser:show", (_event, bounds) => attachBrowserView(bounds));
     ipcMain.handle("sofia:browser:hide", () => hideBrowserView());
     ipcMain.handle("sofia:browser:openUrl", (_event, url, provider) => openBrowserUrlForAutomation(url, provider));
@@ -1345,10 +1534,33 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
     ipcMain.handle("sofia:browser:setProxy", (_event, proxy) => setBrowserProxy(proxy));
     ipcMain.handle("sofia:browser:getProxy", () => browserProxyState());
     ipcMain.handle("sofia:browser:toolbarMenu", (_event, tabId, kind, point) => showBrowserToolbarMenu(tabId, kind, point));
+    ipcMain.handle("sofia:browser:extensions:list", () => listBrowserExtensions());
+    ipcMain.handle("sofia:browser:extensions:install", () => installBrowserExtension());
+    ipcMain.handle("sofia:browser:extensions:remove", (_event, extensionId) => removeBrowserExtension(extensionId));
     ipcMain.handle("sofia:browser:find", (_event, tabId, text, forward = true) => {
       const contents = requireBrowserTab(tabId).view.webContents;
       if (!text) return contents.stopFindInPage("clearSelection");
       return contents.findInPage(String(text), { forward, findNext: true });
+    });
+    ipcMain.handle("sofia:browser:annotationCapture", async (_event, tabId) => {
+      const image = await requireBrowserTab(tabId).view.webContents.capturePage();
+      return image.toDataURL();
+    });
+    ipcMain.handle("sofia:browser:annotationTarget", (_event, tabId, x, y) => {
+      const px = Number(x);
+      const py = Number(y);
+      if (!Number.isFinite(px) || !Number.isFinite(py)) return null;
+      return requireBrowserTab(tabId).view.webContents.executeJavaScript(`(() => {
+        const element = document.elementFromPoint(${px}, ${py});
+        if (!element) return null;
+        const rect = element.getBoundingClientRect();
+        return {
+          boundingBox: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+          selector: element.id ? '#' + CSS.escape(element.id) : element.tagName.toLowerCase(),
+          text: (element.innerText || element.textContent || '').trim().slice(0, 240),
+          role: element.getAttribute('role') || undefined,
+        };
+      })()`);
     });
     ipcMain.handle("sofia:browser:tabContextMenu", (_event, tabId, point) => showBrowserTabContextMenu(tabId, point));
     ipcMain.handle("sofia:browser:destroy", () => destroyBrowserView());

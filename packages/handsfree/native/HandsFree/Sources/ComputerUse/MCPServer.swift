@@ -37,7 +37,15 @@ actor MCPServer {
                 let name = params["name"] as? String ?? ""
                 let args = params["arguments"] as? [String: Any] ?? [:]
                 let content = await executeTool(name: name, args: args)
-                respond(id: id, result: ["content": content])
+                // MCP clients must see failed actions as tool failures, not successful
+                // text containing an error. Preserve the recovery payload in content.
+                let failed = content.contains { item in
+                    guard let text = item["text"] as? String,
+                          let data = text.data(using: .utf8),
+                          let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return false }
+                    return payload["ok"] as? Bool == false
+                }
+                respond(id: id, result: ["content": content, "isError": failed])
             default:
                 if id != nil {
                     respondError(id: id, code: -32601, message: "Method not found: \(method)")
@@ -55,6 +63,10 @@ actor MCPServer {
                     "app": ["type": "string", "description": "Optional running app name. Omit for frontmost app."],
                     "pid": ["type": "number", "description": "Optional process id. Disambiguates multiple instances of the same app."],
                     "window_title": ["type": "string", "description": "Optional window title to target a specific window."],
+                    "wait_for": ["type": "string", "description": "Wait for this AX label/value substring before capturing. Never sends input."],
+                    "wait_milliseconds": ["type": "integer", "minimum": 0, "maximum": 5000, "description": "Readiness timeout; default 2000."],
+                    "crop": ["type": "object", "properties": ["x": ["type": "number"], "y": ["type": "number"], "width": ["type": "number"], "height": ["type": "number"]], "required": ["x", "y", "width", "height"], "description": "Zoom into absolute screen-point bounds. Clipped to the target window. New snapshot coordinates refer to this crop."],
+                    "image_width": ["type": "integer", "minimum": 256, "maximum": 2048, "description": "Output image width; default 768. Increase for detail."],
                     "strict": ["type": "boolean", "description": "Keep actions on background-safe AX/postToPid paths. Default true."],
                 ]
             ),
@@ -79,6 +91,7 @@ actor MCPServer {
                     "y": ["type": "number", "description": "Screenshot-image y coordinate (pixels in the snapshot image, e.g. element center.imageY). Not screen pixels."],
                     "screen_x": ["type": "number", "description": "Absolute screen x coordinate (e.g. element center.screenX). Takes precedence over x/y."],
                     "screen_y": ["type": "number", "description": "Absolute screen y coordinate (e.g. element center.screenY). Takes precedence over x/y."],
+                    "button": ["type": "string", "enum": ["left", "right"], "description": "Mouse button; right opens context menu without AXPress."],
                     "click_count": ["type": "number", "description": "1 or 2. Default 1."],
                     "strict": ["type": "boolean", "description": "Override strict mode for this action."],
                 ]
@@ -97,6 +110,7 @@ actor MCPServer {
                 description: "Press a key combo such as command+k, return, tab, or escape.",
                 properties: [
                     "combo": ["type": "string", "description": "Key combo."],
+                    "milliseconds": ["type": "integer", "minimum": 0, "maximum": 5000, "description": "Hold duration before releasing all keys. Default 0."],
                     "snapshot_id": ["type": "string", "description": "Optional snapshot id from the latest snapshot response."],
                     "strict": ["type": "boolean", "description": "Override strict mode for this action."],
                 ]
@@ -175,7 +189,7 @@ actor MCPServer {
                 return try await snapshotResult(args: args)
             case "snapshot_elements":
                 let snapshot = try await runtime.requireSnapshot(snapshotID: snapshotIDArg(args))
-                return jsonResult(SnapshotPage.payload(snapshot, offset: intArg(args, "offset") ?? 0, limit: intArg(args, "limit") ?? 30, query: args["query"] as? String))
+                return jsonResult(SnapshotPage.payload(snapshot, offset: intArg(args, "offset") ?? 0, limit: intArg(args, "limit") ?? 10, query: args["query"] as? String))
             case "click":
                 let metadata = try await runtime.click(
                     snapshotID: snapshotIDArg(args),
@@ -186,6 +200,7 @@ actor MCPServer {
                     screenX: doubleArg(args, "screen_x"),
                     screenY: doubleArg(args, "screen_y"),
                     clickCount: intArg(args, "click_count") ?? 1,
+                    rightClick: args["button"] as? String == "right",
                     strict: boolArg(args, "strict")
                 )
                 return jsonResult(metadata.dictionary)
@@ -193,7 +208,7 @@ actor MCPServer {
                 let metadata = try await runtime.typeText(snapshotID: snapshotIDArg(args), text: args["text"] as? String ?? "", strict: boolArg(args, "strict"))
                 return jsonResult(metadata.dictionary)
             case "press_key":
-                let metadata = try await runtime.pressKey(snapshotID: snapshotIDArg(args), combo: args["combo"] as? String ?? "", strict: boolArg(args, "strict"))
+                let metadata = try await runtime.pressKey(snapshotID: snapshotIDArg(args), combo: args["combo"] as? String ?? "", milliseconds: intArg(args, "milliseconds") ?? 0, strict: boolArg(args, "strict"))
                 return jsonResult(metadata.dictionary)
             case "scroll":
                 let metadata = try await runtime.scroll(
@@ -299,13 +314,21 @@ actor MCPServer {
     }
 
     private func snapshotResult(args: [String: Any]) async throws -> [[String: Any]] {
+        let crop: CGRect?
+        if let raw = args["crop"] as? [String: Any] {
+            guard let x = doubleArg(raw, "x"), let y = doubleArg(raw, "y"),
+                  let width = doubleArg(raw, "width"), let height = doubleArg(raw, "height") else {
+                throw ComputerUseError.staleSnapshot("Crop requires x, y, width, and height.")
+            }
+            crop = CGRect(x: x, y: y, width: width, height: height)
+        } else { crop = nil }
         let snapshot = try await runtime.snapshot(
             appName: args["app"] as? String,
             pid: intArg(args, "pid"),
             windowTitle: args["window_title"] as? String,
-            strict: boolArg(args, "strict")
+            strict: boolArg(args, "strict"), crop: crop, imageWidth: intArg(args, "image_width") ?? 768, waitFor: args["wait_for"] as? String, waitMilliseconds: intArg(args, "wait_milliseconds") ?? 2000
         )
-        let payload = SnapshotPage.payload(snapshot)
+        let payload = SnapshotPage.payload(snapshot, limit: 8)
         guard let text = jsonString(payload) else {
             return textResult("Failed to serialize semantic AX snapshot.")
         }
@@ -545,6 +568,11 @@ actor MCPServer {
     private func errorPayload(_ error: Error) -> [String: Any] {
         let message = error.localizedDescription
         var payload: [String: Any] = ["ok": false, "error": message]
+        if case ComputerUseError.noSnapshot = error {
+            payload["requiredNextAction"] = "snapshot"
+            payload["retryable"] = false
+            payload["hint"] = "The helper has no saved observation, possibly after reconnecting. Snapshot the original app by pid and window_title; do not relaunch the app or reuse old refs."
+        }
         if case ComputerUseError.staleSnapshot = error {
             payload["staleSnapshot"] = true
             payload["retryable"] = false
@@ -566,13 +594,13 @@ actor MCPServer {
 
     private func intArg(_ args: [String: Any], _ key: String) -> Int? {
         if let value = args[key] as? Int { return value }
-        if let value = args[key] as? Double { return Int(value) }
+        if let value = args[key] as? Double, value.isFinite, value >= Double(Int.min), value < Double(Int.max) { return Int(value) }
         if let value = args[key] as? String { return Int(value) }
         return nil
     }
 
     private func doubleArg(_ args: [String: Any], _ key: String) -> Double? {
-        if let value = args[key] as? Double { return value }
+        if let value = args[key] as? Double, value.isFinite { return value }
         if let value = args[key] as? Int { return Double(value) }
         if let value = args[key] as? String { return Double(value) }
         return nil

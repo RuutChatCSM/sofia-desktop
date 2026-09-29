@@ -17,7 +17,7 @@ type ContextMenuItem = {
 
 type ContextMenuRequest = {
   id: string;
-  source: "tab" | "page" | "sidebar";
+  source: "tab" | "page" | "sidebar" | "browser" | "viewport" | "zoom" | "extensions";
   items: ContextMenuItem[];
 };
 

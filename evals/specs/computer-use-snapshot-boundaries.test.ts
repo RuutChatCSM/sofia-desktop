@@ -16,5 +16,5 @@ test.skipIf(process.platform !== "darwin")(title, async () => {
     timeout: 180_000,
     maxBuffer: 2 * 1024 * 1024,
   });
-  expect(stdout + stderr).toContain("Executed 3 tests, with 0 failures");
+  expect(stdout + stderr).toContain("Executed 7 tests, with 0 failures");
 }, 200_000);

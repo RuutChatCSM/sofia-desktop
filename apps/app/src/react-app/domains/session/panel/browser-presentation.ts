@@ -47,11 +47,8 @@ export type BrowserPresentationPreferences = {
   dockedWidth: number;
 };
 
-/** Where `Restore` returns to after an expanded presentation. */
-export type BrowserRestorePresentation =
-  | { mode: "hidden" }
-  | { mode: "peek" }
-  | { mode: "docked"; width: number };
+/** Minimize always returns to the normal split, keeping the user's width. */
+export type BrowserRestorePresentation = { mode: "docked"; width: number };
 
 export type BrowserPresentationRuntime = {
   mode: BrowserPresentationMode;
@@ -75,6 +72,7 @@ export type BrowserPresentationState = {
 export type BrowserPresentationEvent =
   | { type: "agent-browser-started" }
   | { type: "user-open-browser" }
+  | { type: "user-show-peek" }
   | { type: "user-hide-peek" }
   | { type: "user-dock-browser"; width?: number }
   | { type: "user-expand-browser" }
@@ -114,19 +112,20 @@ export const BROWSER_PEEK_VIEWPORT = {
  * follow is the shape of the content it holds: a card that is not the shape of
  * its page is a card with dead space in it.
  */
-export const BROWSER_PEEK_WIDTH = 440;
+export const BROWSER_PEEK_WIDTH = 320;
 export const BROWSER_PEEK_ASPECT = 16 / 10;
 export const BROWSER_PEEK_HEIGHT = Math.round(BROWSER_PEEK_WIDTH / BROWSER_PEEK_ASPECT);
 /**
  * The largest card Peek will ask for, in each direction independently: enough
- * for a desktop page at the default width, and enough for a tablet in portrait.
+ * for a desktop page at the default width, while a portrait preview remains
+ * small enough to float over a conversation rather than obscure it.
  */
 export const MAX_BROWSER_PEEK_WIDTH = BROWSER_PEEK_WIDTH;
-export const MAX_BROWSER_PEEK_HEIGHT = 560;
+export const MAX_BROWSER_PEEK_HEIGHT = 320;
 /** …and the smallest, so a hug never leaves an unreadable or hard-to-grab card. */
-export const MIN_BROWSER_PEEK_WIDTH = 200;
+export const MIN_BROWSER_PEEK_WIDTH = 140;
 export const MIN_BROWSER_PEEK_HEIGHT = 150;
-export const BROWSER_PEEK_RADIUS = 12;
+export const BROWSER_PEEK_RADIUS = 6;
 /** The card never comes closer than this to the edges of the workspace it floats over. */
 export const BROWSER_PEEK_MARGIN = 16;
 // Resting place before the user drags the card: clear of the workspace header
@@ -142,6 +141,7 @@ export const MAX_BROWSER_EXPANDED_WIDTH = 1100;
 export type BrowserPeekPosition = { x: number; y: number };
 
 export const BROWSER_PEEK_DRAG_THRESHOLD_PX = 5;
+export const BROWSER_PEEK_SNAP_THRESHOLD_PX = 32;
 
 /**
  * One pointer gesture on the card. It stays a click until the pointer has
@@ -173,11 +173,29 @@ export function movePeekDrag(
 export function peekDragPosition(
   state: BrowserPeekDragState,
   surface: BrowserSurfaceSize,
+  size = browserPeekSize(),
 ): BrowserPeekPosition {
   // Below the threshold the card does not move at all: an imprecise click must
   // not nudge it, because that same gesture is also how the browser opens.
   if (!state.dragging) return state.origin;
-  return clampPeekPosition({ x: state.origin.x + state.dx, y: state.origin.y + state.dy }, surface);
+  return clampPeekPosition({ x: state.origin.x + state.dx, y: state.origin.y + state.dy }, surface, size);
+}
+
+/** Settle a dragged card against a nearby workspace edge without changing its shape. */
+export function snapPeekPosition(
+  position: BrowserPeekPosition,
+  surface: BrowserSurfaceSize,
+  size = browserPeekSize(),
+): BrowserPeekPosition {
+  const clamped = clampPeekPosition(position, surface, size);
+  const right = Math.max(BROWSER_PEEK_MARGIN, surface.width - size.width - BROWSER_PEEK_MARGIN);
+  const bottom = Math.max(BROWSER_PEEK_MARGIN, surface.height - size.height - BROWSER_PEEK_MARGIN);
+  const snapAxis = (value: number, far: number) => {
+    if (Math.abs(value - BROWSER_PEEK_MARGIN) <= BROWSER_PEEK_SNAP_THRESHOLD_PX) return BROWSER_PEEK_MARGIN;
+    if (Math.abs(value - far) <= BROWSER_PEEK_SNAP_THRESHOLD_PX) return far;
+    return value;
+  };
+  return { x: snapAxis(clamped.x, right), y: snapAxis(clamped.y, bottom) };
 }
 
 /** The workspace the card floats over, in CSS pixels. */
@@ -310,10 +328,7 @@ export function browserPresentationVisible(mode: BrowserPresentationMode): boole
 }
 
 function currentRestore(state: BrowserPresentationState): BrowserRestorePresentation {
-  const mode = state.runtime.mode;
-  if (mode === "docked") return { mode: "docked", width: state.preferences.dockedWidth };
-  if (mode === "peek") return { mode: "peek" };
-  return { mode: "hidden" };
+  return { mode: "docked", width: state.preferences.dockedWidth };
 }
 
 /**
@@ -339,7 +354,12 @@ export function reduceBrowserPresentation(
     case "user-open-browser":
       return {
         ...state,
-        runtime: { ...runtime, mode: "peek", peekSuppressed: false },
+        runtime: { ...runtime, mode: "docked", restore: null, peekSuppressed: false },
+      };
+    case "user-show-peek":
+      return {
+        ...state,
+        runtime: { ...runtime, mode: "peek", restore: null, peekSuppressed: false },
       };
     case "user-dock-browser":
       return {
@@ -361,14 +381,11 @@ export function reduceBrowserPresentation(
       if (runtime.mode !== "expanded") return state;
       const restore = runtime.restore;
       if (!restore) return { ...state, runtime: { ...runtime, mode: "docked", restore: null } };
-      if (restore.mode === "docked") {
-        return {
-          ...state,
-          preferences: { ...preferences, dockedWidth: clampDockedWidth(restore.width) },
-          runtime: { ...runtime, mode: "docked", restore: null },
-        };
-      }
-      return { ...state, runtime: { ...runtime, mode: restore.mode, restore: null } };
+      return {
+        ...state,
+        preferences: { ...preferences, dockedWidth: clampDockedWidth(restore.width) },
+        runtime: { ...runtime, mode: "docked", restore: null },
+      };
     }
     case "user-hide-peek":
       // A presentation action: the browser keeps running and the tabs survive.

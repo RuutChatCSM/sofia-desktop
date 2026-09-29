@@ -2253,26 +2253,49 @@ const desktopCommandHandlers = {
 
       try {
         if (platform === "darwin") {
-          // Scan /Applications and /System/Applications for .app bundles
-          const appDirs = ["/Applications", "/System/Applications", "/Applications/Utilities", `${os.homedir()}/Applications`];
-          const seen = new Set();
-          for (const dir of appDirs) {
-            let entries;
-            try { entries = await readdir(dir); } catch { continue; }
-            for (const entry of entries) {
-              if (!entry.endsWith(".app")) continue;
-              const appPath = path.join(dir, entry);
-              if (seen.has(appPath)) continue;
-              seen.add(appPath);
-              const name = entry.replace(/\.app$/i, "");
-              let icon = null;
-              try {
-                const img = await app.getFileIcon(appPath, { size: "small" });
-                icon = img.isEmpty() ? null : img.toDataURL();
-              } catch {}
-              results.push({ name, appPath, icon });
+          const iconScript = `function applicationIcon(appPath) {
+  let icon = null;
+    try {
+      const original = $.NSWorkspace.sharedWorkspace.iconForFile(appPath);
+      const image = $.NSImage.alloc.initWithSize($.NSMakeSize(32, 32));
+      image.lockFocus;
+      original.drawInRectFromRectOperationFraction($.NSMakeRect(0, 0, 32, 32), $.NSZeroRect, 2, 1);
+      image.unlockFocus;
+      const bitmap = $.NSBitmapImageRep.imageRepWithData(image.TIFFRepresentation);
+      const data = bitmap.representationUsingTypeProperties(4, $.NSDictionary.dictionary);
+      icon = 'data:image/png;base64,' + ObjC.unwrap(data.base64EncodedStringWithOptions(0));
+    } catch {}
+  return icon;
+}`;
+          try {
+            const script = `ObjC.import('AppKit');
+${iconScript}
+function run(argv) {
+  const workspace = $.NSWorkspace.sharedWorkspace;
+  const file = $.NSURL.fileURLWithPath(argv[0]);
+  const preferred = workspace.URLForApplicationToOpenURL(file);
+  const preferredPath = preferred.isNil() ? null : ObjC.unwrap(preferred.path);
+  const applications = workspace.URLsForApplicationsToOpenURL(file);
+  const results = [];
+  for (let index = 0; index < applications.count; index++) {
+    const url = applications.objectAtIndex(index);
+    const appPath = ObjC.unwrap(url.path);
+    const name = ObjC.unwrap($.NSFileManager.defaultManager.displayNameAtPath(appPath)).replace(/\\.app$/i, '');
+    const icon = applicationIcon(appPath);
+    results.push({ appPath, name, icon, isDefault: appPath === preferredPath });
+  }
+  return JSON.stringify(results);
+}`;
+            const matches = JSON.parse(execFileSync("/usr/bin/osascript", ["-l", "JavaScript", "-e", script, target], { encoding: "utf8", timeout: 20000, maxBuffer: 16 * 1024 * 1024 }));
+            const seen = new Set();
+            for (const application of matches) {
+              if (seen.has(application.appPath)) continue;
+              seen.add(application.appPath);
+              results.push(application);
             }
-          }
+            if (results.length) return results.sort((left, right) => Number(right.isDefault) - Number(left.isDefault) || left.name.localeCompare(right.name));
+          } catch {}
+
         } else if (platform === "linux") {
           // Parse .desktop files in standard directories
           const desktopDirs = ["/usr/share/applications", "/usr/local/share/applications", `${os.homedir()}/.local/share/applications`];

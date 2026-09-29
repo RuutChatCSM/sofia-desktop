@@ -20,10 +20,11 @@ import {
 export const PERSISTED_PANEL_TAB_STORE_KEY = "sofia:panel-tabs:v2";
 export const LEGACY_PANEL_TAB_STORE_KEY = "sofia:panel-tabs:v1";
 
-export type PanelTabType = "artifact" | "browser" | "changes";
+export type PanelTabType = "artifact" | "browser" | "changes" | "start" | "files";
 
 export type { BrowserPanelTab } from "../../../../app/lib/desktop-types";
 import type {
+  BrowserAnnotation,
   BrowserInteractionMode,
   BrowserPanelTab,
   BrowserTabId,
@@ -55,7 +56,7 @@ export type ChangesPanelTab = {
   filePath?: string;
 };
 
-export type PanelTab = BrowserPanelTab | ArtifactPanelTab | ChangesPanelTab;
+export type PanelTab = BrowserPanelTab | ArtifactPanelTab | ChangesPanelTab | { id: string; type: "start" | "files"; label: string; path?: string };
 
 export type SessionPanelState = {
   tabs: PanelTab[];
@@ -91,6 +92,7 @@ export type PanelTabStore = {
   setBrowserViewport: (sessionId: string, tabId: string, viewport: BrowserViewport) => void;
   setBrowserZoom: (sessionId: string, tabId: string, zoom: BrowserZoom) => void;
   setBrowserInteractionMode: (sessionId: string, tabId: string, mode: BrowserInteractionMode) => void;
+  addBrowserAnnotation: (sessionId: string, tabId: string, annotation: BrowserAnnotation) => void;
   syncArtifactTargets: (
     sessionId: string,
     targets: Array<{ id: string; name: string; preview: OpenTargetPreview }>,
@@ -477,6 +479,9 @@ export const usePanelTabStore = create<PanelTabStore>()(
       )),
       setBrowserInteractionMode: (sessionId, tabId, mode) => set((state) => (
         updateBrowserTab(state, sessionId, tabId, (tab) => ({ ...tab, interactionMode: mode }))
+      )),
+      addBrowserAnnotation: (sessionId, tabId, annotation) => set((state) => (
+        updateBrowserTab(state, sessionId, tabId, (tab) => ({ ...tab, annotations: [...tab.annotations, annotation] }))
       )),
       syncArtifactTargets: (sessionId, targets) => set((state) => {
         const session = getWritableSession(state, sessionId);

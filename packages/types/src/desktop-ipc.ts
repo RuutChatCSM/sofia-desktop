@@ -539,7 +539,7 @@ export type DesktopCommandMap = {
   __applyBrandIcon: { args: [url: string | null]; result: BrandIconApplyResult };
   __getBrandIconState: { args: []; result: BrandIconState };
   __evalRelaunch: { args: []; result: EvalRelaunchResult };
-  __getApplicationsForFile: { args: [target: string]; result: { name: string; appPath: string; icon: string | null }[] };
+  __getApplicationsForFile: { args: [target: string]; result: { name: string; appPath: string; icon: string | null; isDefault?: boolean }[] };
   __openWithApp: { args: [target: string, appPath: string]; result: unknown };
   __fetch: { args: [url: string, init?: DesktopFetchInit]; result: DesktopFetchResult };
   __homeDir: { args: []; result: string };

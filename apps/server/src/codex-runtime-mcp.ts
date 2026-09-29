@@ -3,7 +3,7 @@
 // ChatGPT/Codex app's "capabilities = SKILL.md + plugin that registers tools +
 // MCP bridge" model (see reference/codex-app TOOLS-SKILLS.md): each surface is a
 // SKILL.md the agent must obey plus an MCP server the skill points at.
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -53,12 +53,21 @@ export function resolveBrowserReplInvocation(): { command: string; args: string[
   ];
   const harness = candidates.find((candidate) => existsSync(candidate));
   if (!harness) return null;
-  const brokerUrl = process.env.SOFIA_ELECTRON_AGENT_CDP_BASE_URL?.trim();
-  if (!brokerUrl) return null;
+  const discoveryPath = join(process.env.SOFIA_HOME?.trim() || join(homedir(), ".sofia"), "sofia-cdp-broker.json");
+  let discoveredUrl = "";
+  try {
+    const record: unknown = JSON.parse(readFileSync(discoveryPath, "utf8"));
+    if (record && typeof record === "object" && "url" in record && typeof record.url === "string") {
+      discoveredUrl = record.url.trim();
+    }
+  } catch {
+    // The live environment variable is sufficient when no discovery file exists.
+  }
+  const brokerUrl = process.env.SOFIA_ELECTRON_AGENT_CDP_BASE_URL?.trim() || discoveredUrl;
   return {
     command: process.execPath,
     args: [harness],
-    env: { ELECTRON_RUN_AS_NODE: "1", SOFIA_BROWSER_CDP_URL: brokerUrl },
+    env: { ELECTRON_RUN_AS_NODE: "1", ...(brokerUrl ? { SOFIA_BROWSER_CDP_URL: brokerUrl } : {}) },
   };
 }
 
@@ -121,11 +130,12 @@ export function defaultCodexRuntimeMcpServers(): CodexRuntimeMcpServer[] {
   // codex agent gets the app-parity surface instead: a Node REPL `js` tool
   // (mcp__node_repl__js) that exposes `agent.browsers.get("iab")` backed by the
   // same local CDP broker, driven over each tab's page-level websocket.
-  const brokerUrl = process.env.SOFIA_ELECTRON_AGENT_CDP_BASE_URL?.trim();
   const replInvocation = resolveBrowserReplInvocation();
-  if (brokerUrl && replInvocation) {
+  if (replInvocation) {
     servers.push({
       name: "node_repl",
+      startupTimeoutSec: 20,
+      enabledTools: ["js"],
       command: replInvocation.command,
       args: replInvocation.args,
       env: replInvocation.env,
@@ -213,7 +223,7 @@ export function codexRuntimeSkill(name: "computer-use" | "browser"): string {
       "",
       "1. Start with `snapshot` to get a screenshot plus a compact semantic AX state. Each element carries a ref like `{e1}` and center coordinates (`screenX`/`screenY` for absolute, `imageX`/`imageY` for the screenshot image).",
       "2. Act with refs where possible (`click` ref `{e1}`, `set_value`, `perform_action`); fall back to screenshot x/y coordinates only when no AX ref exists.",
-      "3. After each action, take a fresh `snapshot` and compare the semantic state before acting again. Refs change between snapshots.",
+      "3. After each action, take a fresh `snapshot` and compare the semantic state before acting again. Refs belong to the saved snapshot; save its snapshot_id and pass it with actions. If staleSnapshot is reported, recapture and resolve the intended control again.",
       "4. When `treeTruncated` is true, or a control you expected is missing from `elements`, page the snapshot you already have with `snapshot_elements` (`offset`, then `nextOffset` until null; or `query` by label/role). Paging reads the same snapshot, so refs stay valid and you do not invalidate your plan the way a second `snapshot` would.",
       "5. Use `type_text` for input, `press_key` for combos (`command+k`, `return`, `tab`, `escape`), `scroll` with a direction, and `wait` after actions that change UI.",
       "",
@@ -223,10 +233,12 @@ export function codexRuntimeSkill(name: "computer-use" | "browser"): string {
       "- Strict mode (default) keeps the user's frontmost app frontmost. Prefer it; only disable with `set_strict_mode` when a foreground interaction genuinely fails.",
       "- If `check_permissions` reports missing Accessibility or Screen Recording, surface the permission request to the user instead of retrying silently.",
       "- Foreground input is refused when the target app is not frontmost: activate the app, then take a new snapshot. Retrying the same refs will keep failing.",
-      "- Accessibility accepting an action does not prove the UI changed. Confirm the result with a fresh `snapshot` (or `snapshot_elements`) before reporting success.",
+      "- Accessibility accepting an action does not prove the UI changed. Confirm the result with a fresh `snapshot` before reporting success. `snapshot_elements` only pages the saved state; it cannot verify a later action.",
       "- Prefer `launch_app`/`open_url` for opening things over raw shortcuts.",
+      "- Use click(button: right) for context menus; press_key(milliseconds: 0..5000) holds then releases the combo. Use snapshot(crop: {x,y,width,height}, image_width: 256..2048) to inspect a region in absolute screen points. The new image coordinates belong to that crop; discard old refs and coordinates.",
+      "- After reconnecting, snapshot the original app by saved pid and window_title. A noSnapshot response means observations were lost, not that the app closed. Never relaunch an app to recover a tool handle. Missing controls may reflect delayed AX readiness: use snapshot(wait_for: label, wait_milliseconds: 0..5000) for bounded read-only polling, or wait briefly and capture again; do not replay mutations automatically.",
       "- The `cua_*` tools are compatibility aliases for screenshot-first loops; prefer the semantic `snapshot`/`click`/... surface for new work.",
-      "- These tools are registered for every turn. If they are missing from your tool list, computer use is not available on this runtime: say so and stop instead of working around it.",
+      "- These tools are registered for every turn. If they are missing from your tool list, computer use is not available on this runtime: say so and stop instead of working around it. Do not substitute osascript/System Events, screencapture, cliclick, raw Swift, or another desktop driver. Missing tools require reconnecting Computer Use in Settings, not recreating it through shell commands.",
       "",
     ].join("\n");
   }
@@ -246,26 +258,30 @@ export function codexRuntimeSkill(name: "computer-use" | "browser"): string {
     "  globalThis.iab = await agent.browsers.get(\"iab\");",
     "  await iab.documentation();",
     "}",
-    "const browser = globalThis.iab;",
-    "globalThis.tab = await browser.tabs.open(\"https://example.com\");",
-    "const snap = await tab.snapshot();     // a11y/DOM text",
-    "// act, then snapshot again:",
-    "await tab.click({index: 0});           // or {x, y}",
-    "await tab.type({text: \"hello\"});",
-    "console.log(await tab.title(), await tab.url());",
-    "const img = await tab.screenshot();    // base64 PNG",
-    "await tab.close();",
+    "globalThis.browser = globalThis.iab;",
+    "console.log(await browser.tabs.list()); // plain {id,url,title} records",
+    "globalThis.tab = await browser.tabs.get(\"the intended existing tab id\");",
+    "globalThis.tabId = tab.id;",
+    "// tabs.open(url) is only for an explicitly needed new tab.",
+    "console.log(await tab.see()); // inspect before choosing an action",
+    "// In a later call, act on an observed control, then inspect again.",
+    "// display(await tab.screenshot()) emits an image when mixing outputs.",
     "```",
     "",
     "## Protocol",
     "",
-    "1. `browser.tabs.list()` to see open tabs; skip any page whose url is the Sofia (localhost:5173).",
+    "1. `browser.tabs.list()` returns plain {id,url,title} metadata, not handles. Reacquire by the exact saved `tabId`; never recover using the first tab. Skip the Sofia UI tab.",
     "   `browser.user.openTabs()` is the equivalent user-session tab listing.",
-    "2. `browser.tabs.open(url)` opens a new **visible** browser tab and returns it.",
+    "2. `browser.tabs.get(id)` reacquires an existing tab without navigation (`tabs.attach(id)` is an alias). `browser.tabs.open(url)` creates a NEW visible tab; use it only when a new tab is needed.",
+    "   Store reusable bindings as `globalThis.tab`/`globalThis.iab`. Local const/let bindings are scoped to one call. After a process restart reacquire the tab by ID; do not reload a partially filled form.",
+    "   Undefined variables and unknown methods are JavaScript/API errors, not evidence that the browser bridge disconnected.",
     "3. Always `tab.snapshot()` before acting. After an action changes the page, take a fresh snapshot before choosing the next action.",
     "4. Prefer `tab.click({index})`/`tab.fill(target, value)`/`tab.type({text})`; use coordinates only when the semantic snapshot cannot identify the target.",
     "5. `tab.cdp.send(method, params)` is raw CDP on the tab if you need Page/Runtime/Network directly.",
     "6. `tab.evaluate(script)` runs a JavaScript **string** in the page and returns its value, awaiting promises. It takes a string, not a function and not an `{expression}` object: `await tab.evaluate(\"document.body.innerText\")`. Prefer `tab.snapshot()`/`tab.see()` to read page state and `tab.cdp.send` for protocol work; reach for `evaluate` only when neither can express the query.",
+    "",
+    "7. `tab.see({includeText:true,maxText:8000})` includes readable page text and frame metadata. Unknown options throw. Use `tab.frames.read({index})` for a missing message body; sandboxed srcdoc is inert source inspection, not a live frame context. Cross-origin frames without srcdoc report their limitation.",
+    "8. Observations awaited without console.log/display are returned when there is no explicit output. When mixing outputs, print text with console.log and images with display(await tab.screenshot()). Page JavaScript exceptions are tool failures.",
     "",
     "## Rules",
     "",
@@ -273,9 +289,12 @@ export function codexRuntimeSkill(name: "computer-use" | "browser"): string {
     "- The opened tab is already signed in to the user's session; do not attempt login again.",
     "- Keep discovery read-only: do not copy cookies or credentials.",
     "- Prefer `tab.goto(url)` to navigate instead of opening new tabs repeatedly.",
-    "- Do not assume an action succeeded. Verify the resulting page state before continuing.",
-    "- If a call reports `in-app browser bridge is not answering`, the app window that owns the bridge has restarted. Say so and stop; never reconnect to Chromium over raw CDP by hand.",
-    "- `mcp__node_repl__js` is registered for every turn. If it is missing from your tool list the in-app browser bridge failed to start: say so and stop. Never substitute a separate browser process (Chrome, a browser harness) for the in-app browser.",
+    "- Do not assume an action succeeded. Verify the resulting page state before continuing. `tab.see()` exposes non-password field values, validity, disabled/read-only and checked state. Use `tab.inputValue(target)` to verify entered text. When submission stalls, inspect `tab.network.responses()` and `tab.dev.logs()`; a successful click does not prove a server accepted the form.",
+    "- Tool registration, model-visible discovery, and the live browser connection are separate states. A tool missing from the initial list does not prove the bridge failed.",
+    "- If `mcp__node_repl__js` is not immediately visible, use the runtime tool discovery/search facility when available to find the node_repl js tool for Sofia Browser. Load the discovered tool and initialize setupBrowserRuntime() before deciding it is unavailable.",
+    "- If discovery cannot expose the tool, report that the Browser tool is unavailable in this turn; do not claim the browser bridge crashed or that the user needs credentials. A previous unavailable turn is not evidence about this turn.",
+    "- Only report a live bridge connection failure after a browser tool call returns that error. Describe the observed error; do not infer that the app restarted. Never reconnect to Chromium over raw CDP by hand.",
+    "- Never substitute a separate browser process (Chrome, a browser harness) for the in-app browser. If the tool is callable now, proceed with the authorized browser work.",
     "",
   ].join("\n");
 }

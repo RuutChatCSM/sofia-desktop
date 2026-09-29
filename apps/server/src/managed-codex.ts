@@ -471,6 +471,17 @@ export class ManagedCodexEngine {
     return payload.threadId ?? payload.thread?.id ?? null;
   }
 
+  /**
+   * Revert a thread to the history before one turn (thread/revert).
+   *
+   * The engine replaces the thread's durable history with the prefix ending
+   * before `beforeTurnId`, dropping that turn and everything after it. Only
+   * paginated threads support this; the engine rejects the rest.
+   */
+  async revertThread(params: { threadId: string; beforeTurnId: string }): Promise<unknown> {
+    return await this.request("thread/revert", { threadId: params.threadId, beforeTurnId: params.beforeTurnId });
+  }
+
   /** Load a persisted thread, optionally from a legacy rollout outside this home. */
   async resumeThread(threadId: string, options?: { path?: string; model?: string; modelProvider?: string }): Promise<unknown> {
     return await this.request("thread/resume", { threadId, ...options });

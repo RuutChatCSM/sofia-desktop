@@ -28,9 +28,7 @@ describe("peek shield document", () => {
   });
 
   it("masks all four native corners with the app's surface colour", () => {
-    for (const corner of ["tl", "tr", "bl", "br"]) {
-      assert.match(PEEK_SHIELD_DOCUMENT, new RegExp(`\\.mask\\.${corner} \\{[^}]*background: var\\(--peek-frame\\)`));
-    }
+    assert.match(PEEK_SHIELD_DOCUMENT, /\.mask \{[^}]*background: var\(--peek-frame\)/);
     // An inverse quarter disc per corner is what turns four square native
     // corners into one rounded card.
     assert.match(PEEK_SHIELD_DOCUMENT, /\.mask\.tl \{[^}]*border-bottom-right-radius: 100%/);
@@ -53,7 +51,7 @@ describe("peek shield document", () => {
     assert.match(PEEK_SHIELD_DOCUMENT, /setPointerCapture\(event\.pointerId\)/);
     assert.match(PEEK_SHIELD_DOCUMENT, /api && api\.pointer\(\{ phase: "down" \}\)/);
     assert.match(PEEK_SHIELD_DOCUMENT, /phase: "move",/);
-    assert.match(PEEK_SHIELD_DOCUMENT, /api && api\.pointer\(\{ phase: "up" \}\)/);
+    assert.match(PEEK_SHIELD_DOCUMENT, /api && api\.pointer\(\{ phase: "up", dx: delta\.dx, dy: delta\.dy \}\)/);
     assert.match(PEEK_SHIELD_DOCUMENT, /api && api\.action\(target\.getAttribute\("data-action"\)\)/);
     // Controls must not start a drag of the whole card.
     assert.match(PEEK_SHIELD_DOCUMENT, /closest\("\[data-action\]"\)\) return;/);
@@ -67,9 +65,10 @@ describe("peek shield document", () => {
 });
 
 describe("peek pointer reports", () => {
-  it("normalizes the phase so a gesture is always down, move or up", () => {
+  it("normalizes the phase and preserves cancellation", () => {
     assert.equal(peekPointerReport({ phase: "down" }, 1).phase, "down");
     assert.equal(peekPointerReport({ phase: "up" }, 1).phase, "up");
+    assert.equal(peekPointerReport({ phase: "cancel" }, 1).phase, "cancel");
     assert.equal(peekPointerReport({ phase: "move" }, 1).phase, "move");
     assert.equal(peekPointerReport({ phase: "nonsense" }, 1).phase, "move");
     assert.equal(peekPointerReport(undefined, 1).phase, "move");

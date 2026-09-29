@@ -361,58 +361,38 @@ async function waitForPanelWidth(
 async function dragBrowserPanelTo(app: Surface, targetWidth: number): Promise<void> {
   const before = await readPanelWidth(app);
 
-  const dragged = await evalIn(app, `(() => {
-    const divider = document.querySelector('[data-testid="browser-panel-divider"]');
-    if (!divider) return { ok: false, reason: "there is no panel divider in this layout" };
+  const divider = await evalIn(app, `(() => {
+    const divider = document.querySelector('[data-slot="resizable-handle"][aria-orientation="vertical"]');
+    if (!divider) return {
+      ok: false,
+      reason: "there is no panel divider in this layout",
+      presentation: document.querySelector('[data-browser-presentation]')?.getAttribute('data-browser-presentation'),
+      canvasCount: document.querySelectorAll('[data-testid="browser-canvas"]').length,
+      railPressed: document.querySelector('button[aria-label="Browser"]')?.getAttribute('aria-pressed'),
+      handles: Array.from(document.querySelectorAll('[data-slot="resizable-handle"]')).map((element) => element.outerHTML.slice(0, 500)),
+    };
 
     const rect = divider.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) {
       return { ok: false, reason: "the panel divider is not visible at this window width" };
     }
 
-    const startX = rect.left + rect.width / 2;
-    const startY = rect.top + rect.height / 2;
-    const moveBy = ${targetWidth} - ${before};
-
-    // An untrusted pointerdown cannot take pointer capture, and the resizable
-    // group requests it unconditionally. Stub capture for this gesture only.
-    const originalCapture = Element.prototype.setPointerCapture;
-    const originalRelease = Element.prototype.releasePointerCapture;
-    Element.prototype.setPointerCapture = function () {};
-    Element.prototype.releasePointerCapture = function () {};
-
-    const fire = (type, x, buttons) => {
-      divider.dispatchEvent(new PointerEvent(type, {
-        bubbles: true,
-        cancelable: true,
-        clientX: x,
-        clientY: startY,
-        button: 0,
-        buttons,
-        pointerId: 1,
-        isPrimary: true,
-        pointerType: "mouse",
-      }));
-    };
-
-    try {
-      fire("pointerdown", startX, 1);
-      const steps = 12;
-      for (let step = 1; step <= steps; step += 1) {
-        fire("pointermove", startX + (moveBy * step) / steps, 1);
-      }
-      fire("pointerup", startX + moveBy, 0);
-    } finally {
-      Element.prototype.setPointerCapture = originalCapture;
-      Element.prototype.releasePointerCapture = originalRelease;
-    }
-
-    return { ok: true, before: Math.round(${before}) };
+    return { ok: true, x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
   })()`);
 
-  if (isRecord(dragged) && dragged.ok === false) {
-    throw new Error(`Could not drag the panel divider: ${String(dragged.reason)}`);
+  if (!isRecord(divider) || divider.ok === false || typeof divider.x !== "number" || typeof divider.y !== "number") {
+    throw new Error(`Could not drag the panel divider: ${JSON.stringify(divider)}`);
   }
+
+  // The browser panel is on the right: moving its left divider right narrows
+  // it. Trusted input also exercises the real pointer-capture path.
+  const endX = divider.x + before - targetWidth;
+  await app.client.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: divider.x, y: divider.y, button: "none", buttons: 0 });
+  await app.client.send("Input.dispatchMouseEvent", { type: "mousePressed", x: divider.x, y: divider.y, button: "left", buttons: 1, clickCount: 1 });
+  for (let step = 1; step <= 12; step += 1) {
+    await app.client.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: divider.x + (endX - divider.x) * step / 12, y: divider.y, button: "left", buttons: 1 });
+  }
+  await app.client.send("Input.dispatchMouseEvent", { type: "mouseReleased", x: endX, y: divider.y, button: "left", buttons: 0, clickCount: 1 });
 
   await waitForPanelWidth(
     app,
@@ -435,6 +415,15 @@ test("the shipped viewport controls pin a virtual viewport through resize, agent
 
   await createAndSelectWorkspace(app, { path: `/tmp/sofia-browser-viewport-${Date.now()}` });
 
+  // The first-run flow may leave the model picker open over the task surface.
+  // Native browser views correctly stay hidden behind dialogs, so close it
+  // before checking browser geometry.
+  const modelPickerOpen = await evalIn(app, `Boolean(Array.from(document.querySelectorAll('[role="dialog"]')).find((dialog) => dialog.textContent?.includes('Select a model for this session.')))`);
+  if (modelPickerOpen) {
+    await app.client.send("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+    await app.client.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+  }
+
   const openFixtureTab = async (): Promise<{ tabId: string; surface: Surface }> => {
     const opened = await evalIn(
       app,
@@ -452,6 +441,20 @@ test("the shipped viewport controls pin a virtual viewport through resize, agent
   // 1. Default is Panel: the page viewport follows the physical panel.
   const first = await openFixtureTab();
   await using firstSurface = { async [Symbol.asyncDispose]() { first.surface.client.close(); } };
+
+  // Agent-opened pages appear in Peek first. Dock through the same browser
+  // rail button a person uses before asserting panel-sized viewport behavior.
+  const dockDeadline = Date.now() + STEP_TIMEOUT_MS;
+  while (Date.now() < dockDeadline) {
+    const opened = await evalIn(app, `(() => {
+      const button = document.querySelector('button[aria-label="Browser"]');
+      if (!button) return false;
+      button.click();
+      return true;
+    })()`);
+    if (opened) break;
+    await sleep(POLL_MS);
+  }
 
   const initialPanelWidth = await readPanelWidth(app);
   const panelMode = await waitForFixture(

@@ -53,7 +53,7 @@ export function toSplitDiffRows(lines: readonly DiffLine[]): SplitDiffRow[] {
 }
 
 import * as React from "react";
-import { FilePlus2, FileMinus2, FileSymlink, FilePenLine, ImageIcon } from "lucide-react";
+import { FilePlus2, FileMinus2, FileSymlink, FilePenLine, ImageIcon, FolderOpen, Columns2, WrapText } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import {
@@ -127,6 +127,10 @@ export function ReviewPane({
         : ([{ repositoryId: "", root: "", files: repositoryFiles ?? [] }] satisfies RepositoryFiles[]),
     [changeSet, repositoryFiles, scope],
   );
+  const [showFiles, setShowFiles] = React.useState(false);
+  const [filter, setFilter] = React.useState("");
+  const [split, setSplit] = React.useState(true);
+  const [wrap, setWrap] = React.useState(true);
   const files = React.useMemo(() => groups.flatMap((group) => group.files), [groups]);
   const [selectedPath, setSelectedPath] = React.useState<string | null>(initialPath ?? null);
 
@@ -161,23 +165,10 @@ export function ReviewPane({
   return (
     <div data-review-pane={scope} className="flex h-full min-h-0 flex-col">
       <div className="flex flex-wrap items-center gap-2 border-b border-border/70 px-3 py-2">
-        {REVIEW_SCOPES.map((option) => (
-          <button
-            key={option.id}
-            type="button"
-            data-review-scope={option.id}
-            aria-pressed={scope === option.id}
-            onClick={() => onScopeChange(option.id)}
-            className={cn(
-              "rounded-md px-2 py-1 text-[11px] transition-colors",
-              scope === option.id
-                ? "bg-muted text-foreground"
-                : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
-            )}
-          >
-            {option.label}
-          </button>
-        ))}
+        <select aria-label="Review scope" value={scope} className="rounded-full bg-muted px-3 py-1.5 text-xs" onChange={(event) => {
+          const option = REVIEW_SCOPES.find((item) => item.id === event.target.value);
+          if (option) onScopeChange(option.id);
+        }}>{REVIEW_SCOPES.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}</select>
         <span className="ml-auto text-[11px] tabular-nums text-muted-foreground">
           {scope === "last-turn" && changeSet
             ? turnAttributed
@@ -192,6 +183,11 @@ export function ReviewPane({
             </>
           ) : null}
         </span>
+        <div className="flex items-center gap-1 rounded-full bg-muted px-1 [&_svg]:size-4 [&_svg]:stroke-[1.5]">
+          <button type="button" aria-label="Toggle split diff" aria-pressed={split} className="p-2" onClick={() => setSplit(!split)}><Columns2 /></button>
+          <button type="button" aria-label="Wrap diff lines" aria-pressed={wrap} className="p-2" onClick={() => setWrap(!wrap)}><WrapText /></button>
+          <button type="button" aria-label="Toggle changed files" aria-pressed={showFiles} className="p-2" onClick={() => setShowFiles(!showFiles)}><FolderOpen /></button>
+        </div>
       </div>
 
       {loading ? (
@@ -200,8 +196,9 @@ export function ReviewPane({
         <div className="px-3 py-6 text-[12px] text-muted-foreground">No changes in this scope.</div>
       ) : (
         <div className="flex min-h-0 flex-1">
-          <div data-review-files className="w-64 shrink-0 overflow-y-auto border-r border-border/70 py-1">
-            {groups.map((group) => (
+          {showFiles ? <div data-review-files className="order-2 w-60 max-w-[40%] shrink-0 overflow-y-auto border-l border-border/70 py-1">
+            <div className="p-2"><input aria-label="Filter changed files" placeholder="Filter files…" value={filter} onChange={(event) => setFilter(event.target.value)} className="w-full rounded-md border border-border bg-transparent px-2 py-1 text-xs" /></div>
+            {groups.filter((group) => group.files.length > 0).map((group) => (
               <div key={group.repositoryId || "workspace"}>
                 {groups.length > 1 ? (
                   <div
@@ -211,7 +208,7 @@ export function ReviewPane({
                     {group.repositoryId} · {group.files.length} files
                   </div>
                 ) : null}
-                {group.files.map((file) => (
+                {group.files.filter((file) => file.path.toLowerCase().includes(filter.toLowerCase())).map((file) => (
               <button
                 key={`${group.repositoryId}:${file.oldPath ?? ""}:${file.path}`}
                 type="button"
@@ -242,10 +239,10 @@ export function ReviewPane({
                 ))}
               </div>
             ))}
-          </div>
+          </div> : null}
           <div className="min-w-0 flex-1 overflow-auto">
             {selected ? (
-              <DiffView file={selected} onOpenFile={onOpenFile} counted={showCounts} />
+              <DiffView file={selected} onOpenFile={onOpenFile} counted={showCounts} split={split} wrap={wrap} />
             ) : null}
           </div>
         </div>
@@ -260,11 +257,15 @@ function DiffView({
   file,
   onOpenFile,
   counted,
+  split,
+  wrap,
 }: {
   file: FileChange;
   onOpenFile?: (path: string) => void;
   /** False when the source could not read the repository for this turn. */
   counted: boolean;
+  split: boolean;
+  wrap: boolean;
 }) {
   const note = fileChangeNote(file);
   const hunks = file.hunks ?? [];
@@ -298,7 +299,7 @@ function DiffView({
     <div className="flex min-h-0 flex-col">
       {/* Stays put while a long file scrolls: the header is a flex sibling of the
           scroller, and sticky so it also survives any future nesting. */}
-      <div className="sticky top-0 z-10 flex shrink-0 items-center gap-2 border-b border-border/70 bg-background/95 px-3 py-2 backdrop-blur">
+      <div className="sticky top-0 z-10 flex shrink-0 items-center gap-2 border-b border-border/70 bg-dls-canvas px-3 py-2">
         <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-foreground/90" title={file.path}>
           {file.path}
         </span>
@@ -322,10 +323,10 @@ function DiffView({
       ) : (
         <div data-review-hunks className="min-h-0 flex-1 overflow-auto py-1 font-mono text-[11px] leading-5">
           {hunks.map((hunk, index) => (
-            <div key={`${hunk.header}-${index}`} className="min-w-max">
+            <div key={`${hunk.header}-${index}`} className="min-w-0">
               <div className="bg-muted/50 px-3 text-muted-foreground/80">{hunk.header}</div>
               <UnchangedGap hunks={hunks} index={index} />
-              <HunkRows hunk={hunk} highlight={highlighted?.[index]} />
+              <HunkRows hunk={hunk} highlight={highlighted?.[index]} split={split} wrap={wrap} />
             </div>
           ))}
         </div>
@@ -338,7 +339,12 @@ function DiffView({
  * The rows of one hunk. Token lines are consumed in row order for each side, so
  * a highlighted line always sits beside the line it came from.
  */
-function HunkRows({ hunk, highlight }: { hunk: DiffHunk; highlight?: HunkHighlight }) {
+function HunkRows({ hunk, highlight, split, wrap }: { hunk: DiffHunk; highlight?: HunkHighlight; split: boolean; wrap: boolean }) {
+  if (!split) return <>{hunk.lines.map((line, index) => <DiffSide key={index} line={line} side={line.type === "delete" ? "old" : "new"} wrap={wrap} />)}</>;
+  return <SplitHunkRows hunk={hunk} highlight={highlight} wrap={wrap} />;
+}
+
+function SplitHunkRows({ hunk, highlight, wrap }: { hunk: DiffHunk; highlight?: HunkHighlight; wrap: boolean }) {
   const rows = React.useMemo(() => toSplitDiffRows(hunk.lines), [hunk.lines]);
   let oldCursor = 0;
   let newCursor = 0;
@@ -352,8 +358,8 @@ function HunkRows({ hunk, highlight }: { hunk: DiffHunk; highlight?: HunkHighlig
         if (row.new) newCursor += 1;
         return (
           <div key={row.key} data-diff-row className="grid grid-cols-2 border-t border-border/40 first:border-t-0">
-            <DiffSide line={row.old} side="old" tokens={oldTokens} />
-            <DiffSide line={row.new} side="new" tokens={newTokens} />
+            <DiffSide line={row.old} side="old" tokens={oldTokens} wrap={wrap} />
+            <DiffSide line={row.new} side="new" tokens={newTokens} wrap={wrap} />
           </div>
         );
       })}
@@ -366,10 +372,12 @@ function DiffSide({
   line,
   side,
   tokens,
+  wrap,
 }: {
   line?: DiffLine;
   side: "old" | "new";
   tokens?: HighlightedLine;
+  wrap: boolean;
 }) {
   if (!line) {
     return <div data-diff-blank={side} className="grid grid-cols-[2.5rem_1fr] bg-muted/20" />;
@@ -381,7 +389,8 @@ function DiffSide({
       data-diff-side={side}
       data-diff-line={line.type}
       className={cn(
-        "grid grid-cols-[2.5rem_1fr] whitespace-pre",
+        "grid min-w-0 grid-cols-[2.5rem_minmax(0,1fr)] border-r border-border/40",
+        wrap ? "whitespace-pre-wrap break-all" : "whitespace-pre overflow-x-auto",
         added && "bg-emerald-3/40 text-emerald-11",
         removed && "bg-red-3/40 text-red-11",
         !added && !removed && "text-muted-foreground",
@@ -408,8 +417,8 @@ function DiffSide({
 function UnchangedGap({ hunks, index }: { hunks: readonly DiffHunk[]; index: number }) {
   const previous = hunks[index - 1];
   const hunk = hunks[index];
-  if (!previous || !hunk) return null;
-  const gap = hunk.oldStart - (previous.oldStart + previous.oldLines);
+  if (!hunk) return null;
+  const gap = previous ? hunk.oldStart - (previous.oldStart + previous.oldLines) : hunk.oldStart - 1;
   if (gap <= 1) return null;
   return (
     <div

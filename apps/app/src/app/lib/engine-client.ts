@@ -680,7 +680,18 @@ export function createEngineClient(options: EngineClientOptions) {
       },
 
       async revert(params: { sessionID: string; messageID?: string }): Promise<EngineResult<Session>> {
-        return failResult("Session revert is not supported by the Sofia engine.", `/session/${params.sessionID}/revert`);
+        const id = workspaceId();
+        if (!id) return failResult("Workspace is not mounted on this server.", "/sessions");
+        if (!params.messageID) {
+          return failResult("messageID is required to revert a session.", `/session/${params.sessionID}/revert`);
+        }
+        return mapResult(
+          await request<{ session?: Session }>(
+            `${workspacePath(id)}/sessions/${encodeURIComponent(params.sessionID)}/revert`,
+            { method: "POST", body: { messageId: params.messageID }, timeoutMs: 30_000 },
+          ),
+          (data) => data.session ?? codexEmptySession(params.sessionID),
+        );
       },
 
       async fork(params: { sessionID: string; messageID?: string }): Promise<EngineResult<Session>> {
@@ -688,7 +699,13 @@ export function createEngineClient(options: EngineClientOptions) {
       },
 
       async unrevert(params: { sessionID: string }): Promise<EngineResult<Session>> {
-        return failResult("Session revert is not supported by the Sofia engine.", `/session/${params.sessionID}/unrevert`);
+        // The engine rewrites the thread's rollout in place and keeps no
+        // restore point, so there is nothing to unrevert to. The UI only
+        // offers "restore" when the server reports a revert cursor.
+        return failResult(
+          "The engine keeps no restore point for a reverted session.",
+          `/session/${params.sessionID}/unrevert`,
+        );
       },
     },
 

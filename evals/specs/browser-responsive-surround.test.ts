@@ -49,10 +49,13 @@ test("a fitted device frame never runs into the panel edge it used to spill over
     panelBounds: bounds,
   });
   const scale = plan.emulation?.scale ?? 0;
-  const left = (plan.emulation?.positionX ?? 0) * scale;
-  const top = (plan.emulation?.positionY ?? 0) * scale;
-  const right = bounds.width - (left + 1440 * scale);
-  const bottom = bounds.height - (top + 900 * scale);
+  expect(plan.bounds).not.toBeNull();
+  const left = plan.bounds.x - bounds.x;
+  const top = plan.bounds.y - bounds.y;
+  const right = bounds.width - (left + plan.bounds.width);
+  const bottom = bounds.height - (top + plan.bounds.height);
+  expect(plan.emulation?.positionX).toBe(0);
+  expect(plan.emulation?.positionY).toBe(0);
 
   for (const [edge, gap] of Object.entries({ left, right, top, bottom })) {
     expect(gap, `${edge} letterbox`).toBeGreaterThanOrEqual(RESPONSIVE_FRAME_MARGIN_PX - 1);

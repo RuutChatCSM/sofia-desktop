@@ -40,7 +40,7 @@ export function codexItemToToolPart(item: Record<string, unknown>, sessionId: st
   const lower = tool.toLowerCase();
   const isEdit = /\b(edit|write|apply_patch|patch)\b/.test(lower) || type === "fileChange";
   const isRead = /\b(read|cat|view|ls|list|find|glob|grep|search)\b/.test(lower);
-  const toolName = isCommand ? "bash" : isEdit ? "apply_patch" : isRead ? "read" : tool;
+  const toolName = isCommand ? "bash" : isEdit ? "apply_patch" : isRead ? "read" : str(item.server) === "node_repl" && tool === "js" ? "node_repl_js" : tool;
 
   const status = str(item.status);
   const completed = itemCompleted || status === "completed";

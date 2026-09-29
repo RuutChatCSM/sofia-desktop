@@ -87,7 +87,7 @@ import { getSidePanelSessionKey } from "../panel/side-panel-session";
 import { TerminalDock } from "../terminal/terminal-dock";
 import { useActivePanelTab, usePanelTabStore, useSessionPanelState } from "../panel/panel-tab-store";
 import { useBrowserTabSync } from "../panel/use-side-panel-tabs";
-import { browserExpandedWidth, dispatchBrowserPresentation, useBrowserPresentationStore } from "../panel/browser-presentation";
+import { DEFAULT_BROWSER_DOCKED_WIDTH, dispatchBrowserPresentation, useBrowserPresentationStore } from "../panel/browser-presentation";
 import { BrowserPeek } from "../panel/browser-peek";
 import { useWorkspaceShellLayout } from "../../../shell/workspace-shell-layout";
 import { useControlAction, type SofiaControlAction } from "../../../shell/control/control-provider";
@@ -377,10 +377,18 @@ export function SessionPage(props: SessionPageProps) {
   const browserPresentationMode = useBrowserPresentationStore((state) => state.state.runtime.mode);
   const browserDockedWidth = useBrowserPresentationStore((state) => state.state.preferences.dockedWidth);
   const peekBrowserTab = activePanelTab?.type === "browser" ? activePanelTab : null;
-  // Expanded is the browser taking the dominant share of the workspace, not the
-  // whole workspace: the conversation and its composer stay exactly where they
-  // are. Which is also why it needs no separate host — it is the side panel.
-  const browserExpanded = browserPresentationMode === "expanded";
+  // Expansion belongs to the shared panel shell, preserving the split width
+  // and the active tab across Browser, Review, Files and artifacts.
+  const [sidePanelExpanded, setSidePanelExpanded] = useState(false);
+  const panelExpanded = sidePanelExpanded || browserPresentationMode === "expanded";
+  const toggleSidePanelExpanded = useCallback(() => {
+    if (panelExpanded) {
+      setSidePanelExpanded(false);
+      if (browserPresentationMode === "expanded") dispatchBrowserPresentation({ type: "user-restore-browser" });
+    } else {
+      setSidePanelExpanded(true);
+    }
+  }, [panelExpanded, browserPresentationMode]);
   const activeSidePanel = voiceSidePanelOpen ? "voice" : sessionSidePanel;
   const sidePanelOpen = activeSidePanel !== null;
   const panelRailActive = activeSidePanel === "panel";
@@ -459,7 +467,7 @@ export function SessionPage(props: SessionPageProps) {
       dispatchBrowserPresentation({ type: "agent-browser-started" });
     });
     const unsubPresentation = browser.onPresentationRequested?.((mode) => {
-      if (mode === "peek") dispatchBrowserPresentation({ type: "user-open-browser" });
+      if (mode === "peek") dispatchBrowserPresentation({ type: "user-show-peek" });
       else if (mode === "docked") dispatchBrowserPresentation({ type: "user-dock-browser" });
       else if (mode === "expanded") dispatchBrowserPresentation({ type: "user-expand-browser" });
       else dispatchBrowserPresentation({ type: "user-hide-peek" });
@@ -477,6 +485,7 @@ export function SessionPage(props: SessionPageProps) {
   useEffect(() => {
     if (presentedSessionRef.current === props.selectedSessionId) return;
     presentedSessionRef.current = props.selectedSessionId;
+    setSidePanelExpanded(false);
     dispatchBrowserPresentation({ type: "session-changed" });
   }, [props.selectedSessionId]);
 
@@ -491,12 +500,16 @@ export function SessionPage(props: SessionPageProps) {
     if (peekBrowserTab && sessionSidePanelRef.current === "panel") setCurrentSidePanel(null);
   }, [browserPresentationMode, setCurrentSidePanel, peekBrowserTab?.id]);
 
+  useEffect(() => {
+    if (browserPresentationMode === "peek") setSidePanelExpanded(false);
+  }, [browserPresentationMode]);
+
   // The main process mirrors the mode so a Peek can render a desktop viewport
   // without ever rewriting the tab's own viewport.
   useEffect(() => {
     if (!isElectronRuntime()) return;
-    void (window as Window).__SOFIA_ELECTRON__?.browser?.setPresentation?.(browserPresentationMode);
-  }, [browserPresentationMode]);
+    void (window as Window).__SOFIA_ELECTRON__?.browser?.setPresentation?.(panelExpanded && panelRailActive ? "expanded" : browserPresentationMode);
+  }, [browserPresentationMode, panelExpanded, panelRailActive]);
   const {
     leftSidebarResizing,
     leftSidebarWidth,
@@ -504,24 +517,34 @@ export function SessionPage(props: SessionPageProps) {
     setRightSidebarExpandedWidth: setBrowserPanelWidth,
     startLeftSidebarResize,
   } = useWorkspaceShellLayout({
-    expandedRightWidth: 520,
+    expandedRightWidth: DEFAULT_BROWSER_DOCKED_WIDTH,
     minRightWidth: 320,
   });
   const [browserPanelDefaultWidth, setBrowserPanelDefaultWidth] = useState(browserPanelWidth);
+  const browserPanelDragRef = useRef(false);
   const browserPanelGroupRef = useRef<HTMLDivElement>(null);
   /** The last width this effect asked the panel for. See the sizing effect. */
   const browserPanelAppliedTargetRef = useRef<number | null>(null);
   const [browserPanelAvailableWidth, setBrowserPanelAvailableWidth] = useState(0);
-  // Expanded sizes the browser against the workspace it is splitting, so the
-  // share stays ~60/40 instead of "as wide as the window allows".
+  const [browserFullViewBounds, setBrowserFullViewBounds] = useState({ left: 0, top: 0, width: 0, height: 0 });
+  // Expanded sizes the browser against the available workspace width.
   useEffect(() => {
     const group = browserPanelGroupRef.current;
     if (!group) return;
-    const measure = () => setBrowserPanelAvailableWidth(group.getBoundingClientRect().width);
+    const measure = () => {
+      const rect = group.getBoundingClientRect();
+      const width = Math.round(rect.width);
+      setBrowserPanelAvailableWidth((previous) => previous === width ? previous : width);
+      const bounds = { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
+      setBrowserFullViewBounds((previous) =>
+        previous.left === bounds.left && previous.top === bounds.top && previous.width === bounds.width && previous.height === bounds.height
+          ? previous : bounds);
+    };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(group);
-    return () => observer.disconnect();
+    window.addEventListener("resize", measure);
+    return () => { observer.disconnect(); window.removeEventListener("resize", measure); };
   }, []);
   const sidebarProviderStyle: CSSProperties & Record<"--sidebar-width", string> = {
     "--sidebar-width": `${leftSidebarWidth}px`,
@@ -555,16 +578,37 @@ export function SessionPage(props: SessionPageProps) {
     // Docked width is durable user intent: it is what Restore returns to.
     dispatchBrowserPresentation({ type: "preference-docked-width", value: width });
   }, [browserPanelRef, browserPanelWidth, setBrowserPanelWidth]);
+  useEffect(() => {
+    const finishDrag = () => {
+      if (!browserPanelDragRef.current) return;
+      browserPanelDragRef.current = false;
+      // Let the resizable group finish its pointer-up layout before reading it.
+      window.requestAnimationFrame(commitBrowserPanelWidth);
+    };
+    const cancelDrag = () => { browserPanelDragRef.current = false; };
+    window.addEventListener("pointerup", finishDrag);
+    window.addEventListener("pointercancel", cancelDrag);
+    return () => {
+      window.removeEventListener("pointerup", finishDrag);
+      window.removeEventListener("pointercancel", cancelDrag);
+    };
+  }, [commitBrowserPanelWidth]);
 
   // Docked and expanded are the same panel at two widths; the mode picks one.
   // The panel is also the host for artifacts and other destinations, so the
   // policy only sizes it while the browser is what the panel is showing.
-  const browserOwnsPanel = panelRailActive && (browserPresentationMode === "docked" || browserExpanded);
-  const browserPanelTargetWidth = !browserOwnsPanel
+  const browserOwnsPanel = panelRailActive && (browserPresentationMode === "docked" || panelExpanded);
+  const halfPanelWidth = browserPanelAvailableWidth > 0
+    ? Math.round(browserPanelAvailableWidth / 2)
+    : DEFAULT_BROWSER_DOCKED_WIDTH;
+  const panelOpeningWidth = browserPanelDefaultWidth === DEFAULT_BROWSER_DOCKED_WIDTH
+    ? halfPanelWidth
+    : browserPanelDefaultWidth;
+  const browserPanelTargetWidth = !browserOwnsPanel || panelExpanded
     ? null
-    : browserExpanded
-      ? browserExpandedWidth(browserPanelAvailableWidth)
-      : browserDockedWidth;
+    : browserDockedWidth === DEFAULT_BROWSER_DOCKED_WIDTH
+        ? halfPanelWidth
+        : browserDockedWidth;
   useEffect(() => {
     if (isMobile || browserPanelTargetWidth === null || !sidePanelOpen) {
       browserPanelAppliedTargetRef.current = null;
@@ -678,6 +722,7 @@ export function SessionPage(props: SessionPageProps) {
     setCurrentSidePanel("panel");
   }, [activePanelTab?.id, browserUrlForTarget, downloadOpenTarget, openTab, props.selectedSessionId, props.selectedWorkspaceDisplay.workspaceType, props.selectedWorkspaceRoot, setCurrentSidePanel]);
   const closeRightPane = useCallback(() => {
+    setSidePanelExpanded(false);
     setCurrentSidePanel(null);
   }, [setCurrentSidePanel]);
   const openGeneralSidePanel = useCallback(() => {
@@ -689,16 +734,16 @@ export function SessionPage(props: SessionPageProps) {
     closeRightPane();
   }, [closeRightPane]);
   const openBrowserRailPane = useCallback(() => {
-    if (!hasBrowserTabs) return;
-    // Opening the browser pane should land on a usable page, not an empty
-    // panel that forces the user to click "+".
-    dispatchBrowserPresentation({ type: "user-dock-browser" });
-  }, [hasBrowserTabs]);
+    const tab = sessionPanelState.tabs.find((tab) => tab.type === "browser" && tab.id === sessionPanelState.activeTabId)
+      ?? sessionPanelState.tabs.find((tab) => tab.type === "browser");
+    if (tab) selectTab(sidePanelSessionKey, tab.id);
+    else void window.__SOFIA_ELECTRON__?.browser?.createTab?.("about:blank");
+    dispatchBrowserPresentation({ type: "user-open-browser" });
+    // An explicit user open must also reopen a manually closed pane when the
+    // policy already says docked and its mode-change effect will not run.
+    setCurrentSidePanel("panel");
+  }, [sessionPanelState, selectTab, sidePanelSessionKey, setCurrentSidePanel]);
 
-  /** A human asked for more browser than the floating card can show. */
-  const requestBrowserExpand = useCallback(() => {
-    dispatchBrowserPresentation({ type: "user-expand-browser" });
-  }, []);
   const openBrowserUrlControlAction = useMemo<SofiaControlAction>(() => ({
     id: "browser.open_url",
     label: "Open URL in built-in browser",
@@ -1258,7 +1303,6 @@ export function SessionPage(props: SessionPageProps) {
           <ResizablePanelGroup
             elementRef={browserPanelGroupRef}
             orientation="horizontal"
-            onLayoutChanged={browserOwnsPanel && !browserExpanded ? commitBrowserPanelWidth : undefined}
             className="min-h-0 flex-1 max-lg:rounded-none lg:rounded-[14px]"
           >
             <ResizablePanel minSize={isMobile ? "0px" : "360px"} className="min-w-0">
@@ -1616,7 +1660,7 @@ export function SessionPage(props: SessionPageProps) {
                 <BrowserPeek
                   tab={peekBrowserTab}
                   tabCount={sessionPanelState.tabs.filter((tab) => tab.type === "browser").length}
-                  onExpand={requestBrowserExpand}
+                  onExpand={openBrowserRailPane}
                   onHide={() => dispatchBrowserPresentation({ type: "user-hide-peek" })}
                 />
               ) : null}
@@ -1627,6 +1671,7 @@ export function SessionPage(props: SessionPageProps) {
                 <ResizableHandle
                   data-testid="browser-panel-divider"
                   className="hidden bg-transparent transition-colors hover:bg-foreground/20 active:bg-primary/40 lg:flex lg:cursor-col-resize"
+                  onPointerDown={() => { browserPanelDragRef.current = true; }}
                 />
                 <ResizablePanel
                   panelRef={browserPanelRef}
@@ -1639,17 +1684,32 @@ export function SessionPage(props: SessionPageProps) {
                   // browser button).
                   defaultSize={`${Math.round(
                     browserPanelTargetWidth ??
-                      (activeSidePanel === "extensions" ? Math.max(browserPanelDefaultWidth, 480) : browserPanelDefaultWidth),
+                      (activeSidePanel === "extensions" ? Math.max(panelOpeningWidth, 480) : panelOpeningWidth),
                   )}px`}
                   minSize={activeSidePanel === "extensions" ? "420px" : "320px"}
                   maxSize="70%"
-                  className="min-h-0 overflow-hidden pl-2 lg:flex lg:flex-col"
+                  className={cn("min-h-0 overflow-hidden lg:flex lg:flex-col", !panelRailActive && "pl-2")}
                 >
                   <div
                     data-testid="browser-panel-shell"
                     data-native-browser-host
-                    data-browser-presentation={browserExpanded ? "expanded" : "docked"}
-                    className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-[14px] border border-border bg-dls-canvas shadow-[0_8px_24px_rgba(15,23,42,0.06)] dark:shadow-[0_10px_30px_rgba(0,0,0,0.45)] mac:bg-dls-canvas/85 mac:backdrop-blur-2xl mac:backdrop-saturate-150"
+                    data-browser-presentation={panelExpanded ? "expanded" : "docked"}
+                    data-panel-presentation={panelExpanded ? "expanded" : "docked"}
+                    style={panelExpanded && browserFullViewBounds.width > 0 ? {
+                      position: "fixed",
+                      left: browserFullViewBounds.left,
+                      top: browserFullViewBounds.top,
+                      width: browserFullViewBounds.width,
+                      height: browserFullViewBounds.height,
+                      zIndex: 40,
+                      boxShadow: "none",
+                    } : panelRailActive ? { boxShadow: "none" } : undefined}
+                    className={cn(
+                      "flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-dls-canvas",
+                      panelRailActive
+                        ? "rounded-none border-0 border-l border-border shadow-none"
+                        : "rounded-[14px] border border-border shadow-[0_8px_24px_rgba(15,23,42,0.06)] dark:shadow-[0_10px_30px_rgba(0,0,0,0.45)] mac:bg-dls-canvas/85 mac:backdrop-blur-2xl mac:backdrop-saturate-150",
+                    )}
                   >
                   {activeSidePanel === "extensions" && props.settingsSlot ? (
                     <div className="flex h-full min-h-0 flex-col overflow-y-auto bg-dls-canvas">
@@ -1669,6 +1729,8 @@ export function SessionPage(props: SessionPageProps) {
                       workspaceId={props.runtimeWorkspaceId}
                       workspaceRoot={props.selectedWorkspaceRoot}
                       isRemoteWorkspace={props.surface?.isRemoteWorkspace ?? false}
+                      expanded={panelExpanded}
+                      onToggleExpand={toggleSidePanelExpanded}
                       onClose={closeBrowserPane}
                       onOpenExtensions={props.settingsSlot ? () => setCurrentSidePanel("extensions") : undefined}
                       onOpenVoice={voiceExtensionEnabled ? openVoiceRailPane : undefined}
@@ -1729,13 +1791,12 @@ export function SessionPage(props: SessionPageProps) {
                 size="icon-sm"
                 className={cn(
                   "rounded-xl transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-35 disabled:hover:bg-transparent disabled:hover:text-muted-foreground",
-                  panelRailActive && hasBrowserTabs && "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary",
+                  panelRailActive && hasBrowserTabs && "bg-muted text-foreground/80 hover:bg-muted hover:text-foreground",
                 )}
                 onClick={openBrowserRailPane}
-                title={hasBrowserTabs ? "Browser" : "Browser opens when a page is available"}
-                aria-label={hasBrowserTabs ? "Browser" : "Browser opens when a page is available"}
+                title="Browser"
+                aria-label="Browser"
                 aria-pressed={panelRailActive && hasBrowserTabs}
-                disabled={!hasBrowserTabs}
               >
                 <Globe size={15} />
               </Button>
