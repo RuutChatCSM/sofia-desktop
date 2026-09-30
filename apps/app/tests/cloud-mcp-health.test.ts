@@ -152,6 +152,33 @@ describe("Sofia Cloud MCP reconciler", () => {
     expect(payload?.config.url).toBe("https://app.sofia.test/api/den/mcp/agent");
   });
 
+  // The resource Den actually mints today already ends at /mcp/agent. Appending
+  // the agent segment unconditionally produced /mcp/agent/agent, which 404s and
+  // fails the endpoint check in the health validator.
+  test("does not double-append the agent segment to a resource that already has one", () => {
+    const payload = buildSofiaCloudMcpReconcilePayload({
+      context: { ...context, fallbackUrl: "https://app.sofia.test/api/den/mcp/agent" },
+      token: {
+        ...token,
+        resource: "https://app.sofia.test/mcp/agent",
+      },
+    });
+
+    expect(payload?.config.url).toBe("https://app.sofia.test/mcp/agent");
+  });
+
+  test("still appends the agent segment to a resource that ends at the proxy root", () => {
+    const payload = buildSofiaCloudMcpReconcilePayload({
+      context: { ...context, fallbackUrl: "https://app.sofia.test/api/den/mcp/agent" },
+      token: {
+        ...token,
+        resource: "https://app.sofia.test/api/den/mcp",
+      },
+    });
+
+    expect(payload?.config.url).toBe("https://app.sofia.test/api/den/mcp/agent");
+  });
+
   test("keeps central search and execute working against an older Den without opening the App host", () => {
     const payload = buildSofiaCloudMcpReconcilePayload({
       context,

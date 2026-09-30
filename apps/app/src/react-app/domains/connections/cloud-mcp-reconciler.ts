@@ -167,9 +167,18 @@ function appMetadata(): Record<string, string | number | boolean | null> | undef
 
 function resolveMcpUrl(token: DenMcpToken, fallbackUrl?: string | null): string | null {
   const healedResource = resolveCloudMcpResourceUrl(token.resource);
-  if (healedResource) return `${healedResource}/agent`;
+  if (healedResource) return withAgentPath(healedResource);
   const fallback = fallbackUrl?.trim() ?? "";
   return fallback || null;
+}
+
+// The minted resource may or may not already end at the agent surface: Den
+// mints `/mcp/agent`, while older builds minted a bare `/mcp` that the healing
+// above rewrites to the proxy. Appending unconditionally produced
+// `/mcp/agent/agent`, which 404s and fails the endpoint check.
+function withAgentPath(url: string): string {
+  const trimmed = url.replace(/\/+$/, "");
+  return trimmed.endsWith("/agent") ? trimmed : `${trimmed}/agent`;
 }
 
 export function buildSofiaCloudMcpReconcilePayload(input: {
