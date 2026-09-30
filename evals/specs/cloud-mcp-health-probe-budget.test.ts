@@ -20,40 +20,22 @@ test("direct Cloud MCP health checks stay within a scoped handshake budget", ({ 
     maxBuffer: 10 * 1024 * 1024,
   });
   const budgetOutput = `${budgetResult.stdout}${budgetResult.stderr}`;
-  const reconcileResult = spawnSync("pnpm", [
-    "--filter",
-    "sofia-server",
-    "test",
-    "src/cloud-mcp-reconcile.e2e.test.ts",
-    "--test-name-pattern",
-    "clean ready persists desired config",
-  ], {
-    cwd: repoRoot,
-    encoding: "utf8",
-    timeout: 60_000,
-    maxBuffer: 10 * 1024 * 1024,
-  });
-  const reconcileOutput = `${reconcileResult.stdout}${reconcileResult.stderr}`;
+  // The reconcile operation benchmark this used to assert was removed with the
+  // reconcile optimisation it measured, and the "clean ready persists desired
+  // config" witness it named no longer exists. Running it therefore matched zero
+  // tests and failed on the summary. The reconcile behaviour itself is covered
+  // by apps/server's own suite, so the budget spec now proves only the health
+  // probe budget it is named for.
 
   expect(budgetResult.error, budgetOutput).toBeUndefined();
   expect(budgetResult.status, budgetOutput).toBe(0);
   expect(budgetOutput).toContain("4 pass");
   expect(budgetOutput).toContain("0 fail");
   expect(budgetOutput).toContain("cloud-mcp-probe-operation-benchmark concurrent=6 pre=18 post=3 sequential_explicit=3");
-  expect(reconcileResult.error, reconcileOutput).toBeUndefined();
-  expect(reconcileResult.status, reconcileOutput).toBe(0);
-  expect(reconcileOutput).toContain("1 pass");
-  expect(reconcileOutput).toContain("0 fail");
-  expect(reconcileOutput).toContain("cloud-mcp-reconcile-operation-benchmark pre=6 post=3");
 
   evidence.recordAssertionEvidence(
     "Only concurrent health checks share a direct handshake",
     "Six checks are released together through deterministic barriers and reduce the 18-operation protocol baseline to 3; the next settled explicit check performs 3 fresh operations.",
-    true,
-  );
-  evidence.recordAssertionEvidence(
-    "Successful reconcile does not repeat tools/list",
-    "The focused reconcile witness completes ready and reduces its two direct handshakes from 6 operations to exactly 3 by reusing only its operation-local success.",
     true,
   );
   evidence.recordAssertionEvidence(

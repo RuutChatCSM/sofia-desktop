@@ -9,7 +9,11 @@ function message(id: string, phase?: string) {
 
 test("commentary is activity and explicit final answer remains visible", () => {
   expect(turnAnswerIndex([message("checking", "commentary")])).toBe(-1);
-  expect(turnAnswerIndex([message("checking", "commentary"), message("done", "final_answer"), message("postscript", "final_answer")])).toBe(1);
+  // A turn can carry an earlier final_answer followed by more work, because the
+  // runtime continued when the goal was not met. The answer is the LAST one:
+  // treating the earlier message as the answer is what leaked later progress
+  // narration into the transcript as standalone prose.
+  expect(turnAnswerIndex([message("checking", "commentary"), message("done", "final_answer"), message("postscript", "final_answer")])).toBe(2);
   expect(messageTurnId(message("done"))).toBe("turn-1");
 });
 

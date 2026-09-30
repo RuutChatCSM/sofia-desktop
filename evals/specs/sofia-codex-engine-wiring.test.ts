@@ -47,8 +47,12 @@ test("Sofia preserves native engine behavior while wiring multi-provider and bro
   expect(browserSkill).toContain("browser.documentation()");
   expect(browserSkill).toContain("take a fresh snapshot");
   // The skill must tell the agent what a dead bridge means, otherwise it
-  // improvises with raw CDP instead of reporting.
-  expect(browserSkill).toContain("in-app browser bridge is not answering");
+  // improvises with raw CDP instead of reporting. It must not pre-suppose the
+  // cause either: only a tool call returning the error proves the bridge is
+  // down, so the guidance is "report what you observed", not "the app
+  // restarted".
+  expect(browserSkill).toContain("Never reconnect to Chromium over raw CDP by hand");
+  expect(browserSkill).toContain("do not infer that the app restarted");
 
   const sourceAsset = path.join(repoRoot, "apps/server/src/sofia-browser-repl.mjs");
   await access(sourceAsset);

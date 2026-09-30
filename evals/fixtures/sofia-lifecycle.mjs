@@ -48,6 +48,16 @@ createInterface({ input: process.stdin }).on("line", (line) => {
       break;
     case "thread/name/set": break;
     case "thread/items/list": result = { data: [] }; break;
+    // The engine handle always carries SOFIA_APP_CONFIG_FILE, so startup always
+    // asks the engine to confirm it loaded that workspace's config layer, and an
+    // MCP refresh asks it to reload. A fixture that omits these fails the
+    // connect for reasons that have nothing to do with the behaviour under test.
+    case "config/read": {
+      const configFile = process.env.SOFIA_APP_CONFIG_FILE;
+      result = { layers: configFile ? [{ name: { type: "user", file: configFile } }] : [] };
+      break;
+    }
+    case "config/mcpServer/reload": break;
     default: return fail(`unexpected method ${method}`);
   }
   send({ id, result });

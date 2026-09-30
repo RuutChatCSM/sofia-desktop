@@ -334,6 +334,20 @@ export function productDiagnosticsPrecondition(env: NodeJS.ProcessEnv = process.
     const reason = openssl.error?.message ?? openssl.stderr?.trim() ?? "openssl version failed";
     return `OpenSSL is required to mint per-run egress lab certificates for product-verdict egress proofs (${reason}).`;
   }
+  // The pinned finding is a statement about the Bun that was measured, not
+  // about every Bun: it records that that version ignored Node-style TLS 1.2
+  // pinning and stalled instead. A newer Bun may honor it, in which case the
+  // stall simply does not reproduce. Asserting the stall unconditionally would
+  // fail on a fixed runtime, so skip rather than report a finding that is no
+  // longer true.
+  const version = (bun.stdout ?? "").trim().match(/(\d+)\.(\d+)\.(\d+)/);
+  if (version) {
+    const major = Number(version[1]);
+    const minor = Number(version[2]);
+    if (major > 1 || (major === 1 && minor >= 4)) {
+      return `Bun ${version[0]} is newer than the 1.3.x runtime the TLS 1.2 pinning finding was measured on; the stall may be fixed, so the pinned finding is not asserted.`;
+    }
+  }
   return null;
 }
 

@@ -17,7 +17,11 @@ test("a pasted image rides Sofia's turn as an image input, not as base64 prompt 
 
   expect(turn.images).toEqual([IMAGE_DATA_URL]);
   expect(turn.text).toContain("what does this screenshot show?");
-  expect(turn.text).toContain("Referenced file: scan.pdf (file:///workspace/.sofia/inbox/scan.pdf)");
+  // A non-image attachment rides as its own structured file part carrying the
+  // url, so nothing is spelled out as prose. Inlining "Referenced file: …" put a
+  // file:/// URL into the user's own message; the path is not the message.
+  expect(turn.text).not.toContain("file:///workspace/.sofia/inbox/scan.pdf");
+  expect(turn.text).not.toContain("Referenced file");
   expect(turn.text).not.toContain("iVBORw0KGgo");
   expect(turn.text).not.toContain("data:image");
   evidence.recordAssertionEvidence(

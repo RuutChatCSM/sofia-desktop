@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 import { shouldPrepareSuite, suiteWorkerCount } from "./runner/stack-suite.ts";
 
@@ -5,6 +6,12 @@ const common = {
   environment: "node",
   testTimeout: 120_000,
 };
+
+// Specs import app and server sources directly. Those files use each package's
+// own path aliases, so the runner has to resolve them too — without this, a
+// spec that reaches a module importing "@/lib/..." fails to load at all rather
+// than failing an assertion.
+const appSrc = fileURLToPath(new URL("../apps/app/src", import.meta.url));
 
 const prepareSuite = shouldPrepareSuite(process.argv);
 const attachedDen = Boolean(process.env.SOFIA_EVAL_DEN_API_URL?.trim());
@@ -24,6 +31,7 @@ export default defineConfig({
           // Naming convention: *.e2e.test.ts drives the app/Den; every other test must be app-less.
           include: ["specs/**/*.test.ts"],
           exclude: ["**/*.e2e.test.ts"],
+          alias: { "@": appSrc },
         },
       },
       {
