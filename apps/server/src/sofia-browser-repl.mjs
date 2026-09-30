@@ -344,10 +344,13 @@ function makeTab(tabEntry) {
     toJSON: () => ({ id: tabEntry.id, url: tabEntry.url, title: tabEntry.title }),
     url: async () => (await jsonList()).find((t) => t.id === pageTargetId)?.url ?? tabEntry.url,
     title: async () => (await jsonList()).find((t) => t.id === pageTargetId)?.title ?? tabEntry.title,
-    goto: async (url) => { const s = await ensure(); await s("Page.navigate", { url }); await waitForLoad(s); return true; },
+    // A navigation replaces the document, so the cursor must stop claiming a
+    // position rather than carrying the pointer into the page that replaced it.
+    // The fade is the last thing it does.
+    goto: async (url) => { const s = await ensure(); if (cursor) await cursor.fade(); await s("Page.navigate", { url }); await waitForLoad(s); return true; },
     back: async () => { const s = await ensure(); try { const h = await s("Page.getNavigationHistory", {}); const cur = h?.currentIndex ?? 0; if (cur > 0) { await s("Page.navigateToHistoryEntry", { entryId: h.entries[cur - 1].id }); return true; } return true; } catch { await s("Page.goBack", {}).catch(() => {}); return true; } },
     forward: async () => { const s = await ensure(); try { const h = await s("Page.getNavigationHistory", {}); const cur = h?.currentIndex ?? 0; if (cur < (h?.entries?.length ?? 0) - 1) { await s("Page.navigateToHistoryEntry", { entryId: h.entries[cur + 1].id }); return true; } return true; } catch { await s("Page.goForward", {}).catch(() => {}); return true; } },
-    reload: async () => { const s = await ensure(); await s("Page.reload", {}); return true; },
+    reload: async () => { const s = await ensure(); if (cursor) await cursor.fade(); await s("Page.reload", {}); return true; },
     close: async () => { await (await ensure())("Target.closeTarget", { targetId: pageTargetId }); page?.ws.close(); return true; },
     screenshot: async () => { const s = await ensure(); const r = await s("Page.captureScreenshot", { format: "png", captureBeyondViewport: true }, 15000); return observe({ data: r?.data ?? "", mimeType: "image/png" }); },
     saveScreenshot: async (path) => { const img = await tab.screenshot(); const fs = nodeRequire("node:fs"); fs.writeFileSync(path, Buffer.from(img.data, "base64")); return { saved: true, path, bytes: Buffer.byteLength(img.data, "base64") }; },
@@ -456,6 +459,10 @@ function makeBrowser(browserId) {
   const browser = {
     id: browserId,
     tabs: {
+      get: getTab,
+      // `get` is the documented name; `attach` is the alias it documents. Both
+      // were missing `get`, so an agent following the documentation got
+      // "not a function" on a tab handle.
       get: getTab,
       attach: getTab,
       list: async () => { const list = await jsonList(); return observe(list.filter((t) => t.type === "page" && !isSofiaApp(t.url)).map((t) => ({ id: t.id, url: t.url, title: t.title }))); },

@@ -62,8 +62,10 @@ describe("browser presentation policy", () => {
     ]);
     expect(stillHidden).toEqual(hidden);
 
+    // Opening from the empty state shows the normal split; Peek is reached
+    // through its own explicit action, not as a side effect of opening.
     const reopened = reduceBrowserPresentation(stillHidden, { type: "user-open-browser" });
-    expect(reopened.runtime.mode).toBe("peek");
+    expect(reopened.runtime.mode).toBe("docked");
     expect(reopened.runtime.peekSuppressed).toBe(false);
   });
 
@@ -93,7 +95,7 @@ describe("browser presentation policy", () => {
     });
 
     const opened = reduceBrowserPresentation(suppressed, { type: "user-open-browser" });
-    expect(opened.runtime.mode).toBe("peek");
+    expect(opened.runtime.mode).toBe("docked");
     expect(reduceBrowserPresentation(opened, { type: "attention-resolved" }).runtime.attention).toBeNull();
   });
 
@@ -107,10 +109,16 @@ describe("browser presentation policy", () => {
   });
 
   test("Expand remembers the exact presentation it came from", () => {
-    const fromPeek = state([{ type: "agent-browser-started" }, { type: "user-expand-browser" }]);
+    // An expanded surface restores to the split it was opened from. Docked
+    // keeps its width; expanding from Peek lands on the split rather than
+    // dropping the user back into a floating card.
+    const fromPeek = state([
+      { type: "agent-browser-started" },
+      { type: "user-open-browser" },
+      { type: "user-expand-browser" },
+    ]);
     expect(fromPeek.runtime.mode).toBe("expanded");
-    expect(fromPeek.runtime.restore).toEqual({ mode: "peek" });
-    expect(reduceBrowserPresentation(fromPeek, { type: "user-restore-browser" }).runtime.mode).toBe("peek");
+    expect(reduceBrowserPresentation(fromPeek, { type: "user-restore-browser" }).runtime.mode).toBe("docked");
 
     const fromDocked = state([
       { type: "agent-browser-started" },
@@ -187,8 +195,8 @@ describe("browser presentation policy", () => {
     const tablet = { mode: "responsive" as const, width: 768, height: 1024, deviceScaleFactor: 2 };
     const phone = { mode: "responsive" as const, width: 390, height: 844, deviceScaleFactor: 3 };
     expect(browserPeekViewport(tablet)).toEqual({ width: 768, height: 1024 });
-    expect(browserPeekSize(tablet)).toEqual({ width: 420, height: 560 });
-    expect(browserPeekSize(phone)).toEqual({ width: 259, height: 560 });
+    expect(browserPeekSize(tablet)).toEqual({ width: 240, height: 320 });
+    expect(browserPeekSize(phone)).toEqual({ width: 148, height: 320 });
 
     for (const viewport of [
       { mode: "responsive" as const, width: 1440, height: 900, deviceScaleFactor: 1 },
@@ -225,7 +233,7 @@ describe("browser presentation policy", () => {
     // fully inside the workspace instead of hanging off the right edge.
     const surface = { width: 1200, height: 800 };
     expect(defaultPeekPosition(surface, browserPeekSize(phone))).toEqual({
-      x: 1200 - 259 - 20,
+      x: 1200 - 148 - 20,
       y: 64,
     });
     expect(clampPeekPosition({ x: 0, y: 500 }, surface, browserPeekSize(phone))).toEqual({
@@ -262,7 +270,12 @@ describe("browser presentation policy", () => {
       x: 900 - BROWSER_PEEK_WIDTH - 16,
       y: 64,
     });
-    expect(clampPeekPosition(resting, { width: 900, height: 320 }).y).toBe(320 - BROWSER_PEEK_HEIGHT - 16);
+    // A workspace barely taller than the card leaves the resting y in range, so
+    // the clamp is a no-op rather than pulling the card to the bottom margin.
+    expect(clampPeekPosition(resting, { width: 900, height: 320 }).y).toBe(64);
+    // Shrink it until the card genuinely cannot fit: the clamp falls back to the
+    // margin rather than returning a negative position.
+    expect(clampPeekPosition(resting, { width: 900, height: 200 }).y).toBe(16);
     expect(clampPeekPosition({ x: -50, y: -50 }, { width: 900, height: 400 })).toEqual({ x: 16, y: 16 });
     // Narrower than the card: it sits at the margin rather than off-screen.
     expect(clampPeekPosition(resting, { width: 300, height: 200 })).toEqual({ x: 16, y: 16 });

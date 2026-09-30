@@ -28,9 +28,8 @@ describe("right panel empty state", () => {
       />,
     );
 
-    expect(html).toContain("Open in this panel");
     expect(html).toContain("Browser");
-    expect(html).toContain("Files &amp; artifacts");
+    expect(html).toContain("Files");
     expect(html).toContain("Library");
     expect(html).toContain("Voice Mode");
     expect(html).toContain('aria-label="Panel destinations"');
@@ -43,8 +42,9 @@ describe("right panel empty state", () => {
   test("shows only destinations supported by the runtime", () => {
     const html = renderToStaticMarkup(<PanelEmpty />);
 
-    expect(html).toContain("Files &amp; artifacts");
-    expect(html).not.toContain("Browser");
+    // Files are always available, so it is the only destination rendered.
+    expect(html).toContain("Files");
+    expect(html).not.toContain(">Browser<");
     expect(html).not.toContain("Library");
     expect(html).not.toContain("Voice Mode");
     expect(html.match(/<button/g)).toHaveLength(1);

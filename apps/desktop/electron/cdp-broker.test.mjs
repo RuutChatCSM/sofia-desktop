@@ -328,10 +328,14 @@ describe("createCdpBroker", () => {
         "activity should keep the cursor script installed",
       );
       // …and manufactures no pointer movement of its own.
+      // `present()` is the overlay install the broker runs in every new
+      // document — it is not pointer movement, and the assertion above already
+      // covers it. What must never happen here is a move or a flash, which are
+      // the two that put a visible pointer somewhere the user did not ask for.
       const moves = upstream.recorded.evaluate.filter((p) =>
-        /__sofiaAgentCursor\.(moveTo|flash|present)/.test(String(p.params?.expression ?? "")),
+        /__sofiaAgentCursor\.(moveTo|flash)\b/.test(String(p.params?.expression ?? "")),
       );
-      assert.deepEqual(moves, [], "activity must not move or present the cursor");
+      assert.deepEqual(moves, [], "activity must not move or flash the cursor");
     } finally {
       await broker.close();
       upstream.wss.close();

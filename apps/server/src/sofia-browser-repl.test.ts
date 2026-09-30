@@ -99,6 +99,14 @@ async function startFakeBridgeWithPage() {
           ws.send(JSON.stringify({ id: msg.id, result: { result: { type: "string", value: "complete" } } }));
           return;
         }
+        // `see()` reads `snapshot()`'s `.text` and JSON-parses it, so an
+        // observation has to come back as a JSON string. A bare object here
+        // is what made `see()` fail with '"[object Object]" is not valid JSON'.
+        const isObservation = typeof expression === "string" && expression.includes("JSON.stringify({title:");
+        if (isObservation) {
+          ws.send(JSON.stringify({ id: msg.id, result: { result: { type: "string", value: JSON.stringify({ title: "Fake page", url: "https://example.test/", elements: [], text: "fake page body", textTruncated: false, frames: [] }) } } }));
+          return;
+        }
         ws.send(JSON.stringify({ id: msg.id, result: { result: { type: "object", value: { ok: true, x: 40, y: 60 }, description: "Object" } } }));
       },
     },
@@ -208,14 +216,14 @@ describe("sofia browser Node REPL", () => {
 
     const read = await repl.request(2, "tools/call", {
       name: "js",
-      arguments: { code: "const b = await setupBrowserRuntime(); const t = (await b.browsers.get('iab').tabs.list())[0]; await t.see(); return 'read'", },
+      arguments: { code: "const b = await setupBrowserRuntime(); const t = await b.browsers.get('iab').tabs.get((await b.browsers.get('iab').tabs.list())[0].id); await t.see(); return 'read'", },
     });
     expect(read.error).toBeUndefined();
     expect(page.cursorExpressions()).toEqual([]);
 
     const hover = await repl.request(3, "tools/call", {
       name: "js",
-      arguments: { code: "const b = await setupBrowserRuntime(); const t = (await b.browsers.get('iab').tabs.list())[0]; await t.hover({ role: 'button' }); return 'hover'", },
+      arguments: { code: "const b = await setupBrowserRuntime(); const t = await b.browsers.get('iab').tabs.get((await b.browsers.get('iab').tabs.list())[0].id); await t.hover({ role: 'button' }); return 'hover'", },
     });
     expect(hover.error).toBeUndefined();
     expect(page.moves().length).toBeGreaterThanOrEqual(2);
@@ -228,7 +236,7 @@ describe("sofia browser Node REPL", () => {
     // new one, so a navigation in a later call has no cursor left to fade.
     const nav = await repl.request(4, "tools/call", {
       name: "js",
-      arguments: { code: "const b = await setupBrowserRuntime(); const t = (await b.browsers.get('iab').tabs.list())[0]; await t.hover({ role: 'button' }); await t.goto('https://example.com/next'); return 'nav';", },
+      arguments: { code: "const b = await setupBrowserRuntime(); const t = await b.browsers.get('iab').tabs.get((await b.browsers.get('iab').tabs.list())[0].id); await t.hover({ role: 'button' }); await t.goto('https://example.com/next'); return 'nav';", },
     });
     expect(nav.error).toBeUndefined();
     expect(page.fades().length).toBe(1);

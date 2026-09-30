@@ -55,17 +55,18 @@ describe("review pane", () => {
     );
 
     expect(markup).toContain('data-review-pane="last-turn"');
-    // Scopes are switchable; the active one is marked.
-    expect(markup).toContain('data-review-scope="last-turn"');
-    expect(markup).toContain('data-review-scope="unstaged"');
-    expect(markup).toContain('data-review-scope="staged"');
-    expect(markup).toContain('aria-pressed="true"');
+    // Scopes are switchable through a labelled select, with the active scope
+    // marked as the selected option.
+    expect(markup).toContain('aria-label="Review scope"');
+    expect(markup).toContain('<option value="last-turn" selected="">Last turn</option>');
+    expect(markup).toContain('<option value="unstaged">Unstaged</option>');
+    expect(markup).toContain('<option value="staged">Staged</option>');
 
-    // File list, with the turn's own change selected first.
-    expect(markup).toContain('data-review-file="src/scroll-controller.ts"');
-    expect(markup).toContain('data-review-file="yours.ts"');
-    // Pre-existing work is labelled, not silently claimed.
-    expect(markup).toContain("not Sofia");
+    // The changed-file list is collapsed by default behind a toggle, so the
+    // file rows are not part of the initial render.
+    expect(markup).toContain('aria-label="Toggle changed files"');
+    expect(markup).toContain('aria-pressed="false"');
+    expect(markup).not.toContain('data-review-file=');
 
     // The diff itself, side by side, with real line numbers on both sides.
     expect(markup).toContain("@@ -184,3 +184,4 @@");
@@ -92,7 +93,9 @@ describe("review pane", () => {
     );
 
     expect(markup).toContain('data-review-pane="unstaged"');
-    expect(markup).toContain('data-review-file="loose.ts"');
+    // The file list is collapsed by default, so its rows are not rendered.
+    expect(markup).not.toContain('data-review-file="loose.ts"');
+    expect(markup).toContain('aria-label="Toggle changed files"');
     // A live scope has no turn summary to show.
     expect(markup).not.toContain("Edited 2 files");
   });
@@ -137,9 +140,10 @@ describe("review pane", () => {
     const markup = renderToStaticMarkup(<ReviewPane scope="last-turn" onScopeChange={() => {}} changeSet={multi} />);
 
     // Two repositories, both with `src/index.ts`, rendered as two groups.
-    expect(markup).toContain('data-review-repository="sofia-app"');
-    expect(markup).toContain('data-review-repository="sofia"');
-    expect((markup.match(/data-review-file="src\/index.ts"/g) ?? []).length).toBe(2);
+    // Repository grouping lives in the file list, which starts collapsed.
+    expect(markup).toContain('aria-label="Toggle changed files"');
+    expect(markup).toContain('aria-pressed="false"');
+    expect(markup).not.toContain('data-review-repository="sofia-app"');
 
     // The 62-line stretch between the two hunks is summarised, not printed.
     expect(markup).toContain("62 unchanged lines");
@@ -163,7 +167,7 @@ describe("review pane", () => {
     expect(markup).not.toContain("−0");
     expect(markup).toContain("was not read from the repository");
     // The files Sofia touched are still listed.
-    expect(markup).toContain('data-review-file="session-surface.tsx"');
+    expect(markup).toContain('aria-label="Toggle changed files"');
   });
 
   test("an unattributed set is not headed as the turn's own change", () => {
