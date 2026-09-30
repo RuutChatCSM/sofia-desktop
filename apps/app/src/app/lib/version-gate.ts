@@ -273,8 +273,13 @@ export async function resolveFreshStableDesktopUpdate(input: {
   refreshDesktopConfig: () => Promise<DenDesktopConfig>;
   readMetadata?: () => Promise<DenAppVersionMetadata>;
 }): Promise<StableDesktopUpdateSelection | null> {
+  // The org policy is advisory here, not the thing being asked. A revoked
+  // session or an unreachable Den would otherwise fail the whole check and
+  // report "couldn't check for updates" for a build that is perfectly
+  // updatable. Fall back to a null config, which `selectStableDesktopUpdate`
+  // reads as "no version allowlist", so the update is still offered.
   const [desktopConfig, metadata] = await Promise.all([
-    input.refreshDesktopConfig(),
+    input.refreshDesktopConfig().catch(() => null),
     (input.readMetadata ?? readFreshDenAppVersionMetadata)(),
   ]);
   return selectStableDesktopUpdate({

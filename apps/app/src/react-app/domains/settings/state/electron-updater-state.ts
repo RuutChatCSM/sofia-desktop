@@ -176,11 +176,23 @@ export function useElectronUpdaterState(options: UseElectronUpdaterStateOptions)
         };
       }
 
-      const freshDesktopConfig = await refreshDesktopConfig();
-      return {
-        channel: resolveDesktopUpdateChannel(channel, freshDesktopConfig),
-        desktopConfig: freshDesktopConfig,
-      };
+      // A stale org policy can reject this fetch (a revoked session is the
+      // common case). That must not read as "updates are broken": fall back to
+      // the cached policy so the check still runs. The cached config is
+      // advisory, and an empty one resolves the channel to stable, which is
+      // the safe direction to fail.
+      try {
+        const freshDesktopConfig = await refreshDesktopConfig();
+        return {
+          channel: resolveDesktopUpdateChannel(channel, freshDesktopConfig),
+          desktopConfig: freshDesktopConfig,
+        };
+      } catch {
+        return {
+          channel: resolveDesktopUpdateChannel(channel, desktopConfig),
+          desktopConfig,
+        };
+      }
     },
     [desktopConfig, refreshDesktopConfig],
   );

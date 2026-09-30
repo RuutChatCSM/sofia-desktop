@@ -139,6 +139,39 @@ describe("selectStableDesktopUpdate", () => {
       latestPublishedVersion: "0.17.24",
     });
   });
+
+  test("still offers an update when the policy refresh is rejected", async () => {
+    // A revoked session rejects the org-policy fetch. That is not the same as
+    // "this build cannot update": the inventory is the trust boundary, so the
+    // check must survive and still report the newer published release.
+    const selection = await resolveFreshStableDesktopUpdate({
+      currentVersion: "0.17.22",
+      refreshDesktopConfig: async () => {
+        throw new Error("Sign in to Sofia Cloud again.");
+      },
+      readMetadata: async () => metadata,
+    });
+
+    expect(selection).toEqual({
+      kind: "update",
+      targetVersion: "0.17.24",
+      latestPublishedVersion: "0.17.24",
+    });
+  });
+
+  test("a rejected policy refresh does not turn into a blocked state", async () => {
+    const selection = await resolveFreshStableDesktopUpdate({
+      currentVersion: "0.17.24",
+      refreshDesktopConfig: async () => {
+        throw new Error("Sign in to Sofia Cloud again.");
+      },
+      readMetadata: async () => metadata,
+    });
+
+    // With no allowlist there is nothing to enforce, so an org must not be
+    // reported as blocked purely because its policy could not be read.
+    expect(selection?.kind).toBe("current");
+  });
 });
 
 describe("resolveAutomaticStableDesktopUpdate", () => {
