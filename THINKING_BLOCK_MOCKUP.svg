@@ -1,0 +1,94 @@
+<svg width="1200" height="1400" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      body { background: #0a0a0a; }
+      .title { font-size: 32px; font-weight: bold; fill: #e0e0e0; }
+      .subtitle { font-size: 14px; fill: #888; }
+      .col-label { font-size: 12px; font-weight: 700; fill: #666; text-transform: uppercase; letter-spacing: 1px; }
+      .demo-text { font-size: 14px; fill: #ccc; }
+      .block-text { font-size: 14px; fill: #e0e0e0; }
+      .small-text { font-size: 11px; fill: #888; }
+      .list-item { font-size: 12px; fill: #ccc; }
+    </style>
+  </defs>
+  
+  <rect width="1200" height="1400" fill="#0a0a0a"/>
+  
+  <!-- Title -->
+  <text x="40" y="50" class="title">Thinking Block UI Improvements</text>
+  <text x="40" y="85" class="subtitle">Current vs. Improved design with visual distinction, icons, and actions</text>
+  
+  <!-- LEFT COLUMN - BEFORE -->
+  <text x="40" y="140" class="col-label">❌ Current (Before)</text>
+  
+  <!-- Demo message -->
+  <rect x="40" y="165" width="500" height="60" fill="#1e1e1e" stroke="#3c3c3c" stroke-width="1" rx="8"/>
+  <text x="52" y="200" class="demo-text">The system uses a multi-layered architecture...</text>
+  
+  <!-- Current thinking block -->
+  <rect x="40" y="255" width="500" height="45" fill="#191919" stroke="#505050" stroke-width="1" rx="6"/>
+  <text x="52" y="283" class="block-text">Thought  ❯</text>
+  
+  <!-- Issues -->
+  <rect x="40" y="325" width="500" height="140" fill="#321010" stroke="#6b3838" stroke-width="1" rx="8"/>
+  <text x="52" y="347" fill="#ff6b6b" font-weight="600" font-size="11">PROBLEMS</text>
+  <text x="52" y="375" class="list-item">• No visual distinction</text>
+  <text x="52" y="397" class="list-item">• Blends into background</text>
+  <text x="52" y="419" class="list-item">• No icon or color</text>
+  <text x="52" y="441" class="list-item">• Can't copy/share</text>
+  
+  <!-- RIGHT COLUMN - AFTER -->
+  <text x="660" y="140" class="col-label">✅ Improved (After)</text>
+  
+  <!-- Demo message -->
+  <rect x="620" y="165" width="540" height="60" fill="#1e1e1e" stroke="#3c3c3c" stroke-width="1" rx="8"/>
+  <text x="632" y="200" class="demo-text">The system uses a multi-layered architecture...</text>
+  
+  <!-- Improved thinking block - Header -->
+  <rect x="620" y="255" width="540" height="50" fill="#2a1f14" stroke="#db7852" stroke-width="2" rx="10"/>
+  <rect x="620" y="255" width="2" height="50" fill="#db7852"/>
+  <text x="640" y="283" class="block-text">✨  Thinking…     387 words  ❯</text>
+  
+  <!-- Improved thinking block - Content -->
+  <rect x="620" y="305" width="540" height="85" fill="#1a1410" stroke="#8b5a52" stroke-width="1" stroke-dasharray="0" rx="0"/>
+  <line x1="620" y1="305" x2="1160" y2="305" stroke="#6b4a42" stroke-width="1"/>
+  <text x="632" y="325" class="small-text">The architecture layers consist of:</text>
+  <text x="632" y="348" fill="#999" font-size="12">1. Presentation (React/TypeScript)</text>
+  <text x="632" y="368" fill="#999" font-size="12">2. Logic (State + Business Rules)</text>
+  
+  <!-- Buttons -->
+  <rect x="632" y="395" width="140" height="30" fill="#2a2a2a" stroke="#505050" stroke-width="1" rx="6"/>
+  <text x="645" y="415" fill="#aaa" font-size="12">📋 Copy thinking</text>
+  
+  <rect x="782" y="395" width="100" height="30" fill="#2a2a2a" stroke="#505050" stroke-width="1" rx="6"/>
+  <text x="795" y="415" fill="#aaa" font-size="12">🔗 Share</text>
+  
+  <!-- Improvements -->
+  <rect x="620" y="450" width="540" height="150" fill="#142a14" stroke="#64b364" stroke-width="1" rx="8"/>
+  <text x="632" y="472" fill="#4caf50" font-weight="600" font-size="11">IMPROVEMENTS</text>
+  <text x="632" y="500" class="list-item">✨ Sparkles icon + Amber color (#db7852)</text>
+  <text x="632" y="522" class="list-item">Left border highlight (2px solid)</text>
+  <text x="632" y="544" class="list-item">Subtle background fill (5% amber)</text>
+  <text x="632" y="566" class="list-item">Word count indicator</text>
+  <text x="632" y="588" class="list-item">Copy & Share action buttons</text>
+  
+  <!-- Design Specs Header -->
+  <text x="40" y="700" class="col-label">Design Specifications</text>
+  
+  <!-- Spec Items -->
+  <text x="40" y="745" fill="#888" font-size="11" font-weight="600">PRIMARY COLOR</text>
+  <rect x="40" y="760" width="40" height="40" fill="#db7852" stroke="#8b5a52" stroke-width="1" rx="4"/>
+  <text x="90" y="780" fill="#ccc" font-size="12">#db7852 @ 70%</text>
+  
+  <text x="300" y="745" fill="#888" font-size="11" font-weight="600">BORDER</text>
+  <text x="300" y="775" fill="#ccc" font-size="12">Left: 2px solid</text>
+  <text x="300" y="795" fill="#ccc" font-size="12">Others: 1px @ 20%</text>
+  
+  <text x="560" y="745" fill="#888" font-size="11" font-weight="600">ICON</text>
+  <text x="560" y="775" fill="#ccc" font-size="12">Lucide &lt;Sparkles /&gt;</text>
+  <text x="560" y="795" fill="#ccc" font-size="12">Size: 16px</text>
+  
+  <text x="820" y="745" fill="#888" font-size="11" font-weight="600">SPACING</text>
+  <text x="820" y="775" fill="#ccc" font-size="12">Trigger: 14px 16px</text>
+  <text x="820" y="795" fill="#ccc" font-size="12">Gap: 10px</text>
+</svg>
