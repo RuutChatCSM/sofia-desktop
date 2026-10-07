@@ -1,0 +1,243 @@
+╔════════════════════════════════════════════════════════════════════════════════╗
+║                     THINKING BLOCK UI - VISUAL PREVIEW                         ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+
+════════════════════════════════════════════════════════════════════════════════
+1. CURRENT STATE (Before)
+════════════════════════════════════════════════════════════════════════════════
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│ The system architecture includes three main components...                  │
+└────────────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│ Thought  ❯                                                                │  ← Minimal
+└────────────────────────────────────────────────────────────────────────────┘    No visual distinction
+                                                                                   Blends into interface
+
+
+════════════════════════════════════════════════════════════════════════════════
+2. IMPROVED STATE - Collapsed (After)
+════════════════════════════════════════════════════════════════════════════════
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│ The system architecture includes three main components...                  │
+└────────────────────────────────────────────────────────────────────────────┘
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ ✨ Thinking…     456 words                                        ❯       ┃  ← Sparkles icon
+┃                                                                            ┃    Word count shown
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛    Amber border
+  ▲ ▲ ▲ ▲ ▲ ▲ ▲ ▲ ▲ ▲ ▲ ▲ ▲ ▲ ▲ ▲ ▲ ▲ ▲ ▲ ▲ ▲ ▲ ▲ ▲ ▲ ▲ ▲ ▲ ▲ ▲ ▲ ▲ ▲ ▲ ▲    Subtle background
+  Amber left border (2px), Subtle background fill
+
+
+════════════════════════════════════════════════════════════════════════════════
+3. IMPROVED STATE - Expanded (After)
+════════════════════════════════════════════════════════════════════════════════
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ ✨ Thinking…     456 words                                        ❱       ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃                                                                            ┃
+┃  The system architecture includes three core layers:                      ┃
+┃                                                                            ┃
+┃  1. Presentation Layer                                                    ┃  ← Expanded
+┃     - React components with TypeScript                                   ┃     content area
+┃     - State management (Zustand, React Query)                            ┃
+┃     - UI components from Radix UI                                        ┃
+┃                                                                            ┃
+┃  2. Business Logic Layer                                                 ┃
+┃     - Domain models and validations                                      ┃
+┃     - Service layer for API interactions                                 ┃
+┃     - Data transformations and normalization                             ┃
+┃                                                                            ┃
+┃  3. Data Layer                                                           ┃
+┃     - PostgreSQL database with migrations                                ┃
+┃     - API endpoints following REST conventions                           ┃
+┃     - Caching strategy with Redis                                        ┃
+┃                                                                            ┃
+┃  [📋 Copy thinking]  [🔗 Share]                                         ┃  ← Action buttons
+┃                                                                            ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+
+════════════════════════════════════════════════════════════════════════════════
+4. STREAMING STATE (While Sofia is thinking)
+════════════════════════════════════════════════════════════════════════════════
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ ✨ (pulse) Thinking…     256 words                                        ┃  ← Pulsing animation
+┃                                                                            ┃    on sparkles icon
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃                                                                            ┃
+┃  Let me analyze the requirements more carefully. The key aspects are:     ┃  ← Live content
+┃                                                                            ┃     streaming in
+┃  - User needs and pain points                                            ┃
+┃  - Technical constraints                                                 ┃
+┃  - Performance considerations...                                         ┃
+┃                                                                            ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+
+════════════════════════════════════════════════════════════════════════════════
+5. HOVER STATE (Interactive feedback)
+════════════════════════════════════════════════════════════════════════════════
+
+┏━▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓┓
+┃ ✨ Thought       456 words                                        ❯       ┃  ← Light amber tint
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛    on hover
+
+
+════════════════════════════════════════════════════════════════════════════════
+KEY VISUAL DIFFERENCES
+════════════════════════════════════════════════════════════════════════════════
+
+Feature                    | Before      | After
+─────────────────────────────────────────────────────────────────────────────────
+Icon                       | None        | ✨ Sparkles icon
+Left Border                | None        | 2px Amber (#db7852 @ 70%)
+Background                 | None        | 5% Amber gradient
+Container Border Radius    | 8px         | 12px
+Word Count                 | Hidden      | Visible (e.g., "456 words")
+Content Text Label         | "Thought"   | "Thinking…" (when streaming)
+Action Buttons             | None        | [📋 Copy thinking] [🔗 Share]
+Hover State                | None        | 15% Amber tint
+Focus State (A11y)         | None        | 2px outline + keyboard nav
+Mobile Support             | ❌ Hidden   | ✅ Full support (tap to expand)
+
+
+════════════════════════════════════════════════════════════════════════════════
+COLOR PALETTE
+════════════════════════════════════════════════════════════════════════════════
+
+Primary Accent:        #db7852 (Amber/Rust)
+├─ Left border:         70% opacity  (#db7852)
+├─ Background:          8% opacity   (gradient 8% → 4%)
+├─ Container border:    20% opacity
+├─ Hover state:         15% opacity
+└─ Focus outline:       100% opacity
+
+Text Colors:
+├─ Primary:             #e0e0e0 (Light gray)
+├─ Secondary:           #888    (Medium gray)
+└─ Code/Content:        #bbb    (Light gray)
+
+Interactive:
+├─ Button default:      rgba(255, 255, 255, 0.05)
+└─ Button hover:        rgba(255, 255, 255, 0.1)
+
+
+════════════════════════════════════════════════════════════════════════════════
+DIMENSIONS & SPACING
+════════════════════════════════════════════════════════════════════════════════
+
+Container:
+  Padding: 0 (content handles internal spacing)
+  Border radius: 12px
+  Border width: 1px (top/right/bottom), 2px (left)
+
+Trigger (Header):
+  Height: 50px
+  Padding: 14px 16px
+  Gap between items: 10px
+  Font size: 14px (weight 500)
+
+Content Area:
+  Padding: 16px
+  Border-top: 1px @ 12% opacity
+  Text size: 13px
+  Line height: 1.6
+
+Code Box (inside content):
+  Padding: 14px
+  Background: rgba(0, 0, 0, 0.4)
+  Border radius: 8px
+  Font size: 12px monospace
+  Margin bottom: 14px
+
+Buttons:
+  Padding: 6px 12px
+  Gap: 10px
+  Border radius: 6px
+  Font size: 12px (weight 500)
+
+
+════════════════════════════════════════════════════════════════════════════════
+INTERACTIONS
+════════════════════════════════════════════════════════════════════════════════
+
+Click to Expand:
+  ✨ Smooth height animation (150ms ease-out)
+  ✓ Content fades in with opacity
+  ✓ Chevron rotates 180° smoothly
+
+Click Copy Thinking:
+  ✓ Text copied to clipboard
+  ✓ Toast notification: "Copied to clipboard"
+  ✓ 1 second auto-dismiss
+
+Click Share:
+  ✓ Opens share dialog
+  ✓ Copy link, email, or social options
+  ✓ Optional custom message
+
+Keyboard Navigation:
+  ✓ Tab to focus trigger
+  ✓ Enter/Space to expand/collapse
+  ✓ Tab into Copy/Share buttons
+  ✓ Escape to close (if modal)
+
+Mobile Touch:
+  ✓ Full height touch target (50px)
+  ✓ No hover states (uses tap instead)
+  ✓ Long-press for context menu (Copy/Share)
+
+
+════════════════════════════════════════════════════════════════════════════════
+ACCESSIBILITY FEATURES
+════════════════════════════════════════════════════════════════════════════════
+
+Screen Reader:
+  ✓ "Thinking block, 456 words, collapsed, press Enter to expand"
+  ✓ When expanded: "Thinking block expanded. [Content]. Copy thinking button. Share button."
+
+Keyboard:
+  ✓ Full keyboard navigation
+  ✓ Focus indicators (outline: 2px #db7852)
+  ✓ Tab order: Trigger → Copy → Share → Next element
+
+Color Contrast:
+  ✓ Text vs background: 7.5:1 (exceeds WCAG AAA)
+  ✓ Border vs background: 4.5:1 (exceeds WCAG AA)
+
+Motion:
+  ✓ Respects prefers-reduced-motion
+  ✓ Animations have <150ms duration
+  ✓ No flashing (>3 Hz)
+
+
+════════════════════════════════════════════════════════════════════════════════
+RESPONSIVE BEHAVIOR
+════════════════════════════════════════════════════════════════════════════════
+
+Desktop (≥900px):
+  ✓ Full width layout
+  ✓ Hover states active
+  ✓ Full content visibility
+
+Tablet (600px-900px):
+  ✓ Container width: 90% max-width: 700px
+  ✓ Trigger height: 48px (slightly reduced)
+  ✓ Touch targets: ≥48px
+
+Mobile (320px-600px):
+  ✓ Container width: 100% with 12px margin
+  ✓ Trigger height: 48px
+  ✓ Touch targets: ≥44px
+  ✓ Buttons stack vertically if needed
+  ✓ Word count moves to new line at <400px
+
+
+════════════════════════════════════════════════════════════════════════════════
