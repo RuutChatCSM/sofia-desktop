@@ -1,4 +1,5 @@
 /** @jsxImportSource react */
+import "./image-cards.css";
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, type ForwardedRef } from "react";
 import { LexicalComposer } from "@lexical/react/LexicalComposer.js";
 import { PlainTextPlugin } from "@lexical/react/LexicalPlainTextPlugin.js";
@@ -479,13 +480,25 @@ function createAttachmentChipDom(attachment: ComposerAttachmentToken) {
     label.textContent = attachment.name;
     chip.append(icon, label);
     dom.append(chip);
-  } else if (attachment.kind === "image" && attachment.previewUrl) {
+  } else if (attachment.kind === "image") {
+    dom.className = "relative mx-0.5 my-2 inline-flex h-[118px] w-[154px] shrink-0 flex-col overflow-visible rounded-lg border border-border/70 bg-muted/40 align-top";
+    dom.dataset.attachmentKind = "image";
+    const frame = document.createElement("span");
+    frame.className = "flex h-[86px] w-full items-center justify-center overflow-hidden rounded-t-lg text-xs text-muted-foreground";
+    const label = document.createElement("span");
+    label.className = "block w-full truncate px-2 py-1.5 text-xs text-foreground";
+    label.textContent = attachment.name;
+    dom.append(frame, label);
+    if (!attachment.previewUrl) frame.textContent = "Image preview";
+    if (attachment.previewUrl) {
     const img = document.createElement("img");
     img.src = attachment.previewUrl;
     img.alt = attachment.name;
     img.decoding = "async";
-    img.className = "h-10 w-10 rounded-xl border border-border/70 object-cover";
-    dom.append(img);
+    img.className = "h-full w-full object-cover";
+    img.addEventListener("error", () => { img.remove(); frame.textContent = "Preview unavailable"; });
+    frame.append(img);
+    }
   } else {
     const chip = document.createElement("span");
     chip.className = "inline-flex h-10 max-w-[140px] items-center gap-1.5 rounded-xl border border-border/70 bg-muted/40 px-2";
@@ -549,6 +562,10 @@ function updateAttachmentChipDom(dom: HTMLElement, attachment: ComposerAttachmen
     remove.dataset.attachmentRemoveId = attachment.id;
     remove.setAttribute("aria-label", `Remove ${attachment.name}`);
   }
+  if (attachment.kind === "image" && attachment.previewUrl && !dom.querySelector("img")) {
+    const fresh = createAttachmentChipDom(attachment);
+    dom.replaceChildren(...Array.from(fresh.childNodes));
+  }
   const img = dom.querySelector("img");
   if (img instanceof HTMLImageElement && attachment.previewUrl) {
     img.src = attachment.previewUrl;
@@ -611,6 +628,14 @@ class ComposerAttachmentNode extends TextNode {
 
   getAttachmentId() {
     return this.__attachmentId;
+  }
+
+  syncAttachment(attachment: ComposerAttachmentToken) {
+    if (this.__attachmentName === attachment.name && this.__attachmentKind === attachment.kind && this.__attachmentPreviewUrl === attachment.previewUrl) return;
+    const writable = this.getWritable();
+    writable.__attachmentName = attachment.name;
+    writable.__attachmentKind = attachment.kind;
+    writable.__attachmentPreviewUrl = attachment.previewUrl;
   }
 
   override exportJSON(): SerializedComposerAttachmentNode {
@@ -891,6 +916,16 @@ function SyncPlugin(props: {
     });
   }, [editor, props.attachments, props.mentions, props.pastedText, props.value]);
 
+  useEffect(() => {
+    const byId = new Map((props.attachments ?? []).map((attachment) => [attachment.id, attachment]));
+    editor.update(() => {
+      for (const node of $nodesOfType(ComposerAttachmentNode)) {
+        const attachment = byId.get(node.getAttachmentId());
+        if (attachment) node.syncAttachment(attachment);
+      }
+    });
+  }, [editor, props.attachments]);
+
   return null;
 }
 
@@ -911,15 +946,17 @@ function SubmitPlugin(props: { onSubmit: (options: { queue: boolean }) => void |
         // Chrome, Safari, and WebKit. While IME is mid-character, Enter
         // must always fall through to the editor so the composition can
         // commit.
-        if (event?.isComposing === true || event?.keyCode === 229) return false;
+        if (event?.defaultPrevented || event?.isComposing === true || event?.keyCode === 229 || editor.isComposing()) return false;
+        // Holding Enter must not queue or steer the same draft repeatedly.
+        if (event?.repeat) { event.preventDefault(); return true; }
         // Shift+Enter inserts a newline — let the editor handle it.
-        if (event?.shiftKey) return false;
+        if (event?.shiftKey && !event.metaKey && !event.ctrlKey) return false;
         const selection = $getSelection();
         if (!$isRangeSelection(selection)) return false;
-        // Plain Enter submits. Cmd/Ctrl+Enter is the modifier: while the
-        // agent is busy, Enter queues and the modifier steers.
+        // Plain and Cmd/Ctrl+Enter submit normally. Cmd/Ctrl+Shift+Enter
+        // reverses the selected queue/steer behavior while busy.
         event?.preventDefault();
-        void onSubmitRef.current({ queue: event?.metaKey === true || event?.ctrlKey === true });
+        void onSubmitRef.current({ queue: event?.shiftKey === true && (event.metaKey || event.ctrlKey) });
         return true;
       },
       COMMAND_PRIORITY_HIGH,
@@ -991,7 +1028,9 @@ function PasteChipPlugin(props: { onPasteText?: (text: string) => void }) {
     const unregisterPaste = editor.registerCommand(
       PASTE_COMMAND,
       (event: ClipboardEvent) => {
-        if (event.defaultPrevented) return false;
+        // Consume a capture handler's attachment paste. Returning false lets
+        // PlainTextPlugin run its own paste handler even after preventDefault.
+        if (event.defaultPrevented) return true;
         const referenceText = event.clipboardData?.getData("application/x-sofia-reference-text");
         const selection = $getSelection();
         if (referenceText && $isRangeSelection(selection)) {
@@ -1314,10 +1353,11 @@ export const LexicalPromptEditor = forwardRef<LexicalPromptEditorHandle, EditorP
         <PlainTextPlugin
           contentEditable={
             <ContentEditable
+              data-sofia-composer-editor=""
               className="min-h-[36px] max-h-[280px] w-full resize-none overflow-y-auto bg-transparent text-base leading-6 text-dls-text outline-none placeholder:text-dls-secondary lg:text-[13px] lg:leading-[1.55] [&_p]:min-h-[1.5rem] [&_p]:m-0"
               aria-placeholder={props.placeholder}
               placeholder={<span />}
-              onPaste={props.onPaste}
+              onPasteCapture={props.onPaste}
               onDrop={props.onDrop}
               onDragOver={props.onDragOver}
               onDragLeave={props.onDragLeave}

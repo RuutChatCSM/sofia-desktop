@@ -22,12 +22,12 @@ declare module "vitest" {
   }
 }
 
-async function run(command: string, args: string[], cwd = REPO_ROOT): Promise<void> {
+async function run(command: string, args: string[], cwd = REPO_ROOT, timeout = 20 * 60 * 1_000): Promise<void> {
   await execFileAsync(command, args, {
     cwd,
     env: process.env,
     maxBuffer: 32 * 1024 * 1024,
-    timeout: 20 * 60 * 1_000,
+    timeout,
   });
 }
 
@@ -51,7 +51,7 @@ async function prepareLocal(): Promise<StackPreparation> {
   await Promise.all([
     run("pnpm", ["--filter", "@sofia/ui", "build"]),
     run("pnpm", ["--filter", "@sofia-ee/utils", "build"]),
-    run(process.execPath, [join(REPO_ROOT, "apps/desktop/scripts/prepare-sidecar.mjs"), "--force", "--outdir", join(REPO_ROOT, "apps/desktop/resources/sidecars")], join(REPO_ROOT, "apps/desktop")),
+    run(process.execPath, [join(REPO_ROOT, "apps/desktop/scripts/prepare-sidecar.mjs"), "--force", "--outdir", join(REPO_ROOT, "apps/desktop/resources/sidecars")], join(REPO_ROOT, "apps/desktop"), 45 * 60 * 1_000),
     run(process.execPath, [join(REPO_ROOT, "apps/desktop/scripts/prepare-computer-use-helper.mjs"), "--force", "--outdir", join(REPO_ROOT, "apps/desktop/resources/helpers")], join(REPO_ROOT, "apps/desktop")),
   ]);
 

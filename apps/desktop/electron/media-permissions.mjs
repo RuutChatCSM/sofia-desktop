@@ -15,17 +15,20 @@ function isLocalRendererOrigin(origin) {
 }
 
 function shouldAllowMainWindowPermission(input) {
-  const { webContents, permission, origin, details, mainWindow } = input;
+  const { webContents, permission, origin, details, mainWindow, computerPeekCaptureActive } = input;
   if (!mainWindow || !webContents || webContents.id !== mainWindow.webContents.id) return false;
   if (!isLocalRendererOrigin(origin)) return false;
+  if (permission === "display-capture") return Boolean(computerPeekCaptureActive);
   if (permission !== "media" && permission !== "audioCapture") return true;
   const mediaType = typeof details.mediaType === "string" ? details.mediaType : "";
+  if (computerPeekCaptureActive && mediaType === "video") return true;
   if (mediaType && mediaType !== "audio") return false;
   const mediaTypes = Array.isArray(details.mediaTypes) ? details.mediaTypes : [];
+  if (computerPeekCaptureActive && mediaTypes.includes("video")) return true;
   return mediaType === "audio" || (mediaTypes.includes("audio") && !mediaTypes.includes("video"));
 }
 
-export function installMediaPermissionHandlers(session, getMainWindow) {
+export function installMediaPermissionHandlers(session, getMainWindow, computerPeekCaptureActive = () => false) {
   session.defaultSession.setPermissionRequestHandler((webContents, permission, callback, details) => {
     callback(shouldAllowMainWindowPermission({
       webContents,
@@ -33,6 +36,7 @@ export function installMediaPermissionHandlers(session, getMainWindow) {
       origin: details?.requestingUrl,
       details: details ?? {},
       mainWindow: getMainWindow(),
+      computerPeekCaptureActive: computerPeekCaptureActive(),
     }));
   });
   session.defaultSession.setPermissionCheckHandler((webContents, permission, requestingOrigin, details) => (
@@ -42,6 +46,7 @@ export function installMediaPermissionHandlers(session, getMainWindow) {
       origin: requestingOrigin,
       details: details ?? {},
       mainWindow: getMainWindow(),
+      computerPeekCaptureActive: computerPeekCaptureActive(),
     })
   ));
 }

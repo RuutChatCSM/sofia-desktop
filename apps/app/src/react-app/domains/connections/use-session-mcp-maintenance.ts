@@ -340,6 +340,8 @@ export async function healWorkspaceMcpInBackground(input: {
 
 export function useSessionMcpMaintenance(input: {
   cloudSignedIn: boolean;
+  /** Managed stdio engines have no HTTP base URL for the legacy Cloud MCP probe. */
+  managedEngine?: boolean;
   client: SofiaServerClient | null;
   workspaceId: string | null;
   engineClient: Client | null;
@@ -353,7 +355,7 @@ export function useSessionMcpMaintenance(input: {
 
   useEffect(() => {
     if (input.engineReloadBusy) {
-      setCloudMcpState(input.cloudSignedIn
+      setCloudMcpState(input.cloudSignedIn && !input.managedEngine
         ? { ...IDLE_CLOUD_MCP_MAINTENANCE_STATE, status: "checking" }
         : IDLE_CLOUD_MCP_MAINTENANCE_STATE);
       return;
@@ -378,7 +380,7 @@ export function useSessionMcpMaintenance(input: {
 
     let cancelled = false;
     let busyRetryTimer: number | null = null;
-    setCloudMcpState(input.cloudSignedIn
+    setCloudMcpState(input.cloudSignedIn && !input.managedEngine
       ? { ...IDLE_CLOUD_MCP_MAINTENANCE_STATE, status: "checking" }
       : IDLE_CLOUD_MCP_MAINTENANCE_STATE);
 
@@ -428,7 +430,7 @@ export function useSessionMcpMaintenance(input: {
       const started = await runSessionMcpMaintenanceTask({
         targetKey,
         task: async () => {
-          if (input.cloudSignedIn) {
+          if (input.cloudSignedIn && !input.managedEngine) {
             await runCloudMcpMaintenanceWithRetry({
               attempt: () => syncCloudControlMcpInBackground({
                 client,
@@ -473,6 +475,7 @@ export function useSessionMcpMaintenance(input: {
     input.directory,
     input.engineReloadBusy,
     input.engineClient,
+    input.managedEngine,
     input.providerModel?.model,
     input.providerModel?.provider,
     input.workspaceId,

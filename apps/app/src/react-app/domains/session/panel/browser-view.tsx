@@ -276,6 +276,13 @@ export function BrowserView({
       return;
     }
 
+    // This effect has no dependency list, so it runs after every render — and it
+    // used to push the native bounds every time. During agent activity that
+    // repositions the WebContentsView on each streaming frame, which is the
+    // flicker in the panel. The rAF loop below already dedupes with sameBounds;
+    // do the same here so a re-render can never move the native surface.
+    if (sameBounds(lastBoundsRef.current, bounds)) return;
+
     browser.setBounds?.(bounds);
     lastBoundsRef.current = bounds;
   });
@@ -502,6 +509,12 @@ export function BrowserView({
             >
               <MoreHorizontal />
             </Button>
+            {(tab.agentState.status === "attached" || tab.agentState.status === "paused") && <button
+              type="button" className="shrink-0 rounded px-2 py-1 text-xs hover:bg-muted"
+              aria-label={tab.agentState.status === "paused" ? "Resume browser agent" : "Take browser control"}
+              onClick={() => void getElectronBrowser()?.agentLease?.(tab.agentState.status === "paused" ? "resume" : "pause", {tabId:tab.id})}>
+              {tab.agentState.status === "paused" ? "Resume agent" : "Take control"}
+            </button>}
             {agentDisconnected ? (
               <Tooltip>
                 <TooltipTrigger

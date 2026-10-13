@@ -1,4 +1,6 @@
 /** @jsxImportSource react */
+import type { ComposerMentionKind } from "@/react-app/domains/session/surface/composer/mention-encoding";
+import type { PastedTextChip } from "@/react-app/domains/session/surface/composer/pasted-text";
 import {
   useCallback,
   useEffect,
@@ -98,6 +100,8 @@ import { SessionPage, type OpenSessionTab } from "@/react-app/domains/session/ch
 import { SessionSurfaceBoundary } from "@/react-app/shell/session-surface-boundary";
 import { useCodexEngine } from "@/react-app/domains/session/use-codex-engine";
 import { useCodexSessionStore } from "@/react-app/domains/session/codex-session-store";
+import { recordSentAttachments } from "@/react-app/domains/session/sync/sent-attachment-store";
+import { transcriptDisplayParts } from "@/react-app/domains/session/sync/transcript-display-parts";
 import { useCodexApprovals } from "@/react-app/domains/session/codex/use-codex-approvals";
 import { CodexApprovalModal } from "@/react-app/domains/session/codex/codex-approval-modal";
 import { ApprovalModeSelector } from "@/react-app/domains/session/codex/approval-mode-selector";
@@ -219,7 +223,7 @@ import {
 } from "@/app/lib/den";
 import { denSessionUpdatedEvent, denSettingsChangedEvent } from "@/app/lib/den-session-events";
 
-import { filterProviderList } from "@/app/utils/providers";
+import { filterProviderList, wireApiForProvider, type ProviderWireApi } from "@/app/utils/providers";
 import { ensureDesktopLocalSofiaConnection } from "./desktop-local-sofia";
 import { resolveSofiaConnection } from "./sofia-connection";
 import { useReloadCoordinator } from "./reload-coordinator";
@@ -330,7 +334,7 @@ type CodexProviderWire = {
   providerName: string;
   baseUrl: string | null;
   envKey: string | null;
-  wireApi: "responses" | "chatcompletions";
+  wireApi: ProviderWireApi;
   models: Array<{ id: string; name: string; reasoning: boolean; contextWindow: number | null }>;
 };
 
@@ -350,7 +354,7 @@ function codexProvidersFromProviderList(
       providerName: provider.name?.trim() || provider.id,
       baseUrl: readProviderBaseUrl(provider),
       envKey: null,
-      wireApi: provider.id.trim().toLowerCase() === "openai" ? "responses" : "chatcompletions",
+      wireApi: wireApiForProvider(provider.id),
       models: Object.entries(provider.models ?? {}).map(([id, model]) => ({
         id,
         name: model.name?.trim() || id,
@@ -438,6 +442,7 @@ async function draftToParts(
       if (filePart) attachmentFileById.set(attachment.id, filePart);
     }
   }
+  const uploadedAttachmentParts = new Map(attachmentFileById);
 
   // Prefer draft.text token order so attachment chips stay inline with surrounding text
   // (same positions as the composer), instead of dumping every file part at the end.
@@ -452,6 +457,8 @@ async function draftToParts(
       if (!segment) continue;
       const attachmentMatch = segment.match(/^\[attachment (.+)\]$/);
       if (attachmentMatch?.[1]) {
+        const attachment = draft.attachments.find((item) => item.id === attachmentMatch[1]);
+        if (attachment?.annotationContext) parts.push({ type: "text", text: `\n${attachment.annotationContext}\n` });
         const filePart = attachmentFileById.get(attachmentMatch[1]);
         if (filePart) {
           parts.push(filePart);
@@ -504,7 +511,9 @@ async function draftToParts(
       }
       parts.push({ type: "text", text: segment });
     }
-    for (const filePart of attachmentFileById.values()) {
+    for (const [id, filePart] of attachmentFileById) {
+      const context = draft.attachments.find((attachment) => attachment.id === id)?.annotationContext;
+      if (context) parts.push({ type: "text", text: `\n${context}\n` });
       parts.push(filePart);
     }
   } else {
@@ -544,7 +553,7 @@ async function draftToParts(
 
   parts.push(...firstLineLocalFileParts(sanitizePromptText(draft.resolvedText ?? draft.text), root));
 
-  return parts;
+  return { parts, uploadedAttachmentParts };
 }
 
 function singlePickedDirectory(selection: string | string[] | null) {
@@ -693,6 +702,11 @@ export function SessionRoute() {
       : null,
     selectedSessionId,
   );
+  useEffect(()=>{
+    if(selectedWorkspaceId && codexEngine.parentSessionId && codexEngine.parentSessionId!==selectedSessionId){
+      navigate(workspaceSessionRoute(selectedWorkspaceId,codexEngine.parentSessionId),{replace:true});
+    }
+  },[codexEngine.parentSessionId,selectedWorkspaceId,selectedSessionId,navigate]);
   const codexApproval = useCodexApprovals(
     codexEngine.enabled ? codexEngine.client : null,
     selectedWorkspaceEndpoint?.workspaceId ?? selectedWorkspaceId,
@@ -715,6 +729,7 @@ export function SessionRoute() {
     : undefined, [local.prefs.defaultModel?.modelID, local.prefs.defaultModel?.providerID]);
   const sessionMcpMaintenance = useSessionMcpMaintenance({
     cloudSignedIn: denAuth.isSignedIn,
+    managedEngine: codexEngine.enabled,
     client: selectedWorkspaceEndpoint?.client ?? null,
     workspaceId: selectedWorkspaceEndpoint?.workspaceId ?? null,
     engineClient,
@@ -871,20 +886,75 @@ export function SessionRoute() {
     () => toSessionGroups(workspaces, sessionsByWorkspaceId, errorsByWorkspaceId, new Set(retryingWorkspaceIds)),
     [errorsByWorkspaceId, retryingWorkspaceIds, sessionsByWorkspaceId, workspaces],
   );
-  // When the selected engine is codex, codex sessions replace engine sessions
-  // in the sidebar. Build RouteSession-shaped entries from the codex store.
+  const [backgroundCodexSessions, setBackgroundCodexSessions] = useState<Record<string, {
+    sessions: CodexSession[];
+    error: string | null;
+  }>>({});
+  const sidebarCodexEntries = useCodexSessionStore((state) => state.sessions);
+  // The active Codex stream only owns one workspace. Fetch the other workspaces
+  // directly from their Codex managers so their sidebar rows are available
+  // without first selecting each workspace.
+  useEffect(() => {
+    if (!codexEngine.enabled) return;
+    let cancelled = false;
+    let refreshing = false;
+    const refresh = async () => {
+      if (refreshing) return;
+      refreshing = true;
+      await Promise.all(workspaces.filter((workspace) => workspace.id !== selectedWorkspaceId).map(async (workspace) => {
+        const endpoint = endpointForWorkspace(workspace);
+        if (!endpoint) return;
+        try {
+          const codexClient = createCodexSessionClient({
+            baseUrl: endpoint.baseUrl,
+            token: endpoint.token,
+            hostToken: endpoint.isRemote ? workspace.sofiaHostToken ?? undefined : sofiaServerHostInfoState?.hostToken ?? undefined,
+            workspaceId: endpoint.workspaceId,
+          });
+          const snapshot = useCodexSessionStore.getState().sessions;
+          const sessions = await codexClient.listSessions();
+          if (!cancelled) {
+            useCodexSessionStore.getState().replaceSessions(sessions.map(session => ({ ...session, workspaceId: workspace.id })), { workspaceId: workspace.id, entries: snapshot });
+            setBackgroundCodexSessions((current) => ({ ...current, [workspace.id]: { sessions, error: null } }));
+          }
+        } catch (error) {
+          if (!cancelled) setBackgroundCodexSessions((current) => ({
+            ...current,
+            [workspace.id]: {
+              sessions: current[workspace.id]?.sessions ?? [],
+              error: error instanceof Error ? error.message : String(error),
+            },
+          }));
+        }
+      }));
+      refreshing = false;
+    };
+    void refresh();
+    const interval = window.setInterval(() => { void refresh(); }, 30_000);
+    return () => { cancelled = true; window.clearInterval(interval); };
+  }, [codexEngine.enabled, endpointForWorkspace, selectedWorkspaceId, sofiaServerHostInfoState?.hostToken, workspaces]);
   const codexWorkspaceSessionGroups = useMemo<WorkspaceSessionGroup[] | null>(() => {
     if (!codexEngine.enabled) return null;
-    const codexSessions = codexEngine.sessions;
-    return workspaces.map((workspace) => ({
-      workspace,
-      sessions: codexSessions
-        .filter((session) => session.workspaceId === workspace.id)
-        .map((session) => toRouteSessionFromCodex(session)),
-      status: "ready" as const,
-      error: null,
-    }));
-  }, [codexEngine.enabled, codexEngine.sessions, workspaces]);
+    const sessionsFor = (workspaceId: string) => Object.values(sidebarCodexEntries)
+      .map(entry => entry.session)
+      .filter(session => session.workspaceId === workspaceId && !session.archived && !session.parentSessionId)
+      .map(toRouteSessionFromCodex);
+    return workspaceSessionGroups.map((group) => group.workspace.id === selectedWorkspaceId
+      ? {
+          ...group,
+          sessions: sessionsFor(group.workspace.id),
+          status: codexEngine.sessionListStatus,
+          error: codexEngine.sessionListError,
+        }
+      : backgroundCodexSessions[group.workspace.id]
+        ? {
+            ...group,
+            sessions: sessionsFor(group.workspace.id),
+            status: backgroundCodexSessions[group.workspace.id].error ? "error" as const : "ready" as const,
+            error: backgroundCodexSessions[group.workspace.id].error,
+          }
+        : { ...group, sessions: [], status: "loading" as const, error: null });
+  }, [backgroundCodexSessions, codexEngine.enabled, sidebarCodexEntries, codexEngine.sessionListStatus, codexEngine.sessionListError, selectedWorkspaceId, workspaceSessionGroups]);
   const effectiveWorkspaceSessionGroups = codexWorkspaceSessionGroups ?? workspaceSessionGroups;
   useSessionGroupSync({ workspaces, endpointForWorkspace });
   const selectedWorkspaceGroupState = sessionManagementStore((state) => (
@@ -1481,7 +1551,8 @@ export function SessionRoute() {
         const text = sanitizePromptText(draft.resolvedText ?? draft.text).trim();
         // What the user sees optimistically. Display text keeps collapsed
         // pastes collapsed instead of dumping resolved content into the bubble.
-        const displayText = draft.text.trim();
+          const annotationIds = new Set(draft.attachments.filter((attachment) => attachment.annotationContext).map((attachment) => attachment.id));
+          const displayText = draft.text.replace(/\[attachment ([^\]]+)\]/g, (token, id: string) => annotationIds.has(id) ? "" : token).trim();
         if (!text && draft.attachments.length === 0) {
           return { outcome: "cancelled", reason: "context_changed" };
         }
@@ -1495,15 +1566,27 @@ export function SessionRoute() {
             model: sendModel?.modelID,
             providerId: sendModel?.providerID,
           };
-          const parts = await draftToParts(draft, selectedWorkspaceRoot, targetSessionId, selectedWorkspaceEndpoint);
+          const { parts, uploadedAttachmentParts } = await draftToParts(draft, selectedWorkspaceRoot, targetSessionId, selectedWorkspaceEndpoint);
           // Never stringify a file part's URL into the prompt: attachment images
           // carry a base64 data URL, which used to land in the turn as a wall of
           // base64. Image payloads ride as structured image inputs instead.
           const composed = codexPromptFromParts(parts);
           const promptText = composed.text || text;
           // Render the user's message immediately; it is dropped once the
-          // engine echoes it back as a `userMessage` item.
-          useCodexSessionStore.getState().addPendingUserMessage(targetSessionId, displayText);
+          // engine echoes it back as a `userMessage` item. Attachments ride as
+          // display parts so an image the user sent is visible in the chat, not
+          // just in the composer: the engine's echo is text only.
+          // Keep the editor's text/file order for display. The engine echoes
+          // only prompt text; the ordered display parts are the durable view.
+          const attachmentParts = await transcriptDisplayParts(draft, uploadedAttachmentParts);
+          const sessionEntry = useCodexSessionStore.getState().sessions[targetSessionId];
+          const userMessageOrdinal = sessionEntry
+            ? sessionEntry.items.filter((item) => item.type === "userMessage").length + sessionEntry.pendingUserMessages.length + (sessionEntry.settledUserMessages?.length ?? 0)
+            : undefined;
+          // Store by echo ordinal as well as prompt text. Repeated prompts and
+          // text-only engine echoes must not move a file to an older message.
+          recordSentAttachments(targetSessionId, promptText, attachmentParts, annotationIds.size ? displayText : undefined, true, userMessageOrdinal);
+          useCodexSessionStore.getState().addPendingUserMessage(targetSessionId, displayText, attachmentParts, promptText, true, userMessageOrdinal);
           try {
             const turnRunning = useCodexSessionStore.getState().sessions[targetSessionId]?.session.status === "running";
             if (turnRunning && codexEngine.steer) {
@@ -1511,6 +1594,7 @@ export function SessionRoute() {
               if (result.outcome === "not_steerable" || result.outcome === "turn_mismatch") {
                 useCodexSessionStore.getState().confirmPendingUserMessage(targetSessionId, displayText);
                 useComposerStateStore.getState().appendQueuedDraft(targetSessionId, draft);
+                return { outcome: "queued" };
               } else if (result.outcome === "no_active_turn") {
                 await codexEngine.prompt(targetSessionId, promptText, selection, composed.images);
               }
@@ -1597,7 +1681,7 @@ export function SessionRoute() {
                   return;
                 }
 
-                const parts = await draftToParts(draft, selectedWorkspaceRoot, targetSessionId, selectedWorkspaceEndpoint);
+                const { parts } = await draftToParts(draft, selectedWorkspaceRoot, targetSessionId, selectedWorkspaceEndpoint);
                 const envSystemContext = await buildSofiaEnvSystemContext(client, {
                   cacheKey: targetSessionId,
                   runtimeKey: environmentRuntimeKey,
@@ -1781,11 +1865,29 @@ export function SessionRoute() {
   // the same skills/commands/agent/model controls before the session is
   // created. Model and agent choices land in the same route-level state the
   // session composer reads, so they carry into the created session.
+  const [newTaskMentions, setNewTaskMentions] = useState<Record<string, ComposerMentionKind>>({});
+  const [newTaskPastedText, setNewTaskPastedText] = useState<PastedTextChip[]>([]);
+  const [newTaskDraft, setNewTaskDraft] = useState("");
+  const [newTaskAttachments, setNewTaskAttachments] = useState<ComposerAttachment[]>([]);
   const newTaskComposerContext = useMemo<NewTaskComposerContext | null>(() => {
     return {
       client,
       workspaceId: selectedWorkspaceId || null,
       workspaceRoot: selectedWorkspaceRoot,
+      projects: workspaces.map((workspace) => ({ id: workspace.id, name: workspace.name, path: workspace.path })),
+      onSelectProject: (id: string) => {
+        setLegacySelectedWorkspaceId(id);
+        writeActiveWorkspaceId(id);
+        navigateToWorkspaceSession(id);
+      },
+      mentions: newTaskMentions,
+      onMentionsChange: setNewTaskMentions,
+      pastedText: newTaskPastedText,
+      onPastedTextChange: setNewTaskPastedText,
+      draft: newTaskDraft,
+      onDraftChange: setNewTaskDraft,
+      attachments: newTaskAttachments,
+      onAttachmentsChange: setNewTaskAttachments,
       selectedModel: local.prefs.defaultModel ?? { providerID: "", modelID: "" },
       modelOptions: organizationAssignedModelOptions,
       modelUnavailable: selectedModelUnavailable,
@@ -1848,6 +1950,13 @@ export function SessionRoute() {
       },
     };
   }, [
+    newTaskMentions,
+    newTaskPastedText,
+    newTaskDraft,
+    newTaskAttachments,
+    workspaces,
+    navigateToWorkspaceSession,
+    setLegacySelectedWorkspaceId,
     client,
     handleOpenExtensions,
     handleOpenSettings,
@@ -2016,6 +2125,7 @@ export function SessionRoute() {
     });
   }, [local, selectedSessionId]);
 
+  const creatingTaskWorkspaceIds = useRef(new Set<string>());
   const handleCreateTaskInWorkspace = useCallback(async (workspaceId: string): Promise<string | null> => {
     const workspace = workspaces.find((item) => item.id === workspaceId);
     if (
@@ -2025,8 +2135,10 @@ export function SessionRoute() {
     ) {
       return null;
     }
+    if (creatingTaskWorkspaceIds.current.has(workspaceId)) return null;
     // Sofia engine: create a codex session (the surface sends the first prompt).
     if (codexEngine.enabled && codexEngine.createSession) {
+      creatingTaskWorkspaceIds.current.add(workspaceId);
       try {
         const preferredModel = local.prefs.defaultModel;
         const selectedProviderIsConfigured = Boolean(
@@ -2060,6 +2172,12 @@ export function SessionRoute() {
         });
         const session = { ...result.session, workspaceId };
         useCodexSessionStore.getState().upsertSession(session);
+        setSessionsByWorkspaceId(current => {
+          const row = toRouteSessionFromCodex(session);
+          const next = { ...current, [workspaceId]: [row, ...(current[workspaceId] ?? []).filter(item => item.id !== session.id)] };
+          sessionsByWorkspaceIdRef.current = next;
+          return next;
+        });
         setLegacySelectedWorkspaceId(workspaceId);
         writeActiveWorkspaceId(workspaceId || null);
         writeLastSessionFor(workspaceId, session.id);
@@ -2070,6 +2188,8 @@ export function SessionRoute() {
       } catch (error) {
         toast.error("Unable to create Sofia task", { description: describeRouteError(error) });
         return null;
+      } finally {
+        creatingTaskWorkspaceIds.current.delete(workspaceId);
       }
     }
     const endpoint = endpointForWorkspace(workspace);
@@ -3017,6 +3137,10 @@ export function SessionRoute() {
             saveSessionDraft(workspaceId, sessionId, { text: text.replace(/\[attachment [^\]]+\]/g, "").trim(), mode: "prompt" });
             store.setDraft(sessionId, text);
             if (attachments?.length) store.setAttachments(sessionId, attachments);
+            setNewTaskDraft("");
+            setNewTaskAttachments([]);
+            setNewTaskMentions({});
+            setNewTaskPastedText([]);
             // One submission path preserves attachments, model, and workspace.
             // Creation never sends a hidden first turn or falls into another engine.
             if (text || attachments?.length) markComposerAutoSend(sessionId);

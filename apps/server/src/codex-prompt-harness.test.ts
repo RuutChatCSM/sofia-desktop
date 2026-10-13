@@ -30,6 +30,14 @@ describe("codex-prompt-harness", () => {
     expect(instructions).toContain("plugin-provided tools");
     expect(instructions).toContain("use tool_search when available");
     expect(instructions).toContain("confirmed callable in this turn");
+    expect(instructions).toContain("including Safari or a signed-in website");
+    expect(instructions).toContain("do not claim access is limited to public pages");
+    expect(instructions).toContain("not a request to open its URL in Sofia's browser");
+    expect(instructions).toContain("without activating or focusing it");
+    // The agent's most common shell failure is an unquoted glob.
+    expect(instructions).toContain("rg -g '*.ts' 'pattern' path");
+    expect(instructions).toContain("always quote globs");
+    expect(instructions).toContain("not grep's `--include`");
     expect(instructions).not.toContain("Make a short plan");
     expect(instructions).not.toContain("EXECUTE it back-to-back");
   });

@@ -5,10 +5,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { addMcp } from "./mcp.js";
+import { writeGlobalRuntimeWorkspaceEngineConfig } from "./runtime-engine-config-store.js";
 import { writeCodexProviders } from "./codex-providers.js";
 import {
   applyCodexWorkspaceMcpConfiguration,
   codexWorkspaceConfigFile,
+  getOrCreateCodexSessionManager,
   setCodexBinaryForConfig,
 } from "./codex-registry.js";
 import type { ServerConfig } from "./types.js";
@@ -107,6 +109,54 @@ describe("codex workspace engine configuration", () => {
     });
   });
 
+  test("writes a model catalog covering every connected provider", async () => {
+    await withCodexWorkspace(async ({ config, configFile }) => {
+      setCodexBinaryForConfig(config, { path: "/bin/true", source: "custom" });
+      await seedProviders();
+
+      await applyCodexWorkspaceMcpConfiguration(config, WORKSPACE_ID);
+
+      const toml = await readFile(configFile, "utf8");
+      const match = /model_catalog_json = "([^"]+)"/.exec(toml);
+      expect(match).not.toBeNull();
+
+      const catalog = JSON.parse(await readFile(match![1]!, "utf8")) as {
+        models: Array<{ slug: string; apply_patch_tool_type: string | null }>;
+      };
+      expect(catalog.models.map((model) => model.slug).sort()).toEqual(["deepseek-flash", "mimo"]);
+      // The engine otherwise resolves these through its tool-blind fallback and
+      // the agent loses file editing.
+      expect(catalog.models.every((model) => model.apply_patch_tool_type === "freeform")).toBe(true);
+      expect(toml).toContain("model_catalog_json");
+    });
+  });
+
+  test("a disabled engine feature disappears from the generated engine config", async () => {
+    await withCodexWorkspace(async ({ config, configFile }) => {
+      setCodexBinaryForConfig(config, { path: "/bin/true", source: "custom" });
+      await seedProviders();
+      await applyCodexWorkspaceMcpConfiguration(config, WORKSPACE_ID);
+
+      const before = await readFile(configFile, "utf8");
+      expect(before).toContain("multi_agent_v2 = true");
+      expect(before).toContain("[tools.update_plan]");
+
+      // What Settings sends when the user switches a capability off.
+      await writeGlobalRuntimeWorkspaceEngineConfig(config, (current) => ({
+        ...current,
+        engine_features: { multi_agent_v2: false, update_plan: false },
+      }));
+      await applyCodexWorkspaceMcpConfiguration(config, WORKSPACE_ID);
+
+      const after = await readFile(configFile, "utf8");
+      expect(after).not.toContain("multi_agent_v2 = true");
+      expect(after).not.toContain("[tools.update_plan]");
+      // Untouched capabilities survive, and the table is still a single header.
+      expect(after).toContain("request_permissions_tool = true");
+      expect(after.match(/^\[features\]$/gm) ?? []).toHaveLength(1);
+    });
+  });
+
   test("keeps the workspace's selected provider and model across regeneration", async () => {
     await withCodexWorkspace(async ({ config, configFile }) => {
       setCodexBinaryForConfig(config, { path: "/bin/true", source: "custom" });
@@ -127,6 +177,50 @@ describe("codex workspace engine configuration", () => {
       const regenerated = await readFile(configFile, "utf8");
       expect(regenerated).toContain('model_provider = "deepseek"');
       expect(regenerated).toContain('model = "deepseek-flash"');
+    });
+  });
+});
+
+describe("codex engine identity", () => {
+  test("a restarted server reuses the workspace engine instead of orphaning it", async () => {
+    await withCodexWorkspace(async ({ root, config }) => {
+      setCodexBinaryForConfig(config, { path: "/bin/true", source: "custom" });
+      const first = await getOrCreateCodexSessionManager(config, WORKSPACE_ID);
+
+      // A restart resolves a *fresh* config object with the same engine identity.
+      // Keying managers by object identity left the first engine running as an
+      // orphan (`sofia app-server` piling up under one Electron main) while this
+      // call spawned a second one for the same workspace.
+      const restarted = serverConfig(root);
+      setCodexBinaryForConfig(restarted, { path: "/bin/true", source: "custom" });
+      const second = await getOrCreateCodexSessionManager(restarted, WORKSPACE_ID);
+
+      expect(second).toBe(first);
+    });
+  });
+
+  test("closing the restarted server closes the shared engine exactly once", async () => {
+    await withCodexWorkspace(async ({ root, config }) => {
+      setCodexBinaryForConfig(config, { path: "/bin/true", source: "custom" });
+      const manager = await getOrCreateCodexSessionManager(config, WORKSPACE_ID);
+      let closes = 0;
+      const originalClose = manager.close.bind(manager);
+      manager.close = async () => {
+        closes += 1;
+        await originalClose();
+      };
+
+      const restarted = serverConfig(root);
+      setCodexBinaryForConfig(restarted, { path: "/bin/true", source: "custom" });
+      await getOrCreateCodexSessionManager(restarted, WORKSPACE_ID);
+
+      // The old config's stop must not kill an engine the new one still uses.
+      const { closeCodexManagersForConfig } = await import("./codex-registry.js");
+      await closeCodexManagersForConfig(config);
+      expect(closes).toBe(0);
+
+      await closeCodexManagersForConfig(restarted);
+      expect(closes).toBe(1);
     });
   });
 });

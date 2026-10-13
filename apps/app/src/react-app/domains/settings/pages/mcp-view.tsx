@@ -1,5 +1,5 @@
 /** @jsxImportSource react */
-import { useEffect, useReducer, useState, type ReactNode, type SetStateAction } from "react";
+import { useEffect, useReducer, useRef, useState, type ReactNode, type SetStateAction } from "react";
 import {
   BookOpen,
   ArrowUpRight,
@@ -68,6 +68,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ConfirmModal } from "../../../design-system/modals/confirm-modal";
 import { AddMcpModal } from "../../connections/modals/add-mcp-modal";
 import type { McpConnectResult } from "../../connections/store";
+import type { InstallScope } from "../../connections/install-flow";
 import { ClaudePluginImportModal } from "../../connections/modals/claude-plugin-import-modal";
 import {
   canDisconnectMemberConnection,
@@ -130,6 +131,8 @@ export type ReactMcpStatus =
   | "disconnected";
 
 export type SkillItem = {
+  sourceDirectory?: string;
+  readOnly?: boolean;
   name: string;
   description?: string;
   trigger?: string;
@@ -175,7 +178,7 @@ export type McpViewProps = {
   selectedMcp: string | null;
   setSelectedMcp: (name: string | null) => void;
   quickConnect: McpDirectoryInfo[];
-  connectMcp: (entry: McpDirectoryInfo) => Promise<McpConnectResult>;
+  connectMcp: (entry: McpDirectoryInfo, scope: InstallScope) => Promise<McpConnectResult>;
   authorizeMcp: (entry: McpServerEntry) => void;
   logoutMcpAuth: (name: string) => Promise<void> | void;
   removeMcp: (name: string) => void;
@@ -499,6 +502,22 @@ export function McpView(props: McpViewProps) {
   const activeTarget = useRoutedDetail ? routedTarget : detailTarget;
   const detailEntry = activeTarget?.kind === "entry" ? activeTarget.entry : null;
   const detailSkill = activeTarget?.kind === "skill" ? activeTarget.skill : null;
+  const readSkillRef = useRef(props.readSkill);
+  readSkillRef.current = props.readSkill;
+  const skillName = detailSkill?.name;
+  const skillPath = detailSkill?.path;
+  const skillContent = detailSkill?.content;
+  const skillOrigin = detailSkill?.origin;
+  useEffect(() => {
+    let cancelled = false;
+    setDetailSkillContent(skillContent ?? null);
+    if (skillName && !skillContent && skillOrigin !== "sofia-connect" && readSkillRef.current) {
+      void readSkillRef.current(skillName).then(result => {
+        if (!cancelled) setDetailSkillContent(result?.content ?? null);
+      }).catch(() => { if (!cancelled) setDetailSkillContent(null); });
+    }
+    return () => { cancelled = true; };
+  }, [skillName, skillPath, skillContent, skillOrigin]);
   const detailCommand = activeTarget?.kind === "command" ? activeTarget.command : null;
   const detailAgent = activeTarget?.kind === "agent" ? activeTarget.agent : null;
   const detailConnectMcp = activeTarget?.kind === "connect-mcp" ? activeTarget.entry : null;
@@ -602,18 +621,6 @@ export function McpView(props: McpViewProps) {
   const openDetail = (target: ExtensionDetailTarget) => {
     setDetailTarget(target);
     setMcpConnectFailure(null);
-    if (target.kind === "skill") {
-      setDetailSkillContent(target.skill.content ?? null);
-      if (!target.skill.content && target.skill.origin !== "sofia-connect" && props.readSkill) {
-        void props.readSkill(target.skill.name).then((result) => {
-          if (result?.content) {
-            setDetailSkillContent(result.content);
-          }
-        });
-      }
-    } else {
-      setDetailSkillContent(null);
-    }
     props.onDetailIdChange?.(extensionDetailIdForTarget(target));
   };
 
@@ -637,41 +644,7 @@ export function McpView(props: McpViewProps) {
     }
   }, [props.initialFilter, props.initialState]);
 
-  useEffect(() => {
-    if (!useRoutedDetail) return;
-    const detailId = props.detailId ?? null;
-    if (!detailId) {
-      setDetailTarget(null);
-      setDetailSkillContent(null);
-      return;
-    }
-    const resolved = resolveExtensionDetailTarget(detailId, libraryDetailLists);
-    setDetailTarget(resolved);
-    if (resolved?.kind === "skill") {
-      setDetailSkillContent(resolved.skill.content ?? null);
-      if (!resolved.skill.content && resolved.skill.origin !== "sofia-connect" && props.readSkill) {
-        void props.readSkill(resolved.skill.name).then((result) => {
-          if (result?.content) {
-            setDetailSkillContent(result.content);
-          }
-        });
-      }
-    } else {
-      setDetailSkillContent(null);
-    }
-  }, [
-    useRoutedDetail,
-    props.detailId,
-    props.readSkill,
-    quickConnectList,
-    installedSkills,
-    installedCommands,
-    installedAgents,
-    availableConnectMcpServers,
-    installedPlugins,
-    pendingPlugin,
-    orgMcpItems,
-  ]);
+
 
   useEffect(() => {
     if (!pendingPlugin) return;
@@ -871,7 +844,7 @@ export function McpView(props: McpViewProps) {
               closeDetail();
             } : hasConfigSlot ? undefined : async () => {
               setMcpConnectFailure(null);
-              const result = await props.connectMcp(detailEntry);
+              const result = await props.connectMcp(detailEntry, "project");
               if (result.ok) {
                 closeDetail();
                 return;
@@ -923,7 +896,7 @@ export function McpView(props: McpViewProps) {
             onReveal={detailSkill.path && detailSkill.origin !== "sofia-connect" ? () => {
               void revealDesktopItemInDir(detailSkill.path);
             } : undefined}
-            onUninstall={props.uninstallSkill && detailSkill.origin !== "sofia-connect" ? () => {
+            onUninstall={props.uninstallSkill && !detailSkill.readOnly && detailSkill.origin !== "sofia-connect" ? () => {
               props.uninstallSkill?.(detailSkill.name);
               closeDetail();
             } : undefined}
@@ -1361,7 +1334,7 @@ export function McpView(props: McpViewProps) {
         statusForEntry={quickConnectStatus}
         onConnect={async (entry) => {
           setMcpConnectFailure(null);
-          const result = await props.connectMcp(entry);
+          const result = await props.connectMcp(entry, "project");
           if (result.ok) return;
           openDetail({ kind: "entry", entry });
           setMcpConnectFailure({
@@ -1725,7 +1698,7 @@ function McpQuickConnectSection(props: {
           connected={true}
           connectedLabel={fromOrg ? t("connect.row_chip_ready") : undefined}
           hidden={hidden}
-          meta={fromOrg ? orgMeta : t("extensions.surface_this_device")}
+          meta={fromOrg ? orgMeta : skill.sourceDirectory ?? t("extensions.surface_this_device")}
           actionLabel="View details"
           onClick={() => props.onSkillDetail?.(skill)}
         />
@@ -2050,6 +2023,11 @@ function McpConfiguredServerRow(props: {
             <div className="truncate text-sm font-medium text-dls-text">{props.displayName(props.entry.name)}</div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
+            {props.entry.scope ? (
+              <span className="rounded-md border border-dls-border px-1.5 py-0.5 text-[10px] text-dls-secondary">
+                {props.entry.scope === "global" ? t("mcp.scope_global") : t("mcp.scope_project")}
+              </span>
+            ) : null}
             <div className={`size-2 rounded-full ${statusDot(props.status)}`} />
             <span className="text-[11px] text-dls-secondary">{friendlyStatus(props.status)}</span>
           </div>

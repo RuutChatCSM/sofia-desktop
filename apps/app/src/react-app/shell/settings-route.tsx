@@ -10,6 +10,7 @@ import {
   resolveSofiaExtensionCatalogPlatform,
 } from "@/app/constants";
 import type { EnablementContext } from "@/app/enablement";
+import type { McpDirectoryInfo } from "@/app/constants";
 import { createClient, unwrap } from "@/app/lib/engine";
 import {
   createSofiaServerClient,
@@ -94,6 +95,7 @@ import { createOpaqueDiagnosticsScopeKey } from "@/react-app/domains/settings/pa
 import { CloudProvidersView } from "@/react-app/domains/settings/pages/cloud-providers-view";
 import { MemoryView } from "@/react-app/domains/settings/pages/memory-view";
 import { useFeatureFlagsPreferences } from "@/react-app/domains/settings/state/feature-flags-preferences";
+import { useEngineFeatures } from "@/react-app/domains/settings/state/engine-features-store";
 import { DebugView } from "@/react-app/domains/settings/pages/debug-view";
 import { EnvironmentView } from "@/react-app/domains/settings/pages/environment-view";
 import { ExtensionsView, type ExtensionsSection } from "@/react-app/domains/settings/pages/extensions-view";
@@ -502,6 +504,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
   const [baseUrl, setBaseUrl] = useState("");
   const [token, setToken] = useState("");
   const [sofiaClient, setSofiaClient] = useState<SofiaServerClient | null>(null);
+  const engineFeatures = useEngineFeatures(sofiaClient);
   const [activeClient, setActiveClient] = useState<Client | null>(null);
   const [busy, setBusy] = useState(false);
   const [busyLabel, setBusyLabel] = useState<string | null>(null);
@@ -540,6 +543,9 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
   const [autoCompactContext, setAutoCompactContext] = useState(true);
   const [autoCompactContextBusy, setAutoCompactContextBusy] = useState(false);
   const [autoCompactContextLoaded, setAutoCompactContextLoaded] = useState(false);
+  const [discoverCodexSkills, setDiscoverCodexSkills] = useState(true);
+  const [codexSkillsBusy, setCodexSkillsBusy] = useState(false);
+  const [additionalSkillDirectories, setAdditionalSkillDirectories] = useState<string[]>([]);
   const [localProviderBusy, setLocalProviderBusy] = useState(false);
   const [localProviderStatus, setLocalProviderStatus] = useState<string | null>(null);
   const [localProviderError, setLocalProviderError] = useState<string | null>(null);
@@ -1750,6 +1756,10 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
           ? (compaction as { auto?: boolean }).auto
           : undefined;
         setAutoCompactContext(auto !== false);
+        const skills = config.engine?.skills;
+        setDiscoverCodexSkills(!(skills && typeof skills === "object" && "discoverCodexSkills" in skills && skills.discoverCodexSkills === false));
+        const directories = skills && typeof skills === "object" && "additionalDirectories" in skills ? skills.additionalDirectories : [];
+        setAdditionalSkillDirectories(Array.isArray(directories) ? directories.filter((path): path is string => typeof path === "string") : []);
         setAutoCompactContextLoaded(true);
       } catch {
         if (!cancelled) setAutoCompactContextLoaded(true);
@@ -1780,6 +1790,39 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
       setAutoCompactContextBusy(false);
     }
   }, [autoCompactContext, autoCompactContextBusy, sofiaClient, reloadCoordinator, selectedWorkspaceId]);
+
+  const toggleCodexSkills = useCallback(async () => {
+    const workspaceId = routeStateRef.current.runtimeWorkspaceId?.trim() || selectedWorkspaceId;
+    if (codexSkillsBusy || !sofiaClient || !workspaceId) return;
+    const next = !discoverCodexSkills;
+    setCodexSkillsBusy(true);
+    try {
+      await sofiaClient.patchConfig(workspaceId, { engine: { skills: { discoverCodexSkills: next } } });
+      setDiscoverCodexSkills(next);
+      await extensionsStore.refreshSkills({ force: true });
+    } catch {
+      setConfigActionStatus("Could not update Codex skill discovery. Please try again.");
+    } finally {
+      setCodexSkillsBusy(false);
+    }
+  }, [codexSkillsBusy, discoverCodexSkills, sofiaClient, selectedWorkspaceId]);
+
+  const saveSkillDirectories = useCallback(async (directories: string[]) => {
+    const workspaceId = routeStateRef.current.runtimeWorkspaceId?.trim() || selectedWorkspaceId;
+    if (codexSkillsBusy || !sofiaClient || !workspaceId) return false;
+    setCodexSkillsBusy(true);
+    try {
+      await sofiaClient.patchConfig(workspaceId, { engine: { skills: { additionalDirectories: directories } } });
+      setAdditionalSkillDirectories(directories);
+      await extensionsStore.refreshSkills({ force: true });
+      return true;
+    } catch {
+      setConfigActionStatus("Could not update skill directories. Please try again.");
+      return false;
+    } finally {
+      setCodexSkillsBusy(false);
+    }
+  }, [codexSkillsBusy, sofiaClient, selectedWorkspaceId]);
 
   useEffect(() => {
     sofiaServerStore.start();
@@ -1827,6 +1870,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
     providerAuthStore.syncFromOptions();
     extensionsStore.syncFromOptions();
   }, [
+    sofiaClient,
     activeClient,
     connectionsStore,
     extensionsStore,
@@ -1953,8 +1997,8 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
     mcpConnectingName: connectionsSnapshot.mcpConnectingName,
     onComputerUsePermissionsChange: setComputerUsePermissions,
     restartLocalServer: restartExtensionLocalServer,
-    connectMcp: async (entry) => {
-      await connectionsStore.connectMcp(entry);
+    connectMcp: async (entry: McpDirectoryInfo) => {
+      await connectionsStore.connectMcp(entry, "project");
     },
     refreshMcpServers: () => connectionsStore.refreshMcpServers(),
     providers,
@@ -2343,6 +2387,11 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
               local.setPrefs((previous) => ({ ...previous, showThinking: !previous.showThinking }));
             }}
             autoCompactContext={autoCompactContext}
+            discoverCodexSkills={discoverCodexSkills}
+            codexSkillsBusy={codexSkillsBusy || !autoCompactContextLoaded}
+            onToggleCodexSkills={toggleCodexSkills}
+            additionalSkillDirectories={additionalSkillDirectories}
+            onSaveSkillDirectories={saveSkillDirectories}
             autoCompactContextBusy={autoCompactContextBusy}
             onToggleAutoCompactContext={toggleAutoCompactContext}
             analyticsEnabled={local.prefs.analyticsEnabled}
@@ -2410,8 +2459,8 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
                 quickConnect={extensionItems.quickConnectEntries}
                 enablementContext={enablementContext}
                 builtInExtensionsDisabled={builtInExtensionsDisabled}
-                connectMcp={(entry) => {
-                  return connectionsStore.connectMcp(entry);
+                connectMcp={(entry, scope) => {
+                  return connectionsStore.connectMcp(entry, scope);
                 }}
                 configSlotForEntry={extensionController.configSlotForEntry}
                 isExtensionConnected={extensionController.isConnected}
@@ -2455,7 +2504,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
                 reconnectOrgMcp={(connectionId) => { void orgMcpConnections.connect(connectionId, { forceFreshAuthorization: true }); }}
                 orgMcpDisconnectingId={orgMcpConnections.disconnectingId}
                 disconnectOrgMcp={(connectionId) => { void orgMcpConnections.disconnect(connectionId); }}
-                readSkill={(name) => extensionsStore.readSkill(name)}
+                readSkill={extensionsStore.readSkill}
                 previewClaudePlugin={(url) => extensionsStore.previewClaudePlugin(url)}
                 installClaudePlugin={(url) => extensionsStore.installClaudePlugin(url)}
                 createLibraryItem={(kind, input) => extensionsStore.createLibraryItem(kind, input)}
@@ -2480,7 +2529,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
           />
         );
       case "memory":
-        return <MemoryView onOpenAccount={openCloudAccountSettings} />;
+        return <MemoryView onOpenAccount={openCloudAccountSettings} client={sofiaClient} workspaceId={routeStateRef.current.runtimeWorkspaceId?.trim() || selectedWorkspaceId} cloudEnabled={memoryEnabled} />;
       case "cloud-providers":
         return (
           <CloudProvidersView
@@ -2506,6 +2555,13 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
             busy={busy}
             clientConnected={Boolean(engineClient)}
             engineConnectStatus={null}
+            engineFeatures={engineFeatures.features}
+            engineFeaturesLoading={engineFeatures.loading}
+            engineFeaturesBusy={engineFeatures.busy}
+            engineFeaturesError={engineFeatures.error}
+            onToggleEngineFeature={(key, enabled) => {
+              void engineFeatures.setEnabled(key, enabled);
+            }}
             sofiaServerStatus={sofiaServerSnapshot.sofiaServerStatus}
             developerMode={developerMode}
             toggleDeveloperMode={() => setDeveloperMode((current) => {

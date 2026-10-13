@@ -1,0 +1,157 @@
+import { captureScreenshot } from "@sofia/cdp";
+import { createServer } from "node:http";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { control, createAndSelectWorkspace, evalIn } from "@sofia/behaviors";
+import { desktop } from "@sofia/hosts";
+import { needs, test, eventually } from "@sofia/testkit";
+import { expect, onTestFinished } from "vitest";
+
+test("session Outputs and Sources separate inputs, reveal all references and open generated artifacts",{timeout:180_000},async({evidence})=>{
+  needs({optIn:['SOFIA_EVAL_E2E_TESTS'],placement:'local'});
+  const path=await mkdtemp(join(tmpdir(),'sofia-resources-'));
+  onTestFinished(()=>rm(path,{recursive:true,force:true}));
+  await writeFile(join(path,'plan-tomorrow.md'),'# Generated output\n\nResource preview proof.');
+  await writeFile(join(path,'meeting-notes.md'),'# Source notes');
+  const server=createServer((_request,response)=>{response.writeHead(200,{'content-type':'text/html'});response.end('<title>Source reference</title>Reference proof');});
+  await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve));onTestFinished(()=>server.close());
+  const address=server.address();if(!address||typeof address==='string')throw new Error('Fixture did not bind');
+  const url=`http://127.0.0.1:${address.port}`;
+  await using app=await desktop({name:'session-resources'});
+  await app.client.send('Emulation.setDeviceMetricsOverride',{width:1600,height:1000,deviceScaleFactor:1,mobile:false});
+  await createAndSelectWorkspace(app,{path});await control(app,'session.create_task');
+  await eventually(async()=>{expect(await evalIn(app,`window.__sofiaControl.listActions().some(action=>action.id==='eval.chat_transcript.seed'&&!action.disabled)`)).toBe(true);return true;},{within:10_000});
+  await control(app,'eval.chat_transcript.seed',{userText:'Use the attached sources',pastedFile:true,resourcesFixture:true,resourcesImage:true,resourcesSubagents:true,resourcesRoot:path,resourcesUrl:url});
+  await app.client.send('Input.dispatchKeyEvent',{type:'keyDown',key:'Escape',code:'Escape',windowsVirtualKeyCode:27});
+  await app.client.send('Input.dispatchKeyEvent',{type:'keyUp',key:'Escape',code:'Escape',windowsVirtualKeyCode:27});
+  await eventually(async()=>{expect(await evalIn(app,`Boolean(document.querySelector('[data-floating-session-summary]'))`)).toBe(true);return true;},{within:10_000});
+  expect(await evalIn(app,`document.querySelector('[data-floating-session-summary] [data-session-resources]').getBoundingClientRect().width`)).toBe(300);
+  expect(await evalIn(app,`getComputedStyle(document.querySelector('[data-session-resources]')).fontSize`)).toBe('13px');
+  expect(await evalIn(app,`getComputedStyle(document.querySelector('[data-resource-source]')).color === getComputedStyle(document.querySelector('[data-session-resources] h2')).color`)).toBe(true);
+
+  const compactSourcesBeforeHide = await evalIn(app,`Array.from(document.querySelectorAll('[data-resource-source]')).map(node=>node.textContent)`);
+  await evalIn(app,`document.querySelector('button[aria-label="Hide Outputs and Sources"]').click()`);
+  await eventually(async()=>{expect(await evalIn(app,`document.querySelector('[data-floating-session-summary]')===null`)).toBe(true);return true;},{within:5000});
+  expect(await evalIn(app,`document.querySelector('button[aria-label="Show Outputs and Sources"]').getAttribute('aria-pressed')`)).toBe('false');
+  expect(await evalIn(app,`JSON.parse(localStorage.getItem('sofia-session-summary-preferences')).state.visible`)).toBe(false);
+  await evalIn(app,`document.querySelector('button[aria-label="Show Outputs and Sources"]').click()`);
+  await eventually(async()=>{expect(await evalIn(app,`Boolean(document.querySelector('[data-floating-session-summary]'))`)).toBe(true);return true;},{within:5000});
+  expect(await evalIn(app,`Array.from(document.querySelectorAll('[data-resource-source]')).map(node=>node.textContent)`)).toEqual(compactSourcesBeforeHide);
+
+  await evalIn(app,`document.querySelector('[contenteditable="true"]').focus()`);
+  await app.client.send('Input.insertText',{text:'Keep my draft'});
+  await evalIn(app,`document.querySelector('[data-floating-session-summary] button[aria-label="Create an output"]').click()`);
+  await eventually(async()=>{expect(await evalIn(app,`document.querySelector('[contenteditable="true"]').textContent`)).toContain('Keep my draft');expect(await evalIn(app,`document.querySelector('[contenteditable="true"]').textContent`)).toContain('Create a file or site');return true;},{within:5000});
+  await evalIn(app,`(()=>{window.__resourceAttachClicks=0;document.querySelector('[data-session-surface-id] input[type="file"]').addEventListener('click',event=>{event.preventDefault();window.__resourceAttachClicks++},{once:true});document.querySelector('[data-floating-session-summary] button[aria-label="Attach source files"]').click()})()`);
+  expect(await evalIn(app,`window.__resourceAttachClicks`)).toBe(1);
+  await evalIn(app,`Array.from(document.querySelectorAll('[data-floating-session-summary] [data-resource-source]')).find(node=>node.textContent==='Screenshot.png').click()`);
+  await eventually(async()=>{expect(await evalIn(app,`(()=>{const image=document.querySelector('[data-source-image-panel] img[alt="Screenshot.png"]');return !!image&&image.complete&&image.naturalWidth===1})()`)).toBe(true);return true;},{within:5000});
+  expect(await evalIn(app,`document.querySelector('[role="dialog"] img[alt="Screenshot.png"]')===null`)).toBe(true);
+  expect(await evalIn(app,`Boolean(document.querySelector('button[aria-label="Select tab: Screenshot.png"]'))`)).toBe(true);
+  expect(await evalIn(app,`getComputedStyle(document.querySelector('[contenteditable="true"]').closest('[data-session-surface-id]').querySelector('.sticky.bottom-0')).backgroundImage`)).toBe('none');
+  const newTab=async()=>{
+    await eventually(async()=>{expect(await evalIn(app,`Boolean(document.querySelector('button[aria-label="New tab"]'))`)).toBe(true);return true;},{within:10_000});
+    await evalIn(app,`document.querySelector('button[aria-label="New tab"]').click()`);
+    await eventually(async()=>{expect(await evalIn(app,`Boolean(document.querySelector('[data-session-resources]'))`)).toBe(true);return true;},{within:5000});
+  };
+  await newTab();
+  expect(await evalIn(app,`document.querySelector('button[aria-label="Open subagents"]').getBoundingClientRect().width`)).toBeGreaterThan(100);
+  expect(await evalIn(app,`document.querySelector('[data-session-subagents]').textContent`)).toContain('1 working');
+  expect(await evalIn(app,`document.querySelector('[data-session-subagents]').textContent`)).toContain('2 done');
+  await mkdir(evidence.dir,{recursive:true});await writeFile(join(evidence.dir,'outputs-sources-widget.png'),await captureScreenshot(app.client));
+  await evalIn(app,`document.querySelector('button[aria-label="Open subagents"]').click()`);
+  await eventually(async()=>{expect(await evalIn(app,`document.querySelector('[data-session-subagent-details]').textContent`)).toContain('References checked');return true;},{within:5000});
+  expect(await evalIn(app,`document.querySelector('[data-session-subagent-details]').textContent`)).toContain('Checking references');
+  await evalIn(app,`document.querySelector('[data-session-subagent-details] button[aria-label="Inspect source. Show details"]').click()`);
+  await eventually(async()=>{expect(await evalIn(app,`document.querySelector('[data-session-subagent-details]').textContent`)).toContain('Source inspection complete');return true;},{within:5000});
+  expect(await evalIn(app,`document.querySelector('[data-session-subagent-details]').textContent`)).toContain('Inspect actual source inputs');
+  await evalIn(app,`(()=>{
+    window.__originalSubagentFetch=window.fetch;
+    window.__subagentFetchCalls=0;
+    window.__subagentFetchFail=false;
+    window.fetch=async(input,init)=>{
+      const url=typeof input==='string'?input:input instanceof URL?input.href:input.url;
+      if(url.includes('/subagents/fixture-child-done/items')){
+        window.__subagentFetchCalls++;
+        return window.__subagentFetchFail
+          ?new Response(JSON.stringify({code:'history_unavailable',message:'Child history temporarily unavailable'}),{status:503})
+          :new Response(JSON.stringify({ok:true,items:[{turnId:'child-turn',item:{id:'child-answer',type:'agentMessage',text:'Recorded child conversation proof'}}]}),{status:200});
+      }
+      return window.__originalSubagentFetch(input,init);
+    };
+    Array.from(document.querySelectorAll('button[aria-label^="Open conversation:"]')).find(node=>node.closest('[data-subagent-id]').textContent.includes('References checked')).click();
+  })()`);
+  await eventually(async()=>{expect(await evalIn(app,`document.querySelector('[data-subagent-conversation]').textContent`)).toContain('Recorded child conversation proof');return true;},{within:5000});
+  expect(await evalIn(app,`document.querySelector('[data-subagent-conversation]').textContent`)).toContain('Completed');
+  expect(await evalIn(app,`window.__subagentFetchCalls`)).toBe(1);
+  await evalIn(app,`(()=>{window.__subagentFetchFail=true;Array.from(document.querySelectorAll('[data-subagent-conversation] button')).find(node=>node.textContent==='Refresh conversation').click()})()`);
+  await eventually(async()=>{expect(await evalIn(app,`document.querySelector('[data-subagent-conversation] [role="alert"]').textContent`)).toContain('Child history temporarily unavailable');return true;},{within:5000});
+  await evalIn(app,`(()=>{window.fetch=window.__originalSubagentFetch;Array.from(document.querySelectorAll('[data-subagent-conversation] button')).find(node=>node.textContent.includes('All subagents')).click()})()`);
+  expect(await evalIn(app,`Boolean(document.querySelector('[data-session-subagent-details]'))`)).toBe(true);
+  await newTab();
+  expect(await evalIn(app,`Array.from(document.querySelectorAll('[data-resource-output]')).map(node=>node.textContent.trim())`)).toEqual(['plan-tomorrow.md']);
+  expect(await evalIn(app,`document.querySelectorAll('[data-resource-source]').length`)).toBe(3);
+  await evalIn(app,`Array.from(document.querySelectorAll('[data-session-resources] button')).find(node=>node.textContent==='View all').click()`);
+  expect(await evalIn(app,`document.querySelectorAll('[data-resource-source]').length`)).toBe(6);
+  expect(await evalIn(app,`document.querySelector('[data-session-resources]').textContent`)).toContain('Pasted text.txt');
+  await newTab();
+  await evalIn(app,`document.querySelector('[data-resource-output]').click()`);
+  await eventually(async()=>{
+    const content=await evalIn(app,`JSON.stringify({text:document.body.innerText.slice(-5000),editors:Array.from(document.querySelectorAll('textarea')).map(node=>node.value)})`);
+    if (!content.includes('Resource preview proof.')) throw new Error(content);return true;
+  },{within:10_000});
+  await newTab();
+  await evalIn(app,`Array.from(document.querySelectorAll('[data-session-resources] button')).find(node=>node.textContent==='View all').click()`);
+  await evalIn(app,`Array.from(document.querySelectorAll('[data-resource-source]')).find(node=>node.textContent==='meeting-notes.md').click()`);
+  await eventually(async()=>{const proof=await evalIn(app,`JSON.stringify({text:document.body.innerText,editors:Array.from(document.querySelectorAll('textarea')).map(node=>node.value),source:Array.from(document.querySelectorAll('[data-resource-source]')).map(node=>({text:node.textContent,disabled:node.disabled}))})`);if(!proof.includes('Source notes'))throw new Error(proof);return true;},{within:10_000});
+  await newTab();
+  await evalIn(app,`Array.from(document.querySelectorAll('[data-session-resources] button')).find(node=>node.textContent==='View all').click()`);
+  await evalIn(app,`Array.from(document.querySelectorAll('[data-resource-source]')).find(node=>node.textContent==='Reference 1').click()`);
+  await eventually(async()=>{
+    const state=await evalIn(app,`window.__SOFIA_ELECTRON__.browser.getState()`,{awaitPromise:true});
+    expect(state.tabs.some((tab:{url:string})=>tab.url===`${url}/reference-1`)).toBe(true);return true;
+  },{within:10_000});
+  await evalIn(app,`document.querySelector('button[aria-label="Close panel"]')?.click()`);
+  await app.client.send('Emulation.setDeviceMetricsOverride',{width:1200,height:1000,deviceScaleFactor:1,mobile:false});
+  await eventually(async()=>{expect(await evalIn(app,`document.querySelector('[data-floating-session-summary]')===null`)).toBe(true);return true;},{within:5000});
+  await evalIn(app,`document.querySelector('button[aria-label="Outputs and Sources"]').click()`);
+  await eventually(async()=>{expect(await evalIn(app,`Boolean(document.querySelector('[data-session-resources]'))`)).toBe(true);return true;},{within:5000});
+  expect(await evalIn(app,`document.querySelectorAll('[data-resource-source]').length`)).toBe(3);
+  await writeFile(join(path,'source.txt'),'Plain source content');
+  await writeFile(join(path,'table.csv'),'Name,Value\nFixture,42');
+  await writeFile(join(path,'source.png'),Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l9sAAAAASUVORK5CYII=','base64'));
+  await writeFile(join(path,'unsupported.zip'),'Fixture binary');
+  await control(app,'eval.chat_transcript.seed',{resourcesFixture:true,resourcesImage:true,resourcesSubagents:true,resourcesRoot:path,resourcesUrl:url,resourcesFiles:['source.txt','table.csv','source.png','unsupported.zip']});
+  const openSource=async(label:string)=>{
+    await newTab();
+    await evalIn(app,`Array.from(document.querySelectorAll('[data-session-resources] button')).find(node=>node.textContent==='View all').click()`);
+    await eventually(async()=>{expect(await evalIn(app,`(()=>{const source=Array.from(document.querySelectorAll('[data-resource-source]')).find(node=>node.textContent===${JSON.stringify(label)});return source&&!source.disabled})()`)).toBe(true);return true;},{within:10_000});
+    await evalIn(app,`Array.from(document.querySelectorAll('[data-resource-source]')).find(node=>node.textContent===${JSON.stringify(label)}).click()`);
+  };
+  await openSource('source.txt');
+  await eventually(async()=>{expect(await evalIn(app,`document.body.innerText`)).toContain('Plain source content');return true;},{within:10_000});
+  await openSource('source.png');
+  await eventually(async()=>{expect(await evalIn(app,`(()=>{const image=document.querySelector('[data-source-image-panel] img');return image&&image.complete&&image.naturalWidth===1})()`)).toBe(true);return true;},{within:10_000});
+  await evalIn(app,`(()=>{const select=document.querySelector('select[aria-label="Image zoom"]');select.value='200';select.dispatchEvent(new Event('change',{bubbles:true}))})()`);
+  expect(await evalIn(app,`getComputedStyle(document.querySelector('[data-source-image-panel] img')).zoom`)).toBe('2');
+  await openSource('table.csv');
+  await eventually(async()=>{expect(await evalIn(app,`Array.from(document.querySelectorAll('table input')).map(node=>node.value)`)).toContain('Fixture');return true;},{within:10_000});
+  await openSource('unsupported.zip');
+  await eventually(async()=>{expect(await evalIn(app,`document.body.innerText`)).toContain('Preview unavailable');return true;},{within:10_000});
+  expect(await evalIn(app,`Boolean(document.querySelector('button[aria-label="Download artifact"]'))`)).toBe(true);
+  expect(await evalIn(app,`Boolean(document.querySelector('button[aria-label="Open externally"]'))`)).toBe(true);
+  const extraOutputs=['report.md','table-output.csv','notes.txt','final.md'];
+  for(const name of extraOutputs)await writeFile(join(path,name),'Generated compact output proof');
+  await control(app,'eval.chat_transcript.seed',{resourcesFixture:true,resourcesRoot:path,resourcesUrl:url,resourcesOutputs:extraOutputs});
+  await newTab();
+  await eventually(async()=>{expect(await evalIn(app,`document.querySelectorAll('[data-resource-output]').length`)).toBe(3);return true;},{within:10_000});
+  expect(await evalIn(app,`document.querySelectorAll('[data-resource-source]').length`)).toBe(3);
+  await evalIn(app,`document.querySelector('button[aria-label="View all outputs"]').click()`);
+  await eventually(async()=>{expect(await evalIn(app,`document.querySelectorAll('[data-resource-output]').length`)).toBe(5);return true;},{within:5000});
+  expect(await evalIn(app,`Boolean(document.querySelector('button[aria-label="Select tab: Outputs"]'))`)).toBe(true);
+  expect(await evalIn(app,`document.querySelectorAll('[data-resource-source]').length`)).toBe(0);
+  await evalIn(app,`Array.from(document.querySelectorAll('[data-resource-output]')).find(node=>node.textContent==='final.md').click()`);
+  await eventually(async()=>{expect(await evalIn(app,`JSON.stringify({text:document.body.innerText,editors:Array.from(document.querySelectorAll('textarea')).map(node=>node.value)})`)).toContain('Generated compact output proof');return true;},{within:10_000});
+  evidence.recordAssertionEvidence('Outputs and Sources presentation','Outputs are capped at three with a separate five-item full list and openable generated files. Recorded child conversations show completion, load history, refresh errors and return to the overview through mocked HTTP responses in the actual UI. Image sources use docked tabs with zoom; the composer has no gradient; real Task/Codex states open Subagent details; verified text, CSV and unsupported binary routes work. The 300px floating widget preserves drafts through its create action, routes attach to the current composer, opens all Sources in a separate pane, excludes input/read files from Outputs, displays original attachment names, reveals all Sources, opens the generated markdown artifact and navigates a source URL in the actual in-app browser.',true);
+});

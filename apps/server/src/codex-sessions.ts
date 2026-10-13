@@ -1,3 +1,9 @@
+import { historyReadScheduler } from "./history-read-scheduler.js";
+import { readRolloutLines, RolloutRecordTooLargeError } from "./rollout-lines.js";
+import { isPlaceholderTaskTitle, parseCodexSessionTitles, selectCodexThreadName, threadDisplayTitle, threadTitleFromEngineText } from "./codex-session-titles.js";
+import { parseRolloutLines, TRANSCRIPT_RETAINED_CHARS, reconcileRolloutItems } from "./codex-rollout-items.js";
+import { parseDurableTurnOutcomes, type DurableTurnOutcome } from "./codex-turn-outcomes.js";
+import { recordedSubagentState, type RecordedAgentState } from "./codex-subagent-outcome.js";
 import { TurnChangeTracker, type TurnChangeRecord } from "./turn-changes.js";
 import { parseMcpStatusPage, type NativeMcpServer } from "./codex-mcp-status.js";
 import { resolveSofiaPrompt } from "./sofia-commands.js";
@@ -8,9 +14,9 @@ import { resolveSofiaPrompt } from "./sofia-commands.js";
 // Sofia session ids via a `codex-<threadId>` scheme.
 import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
-import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, writeFileSync, openSync, closeSync, readSync, fstatSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { join, resolve, relative, isAbsolute } from "node:path";
 
 import { importNodeSqlite } from "./runtime-db.js";
 import { ManagedCodexEngine } from "./managed-codex.js";
@@ -42,6 +48,53 @@ export function threadBelongsToWorkspace(
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function decodedThreadSource(metadata: Record<string, unknown>): Record<string, unknown> | null {
+  let source = metadata.source;
+  if (typeof source === "string") {
+    try { source = JSON.parse(source); } catch { return null; }
+  }
+  return isRecord(source) ? source : null;
+}
+
+/** Child workers stay accessible by id, but are not independent user chats. */
+export function isSubagentThread(metadata: Record<string, unknown>): boolean {
+  const kind = metadata.threadSource ?? metadata.thread_source;
+  if (kind === "subagent") return true;
+  if (typeof metadata.source === "string" && /^sub[_-]?agent/i.test(metadata.source)) return true;
+  const source = decodedThreadSource(metadata);
+  return source !== null && (Object.hasOwn(source, "subagent") || Object.hasOwn(source, "subAgent"));
+}
+
+export function subagentParentSessionId(metadata: Record<string, unknown>): string | undefined {
+  if (!isSubagentThread(metadata)) return undefined;
+  const direct = metadata.parentThreadId ?? metadata.parent_thread_id;
+  if (typeof direct === "string" && direct) return codexSessionId(direct);
+  const source = decodedThreadSource(metadata);
+  const agent = source?.subagent ?? source?.subAgent;
+  if (!isRecord(agent)) return undefined;
+  const spawn = agent.thread_spawn ?? agent.threadSpawn;
+  if (!isRecord(spawn)) return undefined;
+  const parent = spawn.parent_thread_id ?? spawn.parentThreadId;
+  return typeof parent === "string" && parent ? codexSessionId(parent) : undefined;
+}
+
+function subagentIdentity(metadata: Record<string, unknown>): { agentNickname?: string; agentPath?: string } {
+  const source = decodedThreadSource(metadata);
+  const agent = source?.subagent ?? source?.subAgent;
+  const spawn = isRecord(agent) ? agent.thread_spawn ?? agent.threadSpawn : null;
+  const identity = isRecord(spawn) ? spawn : metadata;
+  const nickname = identity.agentNickname ?? identity.agent_nickname;
+  const path = identity.agentPath ?? identity.agent_path;
+  return {
+    ...(typeof nickname === "string" && nickname ? {agentNickname: nickname} : {}),
+    ...(typeof path === "string" && path ? {agentPath: path} : {}),
+  };
+}
+
+export function isRecordedSubagent(items: readonly { item: Record<string, unknown> }[], threadId: string): boolean {
+  return items.some(({ item }) => item.type === "collabAgentToolCall" && isRecord(item.agentsStates) && Object.hasOwn(item.agentsStates, threadId));
 }
 
 /**
@@ -145,39 +198,11 @@ export function isThreadWriterConflict(error: unknown): boolean {
   return /already has an active writer/i.test(message);
 }
 
-/** Extract the shell command from a codex custom_tool_call "input" JS string. */
-function parseCustomToolCommand(raw: string): string {
-  const trimmed = raw.trim();
-  // The input is often a JS expression: `const r = await tools.exec_command({cmd:"...", workdir:"..."})`.
-  // Prefer the JSON cmd/command if raw is JSON; else pull the `cmd:"..."` string.
-  try {
-    const parsed = JSON.parse(trimmed);
-    if (isRecord(parsed)) {
-      if (typeof parsed.cmd === "string" && parsed.cmd) return parsed.cmd;
-      if (typeof parsed.command === "string" && parsed.command) return parsed.command;
-    }
-  } catch {
-    // Not pure JSON — extract cmd:"..." / cmd:'...' from the JS expression.
-  }
-  const cmdMatch = trimmed.match(/\bcmd\s*:\s*(["'`])([\s\S]*?)\1/);
-  if (cmdMatch) return cmdMatch[2];
-  const commandMatch = trimmed.match(/\bcommand\s*:\s*(["'`])([\s\S]*?)\1/);
-  if (commandMatch) return commandMatch[2];
-  return trimmed;
-}
-
-/** Find a previously emitted item by its call id (to attach tool output). */
-function idFromCallId(
-  items: Array<{ turnId: string; item: Record<string, unknown> }>,
-  callId: string,
-): { item: Record<string, unknown> } | null {
-  return items.find((entry) => entry.item.id === callId) ?? null;
-}
-
 export type CodexEngineHandle = {
   bin: string;
   cwd: string;
   codexHome?: string;
+  skillRoots?: string[];
   env?: Record<string, string>;
   /** Interpreter to run `bin` with (e.g. process.execPath for test scripts). */
   interpreter?: string;
@@ -192,76 +217,32 @@ export type CodexSession = {
   turnId: string | null;
   status: "idle" | "running" | "error";
   archived?: boolean;
+  /** Nested worker owner; normal chat list excludes these sessions. */
+  parentSessionId?: string;
+  agentNickname?: string;
+  agentPath?: string;
+  agentStatus?: RecordedAgentState["agentStatus"];
+  agentUpdatedAt?: string;
   /** cwd of the last active turn (per-turn cwd tracking, like the app's turnCwds). */
   cwd?: string;
   /** Rollout JSONL path (legacy ChatGPT/Codex store) for transcript fallback. */
   rolloutPath?: string | null;
   model?: string;
   providerId?: string;
+  /** Latest `update_plan` checklist, restored from the rollout on reopen. */
+  plan?: CodexPlanItem[];
 };
 
 /** The desktop stamps a brand-new task with this title before the engine has
  * seen a turn. It must never mask the title the engine derives from the first
  * user message, and it must not be written to the engine's thread name where
  * every other client would then show it. */
-const PENDING_TASK_TITLE = "New Sofia task";
-
 function isPendingTaskTitle(value: string | null | undefined): boolean {
-  return (value?.trim() ?? "") === PENDING_TASK_TITLE;
+  return isPlaceholderTaskTitle(value);
 }
 
-/** The engine exposes its own generated title only as `preview`, so prefer a
- * real user/engine name and fall back to the first user message. */
-/** Longest title we keep before cutting on a word boundary. */
-export const THREAD_TITLE_MAX_LENGTH = 72;
-
-/**
- * The engine titles a task from its first user message, verbatim — so a pasted
- * diff, a `//` comment banner, a stack trace or a wall of markdown all arrive as
- * the title, and the session header ends up rendering a fragment of code. A
- * title has to read as a title: keep the first line that carries words, drop the
- * markdown and comment noise around it, collapse whitespace, and cut on a word
- * boundary so it never ends mid-word (or starts on the halves the engine left).
- */
-export function threadTitleFromEngineText(text: unknown): string {
-  const raw = typeof text === "string" ? text : "";
-  let inFence = false;
-  for (const rawLine of raw.split(/\r?\n/)) {
-    if (/^\s*```/.test(rawLine)) {
-      inFence = !inFence;
-      continue;
-    }
-    if (inFence) continue;
-    const line = rawLine
-      .replace(/^\s*>+\s*/, "")                    // blockquote
-      .replace(/^\s*(?:[-*+]|\d+[.)])\s+/, "")     // list marker
-      .replace(/^\s*#{1,6}\s*/, "")                // heading
-      .replace(/^\s*\/\/+\s*/, "")                 // line comment
-      .replace(/^\s*\/\*+\s*/, "")                // block comment opener
-      .replace(/\*\/\s*$/, "")                    // …and its closer
-      // A pasted `//` banner ends the sentence the user actually wrote.
-      .replace(/(?<!:)\/\/(?=\s|$).*$/, " ")
-      .replace(/`{1,3}/g, "")                       // code span
-      .replace(/\*{1,3}(?=\S)|(?<=\S)\*{1,3}/g, "")  // emphasis markers
-      .replace(/^(?:\.{2,}|…)\s*\S*\s+/, "")       // the half-word a truncation left
-      .replace(/\s+/g, " ")
-      .trim();
-    if (!line) continue;
-    if (!/[\p{L}\p{N}]/u.test(line)) continue;
-    if (line.length <= THREAD_TITLE_MAX_LENGTH) return line;
-    const cut = line.slice(0, THREAD_TITLE_MAX_LENGTH);
-    const boundary = cut.lastIndexOf(" ");
-    const head = boundary > 24 ? cut.slice(0, boundary) : cut;
-    return `${head.replace(/[\s,;:.!?/-]+$/, "")}…`;
-  }
-  return "";
-}
-
-function threadDisplayTitle(thread: { name?: unknown; preview?: unknown }): string {
-  const name = typeof thread.name === "string" ? thread.name.trim() : "";
-  if (name && !isPendingTaskTitle(name)) return threadTitleFromEngineText(name);
-  return threadTitleFromEngineText(thread.preview);
-}
+/** Re-export the shared title formatter for existing server consumers. */
+export { THREAD_TITLE_MAX_LENGTH, threadTitleFromEngineText } from "./codex-session-titles.js";
 
 /**
  * A long-running command the agent started through unified exec. The engine
@@ -291,9 +272,82 @@ export type BackgroundProcess = {
   rssKb?: number;
 };
 
+/**
+ * Server-internal tracking record.
+ *
+ * Unified exec reports *every* shell command through a `CommandExecution`
+ * item whose `source` is `unifiedExecStartup`, so the item alone does not make
+ * a background process. Membership is earned, not assumed:
+ *
+ *   * a command still running when the turn that started it ends has outlived
+ *     its turn — that is background work (`detached`), or
+ *   * the engine's live terminal list names it (see `listBackgroundProcesses`),
+ *
+ * `turnId` records which turn started it so promotion can match the turn that
+ * actually ended. Neither field is part of the wire shape.
+ */
+type TrackedProcess = BackgroundProcess & { detached: boolean; turnId?: string };
+
+/** Drop the server's bookkeeping so the wire shape stays `BackgroundProcess`. */
+function toWireProcess(tracked: TrackedProcess): BackgroundProcess {
+  const { detached: _detached, turnId: _turnId, ...process } = tracked;
+  return process;
+}
+
 /** Only `Startup` is a new process; an `Interaction` polls/writes one that
  * already exists and must not be registered as a background process. */
 const UNIFIED_EXEC_STARTUP_SOURCE = "unifiedExecStartup";
+
+/** One step of a Codex `update_plan` checklist. */
+export type CodexPlanItem = { step: string; status: string };
+
+/**
+ * Codex reports step status as `pending` / `inProgress` / `completed` (the
+ * app-server's camelCase wire form); the session UI speaks the Sofia todo
+ * vocabulary (`pending` / `in_progress` / `completed` / `cancelled`). Normalize
+ * here so every client sees one vocabulary.
+ */
+function normalizePlanStatus(status: unknown): string {
+  switch (typeof status === "string" ? status.toLowerCase() : "") {
+    case "inprogress":
+    case "in_progress":
+    case "in-progress":
+    case "active":
+    case "running":
+      return "in_progress";
+    case "completed":
+    case "complete":
+    case "done":
+      return "completed";
+    case "cancelled":
+    case "canceled":
+      return "cancelled";
+    default:
+      return "pending";
+  }
+}
+
+/**
+ * Parse an `update_plan` tool call's arguments (a JSON string in the rollout)
+ * into normalized steps. Used to restore a checklist from the durable record.
+ */
+function parsePlanArguments(value: unknown): CodexPlanItem[] | null {
+  let parsed: unknown = value;
+  if (typeof value === "string") {
+    try {
+      parsed = JSON.parse(value);
+    } catch {
+      return null;
+    }
+  }
+  if (!isRecord(parsed) || !Array.isArray(parsed.plan)) return null;
+  return parsed.plan
+    .map((entry) => ({
+      step: isRecord(entry) && typeof entry.step === "string" ? entry.step : "",
+      status: normalizePlanStatus(isRecord(entry) ? entry.status : undefined),
+    }))
+    .filter((entry) => entry.step.trim().length > 0);
+}
 
 export type CodexEvent =
   | { type: "session.created"; session: CodexSession }
@@ -307,7 +361,8 @@ export type CodexEvent =
   | { type: "tool.output"; sessionId: string; threadId: string; itemId: string; text: string }
   | { type: "file.patch"; sessionId: string; threadId: string; itemId: string; patch: unknown }
   | { type: "turn.changes"; sessionId: string; changes: TurnChangeRecord }
-  | { type: "turn.completed"; sessionId: string; threadId: string }
+  | { type: "turn.completed"; sessionId: string; threadId: string; outcome?: "completed" | "cancelled" | "failed" }
+  | { type: "plan.updated"; sessionId: string; threadId: string; turnId: string; explanation: string | null; plan: CodexPlanItem[] }
   | { type: "approval.requested"; sessionId: string; threadId: string; params: unknown }
   | { type: "thread.status"; sessionId: string; threadId: string; status: unknown }
   | { type: "rateLimit.updated"; sessionId: string; threadId: string; rateLimits: unknown }
@@ -345,29 +400,8 @@ export function isFailedBackgroundProcess(process: BackgroundProcess): boolean {
   return process.status === "completed" && typeof process.exitCode === "number" && process.exitCode !== 0;
 }
 
-/**
- * Attention is for a process that *died*, or for one that outlived the turn
- * nobody is working on any more — never for a command's exit code.
- *
- *   * died on its own / was declined  -> attention, whenever it happened
- *     (a dev server that crashes mid-turn is exactly the thing the user cannot
- *     see from wherever they are looking)
- *   * finished with a non-zero exit   -> a *result*: `grep` finding nothing, or
- *     a failing test run, is something the agent already saw and will report.
- *     Only worth paging about once the turn is over and nobody is left to act.
- */
-export function shouldNotifyBackgroundProcessFailure(input: {
-  process: BackgroundProcess;
-  turnRunning: boolean;
-}): boolean {
-  const { process, turnRunning } = input;
-  if (process.status === "failed" || process.status === "declined") return true;
-  if (turnRunning) return false;
-  return isFailedBackgroundProcess(process);
-}
-
 /** Live processes first, then most-recently-started exit history. */
-function sortBackgroundProcesses(processes: BackgroundProcess[]): BackgroundProcess[] {
+function sortBackgroundProcesses<T extends BackgroundProcess>(processes: T[]): T[] {
   return processes.sort((a, b) => {
     if (a.status === b.status) return a.itemId.localeCompare(b.itemId);
     return a.status === "running" ? -1 : 1;
@@ -378,15 +412,41 @@ export class CodexSessionManager {
   private readonly turnChanges: TurnChangeTracker;
   private engine: ManagedCodexEngine | null = null;
   private sessions = new Map<string, CodexSession>();
+  private childSessionIds = new Set<string>();
+  private legacySubagentFingerprint = "";
+  private pendingTitleInputs = new Map<string, string>();
+  private namedThreads = new Set<string>();
+  private titleIndexCache = new Map<string, { fingerprint: string; titles: Map<string, string> }>();
   private events = new EventEmitter();
   private starting: Promise<void> | null = null;
   private approvalQueue: { sessionId: string; threadId: string; params: unknown; resolve: () => void; reject: (reason?: unknown) => void }[] = [];
   private threadAliases: Record<string, string>;
   private loadedThreads = new Set<string>();
   /** Unified-exec background processes per thread, keyed by item id. */
-  private backgroundProcesses = new Map<string, Map<string, BackgroundProcess>>();
+  private backgroundProcesses = new Map<string, Map<string, TrackedProcess>>();
   private mcpConfigSnapshot: string | null = null;
   private mcpRefresh: Promise<void> = Promise.resolve();
+  private skillRootsSnapshot: string | null = null;
+  private skillRootsRefresh: Promise<void> = Promise.resolve();
+
+  async setSkillRoots(roots: string[]): Promise<void> {
+    this.handle.skillRoots = roots;
+    const refresh = this.skillRootsRefresh.catch(() => undefined).then(async () => {
+      if (!this.engine?.isAlive()) return;
+      const current = this.handle.skillRoots ?? [];
+      const snapshot = JSON.stringify(current);
+      if (snapshot === this.skillRootsSnapshot) return;
+      await this.engine.request("skills/extraRoots/set", { extraRoots: current });
+      this.skillRootsSnapshot = snapshot;
+    });
+    this.skillRootsRefresh = refresh;
+    await refresh;
+  }
+
+  async listDiscoveredSkills(): Promise<unknown> {
+    await this.start();
+    return this.activeEngine().request("skills/list", { cwds: [this.handle.cwd], forceReload: true });
+  }
 
   /** Refresh loaded threads without terminating their active turns. */
   async refreshMcpConfiguration(): Promise<void> {
@@ -510,6 +570,22 @@ export class CodexSessionManager {
   ): Promise<void> {
     if (this.loadedThreads.has(session.threadId)) return;
     const overrides = { model: selection?.model, modelProvider: selection?.providerId };
+    // Adopt external history into the Sofia home before taking a writer lease.
+    // Resuming its source path directly would append to another app's rollout.
+    if (session.rolloutPath && this.handle.codexHome) {
+      const sourceRelative = relative(resolve(this.handle.codexHome), resolve(session.rolloutPath));
+      if (sourceRelative === ".." || sourceRelative.startsWith("../") || isAbsolute(sourceRelative)) {
+        const localId = await engine.forkThread({ threadId: session.threadId, path: session.rolloutPath, ...overrides, cwd: session.cwd ?? this.handle.cwd });
+        if (!localId) throw new Error("Could not import this session into Sofia: the engine returned no thread ID.");
+        const originalId = session.id.slice("codex-".length);
+        session.threadId = localId;
+        session.rolloutPath = this.findRolloutPath(localId);
+        this.threadAliases[originalId] = localId;
+        this.persistThreadAliases();
+        this.loadedThreads.add(localId);
+        return;
+      }
+    }
     try {
       await engine.resumeThread(session.threadId, overrides);
     } catch (error) {
@@ -572,7 +648,7 @@ export class CodexSessionManager {
     this.releaseThread(threadId);
   }
 
-  private backgroundProcessesFor(threadId: string): Map<string, BackgroundProcess> {
+  private backgroundProcessesFor(threadId: string): Map<string, TrackedProcess> {
     let processes = this.backgroundProcesses.get(threadId);
     if (!processes) {
       processes = new Map();
@@ -581,9 +657,19 @@ export class CodexSessionManager {
     return processes;
   }
 
-  private liveBackgroundProcesses(threadId: string): BackgroundProcess[] {
+  /** Tracked processes that earned background-process membership. */
+  private visibleProcesses(threadId: string): TrackedProcess[] {
     return [...this.backgroundProcessesFor(threadId).values()]
-      .filter((process) => process.status === "running");
+      .filter((process) => process.detached);
+  }
+
+  /**
+   * Retain the engine thread while a *detached* process still owns it. A
+   * command merely running inside the current turn is not a reason to keep the
+   * subscription past the turn — the turn itself already does that.
+   */
+  private liveBackgroundProcesses(threadId: string): TrackedProcess[] {
+    return this.visibleProcesses(threadId).filter((process) => process.status === "running");
   }
 
   /** Map a unified-exec `CommandExecution` item onto a tracked process. */
@@ -696,20 +782,236 @@ export class CodexSessionManager {
   }
 
   listSessions(): CodexSession[] {
-    return [...this.sessions.values()].sort((a, b) => b.created.localeCompare(a.created));
+    this.refreshIndexedTitles();
+    return [...this.sessions.values()].filter(session => !this.childSessionIds.has(session.id)).sort((a, b) => b.created.localeCompare(a.created));
   }
 
   getSession(sessionId: string): CodexSession | null {
+    this.refreshIndexedTitles();
     return this.sessions.get(sessionId) ?? null;
   }
 
-  /** Fetch a thread's persisted items (for restoring a transcript). */
-  async getSessionItems(sessionId: string, options?: { limit?: number }): Promise<Array<{ turnId: string; item: Record<string, unknown> }>> {
+  /** Read desktop display names on list/open, so a renamed imported thread
+   * appears without restarting the workspace manager. Match exact root ids. */
+  private refreshIndexedTitles(): void {
+    if (!this.enableLegacyImport) return;
+    const realHome = this.handle.env?.REAL_HOME?.trim() || process.env.REAL_HOME?.trim() || homedir();
+    const indexedTitles = new Map<string, string>();
+    for (const home of new Set([homedir(), realHome])) {
+      const path = join(home, ".codex", "session_index.jsonl");
+      try {
+        const stat = statSync(path);
+        const fingerprint = `${stat.mtimeMs}:${stat.ctimeMs}:${stat.size}`;
+        let cached = this.titleIndexCache.get(path);
+        if (cached?.fingerprint !== fingerprint) {
+          cached = { fingerprint, titles: parseCodexSessionTitles(readFileSync(path, "utf8")) };
+          this.titleIndexCache.set(path, cached);
+        }
+        if (cached) for (const [id, title] of cached.titles) indexedTitles.set(id, title);
+      } catch { /* Missing or partially replaced index is retried on next read. */ }
+    }
+    for (const session of this.sessions.values()) {
+      if (this.namedThreads.has(session.threadId)) continue;
+      const title = indexedTitles.get(session.threadId);
+      if (!title || title === session.title) continue;
+      session.title = title;
+      this.emit({ type: "session.updated", session: { ...session } });
+    }
+  }
+
+  /**
+   * The last `update_plan` checklist written to a thread's rollout. The engine
+   * neither persists the checklist as an item nor replays it on resume, so the
+   * rollout is the durable record a reopened task restores from.
+   */
+  private readLatestPlanFromRollout(session: CodexSession): CodexPlanItem[] | null {
+    const path = session.rolloutPath ?? this.findRolloutPath(session.threadId);
+    if (!path || !existsSync(path)) return null;
+    session.rolloutPath = path;
+    try {
+      let latest: CodexPlanItem[] | null = null;
+      for (const line of readRolloutLines(path)) {
+        if (!line.includes("update_plan")) continue;
+        let parsed: Record<string, unknown>;
+        try { parsed = JSON.parse(line); } catch { continue; }
+        if (parsed.type !== "response_item") continue;
+        const payload = isRecord(parsed.payload) ? parsed.payload : {};
+        if (payload.type !== "function_call" || payload.name !== "update_plan") continue;
+        const steps = parsePlanArguments(payload.arguments);
+        if (steps) latest = steps;
+      }
+      return latest;
+    } catch {
+      return null;
+    }
+  }
+
+  /** A session's checklist: the live value, else the rollout's record. */
+  async getSessionPlan(sessionId: string): Promise<CodexPlanItem[] | null> {
     await this.start();
+    const session = this.sessions.get(sessionId);
+    if (!session) return null;
+    const plan = session.plan ?? this.readLatestPlanFromRollout(session);
+    if (!plan) return null;
+    session.plan = plan;
+    // Restore is conservative: a fully completed checklist is the normal end
+    // state (and Codex treats the plan as transient), so a reopened task must
+    // not resurrect a finished one. Only an in-flight checklist is restored.
+    return plan.some((step) => step.status !== "completed") ? plan : null;
+  }
+
+  private subagentOutcomeCache = new Map<string, { fingerprint: string; state: RecordedAgentState }>();
+
+  /** Recorded direct workers; idle means no observed live turn, not done. */
+  getSubagents(parentSessionId: string): CodexSession[] {
+    return [...this.sessions.values()]
+      .filter(session => session.parentSessionId === parentSessionId)
+      .map(session => {
+        let recorded: RecordedAgentState = {agentStatus: "unknown"};
+        const path = session.rolloutPath ?? this.findRolloutPath(session.threadId);
+        let fd: number | undefined;
+        try {
+          if (path) {
+            fd = openSync(path, "r");
+            const size = fstatSync(fd).size;
+            const stat = fstatSync(fd);
+            const fingerprint = `${stat.size}:${stat.mtimeMs}:${stat.ctimeMs}`;
+            const cached = this.subagentOutcomeCache.get(path);
+            if (cached?.fingerprint === fingerprint) recorded = cached.state;
+            else {
+              const length = Math.min(size, 8 * 1024 * 1024);
+              const buffer = Buffer.alloc(length);
+              const read = readSync(fd, buffer, 0, length, size - length);
+              recorded = recordedSubagentState(buffer.subarray(0, read).toString("utf8"));
+              this.subagentOutcomeCache.set(path, {fingerprint, state: recorded});
+            }
+          }
+        } catch { /* A missing record remains unknown. */ }
+        finally { if (fd !== undefined) closeSync(fd); }
+        return {...session, ...recorded, ...(session.status === "running" ? {agentStatus: "working" as const} : session.status === "error" ? {agentStatus: "failed" as const} : {})};
+      });
+  }
+
+  /** Discover externally spawned workers from metadata only; never resume. */
+  async refreshSubagents(parentSessionId: string): Promise<CodexSession[]> {
+    await this.start();
+    if (this.enableLegacyImport) {
+      const realHome = this.handle.env?.REAL_HOME?.trim() || process.env.REAL_HOME?.trim() || homedir();
+      const sources = [...new Set([realHome, homedir()])].flatMap(home => {
+        const db = join(home, ".codex", "state_5.sqlite");
+        return [db, `${db}-wal`];
+      });
+      const fingerprint = sources.map(path => {
+        try {
+          const stat = statSync(path);
+          return `${path}:${stat.mtimeMs}:${stat.ctimeMs}:${stat.size}`;
+        } catch { return `${path}:absent`; }
+      }).join("|");
+      if (fingerprint !== this.legacySubagentFingerprint) {
+        await this.importLegacyCodexSessions();
+        this.legacySubagentFingerprint = fingerprint;
+      }
+    }
+    // Native workers are excluded from the ordinary chat list. Discover them
+    // separately without resuming a thread or taking its writer lock.
+    try {
+      const threads = await this.activeEngine().listThreads({ limit: 100, archived: false, sourceKinds: ["subAgentThreadSpawn"] });
+      for (const listed of threads) {
+        if (typeof listed.id !== "string" || !isSubagentThread(listed)) continue;
+        let metadata = listed;
+        const listedParent = subagentParentSessionId(listed);
+        if (listedParent && listedParent !== parentSessionId) continue;
+        try {
+          const read = await this.activeEngine().readThread(listed.id);
+          if (isRecord(read) && isRecord(read.thread)) metadata = { ...listed, ...read.thread };
+        } catch { /* List metadata is sufficient when read is unavailable. */ }
+        if (subagentParentSessionId(metadata) !== parentSessionId) continue;
+        const id = codexSessionId(listed.id);
+        const previous = this.sessions.get(id);
+        this.childSessionIds.add(id);
+        const createdAt = metadata.createdAt;
+        const identity = subagentIdentity(metadata);
+        const taskName = identity.agentPath?.split("/").filter(Boolean).at(-1)?.replace(/[_-]+/g, " ");
+        const title = selectCodexThreadName(metadata) || (taskName ? taskName.charAt(0).toUpperCase() + taskName.slice(1) : previous?.title || identity.agentNickname || "Subagent");
+        this.sessions.set(id, {
+          ...previous,
+          id,
+          threadId: listed.id,
+          parentSessionId,
+          title,
+          cwd: typeof metadata.cwd === "string" ? metadata.cwd : this.handle.cwd,
+          workspaceId: this.workspaceId ?? "local",
+          created: previous?.created ?? (typeof createdAt === "number" ? new Date(createdAt * 1000).toISOString() : new Date().toISOString()),
+          turnId: previous?.turnId ?? null,
+          status: previous?.status ?? "idle",
+          ...identity,
+          ...(typeof metadata.rolloutPath === "string" ? { rolloutPath: metadata.rolloutPath } : {}),
+        });
+      }
+    } catch { /* Older engines can lack this source filter; preserve recorded workers. */ }
+    return this.getSubagents(parentSessionId);
+  }
+
+  /** Browse a recorded child without resuming it or acquiring its writer lock. */
+  async getSubagentItems(parentSessionId: string, threadId: string) {
+    const parentItems = await this.getSessionItems(parentSessionId);
+    const child = this.getSession(codexSessionId(threadId));
+    if (child?.parentSessionId !== parentSessionId && !isRecordedSubagent(parentItems, threadId)) {
+      throw new Error("This thread is not a recorded subagent of this session");
+    }
+    if (child) {
+      const items = await this.getSessionItems(child.id);
+      let bornAt = NaN;
+      const path = child.rolloutPath ?? this.findRolloutPath(child.threadId);
+      let fd: number | undefined;
+      try {
+        if (path) {
+          fd = openSync(path, "r");
+          const buffer = Buffer.alloc(Math.min(fstatSync(fd).size, 64 * 1024));
+          const read = readSync(fd, buffer, 0, buffer.length, 0);
+          for (const line of buffer.subarray(0, read).toString("utf8").split("\n")) {
+            let record: unknown;
+            try { record = JSON.parse(line); } catch { continue; }
+            if (isRecord(record) && record.type === "session_meta" && isRecord(record.payload) && record.payload.id === child.threadId && typeof record.payload.timestamp === "string") {
+              bornAt = Date.parse(record.payload.timestamp); break;
+            }
+          }
+        }
+      } catch { /* Without an owned boundary, keep recorded data. */ }
+      finally { if (fd !== undefined) closeSync(fd); }
+      const outcomes = await this.getTurnOutcomes(child.id);
+      return items.filter(entry => !Number.isFinite(bornAt) || (typeof entry.item.createdAt === "number" && entry.item.createdAt >= bornAt)).map(entry => {
+        const outcome = outcomes.find(outcome => outcome.turnId === entry.turnId);
+        return {...entry,item:{...entry.item,...(outcome?.startedAt === undefined ? {} : {turnStartedAt:outcome.startedAt}),...(outcome?.completedAt === undefined ? {} : {turnCompletedAt:outcome.completedAt})}};
+      });
+    }
+    if (!this.engine) throw new Error("Engine unavailable");
+    return this.readThreadStoreItems(this.engine, threadId, MAX_TRANSCRIPT_ITEMS);
+  }
+
+  /** Fetch a thread's persisted items (for restoring a transcript). */
+  private readonly transcriptReads = new Map<string, Promise<Array<{ turnId: string; item: Record<string, unknown> }>>>();
+
+  getSessionItems(sessionId: string, options?: { limit?: number }): Promise<Array<{ turnId: string; item: Record<string, unknown> }>> {
+    const limit = Math.min(MAX_TRANSCRIPT_ITEMS, Math.max(1, Math.floor(options?.limit || MAX_TRANSCRIPT_ITEMS)));
+    const key = `${sessionId}:${limit}`;
+    const pending = this.transcriptReads.get(key);
+    if (pending) return pending;
+    const request = historyReadScheduler.run(() => this.readSessionItems(sessionId, { limit }));
+    this.transcriptReads.set(key, request);
+    void request.finally(() => {
+      if (this.transcriptReads.get(key) === request) this.transcriptReads.delete(key);
+    }).catch(() => undefined);
+    return request;
+  }
+
+  private async readSessionItems(sessionId: string, options?: { limit?: number }): Promise<Array<{ turnId: string; item: Record<string, unknown> }>> {
+    await this.start();
+    this.refreshIndexedTitles();
     const session = this.sessions.get(sessionId);
     const engine = this.engine;
     if (!session || !engine) return [];
-    const limit = options?.limit && options.limit > 0 ? options.limit : MAX_TRANSCRIPT_ITEMS;
+    const limit = Math.min(MAX_TRANSCRIPT_ITEMS, Math.max(1, Math.floor(options?.limit || MAX_TRANSCRIPT_ITEMS)));
     // Read-only by design: `thread/items/list` serves materialized items
     // straight from the thread store, and the rollout JSONL covers threads the
     // store has not seen. Never resume here — resuming takes the thread's
@@ -717,8 +1019,11 @@ export class CodexSessionManager {
     // browsed session locked against other Sofia processes until we exited.
     try {
       const items = await this.readThreadStoreItems(engine, session.threadId, limit);
-      if (items.length > 0) return items;
-    } catch {
+      if (items.length > 0) {
+        return reconcileRolloutItems(this.readRolloutItems(session, limit), items);
+      }
+    } catch (error) {
+      if (error instanceof RolloutRecordTooLargeError) throw error;
       // Fall through to the rollout reader.
     }
     return this.readRolloutItems(session, limit);
@@ -738,14 +1043,24 @@ export class CodexSessionManager {
     limit: number,
   ): Promise<Array<{ turnId: string; item: Record<string, unknown> }>> {
     const items: Array<{ turnId: string; item: Record<string, unknown> }> = [];
+    let retainedChars = 0;
+    const sizes: number[] = [];
     let cursor: string | undefined;
     for (let page = 0; page < TRANSCRIPT_PAGE_BUDGET; page += 1) {
       const result = await engine.listThreadItems(threadId, {
         limit: TRANSCRIPT_PAGE_SIZE,
         ...(cursor ? { cursor } : {}),
       });
-      items.push(...result.items);
-      if (items.length > limit) items.splice(0, items.length - limit);
+      for (const entry of result.items) {
+        items.push(entry);
+        const size = JSON.stringify(entry.item).length;
+        sizes.push(size);
+        retainedChars += size;
+        while (items.length > 1 && (items.length > limit || retainedChars > TRANSCRIPT_RETAINED_CHARS)) {
+          items.shift();
+          retainedChars -= sizes.shift()!;
+        }
+      }
       if (!result.nextCursor || result.items.length === 0) break;
       cursor = result.nextCursor;
     }
@@ -753,117 +1068,34 @@ export class CodexSessionManager {
   }
 
   /** Parse a legacy rollout JSONL into ThreadItem-shaped entries. */
+  async getTurnOutcomes(sessionId: string): Promise<DurableTurnOutcome[]> {
+    const session = this.sessions.get(sessionId);
+    if (!session) return [];
+    const path = session.rolloutPath ?? this.findRolloutPath(session.threadId);
+    if (!path || !existsSync(path)) return [];
+    let fd: number | undefined;
+    try {
+      fd = openSync(path, "r");
+      const size = fstatSync(fd).size;
+      const length = Math.min(size, 8 * 1024 * 1024);
+      const buffer = Buffer.alloc(length);
+      const read = readSync(fd, buffer, 0, length, size - length);
+      return parseDurableTurnOutcomes(buffer.subarray(0, read).toString("utf8"));
+    } catch {
+      return [];
+    } finally {
+      if (fd !== undefined) closeSync(fd);
+    }
+  }
+
   private readRolloutItems(session: CodexSession, limit = 200): Array<{ turnId: string; item: Record<string, unknown> }> {
     const path = session.rolloutPath ?? this.findRolloutPath(session.threadId);
     if (!path || !existsSync(path)) return [];
     session.rolloutPath = path;
     try {
-      const raw = readFileSync(path, "utf8");
-      const out: Array<{ turnId: string; item: Record<string, unknown> }> = [];
-      let currentTurn = "";
-      for (const line of raw.split("\n")) {
-        if (!line.trim()) continue;
-        let parsed: Record<string, unknown>;
-        try { parsed = JSON.parse(line); } catch { continue; }
-        const type = parsed.type;
-        if (type === "event_msg" || type === "turn_context") {
-          const payload = isRecord(parsed.payload) ? parsed.payload : {};
-          if (isRecord(payload)) {
-            const turnId = typeof payload.turn_id === "string" ? payload.turn_id : currentTurn;
-            if (turnId) currentTurn = turnId;
-          }
-          // Messages are emitted only from response_item (the durable record);
-          // event_msg.agent_message duplicates the same assistant reply and
-          // would double every message in the transcript.
-          continue;
-        }
-        if (type === "response_item") {
-          const payload = isRecord(parsed.payload) ? parsed.payload : {};
-          const itemType = typeof payload.type === "string" ? payload.type : "";
-          const id = typeof payload.id === "string" ? payload.id : `${currentTurn}:item:${out.length}`;
-          if (itemType === "reasoning") {
-            const content = Array.isArray(payload.content)
-              ? (payload.content as unknown[]).map((c) => isRecord(c) && typeof c.text === "string" ? c.text : "").filter(Boolean)
-              : [];
-            out.push({ turnId: currentTurn, item: { type: "reasoning", id, content } });
-          } else if (itemType === "message" && payload.role === "user") {
-            const content = Array.isArray(payload.content)
-              ? (payload.content as unknown[]).map((c) => isRecord(c) && typeof c.text === "string" ? c.text : "").filter(Boolean)
-              : [];
-            const text = content.join("\n");
-            if (text) out.push({ turnId: currentTurn, item: { type: "userMessage", id, content: [{ type: "text", text }] } });
-          } else if (itemType === "message" && payload.role === "assistant") {
-            const content = Array.isArray(payload.content)
-              ? (payload.content as unknown[]).map((c) => isRecord(c) && typeof c.text === "string" ? c.text : "").filter(Boolean)
-              : [];
-            out.push({ turnId: currentTurn, item: { type: "agentMessage", id, text: content.join("\n"), ...(payload.phase === "commentary" || payload.phase === "final_answer" ? { phase: payload.phase } : {}) } });
-          } else if (itemType === "function_call") {
-            out.push({
-              turnId: currentTurn,
-              item: {
-                type: "dynamicToolCall",
-                id,
-                tool: typeof payload.name === "string" ? payload.name : "tool",
-                arguments: payload.arguments,
-                status: "completed",
-              },
-            });
-          } else if (itemType === "function_call_output") {
-            const callId = typeof payload.call_id === "string" ? payload.call_id : "";
-            if (callId) {
-              out.push({
-                turnId: currentTurn,
-                item: {
-                  type: "dynamicToolCall",
-                  id: callId,
-                  tool: "function",
-                  arguments: {},
-                  status: "completed",
-                  result: payload.output,
-                },
-              });
-            }
-          } else if (itemType === "custom_tool_call") {
-            // Codex "exec" custom tool calls are shell commands. Map to a
-            // commandExecution so the UI renders an inline "used bash" marker.
-            const name = typeof payload.name === "string" ? payload.name : "";
-            const rawInput = typeof payload.input === "string" ? payload.input : JSON.stringify(payload.input ?? {});
-            const command = parseCustomToolCommand(rawInput);
-            const callId = typeof payload.call_id === "string" ? payload.call_id : id;
-            if (name === "exec" && command) {
-              out.push({
-                turnId: currentTurn,
-                item: {
-                  type: "commandExecution",
-                  id: callId,
-                  command,
-                  status: typeof payload.status === "string" ? payload.status : "completed",
-                },
-              });
-            } else if (name) {
-              out.push({
-                turnId: currentTurn,
-                item: {
-                  type: "dynamicToolCall",
-                  id: callId,
-                  tool: name,
-                  arguments: payload.input,
-                  status: "completed",
-                },
-              });
-            }
-          } else if (itemType === "custom_tool_call_output") {
-            const callId = typeof payload.call_id === "string" ? payload.call_id : "";
-            const commandItem = idFromCallId(out, callId);
-            if (commandItem && commandItem.item.type === "commandExecution") {
-              commandItem.item.aggregatedOutput = typeof payload.output === "string" ? payload.output : "";
-            }
-          }
-        }
-      }
-      // Return only the most recent `limit` items (rollouts can be huge).
-      return limit > 0 && out.length > limit ? out.slice(-limit) : out;
-    } catch {
+      return parseRolloutLines(readRolloutLines(path), limit);
+    } catch (error) {
+      if (error instanceof RolloutRecordTooLargeError) throw error;
       return [];
     }
   }
@@ -879,6 +1111,8 @@ export class CodexSessionManager {
     const starting = (async () => {
       this.loadedThreads.clear();
       this.backgroundProcesses.clear();
+    this.pendingTitleInputs.clear();
+    this.namedThreads.clear();
       const engine = new ManagedCodexEngine({
         bin: this.handle.bin,        cwd: this.handle.cwd,
         codexHome: this.handle.codexHome,
@@ -890,6 +1124,8 @@ export class CodexSessionManager {
       engine.onExit(() => {
         // The engine owns every background process; none survive its exit.
         this.backgroundProcesses.clear();
+    this.pendingTitleInputs.clear();
+    this.namedThreads.clear();
         // Mark running sessions as errored so the UI can surface the loss.
         for (const session of this.sessions.values()) {
           if (session.status === "running") {
@@ -918,6 +1154,7 @@ export class CodexSessionManager {
       });
       engine.on("turn/started", (params) => this.handleTurnStarted(params));
       engine.on("turn/completed", (params) => this.handleTurnCompleted(params));
+      engine.on("turn/plan/updated", (params) => this.handlePlanUpdated(params));
       engine.on("thread/status/changed", (params) => this.handleThreadStatus(params));
       engine.on("account/rateLimits/updated", (params) => this.handleRateLimits(params));
       // Notification-style (no request id) approval requests, e.g. when the
@@ -926,6 +1163,8 @@ export class CodexSessionManager {
       engine.on("item/commandExecution/requestApproval", (params) => this.handleApproval(params));
       engine.on("item/fileChange/requestApproval", (params) => this.handleApproval(params));
       this.engine = engine;
+      this.skillRootsSnapshot = null;
+      await this.setSkillRoots(this.handle.skillRoots ?? []);
       await this.loadExistingThreads();
     })();
     this.starting = starting;
@@ -940,12 +1179,13 @@ export class CodexSessionManager {
   private async loadExistingThreads(): Promise<void> {
     if (!this.engine) return;
     try {
-      const threads = await this.engine.listThreads({ limit: 100, archived: false });
+      const threads = await this.engine.listThreads({ limit: 100, archived: false, sourceKinds: ["cli", "vscode", "exec", "appServer", "unknown"] });
       for (const raw of threads) {
         const thread = raw as {
           id?: string;
           preview?: string;
           name?: string;
+          title?: string;
           createdAt?: number;
           created_at?: number | string;
           cwd?: string;
@@ -956,10 +1196,12 @@ export class CodexSessionManager {
           rolloutPath?: string;
         };
         const threadId = typeof thread.id === "string" ? thread.id : "";
+        if (isSubagentThread(raw)) this.childSessionIds.add(codexSessionId(threadId));
         // Group by project, not exact path: a session created in a subdirectory
         // (or from the repo root while the workspace points at a subdir) belongs
         // to this workspace, and the TUI lists it. Strict equality hid them.
         if (!threadBelongsToWorkspace(this.handle.cwd, thread.cwd)) continue;
+        if (selectCodexThreadName({ name: thread.name })) this.namedThreads.add(threadId);
         const originalThreadId = Object.entries(this.threadAliases).find(([, replacement]) => replacement === threadId)?.[0];
         const sessionId = codexSessionId(originalThreadId ?? threadId);
         if (!threadId || this.sessions.has(sessionId)) continue;
@@ -971,6 +1213,8 @@ export class CodexSessionManager {
             : new Date().toISOString();
         const session: CodexSession = {
           id: sessionId,
+          parentSessionId: subagentParentSessionId(raw),
+          ...subagentIdentity(raw),
           threadId,
           title: threadDisplayTitle(thread) || "Sofia task",
           cwd: thread.cwd ?? this.handle.cwd,
@@ -1007,7 +1251,7 @@ export class CodexSessionManager {
     // tests pass false and stay clean.
     if (!this.enableLegacyImport) return;
     let legacyDb: string | null = null;
-    const realHome = process.env.REAL_HOME?.trim() || homedir();
+    const realHome = this.handle.env?.REAL_HOME?.trim() || process.env.REAL_HOME?.trim() || homedir();
     const candidates = [
       join(realHome, ".codex", "state_5.sqlite"),
       join(homedir(), ".codex", "state_5.sqlite"),
@@ -1017,18 +1261,40 @@ export class CodexSessionManager {
         if (existsSync(candidate)) { legacyDb = candidate; break; }
       } catch { /* skip */ }
     }
+    const indexedTitles = new Map<string, string>();
+    for (const home of new Set([homedir(), realHome])) {
+      try {
+        for (const [id, title] of parseCodexSessionTitles(readFileSync(join(home, ".codex", "session_index.jsonl"), "utf8"))) indexedTitles.set(id, title);
+      } catch { /* Desktop names are optional; never mutate their source. */ }
+    }
+    for (const session of this.sessions.values()) {
+      const title = indexedTitles.get(session.threadId);
+      if (title && !this.namedThreads.has(session.threadId)) session.title = title;
+    }
     if (!legacyDb) return;
     try {
       const { DatabaseSync } = await importNodeSqlite();
       const sqlite = new DatabaseSync(legacyDb, { readOnly: true });
       const rows = sqlite.prepare(
-        "SELECT id, rollout_path, title, created_at, cwd FROM threads",
+        "SELECT * FROM threads",
       ).all() as Array<Record<string, unknown>>;
       sqlite.close();
       const workspacePath = this.handle.cwd;
       for (const row of rows) {
         const threadId = typeof row.id === "string" ? row.id : "";
-        if (!threadId || this.sessions.has(codexSessionId(threadId))) continue;
+        if (!threadId) continue;
+        if (isSubagentThread(row)) this.childSessionIds.add(codexSessionId(threadId));
+        if (row.archived === 1) continue;
+        const existing = this.sessions.get(codexSessionId(threadId));
+        if (existing) {
+          const parentSessionId = subagentParentSessionId(row);
+          if (parentSessionId) {
+            existing.parentSessionId = parentSessionId;
+            Object.assign(existing, subagentIdentity(row));
+          }
+          if (isPendingTaskTitle(existing.title)) existing.title = indexedTitles.get(threadId) ?? (threadTitleFromEngineText(row.title) || "Sofia task");
+          continue;
+        }
         // Only import sessions whose project matches this workspace's path
         // (codex groups by project cwd; Sofia groups by workspace).
         const rowCwd = typeof row.cwd === "string" ? row.cwd : "";
@@ -1039,15 +1305,17 @@ export class CodexSessionManager {
           : new Date().toISOString();
         const session: CodexSession = {
           id: codexSessionId(threadId),
-          threadId,
-          title: typeof row.title === "string" && row.title.trim()
-            ? row.title.trim().slice(0, 200)
-            : "Sofia task",
+          parentSessionId: subagentParentSessionId(row),
+          ...subagentIdentity(row),
+          threadId: this.threadAliases[threadId] ?? threadId,
+          title: indexedTitles.get(threadId) ?? (threadDisplayTitle({name: typeof row.name === "string" ? row.name : undefined, title: typeof row.title === "string" ? row.title : undefined, preview: typeof row.first_user_message === "string" ? row.first_user_message : undefined}) || "Sofia task"),
           workspaceId: this.workspaceId ?? "local",
           created,
           turnId: null,
           status: "idle",
-          rolloutPath: typeof row.rollout_path === "string" ? row.rollout_path : null,
+          rolloutPath: this.threadAliases[threadId]
+            ? this.findRolloutPath(this.threadAliases[threadId])
+            : typeof row.rollout_path === "string" ? row.rollout_path : null,
         };
         this.sessions.set(session.id, session);
       }
@@ -1062,6 +1330,8 @@ export class CodexSessionManager {
     this.starting = null;
     this.loadedThreads.clear();
     this.backgroundProcesses.clear();
+    this.pendingTitleInputs.clear();
+    this.namedThreads.clear();
   }
 
   /** Create a thread (session) and optionally start a turn with a prompt. */
@@ -1103,6 +1373,7 @@ export class CodexSessionManager {
     // title the engine derives from the first user message.
     if (requestedTitle && !isPendingTaskTitle(requestedTitle)) {
       await this.engine.renameThread(threadId, requestedTitle);
+      this.namedThreads.add(threadId);
     }
     this.sessions.set(session.id, session);
     this.emit({ type: "session.created", session });
@@ -1141,6 +1412,7 @@ export class CodexSessionManager {
     }
     if (!session) throw new Error(`unknown Sofia session: ${sessionId}`);
     if (session.status === "running") throw new Error("This Sofia task is still running. Stop it or wait before sending another turn.");
+    if (isPendingTaskTitle(session.title) && !this.pendingTitleInputs.has(session.id)) this.pendingTitleInputs.set(session.id, text);
     // Reserve the task before any RPC so concurrent prompts cannot start two turns.
     session.status = "running";
     session.cwd = opts?.cwd ?? session.cwd ?? this.handle.cwd;
@@ -1166,10 +1438,16 @@ export class CodexSessionManager {
         if (opts.providerId) session.providerId = opts.providerId;
       }
       await this.turnChanges.beginTurn(session.id, session.cwd);
+      // Never send an empty text input: an image-only turn carries its payload
+      // as an image input, and a `{ text: "" }` entry is rejected outright
+      // ("text is required"). Only the text the caller actually has is sent.
+      const promptText = text.trim() ? await resolveSofiaPrompt(session.cwd, text) : "";
+      const imageInputs = turnImageInputs(opts?.images);
+      if (!promptText && imageInputs.length === 0) throw new Error("text is required");
       turnId = await engine.startTurn({
         ...codexTurnPermissions(readCodexAccessMode(this.handle.codexHome)),
         threadId: session.threadId,
-        input: [{ text: await resolveSofiaPrompt(session.cwd, text) }, ...turnImageInputs(opts?.images)],
+        input: [...(promptText ? [{ text: promptText }] : []), ...imageInputs],
         cwd: session.cwd,
       });
     } catch (error) {
@@ -1344,6 +1622,8 @@ export class CodexSessionManager {
     if (!name) throw new Error("title is required");
     await this.activeEngine().renameThread(session.threadId, name);
     session.title = name;
+    this.namedThreads.add(session.threadId);
+    this.pendingTitleInputs.delete(session.id);
     this.emit({ type: "session.updated", session: { ...session } });
     return { ...session };
   }
@@ -1352,7 +1632,7 @@ export class CodexSessionManager {
   listTrackedBackgroundProcesses(sessionId: string): BackgroundProcess[] {
     const session = this.sessions.get(sessionId);
     if (!session) return [];
-    return sortBackgroundProcesses([...this.backgroundProcessesFor(session.threadId).values()]);
+    return sortBackgroundProcesses(this.visibleProcesses(session.threadId)).map(toWireProcess);
   }
 
   /**
@@ -1365,6 +1645,7 @@ export class CodexSessionManager {
    */
   async listBackgroundProcesses(sessionId: string): Promise<BackgroundProcess[]> {
     await this.start();
+    this.refreshIndexedTitles();
     const session = this.sessions.get(sessionId);
     const engine = this.engine;
     if (!session || !engine) return [];
@@ -1381,7 +1662,9 @@ export class CodexSessionManager {
         if (!key) continue;
         const existing = [...tracked.values()].find((process) =>
           (itemId && process.itemId === itemId) || (processId && process.processId === processId));
-        const target: BackgroundProcess = existing ?? { itemId: itemId || key, processId, command: "", status: "running" };
+        // Engine-discovered terminals have no tracked record: the engine lists
+        // only live terminals, so they are detached by definition.
+        const target: TrackedProcess = existing ?? { itemId: itemId || key, processId, command: "", status: "running", detached: true };
         target.status = "running";
         if (!target.processId && processId) target.processId = processId;
         if (!target.itemId && itemId) target.itemId = itemId;
@@ -1394,12 +1677,12 @@ export class CodexSessionManager {
         liveIds.add(target.itemId);
       }
       for (const process of tracked.values()) {
-        if (process.status === "running" && !liveIds.has(process.itemId)) process.status = "completed";
+        if (process.detached && process.status === "running" && !liveIds.has(process.itemId)) process.status = "completed";
       }
     } catch {
       // Thread unloaded or engine unavailable — the local view still helps.
     }
-    return sortBackgroundProcesses([...tracked.values()]);
+    return sortBackgroundProcesses(this.visibleProcesses(session.threadId)).map(toWireProcess);
   }
 
   /**
@@ -1439,7 +1722,7 @@ export class CodexSessionManager {
     const tracked = this.backgroundProcessesFor(session.threadId);
     let changed = false;
     for (const process of tracked.values()) {
-      if (process.status === "running") {
+      if (process.detached && process.status === "running") {
         process.status = "completed";
         changed = true;
       }
@@ -1455,7 +1738,7 @@ export class CodexSessionManager {
       type: "backgroundProcesses",
       sessionId,
       threadId: session.threadId,
-      processes: sortBackgroundProcesses([...this.backgroundProcessesFor(session.threadId).values()]),
+      processes: sortBackgroundProcesses(this.visibleProcesses(session.threadId)).map(toWireProcess),
     });
   }
 
@@ -1501,11 +1784,51 @@ export class CodexSessionManager {
     if (itemType === "commandExecution" && isRecord(item)) {
       const process = this.backgroundProcessFromItem(item);
       if (process?.processId) {
-        this.backgroundProcessesFor(session.threadId).set(process.itemId, process);
-        this.emitBackgroundProcesses(session.id);
+        // Registered, but not yet a background process. It earns membership by
+        // still running when this turn ends; nothing is emitted until then, so
+        // an ordinary command never reaches the client as background work.
+        this.backgroundProcessesFor(session.threadId).set(process.itemId, {
+          ...process,
+          detached: false,
+          ...(typeof turnId === "string" && turnId ? { turnId } : {}),
+        });
       }
     }
     this.emit({ type: "item.started", sessionId: session.id, threadId: threadId ?? "", itemType, item: item ?? null, turnId: typeof turnId === "string" ? turnId : "" });
+  }
+
+  /**
+   * Codex's `update_plan` checklist: the engine emits this notification as the
+   * model rewrites its plan, but it is not an item, so without an explicit
+   * subscription the checklist never reaches the session UI.
+   */
+  private handlePlanUpdated(params: unknown): void {
+    if (!params || typeof params !== "object") return;
+    const { threadId, turnId, explanation, plan } = params as {
+      threadId?: string;
+      turnId?: string;
+      explanation?: string | null;
+      plan?: Array<{ step?: unknown; status?: unknown }>;
+    };
+    const session = this.sessionFor(threadId ?? "");
+    if (!session) return;
+    const steps: CodexPlanItem[] = Array.isArray(plan)
+      ? plan
+          .map((entry) => ({
+            step: typeof entry?.step === "string" ? entry.step : "",
+            status: normalizePlanStatus(entry?.status),
+          }))
+          .filter((entry) => entry.step.trim().length > 0)
+      : [];
+    session.plan = steps;
+    this.emit({
+      type: "plan.updated",
+      sessionId: session.id,
+      threadId: threadId ?? "",
+      turnId: typeof turnId === "string" ? turnId : "",
+      explanation: typeof explanation === "string" && explanation.trim() ? explanation : null,
+      plan: steps,
+    });
   }
 
   private handleAgentDelta(params: unknown): void {
@@ -1571,23 +1894,37 @@ export class CodexSessionManager {
         if (typeof item.aggregatedOutput === "string") tracked.aggregatedOutput = item.aggregatedOutput;
         if (typeof item.durationMs === "number") tracked.durationMs = item.durationMs;
         if (tracked.status === "running") tracked.status = "completed";
-        this.emitBackgroundProcesses(session.id);
-        processExited = true;
-        // A transition into failure is the attention-worthy fact. The server
-        // owns this so it is observed regardless of which workspace the user is
-        // viewing (see CodexAttentionHub).
-        if (wasRunning && shouldNotifyBackgroundProcessFailure({ process: tracked, turnRunning: session.status === "running" })) {
-          this.emit({
-            type: "backgroundProcess.failed",
-            sessionId: session.id,
-            threadId: session.threadId,
-            workspaceId: session.workspaceId,
-            sessionTitle: session.title,
-            itemId: tracked.itemId,
-            processId: tracked.processId,
-            command: tracked.command,
-            ...(typeof tracked.exitCode === "number" ? { exitCode: tracked.exitCode } : {}),
-          });
+        if (!tracked.detached) {
+          // Never earned membership: an ordinary command that finished inside
+          // its turn. It is transcript history, not background work, so drop it
+          // rather than letting the registry grow one entry per command.
+          this.backgroundProcessesFor(session.threadId).delete(itemId);
+        } else {
+          this.emitBackgroundProcesses(session.id);
+          processExited = true;
+          // Attention belongs to work that outlived its turn, never to a
+          // command's exit code. Only detached processes reach here, so this is
+          // the detached resource the user walked away from stopping. The server
+          // owns the decision so it holds regardless of which workspace the user
+          // is viewing (see CodexAttentionHub).
+          //
+          // A command that finished inside its turn is a *result* — `grep`
+          // finding nothing, a failing test run — which the agent already saw
+          // and will report. It never reaches here, because it never earned
+          // membership.
+          if (wasRunning && isFailedBackgroundProcess(tracked)) {
+            this.emit({
+              type: "backgroundProcess.failed",
+              sessionId: session.id,
+              threadId: session.threadId,
+              workspaceId: session.workspaceId,
+              sessionTitle: session.title,
+              itemId: tracked.itemId,
+              processId: tracked.processId,
+              command: tracked.command,
+              ...(typeof tracked.exitCode === "number" ? { exitCode: tracked.exitCode } : {}),
+            });
+          }
         }
       }
     }
@@ -1606,18 +1943,22 @@ export class CodexSessionManager {
   }
 
   /**
-   * The engine derives the first title from the user's message but only exposes
-   * it as `preview`, so a task created with a placeholder would keep it forever.
-   * Adopt the generated title once the turn that produced it has finished.
+   * Prefer the engine's name/title/preview after the first turn, then derive a
+   * readable title from the first user request if metadata is missing. Persist
+   * it as a thread name and guard against a manual rename during the read.
    */
   private async adoptGeneratedTitle(session: CodexSession, threadId: string): Promise<void> {
     const engine = this.engine;
     const current = session.title.trim();
     if (!engine || (current && !isPendingTaskTitle(current))) return;
     try {
-      const raw = await engine.readThread(threadId) as { thread?: { name?: unknown; preview?: unknown } };
-      const generated = threadDisplayTitle(raw.thread ?? {});
-      if (!generated || generated === current || this.sessions.get(session.id) !== session) return;
+      const raw = await engine.readThread(threadId) as { thread?: { name?: unknown; title?: unknown; preview?: unknown } };
+      const generated = threadDisplayTitle(raw.thread ?? {}) || threadTitleFromEngineText(this.pendingTitleInputs.get(session.id));
+      if (!generated || generated === current || this.sessions.get(session.id) !== session || !isPendingTaskTitle(session.title)) return;
+      if (!selectCodexThreadName({ name: raw.thread?.name })) await engine.renameThread(threadId, generated);
+      if (this.sessions.get(session.id) !== session || !isPendingTaskTitle(session.title)) return;
+      this.pendingTitleInputs.delete(session.id);
+      this.namedThreads.add(threadId);
       session.title = generated;
       this.emit({ type: "session.updated", session: { ...session } });
     } catch {
@@ -1656,7 +1997,24 @@ export class CodexSessionManager {
     session.status = turn?.status === "failed" || turn?.error || error ? "error" : "idle";
     session.turnId = null;
     this.emit({ type: "session.updated", session: { ...session } });
-    this.emit({ type: "turn.completed", sessionId: session.id, threadId: tid });
+    this.emit({ type: "turn.completed", sessionId: session.id, threadId: tid, outcome: session.status === "error" ? "failed" : turn?.status === "completed" ? "completed" : "cancelled" });
+    // Membership is decided here: a command still running when its turn ends
+    // has outlived the turn and becomes background work; everything else from
+    // that turn settled and is dropped. The item stream alone cannot tell the
+    // two apart, which is why a `grep` that exited 1 used to raise attention.
+    const processes = this.backgroundProcessesFor(tid);
+    let detachedChanged = false;
+    for (const [itemId, process] of processes) {
+      if (process.detached) continue;
+      const fromCompletedTurn = !process.turnId || !completedTurnId || process.turnId === completedTurnId;
+      if (fromCompletedTurn && process.status === "running") {
+        process.detached = true;
+        detachedChanged = true;
+      } else {
+        processes.delete(itemId);
+      }
+    }
+    if (detachedChanged) this.emitBackgroundProcesses(session.id);
     // Idle now — but only let the engine unload the thread (and drop its
     // writer lock) if no background process still owns it. A dev server left
     // running is live work, not a leak of the writer lock.

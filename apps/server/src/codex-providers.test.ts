@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it } from "bun:test";
 import {
   codexConfigTomlFromEngineConfig,
   codexEnvKeyForProvider,
+  parseCodexEngineConfig,
   readCodexEngineConfig,
   readCodexProviders,
   writeCodexEngineConfigFromProviders,
@@ -87,6 +88,25 @@ describe("readCodexEngineConfig", () => {
     expect(config.providers[0].models).toHaveLength(2);
   });
 
+  it("preserves the native Anthropic wire_api from providers.json", async () => {
+    const dir = await tempDir();
+    const providersPath = join(dir, "providers.json");
+    await writeCodexProviders({
+      providers: {
+        anthropic: {
+          api_key: "sk-ant",
+          base_url: "https://api.anthropic.com/v1",
+          wire_api: "anthropic",
+          name: "Anthropic",
+          models: [{ id: "claude-sonnet-4", name: "Claude Sonnet 4", reasoning: true }],
+        },
+      },
+    }, { path: providersPath });
+
+    const config = await readCodexEngineConfig({ path: providersPath, tomlPath: join(dir, "missing.toml") });
+    expect(config.providers[0].wireApi).toBe("anthropic");
+  });
+
   it("defaults to the first provider/model when config.toml has no selection", async () => {
     const dir = await tempDir();
     const providersPath = join(dir, "providers.json");
@@ -127,6 +147,22 @@ describe("readCodexProviders", () => {
     };
     await writeCodexProviders(input, { path });
     expect(await readCodexProviders({ path })).toEqual(input);
+  });
+});
+
+describe("parseCodexEngineConfig", () => {
+  it("accepts an explicit anthropic wire and selects it for the anthropic provider", () => {
+    const explicit = parseCodexEngineConfig({
+      defaultProviderId: "custom",
+      providers: [{ providerId: "custom", providerName: "Custom", wireApi: "anthropic", models: [] }],
+    });
+    expect(explicit.providers[0].wireApi).toBe("anthropic");
+
+    const byId = parseCodexEngineConfig({
+      defaultProviderId: "anthropic",
+      providers: [{ providerId: "anthropic", providerName: "Anthropic", models: [] }],
+    });
+    expect(byId.providers[0].wireApi).toBe("anthropic");
   });
 });
 

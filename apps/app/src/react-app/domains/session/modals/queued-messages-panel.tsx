@@ -19,6 +19,8 @@ export type QueuedMessagesPanelProps = {
   onReorder: (ids: string[]) => void;
   onEdit: (id: string, text: string) => void;
   sending?: boolean;
+  storageError?: string | null;
+  onRetryStorage?: () => void;
 };
 
 // Keep the pending row quiet: show a few stacked follow-ups, then a count.
@@ -131,13 +133,15 @@ function QueuedRow(props: {
 
   const preview = previewText(props.item.draft);
   const hasAttachments = props.item.draft.attachments.length > 0;
+  const sending = props.sending || props.item.deliveryState === "sending";
+  const uncertain = props.item.deliveryState === "outcome-unknown";
 
   return (
     <div className="flex min-h-9 items-center gap-2 px-3 py-1">
       <ListEnd size={14} className="shrink-0 text-gray-9" aria-hidden="true" />
       <button
         type="button"
-        disabled={props.sending}
+        disabled={sending}
         onClick={startEdit}
         title={preview || t("composer.queued_edit")}
         className="min-w-0 flex-1 truncate text-left text-[13px] leading-5 text-gray-11 transition-colors hover:text-gray-12 disabled:pointer-events-none"
@@ -146,21 +150,23 @@ function QueuedRow(props: {
           <Paperclip size={12} className="mr-1 inline align-text-bottom text-gray-9" aria-hidden="true" />
         ) : null}
         {preview}
+        {uncertain ? <span className="ml-2 text-amber-10">Delivery unconfirmed</span> : null}
+        {props.item.deliveryState === "sending" ? <span className="ml-2 text-gray-9">Sending…</span> : null}
       </button>
       <div className="flex shrink-0 items-center gap-0.5">
         <button
           type="button"
-          disabled={props.sending}
+          disabled={sending}
           onClick={() => props.onSendNow(props.item.id)}
-          title={t("composer.queued_send_now_hint")}
+          title={uncertain ? "Check the chat before retrying; this message may already have arrived." : t("composer.queued_send_now_hint")}
           className="flex items-center gap-1 rounded-md px-2 py-1 text-[12px] text-gray-11 transition-colors hover:bg-gray-3 hover:text-gray-12 disabled:pointer-events-none disabled:opacity-40"
         >
           <CornerDownRight size={13} aria-hidden="true" />
-          {t("composer.queued_steer")}
+          {uncertain ? "Retry" : t("composer.queued_steer")}
         </button>
         <button
           type="button"
-          disabled={props.sending}
+          disabled={sending}
           onClick={() => props.onRemove(props.item.id)}
           title={t("common.remove")}
           aria-label={t("common.remove")}
@@ -173,7 +179,7 @@ function QueuedRow(props: {
             render={
               <button
                 type="button"
-                disabled={props.sending}
+                disabled={sending}
                 title={t("composer.queued_more_actions")}
                 aria-label={t("composer.queued_more_actions")}
                 className="flex size-7 items-center justify-center rounded-md text-gray-10 transition-colors hover:bg-gray-3 hover:text-gray-12 disabled:pointer-events-none disabled:opacity-40"
@@ -203,7 +209,7 @@ function QueuedRow(props: {
  * current run now, or use the menu to reorder.
  */
 export function QueuedMessagesPanel(props: QueuedMessagesPanelProps) {
-  if (props.items.length === 0) return null;
+  if (props.items.length === 0 && !props.storageError) return null;
 
   const ids = props.items.map((item) => item.id);
   const visible = props.items.slice(0, MAX_VISIBLE);
@@ -211,6 +217,10 @@ export function QueuedMessagesPanel(props: QueuedMessagesPanelProps) {
 
   return (
     <div className="flex flex-col divide-y divide-dls-border/50">
+      {props.storageError ? <div role="alert" className="px-3 py-2 text-[12px] text-amber-10">{props.storageError} <button type="button" className="underline" onClick={props.onRetryStorage}>Retry recovery</button></div> : null}
+      {props.items.some((item) => item.deliveryState === "outcome-unknown") ? (
+        <div className="px-3 py-2 text-[12px] text-gray-10">Some message deliveries are unconfirmed. Check the chat before retrying.</div>
+      ) : null}
       {visible.map((item, index) => (
         <QueuedRow
           key={item.id}

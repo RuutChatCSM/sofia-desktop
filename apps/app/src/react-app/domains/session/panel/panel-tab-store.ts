@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
-import { isCollectibleArtifactTarget, type OpenTarget, type OpenTargetPreview } from "../artifacts/open-target";
+import { isOpenableFileTarget, type OpenTarget, type OpenTargetPreview } from "../artifacts/open-target";
 import {
   createBrowserPanelTab,
   isRecord,
@@ -20,7 +20,7 @@ import {
 export const PERSISTED_PANEL_TAB_STORE_KEY = "sofia:panel-tabs:v2";
 export const LEGACY_PANEL_TAB_STORE_KEY = "sofia:panel-tabs:v1";
 
-export type PanelTabType = "artifact" | "browser" | "changes" | "start" | "files";
+export type PanelTabType = "artifact" | "browser" | "changes" | "start" | "files" | "outputs" | "sources" | "source-image" | "subagents";
 
 export type { BrowserPanelTab } from "../../../../app/lib/desktop-types";
 import type {
@@ -56,7 +56,9 @@ export type ChangesPanelTab = {
   filePath?: string;
 };
 
-export type PanelTab = BrowserPanelTab | ArtifactPanelTab | ChangesPanelTab | { id: string; type: "start" | "files"; label: string; path?: string };
+export type SourceImagePanelTab = { id: string; type: "source-image"; label: string; src: string };
+
+export type PanelTab = BrowserPanelTab | ArtifactPanelTab | ChangesPanelTab | SourceImagePanelTab | { id: string; type: "start" | "files" | "outputs" | "sources" | "subagents"; label: string; path?: string };
 
 export type SessionPanelState = {
   tabs: PanelTab[];
@@ -497,7 +499,7 @@ export const usePanelTabStore = create<PanelTabStore>()(
         const currentTranscript = state.transcriptArtifactTargets[sessionId] ?? [];
         const session = getWritableSession(state, sessionId);
         const collectibleTargets = targets
-          .filter(isCollectibleArtifactTarget)
+          .filter(isOpenableFileTarget)
           .map((target) => ({
             id: target.id,
             name: target.name,

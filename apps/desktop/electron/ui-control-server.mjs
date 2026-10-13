@@ -111,7 +111,7 @@ export function createUiControlServer({ appName, appIdentifier, getWindow }) {
           return { ok: false, error: "Missing Sofia actionId." };
         }
         control.setEnabled?.(true);
-        return control.execute(input.actionId, input.args ?? {});
+        return control.execute(input.actionId, input.args ?? {}, input.context);
       })()`);
     }
     return { ok: false, error: `Unknown Sofia control command: ${command}` };

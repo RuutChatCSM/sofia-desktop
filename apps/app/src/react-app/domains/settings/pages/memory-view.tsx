@@ -22,6 +22,8 @@ import {
   SettingsListItemTitle,
 } from "@/react-app/domains/settings/settings-list";
 import { SettingsNotice, SettingsStack } from "@/react-app/domains/settings/settings-section";
+import type { SofiaServerClient } from "@/app/lib/sofia-server";
+import { LocalMemorySettings } from "./local-memory-settings";
 import { visibleMemories } from "./memory-utils";
 
 // The server delete is deferred so "Undo" is a true reversal (no re-create; original id/
@@ -39,7 +41,11 @@ export type MemoryViewProps = {
   onOpenAccount: () => void;
 };
 
-export function MemoryView({ onOpenAccount }: MemoryViewProps) {
+export function MemoryView({ onOpenAccount, client, workspaceId, cloudEnabled }: MemoryViewProps & { client: SofiaServerClient | null; workspaceId: string | null; cloudEnabled: boolean }) {
+  return <SettingsStack><LocalMemorySettings client={client} workspaceId={workspaceId} /><Separator /><h3 className="text-sm font-medium">Cloud Memory Bank</h3>{cloudEnabled ? <CloudMemoryView onOpenAccount={onOpenAccount} /> : <SettingsNotice>Cloud Memory Bank preview is off. Enable it in Preferences to manage explicitly saved cloud memories.</SettingsNotice>}</SettingsStack>;
+}
+
+function CloudMemoryView({ onOpenAccount }: MemoryViewProps) {
   const { activeOrganization, authToken, client, isSignedIn } = useCloudSession();
   const queryClient = useQueryClient();
   const activeOrgId = activeOrganization?.id ?? "";

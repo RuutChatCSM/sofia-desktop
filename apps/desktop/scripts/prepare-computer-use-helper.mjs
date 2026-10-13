@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { chmodSync, copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -11,7 +11,7 @@ const iconPath = resolve(desktopRoot, "resources", "icons", "icon.icns");
 const productName = "HandsFreeComputerUse";
 const helperExecutableName = "ComputerUse";
 const helperAppName = "Sofia Computer Use.app";
-const bundleIdentifier = "com.differentai.sofia.computer-use";
+const bundleIdentifier = "ruut.sofia.computer-use";
 
 const readArg = (name) => {
   const raw = process.argv.slice(2);
@@ -118,7 +118,9 @@ if (process.platform !== "darwin") {
   process.exit(0);
 }
 
-if (!force && existsSync(join(appPath, "Contents", "MacOS", helperExecutableName))) {
+const helperInfoPath = join(appPath, "Contents", "Info.plist");
+const currentIdentity = existsSync(helperInfoPath) && readFileSync(helperInfoPath, "utf8").includes(`<string>${bundleIdentifier}</string>`);
+if (!force && currentIdentity && existsSync(join(appPath, "Contents", "MacOS", helperExecutableName))) {
   process.stdout.write(JSON.stringify({ ok: true, skipped: true, appPath }, null, 2) + "\n");
   process.exit(0);
 }

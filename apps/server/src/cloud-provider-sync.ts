@@ -15,6 +15,14 @@ import {
   writeGlobalRuntimeWorkspaceEngineConfig,
   writeRuntimeWorkspaceEngineConfig,
 } from "./runtime-engine-config-store.js";
+import {
+  parseLlmProviderConnection,
+  parseLlmProviderList,
+  type LlmProviderConnectionWire,
+  type LlmProviderWire,
+  type LlmProviderWireModel,
+  type UnreadableLlmProvider,
+} from "@sofia/types/den/llm-providers";
 import type { ServerConfig } from "./types.js";
 import { findManagedEngineWorkspace } from "./workspaces.js";
 
@@ -53,8 +61,12 @@ export type CloudProviderSyncSkippedProvider = {
   cloudProviderId: string;
   providerId: string;
   name: string;
-  /** Why materialization skipped this provider (e.g. declared env vars but no credential to fill them). */
-  reason: "missing_credentials";
+  /**
+   * Why materialization skipped this provider (e.g. declared env vars but no
+   * credential to fill them), or `unparseable` when Den's payload could not be
+   * read at all.
+   */
+  reason: "missing_credentials" | "unparseable";
 };
 
 export type CloudProviderSyncRunDetail = {
@@ -88,26 +100,13 @@ export type CloudProviderSyncStatus = {
   skippedProviders: CloudProviderSyncSkippedProvider[];
 };
 
-type DenProviderModel = {
-  id: string;
-  name: string;
-  config: JsonRecord;
-};
+// The wire shape and its tolerance live in `@sofia/types` so the renderer and
+// this server cannot drift apart on the same payload.
+type DenProviderModel = LlmProviderWireModel;
 
-type DenProvider = {
-  id: string;
-  providerId: string;
-  name: string;
-  source: string | null;
-  updatedAt: string | null;
-  providerConfig: JsonRecord;
-  models: DenProviderModel[];
-};
+type DenProvider = LlmProviderWire;
 
-type DenProviderConnection = DenProvider & {
-  apiKey: string | null;
-  apiKeys: Record<string, string> | null;
-};
+type DenProviderConnection = LlmProviderConnectionWire;
 
 type EnvEntry = {
   key: string;
@@ -190,101 +189,25 @@ function isRecord(value: unknown): value is JsonRecord {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function readRequiredString(value: unknown): string | null {
-  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+/** Structural summary of an unexpected payload — types only, no values. */
+function describePayloadShape(value: unknown): string {
+  if (value === null) return "null";
+  if (Array.isArray(value)) return `array(${value.length})`;
+  if (!isRecord(value)) return typeof value;
+  return `object{${Object.keys(value)
+    .slice(0, 12)
+    .map((key) => `${key}:${Array.isArray(value[key]) ? "array" : typeof value[key]}`)
+    .join(",")}}`;
 }
 
-function readOptionalString(value: unknown): string | null {
-  return typeof value === "string" ? value : null;
+function readRequiredString(value: unknown): string | null {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
 }
 
 function readStringList(value: unknown): string[] {
   return Array.isArray(value)
     ? value.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0)
     : [];
-}
-
-function parseJsonRecord(value: unknown): JsonRecord {
-  if (isRecord(value)) return value;
-  if (typeof value !== "string") return {};
-  try {
-    const parsed: unknown = JSON.parse(value);
-    return isRecord(parsed) ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
-function parseApiKeys(value: unknown): Record<string, string> | null {
-  if (!isRecord(value)) return null;
-  const entries: Array<[string, string]> = [];
-  for (const [key, credential] of Object.entries(value)) {
-    if (typeof credential === "string" && credential.trim().length > 0) {
-      entries.push([key, credential]);
-    }
-  }
-  return entries.length > 0 ? Object.fromEntries(entries) : null;
-}
-
-function parseModel(value: unknown): DenProviderModel | null {
-  if (!isRecord(value)) return null;
-  const id = readRequiredString(value.id);
-  const name = readRequiredString(value.name);
-  if (!id || !name || (!isRecord(value.config) && typeof value.config !== "string")) return null;
-  return { id, name, config: parseJsonRecord(value.config) };
-}
-
-function parseProvider(value: unknown): DenProvider | null {
-  if (!isRecord(value)) return null;
-  const id = readRequiredString(value.id);
-  const providerId = readRequiredString(value.providerId);
-  const name = readRequiredString(value.name);
-  if (!id || !/^lpr_/i.test(id) || !providerId || !name || !Array.isArray(value.models)) return null;
-
-  const models: DenProviderModel[] = [];
-  for (const modelValue of value.models) {
-    const model = parseModel(modelValue);
-    if (!model) return null;
-    models.push(model);
-  }
-
-  return {
-    id,
-    providerId,
-    name,
-    source: readOptionalString(value.source),
-    updatedAt: readOptionalString(value.updatedAt),
-    providerConfig: parseJsonRecord(value.providerConfig),
-    models,
-  };
-}
-
-function parseProviderList(payload: unknown): DenProvider[] {
-  if (!isRecord(payload) || !Array.isArray(payload.llmProviders)) {
-    throw new Error("den_llm_provider_list_invalid_response");
-  }
-  const providers: DenProvider[] = [];
-  for (const value of payload.llmProviders) {
-    const provider = parseProvider(value);
-    if (!provider) throw new Error("den_llm_provider_list_invalid_response");
-    providers.push(provider);
-  }
-  return providers;
-}
-
-function parseProviderConnection(payload: unknown, expectedId: string): DenProviderConnection {
-  if (!isRecord(payload) || !isRecord(payload.llmProvider)) {
-    throw new Error(`den_llm_provider_connect_invalid_response_${expectedId}`);
-  }
-  const provider = parseProvider(payload.llmProvider);
-  if (!provider || provider.id !== expectedId) {
-    throw new Error(`den_llm_provider_connect_invalid_response_${expectedId}`);
-  }
-  return {
-    ...provider,
-    apiKey: typeof payload.llmProvider.apiKey === "string" ? payload.llmProvider.apiKey : null,
-    apiKeys: parseApiKeys(payload.llmProvider.apiKeys),
-  };
 }
 
 export function parseCloudProviderDenSession(value: unknown): CloudProviderDenSession | null {
@@ -313,6 +236,9 @@ async function requestJson(
       headers: {
         Accept: "application/json",
         Authorization: `Bearer ${session.token}`,
+        // Sofia Cloud scopes the request from `x-sofia-org-id` only; the
+        // legacy header is kept so Den-based backends keep working.
+        "x-sofia-org-id": session.orgId,
         "x-sofia-legacy-org-id": session.orgId,
       },
       signal: AbortSignal.timeout(requestTimeoutMs),
@@ -332,15 +258,52 @@ async function requestJson(
 async function fetchProviders(
   fetchImpl: typeof globalThis.fetch,
   session: CloudProviderDenSession,
-): Promise<DenProviderConnection[]> {
-  const providers = parseProviderList(await requestJson(fetchImpl, session, "/v1/llm-providers"));
-  return Promise.all(
-    providers.map(async (provider) =>
-      parseProviderConnection(
+  logger?: CloudProviderSyncLogger,
+): Promise<{ connections: DenProviderConnection[]; unparseable: UnreadableLlmProvider[] }> {
+  const payload = await requestJson(fetchImpl, session, "/v1/llm-providers");
+  const parsed = parseLlmProviderList(payload);
+  if (!parsed) {
+    // Only a payload that is not a provider list at all is fatal. The shape is
+    // logged (keys and types only, never credential values) so a wrong base URL,
+    // an HTML page served with 200, or a renamed envelope is diagnosable from
+    // the log instead of guessed at.
+    logger?.warn("llm provider list response was not a provider list", {
+      payload_shape: describePayloadShape(payload),
+      status_hint: "response body was JSON but carried no llmProviders array",
+    });
+    throw new Error("den_llm_provider_list_invalid_response");
+  }
+
+  const settled = await Promise.allSettled(
+    parsed.providers.map(async (provider) => {
+      const connection = parseLlmProviderConnection(
         await requestJson(fetchImpl, session, `/v1/llm-providers/${encodeURIComponent(provider.id)}/connect`),
         provider.id,
-      )),
+      );
+      if (!connection) throw new Error(`den_llm_provider_connect_invalid_response_${provider.id}`);
+      return connection;
+    }),
   );
+
+  // One provider whose credential read fails must not discard the providers
+  // that connected fine. Collect the failures and keep going.
+  const connections: DenProviderConnection[] = [];
+  for (const [index, result] of settled.entries()) {
+    if (result.status === "fulfilled") {
+      connections.push(result.value);
+      continue;
+    }
+    const provider = parsed.providers[index];
+    if (!provider) continue;
+    const reason = result.reason instanceof Error ? result.reason.message : "den_request_failed";
+    parsed.unreadable.push({ id: provider.id, name: provider.name });
+    logger?.warn("cloud provider credential read failed", {
+      cloudProviderId: provider.id,
+      message: reason,
+    });
+  }
+
+  return { connections, unparseable: parsed.unreadable };
 }
 
 function stableValue(value: unknown): unknown {
@@ -394,9 +357,24 @@ function readSofiaInferenceBaseUrl(providerConfig: JsonRecord): string | null {
 
 // Ported from ee/apps/den-api/src/llm/cloud-provider-materialization.ts.
 // Keep local: the open-source server must never depend on ee modules.
-function providerEnvEntries(provider: DenProviderConnection): EnvEntry[] {
+/**
+ * The credential env vars a provider declares. This is the single place that
+ * knows the Sofia provider's convention: its credential is always written to
+ * SOFIA_API_KEY, so it must always be declared too — otherwise the credential
+ * bridge sees an empty `env` list, skips the provider, and a remote engine
+ * never receives the key ("API key is missing") while the provider still shows
+ * up in the picker.
+ */
+function providerEnvNames(provider: DenProviderConnection): string[] {
+  const declared = readProviderEnvNames(provider.providerConfig);
+  if (provider.source === "sofia" && !declared.includes("SOFIA_API_KEY")) {
+    return [...declared, "SOFIA_API_KEY"];
+  }
+  return declared;
+}
+
+function providerEnvEntries(provider: DenProviderConnection, envNames: string[]): EnvEntry[] {
   const entries: EnvEntry[] = [];
-  const envNames = readProviderEnvNames(provider.providerConfig);
   if (provider.apiKeys) {
     const keys = Object.keys(provider.apiKeys);
     const orderedNames = [
@@ -425,7 +403,7 @@ function buildModelConfig(model: DenProviderModel): JsonRecord {
   return next;
 }
 
-function buildProviderConfig(provider: DenProviderConnection): JsonRecord {
+function buildProviderConfig(provider: DenProviderConnection, envNames: string[]): JsonRecord {
   const models: JsonRecord = {};
   for (const model of [...provider.models].sort((left, right) => left.id.localeCompare(right.id))) {
     models[model.id] = buildModelConfig(model);
@@ -433,7 +411,7 @@ function buildProviderConfig(provider: DenProviderConnection): JsonRecord {
   const config: JsonRecord = {
     id: provider.providerId,
     name: provider.name,
-    env: readProviderEnvNames(provider.providerConfig),
+    env: envNames,
   };
   if (Object.keys(models).length > 0 || provider.source !== "sofia") config.models = models;
 
@@ -449,20 +427,57 @@ function buildProviderConfig(provider: DenProviderConnection): JsonRecord {
   return config;
 }
 
-function prepareMaterialization(providers: DenProviderConnection[]): PreparedMaterialization {
+type MaterializedProviderParts = {
+  runtimeProviderId: string;
+  config: JsonRecord;
+  envEntries: EnvEntry[];
+  /** The credential env vars this provider declares. */
+  declaredEnvNames: string[];
+};
+
+/**
+ * Derives everything one provider materialization needs from a single pass, so
+ * the credential env vars a provider *declares* and the credential values we
+ * *write* come from the same source and cannot drift apart.
+ */
+function materializeProvider(provider: DenProviderConnection): MaterializedProviderParts {
+  const declaredEnvNames = providerEnvNames(provider);
+  return {
+    runtimeProviderId: runtimeProviderId(provider),
+    config: buildProviderConfig(provider, declaredEnvNames),
+    envEntries: providerEnvEntries(provider, declaredEnvNames),
+    declaredEnvNames,
+  };
+}
+
+function prepareMaterialization(
+  providers: DenProviderConnection[],
+  unparseable: UnreadableLlmProvider[] = [],
+): PreparedMaterialization {
   const materialized: MaterializedProvider[] = [];
-  const skipped: CloudProviderSyncSkippedProvider[] = [];
+  const skipped: CloudProviderSyncSkippedProvider[] = [
+    // Report unreadable providers with the same machine-readable reason shape
+    // as credential-less ones, so status readers never see a silent drop.
+    ...unparseable.map((provider) => ({
+      cloudProviderId: provider.id,
+      providerId: provider.id,
+      name: provider.name,
+      reason: "unparseable" as const,
+    })),
+  ];
   for (const provider of providers) {
-    const envEntries = providerEnvEntries(provider);
-    const envNames = readProviderEnvNames(provider.providerConfig);
-    if (envNames.length > 0 && !envEntries.some((entry) => envNames.includes(entry.key))) {
+    const parts = materializeProvider(provider);
+    if (
+      parts.declaredEnvNames.length > 0
+      && !parts.envEntries.some((entry) => parts.declaredEnvNames.includes(entry.key))
+    ) {
       // The provider declares credential env vars but the connect payload
       // yielded no value for any of them. Materializing it would produce a
       // provider whose every request fails with a missing API key, so it is
       // skipped — loudly, so status readers can see why it never appeared.
       skipped.push({
         cloudProviderId: provider.id,
-        providerId: runtimeProviderId(provider),
+        providerId: parts.runtimeProviderId,
         name: provider.name,
         reason: "missing_credentials",
       });
@@ -470,9 +485,9 @@ function prepareMaterialization(providers: DenProviderConnection[]): PreparedMat
     }
     materialized.push({
       provider,
-      runtimeProviderId: runtimeProviderId(provider),
-      config: buildProviderConfig(provider),
-      envEntries,
+      runtimeProviderId: parts.runtimeProviderId,
+      config: parts.config,
+      envEntries: parts.envEntries,
     });
   }
   materialized.sort((left, right) => left.runtimeProviderId.localeCompare(right.runtimeProviderId));
@@ -784,7 +799,8 @@ export class CloudProviderSync {
   private async runPass(request: CloudProviderSyncRequest): Promise<CloudProviderSyncRunResult> {
     const { reason, session } = request;
     try {
-      const prepared = prepareMaterialization(await fetchProviders(this.fetchImpl, session));
+      const { connections, unparseable } = await fetchProviders(this.fetchImpl, session, this.logger);
+      const prepared = prepareMaterialization(connections, unparseable);
       const { changed, detail, reloadError } = await this.apply(prepared);
       // The materialization itself succeeded (config + env writes landed), so
       // record it even when the engine reload failed: hiding the providers

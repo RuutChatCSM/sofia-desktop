@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import type { AgentPartInput, FilePartInput, TextPartInput } from "../src/app/lib/engine-types";
 import { codexPromptFromParts } from "../src/react-app/domains/session/sync/codex-prompt-parts";
+import { parseMessageReference } from "../src/react-app/domains/session/surface/composer/message-reference";
 
 const PNG_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUg==";
 
@@ -24,22 +25,39 @@ describe("codexPromptFromParts", () => {
     expect(text).not.toContain("data:image");
   });
 
-  test("the attachment path is never the message", () => {
-    // A workspace copy path used to be spelled out as prompt prose, so the
-    // user's own message rendered `file:///…` and `.sofia/…/chat-attachments/`.
-    // The part already carries its own url/source; nothing belongs in the text.
+  test("a tagged @file survives as a readable reference, never as a raw file:// URL", () => {
+    // Sofia sends a turn as flat text, so a non-image file part has no
+    // structured channel: its path must ride in the prompt or a tagged `@file`
+    // reaches the engine as an empty message. The readable reference carries the
+    // path the model can read while the transcript renders a chip — no `file:///`
+    // URL is spelled into the user's own message.
     const parts = [
-      filePart({ url: "file:///workspace/.sofia/inbox/scan.pdf", mime: "application/pdf", filename: "scan.pdf" }),
+      filePart({ url: "file:///workspace/src/report.pdf", mime: "application/pdf", filename: "report.pdf" }),
       filePart({ url: "data:text/plain;base64,aGVsbG8=", mime: "text/plain", filename: "notes.txt" }),
     ];
 
     const { text, images } = codexPromptFromParts(parts);
 
     expect(images).toEqual([]);
-    expect(text).toBe("");
+    expect(text).toBe('[File: "/workspace/src/report.pdf"]');
     expect(text).not.toContain("file:///");
-    expect(text).not.toContain("chat-attachments");
     expect(text).not.toContain("aGVsbG8=");
+    expect(parseMessageReference(text)?.path).toBe("/workspace/src/report.pdf");
+  });
+
+  test("a workspace copy without a file:// url still reaches the prompt via source.path", () => {
+    const parts = [
+      filePart({
+        url: "data:application/pdf;base64,AAAA",
+        mime: "application/pdf",
+        filename: "scan.pdf",
+        source: { type: "file", path: ".sofia/sofia/inbox/chat-attachments/scan.pdf", text: { value: "scan.pdf", start: 0, end: 0 } },
+      }),
+    ];
+
+    const { text } = codexPromptFromParts(parts);
+
+    expect(parseMessageReference(text)?.path).toBe(".sofia/sofia/inbox/chat-attachments/scan.pdf");
   });
 
   test("never echoes runtime plumbing as user text", () => {

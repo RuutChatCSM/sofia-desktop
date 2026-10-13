@@ -4,7 +4,12 @@ import { useEffect, useReducer, useState } from "react";
 import { Separator } from "@/components/ui/separator";
 
 import type { WorkspaceEngineConnectStatus } from "@/app/types";
-import type { SofiaCloudMcpHealth, SofiaRuntimeConfigStatus, SofiaServerStatus } from "@/app/lib/sofia-server";
+import type {
+  EngineFeatureInfo,
+  SofiaCloudMcpHealth,
+  SofiaRuntimeConfigStatus,
+  SofiaServerStatus,
+} from "@/app/lib/sofia-server";
 import { t } from "@/i18n";
 import { LayoutStack } from "../settings-layout";
 import type { CodexEngineAvailability } from "./advanced-view-sections";
@@ -17,6 +22,7 @@ import {
   AdvancedOrganizationServerSection,
   AdvancedRuntimeMigrationSection,
   AdvancedRuntimeSection,
+  EngineFeaturesSection,
 } from "./advanced-view-sections";
 
 type AdvancedOrganizationServerSession = Pick<
@@ -50,6 +56,11 @@ export type AdvancedViewProps = {
   cloudMcpHealth: SofiaCloudMcpHealth | null;
   refreshCloudMcpHealth: () => Promise<SofiaCloudMcpHealth | null>;
   codexEngineStatus: CodexEngineAvailability | null;
+  engineFeatures: EngineFeatureInfo[];
+  engineFeaturesLoading: boolean;
+  engineFeaturesBusy: boolean;
+  engineFeaturesError: string | null;
+  onToggleEngineFeature: (key: string, enabled: boolean) => void;
 };
 
 type AdvancedStatusTone = "ready" | "warning" | "error" | "neutral";
@@ -205,6 +216,14 @@ export function AdvancedView(props: AdvancedViewProps) {
         sofiaTone={sofiaTone}
         sofiaDetailLines={sofiaDetailLines}
         codexEngineStatus={props.codexEngineStatus}
+      />
+
+      <EngineFeaturesSection
+        features={props.engineFeatures}
+        loading={props.engineFeaturesLoading}
+        busy={props.engineFeaturesBusy}
+        error={props.engineFeaturesError}
+        onToggle={props.onToggleEngineFeature}
       />
 
       <AdvancedCloudMcpDiagnosticsSection

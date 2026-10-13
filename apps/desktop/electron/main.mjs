@@ -7,6 +7,7 @@ import { existsSync, readFileSync } from "node:fs";
 import {
   cp,
   mkdir,
+  mkdtemp,
   readFile,
   readdir,
   rename,
@@ -28,12 +29,17 @@ import {
   writeCdpBrokerDiscovery,
 } from "./cdp-broker-discovery.mjs";
 import {
+  resolveComputerUseExecutable,
   checkComputerUsePermissions,
   getComputerUseMcpCommand,
   listRunningApps,
   openComputerUseSetupApp,
+  openComputerUsePreview,
+  readComputerUsePreview,
+  computerUseCaptureSource,
 } from "./computer-use.mjs";
 import { createUiControlServer } from "./ui-control-server.mjs";
+import { createComputerPreviewLease } from "./computer-preview-lease.mjs";
 import { createApplicationMenu } from "./app-menu.mjs";
 import { applyBrandAppName } from "./brand-app-name.mjs";
 import { createBrowserPanel } from "./browser-panel.mjs";
@@ -85,6 +91,7 @@ import {
   setSofiaSentrySession,
 } from "./sentry.mjs";
 import { installStdioErrorHandlers } from "./stdio-errors.mjs";
+import { installMainErrorGuards } from "./main-error-guard.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const APP_ROOT = path.resolve(__dirname, "../../..");
@@ -146,6 +153,7 @@ const BLANK_SLATE_LAUNCH = resolveBlankSlateLaunch({
 const APP_NAME = BLANK_SLATE_LAUNCH.appName;
 let currentDisplayAppName = APP_NAME;
 installStdioErrorHandlers();
+installMainErrorGuards();
 await initSofiaSentry({
   app,
   distribution: DESKTOP_DISTRIBUTION,
@@ -1036,9 +1044,16 @@ if (isDevMode && !app.isPackaged) {
 // motion before they reach the built-in browser panel's Chromium. Engine
 // agnostic — any CDP client (engine-chrome-devtools today, a Codex runtime
 // later) connects here. Falls back to the raw CDP port if unavailable.
+// The server must use the same signed helper whose permissions Settings checks.
+const computerUseExecutable = resolveComputerUseExecutable();
+if (computerUseExecutable && !process.env.SOFIA_COMPUTER_USE_BINARY) process.env.SOFIA_COMPUTER_USE_BINARY = computerUseExecutable;
+
 let cdpBrokerBaseUrl = null;
 let closeCdpBroker = null;
 let cdpBrokerCreateTarget = null;
+let cdpBrokerCursor = null;
+let cdpBrokerCanExecute = null;
+let cdpBrokerCanDiscover = null;
 const agentCdpBrokerPort = Number.parseInt(
   process.env.SOFIA_ELECTRON_AGENT_CDP_PORT?.trim() ?? "",
   10,
@@ -1050,6 +1065,9 @@ if (remoteDebugPort > 0) {
   try {
     const broker = await createCdpBroker({
       upstreamBaseUrl: `http://127.0.0.1:${remoteDebugPort}`,
+      cursor: (target, state) => cdpBrokerCursor?.(target, state) ?? {host:true},
+      canDiscover: (target) => cdpBrokerCanDiscover?.(target) ?? false,
+      canExecute: (target, method) => cdpBrokerCanExecute?.(target, method) ?? false,
       port: brokerPort,
       debug: envFlagEnabled("SOFIA_CDP_BROKER_DEBUG"),
       // Electron cannot create raw CDP targets; route Target.createTarget
@@ -1162,6 +1180,13 @@ const IDLE_ROUTER_INFO = Object.freeze({
 });
 
 let mainWindow = null;
+let activeComputerPeekSource = null;
+const computerPreviewLease = createComputerPreviewLease({
+  readPreview: readComputerUsePreview,
+  captureSource: computerUseCaptureSource,
+  openPreview: openComputerUsePreview,
+  sourceChanged: (source) => { activeComputerPeekSource = source; },
+});
 const pendingDeepLinks = [];
 
 const browserPanel = createBrowserPanel({
@@ -1172,6 +1197,9 @@ const browserPanel = createBrowserPanel({
 });
 // Broker Target.createTarget now has the panel it needs to open real tabs.
 cdpBrokerCreateTarget = (params) => browserPanel.createTargetForAgent(params);
+cdpBrokerCursor = browserPanel.cursor;
+cdpBrokerCanExecute = browserPanel.canExecuteAgentCommand;
+cdpBrokerCanDiscover = browserPanel.canDiscoverTarget;
 
 const workspaceStore = createWorkspaceStore({
   app,
@@ -1936,6 +1964,11 @@ const desktopCommandHandlers = {
       // Running regular macOS apps for composer @App mentions.
       return listRunningApps();
   },
+  "beginComputerUsePreview": async (event, scope) => event.sender === mainWindow?.webContents && computerPreviewLease.begin(event.sender.id, scope),
+  "releaseComputerUsePreview": async (event, scope) => computerPreviewLease.release(event.sender.id, scope),
+  "getComputerUsePreview": async (event, scope) => computerPreviewLease.read(event.sender.id, scope),
+  "getComputerUseCaptureSource": async (event, scope, target) => computerPreviewLease.capture(event.sender.id, scope, target),
+  "openComputerUsePreview": async (event, scope, target) => computerPreviewLease.open(event.sender.id, scope, target),
   "openComputerUsePermissionSetup": async (event, ...args) => {
       // Open the GUI app. Returns immediately — React shows "verify" CTA.
       await openComputerUseSetupApp();
@@ -2571,7 +2604,14 @@ async function createMainWindow() {
     flushPendingDeepLinks();
   });
 
+  const computerPreviewOwner = mainWindow.webContents.id;
+  mainWindow.webContents.on("destroyed", () => computerPreviewLease.releaseOwner(computerPreviewOwner));
+  mainWindow.webContents.on("render-process-gone", () => computerPreviewLease.releaseOwner(computerPreviewOwner));
+  mainWindow.webContents.on("did-start-navigation", (_event, _url, isInPlace, isMainFrame) => {
+    if (isMainFrame && !isInPlace) computerPreviewLease.releaseOwner(computerPreviewOwner);
+  });
   mainWindow.on("closed", () => {
+    computerPreviewLease.releaseOwner(computerPreviewOwner);
     browserPanel.destroy();
     mainWindow = null;
   });
@@ -2648,6 +2688,26 @@ ipcMain.handle("sofia:shell:openExternal", async (_event, url) => {
 ipcMain.handle("sofia:shell:relaunch", async () => {
   app.relaunch();
   app.quit();
+});
+ipcMain.handle("sofia:image:decodeHeic", async (_event, bytes) => {
+  if (process.platform !== "darwin") throw new Error("HEIC images need conversion to PNG or JPEG on this platform.");
+  if (!(bytes instanceof Uint8Array) || !bytes.length || bytes.length > 50_000_000) throw new Error("Invalid HEIC image or image exceeds 50 MB.");
+  const directory = await mkdtemp(path.join(os.tmpdir(), "sofia-image-"));
+  try {
+    const input = path.join(directory, "input.heic");
+    const output = path.join(directory, "preview.png");
+    await writeFile(input, bytes);
+    await new Promise((resolve, reject) => {
+      const child = spawn("/usr/bin/sips", ["-s", "format", "png", input, "--out", output], { stdio: "ignore" });
+      const timeout = setTimeout(() => { child.kill(); reject(new Error("Image conversion timed out.")); }, 30_000);
+      child.once("error", (error) => { clearTimeout(timeout); reject(error); });
+      child.once("exit", (code) => { clearTimeout(timeout); code === 0 ? resolve() : reject(new Error("This HEIC image could not be decoded. Try exporting it as PNG or JPEG.")); });
+    });
+    const result = await readFile(output);
+    const decoded = nativeImage.createFromBuffer(result);
+    if (decoded.isEmpty()) throw new Error("Converted image is empty.");
+    return new Uint8Array(result);
+  } finally { await rm(directory, { recursive: true, force: true }); }
 });
 ipcMain.handle("sofia:system:architecture", async () => resolveArchitectureInfo());
 ipcMain.handle("sofia:system:microphoneStatus", async () => {
@@ -2786,7 +2846,14 @@ or use: pnpm dev:worktree`);
   app.whenReady().then(async () => {
     const systemCaCertificates = await runtimeManager.systemCaCertificates();
     session.defaultSession.setCertificateVerifyProc(createSystemCaCertificateVerifyProc(systemCaCertificates));
-    installMediaPermissionHandlers(session, () => mainWindow);
+    installMediaPermissionHandlers(session, () => mainWindow, () => Boolean(activeComputerPeekSource));
+    session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
+      if (!activeComputerPeekSource || !mainWindow || request.frame !== mainWindow.webContents.mainFrame || request.audioRequested) {
+        callback(null);
+        return;
+      }
+      callback({ video: activeComputerPeekSource });
+    });
     await runPendingNukeCleanup({
       env: process.env,
       homedir: os.homedir(),

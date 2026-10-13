@@ -285,6 +285,8 @@ export type WorkspaceSofiaConfig = {
 export type CapabilityOrigin = "local" | "sofia-connect";
 
 export type SkillCard = {
+  sourceDirectory?: string;
+  readOnly?: boolean;
   name: string;
   path: string;
   description?: string;
@@ -345,6 +347,8 @@ export type McpServerEntry = {
   name: string;
   config: McpServerConfig;
   source?: McpServerSource;
+  /** Runtime config layer the entry lives in; global entries are inherited by every workspace. */
+  scope?: "global" | "project";
   origin?: CapabilityOrigin;
   marketplaceName?: string;
   pluginName?: string;

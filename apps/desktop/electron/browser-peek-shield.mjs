@@ -212,5 +212,8 @@ export function peekPointerReport(payload, zoom) {
 }
 
 export function peekShieldUrl() {
-  return `data:text/html;charset=utf-8,${encodeURIComponent(PEEK_SHIELD_DOCUMENT)}`;
+  // The trailing fragment is a stable marker the browser harness filters on, so
+  // this internal shield never shows up as a page the agent can drive
+  // (see `isSofiaApp` in sofia-browser-repl.mjs).
+  return `data:text/html;charset=utf-8,${encodeURIComponent(PEEK_SHIELD_DOCUMENT)}#sofia-internal-peek-shield`;
 }

@@ -1,11 +1,13 @@
 "use client"
 
 import { useState } from "react"
-import { ChevronRight } from "lucide-react"
+import { BookOpen, Pencil, Terminal, Globe, Search, ChevronRight, Wrench } from "lucide-react"
 
 import { FileChip } from "@/components/chat/file-chip"
 import { DotMatrixLoader } from "@/components/ui/dot-matrix-loader"
 import {
+  getToolFamily,
+  getAggregateIconFamily,
   getAggregateNowLabel,
   getAggregateRowFile,
   getAggregateRowLabel,
@@ -15,6 +17,11 @@ import {
 import { isToolPartInFlight } from "@/lib/tool-activity"
 import { trackToolCallDuration } from "@/lib/tool-call-duration"
 import { cn } from "@/lib/utils"
+
+function actionIcon(part: AnyToolPart) {
+  const family = getToolFamily(part)
+  return family === "skill" ? Wrench : family === "edit" ? Pencil : family === "read" ? BookOpen : family === "web" ? Globe : family === "search" ? Search : Terminal
+}
 
 const ROW_CAP = 8
 
@@ -62,6 +69,8 @@ export function ToolAggregateGroup({ parts, className }: ToolAggregateGroupProps
   const anyRunning = parts.some((part) => isToolPartInFlight(part))
   const failedCount = parts.filter((part) => part.state === "output-error").length
   const summary = getAggregateSummary(parts, anyRunning ? "present" : "past")
+  const primaryPart = parts.find(part => getToolFamily(part) === getAggregateIconFamily(parts))
+  const SummaryIcon = primaryPart ? actionIcon(primaryPart) : Terminal
   const nowLabel = anyRunning ? getAggregateNowLabel(parts) : null
 
   // Track durations for every part so each is frozen the moment it completes.
@@ -77,6 +86,8 @@ export function ToolAggregateGroup({ parts, className }: ToolAggregateGroupProps
         aria-expanded={expanded}
         className="group flex min-w-0 max-w-full cursor-pointer items-center gap-1.5 text-start text-sm text-muted-foreground transition-colors hover:text-foreground"
       >
+        <SummaryIcon aria-hidden="true" className="size-4 shrink-0" />
+        <span className="min-w-0 truncate">{summary}</span>
         <ChevronRight
           aria-hidden="true"
           className={cn(
@@ -84,7 +95,6 @@ export function ToolAggregateGroup({ parts, className }: ToolAggregateGroupProps
             expanded && "rotate-90",
           )}
         />
-        <span className="min-w-0 truncate">{summary}</span>
         {failedCount > 0 ? (
           <span className="shrink-0 text-xs text-muted-foreground">
             {failedCount} failed
@@ -105,11 +115,13 @@ export function ToolAggregateGroup({ parts, className }: ToolAggregateGroupProps
       {expanded ? (
         <div className="mt-1.5 flex flex-col gap-1 ps-5">
           {visibleParts.map((part, index) => {
+            const ActionIcon = actionIcon(part)
             const status = rowStatus(part)
             const reason = failureReason(part)
             return (
               <div key={part.toolCallId} className="flex min-w-0 flex-col gap-0.5">
-                <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+                <div className="flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
+                  <ActionIcon aria-hidden="true" className="size-4 shrink-0" />
                   {status === "running" ? (
                     <span className="flex size-3.5 shrink-0 items-center justify-center">
                       <DotMatrixLoader label="Running" className="size-3 text-muted-foreground" />
@@ -119,7 +131,7 @@ export function ToolAggregateGroup({ parts, className }: ToolAggregateGroupProps
                     const file = getAggregateRowFile(part)
                     if (!file) {
                       return (
-                        <span className="min-w-0 truncate font-mono text-[11px]">
+                        <span className="min-w-0 truncate">
                           {getAggregateRowLabel(part)}
                         </span>
                       )

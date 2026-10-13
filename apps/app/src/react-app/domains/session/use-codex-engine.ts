@@ -5,7 +5,10 @@ import { useShallow } from "zustand/react/shallow";
 import { createCodexSessionClient, isThreadWriterConflictError, type CodexEngineConfigWire } from "@/app/lib/codex-session";
 import { setCodexAbortHandler, setCodexForkHandler } from "@/app/lib/engine-session";
 import { refreshBackgroundProcesses, runCodexStream, setCodexClient, useCodexSessionStore } from "./codex-session-store";
-import { syncCodexTranscriptToCache, restoreCodexSessionItems, ensureCodexTranscriptCached } from "./sync/codex-transcript-adapter";
+import { syncCodexTranscriptToCache, restoreCodexSessionItems, ensureCodexTranscriptCached, recoverCodexSessions } from "./sync/codex-transcript-adapter";
+import { createReconnectRecovery, createSessionHistoryRecovery } from "./sync/reconnect-recovery";
+import { changedSessionIds } from "./sync/transcript-mirror";
+import { subscribeSentAttachments, whenSentAttachmentsReady } from "./sync/sent-attachment-store";
 import { useCodexAttentionFeed } from "./use-codex-attention";
 
 export type CodexEngineEndpoint = {
@@ -37,8 +40,14 @@ export function useCodexEngine(endpoint: CodexEngineEndpoint | null, activeSessi
     });
   }, [enabled, endpoint?.baseUrl, endpoint?.hostToken, endpoint?.token, endpoint?.workspaceId]);
 
+  const [sessionListResolution, setSessionListResolution] = useState<{ client: typeof client; status: "ready" | "error"; error: string | null } | null>(null);
   const [engineConfig, setEngineConfig] = useState<CodexEngineConfigWire | null>(null);
   const [configVersion, setConfigVersion] = useState(0);
+  useEffect(() => {
+    const refresh = () => setConfigVersion((value) => value + 1);
+    window.addEventListener("sofia:codex-providers-changed", refresh);
+    return () => window.removeEventListener("sofia:codex-providers-changed", refresh);
+  }, []);
   useEffect(() => {
     if (!enabled || !client) {
       setEngineConfig(null);
@@ -87,8 +96,7 @@ export function useCodexEngine(endpoint: CodexEngineEndpoint | null, activeSessi
 
   useEffect(() => {
     const store = useCodexSessionStore.getState();
-    if (!enabled || !client) {
-      store.clear();
+    if (!enabled || !client || !displayWorkspaceId) {
       store.setStreaming(false);
       return;
     }
@@ -100,39 +108,86 @@ export function useCodexEngine(endpoint: CodexEngineEndpoint | null, activeSessi
     // transcript per delta and starve the main thread (the same freeze the
     // engine sync guards against).
     let mirrorFrame: number | null = null;
-    const mirror = () => {
+    // Only sessions whose entry actually changed are re-serialized. Rebuilding
+    // *every* session's full transcript once per frame (the previous behaviour)
+    // made the cost grow with total history, not with the change: one long
+    // conversation, or a busy session beside a long one, pinned the main thread
+    // and the app froze — including on a single revert, which fans out into a
+    // burst of store updates.
+    const dirtySessions = new Set<string>();
+    const scheduleMirror = () => {
       if (mirrorFrame !== null) return;
       mirrorFrame = requestAnimationFrame(() => {
         mirrorFrame = null;
-        for (const entry of Object.values(useCodexSessionStore.getState().sessions)) {
-          syncCodexTranscriptToCache(entry.session.workspaceId, entry.session.id);
+        const sessionIds = [...dirtySessions];
+        dirtySessions.clear();
+        const sessions = useCodexSessionStore.getState().sessions;
+        for (const sessionId of sessionIds) {
+          const entry = sessions[sessionId];
+          if (entry) syncCodexTranscriptToCache(entry.session.workspaceId, sessionId);
         }
       });
     };
+    const mirror = (
+      state: ReturnType<typeof useCodexSessionStore.getState>,
+      previous: ReturnType<typeof useCodexSessionStore.getState>,
+    ) => {
+      for (const sessionId of changedSessionIds(state.sessions, previous.sessions)) {
+        dirtySessions.add(sessionId);
+      }
+      if (dirtySessions.size) scheduleMirror();
+    };
     const unsubscribe = useCodexSessionStore.subscribe(mirror);
+    // Sent attachments hydrate asynchronously after boot (IndexedDB). Rebuild
+    // every transcript once they land, or a reopened session shows no images
+    // until something else happens to change it.
+    const unsubscribeAttachments = subscribeSentAttachments(() => {
+      for (const sessionId of Object.keys(useCodexSessionStore.getState().sessions)) {
+        dirtySessions.add(sessionId);
+      }
+      if (dirtySessions.size) scheduleMirror();
+    });
+    void whenSentAttachmentsReady();
     // Background-process UI (footer/list/stop) needs the same client the stream
     // uses; the store owns the registry so it stays in sync with this effect.
     if (displayWorkspaceId) setCodexClient(displayWorkspaceId, client);
     void (async () => {
       try {
+        const snapshot = useCodexSessionStore.getState().sessions;
         const list = (await client.listSessions()).map((session) => ({ ...session, workspaceId: displayWorkspaceId ?? session.workspaceId }));
         if (controller.signal.aborted) return;
-        store.replaceSessions(list);
+        store.replaceSessions(list, { workspaceId: displayWorkspaceId, entries: snapshot });
+        setSessionListResolution({ client, status: "ready", error: null });
         // Restore persisted items so existing sessions show their transcript
         // (tools, reasoning) on open — not just live streams.
         await Promise.all(
-          list.map((session) => restoreCodexSessionItems(client, session.workspaceId, session.id)),
+          list.map((session) => restoreCodexSessionItems(client, session.workspaceId, session.id, controller.signal)),
         );
       } catch {
+        if (controller.signal.aborted) return;
+        setSessionListResolution({ client, status: "error", error: "Unable to load tasks. Reconnect the workspace and try again." });
         store.setError("Failed to load codex sessions");
       }
-      if (!controller.signal.aborted) await runCodexStream(client, controller.signal, undefined, displayWorkspaceId);
+      const requestRecovery = createReconnectRecovery(
+        () => recoverCodexSessions(client, controller.signal, displayWorkspaceId),
+        controller.signal,
+        (error) => store.setError(error instanceof Error ? error.message : "Failed to recover sessions"),
+      );
+      const requestSessionHistory = createSessionHistoryRecovery(async sessionId => {
+        const entry = useCodexSessionStore.getState().sessions[sessionId];
+        if (entry) await restoreCodexSessionItems(client, entry.session.workspaceId, sessionId, controller.signal);
+      }, controller.signal, error => store.setError(error instanceof Error ? error.message : "Failed to recover thread history"));
+      if (!controller.signal.aborted) await runCodexStream(client, controller.signal, (event) => {
+        if (event.type === "stream.ready") requestRecovery();
+        if (event.type === "turn.completed" || event.type === "error") requestSessionHistory(event.sessionId);
+      }, displayWorkspaceId);
     })();
     return () => {
       if (displayWorkspaceId) setCodexClient(displayWorkspaceId, null);
       controller.abort();
       if (mirrorFrame !== null) cancelAnimationFrame(mirrorFrame);
       unsubscribe();
+      unsubscribeAttachments();
     };
   }, [enabled, client, displayWorkspaceId]);
 
@@ -165,15 +220,52 @@ export function useCodexEngine(endpoint: CodexEngineEndpoint | null, activeSessi
   const sessions = useCodexSessionStore(
     useShallow((state) =>
       Object.values(state.sessions)
-        .filter((entry) => entry.session.workspaceId === workspaceId && !entry.session.archived)
+        .filter((entry) => entry.session.workspaceId === workspaceId && !entry.session.archived && !entry.session.parentSessionId)
         .map((entry) => entry.session),
     ),
   );
+  const selectedEntry=useCodexSessionStore(state=>activeSessionId?state.sessions[activeSessionId]:undefined);
+  // External workers can start or finish without a parent transcript event.
+  useEffect(() => {
+    if (!client || !activeSessionId?.startsWith("codex-")) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const refresh = async () => {
+      try {
+        if (document.visibilityState !== "hidden") {
+          const result = await client.subagents(activeSessionId);
+          if (!cancelled && result.ok) useCodexSessionStore.setState(state => {
+            const entry = state.sessions[activeSessionId];
+            return entry ? { sessions: { ...state.sessions, [activeSessionId]: { ...entry, subagentSessions: result.sessions } } } : state;
+          });
+        }
+      } catch { /* Keep the last recorded status during connection loss. */ }
+      if (!cancelled) timer = setTimeout(refresh, 3000);
+    };
+    void refresh();
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [client, activeSessionId]);
+  const loaded=useCodexSessionStore(state=>state.loaded);
+  const [recoveredParent,setRecoveredParent]=useState<{child:string;parent:string}|null>(null);
+  useEffect(()=>{
+    setRecoveredParent(null);
+    if(!client || !activeSessionId || !loaded || selectedEntry)return;
+    let cancelled=false;
+    void client.items(activeSessionId).then(result=>{
+      if(!cancelled && result.parentSessionId && result.parentSessionId!==activeSessionId)setRecoveredParent({child:activeSessionId,parent:result.parentSessionId});
+    }).catch(()=>{});
+    return()=>{cancelled=true;};
+  },[client,activeSessionId,loaded,Boolean(selectedEntry)]);
+  const parentSessionId=selectedEntry?.session.parentSessionId ?? (recoveredParent && recoveredParent.child===activeSessionId?recoveredParent.parent:null);
   const streaming = useCodexSessionStore((state) => state.streaming);
   const error = useCodexSessionStore((state) => state.error);
 
+  const sessionListStatus: "loading" | "ready" | "error" = sessionListResolution?.client === client ? sessionListResolution.status : "loading";
   return {
     enabled,
+    sessionListStatus,
+    sessionListError: sessionListResolution?.client === client ? sessionListResolution.error : null,
+    parentSessionId,
     sessions,
     streaming,
     error,

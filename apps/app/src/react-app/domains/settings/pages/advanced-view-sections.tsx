@@ -8,7 +8,12 @@ import { Button } from "@/components/ui/button";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import type { SofiaCloudMcpHealth, SofiaRuntimeConfigStatus, SofiaServerStatus } from "@/app/lib/sofia-server";
+import type {
+  EngineFeatureInfo,
+  SofiaCloudMcpHealth,
+  SofiaRuntimeConfigStatus,
+  SofiaServerStatus,
+} from "@/app/lib/sofia-server";
 import { sanitizeCloudMcpHealthDiagnostic, sanitizeDiagnosticRecord } from "@/app/lib/diagnostic-sanitizer";
 import {
   DEFAULT_DEN_API_BASE_URL,
@@ -741,6 +746,69 @@ export function AdvancedWorkspaceEngineSection(props: AdvancedWorkspaceEngineSec
         </Alert>
         <LayoutSectionItemFootnote>{t("settings.exa_restart_hint")}</LayoutSectionItemFootnote>
       </LayoutSectionItem>
+    </LayoutSection>
+  );
+}
+
+interface EngineFeaturesSectionProps {
+  features: EngineFeatureInfo[];
+  loading: boolean;
+  busy: boolean;
+  error: string | null;
+  onToggle: (key: string, enabled: boolean) => void;
+}
+
+/**
+ * Engine feature flags. These reach the engine as `[features]` / `[tools.*]`
+ * keys in the managed `config.toml`, so a toggle here is a real engine
+ * capability change rather than a renderer preference — which is why the
+ * server owns the registry (labels, stages, defaults) and this view only
+ * renders what it is handed.
+ */
+export function EngineFeaturesSection(props: EngineFeaturesSectionProps) {
+  return (
+    <LayoutSection>
+      <LayoutSectionHeader>
+        <LayoutSectionTitle>Agent capabilities</LayoutSectionTitle>
+        <LayoutSectionDescription>
+          Turn agent tools on or off. Changes apply to new turns and can reload the engine.
+        </LayoutSectionDescription>
+      </LayoutSectionHeader>
+
+      {props.error ? (
+        <LayoutSectionItem>
+          <SettingsNotice tone="error">{props.error}</SettingsNotice>
+        </LayoutSectionItem>
+      ) : null}
+
+      {props.loading && props.features.length === 0 ? (
+        <LayoutSectionItem>
+          <LayoutSectionItemDescription>Loading capabilities…</LayoutSectionItemDescription>
+        </LayoutSectionItem>
+      ) : null}
+
+      {props.features.map((feature) => (
+        <LayoutSectionItem key={feature.key}>
+          <LayoutSectionItemHeader>
+            <LayoutSectionItemTitle>
+              <span className="inline-flex items-center gap-2">
+                {feature.label}
+                {feature.stage === "under_development" ? <Badge variant="outline">Experimental</Badge> : null}
+                {feature.stage === "removed" ? <Badge variant="outline">Unavailable</Badge> : null}
+              </span>
+            </LayoutSectionItemTitle>
+            <LayoutSectionItemDescription>{feature.description}</LayoutSectionItemDescription>
+            <LayoutSectionItemHeaderActions>
+              <Switch
+                aria-label={feature.label}
+                checked={feature.enabled}
+                disabled={props.busy || !feature.toggleable}
+                onCheckedChange={(enabled) => props.onToggle(feature.key, enabled)}
+              />
+            </LayoutSectionItemHeaderActions>
+          </LayoutSectionItemHeader>
+        </LayoutSectionItem>
+      ))}
     </LayoutSection>
   );
 }

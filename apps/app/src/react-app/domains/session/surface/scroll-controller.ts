@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, type KeyboardEventHandler, type RefObject, type UIEventHandler } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, type KeyboardEventHandler, type RefObject, type UIEventHandler } from "react";
 
 import {
   intentFromGesture,
@@ -19,6 +19,7 @@ import {
   selectSessionTailVisible,
   useSessionScrollStore,
   useSessionTailStore,
+  type SessionScrollAnchor,
 } from "./scroll-store";
 
 // Scroll policy: intent first, geometry only as corroboration.
@@ -70,6 +71,18 @@ function messageElementById(container: HTMLElement, messageId: string) {
   return null;
 }
 
+function readVisibleAnchor(container: HTMLElement): SessionScrollAnchor | undefined {
+  const bounds=container.getBoundingClientRect();
+  for(const element of container.querySelectorAll<HTMLElement>("[data-message-id]")) {
+    const rect=element.getBoundingClientRect();
+    if(rect.bottom > bounds.top && rect.top < bounds.bottom) {
+      const messageId=messageIdForElement(element);
+      if(messageId)return {messageId,offset:rect.top-bounds.top};
+    }
+  }
+  return undefined;
+}
+
 function latestMessageTopClippedId(container: HTMLElement) {
   const latestMessage = latestMessageElement(container);
   if (!latestMessage) return null;
@@ -88,6 +101,7 @@ function latestMessageTopClippedId(container: HTMLElement) {
 type SessionScrollControllerOptions = {
   selectedSessionId: string | null;
   renderedMessages: unknown;
+  isLoading?: boolean;
   containerRef: RefObject<HTMLDivElement | null>;
   contentRef: RefObject<HTMLDivElement | null>;
   /** Marker at the very end of the transcript; drives "is the tail in view?". */
@@ -100,8 +114,39 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
   const setManualScroll = useSessionScrollStore((state) => state.setManualScroll);
   const setTopClippedMessageId = useSessionScrollStore((state) => state.setTopClippedMessageId);
 
+  useEffect(() => {
+    const container = options.containerRef.current;
+    if (!container) return;
+    let hideTimer: ReturnType<typeof setTimeout> | undefined;
+    const reveal = () => {
+      container.setAttribute("data-scroll-active", "");
+      clearTimeout(hideTimer);
+      hideTimer = setTimeout(() => container.removeAttribute("data-scroll-active"), 1200);
+    };
+    const clearHover = () => container.removeAttribute("data-scroll-hover");
+    const trackHover = (event: MouseEvent) => {
+      const bounds = container.getBoundingClientRect();
+      if (event.clientX >= bounds.right - 10 && event.clientX <= bounds.right) container.setAttribute("data-scroll-hover", "");
+      else clearHover();
+    };
+    container.addEventListener("mousemove", trackHover, { passive: true });
+    container.addEventListener("mouseleave", clearHover);
+    container.addEventListener("scroll", reveal, { passive: true });
+    return () => {
+      container.removeEventListener("scroll", reveal);
+      container.removeEventListener("mousemove", trackHover);
+      container.removeEventListener("mouseleave", clearHover);
+      clearHover();
+      clearTimeout(hideTimer);
+      container.removeAttribute("data-scroll-active");
+    };
+  }, [options.containerRef, selectedSessionId]);
+
   const observedContentHeightRef = useRef(0);
   const previousSessionIdRef = useRef<string | null>(null);
+  const restorePendingRef = useRef(true);
+  const scheduledFramesRef = useRef(new Set<number>());
+  const scheduledTimersRef = useRef(new Set<number>());
   // Timestamp until which scroll classification is skipped because a
   // user-initiated smooth scroll is still animating.
   const suppressClassifyUntilRef = useRef(0);
@@ -125,7 +170,7 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
         return;
       }
       // Detached: remember where the user is so a session switch restores it.
-      setManualScroll(selectedSessionId, container.scrollTop, topClippedMessageId);
+      setManualScroll(selectedSessionId, container.scrollTop, topClippedMessageId, readVisibleAnchor(container));
     },
     [options.containerRef, selectedSessionId, setManualScroll, setStickyBottom],
   );
@@ -144,6 +189,24 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
     setTopClippedMessageId(selectedSessionId, nextId);
     return nextId;
   }, [options.containerRef, selectedSessionId, setTopClippedMessageId]);
+
+  const restoreManualPosition = useCallback(() => {
+    const container=options.containerRef.current;
+    if(!container)return false;
+    const saved=getSessionScrollState(useSessionScrollStore.getState().sessions,selectedSessionId);
+    if(saved.mode!=="manual")return false;
+    if(options.isLoading || !container.querySelector("[data-message-id]"))return false;
+    const target=saved.anchor ? messageElementById(container,saved.anchor.messageId) : null;
+    // Keep the saved anchor while a partial/cached transcript is replaced.
+    // Clamping against incomplete history would permanently overwrite it.
+    if(saved.anchor && !target)return false;
+    const top=target && saved.anchor ? container.scrollTop+target.getBoundingClientRect().top-container.getBoundingClientRect().top-saved.anchor.offset : saved.scrollTop;
+    programmaticScrollUntilRef.current=Date.now()+PROGRAMMATIC_SCROLL_MS;
+    container.scrollTop=Math.max(0,Math.min(top,container.scrollHeight-container.clientHeight));
+    setManualScroll(selectedSessionId,container.scrollTop,latestMessageTopClippedId(container),readVisibleAnchor(container));
+    restorePendingRef.current=false;
+    return true;
+  },[options.containerRef,options.isLoading,selectedSessionId,setManualScroll]);
 
   const scrollToBottom = useCallback(
     (behavior: ScrollBehavior = "auto") => {
@@ -167,6 +230,7 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
   const handleScroll = useCallback<UIEventHandler<HTMLDivElement>>(
     (event) => {
       const container = event.currentTarget;
+      if(restorePendingRef.current)return;
 
       // Our own smooth jump in progress — ignore the intermediate frames.
       if (Date.now() < suppressClassifyUntilRef.current) return;
@@ -190,8 +254,12 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
   const handleKeyDown = useCallback<KeyboardEventHandler<HTMLDivElement>>(
     (event) => {
       const container = options.containerRef.current;
-      if (!container) return;
-      const intent = intentFromKey(event.key, readGeometry(container));
+      if (!container || event.defaultPrevented || event.repeat) return;
+      const target=event.target;
+      if(target instanceof HTMLElement && target!==container && (target.isContentEditable || target.closest("input,select,textarea") || ((event.key===" " || event.key==="Spacebar") && target.closest("button,[role=button]"))))return;
+      restorePendingRef.current=false;
+      suppressClassifyUntilRef.current=0;programmaticScrollUntilRef.current=0;
+      const intent = intentFromKey(event.key, readGeometry(container), undefined, event.shiftKey);
       if (intent) applyIntent(intent);
     },
     [applyIntent, options.containerRef],
@@ -201,6 +269,8 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
     (gesture: ScrollGesture) => {
       const container = options.containerRef.current;
       if (!container) return;
+      restorePendingRef.current=false;
+      suppressClassifyUntilRef.current=0;programmaticScrollUntilRef.current=0;
       const intent = intentFromGesture(gesture, readGeometry(container));
       if (intent) applyIntent(intent);
     },
@@ -247,16 +317,19 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
         // than snapping mid-flight (which makes the easing look broken).
         suppressClassifyUntilRef.current = Date.now() + SMOOTH_JUMP_SUPPRESS_MS;
         container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
-        window.setTimeout(verifyTail, SMOOTH_JUMP_SUPPRESS_MS + 50);
+        const timer=window.setTimeout(()=>{scheduledTimersRef.current.delete(timer);verifyTail();}, SMOOTH_JUMP_SUPPRESS_MS + 50);
+        scheduledTimersRef.current.add(timer);
         return;
       }
 
       programmaticScrollUntilRef.current = Date.now() + PROGRAMMATIC_SCROLL_MS;
       container.scrollTop = container.scrollHeight;
-      window.requestAnimationFrame(() => {
-        verifyTail();
-        window.requestAnimationFrame(verifyTail);
+      const frame=window.requestAnimationFrame(() => {
+        scheduledFramesRef.current.delete(frame);verifyTail();
+        const next=window.requestAnimationFrame(()=>{scheduledFramesRef.current.delete(next);verifyTail();});
+        scheduledFramesRef.current.add(next);
       });
+      scheduledFramesRef.current.add(frame);
     },
     [
       isFollowing,
@@ -323,6 +396,9 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
       const grew = nextHeight > observedContentHeightRef.current + 1;
       observedContentHeightRef.current = nextHeight;
 
+      if(restorePendingRef.current){restoreManualPosition();return;}
+      if(!isFollowing())restoreManualPosition();
+
       if (grew) {
         if (shouldFollowContentGrowth(isFollowing())) {
           scrollToBottom("auto");
@@ -339,7 +415,7 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
 
     observer.observe(content);
     return () => observer.disconnect();
-  }, [isFollowing, options.contentRef, refreshTopClippedMessage, scrollToBottom, selectedSessionId]);
+  }, [isFollowing, options.contentRef, refreshTopClippedMessage, scrollToBottom, selectedSessionId, restoreManualPosition]);
 
   // Composer growth (activity status, queued messages, questions, permissions)
   // shrinks the transcript viewport without touching the content, so the content
@@ -350,38 +426,38 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
     if (!container) return;
 
     const observer = new ResizeObserver(() => {
-      if (!shouldRepinAfterViewportResize(isFollowing())) return;
+      if(restorePendingRef.current){restoreManualPosition();return;}
+      if (!shouldRepinAfterViewportResize(isFollowing())) {restoreManualPosition();return;}
       scrollToBottom("auto");
     });
 
     observer.observe(container);
     return () => observer.disconnect();
-  }, [isFollowing, options.containerRef, scrollToBottom]);
+  }, [isFollowing, options.containerRef, scrollToBottom, restoreManualPosition]);
 
-  // Session switch: restore the user's own position after a detach, or jump to
-  // the tail for a fresh/following session.
-  useEffect(() => {
-    if (selectedSessionId === previousSessionIdRef.current) return;
-    previousSessionIdRef.current = selectedSessionId;
-    if (!selectedSessionId) return;
+  // Cancel delayed jumps when this surface changes sessions or unmounts.
+  useLayoutEffect(()=>()=>{
+    for(const timer of scheduledTimersRef.current)window.clearTimeout(timer);
+    for(const frame of scheduledFramesRef.current)window.cancelAnimationFrame(frame);
+    scheduledTimersRef.current.clear();scheduledFramesRef.current.clear();
+  },[selectedSessionId]);
 
-    observedContentHeightRef.current = 0;
-    useSessionTailStore.getState().clearHiddenUpdates(selectedSessionId);
-    queueMicrotask(() => {
-      const container = options.containerRef.current;
-      if (!container) return;
-
-      const savedState = getSessionScrollState(useSessionScrollStore.getState().sessions, selectedSessionId);
-      if (savedState.mode === "manual") {
-        const top = Math.min(savedState.scrollTop, Math.max(0, container.scrollHeight - container.clientHeight));
-        programmaticScrollUntilRef.current = Date.now() + PROGRAMMATIC_SCROLL_MS;
-        container.scrollTop = top;
-        return;
-      }
-
+  useLayoutEffect(()=>{
+    if(selectedSessionId!==previousSessionIdRef.current){
+      previousSessionIdRef.current=selectedSessionId;
+      restorePendingRef.current=true;
+      suppressClassifyUntilRef.current=0;
+      programmaticScrollUntilRef.current=0;
+      observedContentHeightRef.current=0;
+      useSessionTailStore.getState().clearHiddenUpdates(selectedSessionId);
+    }
+    if(!selectedSessionId)return;
+    if(!isFollowing()){restoreManualPosition();return;}
+    if(restorePendingRef.current && !options.isLoading){
+      restorePendingRef.current=false;
       scrollToBottom("auto");
-    });
-  }, [options.containerRef, scrollToBottom, selectedSessionId]);
+    }
+  },[selectedSessionId,options.renderedMessages,options.isLoading,isFollowing,restoreManualPosition,scrollToBottom]);
 
   useEffect(() => {
     void options.renderedMessages;

@@ -7,10 +7,14 @@ import type {
   ChatToolReconnectResult,
 } from "@/components/tools/error-attribution"
 import * as React from "react"
+import type { SofiaServerClient } from "@/app/lib/sofia-server"
 
 interface MessageListContextValue {
   workspaceId: string
+  workspaceRoot: string
+  mediaClient: SofiaServerClient | null
   sessionId: string
+  readOnly?: boolean
   showThinking: boolean
   highlightQuery?: string
   developerMode: boolean
@@ -34,7 +38,10 @@ const MessageListContext = React.createContext<MessageListContextValue | null>(n
 interface MessageListProviderProps {
   children: React.ReactNode
   workspaceId: string
+  workspaceRoot: string
+  mediaClient: SofiaServerClient | null
   sessionId: string
+  readOnly?: boolean
   showThinking: boolean
   highlightQuery?: string
   developerMode: boolean
@@ -62,8 +69,11 @@ export interface DispatchAction {
 export function MessageListProvider({
   children,
   workspaceId,
+  workspaceRoot,
+  mediaClient,
   sessionId,
   showThinking,
+  readOnly = false,
   highlightQuery,
   developerMode,
   displaySuggestions,
@@ -80,8 +90,11 @@ export function MessageListProvider({
   const value = React.useMemo(
     () => ({
       workspaceId,
+      workspaceRoot,
+      mediaClient,
       sessionId,
       showThinking,
+      readOnly,
       highlightQuery,
       developerMode,
       displaySuggestions,
@@ -97,8 +110,11 @@ export function MessageListProvider({
     }),
     [
       workspaceId,
+      workspaceRoot,
+      mediaClient,
       sessionId,
       showThinking,
+      readOnly,
       highlightQuery,
       developerMode,
       displaySuggestions,

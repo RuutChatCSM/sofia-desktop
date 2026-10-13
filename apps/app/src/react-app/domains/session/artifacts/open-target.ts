@@ -34,7 +34,7 @@ const WORKSPACE_ID_PREFIX_PATTERN = /^workspace\/(?:ws_[^/]+|\d+|[0-9a-f-]{6,})\
 const FILE_PATTERN = /(?:^|[\s"'`([{])((?:\.{1,2}[/\\]|~[/\\]|[/\\])?[\w.\-]+(?:[/\\][\w.\-]+)+\.[a-z][a-z0-9]{0,9}|[\w.\-]+\.[a-z][a-z0-9]{0,9})/gi;
 const URL_PATTERN = /https?:\/\/[^\s)\]}>"'`]+/gi;
 const SOCKET_PATTERN = /(?:ws|wss):\/\/[^\s)\]}>"'`]+/gi;
-const SIDEBAR_ARTIFACT_FILE_PREVIEWS = new Set<OpenTargetPreview>(["markdown", "sheet", "slides", "document", "image", "pdf", "html"]);
+const SIDEBAR_ARTIFACT_FILE_PREVIEWS = new Set<OpenTargetPreview>(["markdown", "sheet", "slides", "document", "image", "pdf", "html", "text"]);
 const MARKDOWN_LINK_PATTERN = /\[([^\]\n]+)\]\(([^)\s]+)\)/g;
 const ASSISTANT_ARTIFACT_MENTION_PATTERN = /\b(?:artifact|created|deck|deliverable|exported|file|generated|opened|presentation|saved|slides?|updated|wrote)\b/i;
 const DISCOVERY_TOOL_NAMES = new Set(["glob", "grep", "search", "find"]);
@@ -122,7 +122,7 @@ export function filePathFromFileUrl(url: string): string | null {
   }
 }
 
-function targetFromFile(path: string, confidence: number, reason: string): OpenTarget | null {
+export function targetFromFile(path: string, confidence: number, reason: string): OpenTarget | null {
   const normalized = normalizePath(path).replace(/[.,;:]+$/, "");
   if (!normalized || normalized.length > 500 || !normalized.includes(".")) return null;
   return {

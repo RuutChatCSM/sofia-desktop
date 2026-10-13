@@ -4,6 +4,11 @@ import {
   type DesktopConfig as SharedDesktopConfig,
 } from "@sofia/types/den/desktop-policies";
 import {
+  parseLlmProviderConnection,
+  parseLlmProviderList,
+  type LlmProviderWire,
+} from "@sofia/types/den/llm-providers";
+import {
   AUTOMATION_MODEL_ATTENTION_CAPABILITY,
   AUTOMATION_MODEL_ATTENTION_CAPABILITY_HEADER,
 } from "@sofia/types/automations";
@@ -1583,69 +1588,44 @@ export function parseDenMcpToken(payload: unknown): DenMcpToken | null {
   };
 }
 
-function parseJsonRecord(value: unknown): Record<string, unknown> {
-  if (isRecord(value)) return value;
-  if (typeof value !== "string") return {};
-  try {
-    const parsed: unknown = JSON.parse(value);
-    return isRecord(parsed) ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
-function parseDenOrgLlmProviderModel(value: unknown): DenOrgLlmProviderModel | null {
-  if (!isRecord(value) || typeof value.id !== "string" || typeof value.name !== "string") {
+/**
+ * Narrows a shared wire provider to this module's stricter type. The wire
+ * parser is deliberately loose about `source`; the desktop UI only knows how to
+ * present these three.
+ */
+function normalizeDenOrgLlmProvider(provider: LlmProviderWire): DenOrgLlmProvider | null {
+  const source = provider.source;
+  if (source !== "models_dev" && source !== "custom" && source !== "sofia") {
     return null;
   }
 
   return {
-    id: value.id,
-    name: value.name,
-    config: parseJsonRecord(value.config),
-    createdAt: typeof value.createdAt === "string" ? value.createdAt : null,
-  };
-}
-
-function parseDenOrgLlmProvider(value: unknown): DenOrgLlmProvider | null {
-  if (
-    !isRecord(value) ||
-    typeof value.id !== "string" ||
-    typeof value.providerId !== "string" ||
-    typeof value.name !== "string" ||
-    (value.source !== "models_dev" &&
-      value.source !== "custom" &&
-      value.source !== "sofia")
-  ) {
-    return null;
-  }
-
-  return {
-    id: value.id,
-    source: value.source,
-    providerId: value.providerId,
-    name: value.name,
-    providerConfig: parseJsonRecord(value.providerConfig),
-    hasApiKey: value.hasApiKey === true,
-    models: Array.isArray(value.models)
-      ? value.models.flatMap((model) => {
-          const parsed = parseDenOrgLlmProviderModel(model);
-          return parsed ? [parsed] : [];
-        })
-      : [],
-    createdAt: typeof value.createdAt === "string" ? value.createdAt : null,
-    updatedAt: typeof value.updatedAt === "string" ? value.updatedAt : null,
+    id: provider.id,
+    source,
+    providerId: provider.providerId,
+    name: provider.name,
+    providerConfig: provider.providerConfig,
+    hasApiKey: provider.hasApiKey,
+    models: provider.models.map((model) => ({
+      id: model.id,
+      name: model.name,
+      config: model.config,
+      createdAt: model.createdAt,
+    })),
+    createdAt: provider.createdAt,
+    updatedAt: provider.updatedAt,
   };
 }
 
 function getDenOrgLlmProviders(payload: unknown): DenOrgLlmProvider[] {
-  if (!isRecord(payload) || !Array.isArray(payload.llmProviders)) {
+  const parsed = parseLlmProviderList(payload);
+  if (!parsed) {
     return [];
   }
 
-  return payload.llmProviders.flatMap((provider) => {
-    const parsed = parseDenOrgLlmProvider(provider);
-    return parsed ? [parsed] : [];
+  return parsed.providers.flatMap((provider) => {
+    const normalized = normalizeDenOrgLlmProvider(provider);
+    return normalized ? [normalized] : [];
   });
 }
 
@@ -1709,32 +1689,17 @@ function getDenMcpConnectionConnectStart(payload: unknown): DenMcpConnectionConn
 }
 
 function getDenOrgLlmProviderConnection(payload: unknown): DenOrgLlmProviderConnection | null {
-  if (!isRecord(payload) || !payload.llmProvider) {
+  const connection = parseLlmProviderConnection(payload);
+  if (!connection) {
     return null;
   }
 
-  const provider = parseDenOrgLlmProvider(payload.llmProvider);
-  if (!provider || !isRecord(payload.llmProvider)) {
+  const provider = normalizeDenOrgLlmProvider(connection);
+  if (!provider) {
     return null;
   }
 
-  return {
-    ...provider,
-    apiKey: typeof payload.llmProvider.apiKey === "string" ? payload.llmProvider.apiKey : null,
-    apiKeys: parseApiKeysRecord(payload.llmProvider.apiKeys),
-  };
-}
-
-function parseApiKeysRecord(value: unknown): Record<string, string> | null {
-  if (!isRecord(value)) {
-    return null;
-  }
-
-  const entries = Object.entries(value).filter(
-    (entry): entry is [string, string] =>
-      typeof entry[1] === "string" && entry[1].trim().length > 0,
-  );
-  return entries.length > 0 ? Object.fromEntries(entries) : null;
+  return { ...provider, apiKey: connection.apiKey, apiKeys: connection.apiKeys };
 }
 
 function parsePluginConfigObjectType(value: unknown): DenPluginConfigObjectType | null {

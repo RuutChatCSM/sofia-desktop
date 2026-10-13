@@ -9,9 +9,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const packageRoot = path.resolve(__dirname, "..");
 const swiftPackagePath = path.join(packageRoot, "native", "HandsFree");
 
-const explicitBinary = process.env.HANDSFREE_COMPUTER_USE_BINARY?.trim();
+const explicitBinary = process.env.SOFIA_COMPUTER_USE_BINARY?.trim() || process.env.HANDSFREE_COMPUTER_USE_BINARY?.trim();
 const candidates = [
   explicitBinary,
+  path.resolve(packageRoot, "../../apps/desktop/resources/helpers/Sofia Computer Use.app/Contents/MacOS/ComputerUse"),
   path.join(swiftPackagePath, ".build", "release", "HandsFreeComputerUse"),
   path.join(swiftPackagePath, ".build", "arm64-apple-macosx", "release", "HandsFreeComputerUse"),
   path.join(swiftPackagePath, ".build", "debug", "HandsFreeComputerUse"),

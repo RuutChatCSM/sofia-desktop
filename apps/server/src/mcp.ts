@@ -3,11 +3,24 @@ import type { McpItem, ServerConfig } from "./types.js";
 import { sanitizeDiagnosticString } from "./diagnostic-sanitizer.js";
 import { validateMcpConfig, validateMcpName, validateUserMcpName } from "./validators.js";
 import {
+  ENGINE_GLOBAL_RUNTIME_CONFIG_ID,
+  readGlobalRuntimeWorkspaceEngineConfig,
   readRuntimeWorkspaceEngineConfig,
   runtimeMcpMap,
   writeRuntimeWorkspaceEngineConfig,
   type RuntimeWorkspaceEngineConfig,
 } from "./runtime-engine-config-store.js";
+
+/**
+ * Where an MCP entry is recorded. `project` is the per-workspace runtime config;
+ * `global` is the device-wide runtime config that every workspace inherits
+ * (see `readEffectiveRuntimeWorkspaceEngineConfig`).
+ */
+export type McpScope = "global" | "project";
+
+function mcpConfigTargetId(workspaceId: string, scope: McpScope): string {
+  return scope === "global" ? ENGINE_GLOBAL_RUNTIME_CONFIG_ID : workspaceId;
+}
 
 export type McpToolDenySource = "config.project" | "config.global";
 
@@ -455,7 +468,20 @@ function isMcpDisabledByTools(config: Record<string, unknown>, name: string): bo
 }
 
 export async function listMcp(serverConfig: ServerConfig, workspaceId: string, workspaceRoot: string): Promise<McpItem[]> {
-  return listMcpFromRuntimeSnapshot(workspaceRoot, await readRuntimeWorkspaceEngineConfig(serverConfig, workspaceId));
+  const [globalConfig, workspaceConfig] = await Promise.all([
+    readGlobalRuntimeWorkspaceEngineConfig(serverConfig),
+    readRuntimeWorkspaceEngineConfig(serverConfig, workspaceId),
+  ]);
+  const workspaceItems = await listMcpFromRuntimeSnapshot(workspaceRoot, workspaceConfig);
+  const globalItems = await listMcpFromRuntimeSnapshot(workspaceRoot, globalConfig);
+  const overridden = new Set(workspaceItems.map((item) => item.name));
+  // Project entries win on name collisions, matching the engine's layer merge.
+  return [
+    ...workspaceItems.map((item) => ({ ...item, scope: "project" as const })),
+    ...globalItems
+      .filter((item) => !overridden.has(item.name))
+      .map((item) => ({ ...item, scope: "global" as const })),
+  ];
 }
 
 export type McpConfigCollision = {
@@ -528,23 +554,31 @@ export async function addMcp(
   workspaceId: string,
   name: string,
   config: Record<string, unknown>,
+  scope: McpScope = "project",
 ): Promise<{ action: "added" | "updated" }> {
   validateUserMcpName(name);
   validateMcpConfig(config);
-  const runtimeConfig = await readRuntimeWorkspaceEngineConfig(serverConfig, workspaceId);
+  const targetId = mcpConfigTargetId(workspaceId, scope);
+  const runtimeConfig = await readRuntimeWorkspaceEngineConfig(serverConfig, targetId);
   const mcpMap = { ...runtimeMcpMap(runtimeConfig) };
   const existed = Object.prototype.hasOwnProperty.call(mcpMap, name);
   mcpMap[name] = config;
-  await writeRuntimeWorkspaceEngineConfig(serverConfig, workspaceId, (current) => ({ ...current, mcp: mcpMap }));
+  await writeRuntimeWorkspaceEngineConfig(serverConfig, targetId, (current) => ({ ...current, mcp: mcpMap }));
   return { action: existed ? "updated" : "added" };
 }
 
-export async function removeMcp(serverConfig: ServerConfig, workspaceId: string, name: string): Promise<boolean> {
-  const runtimeConfig = await readRuntimeWorkspaceEngineConfig(serverConfig, workspaceId);
+export async function removeMcp(
+  serverConfig: ServerConfig,
+  workspaceId: string,
+  name: string,
+  scope: McpScope = "project",
+): Promise<boolean> {
+  const targetId = mcpConfigTargetId(workspaceId, scope);
+  const runtimeConfig = await readRuntimeWorkspaceEngineConfig(serverConfig, targetId);
   const mcpMap = { ...runtimeMcpMap(runtimeConfig) };
   if (!Object.prototype.hasOwnProperty.call(mcpMap, name)) return false;
   delete mcpMap[name];
-  await writeRuntimeWorkspaceEngineConfig(serverConfig, workspaceId, (current) => ({ ...current, mcp: mcpMap }));
+  await writeRuntimeWorkspaceEngineConfig(serverConfig, targetId, (current) => ({ ...current, mcp: mcpMap }));
   return true;
 }
 
@@ -560,9 +594,11 @@ export async function setMcpEnabled(
   workspaceId: string,
   name: string,
   enabled: boolean,
+  scope: McpScope = "project",
 ): Promise<boolean> {
   validateMcpName(name);
-  const runtimeConfig = await readRuntimeWorkspaceEngineConfig(serverConfig, workspaceId);
+  const targetId = mcpConfigTargetId(workspaceId, scope);
+  const runtimeConfig = await readRuntimeWorkspaceEngineConfig(serverConfig, targetId);
   const mcpMap = { ...runtimeMcpMap(runtimeConfig) };
   if (!Object.prototype.hasOwnProperty.call(mcpMap, name)) return false;
   const current = mcpMap[name];
@@ -573,6 +609,6 @@ export async function setMcpEnabled(
     return false;
   }
   mcpMap[name] = { ...(current as Record<string, unknown>), enabled };
-  await writeRuntimeWorkspaceEngineConfig(serverConfig, workspaceId, (currentConfig) => ({ ...currentConfig, mcp: mcpMap }));
+  await writeRuntimeWorkspaceEngineConfig(serverConfig, targetId, (currentConfig) => ({ ...currentConfig, mcp: mcpMap }));
   return true;
 }

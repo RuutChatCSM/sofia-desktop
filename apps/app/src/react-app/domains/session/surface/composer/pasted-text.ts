@@ -1,6 +1,22 @@
 export const FILE_URL_RE = /^file:\/\//i;
 export const HTTP_URL_RE = /^https?:\/\//i;
 
+/** Shipped ChatGPT composer-controls: large clipboard text becomes a file. */
+export function largePasteAttachment(input: {
+  text: string;
+  markdown?: string;
+  attachmentsEnabled: boolean;
+  disabled: boolean;
+  voiceLayoutActive?: boolean;
+}): File | null {
+  if (Math.max(input.text.length, input.markdown?.length ?? 0) < 5000 ||
+      !input.attachmentsEnabled || input.disabled || input.voiceLayoutActive) return null;
+  const markdown = input.markdown !== undefined;
+  return new File([input.markdown ?? input.text], markdown ? "Pasted text.md" : "Pasted text.txt", {
+    type: markdown ? "text/markdown" : "text/plain",
+  });
+}
+
 export type PastedTextSegment =
   | { kind: "text"; text: string }
   | { kind: "line-break" }

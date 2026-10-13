@@ -40,6 +40,23 @@ function renderList(messages: UIMessage[], status: ThreadStatus) {
 }
 
 describe("message-list loading feedback", () => {
+  test("shows sent attachments above the message text instead of inside its bubble", () => {
+    const markup = renderList([{
+      id: "user-with-image",
+      role: "user",
+      parts: [
+        { type: "text", text: "Before ", state: "done" },
+        { type: "file", mediaType: "image/png", filename: "photo.png", url: "data:image/png;base64,iVBORw0KGgo=" },
+        { type: "text", text: "after", state: "done" },
+      ],
+    }], "ready");
+
+    expect(markup).toContain('aria-label="Message attachments"');
+    expect(markup.indexOf('aria-label="Message attachments"')).toBeLessThan(markup.indexOf("Before"));
+    expect(markup.indexOf("Before")).toBeLessThan(markup.indexOf("after"));
+    expect(markup).toContain('aria-label="Expand photo.png"');
+  });
+
   test("acknowledges a submitted message before streaming starts", () => {
     const markup = renderList([userMessage], "submitted");
 

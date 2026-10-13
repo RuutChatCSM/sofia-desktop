@@ -350,6 +350,27 @@ export type RunningAppsResult = {
   apps: string[];
 };
 
+export type ComputerUsePreview = {
+  helperPid: number;
+  presentationId: string;
+  revision: number;
+  imageWidth: number;
+  imageHeight: number;
+  app: string;
+  pid: number;
+  windowNumber: number;
+  windowTitle: string;
+  capturedAt: number;
+  imageUrl: string;
+  applicationIconUrl?: string;
+};
+
+export type ComputerPreviewScope = {
+  sessionId: string;
+  runStartedAt: number;
+  leaseId: string;
+};
+
 // ---------------------------------------------------------------------------
 // The command map
 // ---------------------------------------------------------------------------
@@ -442,6 +463,11 @@ export type DesktopCommandMap = {
   // Computer use
   checkComputerUsePermissions: { args: []; result: ComputerUsePermissions };
   listRunningApps: { args: []; result: RunningAppsResult };
+  beginComputerUsePreview: { args: [scope: ComputerPreviewScope]; result: boolean };
+  releaseComputerUsePreview: { args: [scope: ComputerPreviewScope]; result: boolean };
+  getComputerUsePreview: { args: [scope: ComputerPreviewScope]; result: ComputerUsePreview | null };
+  getComputerUseCaptureSource: { args: [scope: ComputerPreviewScope, target: ComputerUsePreview]; result: string | null };
+  openComputerUsePreview: { args: [scope: ComputerPreviewScope, target: ComputerUsePreview]; result: boolean };
   openComputerUsePermissionSetup: { args: []; result: ComputerUsePermissions };
   openComputerUsePermissionSettings: { args: []; result: unknown };
 

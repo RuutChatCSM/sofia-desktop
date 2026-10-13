@@ -108,6 +108,11 @@
       "types": "./src/url.ts",
       "development": "./src/url.ts",
       "default": "./src/url.ts"
+    },
+    "./den/llm-providers": {
+      "types": "./src/den/llm-providers.ts",
+      "development": "./src/den/llm-providers.ts",
+      "default": "./src/den/llm-providers.ts"
     }
   },
   "files": [

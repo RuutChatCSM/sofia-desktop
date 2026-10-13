@@ -1,12 +1,14 @@
-import type { UIMessage } from "ai";
+import type { DynamicToolUIPart, UIMessage } from "ai";
 
 import type { AnyToolPart } from "@/lib/tool-aggregate";
 import { getAssistantRenderGroups, splitTurnAtAnswer } from "./utils";
+import { collaborationActivity, isCollaborationActivity } from "@/lib/collaboration-activity";
 import { turnAnswerIndex } from "./turn-structure";
 
 export type UIMessageWithIndex = { index: number; message: UIMessage };
 
 export type TurnWorkEntry =
+  | { kind: "collaboration"; key: string; parts: DynamicToolUIPart[] }
   | { kind: "commentary"; key: string; item: UIMessageWithIndex }
   | { kind: "milestone"; key: string; parts: AnyToolPart[] }
   | {
@@ -30,9 +32,9 @@ export type TurnPresentation = {
 /** Project parts, not protocol messages: one message may carry all three channels. */
 export function workEntriesForMessage(
   item: UIMessageWithIndex,
-  _showThinking: boolean,
+  showThinking: boolean,
 ): TurnWorkEntry[] {
-  return getAssistantRenderGroups(item.message.parts, true).map((group, index) => {
+  return getAssistantRenderGroups(item.message.parts, showThinking).map((group, index) => {
     const key = `${item.message.id}:${index}`;
     if (group.kind === "reasoning") {
       return {
@@ -83,6 +85,9 @@ export function deriveTurnPresentation(
 
   const append = (entry: TurnWorkEntry) => {
     if (entry.kind === "thought") {
+      // Reasoning belongs between the calls it separates. Extending an older
+      // milestone here would move a later call ahead of recorded reasoning.
+      phase.run = null;
       const open = phase.thought;
       if (open) {
         // One phase: the packets are the runtime's boundaries, not the reader's.
@@ -111,6 +116,15 @@ export function deriveTurnPresentation(
     }
 
     phase.run = null;
+    if (entry.kind === "detail") {
+      const part = entry.item.message.parts[0];
+      if (part?.type === "dynamic-tool" && isCollaborationActivity(part) && collaborationActivity(part).label.endsWith("started working")) {
+        const previous = work.at(-1);
+        if (previous?.kind === "collaboration") previous.parts.push(part);
+        else work.push({kind:"collaboration",key:entry.key,parts:[part]});
+        return;
+      }
+    }
     work.push(entry);
   };
 

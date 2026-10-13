@@ -63,6 +63,16 @@ export const sofiaAffordanceRequestSchema = z.object({
   args: z.record(z.string(), z.unknown()).optional(),
   expectedRevision: z.number().int().nonnegative().optional(),
   actor: z.string().trim().min(1).optional(),
+  // Which session asked for the affordance. Stamped by the server from the
+  // engine context, never by the model: a command that opens durable surfaces
+  // (browser tabs, files) must attach them to the session that invoked it, not
+  // to whatever session the user happens to be looking at.
+  context: z
+    .object({
+      sessionId: z.string().trim().min(1).optional(),
+      workspaceId: z.string().trim().min(1).optional(),
+    })
+    .optional(),
 })
 export type SofiaAffordanceRequest = z.infer<typeof sofiaAffordanceRequestSchema>
 

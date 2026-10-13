@@ -1,4 +1,7 @@
+import { deriveSessionResources } from "../panel/session-resources";
+import { useSessionResourcesStore } from "../panel/session-resources-store";
 import { codexClientForSession, useCodexSessionStore } from "../codex-session-store";
+import { codexItemToToolPart } from "../sync/codex-item-translator";
 import {
   captureTurnBaseline,
   finalizeTurnChangeSet,
@@ -8,7 +11,7 @@ import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState, type
 import type { UIMessage } from "ai";
 import { useQuery } from "@tanstack/react-query";
 import type { SessionStatus } from "@/app/lib/engine-types";
-import { Check, Minimize2 } from "lucide-react";
+import { Check, FileUp, Minimize2 } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 
 import { captureAnalyticsEvent } from "@/app/lib/analytics";
@@ -45,7 +48,10 @@ import type {
   CloudMcpSubmissionGateState,
   CloudMcpSubmissionResult,
 } from "@/react-app/domains/connections/cloud-mcp-submit-readiness";
+import { ProjectComposerStrip } from "../chat/project-composer-strip";
+import type { NewTaskComposerContext } from "../chat/new-task-composer";
 import { ReactSessionComposer } from "./composer/composer";
+import { ComposerQueueAdmission } from "./composer-queue-admission";
 import { useSessionModelSelection } from "./session-model-store";
 import type { ProviderCatalog } from "./use-model-behavior";
 import { decodeComposerMentionValue, encodeComposerMentionValue, type ComposerMentionKind } from "./composer/mention-encoding";
@@ -63,6 +69,7 @@ import { useReactRenderWatchdog } from "@/react-app/shell/react-render-watchdog"
 import { SessionDebugPanel } from "./debug-panel";
 import { deriveRenderedSessionMessages, resolveRenderedSessionSnapshot } from "./session-render-state";
 import { useLocal } from "@/react-app/kernel/local-provider";
+import { isHeicImage, normalizeImageFile } from "@/react-app/domains/session/sync/image-compression";
 import { resolveAttachmentFileMetadata } from "@/react-app/domains/session/sync/attachment-file-part";
 import { deriveSessionRenderModel } from "@/react-app/domains/session/sync/transition-controller";
 import { useSessionScrollController } from "./scroll-controller";
@@ -80,9 +87,11 @@ import {
 } from "@/react-app/domains/session/changes/change-set-store";
 import { QuestionPanel } from "@/react-app/domains/session/modals/question-modal";
 import { QueuedMessagesPanel } from "@/react-app/domains/session/modals/queued-messages-panel";
-import { deriveOpenTargets, selectAutoOpenTarget, type OpenTarget } from "@/react-app/domains/session/artifacts/open-target";
+import { deriveOpenTargets, targetFromFile, selectAutoOpenTarget, type OpenTarget } from "@/react-app/domains/session/artifacts/open-target";
 import { usePanelTabStore } from "@/react-app/domains/session/panel/panel-tab-store";
 import { ActivityStatus } from "@/react-app/domains/session/surface/activity-status";
+import { shouldSurfaceActivity } from "@/react-app/domains/session/activity";
+import { useSessionActivities } from "@/react-app/domains/session/use-session-activities";
 import {
   markSessionSnapshotFetchStart,
   seedSessionState,
@@ -99,6 +108,8 @@ import {
   getComposerPasteParts,
   getComposerQueuedDrafts,
   getComposerRevertMessageId,
+  flushComposerQueuePersistence,
+  retryComposerQueueRecovery,
   useComposerStateStore,
 } from "./composer-state-store";
 import { MessageList } from "@/components/chat/message-list";
@@ -227,7 +238,7 @@ function createMarkdownMathEvalMessages(sessionId: string, stage: number) {
  * sentence-style capability calls, aggregated tool runs, collapsed
  * thinking, linkified bare URLs with favicons, and the FILES strip.
  */
-function createChatTranscriptEvalMessages(sessionId: string, userText = "Plan tomorrow around my calendar and check https://linear.app for open issues.") {
+function createChatTranscriptEvalMessages(sessionId: string, userText = "Plan tomorrow around my calendar and check https://linear.app for open issues.", pastedFile = false) {
   const now = Date.now();
   const messages: UIMessage[] = [
     {
@@ -236,7 +247,7 @@ function createChatTranscriptEvalMessages(sessionId: string, userText = "Plan to
       parts: [{
         type: "text",
         text: userText,
-      }],
+      }, ...(pastedFile ? [{type: "file" as const, filename: "Pasted text.txt", mediaType: "text/plain", url: "file:///workspace/.sofia/inbox/40abf0e0-f779-4350-a11e-8d5f124e8e1f-Pasted%20text.txt"}] : [])],
       metadata: { engine: { created: now } },
     },
     {
@@ -311,6 +322,7 @@ function createChatTranscriptEvalMessages(sessionId: string, userText = "Plan to
 }
 
 export type SessionSurfaceProps = {
+  newTaskComposer?: NewTaskComposerContext | null;
   client: SofiaServerClient;
   environmentClient?: SofiaServerClient | null;
   workspaceId: string;
@@ -654,10 +666,6 @@ function revokeAttachmentPreview(attachment: { previewUrl?: string | undefined }
   URL.revokeObjectURL(attachment.previewUrl);
 }
 
-function sameAttachments(left: ComposerAttachment[], right: ComposerAttachment[]): boolean {
-  return left.length === right.length && left.every((attachment, index) => attachment.id === right[index]?.id);
-}
-
 function draftWithEditedText(draft: ComposerDraft, text: string): ComposerDraft {
   return {
     ...draft,
@@ -721,9 +729,9 @@ export function SessionSurface(props: SessionSurfaceProps) {
   );
   const draft = useComposerStateStore((state) => getComposerDraft(state, props.sessionId));
   const attachments = useComposerStateStore((state) => getComposerAttachments(state, props.sessionId));
-  // True while a send with attachments is in flight (compression + inbox
-  // upload + prompt POST); drives the uploading overlay on composer chips.
-  const [attachmentsUploading, setAttachmentsUploading] = useState(false);
+  const submittingDraftIdsRef = useRef(new Set<string>());
+  const [submittingDraftIds, setSubmittingDraftIds] = useState<Set<string>>(() => new Set());
+  const submittingDraft = submittingDraftIds.has(props.sessionId);
   const mentions = useComposerStateStore((state) => getComposerMentions(state, props.sessionId));
   const pasteParts = useComposerStateStore((state) => getComposerPasteParts(state, props.sessionId));
   const setComposerDraft = useComposerStateStore((state) => state.setDraft);
@@ -740,12 +748,15 @@ export function SessionSurface(props: SessionSurfaceProps) {
   // session B when the route swaps the same surface component to another
   // session.
   const queuedItems = useComposerStateStore((state) => getComposerQueuedDrafts(state, props.sessionId));
+  const queueHydrated = useComposerStateStore((state) => state.queueHydrated);
+  const queueStorageError = useComposerStateStore((state) => state.queueStorageError);
+  const canonicalQueueReady = useCodexSessionStore((state) => state.sessions[props.sessionId]?.canonicalReady === true);
+  const setQueuedDeliveryState = useComposerStateStore((state) => state.setQueuedDeliveryState);
   const appendQueuedDraft = useComposerStateStore((state) => state.appendQueuedDraft);
   const removeQueuedDraftFromStore = useComposerStateStore((state) => state.removeQueuedDraft);
   const updateQueuedDraftInStore = useComposerStateStore((state) => state.updateQueuedDraft);
   const reorderQueuedDrafts = useComposerStateStore((state) => state.reorderQueuedDrafts);
   const clearQueuedDrafts = useComposerStateStore((state) => state.clearQueuedDrafts);
-  const prependQueuedDrafts = useComposerStateStore((state) => state.prependQueuedDrafts);
   // Per-conversation model controls: each pane resolves its own remembered
   // model (falling back to the global default) and owns its picker open
   // state, so split panes never control each other's model picker.
@@ -793,10 +804,7 @@ export function SessionSurface(props: SessionSurfaceProps) {
   const [verifiedOpenTargets, setVerifiedOpenTargets] = useState<OpenTarget[]>([]);
   const [cloudQueueRetryVersion, setCloudQueueRetryVersion] = useState(0);
   const sending = props.cloudMcpSubmissionState.status === "sending";
-  const cloudQueueBlockedRef = useRef(false);
-  // Shared with promote-to-send so a manual send-now cannot race the idle drain.
-  const drainingQueueRef = useRef(false);
-  const awaitingQueueBusyRef = useRef(false);
+  const queueAdmission = useRef(new ComposerQueueAdmission());
   const composerShellRef = useRef<HTMLDivElement>(null);
   const hydratedKeyRef = useRef<string | null>(null);
   const autoOpenedTargetRef = useRef<string | null>(null);
@@ -935,6 +943,11 @@ export function SessionSurface(props: SessionSurfaceProps) {
   const preparingCloudTools = props.cloudMcpSubmissionState.status === "checking" ||
     props.cloudMcpSubmissionState.status === "repairing";
   const chatStreaming = sending || liveStatus.type === "busy" || liveStatus.type === "retry";
+  // Work that outlived its turn raises the composer strip; the same predicate
+  // decides whether the composer has a top accessory at all, so the two can
+  // never disagree about whether the strip is mounted.
+  const sessionActivities = useSessionActivities(props.sessionId);
+  const showsActivityStrip = shouldSurfaceActivity(sessionActivities, chatStreaming);
 
   useEffect(() => {
     if (!chatStreaming) setSteering(false);
@@ -968,6 +981,9 @@ export function SessionSurface(props: SessionSurfaceProps) {
 
     return [...baseRenderedMessages, ...evalMarkdownMessages];
   }, [baseRenderedMessages, evalMarkdownMessages]);
+  useEffect(() => {
+    useSessionResourcesStore.getState().setSession(props.sessionId, deriveSessionResources(renderedMessages, verifiedOpenTargets));
+  }, [props.sessionId, renderedMessages, verifiedOpenTargets]);
   const seedMarkdownPrimitiveControlAction = useMemo<SofiaControlAction | null>(() => {
     if (!import.meta.env.DEV) return null;
 
@@ -1024,14 +1040,77 @@ export function SessionSurface(props: SessionSurfaceProps) {
       disabled: !props.sessionId,
       execute: (args) => {
         const userText = typeof args === "object" && args !== null && "userText" in args && typeof args.userText === "string" ? args.userText : undefined;
-        const seeded = createChatTranscriptEvalMessages(props.sessionId, userText);
+        const pastedFile = typeof args === "object" && args !== null && "pastedFile" in args && args.pastedFile === true;
+        const seeded = createChatTranscriptEvalMessages(props.sessionId, userText, pastedFile);
+        if (typeof args === "object" && args !== null && "collaborationFixture" in args && args.collaborationFixture === true) {
+          const collaboration = codexItemToToolPart({id:"fixture-collaboration",type:"collabAgentToolCall",tool:"spawnAgent",status:"completed",prompt:"Inspect shared transcript",agentsStates:{child:{status:"running"}}},props.sessionId,"fixture-collaboration",true);
+          const assistant = seeded.messages.find(message=>message.role==="assistant");
+          if (collaboration && assistant) assistant.parts.splice(Math.max(0,assistant.parts.length-1),0,collaboration);
+        }
+        if (typeof args === "object" && args !== null && "resourcesFixture" in args && args.resourcesFixture === true) {
+          const root = "resourcesRoot" in args && typeof args.resourcesRoot === "string" ? args.resourcesRoot : "/tmp/sofia-eval";
+          const url = "resourcesUrl" in args && typeof args.resourcesUrl === "string" ? args.resourcesUrl : "https://example.com";
+          if ("resourcesImage" in args && args.resourcesImage === true) {
+            seeded.messages[0]?.parts.push({type:"file",filename:"Screenshot.png",mediaType:"image/png",url:"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l9sAAAAASUVORK5CYII="});
+          }
+          if ("resourcesFiles" in args && Array.isArray(args.resourcesFiles)) {
+            for(const filename of args.resourcesFiles){
+              if(typeof filename!=="string" || filename.includes("/") || filename.includes("\\"))continue;
+              seeded.messages[0]?.parts.push({type:"file",filename,mediaType:"application/octet-stream",url:`file://${root}/${encodeURIComponent(filename)}`});
+            }
+          }
+          if ("resourcesOutputs" in args && Array.isArray(args.resourcesOutputs)) {
+            for(const filename of args.resourcesOutputs){
+              if(typeof filename!=="string" || filename.includes("/") || filename.includes("\\"))continue;
+              seeded.messages.find(message=>message.role==="assistant")?.parts.push({type:"dynamic-tool",toolName:"write",toolCallId:`fixture-write-${filename}`,state:"output-available",input:{filePath:`${root}/${filename}`,content:"Generated output"},output:"Written"});
+            }
+          }
+          if ("resourcesSubagents" in args && args.resourcesSubagents === true) {
+            seeded.messages.find(message=>message.role==="assistant")?.parts.push({type:"dynamic-tool",toolName:"task",toolCallId:"fixture-task",state:"output-available",input:{description:"Inspect source",prompt:"Inspect actual source inputs",subagent_type:"research"},output:"Source inspection complete"});
+            const store=useCodexSessionStore.getState();
+            if(!store.sessions[props.sessionId])store.upsertSession({id:props.sessionId,threadId:"fixture-parent",title:"Fixture",workspaceId:props.workspaceId,created:new Date().toISOString(),turnId:null,status:"idle"});
+            store.upsertItem(props.sessionId,{id:"fixture-collab",type:"collabAgentToolCall",turnId:"fixture-turn",item:{type:"collabAgentToolCall",prompt:"Research references",agentsStates:{"fixture-child-working":{status:"running",message:"Checking references"},"fixture-child-done":{status:"completed",message:"References checked"}}},text:"",thinking:"",output:"",status:"done"});
+          }
+          for (const message of seeded.messages) {
+            if (message.role !== "assistant") continue;
+            message.parts = message.parts.map(part => {
+              if (part.type !== "dynamic-tool") return part;
+              const input: unknown = part.input;
+              if (!input || typeof input !== "object" || !("filePath" in input) || typeof input.filePath !== "string") return part;
+              return {...part,input:{...input,filePath:`${root}/${input.filePath.split("/").pop()}`}};
+            });
+            message.parts.push(...[1,2,3].map(index => ({type:"source-url" as const,sourceId:`fixture:${index}`,title:`Reference ${index}`,url:`${url}/reference-${index}`})));
+          }
+        }
+        if(typeof args === "object" && args!==null && "scrollFixture" in args && args.scrollFixture===true){
+          const start="scrollStart" in args && typeof args.scrollStart==="number" ? args.scrollStart : 0;
+          const count="scrollCount" in args && typeof args.scrollCount==="number" ? Math.min(200,Math.max(0,args.scrollCount)) : 60;
+          seeded.messages=Array.from({length:count},(_,index)=>{
+            const ordinal=start+index;
+            return {id:`scroll-fixture-${ordinal}`,role:ordinal%2===0?"user":"assistant",parts:[{type:"text",text:`Scroll message ${ordinal}\n\n${"Stable reading content. ".repeat(12)}`}]};
+          });
+        }
+        if (typeof args === "object" && args !== null && "answerOnly" in args && args.answerOnly === true) {
+          for (const message of seeded.messages) {
+            if (message.role === "assistant") message.parts = [{ type: "text", text: "A completed answer without recorded tool or thinking details." }];
+          }
+        }
         setEvalMarkdownMessages(seeded.messages);
         return { ok: true, messageCount: seeded.messages.length };
       },
     };
   }, [props.sessionId]);
   useControlAction(props.isControlTarget ? seedChatTranscriptControlAction : null);
-  const openTargets = useMemo(() => deriveOpenTargets(renderedMessages), [renderedMessages]);
+  const openTargets = useMemo(() => {
+    const targets=deriveOpenTargets(renderedMessages);
+    const seen=new Set(targets.map(target=>target.id));
+    for (const source of deriveSessionResources(renderedMessages).sources) {
+      if (source.kind!=="file" || !source.value || /^(?:data|blob|https?):/.test(source.value)) continue;
+      const target=targetFromFile(source.value,95,"source");
+      if (target && !seen.has(target.id)) {targets.push({...target,name:source.label});seen.add(target.id);}
+    }
+    return targets;
+  }, [renderedMessages]);
   const openTargetsFingerprint = useMemo(
     () => openTargets.map((target) => `${target.kind}:${target.value}:${target.confidence}`).join("|"),
     [openTargets],
@@ -1231,7 +1310,7 @@ export function SessionSurface(props: SessionSurfaceProps) {
     setError(null);
     try {
       const result = await props.onSendDraft(nextDraft, props.sessionId);
-      if (result.outcome === "blocked" || result.outcome === "cancelled") return result;
+      if (result.outcome === "blocked" || result.outcome === "cancelled" || result.outcome === "queued") return result;
       // Only report a run after the pre-send gate released the exact queued
       // submission and the route accepted or sent it.
       appendComposerHistory(props.sessionId, nextDraft.text);
@@ -1256,30 +1335,44 @@ export function SessionSurface(props: SessionSurfaceProps) {
   // Initial send (agent idle) and explicit "Steer" follow-up (agent busy)
   // share the same immediate path.
   const handleSend = useCallback(async () => {
+    const sessionId = props.sessionId;
+    if (submittingDraftIdsRef.current.has(sessionId)) return;
     const originalDraft = draft;
     const text = originalDraft.trim();
     if (!text && attachments.length === 0) return;
     const nextDraft = buildDraft(text, attachments);
+    submittingDraftIdsRef.current.add(sessionId);
+    setSubmittingDraftIds((current) => new Set(current).add(sessionId));
     const sentAttachments = attachments;
-    if (sentAttachments.length) setAttachmentsUploading(true);
+    const originalState = useComposerStateStore.getState().sessions[props.sessionId];
+    // Claim the draft synchronously so a second click cannot send it again.
+    // The empty composer is also ready for the user's next message immediately.
+    clearComposer();
+    const restoreDraft = () => {
+      if (!originalState) return;
+      const store = useComposerStateStore.getState();
+      const current = getComposerDraft(store, props.sessionId);
+      store.replaceDraft(props.sessionId, current ? `${originalDraft}\n${current}` : originalDraft, originalState.revertMessageId);
+      store.setAttachments(props.sessionId, [...originalState.attachments, ...getComposerAttachments(store, props.sessionId)]);
+      store.setMentions(props.sessionId, { ...originalState.mentions, ...getComposerMentions(store, props.sessionId) });
+      store.setPasteParts(props.sessionId, [...originalState.pasteParts, ...getComposerPasteParts(store, props.sessionId)]);
+    };
     try {
       const result = await sendDraft(nextDraft);
-      if (result.outcome === "blocked" || result.outcome === "cancelled") return;
-      const currentState = useComposerStateStore.getState();
-      const currentDraft = getComposerDraft(currentState, props.sessionId);
-      const currentAttachments = getComposerAttachments(currentState, props.sessionId);
-      if (currentDraft === originalDraft && sameAttachments(currentAttachments, sentAttachments)) {
-        clearComposer();
-        sentAttachments.forEach(revokeAttachmentPreview);
-      } else {
-        const retainedIds = new Set(currentAttachments.map((attachment) => attachment.id));
-        sentAttachments
-          .filter((attachment) => !retainedIds.has(attachment.id))
-          .forEach(revokeAttachmentPreview);
+      if (result.outcome === "blocked" || result.outcome === "cancelled") {
+        restoreDraft();
+        return;
       }
+      if (result.outcome !== "queued") sentAttachments.forEach(revokeAttachmentPreview);
     } catch {
+      restoreDraft();
     } finally {
-      setAttachmentsUploading(false);
+      submittingDraftIdsRef.current.delete(sessionId);
+      setSubmittingDraftIds((current) => {
+        const next = new Set(current);
+        next.delete(sessionId);
+        return next;
+      });
     }
   }, [attachments, buildDraft, clearComposer, draft, props.sessionId, sendDraft]);
 
@@ -1298,16 +1391,21 @@ export function SessionSurface(props: SessionSurfaceProps) {
   }, [chatStreaming, draft, handleSend, model.transitionState, props.modelUnavailable, props.sessionId]);
 
   const handleSteer = useCallback(async () => {
+    if (submittingDraftIdsRef.current.has(props.sessionId)) return;
     setSteering(true);
-    await handleSend();
-  }, [handleSend]);
+    try {
+      await handleSend();
+    } finally {
+      setSteering(false);
+    }
+  }, [handleSend, props.sessionId]);
 
   const handleRetryCloudSubmission = useCallback(() => {
     if (draft.trim() || attachments.length > 0) {
       void handleSend();
       return;
     }
-    cloudQueueBlockedRef.current = false;
+    queueAdmission.current.retry(props.sessionId);
     setCloudQueueRetryVersion((version) => version + 1);
   }, [attachments.length, draft, handleSend]);
 
@@ -1338,32 +1436,41 @@ export function SessionSurface(props: SessionSurfaceProps) {
   // waiting for the idle drain. Guarded against the drain effect so the same
   // draft cannot be delivered twice.
   const [sendingQueued, setSendingQueued] = useState(false);
+  const sendingQueuedRef = useRef(false);
   const sendQueuedDraftNow = useCallback(async (id: string) => {
-    if (drainingQueueRef.current || sendingQueued) return;
+    if (queueAdmission.current.isSending(props.sessionId) || sendingQueuedRef.current) return;
     const item = queuedItems.find((queued) => queued.id === id);
     const target = withoutRevertTarget(item?.draft ?? null);
-    if (!item || !target) return;
+    if (!item || !target || item.deliveryState === "sending" || !queueHydrated) return;
+    sendingQueuedRef.current = true;
     setSendingQueued(true);
-    removeQueuedDraftFromStore(props.sessionId, id);
+    setQueuedDeliveryState(props.sessionId, id, "sending");
+    let dispatched = false;
     try {
+      await flushComposerQueuePersistence();
+      dispatched = true;
       const result = await sendDraft(target);
       if (result.outcome === "blocked" || result.outcome === "cancelled") {
-        prependQueuedDrafts(props.sessionId, [{ id: item.id, draft: target }]);
+        setQueuedDeliveryState(props.sessionId, id, "ready");
         return;
       }
-      target.attachments.forEach(revokeAttachmentPreview);
+      removeQueuedDraftFromStore(props.sessionId, id);
+      await flushComposerQueuePersistence();
+      if (result.outcome !== "queued") target.attachments.forEach(revokeAttachmentPreview);
     } catch {
-      prependQueuedDrafts(props.sessionId, [{ id: item.id, draft: target }]);
+      setQueuedDeliveryState(props.sessionId, id, dispatched ? "outcome-unknown" : "ready");
     } finally {
+      sendingQueuedRef.current = false;
       setSendingQueued(false);
     }
   }, [
-    prependQueuedDrafts,
     props.sessionId,
     queuedItems,
     removeQueuedDraftFromStore,
     sendDraft,
     sendingQueued,
+    setQueuedDeliveryState,
+    queueHydrated,
   ]);
 
   const handleAbort = useCallback(async () => {
@@ -1409,54 +1516,62 @@ export function SessionSurface(props: SessionSurfaceProps) {
   // item into the still-starting turn.
   useEffect(() => {
     if (liveStatus.type !== "idle") {
-      awaitingQueueBusyRef.current = false;
+      queueAdmission.current.observeRun(props.sessionId);
     }
-  }, [liveStatus.type]);
+  }, [liveStatus.type, props.sessionId]);
 
   useEffect(() => {
-    if (drainingQueueRef.current || sendingQueued) return;
-    if (cloudQueueBlockedRef.current) return;
-    if (awaitingQueueBusyRef.current) return;
+    if (sendingQueued || !queueAdmission.current.canSend(props.sessionId)) return;
+    if (!queueHydrated || queueStorageError) return;
     if (queuedItems.length === 0) return;
     if (chatStreaming || liveStatus.type !== "idle") return;
     const nextItem = queuedItems[0];
     if (!nextItem) return;
+    if (nextItem.deliveryState && nextItem.deliveryState !== "ready") return;
+    if (nextItem.recovered && isCodexSession && !canonicalQueueReady) return;
     const nextDraft = withoutRevertTarget(nextItem.draft);
     if (!nextDraft) return;
-    drainingQueueRef.current = true;
-    removeQueuedDraftFromStore(props.sessionId, nextItem.id);
+    if (!queueAdmission.current.begin(props.sessionId)) return;
+    setQueuedDeliveryState(props.sessionId, nextItem.id, "sending");
     // Arm the busy-wait BEFORE the send can resolve: the engine's busy status
     // can render before the send promise's continuation runs, and arming late
     // would erase that observation — the next idle would then never drain the
     // following item. Failure paths below disarm so retries stay possible.
-    awaitingQueueBusyRef.current = true;
+
     void (async () => {
+      let dispatched = false;
       try {
+        await flushComposerQueuePersistence();
+        dispatched = true;
         const result = await sendDraft(nextDraft);
         if (result.outcome === "blocked") {
-          cloudQueueBlockedRef.current = true;
-          awaitingQueueBusyRef.current = false;
-          prependQueuedDrafts(props.sessionId, [{ id: nextItem.id, draft: nextDraft }]);
+          queueAdmission.current.defer(props.sessionId);
+          setQueuedDeliveryState(props.sessionId, nextItem.id, "ready");
         } else if (result.outcome === "cancelled") {
-          awaitingQueueBusyRef.current = false;
-          prependQueuedDrafts(props.sessionId, [{ id: nextItem.id, draft: nextDraft }]);
+          queueAdmission.current.defer(props.sessionId);
+          setQueuedDeliveryState(props.sessionId, nextItem.id, "ready");
         } else {
-          nextDraft.attachments.forEach(revokeAttachmentPreview);
+          removeQueuedDraftFromStore(props.sessionId, nextItem.id);
+          await flushComposerQueuePersistence();
+          if (result.outcome !== "queued") nextDraft.attachments.forEach(revokeAttachmentPreview);
         }
       } catch {
-        awaitingQueueBusyRef.current = false;
-        prependQueuedDrafts(props.sessionId, [{ id: nextItem.id, draft: nextDraft }]);
+        queueAdmission.current.defer(props.sessionId);
+        setQueuedDeliveryState(props.sessionId, nextItem.id, dispatched ? "outcome-unknown" : "ready");
       } finally {
-        drainingQueueRef.current = false;
+        queueAdmission.current.settle(props.sessionId);
+        // An entire fast turn can finish before the request settles. Re-run
+        // admission after releasing the lock even if no new status arrives.
+        setCloudQueueRetryVersion((version) => version + 1);
       }
     })();
-  }, [chatStreaming, cloudQueueRetryVersion, liveStatus.type, prependQueuedDrafts, props.sessionId, queuedItems, removeQueuedDraftFromStore, sendDraft, sendingQueued]);
+  }, [canonicalQueueReady, chatStreaming, cloudQueueRetryVersion, isCodexSession, liveStatus.type, props.sessionId, queueHydrated, queueStorageError, queuedItems, removeQueuedDraftFromStore, sendDraft, sendingQueued, setQueuedDeliveryState]);
 
   useEffect(() => {
     if (props.cloudMcpSubmissionState.status !== "failed") {
-      cloudQueueBlockedRef.current = false;
+      queueAdmission.current.retry(props.sessionId);
     }
-  }, [props.cloudMcpSubmissionState.status]);
+  }, [props.cloudMcpSubmissionState.status, props.sessionId]);
 
   useEffect(() => {
     props.onDraftChange(buildDraft(draft, attachments));
@@ -1482,17 +1597,30 @@ export function SessionSurface(props: SessionSurfaceProps) {
         size: file.size,
         kind: metadata.kind,
         file,
-        previewUrl: metadata.kind === "image" ? URL.createObjectURL(file) : undefined,
+        previewUrl: metadata.kind === "image" && !isHeicImage(file) ? URL.createObjectURL(file) : undefined,
       };
     });
     setComposerAttachments(props.sessionId, [...attachments, ...next]);
+    for (const attachment of next) {
+      if (!isHeicImage(attachment.file)) continue;
+      void normalizeImageFile(attachment.file).then((file) => {
+        const current = getComposerAttachments(useComposerStateStore.getState(), props.sessionId);
+        if (!current.some((item) => item.id === attachment.id)) return;
+        const previewUrl = URL.createObjectURL(file);
+        setComposerAttachments(props.sessionId, current.map((item) => item.id === attachment.id
+          ? { ...item, file, mimeType: file.type, size: file.size, previewUrl } : item));
+      }).catch((error: unknown) => toast.error(error instanceof Error ? error.message : "This image could not be decoded."));
+    }
     // Inline attachment chips live in the draft as Lexical tokens (same
     // pattern as pasted-text chips), so they sit in the text flow.
     setComposerDraft(
       props.sessionId,
-      `${draft}${next.map((attachment) => `[attachment ${attachment.id}]`).join("")}`,
+      `${draft}${next.map((attachment) => `[attachment ${attachment.id}]`).join("")}${next.some((attachment) => attachment.kind === "image") ? "\n" : ""}`,
     );
   };
+
+  const [fileDragActive, setFileDragActive] = useState(false);
+  const hasDraggedFiles = (event: React.DragEvent) => Array.from(event.dataTransfer.types).includes("Files");
 
   const handleRemoveAttachment = (id: string) => {
     const target = attachments.find((item) => item.id === id);
@@ -1587,26 +1715,30 @@ export function SessionSurface(props: SessionSurfaceProps) {
   useEffect(() => {
     const handleBrowserAnnotation = (event: Event) => {
       if (!(event instanceof CustomEvent) || typeof event.detail?.text !== "string" || event.detail.sessionId !== props.sessionId) return;
-      const existing = getComposerDraft(useComposerStateStore.getState(), props.sessionId);
       const image = typeof event.detail.image === "string" ? event.detail.image : null;
+      const appendToCurrentDraft = (value: string) => {
+        const current = getComposerDraft(useComposerStateStore.getState(), props.sessionId);
+        setComposerDraft(props.sessionId, `${current}${current && !current.endsWith("\n") ? "\n" : ""}${value}`);
+      };
       if (image?.startsWith("data:image/")) {
         void fetch(image).then((response) => response.blob()).then((blob) => {
+          const id = `annotation-${crypto.randomUUID()}`;
           const attachment: ComposerAttachment = {
-            id: `annotation-${Date.now().toString(36)}`,
+            id,
             name: "1 annotation",
             mimeType: blob.type || "image/png",
             size: blob.size,
             kind: "image",
-            file: new File([blob], "annotation.png", { type: blob.type || "image/png" }),
+            file: new File([blob], `${id}.png`, { type: blob.type || "image/png" }),
             previewUrl: image,
             annotationContext: event.detail.text,
           };
           const current = getComposerAttachments(useComposerStateStore.getState(), props.sessionId);
           setComposerAttachments(props.sessionId, [...current, attachment]);
-          setComposerDraft(props.sessionId, `${existing}${existing && !existing.endsWith("\n") ? "\n" : ""}[attachment ${attachment.id}]`);
-        }).catch(() => setComposerDraft(props.sessionId, `${existing}${event.detail.text}`));
+          appendToCurrentDraft(`[attachment ${attachment.id}]`);
+        }).catch(() => appendToCurrentDraft(event.detail.text));
       } else {
-        setComposerDraft(props.sessionId, `${existing}${event.detail.text}`);
+        appendToCurrentDraft(event.detail.text);
       }
       window.dispatchEvent(new Event("sofia:focusPrompt"));
     };
@@ -1805,6 +1937,7 @@ export function SessionSurface(props: SessionSurfaceProps) {
   const sessionScroll = useSessionScrollController({
     selectedSessionId: props.sessionId,
     renderedMessages,
+    isLoading: pendingSessionLoad,
     containerRef: scrollRef,
     contentRef,
     tailSentinelRef,
@@ -1988,6 +2121,23 @@ export function SessionSurface(props: SessionSurfaceProps) {
     });
   }, [attachments, buildDraft, props.onDraftChange, props.sessionId, props.workspaceId, typeComposerText]);
 
+  useEffect(() => {
+    const handle = (event: Event) => {
+      if (!(event instanceof CustomEvent)) return;
+      const detail: unknown = event.detail;
+      if (!detail || typeof detail !== "object" || !("sessionId" in detail) || detail.sessionId !== props.sessionId || !("action" in detail)) return;
+      if (detail.action === "attach") {
+        const root=Array.from(document.querySelectorAll<HTMLElement>("[data-session-surface-id]")).find(element=>element.dataset.sessionSurfaceId===props.sessionId);
+        root?.querySelector<HTMLInputElement>('input[type="file"]')?.click();
+      } else if (detail.action === "create") {
+        const text=draft.trim() ? `${draft}\nCreate a file or site: ` : "Create a file or site: ";
+        void typeComposerText(text);
+        props.onDraftChange(buildDraft(text, attachments));
+      }
+    };
+    window.addEventListener("sofia:session-resources:action",handle);
+    return ()=>window.removeEventListener("sofia:session-resources:action",handle);
+  },[props.sessionId,props.onDraftChange,draft,attachments,buildDraft,typeComposerText]);
   const handleRevertToUserMessage = useCallback((messageId: string) => {
     void props.onRevertToMessage?.(messageId, props.sessionId);
   }, [props.onRevertToMessage, props.sessionId]);
@@ -2090,8 +2240,43 @@ export function SessionSurface(props: SessionSurfaceProps) {
       data-session-surface-id={props.sessionId}
       onPointerDownCapture={handleFindSurfaceInteraction}
       onFocusCapture={handleFindSurfaceInteraction}
-      className="flex h-full min-h-0 flex-col"
+      onDragEnter={(event) => {
+        if (!hasDraggedFiles(event)) return;
+        event.preventDefault();
+        setFileDragActive(true);
+      }}
+      onDragOver={(event) => {
+        if (!hasDraggedFiles(event)) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "copy";
+        if (!fileDragActive) setFileDragActive(true);
+      }}
+      onDragLeave={(event) => {
+        const nextTarget = event.relatedTarget;
+        if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return;
+        setFileDragActive(false);
+      }}
+      onDrop={(event) => {
+        if (!hasDraggedFiles(event)) return;
+        event.preventDefault();
+        setFileDragActive(false);
+        const files = Array.from(event.dataTransfer.files);
+        if (files.length) handleAttachFiles(files);
+      }}
+      className="relative flex h-full min-h-0 flex-col"
     >
+      {fileDragActive ? (
+        <div className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center rounded-[inherit] bg-dls-canvas/35 backdrop-blur-[2px]" role="status">
+          <div className="absolute inset-3 rounded-2xl ring-2 ring-inset ring-dls-accent/55" />
+          <div className="relative flex min-w-60 flex-col items-center rounded-2xl border border-dls-border bg-dls-canvas/95 px-8 py-6 text-center shadow-xl">
+            <div className="mb-3 flex size-11 items-center justify-center rounded-xl bg-dls-hover text-dls-accent">
+              <FileUp className="size-5" aria-hidden="true" />
+            </div>
+            <div className="text-sm font-semibold text-dls-text">Drop to add files</div>
+            <div className="mt-1 text-xs text-dls-secondary">Attach them to your next message</div>
+          </div>
+        </div>
+      ) : null}
       {model.transitionState === "switching" && showDelayedLoading ? (
         <div className="flex justify-center px-6 pt-4">
           <div className="rounded-full border border-dls-border bg-dls-hover/80 px-3 py-1 text-xs text-dls-secondary">
@@ -2108,8 +2293,9 @@ export function SessionSurface(props: SessionSurfaceProps) {
       <div className="relative min-h-0 flex-1">
         <div
           ref={scrollRef}
+          data-session-scroll=""
           onWheel={(event) => {
-            if (event.deltaY === 0) return;
+            if (event.defaultPrevented || event.ctrlKey || event.shiftKey || Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
             // Wheel down moves toward the tail; wheel up moves away from it.
             sessionScroll.markScrollGesture({ type: "wheel", direction: event.deltaY < 0 ? "up" : "down" });
           }}
@@ -2194,6 +2380,8 @@ export function SessionSurface(props: SessionSurfaceProps) {
                   >
                     <MessageListProvider
                       workspaceId={props.workspaceId}
+                      workspaceRoot={props.workspaceRoot}
+                      mediaClient={props.client}
                       sessionId={props.sessionId}
                       showThinking={showThinking}
                       highlightQuery={findHighlightQuery}
@@ -2236,7 +2424,7 @@ export function SessionSurface(props: SessionSurfaceProps) {
         />
       </div>
 
-      <div ref={composerShellRef} className="shrink-0 px-0 pb-2 pt-2">
+      <div ref={composerShellRef} data-computer-preview-obstacle className="shrink-0 px-0 pb-2 pt-2">
         {(props.providerConnectedCount ?? 0) === 0 ? (
           <button
             type="button"
@@ -2248,7 +2436,6 @@ export function SessionSurface(props: SessionSurfaceProps) {
           </button>
         ) : null}
         <DevProfiler id="SessionComposer">
-        <ActivityStatus sessionId={props.sessionId} turnActive={chatStreaming} />
         {props.cloudMcpSubmissionState.status === "failed" ? (
           <div
             className="mx-3 mb-2 flex items-center gap-3 rounded-xl border border-red-7/40 bg-red-2/40 px-3 py-2 text-xs text-red-11"
@@ -2270,6 +2457,13 @@ export function SessionSurface(props: SessionSurfaceProps) {
             </button>
           </div>
         ) : null}
+        {renderedMessages.length === 0 && props.newTaskComposer ? <ProjectComposerStrip docked context={{ ...props.newTaskComposer, onSelectProject: (id) => {
+          props.newTaskComposer?.onDraftChange?.(draft);
+          props.newTaskComposer?.onAttachmentsChange?.(attachments);
+          props.newTaskComposer?.onMentionsChange?.(mentions);
+          props.newTaskComposer?.onPastedTextChange?.(pasteParts);
+          props.newTaskComposer?.onSelectProject?.(id);
+        } }} /> : null}
         <ReactSessionComposer
           draft={draft}
           mentions={mentions}
@@ -2280,7 +2474,8 @@ export function SessionSurface(props: SessionSurfaceProps) {
         onStop={handleAbort}
         busy={chatStreaming}
         steering={steering}
-        submissionPreparing={preparingCloudTools}
+        submissionPreparing={preparingCloudTools || submittingDraft}
+        submissionLabel={submittingDraft ? "Sending message…" : undefined}
         queuedCount={queuedItems.length}
         disabled={model.transitionState !== "idle" || Boolean(props.modelUnavailable)}
         modelUnavailable={Boolean(props.modelUnavailable)}
@@ -2296,7 +2491,6 @@ export function SessionSurface(props: SessionSurfaceProps) {
         onModelChange={handleModelChange}
         sessionId={props.sessionId}
         attachments={attachments}
-        attachmentsUploading={attachmentsUploading}
         onAttachFiles={handleAttachFiles}
         onRemoveAttachment={handleRemoveAttachment}
         attachmentsEnabled={props.attachmentsEnabled}
@@ -2331,10 +2525,10 @@ export function SessionSurface(props: SessionSurfaceProps) {
         isRemoteWorkspace={props.isRemoteWorkspace}
           isSandboxWorkspace={props.isSandboxWorkspace}
           onUploadInboxFiles={props.onUploadInboxFiles ?? handleUploadInboxFiles}
-          compactTopSpacing={Boolean(props.activeQuestion || (props.todos ?? []).some((todo) => todo.content.trim()) || props.activePermission || queuedItems.length > 0)}
+          compactTopSpacing={Boolean(props.activeQuestion || (props.todos ?? []).some((todo) => todo.content.trim()) || props.activePermission || queuedItems.length > 0 || showsActivityStrip)}
           approvalAccessory={props.approvalAccessory}
           aboveComposer={
-            queuedItems.length > 0 ? (
+            queuedItems.length > 0 || queueStorageError ? (
               <QueuedMessagesPanel
                 items={queuedItems}
                 onRemove={removeQueuedDraft}
@@ -2342,12 +2536,15 @@ export function SessionSurface(props: SessionSurfaceProps) {
                 onReorder={(ids) => reorderQueuedDrafts(props.sessionId, ids)}
                 onEdit={editQueuedDraft}
                 sending={sendingQueued}
+                storageError={queueStorageError}
+                onRetryStorage={() => void retryComposerQueueRecovery()}
               />
             ) : null
           }
           topAccessory={
-            props.activeQuestion || (props.todos ?? []).some((todo) => todo.content.trim()) || props.activePermission ? (
+            showsActivityStrip || props.activeQuestion || (props.todos ?? []).some((todo) => todo.content.trim()) || props.activePermission ? (
               <div>
+                {showsActivityStrip ? <ActivityStatus sessionId={props.sessionId} turnActive={chatStreaming} /> : null}
                 {props.activeQuestion ? (
                   <QuestionPanel
                     questions={props.activeQuestion.questions}

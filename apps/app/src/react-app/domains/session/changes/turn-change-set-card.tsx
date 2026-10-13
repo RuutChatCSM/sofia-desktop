@@ -4,6 +4,8 @@ import { ChevronRight, FileDiff } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
+import { RecordedDiffPreview } from "./recorded-diff-preview";
 import { cn } from "@/lib/utils";
 import {
   type ChangeStatus,
@@ -53,7 +55,7 @@ export function TurnChangeSetCard({
   // repositories can both contain `src/index.ts`, and keying by path labelled
   // both rows with whichever repository happened to be last.
   const entries = repositories.flatMap((repository) =>
-    repository.files.map((file) => ({ repositoryId: repository.repositoryId, file })),
+    repository.files.map((file) => ({ repositoryId: repository.repositoryId, root: repository.root, file })),
   );
   const showRepository = repositories.length > 1;
   // A degraded read (no baseline captured) still has counts, but they are the
@@ -114,20 +116,21 @@ export function TurnChangeSetCard({
         {/* Only a repository-backed set can be reviewed. A hint-sourced set is a
             touched-file list, and a Review button that opens an empty pane is a
             dead end. */}
-        {onReview && trusted ? (
+        {onReview && trusted && changeSet.source === "git" ? (
           <Button variant="outline" size="sm" onClick={() => onReview(changeSet.id)}>
             Review
           </Button>
         ) : null}
       </div>
       <div className="border-t border-border/70">
-        {visible.map(({ repositoryId, file }) => (
+        {visible.map(({ repositoryId, root, file }) => (
           <FileChangeRow
             key={`${repositoryId}:${file.oldPath ?? ""}:${file.path}`}
             file={file}
+            root={root}
             showCounts={trusted && hasTextualChange}
             onOpenFile={onOpenFile}
-            onReviewFile={onReviewFile && trusted ? () => onReviewFile(file.path) : undefined}
+            onReviewFile={onReviewFile && trusted && changeSet.source === "git" ? () => onReviewFile(file.path) : undefined}
             repository={showRepository ? repositoryId : undefined}
             showTurnAttribution={attributed}
           />
@@ -140,13 +143,14 @@ export function TurnChangeSetCard({
             <ChevronRight aria-hidden="true" className="size-3 transition-transform group-data-panel-open:rotate-90" />
           </CollapsibleTrigger>
           <CollapsibleContent className="border-t border-border/70">
-            {entries.slice(maxVisibleFiles).map(({ repositoryId, file }) => (
+            {entries.slice(maxVisibleFiles).map(({ repositoryId, root, file }) => (
               <FileChangeRow
                 key={`${repositoryId}:${file.oldPath ?? ""}:${file.path}`}
                 file={file}
+                root={root}
                 showCounts={trusted && hasTextualChange}
                 onOpenFile={onOpenFile}
-                onReviewFile={onReviewFile && trusted ? () => onReviewFile(file.path) : undefined}
+                onReviewFile={onReviewFile && trusted && changeSet.source === "git" ? () => onReviewFile(file.path) : undefined}
                 repository={showRepository ? repositoryId : undefined}
                 showTurnAttribution={attributed}
               />
@@ -169,6 +173,7 @@ function statusMarker(status: ChangeStatus): string {
 
 function FileChangeRow({
   file,
+  root,
   showCounts,
   onOpenFile,
   onReviewFile,
@@ -176,6 +181,7 @@ function FileChangeRow({
   showTurnAttribution,
 }: {
   file: FileChange;
+  root?: string;
   showCounts: boolean;
   onOpenFile?: (path: string) => void;
   onReviewFile?: () => void;
@@ -189,9 +195,10 @@ function FileChangeRow({
   showTurnAttribution: boolean;
 }) {
   const note = fileChangeNote(file);
-  const label = fileChangeLabel(file);
+  const label = file.status === "renamed" ? fileChangeLabel(file) : root && file.path.startsWith(root.replace(/\/$/, "") + "/") ? file.path.slice(root.replace(/\/$/, "").length + 1) : file.path;
   return (
-    <div data-file-change={file.path} className="flex items-center gap-3 px-3 py-1">
+    <HoverCard>
+    <HoverCardTrigger delay={800} render={<div data-file-change={file.path} className="flex items-center gap-3 px-3 py-1" />}>
       <span
         aria-hidden="true"
         className={cn(
@@ -230,6 +237,10 @@ function FileChangeRow({
         // Pre-existing work the turn did not make: never part of Undo.
         <span className={cn("shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground/70")}>Not from Sofia</span>
       ) : null}
-    </div>
+    </HoverCardTrigger>
+    {file.recordedPatch ? <HoverCardContent className="w-[min(48rem,90vw)] overflow-hidden rounded-xl border border-border bg-popover p-0 shadow-2xl" align="center" side="top" sideOffset={0}>
+      <RecordedDiffPreview patch={file.recordedPatch} path={label} additions={file.additions} deletions={file.deletions} />
+    </HoverCardContent> : null}
+    </HoverCard>
   );
 }

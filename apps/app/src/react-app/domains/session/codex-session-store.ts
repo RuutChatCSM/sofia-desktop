@@ -4,8 +4,10 @@ import { restoreRecordedTurnChanges } from "./changes/change-set-store";
 // to drive the existing transcript UI: each session accumulates a text body
 // from `message.delta`, and status from `item.*` / `turn.completed`.
 import { create } from "zustand";
+import { useSessionActivityStore } from "./status/session-activity-store";
+import type { UIMessage } from "ai";
 
-import type { BackgroundProcess, CodexEvent, CodexSession, CodexSessionClient, CodexSessionStatus } from "@/app/lib/codex-session";
+import type { BackgroundProcess, CodexEvent, CodexPlanItem, CodexSession, CodexSessionClient, CodexSessionStatus } from "@/app/lib/codex-session";
 import type { WorkspaceEngineSessionErrorPresentation } from "./sync/session-error";
 import {
   baselineFromChanges,
@@ -109,8 +111,12 @@ export type CodexTrackedItem = {
    * on the codex wire, so without these a turn had to be timed from a session
    * clock that reset on every new item — a long turn reported as "Worked for 2s".
    */
+  historical?: boolean;
+  turnStartedAt?: number;
+  turnCompletedAt?: number;
   createdAt?: number;
   completedAt?: number;
+  turnOutcome?: "completed" | "cancelled" | "failed";
   item: Record<string, unknown>;
   text: string;        // accumulated agentMessage/command output
   thinking: string;    // accumulated reasoning
@@ -121,17 +127,48 @@ export type CodexTrackedItem = {
   errorPresentation?: WorkspaceEngineSessionErrorPresentation;
 };
 
+/** A user turn as this client sent it: the text plus the attachment parts the
+ * transcript renders. */
+export type CodexUserMessageRecord = {
+  /** Last engine item visible when this submission was accepted locally. */
+  afterItemId?: string;
+  text: string;
+  /** The text the engine will echo, when it differs from what the user saw: the
+   * composer's `[attachment …]` placeholders are stripped before the turn is
+   * sent, so matching attachments on the visible text loses them the instant
+   * the echo lands. Matching uses this when it is set. */
+  matchText?: string;
+  parts: UIMessage["parts"];
+  /** Parts already contain the display text and attachment positions. */
+  orderedParts?: boolean;
+  userMessageOrdinal?: number;
+};
+
 export type CodexSessionEntry = {
+  /** Durable transcript was successfully read for this connection epoch. */
+  canonicalReady?: boolean;
+  canonicalEpoch?: number;
   warning?: string;
   session: CodexSession;
   messages: CodexTranscriptMessage[];
   items: CodexTrackedItem[];
+  /** Latest Codex `update_plan` checklist, mirrored into the shared todo cache. */
+  plan?: CodexPlanItem[];
   /** Unified-exec background processes the server tracks for this session. */
   backgroundProcesses: BackgroundProcess[];
   /** User messages submitted locally but not yet echoed back as a
    * `userMessage` stream item. Rendered optimistically so a sent/steered
    * message appears in the transcript immediately. */
-  pendingUserTexts: string[];
+  pendingUserMessages: CodexUserMessageRecord[];
+  /** Accepted local messages retained after a turn fails before an echo. */
+  settledUserMessages?: CodexUserMessageRecord[];
+  /** Every user message this client sent for the session. The engine echoes
+   * `userMessage` items as text only, so the parts captured here (an attached
+   * image or file) are merged back onto the echoed message — without this an
+   * attachment the user sent never appears in the transcript at all. */
+  sentUserMessages: CodexUserMessageRecord[];
+  activeTurnStartedAt?: number;
+  subagentSessions?: CodexSession[];
 };
 
 type CodexSessionState = {
@@ -142,7 +179,7 @@ type CodexSessionState = {
 };
 
 type CodexSessionActions = {
-  replaceSessions: (sessions: CodexSession[]) => void;
+  replaceSessions: (sessions: CodexSession[], snapshot?: { workspaceId: string; entries: Record<string, CodexSessionEntry> }) => void;
   upsertSession: (session: CodexSession) => void;
   applyDelta: (sessionId: string, text: string) => void;
   applyThinkingDelta: (sessionId: string, text: string) => void;
@@ -153,12 +190,14 @@ type CodexSessionActions = {
   appendItemOutput: (sessionId: string, itemId: string, text: string) => void;
   completeItem: (sessionId: string, itemId: string, item: Record<string, unknown>) => void;
   setThreadStatus: (sessionId: string, status: unknown) => void;
+  setPlan: (sessionId: string, plan: CodexPlanItem[]) => void;
   startTurn: (sessionId: string) => void;
-  completeTurn: (sessionId: string) => void;
+  completeTurn: (sessionId: string, outcome?: "completed" | "cancelled" | "failed") => void;
   failSession: (sessionId: string, message: string, turnId?: string) => void;
   setWarning: (sessionId: string, message: string | undefined) => void;
-  addPendingUserMessage: (sessionId: string, text: string) => void;
-  confirmPendingUserMessage: (sessionId: string, text?: string) => void;
+  addPendingUserMessage: (sessionId: string, text: string, parts?: UIMessage["parts"], matchText?: string, orderedParts?: boolean, userMessageOrdinal?: number) => void;
+  confirmPendingUserMessage: (sessionId: string, text?: string, userMessageOrdinal?: number) => void;
+  invalidateCanonical: (sessionId: string) => void;
   removeSession: (sessionId: string) => void;
   clear: () => void;
   setStreaming: (value: boolean) => void;
@@ -174,11 +213,23 @@ export const useCodexSessionStore = create<CodexSessionStore>((set, get) => ({
   streaming: false,
   error: null,
 
-  replaceSessions: (sessions) =>
+  replaceSessions: (sessions, snapshot) =>
     set((state) => {
-      const next: Record<string, CodexSessionEntry> = {};
+      const next: Record<string, CodexSessionEntry> = { ...state.sessions };
+      const fetchedIds = new Set(sessions.map(session => session.id));
+      if (snapshot) {
+        for (const [id, entry] of Object.entries(snapshot.entries)) {
+          if (entry.session.workspaceId === snapshot.workspaceId && !fetchedIds.has(id) && state.sessions[id] === entry) {
+            delete next[id];
+          }
+        }
+      }
       for (const session of sessions) {
-        next[session.id] = { ...(state.sessions[session.id] ?? { messages: [], items: [], backgroundProcesses: [], pendingUserTexts: [] }), session };
+        const existing = state.sessions[session.id];
+        if (snapshot && existing && existing !== snapshot.entries[session.id]) continue;
+        next[session.id] = { ...(existing ?? { messages: [], items: [], backgroundProcesses: [], pendingUserMessages: [], sentUserMessages: [] }), session,
+          ...(existing && existing.session.turnId !== session.turnId ? { canonicalReady: false, canonicalEpoch: (existing.canonicalEpoch ?? 0) + 1 } : {}) };
+
       }
       return { sessions: next, loaded: true };
     }),
@@ -190,8 +241,8 @@ export const useCodexSessionStore = create<CodexSessionStore>((set, get) => ({
         sessions: {
           ...state.sessions,
           [session.id]: existing
-            ? { ...existing, session }
-            : { session, messages: [], items: [], backgroundProcesses: [], pendingUserTexts: [] },
+            ? { ...existing, session, ...(existing.session.turnId !== session.turnId ? { canonicalReady: false, canonicalEpoch: (existing.canonicalEpoch ?? 0) + 1 } : {}) }
+            : { session, messages: [], items: [], backgroundProcesses: [], pendingUserMessages: [], sentUserMessages: [] },
         },
       };
     }),
@@ -202,9 +253,17 @@ export const useCodexSessionStore = create<CodexSessionStore>((set, get) => ({
       if (!entry) return state;
       const existing = entry.items.find((i) => i.id === item.id);
       const now = Date.now();
+      const turnStartedAt=item.turnStartedAt ?? existing?.turnStartedAt ?? (item.historical ? undefined : entry.activeTurnStartedAt);
+      const timedItem={...item,...(turnStartedAt===undefined?{}:{turnStartedAt})};
       const items = existing
-        ? entry.items.map((i) => (i.id === item.id ? { ...i, ...item, createdAt: i.createdAt ?? now, text: i.text || item.text, thinking: i.thinking || item.thinking, output: i.output || item.output } : i))
-        : [...entry.items, { ...item, createdAt: item.createdAt ?? now }];
+        ? entry.items.map((i) => (i.id === item.id ? {
+            ...i, ...timedItem, createdAt: item.createdAt ?? i.createdAt ?? now,
+            status: i.status !== "pending" && item.status === "pending" ? i.status : item.status,
+            text: i.text.length > item.text.length ? i.text : item.text,
+            thinking: i.thinking.length > item.thinking.length ? i.thinking : item.thinking,
+            output: i.output.length > item.output.length ? i.output : item.output,
+          } : i))
+        : [...entry.items, { ...timedItem, createdAt: item.createdAt ?? now }];
       return { sessions: { ...state.sessions, [sessionId]: { ...entry, items } } };
     }),
 
@@ -254,6 +313,13 @@ export const useCodexSessionStore = create<CodexSessionStore>((set, get) => ({
           [sessionId]: { ...entry, session: { ...entry.session, status: nextStatus } },
         },
       };
+    }),
+
+  setPlan: (sessionId, plan) =>
+    set((state) => {
+      const entry = state.sessions[sessionId];
+      if (!entry) return state;
+      return { sessions: { ...state.sessions, [sessionId]: { ...entry, plan } } };
     }),
 
   applyDelta: (sessionId, text) =>
@@ -310,20 +376,29 @@ export const useCodexSessionStore = create<CodexSessionStore>((set, get) => ({
         messages[messages.length - 1] = { ...last, status: "pending" };
       }
       return {
-        sessions: { ...state.sessions, [sessionId]: { ...entry, session: { ...entry.session, status: "running" }, messages } },
+        sessions: { ...state.sessions, [sessionId]: { ...entry, ...(entry.session.status !== "running" ? { canonicalReady: false, canonicalEpoch: (entry.canonicalEpoch ?? 0) + 1 } : {}), activeTurnStartedAt: entry.activeTurnStartedAt ?? Date.now(), session: { ...entry.session, status: "running" }, messages } },
       };
     }),
 
-  completeTurn: (sessionId) =>
+  completeTurn: (sessionId, outcome) =>
     set((state) => {
       const entry = state.sessions[sessionId];
       if (!entry) return state;
       const messages = entry.messages.map((message, index) =>
         index === entry.messages.length - 1 && message.role === "assistant" ? { ...message, status: "done" as const } : message,
       );
-      const items = entry.items.map((item) => item.status === "pending" ? { ...item, status: "done" as const } : item);
+      // The session update may have cleared turnId before this notification.
+      // Bind the outcome to the latest tracked turn, never infer it from idle.
+      const turnId = entry.session.turnId ?? entry.items.at(-1)?.turnId;
+      const completedAt = Date.now();
+      const items = entry.items.map((item) => ({
+        ...item,
+        ...(item.turnId === turnId && item.status === "pending" ? { status: "done" as const, completedAt } : {}),
+        ...(turnId && item.turnId === turnId ? { turnCompletedAt: item.turnCompletedAt ?? completedAt } : {}),
+        ...(outcome && turnId && item.turnId === turnId ? { turnOutcome: outcome } : {}),
+      }));
       return {
-        sessions: { ...state.sessions, [sessionId]: { ...entry, session: { ...entry.session, status: "idle" }, messages, items } },
+        sessions: { ...state.sessions, [sessionId]: { ...entry, activeTurnStartedAt: undefined, session: { ...entry.session, status: "idle" }, messages, items } },
       };
     }),
 
@@ -359,7 +434,7 @@ export const useCodexSessionStore = create<CodexSessionStore>((set, get) => ({
         error: message,
         sessions: {
           ...state.sessions,
-          [sessionId]: { ...entry, session: { ...entry.session, status: "error" }, messages, items, pendingUserTexts: [] },
+          [sessionId]: { ...entry, activeTurnStartedAt: undefined, session: { ...entry.session, status: "error" }, messages, items, settledUserMessages: [...(entry.settledUserMessages ?? []), ...entry.pendingUserMessages], pendingUserMessages: [] },
         },
       };
     }),
@@ -379,37 +454,59 @@ export const useCodexSessionStore = create<CodexSessionStore>((set, get) => ({
 
   // Optimistically render a sent/steered user message until the engine echoes
   // it back as a `userMessage` item (see confirmPendingUserMessage).
-  addPendingUserMessage: (sessionId, text) =>
+  addPendingUserMessage: (sessionId, text, parts, matchText, orderedParts, userMessageOrdinal) =>
     set((state) => {
       const entry = state.sessions[sessionId];
       const trimmed = text.trim();
-      if (!entry || !trimmed) return state;
+      if (!entry || (!trimmed && !parts?.length)) return state;
+      const match = matchText?.trim();
+      const record: CodexUserMessageRecord = {
+        ...(entry.items.length ? { afterItemId: entry.items[entry.items.length - 1].id } : {}),
+        text: trimmed,
+        ...(match ? { matchText: match } : {}),
+        parts: parts ?? [],
+        ...(orderedParts ? { orderedParts: true } : {}),
+        ...(userMessageOrdinal !== undefined ? { userMessageOrdinal } : {}),
+      };
       return {
         sessions: {
           ...state.sessions,
-          [sessionId]: { ...entry, pendingUserTexts: [...entry.pendingUserTexts, trimmed] },
+          [sessionId]: {
+            ...entry,
+            pendingUserMessages: [...entry.pendingUserMessages, record],
+            // Kept after the echo too, so the parts can be merged back onto the
+            // text-only `userMessage` item the engine sends. Bounded so a long
+            // session cannot grow without limit.
+            sentUserMessages: [...entry.sentUserMessages, record].slice(-100),
+          },
         },
       };
     }),
 
-  confirmPendingUserMessage: (sessionId, text) =>
+  confirmPendingUserMessage: (sessionId, text, userMessageOrdinal) =>
     set((state) => {
       const entry = state.sessions[sessionId];
-      if (!entry || entry.pendingUserTexts.length === 0) return state;
+      if (!entry) return state;
       const trimmed = typeof text === "string" ? text.trim() : "";
-      const index = trimmed ? entry.pendingUserTexts.indexOf(trimmed) : -1;
-      // Remove the matched pending message, or the oldest one as a fallback
-      // (user messages echo back in submission order).
-      const next = index >= 0
-        ? [...entry.pendingUserTexts.slice(0, index), ...entry.pendingUserTexts.slice(index + 1)]
-        : entry.pendingUserTexts.slice(1);
-      return {
-        sessions: {
-          ...state.sessions,
-          [sessionId]: { ...entry, pendingUserTexts: next },
-        },
-      };
+      const matches = (message: CodexUserMessageRecord) =>
+        (userMessageOrdinal === undefined || message.userMessageOrdinal === undefined || message.userMessageOrdinal === userMessageOrdinal) &&
+        (message.text === trimmed || (message.matchText ?? message.text).trim() === trimmed);
+      const pendingIndex = entry.pendingUserMessages.findIndex(matches);
+      const settledIndex = (entry.settledUserMessages ?? []).findIndex(matches);
+      // Replayed/unrelated user items cannot remove another submission.
+      if (pendingIndex < 0 && settledIndex < 0) return state;
+      return { sessions: { ...state.sessions, [sessionId]: {
+        ...entry,
+        pendingUserMessages: entry.pendingUserMessages.filter((_, index) => index !== pendingIndex),
+        settledUserMessages: (entry.settledUserMessages ?? []).filter((_, index) => index !== settledIndex),
+      } } };
+
     }),
+
+  invalidateCanonical: (sessionId) => set(state => {
+    const entry = state.sessions[sessionId];
+    return entry ? { sessions: { ...state.sessions, [sessionId]: { ...entry, canonicalReady: false, canonicalEpoch: (entry.canonicalEpoch ?? 0) + 1 } } } : state;
+  }),
 
   removeSession: (sessionId) =>
     set((state) => {
@@ -477,7 +574,14 @@ export async function runCodexStream(
               output: "",
               status: "pending",
             });
-            s.startTurn(event.sessionId);
+            if (event.itemType === "userMessage") {
+              const ordinal = useCodexSessionStore.getState().sessions[event.sessionId]?.items.filter((tracked) => tracked.type === "userMessage").findIndex((tracked) => tracked.id === itemId);
+              s.confirmPendingUserMessage(event.sessionId, userMessageText(item), ordinal);
+            }
+            // Replayed starts cannot reopen an item/turn already completed.
+            if (useCodexSessionStore.getState().sessions[event.sessionId]?.items.find((tracked) => tracked.id === itemId)?.status === "pending") {
+              s.startTurn(event.sessionId);
+            }
             break;
           }
           case "item.completed": {
@@ -493,10 +597,16 @@ export async function runCodexStream(
             // The engine echoed a submitted user message: drop the optimistic
             // pending copy so it isn't rendered twice.
             if (event.itemType === "userMessage") {
-              s.confirmPendingUserMessage(event.sessionId, userMessageText(item));
+              const ordinal = useCodexSessionStore.getState().sessions[event.sessionId]?.items.filter((tracked) => tracked.type === "userMessage").findIndex((tracked) => tracked.id === itemId);
+              s.confirmPendingUserMessage(event.sessionId, userMessageText(item), ordinal);
             }
             break;
           }
+          case "plan.updated":
+            // Update_plan checklist: keep it on the entry so the transcript
+            // adapter can mirror it into the shared todo cache.
+            s.setPlan(event.sessionId, event.plan);
+            break;
           case "backgroundProcesses":
             s.setBackgroundProcesses(event.sessionId, event.processes);
             break;
@@ -511,13 +621,15 @@ export async function runCodexStream(
             restoreRecordedTurnChanges(event.changes);
             break;
           case "turn.completed":
-            s.completeTurn(event.sessionId);
+            if (workspaceId) useSessionActivityStore.getState().completePreview(workspaceId, event.sessionId, event.outcome);
+            s.completeTurn(event.sessionId, event.outcome);
             break;
           case "warning": {
             s.setWarning(event.sessionId, event.message);
             break;
           }
           case "error":
+            if (workspaceId) useSessionActivityStore.getState().completePreview(workspaceId, event.sessionId, "failed");
             s.failSession(event.sessionId, event.message, event.turnId);
             break;
           default:
@@ -529,6 +641,9 @@ export async function runCodexStream(
     } catch (error) {
       if (signal.aborted) break;
       store.setStreaming(false);
+      for (const entry of Object.values(useCodexSessionStore.getState().sessions)) {
+        if (!workspaceId || entry.session.workspaceId === workspaceId) store.invalidateCanonical(entry.session.id);
+      }
       store.setError(error instanceof Error ? error.message : "Sofia stream disconnected");
       await new Promise<void>((resolve) => {
         const done = () => { clearTimeout(timer); signal.removeEventListener("abort", done); resolve(); };

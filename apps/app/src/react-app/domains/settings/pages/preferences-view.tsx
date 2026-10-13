@@ -1,4 +1,7 @@
 /** @jsxImportSource react */
+import { useState } from "react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -36,6 +39,11 @@ export type PreferencesViewProps = {
   autoCompactContext: boolean;
   autoCompactContextBusy: boolean;
   onToggleAutoCompactContext: () => void;
+  discoverCodexSkills: boolean;
+  codexSkillsBusy: boolean;
+  onToggleCodexSkills: () => void;
+  additionalSkillDirectories: string[];
+  onSaveSkillDirectories: (directories: string[]) => Promise<boolean>;
   analyticsEnabled: boolean;
   onToggleAnalytics: () => void;
   desktopNotifications: DesktopNotificationPreference;
@@ -60,6 +68,8 @@ function desktopNotificationPreferenceLabel(value: DesktopNotificationPreference
 }
 
 export function PreferencesView(props: PreferencesViewProps) {
+  const [skillDirectory, setSkillDirectory] = useState("");
+  const [skillDirectoryError, setSkillDirectoryError] = useState<string | null>(null);
   const desktopNotificationItems = DESKTOP_NOTIFICATION_PREFERENCE_VALUES.map((value) => ({
     value,
     label: desktopNotificationPreferenceLabel(value),
@@ -104,6 +114,7 @@ export function PreferencesView(props: PreferencesViewProps) {
             </LayoutSectionItemHeaderActions>
           </LayoutSectionItemHeader>
         </LayoutSectionItem>
+
       </LayoutSection>
 
       <LayoutSection>
@@ -148,6 +159,41 @@ export function PreferencesView(props: PreferencesViewProps) {
       </LayoutSection>
 
       <DesktopIntegrationSection />
+      <LayoutSection>
+        <LayoutSectionHeader>
+          <LayoutSectionTitle>Skills</LayoutSectionTitle>
+          <LayoutSectionDescription>Choose which local skills Sofia can discover in this workspace.</LayoutSectionDescription>
+        </LayoutSectionHeader>
+        <LayoutSectionItem>
+          <LayoutSectionItemHeader>
+            <LayoutSectionItemTitle>Use Codex skills</LayoutSectionItemTitle>
+            <LayoutSectionItemDescription>Include skills from your home folder’s .codex/skills directory. Files stay in their original location. Changes apply to subsequent turns.</LayoutSectionItemDescription>
+            <LayoutSectionItemHeaderActions>
+              <Switch aria-label="Use Codex skills" checked={props.discoverCodexSkills} disabled={props.busy || props.codexSkillsBusy} onCheckedChange={props.onToggleCodexSkills} />
+            </LayoutSectionItemHeaderActions>
+          </LayoutSectionItemHeader>
+        </LayoutSectionItem>
+        <LayoutSectionItem>
+          <LayoutSectionItemHeader>
+            <LayoutSectionItemTitle>Additional skill directories</LayoutSectionItemTitle>
+            <LayoutSectionItemDescription>Enter a directory containing skills with SKILL.md files. Use an absolute path or ~/ for your home folder.</LayoutSectionItemDescription>
+          </LayoutSectionItemHeader>
+          <div className="mt-3 space-y-2">
+            {props.additionalSkillDirectories.map(directory => <div key={directory} className="flex items-center gap-2"><span className="min-w-0 flex-1 break-all text-sm">{directory}</span><Button variant="ghost" size="sm" disabled={props.busy || props.codexSkillsBusy} aria-label={`Remove ${directory}`} onClick={() => void props.onSaveSkillDirectories(props.additionalSkillDirectories.filter(path => path !== directory))}>Remove</Button></div>)}
+            <form className="flex gap-2" onSubmit={event => {
+              event.preventDefault();
+              const path = skillDirectory.trim();
+              if (!path || !/^(?:\/|~\/|[A-Za-z]:[\\/])/.test(path)) { setSkillDirectoryError("Enter an absolute directory path or a path starting with ~/."); return; }
+              setSkillDirectoryError(null);
+              void props.onSaveSkillDirectories([...new Set([...props.additionalSkillDirectories, path])]).then(saved => { if (saved) setSkillDirectory(""); });
+            }}>
+              <Input aria-label="Skill directory" placeholder="~/my-skills" value={skillDirectory} disabled={props.busy || props.codexSkillsBusy} onChange={event => setSkillDirectory(event.target.value)} />
+              <Button type="submit" disabled={props.busy || props.codexSkillsBusy || !skillDirectory.trim()}>Add</Button>
+            </form>
+            {skillDirectoryError && <p role="alert" className="text-sm text-destructive">{skillDirectoryError}</p>}
+          </div>
+        </LayoutSectionItem>
+      </LayoutSection>
 
       {props.continuousEngineAvailable ? (
         <LayoutSection>
@@ -203,11 +249,11 @@ export function PreferencesView(props: PreferencesViewProps) {
 
         <LayoutSectionItem>
           <LayoutSectionItemHeader>
-            <LayoutSectionItemTitle>{t("memory.preferences_toggle")}</LayoutSectionItemTitle>
-            <LayoutSectionItemDescription>{t("memory.preferences_toggle_desc")}</LayoutSectionItemDescription>
+            <LayoutSectionItemTitle>Cloud Memory Bank preview</LayoutSectionItemTitle>
+            <LayoutSectionItemDescription>Show cloud memory management. Requires Sofia Cloud sign-in; this does not enable local memory.</LayoutSectionItemDescription>
             <LayoutSectionItemHeaderActions>
               <Switch
-                aria-label={t("memory.preferences_toggle")}
+                aria-label="Cloud Memory Bank preview"
                 checked={props.memoryEnabled}
                 disabled={props.busy}
                 onCheckedChange={props.onToggleMemory}

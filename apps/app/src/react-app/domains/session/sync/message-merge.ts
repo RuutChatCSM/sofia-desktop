@@ -2,26 +2,64 @@ import type { UIMessage } from "ai";
 
 import { partText } from "@/lib/message-part-text";
 
-function mergeMessageParts(snapshotMessage: UIMessage, cachedMessage: UIMessage) {
-  const parts = snapshotMessage.parts.map((part, index) => {
-    const cachedPart = cachedMessage.parts[index];
-    if (!cachedPart) return part;
+type MessagePart = UIMessage["parts"][number];
 
-    if (
-      (part.type === "text" || part.type === "reasoning") &&
-      cachedPart.type === part.type &&
-      partText(cachedPart).length > partText(part).length
-    ) {
-      return { ...part, text: partText(cachedPart) };
-    }
-
-    return part;
-  });
-
-  if (cachedMessage.parts.length > snapshotMessage.parts.length) {
-    parts.push(...cachedMessage.parts.slice(snapshotMessage.parts.length));
+function partIdentity(part: MessagePart): string | null {
+  if ("toolCallId" in part && typeof part.toolCallId === "string") return `tool:${part.toolCallId}`;
+  const metadata = "providerMetadata" in part ? part.providerMetadata : undefined;
+  const engine = metadata?.engine;
+  if (engine && typeof engine === "object" && "partId" in engine && typeof engine.partId === "string") {
+    return `part:${engine.partId}`;
   }
+  return null;
+}
 
+function mergePart(snapshot: MessagePart, cached: MessagePart): MessagePart {
+  if (snapshot.type !== cached.type) return snapshot;
+  // A lagging read cannot restart a tool that the stream already completed.
+  if ("toolCallId" in snapshot && "state" in snapshot && "state" in cached) {
+    const terminal = (state: unknown) => state === "output-available" || state === "output-error" || state === "output-denied";
+    if (!terminal(snapshot.state) && terminal(cached.state)) return cached;
+  }
+  if ((snapshot.type === "text" || snapshot.type === "reasoning") &&
+      (cached.type === "text" || cached.type === "reasoning") && partText(cached).length > partText(snapshot).length) {
+    return { ...snapshot, text: partText(cached) };
+  }
+  return snapshot;
+}
+
+function mergeMessageParts(snapshotMessage: UIMessage, cachedMessage: UIMessage) {
+  const cachedById = new Map<string, MessagePart>();
+  for (const part of cachedMessage.parts) {
+    const id = partIdentity(part);
+    if (id) cachedById.set(id, part);
+  }
+  const consumed = new Set<MessagePart>();
+  const parts = snapshotMessage.parts.map((part, index) => {
+    const id = partIdentity(part);
+    const positional = cachedMessage.parts[index];
+    // Positional matching is only valid for legacy parts without identities.
+    const cached = id ? cachedById.get(id) : positional && !partIdentity(positional) ? positional : undefined;
+    if (!cached) return part;
+    consumed.add(cached);
+    return mergePart(part, cached);
+  });
+  for (let index = 0; index < cachedMessage.parts.length; index += 1) {
+    const part = cachedMessage.parts[index];
+    if (consumed.has(part)) continue;
+    const id = partIdentity(part);
+    if (!id && index < snapshotMessage.parts.length) continue;
+    // Insert unseen live blocks before their next known sibling rather than
+    // appending them after a final answer that arrived in the snapshot.
+    let before = -1;
+    for (let next = index + 1; next < cachedMessage.parts.length; next += 1) {
+      const nextId = partIdentity(cachedMessage.parts[next]);
+      if (!nextId) continue;
+      before = parts.findIndex(candidate => partIdentity(candidate) === nextId);
+      if (before >= 0) break;
+    }
+    parts.splice(before < 0 ? parts.length : before, 0, part);
+  }
   return parts;
 }
 

@@ -37,6 +37,7 @@ import type {
 } from "../../../app/types";
 import { isDesktopRuntime, normalizeDirectoryPath, safeStringify } from "../../../app/utils";
 import { conflictsWithSofiaConnect } from "./mcp-connection-boundary";
+import type { InstallScope } from "./install-flow";
 
 import type { SofiaServerStore } from "./sofia-server-store";
 import { attemptSilentMcpReauth } from "./mcp-silent-reauth";
@@ -336,6 +337,7 @@ export function createConnectionsStore(options: {
       config: entry.config as McpServerEntry["config"],
       source: entry.source,
       managedOAuth: entry.managedOAuth,
+      scope: entry.scope,
     }));
     const engineSync = response.engineSync ?? null;
 
@@ -531,7 +533,7 @@ export function createConnectionsStore(options: {
     }));
   }
 
-  async function connectMcp(entry: McpDirectoryInfo): Promise<McpConnectResult> {
+  async function connectMcp(entry: McpDirectoryInfo, scope: InstallScope = "project"): Promise<McpConnectResult> {
     const startedAt = perfNow();
     const sofiaSnapshot = getSofiaSnapshot();
     const isRemoteWorkspace =
@@ -761,14 +763,34 @@ export function createConnectionsStore(options: {
         }
       }
 
-      if (canUseSofiaServer && sofiaClient && sofiaWorkspaceId) {
-        await sofiaClient.addMcp(sofiaWorkspaceId, {
-          name: slug,
-          config: mcpEntryConfig,
-        });
-      } else {
+      if (!canUseSofiaServer || !sofiaClient || !sofiaWorkspaceId) {
         throw new Error(t("mcp.connect_server_first"));
       }
+
+      // Prove the handshake before writing config. A configured entry is not
+      // proof that a server exists: installers and one-shot CLIs start, print,
+      // and exit, then report "connected" with an empty tool list. OAuth-gated
+      // remotes are exempt because they cannot handshake before sign-in.
+      let probedTools = 0;
+      const shouldProbe = entryType === "local" || !entry.oauth;
+      if (shouldProbe) {
+        const probe = await sofiaClient.probeMcp(
+          sofiaWorkspaceId,
+          entryType === "remote"
+            ? { url: resolvedUrl ?? "", ...(resolvedHeaders ? { headers: resolvedHeaders } : {}) }
+            : { command: (mcpEntryConfig["command"] as string[] | undefined) ?? entry.command ?? [] },
+        );
+        if (!probe.ok) {
+          throw new Error(t("mcp.probe_failed", { stage: probe.stage, error: probe.error }));
+        }
+        probedTools = probe.tools.length;
+      }
+
+      await sofiaClient.addMcp(sofiaWorkspaceId, {
+        name: slug,
+        config: mcpEntryConfig,
+        scope,
+      });
 
       if (canUseSofiaServer && sofiaClient && sofiaWorkspaceId) {
         // The Sofia server is the source of truth for workspace-scoped MCP
@@ -837,7 +859,10 @@ export function createConnectionsStore(options: {
           mcpAuthModalOpen: true,
         }));
       } else {
-        setStateField("mcpStatus", t("mcp.connected"));
+        setStateField(
+          "mcpStatus",
+          probedTools > 0 ? t("mcp.connected_with_tools", { count: probedTools }) : t("mcp.connected"),
+        );
       }
 
       await refreshMcpServers();

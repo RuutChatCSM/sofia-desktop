@@ -380,6 +380,7 @@ export function createAgentLeaseRegistry() {
     const existingId = leaseIdByTab.get(tabId);
     const existing = existingId ? leases.get(existingId) : null;
     if (existing) {
+      if (existing.status === "paused") return touch(existing);
       existing.status = "attached";
       delete existing.error;
       if (cdpSessionId) existing.cdpSessionId = cdpSessionId;
@@ -458,6 +459,86 @@ export function createAgentLeaseRegistry() {
     },
     list: () => [...leases.values()],
   };
+}
+
+/**
+ * Whether `browser.open_url` should drive the active tab instead of creating a
+ * new one. A tab the agent already owns (leased) or the panel's untouched
+ * placeholder (`about:blank`) is safe to take over; a tab the user is reading is
+ * left alone. Repeated opens used to leak one tab each — up to ~20 in a session
+ * — so reuse is the default, with an explicit escape hatch for a genuine new tab.
+ * A tab belonging to another scope (project) is never reused: driving project A's
+ * tab from project B is exactly the cross-project bleed we are fixing.
+ * @param {{ newTab?: boolean, active?: boolean, destroyed?: boolean, leased?: boolean, url?: string, scopeMatches?: boolean }} state
+ * @returns {boolean}
+ */
+export function shouldReuseBrowserTab(state) {
+  if (state?.newTab === true) return false;
+  if (!state?.active || state.destroyed) return false;
+  if (state.scopeMatches === false) return false;
+  return state.leased === true || state.url === "about:blank";
+}
+
+/**
+ * The scope an agent-initiated browser call belongs to.
+ *
+ * The invoking session wins. Only a caller with no engine context — a bare CDP
+ * target, say — falls back to the scope currently on screen, which is the old
+ * (and wrong) default for a background agent.
+ * @param {unknown} requestedScope The scope the caller asked for.
+ * @param {string} activeScopeId The scope the desktop is presenting.
+ * @returns {string}
+ */
+export function resolveAgentBrowserScope(requestedScope, activeScopeId) {
+  const requested = typeof requestedScope === "string" ? requestedScope.trim() : "";
+  return requested || (typeof activeScopeId === "string" ? activeScopeId : "");
+}
+
+/**
+ * The tab an agent navigation should consider reusing for `scopeId`, or null.
+ *
+ * When `scopeId` is the presented scope the on-screen tab is the candidate.
+ * Otherwise the newest live tab parked in that scope is, and a scope with no
+ * tab returns null so the caller opens one *in that scope* rather than reaching
+ * for whatever tab happens to be on screen.
+ * @param {{ tabs: Array<{ tabId: string, scopeId?: string }>, activeTabId: string | null, activeScopeId: string, scopeId?: string }} state
+ */
+export function pickScopedBrowserTab({ tabs, activeTabId, activeScopeId, scopeId }) {
+  const scope = typeof scopeId === "string" ? scopeId : "";
+  if (!scope || scope === activeScopeId) {
+    return tabs.find((tab) => tab.tabId === activeTabId) ?? null;
+  }
+  for (let index = tabs.length - 1; index >= 0; index -= 1) {
+    if (tabs[index]?.scopeId === scope) return tabs[index];
+  }
+  return null;
+}
+
+/**
+ * Whether a tab owned by `scopeId` may take over the visible browser. Only the
+ * presented scope may; a background session's tab loads off screen.
+ * @param {unknown} scopeId
+ * @param {string} activeScopeId
+ */
+export function browserScopeIsPresented(scopeId, activeScopeId) {
+  return typeof scopeId === "string" && scopeId === activeScopeId;
+}
+
+/**
+ * Bounded self-heal for a built-in browser tab whose renderer crashed: reload it
+ * a couple of times, then leave it in the error state for the user to close.
+ * A crashed renderer keeps the tab's URL but loses its document, so without a
+ * reload the page stays permanently blank (`document.body === null`).
+ */
+export const MAX_RENDERER_RECOVERIES = 2;
+
+/**
+ * @param {{ recoveries: number, destroyed: boolean }} state
+ * @returns {boolean}
+ */
+export function shouldReloadCrashedRenderer(state) {
+  if (state?.destroyed) return false;
+  return (state?.recoveries ?? 0) < MAX_RENDERER_RECOVERIES;
 }
 
 /**

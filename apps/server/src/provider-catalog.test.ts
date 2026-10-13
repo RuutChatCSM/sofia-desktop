@@ -147,7 +147,13 @@ describe("catalog integrity", () => {
   it("gives every provider a non-empty name and a wire api", () => {
     for (const provider of CONNECTABLE_PROVIDERS) {
       expect(provider.name.trim().length).toBeGreaterThan(0);
-      expect(["responses", "chatcompletions"]).toContain(provider.wireApi);
+      expect(["responses", "chatcompletions", "anthropic"]).toContain(provider.wireApi);
     }
+  });
+
+  it("uses the native Anthropic wire for the anthropic provider", () => {
+    expect(catalogProvider("anthropic")?.wireApi).toBe("anthropic");
+    expect(catalogProvider("openai")?.wireApi).toBe("responses");
+    expect(catalogProvider("deepseek")?.wireApi).toBe("chatcompletions");
   });
 });

@@ -37,3 +37,9 @@ export interface BrowserCursor {
 export declare function createBrowserCursor(options: {
   send(method: string, params?: Record<string, unknown>): unknown;
 }): BrowserCursor;
+
+export declare function cursorPath(start: {x:number;y:number}, end: {x:number;y:number}, bounds: {width:number;height:number}): {
+  segments: Array<Array<{x:number;y:number}>>;
+  response: number;
+  damping: number;
+};

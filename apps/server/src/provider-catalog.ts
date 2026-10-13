@@ -37,7 +37,7 @@ export type CatalogProvider = {
   /** Provider's OpenAI-compatible API base. `null` when the engine resolves it. */
   baseUrl: string | null;
   /** Wire protocol the provider speaks. */
-  wireApi: "responses" | "chatcompletions";
+  wireApi: "responses" | "chatcompletions" | "anthropic";
   /** Auth methods this provider offers, in display order. */
   auth: CatalogProviderAuthMethod[];
   /** True when the provider is locally hosted and needs no credential. */
@@ -59,7 +59,7 @@ function apiKeyProvider(input: {
   name: string;
   envKey: string;
   baseUrl: string;
-  wireApi?: "responses" | "chatcompletions";
+  wireApi?: "responses" | "chatcompletions" | "anthropic";
   envKeyInstructions?: string;
 }): CatalogProvider {
   return {
@@ -94,6 +94,7 @@ export const CONNECTABLE_PROVIDERS: readonly CatalogProvider[] = [
     name: "Anthropic",
     envKey: "ANTHROPIC_API_KEY",
     baseUrl: "https://api.anthropic.com/v1",
+    wireApi: "anthropic",
     envKeyInstructions: "Create an API key at console.anthropic.com.",
   }),
   apiKeyProvider({

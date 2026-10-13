@@ -197,7 +197,7 @@ async function humanClick(s, x, y) {
 const ELEMENT_ROLE = `function(e){const explicit=e.getAttribute('role');if(explicit)return explicit;const tag=e.tagName.toLowerCase();if(tag==='input'){if(e.type==='checkbox'||e.type==='radio')return e.type;if(e.type==='button'||e.type==='submit'||e.type==='reset')return 'button';if(e.type==='number')return 'spinbutton';if(e.type==='search')return 'searchbox';return 'textbox';}if(tag==='textarea')return 'textbox';if(tag==='select')return 'combobox';if(tag==='a')return 'link';return tag;}`;
 const SAFE_LABEL = `function(e){const referenced=(e.getAttribute('aria-labelledby')||'').split(/\\s+/).filter(Boolean).map(id=>document.getElementById(id)?.textContent||'').join(' ');const associated=Array.from(e.labels||[]).map(label=>label.textContent||'').join(' ');return e.getAttribute('aria-label')||referenced||associated||e.getAttribute('title')||e.innerText||e.getAttribute('placeholder')||'';}`;
 const ELEMENTS_EXPR = `Array.from(document.querySelectorAll('a,button,input:not([type="hidden"]),select,textarea,label,[role],[aria-label],[data-testid]')).filter(e=>e.getClientRects().length>0&&getComputedStyle(e).visibility!=='hidden'&&(e.matches('input,textarea,select')||(${SAFE_LABEL})(e).trim()))`;
-const RESOLVE = `function(t){t=t||{};const safeLabel=${SAFE_LABEL};const role=${ELEMENT_ROLE};const coll=()=>${ELEMENTS_EXPR};if(t.selector){const e=document.querySelector(t.selector);return e&&e.getClientRects().length>0?e:null;}if(t.index!=null)return coll()[t.index]||null;let matches=coll();if(t.role)matches=matches.filter(e=>role(e)===t.role.toLowerCase());if(t.text)matches=matches.filter(e=>safeLabel(e).trim().toLowerCase().includes(t.text.trim().toLowerCase()));if(t.placeholder)matches=matches.filter(e=>e.getAttribute('placeholder')===t.placeholder);if(t.testid)matches=matches.filter(e=>e.getAttribute('data-testid')===t.testid);if(t.label){matches=matches.filter(e=>safeLabel(e).trim()===t.label);const control=matches.find(e=>e.matches('input,textarea,select'));if(control)return control;const label=matches.find(e=>e.tagName==='LABEL'&&e.control);if(label)return label.control;}return matches[0]||null;}`;
+const RESOLVE = `function(t){t=t||{};const safeLabel=${SAFE_LABEL};const role=${ELEMENT_ROLE};const coll=()=>${ELEMENTS_EXPR};if(t.selector){const e=document.querySelector(t.selector);return e&&e.getClientRects().length>0?e:null;}if(t.index!=null){const observed=window.__sofiaBrowserObservation;if(!observed||observed.document!==document||observed.url!==location.href)throw new Error('Stale browser observation; take a fresh snapshot before using an index');const node=observed.elements[t.index];if(!node||!node.isConnected)throw new Error('Observed element was replaced; take a fresh snapshot');return node;}let matches=coll();if(t.role)matches=matches.filter(e=>role(e)===t.role.toLowerCase());if(t.text)matches=matches.filter(e=>safeLabel(e).trim().toLowerCase().includes(t.text.trim().toLowerCase()));if(t.placeholder)matches=matches.filter(e=>e.getAttribute('placeholder')===t.placeholder);if(t.testid)matches=matches.filter(e=>e.getAttribute('data-testid')===t.testid);if(t.label){matches=matches.filter(e=>safeLabel(e).trim()===t.label);const control=matches.find(e=>e.matches('input,textarea,select'));if(control)return control;const label=matches.find(e=>e.tagName==='LABEL'&&e.control);if(label)return label.control;}return matches[0]||null;}`;
 const runAct = (target, action) => `(() => { const e=(${RESOLVE})(${JSON.stringify(target)}); if(!e) return {ok:false,error:'not found'}; try{e.scrollIntoView({block:'center'});}catch{} e.focus(); ${action} })()`;
 
 // Throws when the bridge is unreachable: an empty list would read as "no tabs
@@ -217,7 +217,26 @@ async function waitForLoad(send, timeoutMs = 12000) {
     await new Promise((res) => setTimeout(res, 150));
   }
 }
-function isSofiaApp(url) { return typeof url === "string" && url.includes("localhost:5173"); }
+// A target is Sofia's own surface — never a page the agent should drive — when
+// it is the app UI, the internal Peek shield, or another Sofia-rendered page.
+// A browser *tab* parked on Sofia's CDP marker page is a real tab mid-attach, so
+// generic `data:` URLs must stay listed; only the shield's marker is internal.
+function isSofiaApp(url) {
+  if (typeof url !== "string" || !url) return false;
+  if (url.includes("sofia-internal-peek-shield")) return true;
+  if (/^(?:sofia|sofia-dev|app|blob):/i.test(url)) return true;
+  // Packaged builds render the app UI from inside the Electron asar archive.
+  if (/^file:/i.test(url) && /\.asar\//i.test(url)) return true;
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+    const loopback = host === "localhost" || host === "127.0.0.1" || host === "::1";
+    if (loopback && parsed.port === "5173") return true;
+  } catch {
+    // Not a URL we can parse; treat it as a page rather than hiding it.
+  }
+  return false;
+}
 
 // --- Stealth: hide CDP/Electron automation fingerprints ------------------------
 // Sofia's browser is a real Electron <webview>, but the User-Agent leaks
@@ -359,7 +378,7 @@ function makeTab(tabEntry) {
       validateObservationOptions(options);
       const { includeText = true, maxText = 8000 } = options;
       const send = await ensure();
-      const expression = `(() => {const els=${ELEMENTS_EXPR};const safeLabel=${SAFE_LABEL};const elements=els.map((el,index)=>{const tag=el.tagName.toLowerCase();const role=(${ELEMENT_ROLE})(el);const label=safeLabel(el);const state={};if(el.matches('input,textarea,select')){if(el.type!=='password')state.value=el.value;state.disabled=!!el.disabled;state.readOnly=!!el.readOnly;state.valid=el.validity.valid;state.validationMessage=el.validationMessage;if(el.type==='checkbox'||el.type==='radio')state.checked=el.checked;}return {index,role,tag,label:label.trim().slice(0,120),...state};});const fullText=${includeText}?(document.body?.innerText||''):'';return JSON.stringify({title:document.title,url:location.href,elements,text:fullText.slice(0,${maxText}),textTruncated:fullText.length>${maxText},frames:${FRAME_METADATA}});})()`;
+      const expression = `(() => {const els=${ELEMENTS_EXPR};window.__sofiaBrowserObservation={document,url:location.href,elements:els};const safeLabel=${SAFE_LABEL};const elements=els.map((el,index)=>{const tag=el.tagName.toLowerCase();const role=(${ELEMENT_ROLE})(el);const label=safeLabel(el);const state={};if(el.matches('input,textarea,select')){if(el.type!=='password')state.value=el.value;state.disabled=!!el.disabled;state.readOnly=!!el.readOnly;state.valid=el.validity.valid;state.validationMessage=el.validationMessage;if(el.type==='checkbox'||el.type==='radio')state.checked=el.checked;}return {index,role,tag,label:label.trim().slice(0,120),...state};});const fullText=${includeText}?(document.body?.innerText||''):'';return JSON.stringify({title:document.title,url:location.href,elements,text:fullText.slice(0,${maxText}),textTruncated:fullText.length>${maxText},frames:${FRAME_METADATA}});})()`;
       const result = await send("Runtime.evaluate", { expression, returnByValue: true });
       return observe({ text: result.result.value });
     },
@@ -459,10 +478,7 @@ function makeBrowser(browserId) {
   const browser = {
     id: browserId,
     tabs: {
-      get: getTab,
-      // `get` is the documented name; `attach` is the alias it documents. Both
-      // were missing `get`, so an agent following the documentation got
-      // "not a function" on a tab handle.
+      // `get` is the documented name; `attach` is the alias it documents.
       get: getTab,
       attach: getTab,
       list: async () => { const list = await jsonList(); return observe(list.filter((t) => t.type === "page" && !isSofiaApp(t.url)).map((t) => ({ id: t.id, url: t.url, title: t.title }))); },

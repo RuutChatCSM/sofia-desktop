@@ -206,6 +206,43 @@ describe("sofia browser Node REPL", () => {
     expect(bridge.requests).toContain("/json/list");
   });
 
+  test("lists only real tabs, never Sofia's own surfaces", async () => {
+    // The broker's target list mixes the app's own pages with the agent's. Only
+    // real pages may reach the agent: the app UI (dev and 127.0.0.1), the
+    // internal Peek shield, and blob: documents are Sofia's, not the agent's.
+    // A tab parked on Sofia's CDP marker page is mid-attach and must stay listed
+    // or re-attaching would fail and the agent would open yet another tab.
+    const surfaces = createServer((_req, res) => {
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify([
+        { id: "PAGE-REAL", type: "page", title: "real", url: "https://example.test/" },
+        { id: "PAGE-MARKER", type: "page", title: "marker", url: `data:text/html,${encodeURIComponent("sofia-browser-tab:tab_1")}` },
+        { id: "PAGE-UI", type: "page", title: "Sofia", url: "http://localhost:5173/#/workspace/ws_1/session/codex-1" },
+        { id: "PAGE-UI-IP", type: "page", title: "Sofia", url: "http://127.0.0.1:5173/#/workspace/ws_1" },
+        { id: "PAGE-SHIELD", type: "page", title: "", url: "data:text/html;charset=utf-8,%3C!doctype%20html%3E#sofia-internal-peek-shield" },
+        { id: "PAGE-BLOB", type: "page", title: "blob", url: "blob:http://localhost:5173/abc" },
+      ]));
+    });
+    servers.push(surfaces);
+    await new Promise<void>((resolve) => surfaces.listen(0, "127.0.0.1", resolve));
+    const address = surfaces.address();
+    if (address === null || typeof address === "string") throw new Error("surface bridge did not bind a port");
+
+    const repl = startRepl({ sofiaHome: await isolatedHome({ url: `http://127.0.0.1:${address.port}` }) });
+    const listed = await repl.request(1, "tools/call", {
+      name: "js",
+      arguments: { code: "const b = await setupBrowserRuntime(); return await b.browsers.get('iab').tabs.list();" },
+    });
+    const ids = (JSON.parse(listed.result.content[0].text) as Array<{ id: string }>).map((tab) => tab.id);
+    expect(ids).toEqual(["PAGE-REAL", "PAGE-MARKER"]);
+
+    const attached = await repl.request(2, "tools/call", {
+      name: "js",
+      arguments: { code: "const b = await setupBrowserRuntime(); const t = await b.browsers.get('iab').tabs.get('PAGE-MARKER'); return t.id;" },
+    });
+    expect(attached.result.content).toEqual([{ type: "text", text: "PAGE-MARKER" }]);
+  });
+
   test("semantic browser actions drive the virtual cursor", async () => {
     // The cursor is presentation state: a hover moves it, a read does not, and a
     // navigation fades it. None of this may depend on which transport performed

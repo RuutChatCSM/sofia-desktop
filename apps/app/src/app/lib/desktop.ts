@@ -101,6 +101,7 @@ declare global {
         openExternal?: (url: string) => Promise<{ ok: boolean; error?: string } | void>;
         relaunch?: () => Promise<void>;
       };
+      images?: { decodeHeic: (bytes: Uint8Array) => Promise<Uint8Array> };
       system?: {
         getArchitectureInfo?: () => Promise<{
           appArch: string;
@@ -177,7 +178,7 @@ declare global {
       browser?: {
         show?: (bounds: { x: number; y: number; width: number; height: number }) => Promise<void>;
         hide?: () => Promise<void>;
-        openUrl?: (url: string, provider?: "auto" | "builtin" | "external") => Promise<{
+        openUrl?: (url: string, provider?: "auto" | "builtin" | "external", options?: { newTab?: boolean; scopeId?: string }) => Promise<{
           provider: "builtin";
           browser_url: string;
           target_id: string;
@@ -185,6 +186,9 @@ declare global {
           url: string;
         }>;
         navigate?: (url: string) => Promise<void>;
+        setScope?: (scopeId: string) => Promise<string>;
+        /** The session currently running an agent turn, or null when unknown. */
+        setAgentScope?: (scopeId: string | null) => Promise<string>;
         back?: () => Promise<void>;
         forward?: () => Promise<void>;
         reload?: () => Promise<void>;
@@ -223,8 +227,12 @@ declare global {
         showTabContextMenu?: (tabId: string, point?: { x: number; y: number }) => Promise<void>;
         destroy?: () => Promise<void>;
         onStateChange?: (callback: (state: BrowserStatePayload) => void) => () => void;
-        /** A real page is on screen in a tab; presentation policy decides what the user sees. */
-        onBrowserTabActivated?: (callback: (event: { tabId?: string }) => void) => () => void;
+        /**
+         * A real page is on screen in a tab; presentation policy decides what the
+         * user sees. `scopeId` is the session that owns the tab, so a background
+         * session's activity never surfaces over the one on screen.
+         */
+        onBrowserTabActivated?: (callback: (event: { tabId?: string; scopeId?: string }) => void) => () => void;
         /** Every tab is gone (closed or destroyed). */
         onBrowserTabsClosed?: (callback: () => void) => () => void;
         /** A human clicked the floating preview; agent CDP input never fires this. */

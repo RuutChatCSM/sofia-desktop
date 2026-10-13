@@ -14,6 +14,7 @@ import {
   slugifyLibraryItemName,
   type ComposerSettingsSection,
 } from "@/react-app/domains/settings/library";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ModelSelect } from "@/components/model-select";
 import { LexicalPromptEditor, syncAttachmentChipStatus, type LexicalPromptEditorHandle } from "./editor";
 import { listRunningAppsForMention } from "./app-mentions";
@@ -26,9 +27,10 @@ import {
   type ComposerSlashCommandOption,
 } from "./slash-command";
 import { encodeConnectSkillToken } from "./connect-skill-token";
-import { type PastedTextChip } from "./pasted-text";
+import { largePasteAttachment, type PastedTextChip } from "./pasted-text";
 import { classifyClipboard } from "./clipboard-payload";
 import { resolveSubmitAction } from "./submit-action";
+import { useFollowUpPreference } from "./follow-up-preference";
 import { loadSessionConnectCapabilities } from "@/react-app/domains/connections/cloud-inventory-cache";
 import { useOrgMcpConnections } from "@/react-app/domains/connections/use-org-mcp-connections";
 import {
@@ -56,6 +58,7 @@ type ComposerProps = {
   busy: boolean;
   steering: boolean;
   submissionPreparing: boolean;
+  submissionLabel?: string;
   queuedCount: number;
   disabled: boolean;
   modelUnavailable?: boolean;
@@ -250,7 +253,6 @@ export function ReactSessionComposer(props: ComposerProps) {
   const [mcpLoading, setMcpLoading] = useState(false);
   const [agentMenuIndex, setAgentMenuIndex] = useState(0);
   const agentItemRefs = useRef<Array<HTMLButtonElement | null>>([]);
-  const [dropzoneActive, setDropzoneActive] = useState(false);
   const toolMenuRef = useRef<HTMLDivElement | null>(null);
   const toolMenuPanelRef = useRef<HTMLDivElement | null>(null);
   useLayoutEffect(() => {
@@ -271,11 +273,13 @@ export function ReactSessionComposer(props: ComposerProps) {
   }, [props.draft]);
 
   // Follow-up message UX (only relevant while the agent is busy):
-  // - Enter (and the send button) queues the message until the agent finishes.
-  // - Cmd/Ctrl+Enter sends immediately (the agent adjusts mid-task, aka "steer").
+  // - Enter uses the persisted follow-up behavior (steer by default).
+  // - Cmd/Ctrl+Shift+Enter uses the opposite behavior for one message.
   // - Escape arms a "Hit Escape again to stop the agent" prompt for 3s;
   //   a second Escape within that window stops the agent.
   const [escapeArmed, setEscapeArmed] = useState(false);
+  const followUpMode = useFollowUpPreference((state) => state.mode);
+  const setFollowUpMode = useFollowUpPreference((state) => state.setMode);
   const escapeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const disarmEscape = useCallback(() => {
@@ -331,12 +335,12 @@ export function ReactSessionComposer(props: ComposerProps) {
   }, []);
 
   // Editor submit (Enter). While idle this sends normally; while busy
-  // Enter queues until the agent finishes, and Cmd/Ctrl+Enter steers.
+  // Enter uses the preference; Cmd/Ctrl+Shift+Enter uses its opposite.
   const handleEditorSubmit = useCallback((options: { queue: boolean }) => {
     const hasContent = props.draft.trim().length > 0 || props.attachments.length > 0;
     if (!hasContent) return;
-    if (props.submissionPreparing) return;
-    const action = resolveSubmitAction({ busy: props.busy, modifier: options.queue });
+    if (props.disabled || props.submissionPreparing || props.attachmentsUploading) return;
+    const action = resolveSubmitAction({ busy: props.busy, modifier: options.queue, mode: followUpMode });
     if (action === "queue") {
       void props.onQueue();
       return;
@@ -346,7 +350,7 @@ export function ReactSessionComposer(props: ComposerProps) {
       return;
     }
     void props.onSend();
-  }, [props.busy, props.draft, props.attachments, props.onSend, props.onSteer, props.onQueue, props.submissionPreparing]);
+  }, [props.busy, props.draft, props.attachments, props.onSend, props.onSteer, props.onQueue, props.disabled, props.submissionPreparing, props.attachmentsUploading, followUpMode]);
 
   const slashCommandQuery = getSlashCommandQuery(props.draft);
   const slashOpenNext = slashCommandQuery !== null;
@@ -987,7 +991,7 @@ export function ReactSessionComposer(props: ComposerProps) {
       imeComposingRef.current ||
       (event.nativeEvent as KeyboardEvent).isComposing === true ||
       event.keyCode === 229;
-    if (event.key === "Enter" && imeActive) {
+    if (event.defaultPrevented || ((event.key === "Enter" || event.key === "Escape") && imeActive)) {
       return;
     }
     // Escape-to-stop while the agent is busy. Only when no menu is open so
@@ -1246,7 +1250,7 @@ export function ReactSessionComposer(props: ComposerProps) {
   return (
     <div
       ref={rootRef}
-      className={props.flush ? `relative ${toolMenuOpen ? "z-50" : "z-20"}` : `sticky bottom-0 ${toolMenuOpen ? "z-50" : "z-20"} bg-gradient-to-t from-dls-surface via-dls-surface/95 to-transparent px-4 pb-[max(0.5rem,calc(env(safe-area-inset-bottom)+var(--keyboard-inset,0px)))] max-lg:px-3 lg:px-8 ${props.compactTopSpacing ? "pt-0" : "pt-1"}`}
+      className={props.flush ? `relative ${toolMenuOpen ? "z-50" : "z-20"}` : `sticky bottom-0 ${toolMenuOpen ? "z-50" : "z-20"} px-4 pb-[max(0.5rem,calc(env(safe-area-inset-bottom)+var(--keyboard-inset,0px)))] max-lg:px-3 lg:px-8 ${props.compactTopSpacing ? "pt-0" : "pt-1"}`}
       style={{ contain: "layout style" }}
       onKeyDownCapture={handleKeyDownCapture}
       onCompositionStart={() => {
@@ -1278,15 +1282,6 @@ export function ReactSessionComposer(props: ComposerProps) {
             chip; its pill already shows label + line count, and the user
             removes it with backspace like any other inline token.
           */}
-
-          {dropzoneActive ? (
-            <div className="pointer-events-none absolute inset-3 z-20 flex items-center justify-center rounded-[20px] border-2 border-dashed border-dls-accent bg-[color:color-mix(in_oklab,var(--dls-accent)_10%,transparent)]">
-              <div className="rounded-2xl border border-dls-border bg-dls-canvas/95 px-5 py-4 text-center backdrop-blur-sm">
-                <div className="text-sm font-medium text-dls-text">{t("composer.attach_files")}</div>
-                <div className="mt-1 text-xs text-dls-secondary">{t("composer.any_file_type_supported")}</div>
-              </div>
-            </div>
-          ) : null}
 
           <div className="px-4 pt-3 pb-2">
             {/* Editor */}
@@ -1322,17 +1317,31 @@ export function ReactSessionComposer(props: ComposerProps) {
                 const payload = classifyClipboard(event.clipboardData);
                 if (payload.type === "image" || payload.type === "files") {
                   event.preventDefault();
+                  event.stopPropagation();
                   void addAttachments(payload.files);
                   return;
                 }
 
                 if (payload.type === "uris") {
                   event.preventDefault();
+                  event.stopPropagation();
                   props.onUnsupportedFileLinks(payload.uris);
                   return;
                 }
 
                 const text = payload.type === "text" ? payload.text : "";
+
+                const markdown = event.clipboardData.types.includes("text/markdown")
+                  ? event.clipboardData.getData("text/markdown") : undefined;
+                const attachment = largePasteAttachment({
+                  text, markdown, attachmentsEnabled: props.attachmentsEnabled, disabled: props.disabled,
+                });
+                if (attachment) {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  void addAttachments([attachment]);
+                  return;
+                }
 
                 // Plain text paste display is owned by PasteChipPlugin inside
                 // the Lexical editor: text collapses when it would exceed the
@@ -1359,24 +1368,6 @@ export function ReactSessionComposer(props: ComposerProps) {
                   // Intentionally no preventDefault — the notice is advisory,
                   // the paste still goes through the editor.
                 }
-              }}
-              onDragOver={(event) => {
-                if (event.dataTransfer?.files?.length) {
-                  event.preventDefault();
-                  if (!dropzoneActive) setDropzoneActive(true);
-                }
-              }}
-              onDragLeave={(event) => {
-                const nextTarget = event.relatedTarget;
-                if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return;
-                setDropzoneActive(false);
-              }}
-              onDrop={(event) => {
-                const files = Array.from(event.dataTransfer?.files ?? []);
-                setDropzoneActive(false);
-                if (!files.length) return;
-                event.preventDefault();
-                void addAttachments(files);
               }}
             />
 
@@ -1781,10 +1772,47 @@ export function ReactSessionComposer(props: ComposerProps) {
               {/*
                 Action area: one circular control.
                 - Idle: send arrow.
-                - Busy: stop icon in that same slot (Enter still queues;
-                  Cmd/Ctrl+Enter still steers).
+                - Busy: stop icon in that same slot (Enter uses the preference;
+                  Cmd/Ctrl+Shift+Enter uses the opposite behavior).
               */}
               <div className="ml-auto flex shrink-0 items-center gap-1.5">
+                {props.busy ? (
+                  <>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger
+                        aria-label="Follow-up behavior"
+                        title="Choose how Enter sends follow-ups. Cmd/Ctrl+Shift+Enter uses the other behavior."
+                        className="inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-xs font-medium text-gray-11 transition-colors hover:bg-gray-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-7"
+                      >
+                        {followUpMode === "queue" ? "Queue" : "Steer"}
+                        <ChevronDown className="size-3 text-gray-9" aria-hidden="true" />
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent side="top" align="end" className="w-64 rounded-xl">
+                        <DropdownMenuRadioGroup value={followUpMode} onValueChange={(value) => setFollowUpMode(value === "queue" ? "queue" : "steer")}>
+                          <DropdownMenuRadioItem value="steer" className="items-start rounded-lg py-2.5">
+                            <span className="flex flex-col gap-0.5"><span>Steer</span><span className="text-xs font-normal text-muted-foreground">Guide the current task while it works</span></span>
+                          </DropdownMenuRadioItem>
+                          <DropdownMenuRadioItem value="queue" className="items-start rounded-lg py-2.5">
+                            <span className="flex flex-col gap-0.5"><span>Queue</span><span className="text-xs font-normal text-muted-foreground">Send after the current task finishes</span></span>
+                          </DropdownMenuRadioItem>
+                        </DropdownMenuRadioGroup>
+                        <p className="px-3 pb-2 pt-1 text-[11px] leading-relaxed text-muted-foreground">Enter uses this choice. Cmd/Ctrl+Shift+Enter uses the other.</p>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    {canSend ? (
+                      <button
+                        type="button"
+                        aria-label={followUpMode === "queue" ? "Queue follow-up" : "Steer current task"}
+                        disabled={props.disabled || props.submissionPreparing || props.attachmentsUploading}
+                        onClick={() => handleEditorSubmit({ queue: false })}
+                        title={followUpMode === "queue" ? "Send after the current task finishes" : "Send guidance to the current task"}
+                        className="rounded-full border border-gray-6 px-3 py-1.5 text-xs text-gray-11 hover:bg-gray-3 disabled:opacity-50"
+                      >
+                        {followUpMode === "queue" ? "Queue" : "Steer"}
+                      </button>
+                    ) : null}
+                  </>
+                ) : null}
                 {props.busy && escapeArmed ? (
                   <span className="self-center pr-1 text-[12px] font-medium text-gray-10 max-lg:hidden">
                     {t("composer.escape_to_stop")}
@@ -1795,19 +1823,19 @@ export function ReactSessionComposer(props: ComposerProps) {
                   onClick={
                     props.busy
                       ? props.onStop
-                      : !canSend || props.submissionPreparing
+                      : !canSend || props.submissionPreparing || props.attachmentsUploading
                         ? undefined
                         : props.onSend
                   }
                   disabled={
                     props.disabled
-                    || (!props.busy && (!canSend || props.submissionPreparing))
+                    || (!props.busy && (!canSend || props.submissionPreparing || props.attachmentsUploading))
                   }
                   aria-label={
                     props.busy
                       ? t("composer.stop")
                       : props.submissionPreparing
-                        ? "Preparing connected service tools…"
+                        ? props.submissionLabel ?? "Preparing connected service tools…"
                         : t("composer.run_task")
                   }
                   className={`inline-flex h-9 max-h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors ${
@@ -1821,7 +1849,7 @@ export function ReactSessionComposer(props: ComposerProps) {
                     props.busy
                       ? t("composer.stop")
                       : props.submissionPreparing
-                        ? "Preparing connected service tools…"
+                        ? props.submissionLabel ?? "Preparing connected service tools…"
                         : t("composer.run_task")
                   }
                 >
@@ -1836,7 +1864,7 @@ export function ReactSessionComposer(props: ComposerProps) {
                     {props.busy
                       ? t("composer.stop")
                       : props.submissionPreparing
-                        ? "Preparing connected service tools…"
+                        ? props.submissionLabel ?? "Preparing connected service tools…"
                         : t("composer.run_task")}
                   </span>
                 </button>

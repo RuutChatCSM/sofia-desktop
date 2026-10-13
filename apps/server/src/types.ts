@@ -179,6 +179,8 @@ export interface McpItem {
   name: string;
   config: Record<string, unknown>;
   source: "config.project" | "config.global" | "config.remote";
+  /** Which runtime config layer the entry is recorded in. */
+  scope?: "global" | "project";
   disabledByTools?: boolean;
   toolDenies?: Array<{
     source: "config.project" | "config.global";
@@ -189,6 +191,8 @@ export interface McpItem {
 }
 
 export interface SkillItem {
+  sourceDirectory?: string;
+  readOnly?: boolean;
   name: string;
   path: string;
   description: string;

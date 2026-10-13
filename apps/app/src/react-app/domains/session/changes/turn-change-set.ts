@@ -52,6 +52,7 @@ export type FileChange = {
   additions: number;
   deletions: number;
   hunks?: DiffHunk[];
+  recordedPatch?: string;
   /**
    * False when the file was already dirty before the turn started. Undo must
    * invert only the turn's own patch — reverting a file wholesale would destroy
@@ -101,6 +102,7 @@ export type TurnChangeSet = {
   sessionId: string;
   turnId: string;
   source: ChangeSetSource;
+  recordedCounts?: boolean;
   repositories: RepositoryChangeSet[];
   startedAt: number;
   finalizedAt?: number;
@@ -158,6 +160,7 @@ export function reconcileTurnChangeSet(
   observation: {
     repositories: RepositoryChangeSet[];
     source: ChangeSetSource;
+  recordedCounts?: boolean;
     at?: number;
   },
 ): TurnChangeSet {
@@ -241,7 +244,7 @@ export function changeSetTotals(changeSet: TurnChangeSet): ChangeSetTotals {
     files: files.length,
     additions: files.reduce((total, file) => total + file.additions, 0),
     deletions: files.reduce((total, file) => total + file.deletions, 0),
-    countsKnown: changeSet.source === "git",
+    countsKnown: changeSet.source === "git" || changeSet.recordedCounts === true,
   };
 }
 

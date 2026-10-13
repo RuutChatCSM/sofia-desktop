@@ -509,4 +509,226 @@ describe("cloud provider sync gateway", () => {
     expect(failedLastRun.status).toBe("failed");
     expect(failedLastRun.message).toBe(failedRun.message);
   });
+
+  test("one unreadable provider row does not discard the rest of the org's providers", async () => {
+    const root = await createRoot();
+    const config = serverConfig(root, "https://engine.example.test");
+    config.workspaces = [];
+    let reloads = 0;
+    const engine = Bun.serve({ port: 0, fetch: () => Response.json({ ok: true }) });
+    stops.push(() => engine.stop(true));
+
+    // The healthy provider is listed alongside a row the client cannot read:
+    // an id that is not a Den LLM-provider TypeID, and a model with no name.
+    const healthy = buildProvider([{ id: "model-a", name: "Model A", config: {} }]);
+    const badId = { ...buildProvider([{ id: "m", name: "M", config: {} }]), id: "not_a_provider_id" };
+    const badModel = {
+      ...buildProvider([]),
+      id: "lpr_unreadable_model",
+      name: "Unreadable Model Row",
+      models: [{ id: "model-x" }],
+    };
+
+    const den = Bun.serve({
+      port: 0,
+      fetch(request) {
+        const url = new URL(request.url);
+        if (url.pathname === "/v1/llm-providers") {
+          return Response.json({ llmProviders: [badId, healthy, badModel] });
+        }
+        if (url.pathname === `/v1/llm-providers/${healthy.id}/connect`) {
+          return Response.json({ llmProvider: healthy });
+        }
+        return Response.json({ error: "not_found" }, { status: 404 });
+      },
+    });
+    stops.push(() => den.stop(true));
+
+    const warnings: Array<{ message: string; metadata?: Record<string, unknown> }> = [];
+    const sync = new CloudProviderSync({
+      config,
+      env: new EnvService({ path: process.env.SOFIA_ENV_STORE }),
+      reloadEngine: async () => {
+        reloads += 1;
+      },
+      logger: {
+        warn: (message, metadata) => {
+          warnings.push({ message, metadata });
+        },
+        error: () => undefined,
+      },
+      intervalMs: 3_600_000,
+    });
+    stops.push(() => sync.stop());
+
+    sync.setSession({
+      baseUrl: `http://127.0.0.1:${den.port}`,
+      token: "den-token",
+      orgId: "org_test",
+    });
+
+    // The pass succeeds: the healthy provider still materializes.
+    expect((await sync.run("mixed-list")).status).toBe("applied");
+    const runtime = runtimeProviderMap(await readGlobalRuntimeWorkspaceEngineConfig(config));
+    expect(runtime.lpr_test).toBeDefined();
+
+    // ...and the two unreadable rows are named in status rather than vanishing.
+    const status = sync.status();
+    expect(status.lastRun?.status).toBe("applied");
+    const skipped = status.skippedProviders.filter((entry) => entry.reason === "unparseable");
+    expect(skipped.map((entry) => entry.cloudProviderId).sort()).toEqual([
+      "lpr_unreadable_model",
+      "not_a_provider_id",
+    ]);
+    // The healthy provider is materialized, never listed as skipped.
+    expect(status.providers.map((entry) => entry.cloudProviderId)).toEqual([healthy.id]);
+  });
+
+  test("a non-list provider response stays fatal but is now diagnosable", async () => {
+    const root = await createRoot();
+    const config = serverConfig(root, "https://engine.example.test");
+    config.workspaces = [];
+
+    // A Den/web layer answering the wrong origin with JSON that carries no
+    // llmProviders array. Previously this produced a bare
+    // `den_llm_provider_list_invalid_response` with no way to tell why.
+    const den = Bun.serve({
+      port: 0,
+      fetch: () => Response.json({ error: "unauthorized", message: "Sign in again." }),
+    });
+    stops.push(() => den.stop(true));
+
+    const warnings: Array<{ message: string; metadata?: Record<string, unknown> }> = [];
+    const sync = new CloudProviderSync({
+      config,
+      env: new EnvService({ path: process.env.SOFIA_ENV_STORE }),
+      reloadEngine: async () => undefined,
+      logger: {
+        warn: (message, metadata) => {
+          warnings.push({ message, metadata });
+        },
+        error: () => undefined,
+      },
+      intervalMs: 3_600_000,
+    });
+    stops.push(() => sync.stop());
+
+    sync.setSession({
+      baseUrl: `http://127.0.0.1:${den.port}`,
+      token: "den-token",
+      orgId: "org_test",
+    });
+
+    expect((await sync.run("wrong-shape")).status).toBe("failed");
+    expect(sync.status().lastRun?.message).toBe("den_llm_provider_list_invalid_response");
+
+    // The log now carries the actual response shape, with no credential values.
+    const shapeWarning = warnings.find((entry) => entry.message.includes("not a provider list"));
+    expect(shapeWarning).toBeDefined();
+    const shape = String(shapeWarning?.metadata?.payload_shape ?? "");
+    expect(shape).toContain("error:string");
+    expect(shape).not.toContain("Sign in again.");
+  });
+
+  test("materializes Sofia Cloud's `sofia-cloud` provider, its models, and its inference credential", async () => {
+    const root = await createRoot();
+    const config = serverConfig(root, "https://engine.example.test");
+    config.workspaces = [];
+    const seenOrgHeaders: Array<string | null> = [];
+    const engineAuths: Array<{ url: string; body: string }> = [];
+    const engine = Bun.serve({
+      port: 0,
+      async fetch(request) {
+        const url = new URL(request.url);
+        engineAuths.push({ url: url.pathname, body: await request.text() });
+        return Response.json({ ok: true });
+      },
+    });
+    stops.push(() => engine.stop(true));
+
+    // Exactly the desktop contract Rails serves at `/api/den/v1/llm-providers`:
+    // a managed provider whose id is `sofia-cloud`, not a Den `lpr_...` TypeID.
+    const providerConfig = {
+      npm: "@ai-sdk/openai-compatible",
+      options: { baseURL: "https://cloud.example.test/v1" },
+    };
+    const provider = {
+      id: "sofia-cloud",
+      source: "sofia",
+      providerId: "sofia",
+      name: "Sofia Cloud",
+      hasApiKey: true,
+      providerConfig,
+      models: [
+        {
+          id: "sofia/gpt-5",
+          name: "GPT-5",
+          config: { limit: { context: 400000, output: 128000 }, capabilities: { tools: true } },
+          createdAt: "2026-09-01T00:00:00.000Z",
+        },
+      ],
+      createdAt: "2026-08-01T00:00:00.000Z",
+      updatedAt: "2026-09-01T00:00:00.000Z",
+    };
+    const den = Bun.serve({
+      port: 0,
+      fetch(request) {
+        const url = new URL(request.url);
+        seenOrgHeaders.push(request.headers.get("x-sofia-org-id"));
+        if (url.pathname === "/v1/llm-providers") {
+          return Response.json({ llmProviders: [provider] });
+        }
+        if (url.pathname === "/v1/llm-providers/sofia-cloud/connect") {
+          return Response.json({ llmProvider: { ...provider, apiKey: "sk-sofia-inference-key" } });
+        }
+        return Response.json({ error: "not_found" }, { status: 404 });
+      },
+    });
+    stops.push(() => den.stop(true));
+
+    const sync = new CloudProviderSync({
+      config,
+      env: new EnvService({ path: process.env.SOFIA_ENV_STORE }),
+      reloadEngine: async () => undefined,
+      intervalMs: 3_600_000,
+    });
+    stops.push(() => sync.stop());
+
+    sync.setSession({
+      baseUrl: `http://127.0.0.1:${den.port}`,
+      token: "den-token",
+      orgId: "org_sofia_cloud",
+    });
+
+    expect((await sync.run("sofia-cloud")).status).toBe("applied");
+
+    // The provider materializes under the runtime id the engine expects, with
+    // its model catalog and OpenAI-compatible base URL.
+    const runtime = runtimeProviderMap(await readGlobalRuntimeWorkspaceEngineConfig(config));
+    const sofiaProvider = expectRecord(runtime.sofia, "materialized sofia provider");
+    expect(sofiaProvider.id).toBe("sofia");
+    expect(sofiaProvider.npm).toBe("@ai-sdk/openai-compatible");
+    expect(expectRecord(sofiaProvider.options, "sofia options").baseURL).toBe("https://cloud.example.test/v1");
+    expect(Object.keys(expectRecord(sofiaProvider.models, "sofia models"))).toEqual(["sofia/gpt-5"]);
+
+    // The inference key and host reach the engine so requests can be served
+    // and attributed to the org.
+    const env = await new EnvService({ path: process.env.SOFIA_ENV_STORE }).list();
+    expect(env.find((entry) => entry.key === "SOFIA_API_KEY")?.value).toBe("sk-sofia-inference-key");
+    expect(env.find((entry) => entry.key === "SOFIA_INFERENCE_BASE_URL")?.value).toBe("https://cloud.example.test/v1");
+    expect(sync.status().skippedProviders).toEqual([]);
+    // Sofia Cloud scopes the request from `x-sofia-org-id`.
+    expect(seenOrgHeaders.every((header) => header === "org_sofia_cloud")).toBe(true);
+
+    config.workspaces.push({
+      id: "ws_1",
+      name: "Workspace",
+      path: root,
+      preset: "starter",
+      workspaceType: "local",
+      baseUrl: `http://127.0.0.1:${engine.port}`,
+    });
+    expect((await sync.run("workspace-ready")).status).toBe("applied");
+    expect(engineAuths.some((entry) => entry.url === "/auth/sofia")).toBe(true);
+  });
 });

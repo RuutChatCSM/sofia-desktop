@@ -1,8 +1,10 @@
+import { SessionResourcesPanel } from "../panel/session-resources-panel";
+import { useSessionSummaryPreferences } from "../panel/session-summary-preferences";
 /** @jsxImportSource react */
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePanelRef } from "react-resizable-panels";
-import { Cloud, FileText, Globe, Mic2, MoreHorizontal, PanelRight, TextSearch, Zap } from "lucide-react";
+import { Cloud, FileText, Globe, ListFilter, Mic2, MoreHorizontal, PanelRight, TextSearch, Zap } from "lucide-react";
 
 import { resolveExtensionIconSrc } from "@/react-app/design-system/extension-icon-src";
 import { t } from "../../../../i18n";
@@ -87,8 +89,10 @@ import { getSidePanelSessionKey } from "../panel/side-panel-session";
 import { TerminalDock } from "../terminal/terminal-dock";
 import { useActivePanelTab, usePanelTabStore, useSessionPanelState } from "../panel/panel-tab-store";
 import { useBrowserTabSync } from "../panel/use-side-panel-tabs";
-import { DEFAULT_BROWSER_DOCKED_WIDTH, dispatchBrowserPresentation, useBrowserPresentationStore } from "../panel/browser-presentation";
+import { DEFAULT_BROWSER_DOCKED_WIDTH, browserFactMatchesScope, dispatchBrowserPresentation, pickAgentBrowserScope, useBrowserPresentationStore } from "../panel/browser-presentation";
+import { useSessionActivityStore } from "../status/session-activity-store";
 import { BrowserPeek } from "../panel/browser-peek";
+import { ComputerPeek } from "../panel/computer-peek";
 import { useWorkspaceShellLayout } from "../../../shell/workspace-shell-layout";
 import { useControlAction, type SofiaControlAction } from "../../../shell/control/control-provider";
 import { getExtensionId, isSofiaExtensionEnabled, SOFIA_EXTENSION_STATE_CHANGED } from "../../settings/extension-state";
@@ -336,6 +340,26 @@ function controlStringArg(args: unknown, key: string) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function controlBooleanArg(args: unknown, key: string) {
+  const object = controlObjectArg(args);
+  const value = object ? Reflect.get(object, key) : null;
+  return value === true || value === "true";
+}
+
+/**
+ * The built-in browser's ownership key: one session, not one workspace.
+ *
+ * Two sessions in the same project must never share browser tabs, and a tab the
+ * agent opens for session B must not surface while the user is looking at
+ * session A. The key is therefore the session id — which the engine hands back
+ * with every UI command — falling back to the workspace only for the rare
+ * session-less surface.
+ */
+function browserScopeKey(workspaceId: string, sessionId: string | null) {
+  const session = sessionId?.trim();
+  return session ? `session:${session}` : `workspace:${workspaceId}`;
+}
+
 export function SessionPage(props: SessionPageProps) {
   const { config: shellConfig } = useShellConfig();
   const platform = usePlatform();
@@ -377,6 +401,15 @@ export function SessionPage(props: SessionPageProps) {
   const browserPresentationMode = useBrowserPresentationStore((state) => state.state.runtime.mode);
   const browserDockedWidth = useBrowserPresentationStore((state) => state.state.preferences.dockedWidth);
   const peekBrowserTab = activePanelTab?.type === "browser" ? activePanelTab : null;
+  const computerUseRunStartedAt = useSessionActivityStore((state) => {
+    if (!props.selectedSessionId) return null;
+    const records = Object.values(state.recordsByWorkspaceId).flatMap((workspace) => Object.entries(workspace));
+    const active = records.filter(([, record]) => record.runActive);
+    if (active.length > 1 || (active.length === 1 && active[0]?.[0] !== props.selectedSessionId)) return null;
+    return state.recordsByWorkspaceId[props.selectedWorkspaceId]?.[props.selectedSessionId]?.previewRunStartedAt ?? null;
+  });
+  const computerPreviewCompletedAt = useSessionActivityStore((state) => props.selectedSessionId ? state.recordsByWorkspaceId[props.selectedWorkspaceId]?.[props.selectedSessionId]?.previewCompletedAt ?? null : null);
+  const computerPreviewActive = useSessionActivityStore((state) => props.selectedSessionId ? state.recordsByWorkspaceId[props.selectedWorkspaceId]?.[props.selectedSessionId]?.runActive ?? false : false);
   // Expansion belongs to the shared panel shell, preserving the split width
   // and the active tab across Browser, Review, Files and artifacts.
   const [sidePanelExpanded, setSidePanelExpanded] = useState(false);
@@ -463,7 +496,11 @@ export function SessionPage(props: SessionPageProps) {
     if (!isElectronRuntime()) return;
     const browser = (window as Window).__SOFIA_ELECTRON__?.browser;
     if (!browser) return;
-    const unsubOpen = browser.onBrowserTabActivated?.(() => {
+    const unsubOpen = browser.onBrowserTabActivated?.((event) => {
+      // Only browser activity in the session on screen may drive the preview.
+      // A tab a background session owns must not pop a Peek over this one, even
+      // though the agent keeps driving it off screen.
+      if (!browserFactMatchesScope(event?.scopeId, presentedScopeRef.current)) return;
       dispatchBrowserPresentation({ type: "agent-browser-started" });
     });
     const unsubPresentation = browser.onPresentationRequested?.((mode) => {
@@ -481,13 +518,51 @@ export function SessionPage(props: SessionPageProps) {
   const sessionSidePanelRef = useRef(sessionSidePanel);
   sessionSidePanelRef.current = sessionSidePanel;
 
-  const presentedSessionRef = useRef(props.selectedSessionId);
+  // The built-in browser belongs to one session inside one project: switching
+  // either way must detach the previous page and show nothing of it here — not
+  // the docked panel, not a Peek, not a tab list. The main process keys its tab
+  // registry by this same scope.
+  const presentedScopeRef = useRef(browserScopeKey(props.selectedWorkspaceId, props.selectedSessionId));
   useEffect(() => {
-    if (presentedSessionRef.current === props.selectedSessionId) return;
-    presentedSessionRef.current = props.selectedSessionId;
+    const scope = browserScopeKey(props.selectedWorkspaceId, props.selectedSessionId);
+    if (presentedScopeRef.current === scope) return;
+    presentedScopeRef.current = scope;
     setSidePanelExpanded(false);
     dispatchBrowserPresentation({ type: "session-changed" });
-  }, [props.selectedSessionId]);
+    if (isElectronRuntime()) {
+      const browser = window.__SOFIA_ELECTRON__?.browser;
+      void browser?.hide?.();
+      void browser?.setScope?.(scope);
+    }
+  }, [props.selectedSessionId, props.selectedWorkspaceId]);
+
+  // A raw CDP browser command (`tabs.open`, `new_page`) carries no session, so
+  // the main process infers it from who is actually running. Publish the
+  // working session — the one on screen when that is the session working,
+  // otherwise the single working session — never a session that is merely on
+  // screen. The key is a stable string so streaming tokens do not re-render.
+  const activeAgentScopesKey = useSessionActivityStore((state) => {
+    const scopes: string[] = [];
+    for (const [workspaceId, sessions] of Object.entries(state.recordsByWorkspaceId)) {
+      for (const [sessionId, record] of Object.entries(sessions)) {
+        if (record?.runActive) scopes.push(`${workspaceId}\u0000${sessionId}`);
+      }
+    }
+    scopes.sort();
+    return scopes.join("\u0001");
+  });
+  useEffect(() => {
+    if (!isElectronRuntime()) return;
+    const activeScopes = activeAgentScopesKey
+      ? activeAgentScopesKey.split("\u0001").map((entry) => {
+          const [workspaceId, sessionId] = entry.split("\u0000");
+          return browserScopeKey(workspaceId, sessionId);
+        })
+      : [];
+    void window.__SOFIA_ELECTRON__?.browser?.setAgentScope?.(
+      pickAgentBrowserScope(presentedScopeRef.current, activeScopes),
+    );
+  }, [activeAgentScopesKey, props.selectedSessionId, props.selectedWorkspaceId]);
 
   // Presentation is policy; the docked side panel is only one of its outcomes.
   // Driven by mode *changes* only, so closing the docked panel by hand is never
@@ -527,6 +602,9 @@ export function SessionPage(props: SessionPageProps) {
   const browserPanelAppliedTargetRef = useRef<number | null>(null);
   const [browserPanelAvailableWidth, setBrowserPanelAvailableWidth] = useState(0);
   const [browserFullViewBounds, setBrowserFullViewBounds] = useState({ left: 0, top: 0, width: 0, height: 0 });
+  const summaryVisible = useSessionSummaryPreferences((state) => state.visible);
+  const toggleSummary = useSessionSummaryPreferences((state) => state.toggle);
+  const showSessionSummary=summaryVisible && Boolean(props.selectedSessionId) && !sidePanelOpen && !isMobile && browserPanelAvailableWidth>=1100;
   // Expanded sizes the browser against the available workspace width.
   useEffect(() => {
     const group = browserPanelGroupRef.current;
@@ -753,17 +831,28 @@ export function SessionPage(props: SessionPageProps) {
     args: [
       { name: "url", type: "string", required: true, description: "The website URL to open." },
       { name: "provider", type: "string", description: "Browser provider. Use builtin or auto. External is reserved for future support." },
+      { name: "newTab", type: "boolean", description: "Force a fresh tab. Default false: the built-in browser navigates the tab it is already driving, so repeated calls do not pile up tabs." },
     ],
     previewArgs: { url: "https://example.com", provider: "builtin" },
     disabled: !isElectronRuntime(),
-    execute: async (args) => {
+    execute: async (args, helpers) => {
       const url = controlStringArg(args, "url");
       if (!url) return { ok: false, error: "Missing URL." };
       const provider = controlStringArg(args, "provider") || "builtin";
       if (provider !== "auto" && provider !== "builtin") {
         return { ok: false, error: `Browser provider is not available yet: ${provider}` };
       }
-      return window.__SOFIA_ELECTRON__?.browser?.openUrl?.(url, provider);
+      const newTab = controlBooleanArg(args, "newTab");
+      // Attribute the tab to the session that invoked the agent, not to the
+      // session the user happens to be viewing. A background agent's browsing
+      // must never surface in, or be reused by, an unrelated session. Fall back
+      // to the presented session only for direct invocations that carry no
+      // engine context.
+      const invokingSessionId = helpers.context?.sessionId?.trim();
+      const scopeId = invokingSessionId
+        ? browserScopeKey(helpers.context?.workspaceId ?? "", invokingSessionId)
+        : presentedScopeRef.current;
+      return window.__SOFIA_ELECTRON__?.browser?.openUrl?.(url, provider, { newTab, scopeId });
     },
   }), [setCurrentSidePanel]);
   useControlAction(openBrowserUrlControlAction);
@@ -1327,6 +1416,19 @@ export function SessionPage(props: SessionPageProps) {
             </div>
 
             <div className="flex items-center gap-1.5 text-gray-10 mac:titlebar-no-drag">
+              {props.selectedSessionId && !hasMainContentTakeover ? (
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className="hidden rounded-xl text-gray-10 lg:inline-flex"
+                  aria-label={summaryVisible ? "Hide Outputs and Sources" : "Show Outputs and Sources"}
+                  title={summaryVisible ? "Hide Outputs and Sources" : "Show Outputs and Sources"}
+                  aria-pressed={summaryVisible}
+                  onClick={toggleSummary}
+                >
+                  <ListFilter size={16} />
+                </Button>
+              ) : null}
               {!props.primarySlot && findButtonSessionId && !hasMainContentTakeover ? (
                 <Tooltip>
                   <TooltipTrigger
@@ -1505,6 +1607,8 @@ export function SessionPage(props: SessionPageProps) {
                       onPointerDown={() => focusWorkbenchPane("primary")}
                       onFocusCapture={() => focusWorkbenchPane("primary")}
                     >
+                      <div className="flex h-full min-h-0">
+                      <div className="min-w-0 flex-1">
                       <SessionSurface
                         // Spread `surface` first so the explicit per-workspace
                         // routing props below CAN'T be silently overridden by
@@ -1513,6 +1617,7 @@ export function SessionPage(props: SessionPageProps) {
                         // must come from the resolved workspace endpoint passed by
                         // SessionRoute, not from anything in `surface`.
                         {...props.surface!}
+                        newTaskComposer={props.newTaskComposer}
                         client={props.sofiaServerClient!}
                         environmentClient={props.environmentClient}
                         workspaceId={props.runtimeWorkspaceId!}
@@ -1531,6 +1636,14 @@ export function SessionPage(props: SessionPageProps) {
                         onOpenTarget={openTarget}
                         onStartNewChat={() => props.sidebar.onCreateTaskInWorkspace(props.runtimeWorkspaceId!)}
                       />
+                      </div>
+                      {showSessionSummary && !canRenderSplitSurface ? <aside data-floating-session-summary="" className="max-h-full w-[340px] shrink-0 self-start overflow-y-auto">
+                        <SessionResourcesPanel key={props.selectedSessionId} sessionId={props.selectedSessionId!}
+                          onOpenFile={(path)=>{openTab(props.selectedSessionId!,{id:`workspace-files:${props.selectedSessionId}`,type:'files',label:'Files',path});setCurrentSidePanel('panel');}}
+                          onOpenUrl={(url)=>openTarget({id:`url:${url}`,kind:'url',value:url,name:url,preview:'browser',confidence:1,reason:'source'})}
+                          onReveal={openGeneralSidePanel} />
+                      </aside>:null}
+                      </div>
                     </ResizablePanel>
                     {canRenderSplitSurface ? (
                       <>
@@ -1664,6 +1777,8 @@ export function SessionPage(props: SessionPageProps) {
                   onHide={() => dispatchBrowserPresentation({ type: "user-hide-peek" })}
                 />
               ) : null}
+              <ComputerPeek sessionId={props.selectedSessionId} runStartedAt={computerUseRunStartedAt} active={computerPreviewActive} completedAt={computerPreviewCompletedAt}
+                visible={browserPresentationMode !== "peek" && !isMobile} />
               </main>
             </ResizablePanel>
               {sidePanelOpen && !isMobile ? (
@@ -1801,6 +1916,10 @@ export function SessionPage(props: SessionPageProps) {
                 <Globe size={15} />
               </Button>
             ) : null}
+            {props.selectedSessionId ? <Button variant="ghost" size="icon-sm" aria-label="Outputs and Sources" title="Outputs and Sources" onClick={()=>{
+              const id=`summary:${props.selectedSessionId}`;
+              openTab(props.selectedSessionId!,{id,type:'start',label:'Outputs and Sources'});selectTab(props.selectedSessionId!,id);setCurrentSidePanel('panel');
+            }}><PanelRight size={15}/></Button>:null}
             {voiceExtensionEnabled ? (
               <Button
                 variant="ghost"

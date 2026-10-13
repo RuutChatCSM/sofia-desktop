@@ -1,3 +1,4 @@
+import type { DurableTurnOutcome } from "./codex-turn-outcomes.js";
 // Codex engine routes: an additive HTTP surface for the codex runtime that
 // lives alongside the engine routes. Exposes:
 //   GET  /workspace/:id/codex/engine          -> engine info + session list
@@ -11,16 +12,17 @@ import { randomUUID } from "node:crypto";
 import { removeCodexAuthKey, setCodexAuthKey } from "./codex-auth-store.js";
 import { getCatalogProvider, listCatalogProviders } from "./models-dev-catalog.js";
 import { catalogProvider, providerAuthMethodsById } from "./provider-catalog.js";
-import { discoverProviderModels, ensureProviderModels } from "./codex-model-discovery.js";
+import { discoverProviderModels, ensureProviderModels, mergeProviderModelMetadata } from "./codex-model-discovery.js";
 import {
   codexEnvKeyForProvider,
   parseCodexEngineConfig,
   readCodexEngineConfig,
   readCodexProviders,
+  removeCodexProvider,
   writeCodexEngineConfigFromProviders,
   writeCodexProviders,
 } from "./codex-providers.js";
-import type { BackgroundProcess, CodexEvent, CodexSession } from "./codex-sessions.js";
+import type { BackgroundProcess, CodexEvent, CodexPlanItem, CodexSession } from "./codex-sessions.js";
 import type { TurnChangeRecord } from "./turn-changes.js";
 import {
   countUntrackedLines,
@@ -48,6 +50,9 @@ export interface CodexSessionRegistry {
     engineInfo: unknown;
     start: () => Promise<void>;
     listSessions: () => CodexSession[];
+    getSubagents?: (parentSessionId: string) => CodexSession[];
+    refreshSubagents?: (parentSessionId: string) => Promise<CodexSession[]>;
+    getSession?: (sessionId: string) => CodexSession | null | undefined;
     createSession: (input: { title: string; prompt?: string; workspaceId: string; cwd?: string; model?: string; providerId?: string }) => Promise<CodexSession>;
     prompt: (sessionId: string, text: string, opts?: { model?: string; providerId?: string; images?: string[] }) => Promise<CodexSession>;
     steer: (sessionId: string, text: string, images?: string[]) => Promise<CodexSession>;
@@ -57,6 +62,9 @@ export interface CodexSessionRegistry {
     rename: (sessionId: string, title: string) => Promise<CodexSession>;
     forkSession: (sessionId: string, options?: { messageId?: string | null }) => Promise<CodexSession>;
     getSessionItems: (sessionId: string, options?: { limit?: number }) => Promise<Array<{ turnId: string; item: Record<string, unknown> }>>;
+    getSubagentItems?: (sessionId: string, threadId: string) => Promise<Array<{ turnId: string; item: Record<string, unknown> }>>;
+    getTurnOutcomes?: (sessionId: string) => Promise<DurableTurnOutcome[]>;
+    getSessionPlan: (sessionId: string) => Promise<CodexPlanItem[] | null>;
     getTurnChanges: (sessionId: string) => Promise<TurnChangeRecord[]>;
     listBackgroundProcesses: (sessionId: string) => Promise<BackgroundProcess[]>;
     terminateBackgroundProcess: (sessionId: string, processId: string) => Promise<boolean>;
@@ -162,6 +170,7 @@ export function registerCodexRoutes(options: RegisterCodexRoutesOptions): void {
     // parse lands with `models: []` and would vanish from the picker. Resolve
     // those catalogs from the provider before flattening the config.
     await ensureProviderModels().catch(() => undefined);
+    await seedMissingCatalogModels();
     const config = await readCodexEngineConfig();
     return jsonResponse({ ok: true, config });
   });
@@ -213,9 +222,13 @@ export function registerCodexRoutes(options: RegisterCodexRoutesOptions): void {
     ensureWritable(options.config);
     requireClientScope(ctx, "collaborator");
     const body = await readJsonBody(ctx.request);
-    const text = optionalStringField(body, "text");
-    if (!text) throw new ApiError(400, "invalid_payload", "text is required");
+    const text = optionalStringField(body, "text") ?? "";
     const images = optionalStringArrayField(body, "images");
+    // An image-only turn is legitimate: pasting a screenshot with no words is a
+    // normal Codex turn, and the composer's `[attachment …]` placeholder resolves
+    // to an empty string. Demanding text produced a hard 400 that the client then
+    // retried, which is the "text is required" loop.
+    if (!text && !images?.length) throw new ApiError(400, "invalid_payload", "text is required");
     const manager = await workspaceManager(ctx.params.id);
     if (!isCodexSessionId(ctx.params.sessionId)) throw notFound("unknown codex session");
     const session = await sofiaRequest(() => manager.prompt(ctx.params.sessionId, text, {
@@ -235,6 +248,7 @@ export function registerCodexRoutes(options: RegisterCodexRoutesOptions): void {
     requireClientScope(ctx, "collaborator");
     const body = await readJsonBody(ctx.request);
     const text = optionalStringField(body, "text");
+    // Steering is text by definition: there is no "steer with an image only".
     if (!text) throw new ApiError(400, "invalid_payload", "text is required");
     const images = optionalStringArrayField(body, "images");
     const manager = await workspaceManager(ctx.params.id);
@@ -261,7 +275,26 @@ export function registerCodexRoutes(options: RegisterCodexRoutesOptions): void {
     // The engine pages ~100 items at a time; the manager follows the cursors so
     // opening a task shows its whole transcript, not just the beginning.
     const items = await sofiaRequest(() => manager.getSessionItems(ctx.params.sessionId, { limit: MAX_TRANSCRIPT_ITEMS }));
-    return jsonResponse({ ok: true, items, changes: await manager.getTurnChanges(ctx.params.sessionId) });
+    const plan = await sofiaRequest(() => manager.getSessionPlan(ctx.params.sessionId));
+    return jsonResponse({ ok: true, parentSessionId: manager.getSession?.(ctx.params.sessionId)?.parentSessionId, subagentSessions: manager.getSubagents?.(ctx.params.sessionId), items, changes: await manager.getTurnChanges(ctx.params.sessionId), plan, outcomes: await manager.getTurnOutcomes?.(ctx.params.sessionId) ?? [] });
+  });
+
+  addRoute(routes, "GET", "/workspace/:id/codex/sessions/:sessionId/subagents", "client", async (ctx) => {
+    const manager = await workspaceManager(ctx.params.id);
+    if (!isCodexSessionId(ctx.params.sessionId)) throw notFound("unknown codex session");
+    const refresh = manager.refreshSubagents?.bind(manager);
+    const sessions = refresh
+      ? await sofiaRequest(() => refresh(ctx.params.sessionId))
+      : manager.getSubagents?.(ctx.params.sessionId) ?? [];
+    return jsonResponse({ok: true, sessions});
+  });
+
+  addRoute(routes, "GET", "/workspace/:id/codex/sessions/:sessionId/subagents/:threadId/items", "client", async (ctx) => {
+    const manager = await workspaceManager(ctx.params.id);
+    if (!isCodexSessionId(ctx.params.sessionId)) throw notFound("unknown codex session");
+    const readHistory = manager.getSubagentItems?.bind(manager);
+    if (!readHistory) throw notFound("subagent history unavailable");
+    return jsonResponse({ ok: true, items: await sofiaRequest(() => readHistory(ctx.params.sessionId, ctx.params.threadId)) });
   });
 
   // Background processes the agent started through unified exec. The list is
@@ -496,8 +529,20 @@ export function registerCodexRoutes(options: RegisterCodexRoutesOptions): void {
     if (!id) return;
     const file = await readCodexProviders();
     if (file.providers[id]) {
-      // Already registered. Still resolve an empty catalog so a provider that
-      // failed to discover earlier becomes selectable without a reconnect.
+      // A previous failed /models probe may have persisted an empty catalog.
+      // Use the shared catalog on reconnect before retrying live discovery.
+      if (file.providers[id].models.length === 0) {
+        const catalog = await getCatalogProvider(id, { fetchImpl: providerDiscoveryFetch }).catch(() => null);
+        if (catalog?.models.length) {
+          file.providers[id].models = catalog.models.map((model) => ({
+            id: model.id,
+            name: model.name,
+            reasoning: model.reasoning,
+            contextWindow: model.contextWindow,
+          }));
+          await writeCodexProviders(file);
+        }
+      }
       await resolveRegisteredProviderModels();
       return;
     }
@@ -509,7 +554,13 @@ export function registerCodexRoutes(options: RegisterCodexRoutesOptions): void {
     file.providers[id] = {
       api_key: "",
       base_url: baseUrl,
-      wire_api: catalogEntry ? "chat_completions" : known?.wireApi === "responses" ? "responses" : "chat_completions",
+      // The well-known list is authoritative for native wires (OpenAI Responses,
+      // Anthropic Messages); a models.dev-only provider is OpenAI-compatible.
+      wire_api: known?.wireApi === "anthropic"
+        ? "anthropic"
+        : known?.wireApi === "responses" && !catalogEntry
+          ? "responses"
+          : "chat_completions",
       name: catalogEntry?.name ?? known?.name ?? id,
       // Seed the catalog's own model list so a provider the user connects is
       // immediately selectable, before (or without) a live /models probe.
@@ -522,6 +573,24 @@ export function registerCodexRoutes(options: RegisterCodexRoutesOptions): void {
     };
     await writeCodexProviders(file);
     await resolveRegisteredProviderModels();
+  }
+
+  async function seedMissingCatalogModels(): Promise<void> {
+    const file = await readCodexProviders();
+    const missing = Object.entries(file.providers).filter(([, provider]) => provider.models.length === 0 || provider.models.some(model => !model.contextWindow));
+    if (missing.length === 0) return;
+    const catalog = await listCatalogProviders({ fetchImpl: providerDiscoveryFetch }).catch(() => []);
+    const byId = new Map(catalog.map((entry) => [entry.id, entry]));
+    let changed = false;
+    for (const [id, provider] of missing) {
+      const models = byId.get(id)?.models;
+      if (!models?.length) continue;
+      const merged = mergeProviderModelMetadata(provider.models, models);
+      if (JSON.stringify(merged) === JSON.stringify(provider.models)) continue;
+      provider.models = merged;
+      changed = true;
+    }
+    if (changed) await writeCodexProviders(file);
   }
 
   /**
@@ -592,6 +661,7 @@ export function registerCodexRoutes(options: RegisterCodexRoutesOptions): void {
     for (const name of names) {
       await removeCodexAuthKey(name);
     }
+    await removeCodexProvider(providerId);
     return jsonResponse({ ok: true });
   });
 

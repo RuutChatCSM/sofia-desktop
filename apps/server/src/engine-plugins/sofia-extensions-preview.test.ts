@@ -1,4 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { z } from "zod";
 
 import { SofiaExtensionsPreview } from "./sofia-extensions-preview.js";
@@ -11,6 +14,7 @@ import {
 
 const originalServerUrl = process.env.SOFIA_SERVER_URL;
 const originalServerToken = process.env.SOFIA_SERVER_TOKEN;
+const originalUiControlDiscovery = process.env.SOFIA_UI_CONTROL_DISCOVERY;
 const stops: Array<() => void> = [];
 
 const searchResultSchema = z.object({
@@ -81,6 +85,8 @@ afterEach(() => {
   else process.env.SOFIA_SERVER_URL = originalServerUrl;
   if (originalServerToken === undefined) delete process.env.SOFIA_SERVER_TOKEN;
   else process.env.SOFIA_SERVER_TOKEN = originalServerToken;
+  if (originalUiControlDiscovery === undefined) delete process.env.SOFIA_UI_CONTROL_DISCOVERY;
+  else process.env.SOFIA_UI_CONTROL_DISCOVERY = originalUiControlDiscovery;
 });
 
 async function transformedSystem(plugin: Awaited<ReturnType<typeof SofiaExtensionsPreview>>): Promise<string> {
@@ -608,5 +614,55 @@ describe("SofiaExtensionsPreview semantic tool surface", () => {
         schedule: { kind: "interval", timezone: "Europe/Berlin", everyMinutes: 5 },
       },
     }, { sessionID: "ses_origin" })).rejects.toThrow();
+  });
+});
+
+describe("SofiaExtensionsPreview UI command session scope", () => {
+  test("stamps the invoking session onto the UI command, not the model's args", async () => {
+    const requests: Array<{ pathname: string; authorization: string | null; body?: unknown }> = [];
+    const bridge = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      async fetch(request) {
+        const url = new URL(request.url);
+        const record: { pathname: string; authorization: string | null; body?: unknown } = {
+          pathname: url.pathname,
+          authorization: request.headers.get("authorization"),
+        };
+        if (request.method === "POST") record.body = await request.json();
+        requests.push(record);
+        if (url.pathname === "/command") {
+          return Response.json({ ok: true, id: "browser.open_url", result: { tab_id: "tab_agent" } });
+        }
+        return Response.json({ message: "Not found" }, { status: 404 });
+      },
+    });
+    stops.push(() => bridge.stop(true));
+
+    const discoveryDir = await mkdtemp(join(tmpdir(), "sofia-ui-bridge-"));
+    const discoveryPath = join(discoveryDir, "sofia-ui-control.json");
+    await writeFile(
+      discoveryPath,
+      JSON.stringify({ baseUrl: `http://127.0.0.1:${bridge.port}`, token: "bridge-token" }),
+      "utf8",
+    );
+    process.env.SOFIA_UI_CONTROL_DISCOVERY = discoveryPath;
+
+    const plugin = await SofiaExtensionsPreview({ directory: "/tmp/archive" });
+    const output = await plugin.tool.sofia_execute.execute({
+      id: "browser.open_url",
+      args: { url: "https://example.test/" },
+      // A model cannot claim another session: the engine context wins.
+      context: { sessionId: "ses_spoofed" },
+    }, { sessionID: "ses_invoker", workspaceId: "ws_1" });
+    const parsed = JSON.parse(output);
+
+    expect(parsed.result.tab_id).toBe("tab_agent");
+    const command = requests.find((request) => request.pathname === "/command");
+    expect(command?.authorization).toBe("Bearer bridge-token");
+    expect(command?.body).toMatchObject({
+      id: "browser.open_url",
+      context: { sessionId: "ses_invoker", workspaceId: "ws_1" },
+    });
   });
 });

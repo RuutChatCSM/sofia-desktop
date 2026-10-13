@@ -4,7 +4,11 @@ final class AgentCursorOverlay: @unchecked Sendable {
     static let shared = AgentCursorOverlay()
 
     private var panel: AgentCursorPanel?
-    private var hideWorkItem: DispatchWorkItem?
+    private var lastPoint: CGPoint?
+    private var lastPID: pid_t?
+    private var lastWindowNumber: Int?
+    private var targetBounds: CGRect?
+    private var visibilityTimer: Timer?
     private let size = CGSize(width: 30, height: 34)
 
     func show(at point: CGPoint) {
@@ -13,17 +17,52 @@ final class AgentCursorOverlay: @unchecked Sendable {
         }
     }
 
-    private func showOnMain(at point: CGPoint) {
-        let panel = ensurePanel()
-        panel.setFrame(frame(for: point), display: true)
-        panel.orderFrontRegardless()
-
-        hideWorkItem?.cancel()
-        let nextHide = DispatchWorkItem { [weak panel] in
-            panel?.orderOut(nil)
+    func present(in bounds: CGRect, pid: pid_t, windowNumber: Int?) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            let point: CGPoint
+            if self.lastPID == pid, let previous = self.lastPoint, bounds.contains(previous) {
+                point = previous
+            } else {
+                point = CGPoint(x: bounds.midX, y: bounds.midY)
+            }
+            self.lastPID = pid
+            self.lastWindowNumber = windowNumber
+            self.targetBounds = bounds
+            self.showOnMain(at: point)
         }
-        hideWorkItem = nextHide
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: nextHide)
+    }
+
+    private func showOnMain(at point: CGPoint) {
+        lastPoint = point
+        let panel = ensurePanel()
+        panel.setFrame(frame(for: point), display: true, animate: false)
+        refreshVisibility()
+        if visibilityTimer == nil {
+            visibilityTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
+                self?.refreshVisibility()
+            }
+        }
+    }
+
+    private func refreshVisibility() {
+        guard let panel, let pid = lastPID, let point = lastPoint,
+              targetBounds?.contains(point) == true,
+              NSWorkspace.shared.frontmostApplication?.processIdentifier == pid,
+              targetWindowIsVisible(pid: pid) else {
+            panel?.orderOut(nil)
+            return
+        }
+        panel.orderFrontRegardless()
+    }
+
+    private func targetWindowIsVisible(pid: pid_t) -> Bool {
+        guard let lastWindowNumber else { return true }
+        guard let windows = CGWindowListCopyWindowInfo(.optionOnScreenOnly, kCGNullWindowID) as? [[String: Any]] else { return false }
+        return windows.first {
+            ($0[kCGWindowOwnerPID as String] as? Int32) == pid &&
+            ($0[kCGWindowLayer as String] as? Int) == 0
+        }?[kCGWindowNumber as String] as? Int == lastWindowNumber
     }
 
     private func ensurePanel() -> AgentCursorPanel {
@@ -47,21 +86,10 @@ final class AgentCursorOverlay: @unchecked Sendable {
     }
 
     private func frame(for topLeftPoint: CGPoint) -> NSRect {
-        let screen = screenContaining(topLeftPoint) ?? NSScreen.main
-        let screenFrame = screen?.frame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
-        let x = screenFrame.minX + topLeftPoint.x - 2
-        let y = screenFrame.maxY - topLeftPoint.y - size.height + 2
+        let primaryScreenTop = NSScreen.screens.first?.frame.maxY ?? 900
+        let x = topLeftPoint.x - 9
+        let y = primaryScreenTop - topLeftPoint.y - size.height + 2
         return NSRect(x: x, y: y, width: size.width, height: size.height)
-    }
-
-    private func screenContaining(_ topLeftPoint: CGPoint) -> NSScreen? {
-        NSScreen.screens.first { screen in
-            let frame = screen.frame
-            return topLeftPoint.x >= frame.minX
-                && topLeftPoint.x <= frame.maxX
-                && topLeftPoint.y >= 0
-                && topLeftPoint.y <= frame.height
-        }
     }
 }
 
@@ -76,29 +104,13 @@ final class AgentCursorView: NSView {
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
 
-        let shadow = NSShadow()
-        shadow.shadowBlurRadius = 3
-        shadow.shadowOffset = NSSize(width: 0, height: -1)
-        shadow.shadowColor = NSColor.black.withAlphaComponent(0.35)
-        shadow.set()
-
-        let path = NSBezierPath()
-        path.move(to: NSPoint(x: 4, y: 30))
-        path.line(to: NSPoint(x: 4, y: 4))
-        path.line(to: NSPoint(x: 12, y: 11))
-        path.line(to: NSPoint(x: 17, y: 1))
-        path.line(to: NSPoint(x: 22, y: 4))
-        path.line(to: NSPoint(x: 17, y: 14))
-        path.line(to: NSPoint(x: 27, y: 14))
-        path.close()
+        let path = BrowserPointerArtwork.path()
 
         NSColor.white.setFill()
         path.fill()
 
-        shadow.shadowColor = .clear
-        shadow.set()
-        NSColor.systemBlue.setStroke()
-        path.lineWidth = 2
+        NSColor(calibratedWhite: 0.05, alpha: 0.65).setStroke()
+        path.lineWidth = 1
         path.stroke()
     }
 }

@@ -7,8 +7,8 @@
 // provider then exists in providers.json but is invisible in the app's model
 // picker, which renders providers through their models.
 //
-// This module resolves those empty catalogs from the provider itself, so a
-// provider connected in the CLI shows up in the app without reconnecting.
+// This module resolves empty catalogs and missing context limits from the
+// provider itself, preserving discovered models without reconnecting.
 import { readCodexAuthStore } from "./codex-auth-store.js";
 import {
   codexEnvKeyForProvider,
@@ -18,6 +18,7 @@ import {
   type CodexProviderModel,
   type CodexProvidersFile,
 } from "./codex-providers.js";
+import { providerModelContextWindow } from "./codex-model-limits.js";
 import { externalFetch } from "./server-fetch.js";
 
 const DISCOVERY_TIMEOUT_MS = 8_000;
@@ -42,9 +43,9 @@ export function isChatModelId(id: string): boolean {
 }
 
 /**
- * Resolve and persist model catalogs for providers whose on-disk catalog is
- * empty. Never throws: a provider that cannot be reached keeps its existing
- * (possibly empty) catalog and is retried later.
+ * Resolve empty catalogs and enrich existing models whose context limits
+ * were omitted. Never throws: unreachable providers retain their catalog
+ * and are retried later.
  */
 export async function discoverProviderModels(opts?: {
   env?: NodeJS.ProcessEnv;
@@ -61,7 +62,7 @@ export async function discoverProviderModels(opts?: {
   let changed = false;
   await Promise.all(
     Object.entries(file.providers).map(async ([providerId, record]) => {
-      if (record.models.length > 0) return;
+      if (record.models.length > 0 && record.models.every(model => model.contextWindow)) return;
       const baseUrl = record.base_url?.trim();
       if (!baseUrl) return;
       const cacheKey = `${providerId}@${baseUrl}`;
@@ -74,9 +75,14 @@ export async function discoverProviderModels(opts?: {
         lastFailureAt.set(cacheKey, now());
         return;
       }
-      lastFailureAt.delete(cacheKey);
-      record.models = models;
-      changed = true;
+      const merged = mergeProviderModelMetadata(record.models, models);
+      if (JSON.stringify(merged) !== JSON.stringify(record.models)) {
+        record.models = merged;
+        changed = true;
+      }
+      // An endpoint with IDs but no limits must not be queried every read.
+      if (record.models.some(model => !model.contextWindow)) lastFailureAt.set(cacheKey, now());
+      else lastFailureAt.delete(cacheKey);
     }),
   );
 
@@ -148,9 +154,22 @@ export function parseModelsPayload(payload: unknown): CodexProviderModel[] {
     const id = readModelId(entry);
     if (!id || seen.has(id) || !isChatModelId(id)) continue;
     seen.add(id);
-    models.push({ id, name: readModelName(entry) ?? id, reasoning: true });
+    models.push({ id, name: readModelName(entry) ?? id, reasoning: isRecord(entry) && typeof entry.reasoning === "boolean" ? entry.reasoning : true,
+      contextWindow: providerModelContextWindow(entry) });
   }
   return models;
+}
+
+/** Fill exact model IDs without replacing the provider's discovered model list
+ * or borrowing metadata from similarly named aliases. */
+export function mergeProviderModelMetadata(existing: CodexProviderModel[], advertised: CodexProviderModel[]): CodexProviderModel[] {
+  if (!existing.length) return advertised;
+  const byId = new Map(advertised.map(model => [model.id, model]));
+  return existing.map(model => {
+    const metadata = byId.get(model.id);
+    const limits = [model.contextWindow, metadata?.contextWindow].filter((limit): limit is number => typeof limit === "number" && Number.isFinite(limit) && limit > 0);
+    return { ...model, ...(limits.length ? { contextWindow: Math.min(...limits) } : {}) };
+  });
 }
 
 function readModelId(entry: unknown): string | null {

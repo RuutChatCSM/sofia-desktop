@@ -60,6 +60,17 @@ export type SofiaControlResult =
 
 export type SofiaControlHelpers = {
   setNarration: (text: string) => void;
+  /**
+   * The session that requested the action, when the caller supplied one. A
+   * command that opens durable surfaces (browser tabs, files) must attach them
+   * to this session instead of the session the user is currently viewing.
+   */
+  context?: SofiaControlRequestContext;
+};
+
+export type SofiaControlRequestContext = {
+  sessionId?: string;
+  workspaceId?: string;
 };
 
 export type SofiaControlTargetRef = {
@@ -116,7 +127,11 @@ type SofiaControlAPI = {
   version: number;
   snapshot: () => SofiaControlSnapshot;
   listActions: () => SofiaControlActionMetadata[];
-  execute: (actionId: string, args?: unknown) => Promise<SofiaControlResult>;
+  execute: (
+    actionId: string,
+    args?: unknown,
+    context?: SofiaControlRequestContext,
+  ) => Promise<SofiaControlResult>;
   context: () => SofiaContextSnapshot;
   query: (request: SofiaAffordanceRequest) => Promise<SofiaAffordanceResult>;
   command: (request: SofiaAffordanceRequest) => Promise<SofiaAffordanceResult>;
@@ -392,7 +407,11 @@ export function SofiaControlProvider({ children }: { children: ReactNode }) {
     await wait(SPOTLIGHT_TIMING_MS.release);
   }, []);
 
-  const executeAction = useCallback(async (actionId: string, args?: unknown): Promise<SofiaControlResult> => {
+  const executeAction = useCallback(async (
+    actionId: string,
+    args?: unknown,
+    context?: SofiaControlRequestContext,
+  ): Promise<SofiaControlResult> => {
     const registered = actionsRef.current.get(actionId);
     const action = registered?.ref.current;
     if (!registered || !action) return { ok: false, actionId, error: `Unknown action: ${actionId}` };
@@ -419,7 +438,7 @@ export function SofiaControlProvider({ children }: { children: ReactNode }) {
       await playTargetChoreography(action, runId);
       setNarration(`Running ${action.label}…`);
       const effectiveArgs = args === undefined ? action.previewArgs : args;
-      const result = await action.execute(effectiveArgs, { setNarration });
+      const result = await action.execute(effectiveArgs, { setNarration, context });
       const resultError = returnedActionError(result);
       if (resultError) {
         setNarration(`Could not ${action.label}: ${resultError}`);
@@ -473,7 +492,10 @@ export function SofiaControlProvider({ children }: { children: ReactNode }) {
     }
     try {
       const effectiveArgs = request.args === undefined ? action.previewArgs : request.args;
-      const result = await action.execute(effectiveArgs, { setNarration: () => undefined });
+      const result = await action.execute(effectiveArgs, {
+        setNarration: () => undefined,
+        context: request.context,
+      });
       const resultError = returnedActionError(result);
       if (resultError) {
         return {
@@ -536,7 +558,7 @@ export function SofiaControlProvider({ children }: { children: ReactNode }) {
       };
     }
     busyActorRef.current = request.actor ?? null;
-    const result = await executeAction(request.id, request.args);
+    const result = await executeAction(request.id, request.args, request.context);
     if (!busyActionIdRef.current) busyActorRef.current = null;
     if (!result.ok) {
       return {

@@ -4,13 +4,22 @@
 // stdio). Used when the selected engine is codex.
 import { SofiaServerError } from "./sofia-server";
 
+import type { ProviderWireApi } from "@/app/utils/providers";
 import type { WorkspaceChangesResponse } from "@/react-app/domains/session/changes/change-set-source";
 
 export type CodexSessionStatus = "idle" | "running" | "error";
 
+/** One step of the Codex `update_plan` checklist, normalized by the server. */
+export type CodexPlanItem = { step: string; status: string };
+
 export type CodexSession = {
   id: string; // codex-<threadId>
   threadId: string;
+  parentSessionId?: string;
+  agentNickname?: string;
+  agentPath?: string;
+  agentStatus?: "working" | "completed" | "failed" | "interrupted" | "unknown";
+  agentUpdatedAt?: string;
   title: string;
   workspaceId: string;
   created: string;
@@ -34,6 +43,7 @@ export type RecordedTurnChanges = {
 export type CodexEvent =
   | { type: "session.created"; session: CodexSession }
   | { type: "session.updated"; session: CodexSession }
+  | { type: "plan.updated"; sessionId: string; threadId: string; turnId: string; explanation: string | null; plan: CodexPlanItem[] }
   | { type: "message.delta"; sessionId: string; threadId: string; text: string; itemId?: string }
   | { type: "thinking.delta"; sessionId: string; threadId: string; text: string; itemId?: string }
   | { type: "item.started"; sessionId: string; threadId: string; itemType: string; item: unknown; turnId: string }
@@ -43,7 +53,7 @@ export type CodexEvent =
   | { type: "tool.output"; sessionId: string; threadId: string; itemId: string; text: string }
   | { type: "file.patch"; sessionId: string; threadId: string; itemId: string; patch: unknown }
   | { type: "turn.changes"; sessionId: string; changes: RecordedTurnChanges }
-  | { type: "turn.completed"; sessionId: string; threadId: string }
+  | { type: "turn.completed"; sessionId: string; threadId: string; outcome?: "completed" | "cancelled" | "failed" }
   | { type: "approval.requested"; sessionId: string; threadId: string; params: unknown }
   | { type: "thread.status"; sessionId: string; threadId: string; status: unknown }
   | { type: "warning"; sessionId: string; threadId: string; message: string }
@@ -92,7 +102,7 @@ export type CodexProviderConfigWire = {
   providerName: string;
   baseUrl: string | null;
   envKey: string | null;
-  wireApi: "responses" | "chatcompletions";
+  wireApi: ProviderWireApi;
   models: CodexProviderModelWire[];
 };
 
@@ -359,8 +369,22 @@ export function createCodexSessionClient(options: CodexSessionClientOptions) {
         },
       ),
 
+    subagents: (sessionId: string) =>
+      requestJson<{ok: boolean; sessions: CodexSession[]}>(
+        options.baseUrl,
+        `${workspacePath}/codex/sessions/${encodeURIComponent(sessionId)}/subagents`,
+        {token: options.token, hostToken: options.hostToken, timeoutMs: 15_000},
+      ),
+
+    subagentItems: (sessionId: string, threadId: string) =>
+      requestJson<{ ok: boolean; items: Array<{ turnId: string; item: Record<string, unknown> }> }>(
+        options.baseUrl,
+        `${workspacePath}/codex/sessions/${encodeURIComponent(sessionId)}/subagents/${encodeURIComponent(threadId)}/items`,
+        { token: options.token, hostToken: options.hostToken, timeoutMs: 30_000 },
+      ),
+
     items: (sessionId: string) =>
-      requestJson<{ ok: boolean; changes?: RecordedTurnChanges[]; items: Array<{ turnId: string; item: Record<string, unknown> }> }>(
+      requestJson<{ ok: boolean; parentSessionId?: string; subagentSessions?: CodexSession[]; outcomes?: Array<{ turnId: string; outcome: "completed" | "cancelled" | "failed"; startedAt?: number; completedAt?: number }>; changes?: RecordedTurnChanges[]; items: Array<{ turnId: string; item: Record<string, unknown> }>; plan?: CodexPlanItem[] | null }>(
         options.baseUrl,
         `${workspacePath}/codex/sessions/${encodeURIComponent(sessionId)}/items`,
         { token: options.token, hostToken: options.hostToken, timeoutMs: 30_000 },
