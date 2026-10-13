@@ -847,7 +847,9 @@ function applyEvent(entry: SyncEntry, workspaceId: string, event: WorkspaceEngin
       sessionId: question.sessionID,
       question: questionNotificationText(question),
     });
-    useSessionActivityStore.getState().setWaitingRequest(workspaceId, question.sessionID, "question", question.id, true);
+    if (question.isBlocking !== false) {
+      useSessionActivityStore.getState().setWaitingRequest(workspaceId, question.sessionID, "question", question.id, true);
+    }
     if (!isTrackedSession(entry, question.sessionID)) return;
     const receivedAt = Date.now();
     queryClient.setQueryData<PendingQuestion[]>(questionKey(workspaceId, question.sessionID), (current = []) => {

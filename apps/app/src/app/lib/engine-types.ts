@@ -287,6 +287,7 @@ export type ToolPart = {
 };
 
 export type QuestionInfo = {
+    secret?: boolean;
     /**
      * Complete question
      */
@@ -304,6 +305,7 @@ export type QuestionInfo = {
 };
 
 export type QuestionRequest = {
+    isBlocking?: boolean;
     id: string;
     sessionID: string;
     /**

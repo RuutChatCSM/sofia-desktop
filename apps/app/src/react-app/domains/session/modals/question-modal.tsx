@@ -220,7 +220,7 @@ export function QuestionPanel(props: QuestionPanelProps) {
             </label>
             <div className="flex items-center gap-2">
               <input
-                type="text"
+                type={currentQuestion?.secret ? "password" : "text"}
                 value={state.customInput}
                 onFocus={() => dispatch({ type: "setCustomAnswerActive", value: true })}
                 onClick={() => dispatch({ type: "setCustomAnswerActive", value: true })}
