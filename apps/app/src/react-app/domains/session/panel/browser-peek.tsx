@@ -1,3 +1,5 @@
+import { avoidSessionSummary } from "./session-summary-layout";
+import type { PreviewRect } from "./computer-preview-layout";
 /** @jsxImportSource react */
 // Floating Peek: a glanceable live browser surface, not a miniature browser.
 //
@@ -74,6 +76,7 @@ export function BrowserPeek({ tab, tabCount, onExpand, onHide }: BrowserPeekProp
   expandRef.current = onExpand;
   hideRef.current = onHide;
 
+  const [summaryObstacles,setSummaryObstacles]=React.useState<PreviewRect[]>([]);
   const [surface, setSurface] = React.useState<BrowserSurfaceSize | null>(null);
   const [drag, setDrag] = React.useState<BrowserPeekDragState | null>(null);
   const [frameColor, setFrameColor] = React.useState<string | null>(null);
@@ -85,7 +88,7 @@ export function BrowserPeek({ tab, tabCount, onExpand, onHide }: BrowserPeekProp
   const size = React.useMemo(() => browserPeekSize(tab.viewport), [tab.viewport]);
   const available = surface ?? NO_SURFACE;
   const restingPosition = clampPeekPosition(
-    storedPosition ?? defaultPeekPosition(available, size),
+    storedPosition ?? avoidSessionSummary(defaultPeekPosition(available, size),size,available,summaryObstacles),
     available,
     size,
   );
@@ -102,6 +105,10 @@ export function BrowserPeek({ tab, tabCount, onExpand, onHide }: BrowserPeekProp
     if (!host) return;
     const measure = () => {
       const rect = host.getBoundingClientRect();
+      const obstacles=Array.from(host.querySelectorAll<HTMLElement>('[data-floating-session-summary] [data-session-resources]')).map(element=>{
+        const box=element.getBoundingClientRect();return {x:box.left-rect.left,y:box.top-rect.top,width:box.width,height:box.height};
+      });
+      setSummaryObstacles(previous=>JSON.stringify(previous)===JSON.stringify(obstacles)?previous:obstacles);
       setSurface((previous) =>
         previous && previous.width === rect.width && previous.height === rect.height
           ? previous
@@ -111,7 +118,10 @@ export function BrowserPeek({ tab, tabCount, onExpand, onHide }: BrowserPeekProp
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(host);
-    return () => observer.disconnect();
+    const watch=()=>{host.querySelectorAll('[data-session-resources]').forEach(element=>observer.observe(element));measure();};
+    const mutations=new MutationObserver(watch);
+    mutations.observe(host,{childList:true,subtree:true});watch();
+    return () => {observer.disconnect();mutations.disconnect();};
   }, []);
 
   // A workspace resize can leave the card hanging off an edge; the stored

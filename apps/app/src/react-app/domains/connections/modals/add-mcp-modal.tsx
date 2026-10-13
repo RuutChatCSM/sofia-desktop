@@ -18,11 +18,12 @@ import { t } from "@/i18n";
 import type { McpConnectResult } from "../store";
 import { conflictsWithSofiaConnect } from "../mcp-connection-boundary";
 import { submitMcpEntry } from "./add-mcp-submission";
+import type { InstallScope } from "../install-flow";
 
 export type AddMcpModalProps = {
   open: boolean;
   onClose: () => void;
-  onAdd: (entry: McpDirectoryInfo) => Promise<McpConnectResult>;
+  onAdd: (entry: McpDirectoryInfo, scope: InstallScope) => Promise<McpConnectResult>;
   busy: boolean;
   isRemoteWorkspace: boolean;
 };
@@ -30,6 +31,7 @@ export type AddMcpModalProps = {
 type AddMcpState = {
   name: string;
   serverType: "remote" | "local";
+  scope: InstallScope;
   url: string;
   oauthExpanded: boolean;
   oauthClientId: string;
@@ -43,6 +45,7 @@ type AddMcpState = {
 const initialAddMcpState: AddMcpState = {
   name: "",
   serverType: "remote",
+  scope: "project",
   url: "",
   oauthExpanded: false,
   oauthClientId: "",
@@ -121,6 +124,7 @@ export function AddMcpModal(props: AddMcpModalProps) {
           ...(oauthConfig ? { oauthConfig } : {}),
         },
         t("mcp.connect_failed"),
+        state.scope,
       );
       if (error) {
         dispatch({ error, submitting: false });
@@ -144,6 +148,7 @@ export function AddMcpModal(props: AddMcpModalProps) {
           oauth: false,
         },
         t("mcp.connect_failed"),
+        state.scope,
       );
       if (error) {
         dispatch({ error, submitting: false });
@@ -217,6 +222,39 @@ export function AddMcpModal(props: AddMcpModalProps) {
                 {t("mcp.remote_workspace_url_hint")}
               </div>
             ) : null}
+          </div>
+
+          <div>
+            <div className="mb-1 text-xs font-medium text-dls-secondary">
+              {t("mcp.install_scope")}
+            </div>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                  state.scope === "project"
+                    ? "bg-dls-active text-dls-text"
+                    : "text-dls-secondary hover:text-dls-text hover:bg-dls-hover"
+                }`}
+                onClick={() => dispatch({ scope: "project" })}
+              >
+                {t("mcp.scope_project")}
+              </button>
+              <button
+                type="button"
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                  state.scope === "global"
+                    ? "bg-dls-active text-dls-text"
+                    : "text-dls-secondary hover:text-dls-text hover:bg-dls-hover"
+                }`}
+                onClick={() => dispatch({ scope: "global" })}
+              >
+                {t("mcp.scope_global")}
+              </button>
+            </div>
+            <div className="mt-2 text-[11px] text-dls-secondary">
+              {state.scope === "global" ? t("mcp.scope_global_hint") : t("mcp.scope_project_hint")}
+            </div>
           </div>
 
           {state.serverType === "remote" ? (

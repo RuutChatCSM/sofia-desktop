@@ -1,3 +1,8 @@
+import { useCodexSessionStore } from "@/react-app/domains/session/codex-session-store";
+import { CollaborationActivity } from "@/components/chat/collaboration-activity"
+import { isCollaborationActivity } from "@/lib/collaboration-activity"
+import { normalizeUserMessageDisplayParts } from "@/react-app/domains/session/sync/user-message-display";
+import { getArtifactsFromMessages } from "@/lib/artifacts";
 "use memo";
 
 import * as React from "react"
@@ -10,13 +15,16 @@ import {
   FileIcon,
   FolderOpen,
   LoaderCircle,
+  ListCollapse,
   MoreHorizontal,
   Pencil,
   Sparkles,
   Split,
   Undo2,
+  Wifi,
 } from "lucide-react"
 import { PaperGrainGradient } from "@sofia/ui/react"
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import {
   DynamicToolUIPart,
   isFileUIPart,
@@ -67,6 +75,8 @@ import {
   finishedTurnDurationMs,
   resolveTurnTiming,
   turnWorkLabel,
+  turnWorkOutcome,
+  formatTurnWorkDuration,
 } from "@/components/chat/turn-timing"
 import { useSessionActivities } from "@/react-app/domains/session/use-session-activities"
 import { ArtifactList } from "@/components/chat/artifact"
@@ -190,6 +200,16 @@ class ToolMessage extends React.Component<ToolMessageProps, { failed: boolean }>
 const ToolMessageInner = ({ part }: ToolMessageProps) => {
   const { onMcpReconnect, onMcpReopenAuthorization, onMcpRetry, developerMode } = useMessageList()
 
+  if (part.type === "dynamic-tool" && part.toolName === "network_status") {
+    return <div data-network-status="" className="flex items-center gap-2 text-sm text-muted-foreground"><Wifi aria-hidden="true" className="size-4 shrink-0"/><span>{typeof part.input === "object" && part.input !== null && "message" in part.input && typeof part.input.message === "string" ? part.input.message : "Reconnecting… waiting for network"}</span></div>
+  }
+
+  if (part.type === "dynamic-tool" && part.toolName === "context_compaction") {
+    return <div data-context-compaction="" className="flex items-center gap-2 text-sm text-muted-foreground"><ListCollapse className="size-4 shrink-0" aria-hidden="true"/><span>Context automatically compacted</span></div>
+  }
+
+  if (part.type === "dynamic-tool" && isCollaborationActivity(part)) return <CollaborationActivity part={part} />
+
   if (isBashToolPart(part)) {
     return <BashTool part={part} />
   }
@@ -303,12 +323,18 @@ function retryDelaySeconds(status: RetryStatus) {
 interface FileMessageProps {
   part: FileUIPart
   tone: "user" | "assistant"
+  /** Transcript images are bigger than the composer's chips. */
+  imageSizeClassName?: string
 }
 
-function FileMessage({ part, tone }: FileMessageProps) {
+function FileMessage({ part, tone, imageSizeClassName }: FileMessageProps) {
+  if (part.mediaType === "application/x-sofia-annotation") {
+    return <AnnotationMessageChip url={part.url} />
+  }
   const title = getFileTitle(part)
   const badge = getMediaBadge(part)
-  const isImage = part.mediaType.startsWith("image/") && Boolean(part.url)
+  const inlinePreview = /^(?:data:|blob:|https?:\/\/)/.test(part.url)
+  const isImage = part.mediaType.startsWith("image/") && inlinePreview
   const downloadUrl = getSafeFileDownloadUrl(part)
   const revealPath = getSafeFileRevealPath(part)
   const canReveal = isElectronRuntime() && Boolean(revealPath)
@@ -330,7 +356,7 @@ function FileMessage({ part, tone }: FileMessageProps) {
   }, [revealPath])
 
   if (isImage && tone === "user") {
-    return <ImageAttachmentBadge src={part.url} alt={title} />
+    return <ImageAttachmentBadge src={part.url} alt={title} sizeClassName={imageSizeClassName} />
   }
 
   if (isImage) {
@@ -347,6 +373,10 @@ function FileMessage({ part, tone }: FileMessageProps) {
     )
   }
 
+  if (part.mediaType.startsWith("image/") || part.mediaType.startsWith("video/") || part.mediaType.startsWith("audio/") || part.mediaType === "application/pdf") {
+    return <TranscriptMedia part={part} title={title} />
+  }
+
   return (
     <div className="flex h-auto w-fit min-w-0 max-w-full shrink items-center justify-start gap-2 rounded-xl border border-border/70 bg-background/40 ps-2 pe-2 py-1 text-left text-sm font-medium whitespace-normal">
       <div className="flex min-w-0 items-center gap-2 pe-2">
@@ -357,7 +387,7 @@ function FileMessage({ part, tone }: FileMessageProps) {
           <DescriptiveButtonTitle className="truncate text-xs">{title}</DescriptiveButtonTitle>
           {badge ? (
             <DescriptiveButtonDescription className="text-[10px]">
-              {badge}
+              {badge}{!inlinePreview && (part.mediaType.startsWith("image/") || part.mediaType.startsWith("video/") || part.mediaType.startsWith("audio/") || part.mediaType === "application/pdf") ? " · Preview unavailable" : ""}
             </DescriptiveButtonDescription>
           ) : null}
         </DescriptiveButtonContent>
@@ -393,6 +423,89 @@ function FileMessage({ part, tone }: FileMessageProps) {
         </DropdownMenu>
       ) : null}
     </div>
+  )
+}
+
+function workspaceRelativeMediaPath(url: string, root: string): string | null {
+  try {
+    const parsed = new URL(url)
+    if (parsed.protocol !== "file:") return null
+    const pathname = decodeURIComponent(parsed.pathname).replace(/\\/g, "/")
+    const base = root.replace(/\\/g, "/").replace(/\/$/, "")
+    return base && pathname.startsWith(`${base}/`) ? pathname.slice(base.length + 1) : null
+  } catch {
+    return null
+  }
+}
+
+function TranscriptMedia({ part, title }: { part: FileUIPart; title: string }) {
+  const { mediaClient, workspaceId, workspaceRoot } = useMessageList()
+  const relativePath = workspaceRelativeMediaPath(part.url, workspaceRoot)
+  const initialUrl = /^(?:data:|blob:|https?:\/\/)/.test(part.url) ? part.url : ""
+  const [previewUrl, setPreviewUrl] = React.useState(initialUrl)
+  const [loading, setLoading] = React.useState(false)
+  const [error, setError] = React.useState("")
+  const objectUrl = React.useRef<string | null>(null)
+  React.useEffect(() => () => { if (objectUrl.current) URL.revokeObjectURL(objectUrl.current) }, [])
+  const loadPreview = React.useCallback(async () => {
+    if (!mediaClient || !relativePath || loading) return
+    setLoading(true)
+    setError("")
+    try {
+      const response = await mediaClient.downloadWorkspaceFile(workspaceId, relativePath)
+      const url = URL.createObjectURL(new Blob([response.data], { type: response.contentType ?? part.mediaType }))
+      if (objectUrl.current) URL.revokeObjectURL(objectUrl.current)
+      objectUrl.current = url
+      setPreviewUrl(url)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Preview unavailable")
+    } finally {
+      setLoading(false)
+    }
+  }, [loading, mediaClient, part.mediaType, relativePath, workspaceId])
+
+  if (!previewUrl) {
+    return <button type="button" onClick={() => { void loadPreview() }} disabled={!mediaClient || !relativePath || loading}
+      className="rounded-xl border border-border/70 bg-background/40 px-3 py-2 text-left text-xs hover:bg-muted disabled:cursor-default">
+      <span className="block font-medium">{title}</span>
+      <span className="text-muted-foreground">{error || (loading ? "Loading preview…" : relativePath ? "Load preview" : "Preview unavailable")}</span>
+    </button>
+  }
+  if (part.mediaType.startsWith("image/")) return <ImageAttachmentBadge src={previewUrl} alt={title} sizeClassName="h-24 w-24" />
+  if (part.mediaType.startsWith("video/")) return <video controls preload="metadata" src={previewUrl} aria-label={title} className="max-h-64 max-w-full rounded-xl border border-border/70 bg-black" />
+  if (part.mediaType.startsWith("audio/")) return <audio controls preload="metadata" src={previewUrl} aria-label={title} className="max-w-full" />
+  return <div className="w-56 max-w-full overflow-hidden rounded-xl border border-border/70 bg-background/40">
+    <object data={`${previewUrl}#page=1&toolbar=0`} type="application/pdf" aria-label={`Preview of ${title}`} className="h-64 w-full">
+      <span className="block p-3 text-xs text-muted-foreground">PDF preview unavailable</span>
+    </object>
+    <div className="flex items-center justify-between gap-2 px-2 py-1 text-xs">
+      <span className="truncate">{title}</span>
+      <a href={previewUrl} download={title} aria-label={`Download ${title}`}><Download className="size-3.5" /></a>
+    </div>
+  </div>
+}
+
+function AnnotationMessageChip({ url }: { url: string }) {
+  const [open, setOpen] = React.useState(false)
+  let description = "Annotation details unavailable"
+  try {
+    description = decodeURIComponent(url.slice(url.indexOf(",") + 1))
+  } catch {
+    // A damaged local record should still leave a readable chip.
+  }
+  return (
+    <>
+      <button type="button" onClick={() => setOpen(true)} title={description}
+        className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-muted/40 px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted">
+        <Pencil className="size-3.5" /> Annotation
+      </button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogTitle>Browser annotation</DialogTitle>
+          <p className="whitespace-pre-wrap break-words text-sm text-muted-foreground">{description}</p>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }
 
@@ -673,13 +786,22 @@ function renderUserTextWithoutReferences(text: string, highlightQuery: string | 
 
 const UserMessage = React.memo(
   ({ message, isStreaming }: UserMessageProps) => {
-    const { onRevertToUserMessage, onForkAtMessage, onEditUserMessage, highlightQuery } = useMessageList()
-    const messageText = React.useMemo(() => getMessagesText([message]), [message])
+    const { onRevertToUserMessage, onForkAtMessage, onEditUserMessage, highlightQuery, readOnly } = useMessageList()
+    const displayParts = React.useMemo(() => normalizeUserMessageDisplayParts(message.parts), [message.parts])
+    const messageText = React.useMemo(() => getMessagesText([{...message,parts:displayParts}]), [message,displayParts])
     const inlineParts = React.useMemo(
-      () => message.parts.filter((part) => (part.type === "text" && Boolean(part.text)) || isFileUIPart(part)),
-      [message.parts],
+      () => displayParts.filter((part) => (part.type === "text" && Boolean(part.text)) || isFileUIPart(part)),
+      [displayParts],
     )
-    const hasContent = inlineParts.length > 0
+    const userFileParts = React.useMemo(
+      () => inlineParts.filter((part): part is FileUIPart => isFileUIPart(part)),
+      [inlineParts],
+    )
+    const textParts = React.useMemo(
+      () => inlineParts.filter((part): part is Extract<UIMessage["parts"][number], { type: "text" }> => part.type === "text"),
+      [inlineParts],
+    )
+    const hasText = textParts.some((part) => part.text.trim().length > 0)
 
     return (
       <Message
@@ -696,31 +818,28 @@ const UserMessage = React.memo(
                 className="group flex w-full flex-col items-end gap-1 !select-text"
                 style={{ userSelect: "text" }}
               >
-                {hasContent ? (
+                {userFileParts.length > 0 ? (
+                  <div className="flex max-w-[85%] flex-wrap justify-end gap-2 sm:max-w-[75%]" aria-label="Message attachments">
+                    {userFileParts.map((part, index) => (
+                      <FileMessage
+                        key={`file-${index}`}
+                        part={part}
+                        tone="user"
+                        imageSizeClassName={userFileParts.length > 1 ? "h-20 w-20" : "h-24 w-24"}
+                      />
+                    ))}
+                  </div>
+                ) : null}
+                {hasText ? (
                   <MessageContent
                     className="bg-muted text-foreground max-w-[85%] rounded-3xl px-4 py-2.5 leading-6 sm:max-w-[75%] !select-text not-prose"
                     style={{ userSelect: "text" }}
                   >
-                    {inlineParts.map((part, index) => {
-                      if (part.type === "text") {
-                        return (
-                          <span key={`text-${index}`} className="whitespace-pre-wrap">
-                            {renderUserTextWithSkillChips(part.text, highlightQuery)}
-                          </span>
-                        )
-                      }
-                      if (isFileUIPart(part)) {
-                        return (
-                          <span
-                            key={`file-${part.url}-${index}`}
-                            className="mx-1 inline-flex align-middle not-prose"
-                          >
-                            <FileMessage part={part} tone="user" />
-                          </span>
-                        )
-                      }
-                      return null
-                    })}
+                    {textParts.map((part, index) => (
+                        <span key={`text-${index}`} className="whitespace-pre-wrap">
+                          {renderUserTextWithSkillChips(part.text, highlightQuery)}
+                        </span>
+                    ))}
                   </MessageContent>
                 ) : null}
                 {!isStreaming && (
@@ -731,7 +850,7 @@ const UserMessage = React.memo(
                   >
                     <MessageTimestamp message={message} className="mr-1.5" />
                     <CopyMessageButton messages={[message]} />
-                    {messageText ? (
+                    {messageText && !readOnly ? (
                       <MessageAction tooltip="Edit message">
                         <Button
                           variant="ghost"
@@ -743,7 +862,7 @@ const UserMessage = React.memo(
                         </Button>
                       </MessageAction>
                     ) : null}
-                    <MessageAction tooltip="Branch in new chat">
+                    {!readOnly && <MessageAction tooltip="Branch in new chat">
                       <Button
                         variant="ghost"
                         size="icon"
@@ -752,8 +871,8 @@ const UserMessage = React.memo(
                       >
                         <Split className="rotate-90" />
                       </Button>
-                    </MessageAction>
-                    <MessageAction tooltip="Revert">
+                    </MessageAction>}
+                    {!readOnly && <MessageAction tooltip="Revert">
                       <Button
                         variant="ghost"
                         size="icon"
@@ -762,14 +881,14 @@ const UserMessage = React.memo(
                       >
                         <Undo2 />
                       </Button>
-                    </MessageAction>
+                    </MessageAction>}
                   </MessageActions>
                 )}
               </div>
             }
           />
           <ContextMenuContent className="w-56">
-            {messageText ? (
+            {messageText && !readOnly ? (
               <ContextMenuItem onClick={() => onEditUserMessage(message.id, messageText)}>
                 <Pencil className="size-4" />
                 Edit message
@@ -781,14 +900,14 @@ const UserMessage = React.memo(
                 Copy
               </ContextMenuItem>
             ) : null}
-            <ContextMenuItem onClick={() => onForkAtMessage(message.id)}>
+            {!readOnly && <ContextMenuItem onClick={() => onForkAtMessage(message.id)}>
               <Split className="size-4 rotate-90" />
               Branch in new chat
-            </ContextMenuItem>
-            <ContextMenuItem onClick={() => onRevertToUserMessage(message.id)}>
+            </ContextMenuItem>}
+            {!readOnly && <ContextMenuItem onClick={() => onRevertToUserMessage(message.id)}>
               <Undo2 className="size-4" />
               Revert
-            </ContextMenuItem>
+            </ContextMenuItem>}
           </ContextMenuContent>
         </ContextMenu>
       </Message>
@@ -992,8 +1111,9 @@ function TurnWorkBlock({
   }, [defaultOpen])
 
   return (
-    <Collapsible open={open} onOpenChange={setOpen} className="flex w-full flex-col gap-2">
+    <Collapsible open={open} onOpenChange={setOpen} className="flex w-full flex-col gap-4">
       <div className="mx-auto flex w-full max-w-[800px] px-2 md:px-6">
+        <div data-turn-work-divider="" className="flex w-full border-b border-border/60 pb-2">
         <CollapsibleTrigger
           className="group flex cursor-pointer items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
           aria-label={open ? `${label}. Hide work` : `${label}. Show work`}
@@ -1019,6 +1139,7 @@ function TurnWorkBlock({
             )}
           />
         </CollapsibleTrigger>
+        </div>
       </div>
       <CollapsibleContent className="h-(--collapsible-panel-height) overflow-hidden transition-[height] duration-150 ease-out data-starting-style:h-0 data-ending-style:h-0 [&[hidden]:not([hidden='until-found'])]:hidden">
         {children}
@@ -1184,7 +1305,7 @@ function MessageGroup({
   isStreaming,
   activeLabel,
 }: AssistantMessageGroupProps) {
-  const { sessionId, onRevertToUserMessage, onForkAtMessage, showThinking } = useMessageList()
+  const { sessionId, onRevertToUserMessage, onForkAtMessage, showThinking, readOnly } = useMessageList()
   const lastItem = items[items.length - 1]
   // Branch/revert must target a real server-side message id. Synthetic
   // client-side messages (e.g. session errors) don't exist on the server and
@@ -1200,9 +1321,11 @@ function MessageGroup({
   // (the work block) and from what Sofia is doing now (Activity). Hints only for
   // now: there is no repository-backed producer yet, so this is explicitly
   // `source: "tool-events"` and carries no line counts.
-  const turnArtifacts = useArtifacts(items.map((item) => item.message), { includeTargetFallbacks: false })
-  const openArtifactPath = useOpenArtifactPath()
+  const changeRoot = useCodexSessionStore(state => state.sessions[sessionId]?.session.cwd);
   const turnId = items[0] ? messageTurnId(items[0].message) ?? items[0].message.id : null
+  const changeMessages = React.useMemo(() => messages.filter(message => message.role === "assistant" && messageTurnId(message) === turnId), [messages, turnId])
+  const turnArtifacts = React.useMemo(() => getArtifactsFromMessages(changeMessages.length ? changeMessages : items.map(item => item.message), [], {includeTargetFallbacks:false}), [changeMessages, items])
+  const openArtifactPath = useOpenArtifactPath()
   const hintChangeSet = React.useMemo(
     () =>
       turnId
@@ -1210,10 +1333,12 @@ function MessageGroup({
             sessionId,
             turnId,
             startedAt: timing.startedAt ?? 0,
+            root: changeRoot,
             paths: turnArtifacts.map((artifact) => artifact.path),
+            messages: changeMessages.length ? changeMessages : items.map(item => item.message),
           })
         : null,
-    [sessionId, timing.startedAt, turnArtifacts, turnId],
+    [sessionId, timing.startedAt, turnArtifacts, turnId, items, changeMessages, changeRoot],
   )
   // Never borrow another turn's edits for a new reply, even while its own set is loading.
   const repoChangeSet = useChangeSetStore((state) =>
@@ -1225,7 +1350,7 @@ function MessageGroup({
   // like from the working tree, and letting that empty set win hid the card for a
   // turn that plainly changed files; the hints are better than nothing there.
   const changeSet =
-    repoChangeSet && changeSetFiles(repoChangeSet).length > 0 ? repoChangeSet : hintChangeSet
+    repoChangeSet?.source === "git" && changeSetFiles(repoChangeSet).length > 0 ? repoChangeSet : hintChangeSet
   // Keyed by content, not object identity: the hint set is rebuilt on every
   // render, and depending on the object made this effect (and therefore a store
   // write, and therefore a render) fire forever.
@@ -1260,26 +1385,15 @@ function MessageGroup({
   // sibling of it.
   let workItems = presentation.work
   let proseItems = presentation.answerItems
-  // A finished turn whose only prose is commentary — no explicit final answer —
-  // must still show the one thing Sofia said. Promote that terminal note to the
-  // answer instead of leaving the whole execution trace expanded to find it; a
-  // failed guess at the answer is not a reason to open the disclosure.
-  if (!isLiveGroup && proseItems.length === 0) {
-    const lastCommentary = workItems.findLastIndex((entry) => entry.kind === "commentary")
-    const promoted = lastCommentary >= 0 ? workItems[lastCommentary] : undefined
-    if (promoted?.kind === "commentary") {
-      proseItems = [promoted.item]
-      workItems = workItems.filter((_, index) => index !== lastCommentary)
-    }
-  }
 
   const durationMs = finishedTurnDurationMs(timing)
-  // Active: the semantic operation. Finished: how long the turn took.
+  // Shipped work header: elapsed time while working and after completion.
   const workLabel = turnWorkLabel({
     isLive: isLiveGroup,
-    activeLabel,
+    status: turnWorkOutcome(items.map((item) => item.message)),
+    elapsedMs: liveElapsedMs,
     durationMs,
-    formatDuration: formatToolCallDuration,
+    formatDuration: formatTurnWorkDuration,
   })
   // A finished turn keeps its execution disclosure even when everything it did
   // was talk: "Worked for 1m 30s" is what tells the user how long the turn took,
@@ -1334,6 +1448,10 @@ function MessageGroup({
   // the presentation was derived, so this only has to place each entry — and a
   // milestone is already one row for a whole run of tool events.
   const renderWorkEntry = (entry: (typeof workItems)[number]) => {
+    if (entry.kind === "collaboration") {
+      const part = entry.parts[0];
+      return part ? <WorkRow key={entry.key} kind="detail"><CollaborationActivity part={part} parts={entry.parts} /></WorkRow> : null;
+    }
     if (entry.kind === "thought") {
       // One row per reasoning *phase*, not per packet. Behind a detail inside the
       // work block: the narrative is commentary and milestones, and thinking is
@@ -1374,7 +1492,9 @@ function MessageGroup({
       {/* The scroll area keeps the same 8px rhythm the parts inside a single
           message use, so a step row is spaced identically whether or not a
           message boundary happens to fall between it and the previous row. */}
-      {hasWork ? (
+      {hasWork && workItems.length === 0 ? (
+        <div data-turn-work-summary="" className="mx-auto flex w-full max-w-[800px] px-2 text-sm tabular-nums text-muted-foreground md:px-6">{workLabel}</div>
+      ) : hasWork ? (
         // One vertical scroll owner: the transcript. The work block is a plain
         // collapsible row (no inner viewport), so the session scroll controller
         // decides whether to follow the tail.
@@ -1383,7 +1503,7 @@ function MessageGroup({
             label={workLabel}
             active={isLiveGroup}
             streaming={isLiveGroup && isStreaming}
-            elapsedMs={liveElapsedMs}
+            elapsedMs={null}
             // Open only while it works. A finished turn collapses whatever its
             // answer detection concluded: developer mode changes what expanding
             // shows, not whether a finished turn starts expanded.
@@ -1392,7 +1512,7 @@ function MessageGroup({
             {/* The disclosure owns the internal rhythm: whole-narrative rows sit
                 closer together than transcript messages do, because they are not
                 messages. */}
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-2">
               {workItems.map(renderWorkEntry)}
             </div>
           </TurnWorkBlock>
@@ -1416,7 +1536,7 @@ function MessageGroup({
           still working has no result yet — showing the card the moment a file is
           touched puts a "what changed" summary inside the work it summarises, and
           it rewrites itself on every edit. It belongs to the settled turn. */}
-      {changeSet && !isLiveGroup ? (
+      {changeSet && !isLiveGroup && proseItems.length > 0 && !messages.slice((lastItem?.index ?? -1) + 1).some(message => turnId !== null && message.role === "assistant" && messageTurnId(message) === turnId) ? (
         <div className="mx-auto w-full max-w-[800px] px-2 md:px-6">
           <TurnChangeSetCard
             changeSet={changeSet}
@@ -1444,10 +1564,10 @@ function MessageGroup({
       {lastTextMessage && !isStreaming && (
         <div className="mx-auto flex w-full max-w-[800px] flex-wrap items-center gap-2 px-2 opacity-0 transition-opacity duration-150 group-hover/message-group:opacity-100 max-lg:opacity-100 pointer-coarse:opacity-100 md:px-8">
           <MessageActions className="flex gap-0">
-            <CopyMessageButton messages={renderableItems.map((item) => item.message)} />
+            <CopyMessageButton messages={proseItems.map((item) => item.message)} />
             {lastRealItem ? (
               <>
-                <MessageAction tooltip="Branch in new chat">
+                {!readOnly && <MessageAction tooltip="Branch in new chat">
                   <Button
                     variant="ghost"
                     size="icon"
@@ -1456,8 +1576,8 @@ function MessageGroup({
                   >
                     <Split className="rotate-90" />
                   </Button>
-                </MessageAction>
-                <MessageAction tooltip="Revert">
+                </MessageAction>}
+                {!readOnly && <MessageAction tooltip="Revert">
                   <Button
                     variant="ghost"
                     size="icon"
@@ -1466,7 +1586,7 @@ function MessageGroup({
                   >
                     <Undo2 />
                   </Button>
-                </MessageAction>
+                </MessageAction>}
               </>
             ) : null}
           </MessageActions>
@@ -1540,7 +1660,7 @@ export function MessageList({ messages, status, retryStatus }: MessageListProps)
               isStreaming={isLastMessage && isStreaming}
               isLastStep={isLastStep}
             />
-            <ArtifactList messages={[item.message]} includeTargetFallbacks={false} />
+            {item.message.role !== "user" ? <ArtifactList messages={[item.message]} includeTargetFallbacks={false} /> : null}
           </div>
         )
       })}

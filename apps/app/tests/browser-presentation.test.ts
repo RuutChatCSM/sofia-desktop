@@ -14,8 +14,10 @@ import {
   beginPeekDrag,
   browserAttentionHost,
   browserExpandedWidth,
+  browserFactMatchesScope,
   browserPeekSize,
   browserPeekViewport,
+  pickAgentBrowserScope,
   browserPresentationVisible,
   clampDockedWidth,
   clampPeekPosition,
@@ -313,5 +315,28 @@ describe("browser presentation policy", () => {
     expect(moved.runtime.mode).toBe("peek");
 
     expect(reduceBrowserPresentation(moved, { type: "session-changed" }).runtime.peekPosition).toBeNull();
+  });
+
+  test("a browser fact only drives the session that owns it", () => {
+    // Activity in the session on screen is what a preview is for.
+    expect(browserFactMatchesScope("session:a", "session:a")).toBe(true);
+    // A background session's tab must never surface over the one on screen.
+    expect(browserFactMatchesScope("session:b", "session:a")).toBe(false);
+    // Unstamped facts are legacy and still pass.
+    expect(browserFactMatchesScope(undefined, "session:a")).toBe(true);
+    expect(browserFactMatchesScope(null, "session:a")).toBe(true);
+    expect(browserFactMatchesScope("", "session:a")).toBe(true);
+  });
+
+  test("an unattributed browser command follows the session that is working", () => {
+    // The session on screen is the one running: it owns the command.
+    expect(pickAgentBrowserScope("session:a", ["session:a"])).toBe("session:a");
+    // A background session is working while we look elsewhere: it still owns it,
+    // so the command never lands in the session on screen.
+    expect(pickAgentBrowserScope("session:a", ["session:b"])).toBe("session:b");
+    // Two sessions are working and neither is on screen: don't guess.
+    expect(pickAgentBrowserScope("session:a", ["session:b", "session:c"])).toBeNull();
+    // Nothing is running.
+    expect(pickAgentBrowserScope("session:a", [])).toBeNull();
   });
 });

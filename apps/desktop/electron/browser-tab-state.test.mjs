@@ -9,13 +9,18 @@ import {
   RESPONSIVE_FRAME_MARGIN_PX,
   browserPeekLayoutZoom,
   browserViewBackground,
+  browserScopeIsPresented,
   effectiveBrowserViewport,
   createAgentLeaseRegistry,
   createBrowserTabRuntimeState,
   createViewportController,
+  pickScopedBrowserTab,
+  resolveAgentBrowserScope,
   resolvePageZoomFactor,
   resolveViewportPlan,
   resolveViewportScale,
+  shouldReuseBrowserTab,
+  shouldReloadCrashedRenderer,
   transitionPageState,
 } from "./browser-tab-state.mjs";
 
@@ -496,5 +501,99 @@ describe("agent lease", () => {
     leases.releaseTab("tab_a");
     assert.equal(leases.leaseForTab("tab_a"), null);
     assert.deepEqual(leases.statusFor("tab_a"), { status: "detached" });
+  });
+});
+
+describe("browser.open_url tab reuse", () => {
+  it("drives the tab the agent already owns instead of opening another", () => {
+    assert.equal(shouldReuseBrowserTab({ active: true, leased: true, url: "https://example.test/" }), true);
+  });
+
+  it("takes over the panel's untouched placeholder", () => {
+    assert.equal(shouldReuseBrowserTab({ active: true, leased: false, url: "about:blank" }), true);
+  });
+
+  it("leaves a page the user is reading alone", () => {
+    assert.equal(shouldReuseBrowserTab({ active: true, leased: false, url: "https://news.test/" }), false);
+  });
+
+  it("never reuses a tab that belongs to another project or session", () => {
+    assert.equal(
+      shouldReuseBrowserTab({ active: true, leased: true, url: "https://a.test/", scopeMatches: false }),
+      false,
+    );
+    assert.equal(
+      shouldReuseBrowserTab({ active: true, leased: true, url: "https://a.test/", scopeMatches: true }),
+      true,
+    );
+  });
+
+  it("opens a tab only when none is usable or a new one is requested", () => {
+    assert.equal(shouldReuseBrowserTab({ active: false, leased: true, url: "about:blank" }), false);
+    assert.equal(shouldReuseBrowserTab({ active: true, destroyed: true, leased: true, url: "about:blank" }), false);
+    assert.equal(shouldReuseBrowserTab({ newTab: true, active: true, leased: true, url: "about:blank" }), false);
+  });
+});
+
+describe("agent browser scope attribution", () => {
+  it("prefers the invoking session over the one on screen", () => {
+    assert.equal(resolveAgentBrowserScope("session:b", "session:a"), "session:b");
+    assert.equal(resolveAgentBrowserScope("  session:b  ", "session:a"), "session:b");
+  });
+
+  it("falls back to the presented scope only when the caller has none", () => {
+    assert.equal(resolveAgentBrowserScope(undefined, "session:a"), "session:a");
+    assert.equal(resolveAgentBrowserScope("   ", "session:a"), "session:a");
+    assert.equal(resolveAgentBrowserScope(null, ""), "");
+  });
+
+  it("drives the on-screen tab when the scope is the one being presented", () => {
+    const tabs = [
+      { tabId: "tab_a", scopeId: "session:a" },
+      { tabId: "tab_b", scopeId: "session:b" },
+    ];
+    assert.equal(
+      pickScopedBrowserTab({ tabs, activeTabId: "tab_a", activeScopeId: "session:a", scopeId: "session:a" })?.tabId,
+      "tab_a",
+    );
+  });
+
+  it("drives a parked tab of the same session, never the tab on screen", () => {
+    const tabs = [
+      { tabId: "tab_b_old", scopeId: "session:b" },
+      { tabId: "tab_a", scopeId: "session:a" },
+      { tabId: "tab_b_new", scopeId: "session:b" },
+    ];
+    assert.equal(
+      pickScopedBrowserTab({ tabs, activeTabId: "tab_a", activeScopeId: "session:a", scopeId: "session:b" })?.tabId,
+      "tab_b_new",
+    );
+  });
+
+  it("opens a tab in the invoking scope when that session has none", () => {
+    const tabs = [{ tabId: "tab_a", scopeId: "session:a" }];
+    assert.equal(
+      pickScopedBrowserTab({ tabs, activeTabId: "tab_a", activeScopeId: "session:a", scopeId: "session:b" }),
+      null,
+    );
+  });
+
+  it("only lets the presented scope take over the visible browser", () => {
+    assert.equal(browserScopeIsPresented("session:a", "session:a"), true);
+    assert.equal(browserScopeIsPresented("session:b", "session:a"), false);
+    assert.equal(browserScopeIsPresented(undefined, "session:a"), false);
+  });
+
+});
+
+describe("crashed tab renderer recovery", () => {
+  it("reloads a tab whose renderer died, up to a bounded number of times", () => {
+    assert.equal(shouldReloadCrashedRenderer({ recoveries: 0, destroyed: false }), true);
+    assert.equal(shouldReloadCrashedRenderer({ recoveries: 1, destroyed: false }), true);
+    assert.equal(shouldReloadCrashedRenderer({ recoveries: 2, destroyed: false }), false);
+  });
+
+  it("never retries a tab that is already gone", () => {
+    assert.equal(shouldReloadCrashedRenderer({ recoveries: 0, destroyed: true }), false);
   });
 });

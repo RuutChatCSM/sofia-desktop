@@ -143,6 +143,13 @@ describe("Debug services section", () => {
     expect(html).not.toContain("Local engine process managed by Sofia.");
   });
 
+  test("renders the app commit instead of the raw {sha} placeholder", () => {
+    const html = renderToStaticMarkup(<DebugView {...debugViewProps()} />);
+
+    expect(html).toContain("Commit: abcdef0");
+    expect(html).not.toContain("{sha}");
+  });
+
   test("drops the removed engine runtime selection", () => {
     const html = renderToStaticMarkup(<DebugView {...debugViewProps()} />);
 

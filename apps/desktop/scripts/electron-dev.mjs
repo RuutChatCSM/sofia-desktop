@@ -277,8 +277,18 @@ if (process.env.SOFIA_ELECTRON_SKIP_NATIVE_REBUILD === "1") {
 const cdpPortRaw = process.env.SOFIA_ELECTRON_REMOTE_DEBUG_PORT?.trim() ?? "";
 const cdpPort = cdpPortRaw === "" || cdpPortRaw === "0" ? "" : cdpPortRaw;
 
+// Optional Node inspector for the Electron MAIN process. The embedded
+// sofia-server (and therefore the codex engine client, the crash path) runs
+// there, so this is where a debugger has to attach when the app dies mid-turn.
+// Set SOFIA_ELECTRON_INSPECT_PORT=9229, then open chrome://inspect or attach
+// with the VS Code config in the runbook. Breakpoints on exceptions then catch
+// the throw before the process unwinds.
+const inspectPortRaw = process.env.SOFIA_ELECTRON_INSPECT_PORT?.trim() ?? "";
+const inspectPort = inspectPortRaw === "" || inspectPortRaw === "0" ? "" : inspectPortRaw;
+const inspectArgs = inspectPort ? [`--inspect=${inspectPort}`] : [];
+
 const blankSlateArgs = process.argv.includes("--blank-slate") ? ["--blank-slate"] : [];
-electronChild = run(pnpmCmd, ["exec", "electron", "./electron/main.mjs", ...blankSlateArgs], {
+electronChild = run(pnpmCmd, ["exec", "electron", ...inspectArgs, "./electron/main.mjs", ...blankSlateArgs], {
   cwd: desktopRoot,
     env: {
       ...process.env,
@@ -291,6 +301,10 @@ electronChild = run(pnpmCmd, ["exec", "electron", "./electron/main.mjs", ...blan
 
 if (cdpPort) {
   console.log(`[sofia] Electron CDP exposed at http://127.0.0.1:${cdpPort}`);
+}
+
+if (inspectPort) {
+  console.log(`[sofia] Electron main-process inspector listening on ws://127.0.0.1:${inspectPort} (open chrome://inspect)`);
 }
 
 electronChild.on("exit", (code) => {

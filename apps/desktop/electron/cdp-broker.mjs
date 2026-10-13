@@ -20,88 +20,8 @@ import { WebSocket, WebSocketServer } from "ws";
 const PROXY_PATH_RE = /^\/devtools\/(page|browser)\/([^/?]+)(?:\?.*)?$/;
 const SYNTHETIC_ID_BASE = 1_000_000_000;
 
-// Injected into every new document of a driven target. Creates (once) a fixed,
-// pointer-transparent ghost cursor and exposes a tiny controller the broker
-// drives via Runtime.evaluate. The cursor uses high-contrast colors (white ring
-// with a black outline) so it is visible on any background — no blend modes.
-// `__sofiaAgentCursor` guard makes repeated injection a no-op even across
-// multiple CDP sessions sharing the page.
-// Cursor SVG — a hand-drawn mouse, recolored (white body) so it stays visible on
-// dark pages, with a neon under-aura and a subtle idle wobble/breath so the agent
-// cursor feels alive (mirrors the ChatGPT desktop cursor).
-const CURSOR_MOUSE_PATH = "m151 41.78c-3.03 0.99-7.53 2.97-10 4.4-2.47 1.43-6.86 5.13-9.75 8.21-2.89 3.09-6.45 8.2-7.91 11.36-1.46 3.16-3.09 8.45-3.62 11.75-0.74 4.55 0.74 41.29 6.12 152.5 3.9 80.58 7.49 150.77 7.98 156 0.61 6.49 1.69 11.24 3.4 15 1.37 3.02 4.48 7.69 6.89 10.36 2.91 3.22 6.9 6.09 11.84 8.5 6.92 3.38 8.08 3.64 16.5 3.6 6.85-0.02 10.39-0.56 14.55-2.2 3.03-1.19 7.71-4.09 10.41-6.46 2.7-2.36 16.95-20.28 31.67-39.8 14.72-19.52 29.39-38.09 32.59-41.25 3.21-3.16 8.53-7.55 11.83-9.75 3.3-2.2 9.15-5.32 13-6.92 3.85-1.6 10.49-3.62 14.75-4.5 6.43-1.31 15.89-1.58 55.5-1.59 39.26-0.01 48.73-0.28 53.25-1.51 3.02-0.82 7.52-2.72 10-4.2 2.48-1.49 6.19-4.41 8.25-6.49 2.06-2.09 4.81-5.93 6.11-8.54 1.3-2.61 2.94-7.23 3.64-10.25 0.77-3.31 1.02-7.79 0.64-11.25-0.35-3.16-1.52-8.11-2.59-11-1.07-2.89-3.88-7.46-6.25-10.16-2.36-2.71-54.25-46.16-115.3-96.57-61.05-50.41-114.6-94.56-119-98.1-4.4-3.54-10.93-7.75-14.5-9.34-5.25-2.34-8.23-2.97-15.5-3.25-6.72-0.26-10.39 0.1-14.5 1.45z";
-const CURSOR_SCRIPT = `(() => {
-  if (window.__sofiaAgentCursor) { window.__sofiaAgentCursor.present(); return; }
-  let el = null, aura = null, mouse = null;
-  const S = 30; // rendered cursor size (px)
-  const ensure = () => {
-    if (el && el.isConnected) return el;
-    el = document.createElement("div");
-    el.id = "__sofia-agent-cursor";
-    el.setAttribute("aria-hidden", "true");
-    const st = el.style;
-    st.position = "fixed"; st.top = "0"; st.left = "0";
-    st.width = S + "px"; st.height = S + "px";
-    st.margin = "0"; st.padding = "0"; st.border = "0";
-    st.zIndex = "2147483647"; st.pointerEvents = "none";
-    st.transform = "translate(0px,0px)"; st.opacity = "0";
-    st.transition = "transform 130ms cubic-bezier(.2,.7,.3,1)";
-    st.willChange = "transform, opacity";
-    el.innerHTML =
-      '<style>' +
-      '@keyframes owAura{0%,100%{opacity:.55;transform:scale(1)}50%{opacity:1;transform:scale(1.12)}}' +
-      '@keyframes owWob{0%,100%{transform:rotate(-3.5deg) translateX(-0.4px)}50%{transform:rotate(4deg) translateX(0.6px)}}' +
-      '@keyframes owHue{0%{filter:blur(3px) hue-rotate(0deg)}100%{filter:blur(3px) hue-rotate(360deg)}}' +
-      '</style>' +
-      '<div style="position:absolute;inset:-10px;border-radius:50%;background:radial-gradient(circle, rgba(56,189,248,.42), rgba(168,85,247,.22) 52%, rgba(0,0,0,0) 72%);filter:blur(4px);animation:owAura 3.4s ease-in-out infinite, owHue 7s linear infinite"></div>' +
-      '<svg id="__ow-mouse" viewBox="0 0 512 512" width="' + S + '" height="' + S + '" ' +
-        'style="position:absolute;inset:0;animation:owWob 2.8s ease-in-out infinite;transform-origin:50% 50%;filter:drop-shadow(0 0 2px rgba(255,255,255,.7)) drop-shadow(0 0 7px rgba(56,189,248,.65))">' +
-        '<path fill="rgba(255,255,255,.96)" stroke="rgba(10,12,20,.55)" stroke-width="16" stroke-linejoin="round" d="' + '${CURSOR_MOUSE_PATH}' + '"/>' +
-      '</svg>';
-    (document.documentElement || document).appendChild(el);
-    aura = el.firstElementChild.nextElementSibling ? el.firstElementChild.nextElementSibling : null;
-    mouse = el.querySelector("#__ow-mouse");
-    return el;
-  };
-  let wobbleT = null;
-  const place = (e, x, y, scale) => {
-    const s = scale || 1;
-    e.style.opacity = "1";
-    e.style.transform = "translate(" + (Math.round(x) - S / 2) + "px," + (Math.round(y) - S / 2) + "px) scale(" + s + ")";
-  };
-  const burst = (x, y) => {
-    const e = ensure();
-    e.style.transition = "transform 120ms cubic-bezier(.2,.6,.3,1)";
-    e.style.opacity = "1";
-    e.style.transform = "translate(" + (Math.round(x) - S / 2) + "px," + (Math.round(y) - S / 2) + "px) scale(0.7)";
-    requestAnimationFrame(() => {
-      e.style.transform = "translate(" + (Math.round(x) - S / 2) + "px," + (Math.round(y) - S / 2) + "px) scale(1.22)";
-    });
-    setTimeout(() => { if (el && el.isConnected) { el.style.transform = "translate(" + (Math.round(x) - S / 2) + "px," + (Math.round(y) - S / 2) + "px) scale(1)"; } }, 150);
-  };
-  window.__sofiaAgentCursor = {
-    present() {
-      const e = ensure();
-      if (e.style.opacity === "1") return;
-      const cx = Math.round((window.innerWidth || 640) / 2);
-      const cy = Math.round((window.innerHeight || 480) / 2);
-      place(e, cx, cy);
-      return cx + "," + cy;
-    },
-    moveTo(x, y) {
-      const e = ensure();
-      place(e, x, y);
-      // A brief extra wobble on movement so the cursor feels alive.
-      clearTimeout(wobbleT);
-      if (mouse) { mouse.style.animation = "none"; void mouse.offsetWidth; mouse.style.animation = "owWob 0.8s ease-in-out 2"; }
-      wobbleT = setTimeout(() => { if (mouse) mouse.style.animation = "owWob 2.8s ease-in-out infinite"; }, 1400);
-    },
-    flash(x, y) { burst(x, y); },
-    hide() { if (el && el.isConnected) el.style.opacity = "0"; clearTimeout(wobbleT); },
-  };
-  if (document.documentElement) window.__sofiaAgentCursor.present();
-  else document.addEventListener('DOMContentLoaded', () => window.__sofiaAgentCursor.present(), { once: true });
-})();`;
+import { BROWSER_CURSOR_SCRIPT } from './browser-cursor-runtime.mjs';
+const CURSOR_SCRIPT = BROWSER_CURSOR_SCRIPT + ';window.__sofiaAgentCursor?.present();';
 
 function easeInOutQuad(t) {
   return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
@@ -147,13 +67,14 @@ function serverPort(server) {
  *   Target.createTarget fails on Electron ("Not supported").
  * @returns {Promise<{ baseUrl: string, port: number, close: () => Promise<void> }>}
  */
-export function createCdpBroker({ upstreamBaseUrl, port = 0, stepMs = 28, debug = false, createTarget = null }) {
+export function createCdpBroker({ upstreamBaseUrl, port = 0, stepMs = 28, debug = false, createTarget = null, cursor = null, canExecute = null, canDiscover = null }) {
   const upstreamUrl = String(upstreamBaseUrl).replace(/\/$/, "");
   const upstreamWsOrigin = upstreamUrl.replace(/^http/, "ws");
   const log = (...args) => {
     if (debug) console.log("[cdp-broker]", ...args);
   };
 
+  const targetConnections = new Map();
   let syntheticId = SYNTHETIC_ID_BASE;
   const httpServer = http.createServer();
 
@@ -168,7 +89,16 @@ export function createCdpBroker({ upstreamBaseUrl, port = 0, stepMs = 28, debug 
       res.end(JSON.stringify({ error: `CDP upstream unreachable: ${error.message}` }));
       return;
     }
-    const text = await upstreamResponse.text();
+    let text = await upstreamResponse.text();
+    if (canDiscover && (req.url.startsWith("/json/list") || req.url === "/json")) {
+      try {
+        const targets = JSON.parse(text);
+        if (Array.isArray(targets)) {
+          const allowed = await Promise.all(targets.map(async target => await canDiscover(target.id) ? target : null));
+          text = JSON.stringify(allowed.filter(Boolean));
+        }
+      } catch {}
+    }
     const brokerPort = serverPort(httpServer);
     const rewritten = text
       .replaceAll(`ws://127.0.0.1:${new URL(upstreamUrl).port}`, `ws://127.0.0.1:${brokerPort}`)
@@ -199,13 +129,17 @@ export function createCdpBroker({ upstreamBaseUrl, port = 0, stepMs = 28, debug 
     }
     const targetPath = `${match[1] === "browser" ? "/devtools/browser" : "/devtools/page"}/${match[2]}`;
     const isPageSession = match[1] === "page";
+    if (isPageSession) targetConnections.set(match[2], (targetConnections.get(match[2]) ?? 0) + 1);
     log(`connection: ${targetPath} (${isPageSession ? "page" : "browser-level"})`);
     const upstreamWs = new WebSocket(`${upstreamWsOrigin}${targetPath}`);
 
     const state = {
       // Browser-level connections (puppeteer/chrome-devtools-mcp) route page
       // commands through a sessionId; direct page connections use no sessionId.
-      lastKnown: new Map(), // sessionId -> { x, y }
+      lastKnown: new Map(),
+      attachedTargets: new Map(),
+      owner: crypto.randomUUID(),
+      closed: false, // sessionId -> { x, y }
       cursorScripts: new Map(),
       cursorInjected: new Set(), // sessionIds that have the ghost cursor script
       pendingSynthetic: new Map(), // syntheticId -> resolve
@@ -228,7 +162,10 @@ export function createCdpBroker({ upstreamBaseUrl, port = 0, stepMs = 28, debug 
       return msg?.sessionId ?? null;
     }
 
+    function cursorTarget(sessionId) { return isPageSession ? match[2] : state.attachedTargets.get(sessionId); }
+
     function injectCursor(sessionId) {
+      if (cursor) return cursor(cursorTarget(sessionId), { action: "present", owner: state.owner });
       if (state.cursorInjected.has(sessionId)) return Promise.resolve();
       state.cursorInjected.add(sessionId);
       return sendSynthetic("Page.enable", {}, sessionId).then(() => Promise.all([
@@ -242,6 +179,7 @@ export function createCdpBroker({ upstreamBaseUrl, port = 0, stepMs = 28, debug 
     }
 
     function moveCursor(x, y, sessionId) {
+      if (cursor) return cursor(cursorTarget(sessionId), { action: "moveTo", x, y, animate: false, owner: state.owner });
       return sendSynthetic("Runtime.evaluate", {
         expression: "window.__sofiaAgentCursor && window.__sofiaAgentCursor.moveTo(" +
           `${Math.round(x)},${Math.round(y)});`,
@@ -249,6 +187,7 @@ export function createCdpBroker({ upstreamBaseUrl, port = 0, stepMs = 28, debug 
     }
 
     function flashCursor(x, y, sessionId) {
+      if (cursor) return cursor(cursorTarget(sessionId), { action: "flash", x, y, owner: state.owner });
       return sendSynthetic("Runtime.evaluate", {
         expression: "window.__sofiaAgentCursor && window.__sofiaAgentCursor.flash(" +
           `${Math.round(x)},${Math.round(y)});`,
@@ -288,6 +227,7 @@ export function createCdpBroker({ upstreamBaseUrl, port = 0, stepMs = 28, debug 
       // (hover styles, tooltips) and the ghost cursor visibly travels.
       async function replayMotion(from, target) {
         for (const point of humanPath(from, target)) {
+          if (state.closed || (canExecute && !await canExecute(cursorTarget(sessionId), "Input.dispatchMouseEvent"))) throw new Error("Browser control belongs to the user. Wait for Resume agent.");
           await sendSynthetic("Input.dispatchMouseEvent", {
             type: "mouseMoved",
             x: point.x,
@@ -346,6 +286,24 @@ export function createCdpBroker({ upstreamBaseUrl, port = 0, stepMs = 28, debug 
       } catch {
         return;
       }
+      const targetId = cursorTarget(pageSessionKey(msg));
+      if (msg.params?.targetId && msg.method !== "Target.createTarget" && canExecute && !await canExecute(msg.params.targetId, msg.method)) {
+        forwardToClient(JSON.stringify({id:msg.id,error:{code:-32000,message:"Target is unavailable or controlled by the user."}})); return;
+      }
+      if (msg.method === "Sofia.cursor") {
+        try {
+          if (canExecute && msg.params?.action !== "hide" && !await canExecute(targetId, msg.method)) throw new Error("Browser control belongs to the user. Wait for Resume agent.");
+          if (msg.params?.action === "moveTo") state.lastKnown.set(String(pageSessionKey(msg) ?? ""), {x:msg.params.x,y:msg.params.y});
+          const result = cursor ? await cursor(targetId, {...msg.params, owner:state.owner}) : {host:false};
+          forwardToClient(JSON.stringify({id:msg.id,result}));
+        } catch(error) { forwardToClient(JSON.stringify({id:msg.id,error:{code:-32000,message:error.message}})); }
+        return;
+      }
+      if (canExecute && targetId && !await canExecute(targetId, msg.method)) {
+        forwardToClient(JSON.stringify({id:msg.id,error:{code:-32000,message:"Browser control belongs to the user. Wait for Resume agent."}}));
+        return;
+      }
+      if (state.closed) return;
       if (msg.method === "Input.dispatchMouseEvent") {
         const handled = await dispatchMouse(msg);
         log("Input.dispatchMouseEvent", msg.params?.type, msg.params ? `(${Math.round(Number(msg.params.x))},${Math.round(Number(msg.params.y))})` : "", "session=" + (pageSessionKey(msg) ?? "-"));
@@ -388,14 +346,25 @@ export function createCdpBroker({ upstreamBaseUrl, port = 0, stepMs = 28, debug 
       return ACTIVITY_METHOD_RE.test(method) && method !== "Input.dispatchMouseEvent";
     }
 
+    function queueCommand(data) {
+      state.commandQueue = (state.commandQueue ?? Promise.resolve()).then(() => handleClientMessage(data)).catch(error => {
+        try { const message = JSON.parse(String(data)); forwardToClient(JSON.stringify({id:message.id,error:{code:-32000,message:error.message}})); } catch {}
+      });
+    }
     clientWs.on("message", (data) => {
       if (!state.clientReady) {
         state.clientBuffer.push(data);
         return;
       }
-      void handleClientMessage(data);
+      queueCommand(data);
     });
     clientWs.on("close", () => {
+      state.closed = true;
+      if (isPageSession) {
+        const remaining = (targetConnections.get(match[2]) ?? 1) - 1;
+        if (remaining > 0) targetConnections.set(match[2], remaining);
+        else { targetConnections.delete(match[2]); if (cursor) void cursor(match[2], {action:"detach",owner:state.owner}); }
+      }
       void (async () => {
         await Promise.allSettled([...state.cursorInjected].map(async (sessionId) => {
           await sendSynthetic("Runtime.evaluate", { expression: "window.__sofiaAgentCursor?.hide()" }, sessionId);
@@ -410,7 +379,7 @@ export function createCdpBroker({ upstreamBaseUrl, port = 0, stepMs = 28, debug 
       state.clientReady = true;
       if (isPageSession) void injectCursor(null);
       for (const buffered of state.clientBuffer.splice(0)) {
-        void handleClientMessage(buffered);
+        queueCommand(buffered);
       }
     });
     upstreamWs.on("message", (data) => {
@@ -421,6 +390,7 @@ export function createCdpBroker({ upstreamBaseUrl, port = 0, stepMs = 28, debug 
         forwardToClient(data);
         return;
       }
+      if (parsed.method === "Target.attachedToTarget") state.attachedTargets.set(parsed.params.sessionId, parsed.params.targetInfo.targetId);
       if (parsed.method === "Page.domContentEventFired") {
         const sessionId = pageSessionKey(parsed);
         if (state.cursorInjected.has(sessionId)) {

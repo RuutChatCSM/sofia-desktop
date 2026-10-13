@@ -18,14 +18,65 @@ function safeJson(value: unknown): unknown {
   return value === undefined ? {} : value;
 }
 
+/** Expand recorded nested calls without evaluating their original JavaScript. */
+export function codexItemToToolParts(item: Record<string,unknown>,sessionId:string,messageId:string,completed=false): DynamicToolUIPart[] {
+  if(item.type==="networkStatus")return [{type:"dynamic-tool",toolName:"network_status",toolCallId:str(item.id)||messageId,state:"output-available",input:{message:item.text},output:str(item.text)}];
+  if(item.type==="contextCompaction")return [{type:"dynamic-tool",toolName:"context_compaction",toolCallId:str(item.id)||messageId,state:"output-available",input:{},output:"Context automatically compacted"}];
+  const args=item.arguments;
+  if(item.type==="commandExecution" && Array.isArray(item.commandActions) && item.commandActions.length>1 && item.commandActions.every(action=>isRecord(action)&&["read","search","listFiles"].includes(str(action.type))))return item.commandActions.filter(isRecord).flatMap((action,index)=>{
+    const id=`${str(item.id)||messageId}:action:${index}`;
+    const part=codexItemToToolPart({...item,id,commandActions:[action]},sessionId,id,completed);return part?[part]:[];
+  });
+  if(isRecord(args) && Array.isArray(args.nestedCalls))return args.nestedCalls.filter(isRecord).slice(0,200).flatMap((call,index)=>{
+    const id=`${str(item.id)||messageId}:nested:${index}`;
+    const command=call.command;
+    return codexItemToToolParts({...call,id,status:item.status,type:typeof command==="string"?"commandExecution":"dynamicToolCall"},sessionId,id,completed);
+  });
+  if(item.type==="fileChange" && Array.isArray(item.changes))return item.changes.filter(isRecord).flatMap((change,index)=>{
+    const id=`${str(item.id)||messageId}:file:${index}`;
+    const diff = typeof change.diff === "string" ? change.diff : undefined;
+    const part=codexItemToToolPart({...item,id,path:change.path,changeKind:isRecord(change.kind)?change.kind.type:change.kind, ...(diff === undefined ? {} : {patch:diff,additions:diff.split("\n").filter(line=>line.startsWith("+")&&!line.startsWith("+++")).length,deletions:diff.split("\n").filter(line=>line.startsWith("-")&&!line.startsWith("---")).length})},sessionId,id,completed);
+    return part?[part]:[];
+  });
+  if(item.tool==="apply_patch") {
+    const patch=typeof args==="string"?args:isRecord(args)&&typeof args.patch==="string"?args.patch:"";
+    const changes=Array.from(patch.matchAll(/^\*\*\* (Add|Update|Delete) File: (.+)$/gm));
+    if(changes.length)return changes.map((change,index)=>{
+      const end=changes[index+1]?.index ?? patch.length;
+      const lines=patch.slice(change.index,end).split("\n");
+      const base={type:"dynamic-tool" as const,toolName:"apply_patch",toolCallId:`${str(item.id)||messageId}:file:${index}`,input:{filePath:change[2],changeKind:change[1],patch:patch.slice(change.index,end),additions:lines.filter(line=>line.startsWith("+")).length,deletions:lines.filter(line=>line.startsWith("-")).length}};
+      return completed?{...base,state:"output-available" as const,output:""}:{...base,state:"input-streaming" as const};
+    });
+  }
+  const part=codexItemToToolPart(item,sessionId,messageId,completed);return part?[part]:[];
+}
+
 /** Map a codex CommandExecution/McpToolCall/DynamicToolCall item to a
  * dynamic-tool part with a canonical toolName so engine's aggregator renders
  * inline "Used X, edited Y" markers (matching the codex app). */
 export function codexItemToToolPart(item: Record<string, unknown>, sessionId: string, messageId: string, itemCompleted = false): DynamicToolUIPart | null {
+  if (item.type === "subAgentActivity") {
+    const threadId = str(item.agentThreadId);
+    if (!threadId) return null;
+    const kind = str(item.kind);
+    const status = kind === "completed" ? "completed" : kind === "interrupted" ? "interrupted" : "running";
+    return codexItemToToolPart({
+      ...item,
+      type: "collabAgentToolCall",
+      tool: kind === "started" ? "spawnAgent" : kind === "interacted" ? "sendInput" : kind === "interrupted" ? "interruptAgent" : "wait",
+      receiverThreadIds: [threadId],
+      agentsStates: { [threadId]: { status } },
+      status: "completed",
+    }, sessionId, messageId, true);
+  }
   const type = item.type;
   const id = str(item.id);
   const tool = type === "commandExecution"
     ? String(item.command ?? "shell")
+    : type === "webSearch"
+      ? "web_search"
+    : type === "collabAgentToolCall"
+      ? "collaboration"
     : type === "fileChange"
       ? "apply_patch"
       : type === "mcpToolCall" || type === "dynamicToolCall"
@@ -37,7 +88,13 @@ export function codexItemToToolPart(item: Record<string, unknown>, sessionId: st
   // write/read/grep/glob). Codex "shell" commands -> bash; codex edits ->
   // apply_patch (which collapses into "edited"). Everything else keeps a label.
   const isCommand = type === "commandExecution";
+  // Use the protocol's parsed action, never guess from shell text. A mixed
+  // command keeps its command identity because some of its work is unknown.
+  const actions = Array.isArray(item.commandActions) ? item.commandActions.filter(isRecord) : [];
+  const readAction = actions.length === 1 && actions[0]?.type === "read" ? actions[0] : null;
+  const searchAction = actions.length === 1 && (actions[0]?.type === "search" || actions[0]?.type === "listFiles") ? actions[0] : null;
   const lower = tool.toLowerCase();
+  const dynamicArgs = isRecord(item.arguments) ? item.arguments : {};
   const isEdit = /\b(edit|write|apply_patch|patch)\b/.test(lower) || type === "fileChange";
   const isRead = /\b(read|cat|view|ls|list|find|glob|grep|search)\b/.test(lower);
   const toolName = isCommand ? "bash" : isEdit ? "apply_patch" : isRead ? "read" : str(item.server) === "node_repl" && tool === "js" ? "node_repl_js" : tool;
@@ -57,18 +114,26 @@ export function codexItemToToolPart(item: Record<string, unknown>, sessionId: st
   const source = str(item.source);
   const settled = completed || failed;
   const isBackgroundProcess = isCommand && source === "unifiedExecStartup" && !settled;
-  const resolvedToolName = isBackgroundProcess ? "background_process" : toolName;
+  const resolvedToolName = tool === "write_stdin" ? "bash" : isBackgroundProcess ? "background_process" : readAction ? "read" : searchAction ? "grep" : toolName;
 
   // The agent/orchestrator's own words for the operation, when it supplies
   // them; the command is only the fallback title.
   const description = str(item.description).trim();
-  const input: Record<string, unknown> = isBackgroundProcess
+  const input: Record<string, unknown> = type === "collabAgentToolCall"
+    ? { operation: item.tool, agentPath: item.agentPath, prompt: item.prompt, agentsStates: item.agentsStates, receiverThreadIds: item.receiverThreadIds }
+    : isBackgroundProcess
     ? { command: item.command, processId: item.processId, cwd: item.cwd, ...(description ? { description } : {}) }
+    : readAction
+      ? { filePath: str(readAction.path), command: item.command }
+    : searchAction
+      ? { path: str(searchAction.path), pattern: str(searchAction.query), command: item.command }
     : isCommand
       ? { command: item.command }
       : isEdit
-        ? { filePath: str(item.path) }
-        : { arguments: safeJson(item.arguments) };
+        ? { filePath: str(item.path),changeKind:item.changeKind, ...(typeof item.patch === "string" ? {patch:item.patch,additions:item.additions,deletions:item.deletions} : {}) }
+        : type==="webSearch" || tool==="web__run" || tool==="web.run"
+          ? {query:str(item.query) || (isRecord(item.arguments) && Array.isArray(item.arguments.search_query)?item.arguments.search_query.filter(isRecord).map(query=>str(query.q)).join(", "):""),arguments:safeJson(item.arguments)}
+          : { ...dynamicArgs, arguments: safeJson(item.arguments) };
 
   const output = str(item.aggregatedOutput) || (typeof item.result === "string" ? item.result : item.result != null ? JSON.stringify(item.result) : "");
   const state: "output-available" | "input-streaming" | "output-error" =
@@ -76,11 +141,11 @@ export function codexItemToToolPart(item: Record<string, unknown>, sessionId: st
 
   const part: Record<string, unknown> = {
     type: "dynamic-tool",
-    toolName: resolvedToolName,
+    toolName: tool==="web__run" || tool==="web.run" || type==="webSearch" ? "websearch" : resolvedToolName,
     toolCallId: id,
     state,
     input,
-    callProviderMetadata: { engine: { partId: id, codexItemType: type, codexItemSource: source } },
+    callProviderMetadata: { engine: { partId: id, codexItemType: type, codexItemSource: source, codexToolServer: str(item.server), codexToolName: tool } },
   };
   if (completed && !failed) part.output = output;
   if (failed) part.errorText = str(item.error) || "tool failed";
@@ -138,7 +203,7 @@ export function codexItemToParts(
     }];
   }
 
-  if (type === "commandExecution" || type === "mcpToolCall" || type === "dynamicToolCall" || type === "webSearch") {
+  if (type === "commandExecution" || type === "mcpToolCall" || type === "dynamicToolCall" || type === "webSearch" || type === "collabAgentToolCall" || type === "subAgentActivity") {
     const toolPart = codexItemToToolPart(item, sessionId, messageId);
     // Emit a single inline dynamic-tool marker per call (no step-start wrappers —
     // those make engine auto-collapse the whole turn into "N steps").

@@ -1,0 +1,51 @@
+import { execFile, spawn } from 'node:child_process';
+import { mkdtemp, readFile, rm, writeFile, mkdir } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { promisify } from 'node:util';
+import { expect, onTestFinished } from 'vitest';
+import { needs, test, eventually } from '@sofia/testkit';
+const execute=promisify(execFile);
+type Reply={id:number;result:{isError?:boolean;content:Array<{type:string;text?:string}>}};
+
+test('signed Computer Use helper mutates only its disposable AX fixture and verifies a fresh snapshot', {timeout:90_000},async({evidence})=>{
+  needs({optIn:['SOFIA_EVAL_E2E_TESTS','SOFIA_NATIVE_COMPUTER_PROOF'],placement:'local'});
+  if(process.platform!=='darwin')throw new Error('needs: macOS Accessibility');
+  const helper=resolve(import.meta.dirname,'../../apps/desktop/resources/helpers/Sofia Computer Use.app/Contents/MacOS/ComputerUse');
+  const permission=JSON.parse((await execute(helper,['--check'])).stdout);
+  if(!permission.ok)throw new Error(`needs: grant Accessibility and Screen Recording to ruut.sofia.computer-use at ${helper}; accessibility=${permission.accessibility}, screenRecording=${permission.screenRecording}`);
+  const root=await mkdtemp(join(tmpdir(),'sofia-native-parity-'));onTestFinished(()=>rm(root,{recursive:true,force:true}));
+  const entry=join(root,'fixture.mjs'),ready=join(root,'ready.json');
+  await writeFile(entry,`import {app,BrowserWindow} from 'electron';import {writeFile} from 'node:fs/promises';app.setName('Sofia Native Proof');app.setPath('userData',${JSON.stringify(join(root,'profile'))});await app.whenReady();app.setAccessibilitySupportEnabled(true);const view=new BrowserWindow({width:520,height:300});await view.loadURL('data:text/html,'+encodeURIComponent('<title>Sofia Native Proof</title><label>Proof input<input aria-label="Proof input" value="before"></label>'));await writeFile(${JSON.stringify(ready)},JSON.stringify({pid:process.pid}));`);
+  const env={...process.env};delete env.ELECTRON_RUN_AS_NODE;
+  const fixture=spawn(resolve(import.meta.dirname,'../../apps/desktop/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron'),[entry],{env,stdio:'ignore'});
+  onTestFinished(()=>fixture.kill());
+  const identity=await eventually(async()=>JSON.parse(await readFile(ready,'utf8')),{within:15_000});
+  const transport=spawn(helper,['mcp'],{env:{...env,SOFIA_COMPUTER_USE_CURSOR_OVERLAY:'0'},stdio:['pipe','pipe','pipe']});
+  onTestFinished(()=>transport.kill());transport.stderr.resume();
+  const pending=new Map<number,(reply:Reply)=>void>();let buffer='',id=0;
+  transport.stdout.on('data',chunk=>{buffer+=chunk;let end;while((end=buffer.indexOf('\n'))>=0){const message=JSON.parse(buffer.slice(0,end));buffer=buffer.slice(end+1);pending.get(message.id)?.(message);pending.delete(message.id);}});
+  const calls:Array<{name:string;arguments:unknown;result:unknown}>=[];
+  const call=async(name:string,args:Record<string,unknown>)=>{
+    const request=++id;
+    const response=await new Promise<Reply>((resolveReply,reject)=>{
+      const timer=setTimeout(()=>reject(new Error('Native tool timed out: '+name)),15_000);
+      pending.set(request,reply=>{clearTimeout(timer);resolveReply(reply);});
+      transport.stdin.write(JSON.stringify({jsonrpc:'2.0',id:request,method:'tools/call',params:{name,arguments:args}})+'\n');
+    });
+    const text=response.result.content.find(block=>block.type==='text')?.text;
+    if(!text)throw new Error('Native response has no structured text');
+    const result=JSON.parse(text);calls.push({name,arguments:args,result});
+    expect(response.result.isError,result.error).not.toBe(true);return result;
+  };
+  const before=await call('snapshot',{pid:identity.pid,window_title:'Sofia Native Proof',wait_for:'Proof input',wait_milliseconds:3000});
+  const field=before.elements.find((element:{label:string})=>element.label==='Proof input');
+  expect(field).toBeDefined();
+  const action=await call('set_value',{snapshot_id:before.snapshot_id,ref:field.ref,value:'Sofia native parity verified'});
+  expect(action).toMatchObject({ok:true,path:'accessibility',fallbackUsed:false});
+  const after=await call('snapshot',{pid:identity.pid,window_title:'Sofia Native Proof'});
+  expect(after.snapshot_id).not.toBe(before.snapshot_id);
+  expect(JSON.stringify(after)).toContain('Sofia native parity verified');
+  await mkdir(evidence.dir,{recursive:true});await writeFile(join(evidence.dir,'native-fixture-calls.json'),JSON.stringify(calls,null,2));
+  evidence.recordAssertionEvidence('Real native MCP observation and input','The signed production helper observes one disposable Electron fixture, changes its named input through AX without a fallback driver, and verifies the exact text with a new snapshot ID.',true);
+});

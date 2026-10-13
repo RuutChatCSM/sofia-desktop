@@ -5,6 +5,7 @@ import {
   addCodexDefaultProviderLines,
   buildCodexConfigToml,
   codexConfigTomlFromRuntime,
+  codexWireApiForProvider,
   mapWorkspaceEngineProviderToCodex,
   pickDefaultCodexProvider,
 } from "./codex-config.js";
@@ -20,6 +21,38 @@ const deepseek = {
   },
 };
 
+const anthropic = {
+  name: "Anthropic",
+  npm: "@ai-sdk/anthropic",
+  env: ["ANTHROPIC_API_KEY"],
+  options: { baseURL: "https://api.anthropic.com/v1" },
+  models: { "claude-sonnet-4": {} },
+};
+
+describe("codexWireApiForProvider", () => {
+  it("selects the native Anthropic wire for the anthropic provider id", () => {
+    expect(codexWireApiForProvider("anthropic", {})).toBe("anthropic");
+    expect(codexWireApiForProvider("Anthropic", { api: "https://api.anthropic.com/v1" })).toBe("anthropic");
+  });
+
+  it("selects the native Anthropic wire from the @ai-sdk/anthropic npm field", () => {
+    expect(codexWireApiForProvider("custom-claude", { npm: "@ai-sdk/anthropic" })).toBe("anthropic");
+    expect(codexWireApiForProvider("custom-claude", { options: { npm: "@ai-sdk/anthropic" } })).toBe("anthropic");
+  });
+
+  it("still selects Responses for OpenAI and chat completions for others", () => {
+    expect(codexWireApiForProvider("openai", {})).toBe("responses");
+    expect(codexWireApiForProvider("custom", { npm: "@ai-sdk/openai" })).toBe("responses");
+    expect(codexWireApiForProvider("custom", {})).toBe("chatcompletions");
+  });
+
+  it("honors an explicit anthropic wire value", () => {
+    expect(codexWireApiForProvider("custom", { wireApi: "anthropic" })).toBe("anthropic");
+    expect(codexWireApiForProvider("custom", { wire_api: "anthropic" })).toBe("anthropic");
+    expect(codexWireApiForProvider("custom", { options: { wireApi: "anthropic" } })).toBe("anthropic");
+  });
+});
+
 describe("mapWorkspaceEngineProviderToCodex", () => {
   it("maps baseURL + env + name", () => {
     const mapped = mapWorkspaceEngineProviderToCodex("deepseek", deepseek);
@@ -29,6 +62,11 @@ describe("mapWorkspaceEngineProviderToCodex", () => {
       envKey: "DEEPSEEK_API_KEY",
       wireApi: "chatcompletions",
     });
+  });
+
+  it("maps the anthropic provider to the native Anthropic wire", () => {
+    const mapped = mapWorkspaceEngineProviderToCodex("anthropic", anthropic);
+    expect(mapped?.wireApi).toBe("anthropic");
   });
 
   it("strips a trailing /api/v1 suffix", () => {
@@ -74,6 +112,13 @@ describe("buildCodexConfigToml", () => {
     });
     expect(toml).toContain('[model_providers.openai]');
     expect(toml.match(/wire_api = "responses"/g)).toHaveLength(2);
+  });
+
+  it("uses the native Anthropic wire for the anthropic provider", () => {
+    const toml = buildCodexConfigToml({ anthropic });
+    expect(toml).toContain("[model_providers.anthropic]");
+    expect(toml).toContain('base_url = "https://api.anthropic.com/v1"');
+    expect(toml).toContain('wire_api = "anthropic"');
   });
 
   it("skips providers that cannot be represented", () => {

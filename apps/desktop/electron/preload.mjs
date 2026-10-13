@@ -78,6 +78,7 @@ contextBridge.exposeInMainWorld("__SOFIA_ELECTRON__", {
       return ipcRenderer.invoke("sofia:shell:relaunch");
     },
   },
+  images: { decodeHeic(bytes) { return ipcRenderer.invoke("sofia:image:decodeHeic", bytes); } },
   system: {
     getArchitectureInfo() {
       return ipcRenderer.invoke("sofia:system:architecture");
@@ -160,7 +161,9 @@ contextBridge.exposeInMainWorld("__SOFIA_ELECTRON__", {
   browser: {
     show(bounds) { return ipcRenderer.invoke("sofia:browser:show", bounds); },
     hide() { return ipcRenderer.invoke("sofia:browser:hide"); },
-    openUrl(url, provider) { return ipcRenderer.invoke("sofia:browser:openUrl", url, provider); },
+    openUrl(url, provider, options) { return ipcRenderer.invoke("sofia:browser:openUrl", url, provider, options); },
+    setScope(scopeId) { return ipcRenderer.invoke("sofia:browser:setScope", scopeId); },
+    setAgentScope(scopeId) { return ipcRenderer.invoke("sofia:browser:setAgentScope", scopeId); },
     navigate(url) { return ipcRenderer.invoke("sofia:browser:navigate", url); },
     back() { return ipcRenderer.invoke("sofia:browser:back"); },
     forward() { return ipcRenderer.invoke("sofia:browser:forward"); },

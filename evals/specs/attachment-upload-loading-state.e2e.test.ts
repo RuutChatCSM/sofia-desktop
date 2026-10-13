@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { createServer } from "node:http";
 import { join, resolve } from "node:path";
 import { expect, onTestFinished } from "vitest";
-import { clickButton, control, createAndSelectWorkspace, evalIn, waitFor } from "@sofia/behaviors";
+import { control, createAndSelectWorkspace, evalIn, waitFor } from "@sofia/behaviors";
 import { screenshot } from "@sofia/test-evidence";
 import { desktop } from "@sofia/hosts";
 import { needs, test } from "@sofia/testkit";
@@ -13,8 +13,11 @@ const reply = "attachment upload loading proof";
 const attachmentName = "big-photo.png";
 const e2eTestsEnabled = process.env.SOFIA_EVAL_E2E_TESTS === "1";
 const title = e2eTestsEnabled
-  ? "attaching an image shows its chip instantly and sends with a visible uploading state"
+  ? "chat-attachment inbox uploads bypass manual approval without bypassing ordinary writes"
   : "attachment upload loading state skipped — needs: set SOFIA_EVAL_E2E_TESTS=1";
+const composerTitle = e2eTestsEnabled
+  ? "sending an image twice submits once and clears the composer immediately"
+  : "composer image send skipped — needs: set SOFIA_EVAL_E2E_TESTS=1";
 
 const repoRoot = resolve(import.meta.dirname, "../..");
 
@@ -122,10 +125,12 @@ test.skipIf(!e2eTestsEnabled)(title, async ({ evidence }) => {
     `POST /workspace/:id/files/content with the same client token still parked and was denied with HTTP ${writeResponse.status} after ${writeElapsedMs}ms.`,
     true,
   );
+});
 
-  // ---------------------------------------------------------------------
-  // Part 2 — composer UX: chip appears instantly, uploading state visible.
-  // ---------------------------------------------------------------------
+test.skipIf(!e2eTestsEnabled)(composerTitle, async ({ evidence }) => {
+  needs({ optIn: ["SOFIA_EVAL_E2E_TESTS"] });
+  // Composer UX: chip appears instantly and is claimed on send.
+  let inferenceRequests = 0;
   const mock = createServer((request, response) => {
     const url = request.url ?? "";
     if (request.method === "GET" && url.startsWith("/v1/models")) {
@@ -134,6 +139,7 @@ test.skipIf(!e2eTestsEnabled)(title, async ({ evidence }) => {
       return;
     }
     if (request.method === "POST" && (url.startsWith("/v1/chat/completions") || url.startsWith("/chat/completions"))) {
+      inferenceRequests += 1;
       request.resume();
       request.on("end", () => {
         const chunks = [
@@ -304,37 +310,22 @@ test.skipIf(!e2eTestsEnabled)(title, async ({ evidence }) => {
 
   await screenshot(app);
 
-  // Watch for the uploading overlay before clicking send, so even a fast
-  // local upload cannot slip past the assertion.
-  await evalIn(app, `(() => {
-    window.__attachmentUploadingSeen = false;
-    const record = () => {
-      if (document.querySelector('[data-attachment-status="uploading"]')) {
-        window.__attachmentUploadingSeen = true;
-      }
-    };
-    const observer = new MutationObserver(record);
-    observer.observe(document.body, { subtree: true, attributes: true, attributeFilter: ["data-attachment-status"], childList: true });
-    record();
-    return "observing";
-  })()`);
-
-  await clickButton(app, "Run task", { timeoutMs: 30_000 });
-
-  await waitFor(app, `window.__attachmentUploadingSeen === true`, {
-    timeoutMs: 30_000,
-    label: "attachment chip showed its uploading state during send",
-  });
+  const clearedAfterDoubleClick = await evalIn(app, `(async () => {
+    const button = document.querySelector('button[aria-label="Run task"]');
+    if (!(button instanceof HTMLButtonElement)) return false;
+    button.click();
+    button.click();
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    return !document.querySelector('[data-attachment-id]');
+  })()`, { awaitPromise: true, timeoutMs: 30_000 });
+  expect(clearedAfterDoubleClick).toBe(true);
   evidence.recordAssertionEvidence(
-    "The attachment chip shows a visible uploading state while the send is in flight",
-    "A MutationObserver installed before composer.send recorded a chip with data-attachment-status=\"uploading\" — the send is no longer a silent hang.",
+    "Sending twice claims one draft and removes its image from the composer immediately",
+    "Two synchronous clicks on Run task left no attachment chip in the composer on the next animation frame.",
     true,
   );
 
-  // The regression is the pre-model attachment handoff. Prove the submission
-  // was accepted without depending on provider completion timing: the app
-  // creates a real session route and clears the sent chip from the composer.
-  // (The mock may still be generating when this bounded assertion completes.)
+  // The route accepts the claimed draft and the provider receives it once.
   await waitFor(app, `window.location.hash.includes("/session/ses_")`, {
     timeoutMs: 30_000,
     label: "attachment submission created a session",
@@ -347,9 +338,14 @@ test.skipIf(!e2eTestsEnabled)(title, async ({ evidence }) => {
   });
   const errorToastVisible = await evalIn(app, `Boolean(document.querySelector('[data-sonner-toast][data-type="error"]'))`);
   expect(errorToastVisible).toBe(false);
+  const inferenceDeadline = Date.now() + 10_000;
+  while (inferenceRequests === 0 && Date.now() < inferenceDeadline) {
+    await new Promise((resolveWait) => setTimeout(resolveWait, 50));
+  }
+  expect(inferenceRequests).toBe(1);
   evidence.recordAssertionEvidence(
-    "The message with the attachment is accepted: a session is created, the composer clears, and no error toast appears",
-    `The app created session ${sessionId}, cleared the attachment chip from the composer, and showed no error toast.`,
+    "The message with the attachment is accepted once, without an error toast",
+    `The app created session ${sessionId}, made ${inferenceRequests} inference request, and showed no error toast.`,
     true,
   );
 

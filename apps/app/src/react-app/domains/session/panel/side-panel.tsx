@@ -1,3 +1,11 @@
+import { SessionSubagentsPanel } from "./session-subagents-panel";
+import { deriveRecordedSubagents, mergeSessionSubagents, deriveCodexSubagents } from "./session-subagents";
+import { useSessionResourcesStore } from "./session-resources-store";
+import { EMPTY_SESSION_RESOURCES } from "./session-resources";
+import { useCodexSessionStore } from "../codex-session-store";
+import { SourceImagePanel } from "./source-image-panel";
+import { ImageIcon } from "lucide-react";
+import { SessionResourcesPanel } from "./session-resources-panel";
 /** @jsxImportSource react */
 import * as React from "react";
 import { FileDiff, Globe, Loader2, Plus, X, Maximize2, Minimize2, PictureInPicture2, FolderOpen } from "lucide-react";
@@ -70,6 +78,19 @@ type SidePanelTabProps = {
   onClose: (tab: PanelTabEntry) => void;
 };
 
+function SubagentsPanelContent({sessionId,client,workspaceId}:{sessionId:string;client:SofiaServerClient|null;workspaceId:string|null}) {
+  const resources=useSessionResourcesStore(state=>state.sessions[sessionId] ?? EMPTY_SESSION_RESOURCES);
+  const items=useCodexSessionStore(state=>state.sessions[sessionId]?.items);
+  const children=useCodexSessionStore(state=>state.sessions[sessionId]?.subagentSessions);
+  const agents=React.useMemo(()=>mergeSessionSubagents(mergeSessionSubagents(resources.subagents,deriveRecordedSubagents(children ?? [])),deriveCodexSubagents(items ?? [])),[resources.subagents,items,children]);
+  const loadHistory=React.useCallback(async(threadId:string)=>{
+    if(!client || !workspaceId)throw new Error("Workspace connection is unavailable.");
+    const response=await client.getCodexSubagentItems(workspaceId,sessionId,threadId);
+    return response.items;
+  },[client,workspaceId,sessionId]);
+  return <SessionSubagentsPanel agents={agents} loadHistory={loadHistory} workspaceId={workspaceId ?? ""} client={client}/>;
+}
+
 function SidePanelTab({ tab, active, onSelect, onClose }: SidePanelTabProps) {
   const dragControls = useDragControls();
   const tabRef = React.useRef<HTMLDivElement>(null);
@@ -131,6 +152,8 @@ function SidePanelTab({ tab, active, onSelect, onClose }: SidePanelTabProps) {
             )
           ) : tab.type === "changes" ? (
             <FileDiff className="size-3.5 shrink-0" />
+          ) : tab.type === "source-image" ? (
+            <ImageIcon className="size-3.5 shrink-0" />
           ) : tab.type === "artifact" ? (
             <ArtifactIcon type={tab.preview} />
           ) : tab.type === "files" && tab.path ? (
@@ -471,6 +494,8 @@ export function SidePanel({
           </div>
         </div>
         {!activeTab || activeTab.type === "start" ? (
+          <div className="min-h-0 flex-1 overflow-y-auto">
+          <SessionResourcesPanel key={sessionId} sessionId={sessionId} onOpenFile={(path)=>openPanelTab("files",path)} onOpenUrl={(url)=>void openBrowserPage(url)} />
           <PanelEmpty
             onOpenBrowser={isBrowserAvailable ? () => void openBrowserPage() : undefined}
             onNavigate={isBrowserAvailable ? (url) => void openBrowserPage(url) : undefined}
@@ -480,7 +505,12 @@ export function SidePanel({
             onOpenExtensions={onOpenExtensions}
             onOpenVoice={onOpenVoice}
           />
+          </div>
         ) : null}
+        {activeTab?.type === "outputs" ? <div className="min-h-0 flex-1 overflow-y-auto"><SessionResourcesPanel key={sessionId} sessionId={sessionId} fullOutputs onOpenFile={(path)=>openPanelTab("files",path)} onOpenUrl={(url)=>void openBrowserPage(url)} /></div> : null}
+        {activeTab?.type === "sources" ? <div className="min-h-0 flex-1 overflow-y-auto"><SessionResourcesPanel key={sessionId} sessionId={sessionId} fullSources onOpenFile={(path)=>openPanelTab("files",path)} onOpenUrl={(url)=>void openBrowserPage(url)} /></div> : null}
+        {activeTab?.type === "subagents" ? <SubagentsPanelContent sessionId={sessionId} client={client} workspaceId={workspaceId}/> : null}
+        {activeTab?.type === "source-image" ? <SourceImagePanel key={activeTab.id} src={activeTab.src} label={activeTab.label}/> : null}
         {activeTab?.type === "files" ? (
           <WorkspaceFiles key={activeTab.id} client={client} workspaceId={workspaceId} workspaceRoot={workspaceRoot} remote={isRemoteWorkspace} initialPath={activeTab.path} onSelectPath={(path) => usePanelTabStore.getState().openTab(sessionId, { ...activeTab, path, label: path.split("/").pop() ?? path })} />
         ) : activeTab?.type === "browser" ? (

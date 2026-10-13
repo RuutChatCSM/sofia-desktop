@@ -371,6 +371,7 @@ export function createExtensionsStore(options: {
   let snapshot: ExtensionsStoreSnapshot;
 
   let refreshSkillsInFlight = false;
+  let refreshSkillsRequested = false;
   let refreshPluginsInFlight = false;
   let refreshCloudOrgMarketplacesInFlight = false;
   let refreshCloudOrgMarketplacesInFlightKey = "";
@@ -413,7 +414,9 @@ export function createExtensionsStore(options: {
     const root = normalizeDirectoryPath(options.selectedWorkspaceRoot().trim());
     const runtimeWorkspaceId = (options.runtimeWorkspaceId() ?? "").trim();
     const workspaceType = options.workspaceType();
-    return `${workspaceType}:${workspaceId}:${root}:${runtimeWorkspaceId}`;
+    const connection = options.sofiaServerConnection?.() ?? options.sofiaServer.getSnapshot();
+    const inventorySource = connection.sofiaServerStatus === "connected" && connection.sofiaServerClient ? "server" : "local";
+    return `${workspaceType}:${workspaceId}:${root}:${runtimeWorkspaceId}:${inventorySource}`;
   };
 
   const getSofiaServerSnapshot = () => {
@@ -1368,6 +1371,7 @@ export function createExtensionsStore(options: {
     isPluginInstalled(snapshot.pluginList.map((entry) => entry.name), pluginName, aliases);
 
   async function refreshSkills(optionsOverride?: { force?: boolean }) {
+    const requestContextKey = getWorkspaceContextKey();
     const root = options.selectedWorkspaceRoot().trim();
     const isLocalWorkspace = options.workspaceType() === "local";
     const { sofiaSnapshot, sofiaClient, sofiaWorkspaceId, hasSofiaTarget } =
@@ -1386,10 +1390,10 @@ export function createExtensionsStore(options: {
     }
 
     if (canUseSofiaServer && sofiaClient && sofiaWorkspaceId) {
-      const skillCacheKey = root || sofiaWorkspaceId;
+      const skillCacheKey = `server:${sofiaWorkspaceId}:${root}`;
       if (skillCacheKey !== skillsRoot) skillsLoaded = false;
       if (!optionsOverride?.force && skillsLoaded) return;
-      if (refreshSkillsInFlight) return;
+      if (refreshSkillsInFlight) { refreshSkillsRequested = true; return; }
 
       refreshSkillsInFlight = true;
       refreshSkillsAborted = false;
@@ -1397,8 +1401,63 @@ export function createExtensionsStore(options: {
         setStateField("skillsStatus", null);
         const response = await sofiaClient.listSkills(sofiaWorkspaceId, { includeGlobal: isLocalWorkspace });
         if (refreshSkillsAborted) return;
+        if (requestContextKey !== getWorkspaceContextKey()) { refreshSkillsRequested = true; return; }
         const next: SkillCard[] = Array.isArray(response.items)
           ? response.items.map((entry) => ({
+              name: entry.name,
+              description: entry.description,
+              path: entry.path,
+              sourceDirectory: entry.sourceDirectory,
+              readOnly: entry.readOnly,
+              trigger: entry.trigger,
+            }))
+          : [];
+        mutateState((current) => ({
+          ...current,
+          skills: next,
+          skillsStatus: next.length ? null : t("skills.no_skills_found"),
+          skillsContextKey: getWorkspaceContextKey(),
+        }));
+        skillsLoaded = true;
+        skillsRoot = skillCacheKey;
+      } catch (error) {
+        if (refreshSkillsAborted) return;
+        mutateState((current) => ({
+          ...current,
+          skills: [],
+          skillsStatus: error instanceof Error ? error.message : t("skills.failed_to_load"),
+        }));
+      } finally {
+        refreshSkillsInFlight = false;
+        if (refreshSkillsRequested && !disposed) { refreshSkillsRequested = false; void refreshSkills({ force: true }); }
+      }
+      return;
+    }
+
+    if (hasSofiaTarget) {
+      mutateState((current) => ({
+        ...current,
+        skills: [],
+        skillsStatus: "Sofia server cannot read skills for this workspace.",
+      }));
+      return;
+    }
+
+    if (isLocalWorkspace && isDesktopRuntime()) {
+      const skillCacheKey = `local:${root}`;
+      if (skillCacheKey !== skillsRoot) skillsLoaded = false;
+      if (!optionsOverride?.force && skillsLoaded) return;
+      if (refreshSkillsInFlight) { refreshSkillsRequested = true; return; }
+
+      refreshSkillsInFlight = true;
+      refreshSkillsAborted = false;
+      try {
+        setStateField("skillsStatus", null);
+        const local = await listLocalSkills(root);
+        if (refreshSkillsAborted) return;
+        if (requestContextKey !== getWorkspaceContextKey()) { refreshSkillsRequested = true; return; }
+        const next: SkillCard[] = Array.isArray(local)
+          ? local.map((entry) => ({
               name: entry.name,
               description: entry.description,
               path: entry.path,
@@ -1422,55 +1481,7 @@ export function createExtensionsStore(options: {
         }));
       } finally {
         refreshSkillsInFlight = false;
-      }
-      return;
-    }
-
-    if (hasSofiaTarget) {
-      mutateState((current) => ({
-        ...current,
-        skills: [],
-        skillsStatus: "Sofia server cannot read skills for this workspace.",
-      }));
-      return;
-    }
-
-    if (isLocalWorkspace && isDesktopRuntime()) {
-      if (root !== skillsRoot) skillsLoaded = false;
-      if (!optionsOverride?.force && skillsLoaded) return;
-      if (refreshSkillsInFlight) return;
-
-      refreshSkillsInFlight = true;
-      refreshSkillsAborted = false;
-      try {
-        setStateField("skillsStatus", null);
-        const local = await listLocalSkills(root);
-        if (refreshSkillsAborted) return;
-        const next: SkillCard[] = Array.isArray(local)
-          ? local.map((entry) => ({
-              name: entry.name,
-              description: entry.description,
-              path: entry.path,
-              trigger: entry.trigger,
-            }))
-          : [];
-        mutateState((current) => ({
-          ...current,
-          skills: next,
-          skillsStatus: next.length ? null : t("skills.no_skills_found"),
-          skillsContextKey: getWorkspaceContextKey(),
-        }));
-        skillsLoaded = true;
-        skillsRoot = root;
-      } catch (error) {
-        if (refreshSkillsAborted) return;
-        mutateState((current) => ({
-          ...current,
-          skills: [],
-          skillsStatus: error instanceof Error ? error.message : t("skills.failed_to_load"),
-        }));
-      } finally {
-        refreshSkillsInFlight = false;
+        if (refreshSkillsRequested && !disposed) { refreshSkillsRequested = false; void refreshSkills({ force: true }); }
       }
       return;
     }
@@ -1485,9 +1496,10 @@ export function createExtensionsStore(options: {
       return;
     }
 
-    if (root !== skillsRoot) skillsLoaded = false;
+    const skillCacheKey = `engine:${root}`;
+    if (skillCacheKey !== skillsRoot) skillsLoaded = false;
     if (!optionsOverride?.force && skillsLoaded) return;
-    if (refreshSkillsInFlight) return;
+    if (refreshSkillsInFlight) { refreshSkillsRequested = true; return; }
 
     refreshSkillsInFlight = true;
     refreshSkillsAborted = false;
@@ -1505,6 +1517,7 @@ export function createExtensionsStore(options: {
         throw new Error(message);
       }
       if (refreshSkillsAborted) return;
+      if (requestContextKey !== getWorkspaceContextKey()) { refreshSkillsRequested = true; return; }
       const next: SkillCard[] = Array.isArray(result.data)
         ? result.data.map((entry) => ({
             name: entry.name,
@@ -1519,7 +1532,7 @@ export function createExtensionsStore(options: {
         skillsContextKey: getWorkspaceContextKey(),
       }));
       skillsLoaded = true;
-      skillsRoot = root;
+      skillsRoot = skillCacheKey;
     } catch (error) {
       if (refreshSkillsAborted) return;
       mutateState((current) => ({
@@ -1529,6 +1542,7 @@ export function createExtensionsStore(options: {
       }));
     } finally {
       refreshSkillsInFlight = false;
+      if (refreshSkillsRequested && !disposed) { refreshSkillsRequested = false; void refreshSkills({ force: true }); }
     }
   }
 

@@ -7,9 +7,12 @@ type StickyBottomSessionScrollState = {
   topClippedMessageId: string | null;
 };
 
+export type SessionScrollAnchor = { messageId: string; offset: number };
+
 type ManualSessionScrollState = {
   mode: "manual";
   scrollTop: number;
+  anchor?: SessionScrollAnchor;
   topClippedMessageId: string | null;
 };
 
@@ -45,6 +48,7 @@ function normalizeSessionScrollState(value: unknown): SessionScrollState | null 
   return {
     mode: "manual",
     scrollTop: Math.max(0, Math.round(value.scrollTop)),
+    ...(isRecord(value.anchor) && typeof value.anchor.messageId === "string" && typeof value.anchor.offset === "number" && Number.isFinite(value.anchor.offset) ? {anchor:{messageId:value.anchor.messageId,offset:value.anchor.offset}} : {}),
     topClippedMessageId,
   };
 }
@@ -118,6 +122,7 @@ function setSessionManualScroll(
   sessionId: string | null | undefined,
   scrollTop: number,
   topClippedMessageId: string | null,
+  anchor?: SessionScrollAnchor,
 ): SessionScrollStateById {
   if (!sessionId) return sessions;
 
@@ -126,14 +131,15 @@ function setSessionManualScroll(
   if (
     current.mode === "manual" &&
     current.scrollTop === nextScrollTop &&
-    current.topClippedMessageId === topClippedMessageId
+    current.topClippedMessageId === topClippedMessageId &&
+    current.anchor?.messageId === anchor?.messageId && current.anchor?.offset === anchor?.offset
   ) {
     return sessions;
   }
 
   return {
     ...sessions,
-    [sessionId]: { mode: "manual", scrollTop: nextScrollTop, topClippedMessageId },
+    [sessionId]: { mode: "manual", scrollTop: nextScrollTop, topClippedMessageId, ...(anchor ? {anchor} : {}) },
   };
 }
 
@@ -156,7 +162,7 @@ function setSessionTopClippedMessageId(
 type SessionScrollStore = {
   sessions: SessionScrollStateById;
   setStickyBottom: (sessionId: string | null | undefined, topClippedMessageId: string | null) => void;
-  setManualScroll: (sessionId: string | null | undefined, scrollTop: number, topClippedMessageId: string | null) => void;
+  setManualScroll: (sessionId: string | null | undefined, scrollTop: number, topClippedMessageId: string | null, anchor?: SessionScrollAnchor) => void;
   setTopClippedMessageId: (sessionId: string | null | undefined, topClippedMessageId: string | null) => void;
 };
 
@@ -166,8 +172,8 @@ export const useSessionScrollStore = create<SessionScrollStore>((set) => ({
     const sessions = setSessionStickyBottom(state.sessions, sessionId, topClippedMessageId);
     return sessions === state.sessions ? state : { sessions };
   }),
-  setManualScroll: (sessionId, scrollTop, topClippedMessageId) => set((state) => {
-    const sessions = setSessionManualScroll(state.sessions, sessionId, scrollTop, topClippedMessageId);
+  setManualScroll: (sessionId, scrollTop, topClippedMessageId, anchor) => set((state) => {
+    const sessions = setSessionManualScroll(state.sessions, sessionId, scrollTop, topClippedMessageId, anchor);
     return sessions === state.sessions ? state : { sessions };
   }),
   setTopClippedMessageId: (sessionId, topClippedMessageId) => set((state) => {

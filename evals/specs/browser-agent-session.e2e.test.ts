@@ -105,6 +105,13 @@ test("connected browser shows persistent cursor and Browser activity labels", { 
       try { await tab.click({selector:'#disabled'}); } catch { disabledRejected=true; }
       try { await tab.click({selector:'#covered'}); } catch { coveredRejected=true; }
       console.log(JSON.stringify({disabledRejected,coveredRejected}));
+      const saved = await tab.see();
+      const prior = saved.elements.find(e => e.label === 'Double');
+      await tab.evaluate("document.querySelector('#double').outerHTML='<button id=double>Replacement</button>'");
+      let staleRejected=false;
+      try {await tab.click({index:prior.index});} catch(error){staleRejected=String(error).includes('replaced');}
+      console.log(JSON.stringify({staleRejected}));
+
 
     ` } } }) + '\n');
   });
@@ -117,6 +124,7 @@ test("connected browser shows persistent cursor and Browser activity labels", { 
   expect(content).toContain('second@example.test.extra');
   expect(content).toContain('\"disabledRejected\":true');
   expect(content).toContain('\"coveredRejected\":true');
+  expect(content).toContain('\"staleRejected\":true');
   expect(content).toContain('\"valid\":true');
   expect(await evaluate(observer, 'window.checkTrusted'), JSON.stringify(await evaluate(observer, '({width:innerWidth,dpr:devicePixelRatio,events:window.pointerEvents})'))).toBe(true);
   expect(await evaluate(observer, "document.querySelector('#choice').checked")).toBe(true);

@@ -74,6 +74,9 @@ describe("codex-runtime-mcp", () => {
     const computer = codexRuntimeSkill("computer-use");
     expect(computer).toContain("snapshot");
     expect(computer).toContain("`computer-use` MCP server");
+    expect(computer).toContain("call `list_apps` then `snapshot` targeting Safari");
+    expect(computer).toContain("the tools are not limited to public URLs");
+    expect(computer).toContain("do not open its URL in Sofia's in-app browser");
   });
 
   test("defaultCodexRuntimeMcpServers never returns servers on unsupported platforms", () => {

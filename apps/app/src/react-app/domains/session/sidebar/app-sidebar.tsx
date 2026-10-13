@@ -123,6 +123,7 @@ import {
   flattenSessionRows,
   formatSessionRelativeTime,
   getRootSessions,
+  orderRootSessions,
   isActiveWorkSessionStatus,
   isNeedsAttentionSessionStatus,
   isSessionArchived,
@@ -939,13 +940,22 @@ function isSessionActivityStatus(status: string | undefined): status is SessionA
 
 export function AppSidebar(props: AppSidebarProps) {
   const [expandedWorkspaceIds, setExpandedWorkspaceIds] = React.useState<Set<string>>(
-    () => new Set(),
+    () => new Set(props.workspaceSessionGroups.map((group) => group.workspace.id)),
   );
+  const seenWorkspaceIds = React.useRef(new Set(props.workspaceSessionGroups.map((group) => group.workspace.id)));
   const [previewCountByWorkspaceId, setPreviewCountByWorkspaceId] = React.useState<Record<string, number>>({});
   const [expandedSessionIds, setExpandedSessionIds] = React.useState<Set<string>>(
     () => new Set(),
   );
   const previousSessionStatusRef = React.useRef<Record<string, string>>({});
+  React.useEffect(() => {
+    const newlyLoaded = props.workspaceSessionGroups
+      .map((group) => group.workspace.id)
+      .filter((id) => !seenWorkspaceIds.current.has(id));
+    if (!newlyLoaded.length) return;
+    newlyLoaded.forEach((id) => seenWorkspaceIds.current.add(id));
+    setExpandedWorkspaceIds((current) => new Set([...current, ...newlyLoaded]));
+  }, [props.workspaceSessionGroups]);
   const sessionNumberShortcutByTarget = React.useMemo(
     () => new Map(props.sessionNumberShortcuts.targets.map((target) => [
       sessionNumberShortcutTargetKey(target.workspaceId, target.sessionId),
@@ -1024,11 +1034,11 @@ export function AppSidebar(props: AppSidebarProps) {
   const previewCount = (workspaceId: string) =>
     previewCountByWorkspaceId[workspaceId] ?? MAX_SESSIONS_PREVIEW;
 
-  const showMoreSessions = (workspaceId: string, totalRoots: number) => {
+  const showMoreSessions = (workspaceId: string, totalRoots: number, visibleRoots: number) => {
     expandWorkspace(workspaceId);
     setPreviewCountByWorkspaceId((current) => ({
       ...current,
-      [workspaceId]: Math.min((current[workspaceId] ?? MAX_SESSIONS_PREVIEW) + MAX_SESSIONS_PREVIEW, totalRoots),
+      [workspaceId]: Math.min(Math.max(current[workspaceId] ?? MAX_SESSIONS_PREVIEW, visibleRoots) + MAX_SESSIONS_PREVIEW, totalRoots),
     }));
   };
 
@@ -1453,7 +1463,7 @@ type WorkspaceReorderItemProps = {
   className: string;
   group: WorkspaceSessionGroup;
   previewCount: number;
-  showMoreSessions: (workspaceId: string, totalRoots: number) => void;
+  showMoreSessions: (workspaceId: string, totalRoots: number, visibleRoots: number) => void;
 };
 
 function WorkspaceReorderItem({
@@ -1531,7 +1541,11 @@ function WorkspaceHeader({
         {isLoading ? (
           <SessionDotMatrixLoader label={t("workspace.loading_tasks")} />
         ) : (
-          <WorkspaceAvatarPicker workspaceId={workspace.id} label={label} />
+          // Layout spacer only. The interactive avatar is a *sibling* of this
+          // row button (WorkspaceSidebarGroup), because a popover trigger inside
+          // the menu button nested <button> in <button> — invalid HTML, and a
+          // React hydration error on every render.
+          <span aria-hidden="true" className="block size-4 shrink-0 rounded-full" />
         )}
       </SidebarGlyphSlot>
       <div
@@ -1553,7 +1567,7 @@ type WorkspaceSidebarGroupProps = {
   className: string;
   group: WorkspaceSessionGroup;
   previewCount: number;
-  showMoreSessions: (workspaceId: string, totalRoots: number) => void;
+  showMoreSessions: (workspaceId: string, totalRoots: number, visibleRoots: number) => void;
   onWorkspaceTitlePointerDown: React.PointerEventHandler<HTMLDivElement>;
 };
 
@@ -1616,9 +1630,17 @@ function WorkspaceSidebarGroup({
     () => partitionArchivedSessions(group.sessions),
     [group.sessions],
   );
+  const selectedRootId = tree.ancestorIdsBySessionId.get(ctx.selectedSessionId ?? "")?.[0]
+    ?? ctx.selectedSessionId;
+  const selectedRootIndex = orderRootSessions(getRootSessions(activeSessions), EMPTY_PINNED_IDS, orderIds)
+    .filter((session) => !pinnedIds.has(session.id))
+    .findIndex((session) => session.id === selectedRootId);
+  const visibleRootCount = isSelected && selectedRootIndex >= 0
+    ? Math.max(previewCount, selectedRootIndex + 1)
+    : previewCount;
   const sessionRows = flattenSessionRows(
     group.sessions,
-    wsGroups.length > 0 ? Number.MAX_SAFE_INTEGER : previewCount,
+    wsGroups.length > 0 ? Number.MAX_SAFE_INTEGER : visibleRootCount,
     tree,
     ctx.expandedSessionIds,
     forcedExpandedSessionIds,
@@ -1634,7 +1656,7 @@ function WorkspaceSidebarGroup({
     () => getRootSessions(activeSessions).filter((session) => !pinnedIds.has(session.id)).length,
     [activeSessions, pinnedIds],
   );
-  const remainingRootSessions = Math.max(0, activeRootCount - previewCount);
+  const remainingRootSessions = Math.max(0, activeRootCount - visibleRootCount);
   const showMoreLabel = remainingRootSessions > 0
     ? t("workspace_list.show_more", {
       count: Math.min(MAX_SESSIONS_PREVIEW, remainingRootSessions),
@@ -1659,6 +1681,14 @@ function WorkspaceSidebarGroup({
                 isLoading={isConnecting}
                 onTitlePointerDown={onWorkspaceTitlePointerDown}
               />
+              {/* Sibling of the row button, not a child of it: nested buttons are
+                  invalid HTML and hydrated as an error. Mirrors the actions
+                  cluster below. */}
+              {isConnecting ? null : (
+                <div className="absolute left-1.5 top-1/2 z-10 -translate-y-1/2">
+                  <WorkspaceAvatarPicker workspaceId={workspace.id} label={workspaceLabel(workspace)} />
+                </div>
+              )}
               <div
                 data-workspace-actions
                 className="group/workspace-actions absolute right-8 top-1/2 z-10 flex -translate-y-1/2 items-center gap-0.5 opacity-0 pointer-events-none transition-opacity group-hover/workspace-header:opacity-100 group-hover/workspace-header:pointer-events-auto group-focus-within/workspace-actions:opacity-100 group-focus-within/workspace-actions:pointer-events-auto group-has-data-popup-open/workspace-header:opacity-100 group-has-data-popup-open/workspace-header:pointer-events-auto"
@@ -1757,10 +1787,10 @@ function WorkspaceSidebarGroup({
                         ))}
                       </Reorder.Group>
                     )}
-                    {wsGroups.length === 0 && activeRootCount > previewCount ? (
+                    {wsGroups.length === 0 && activeRootCount > visibleRootCount ? (
                       <ShowMoreSessionsButton
                         label={showMoreLabel}
-                        onClick={() => showMoreSessions(workspace.id, activeRootCount)}
+                        onClick={() => showMoreSessions(workspace.id, activeRootCount, visibleRootCount)}
                       />
                     ) : null}
                   </>
@@ -2306,7 +2336,7 @@ function SessionNumberShortcutSlot({ digit }: { digit: number | undefined }) {
       data-session-action-slot="number-shortcut"
       aria-hidden="true"
       className={cn(
-        "flex h-5 shrink-0 items-center justify-center",
+        "hidden h-5 shrink-0 items-center justify-center group-hover/menu-sub-item:flex group-focus-within/menu-sub-item:flex",
         ctx.sessionNumberShortcutOs === "macos" ? "w-8" : "w-11",
       )}
     >

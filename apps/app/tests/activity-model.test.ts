@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  activityStatusLabel,
   activityTitleForStatus,
   currentActivity,
   deriveActivities,
@@ -22,13 +21,6 @@ const activity = (overrides: Partial<Activity>): Activity => ({
 });
 
 describe("activity presentation model", () => {
-  test("the state lives inside the activity, in the user's words", () => {
-    expect(activityStatusLabel("running")).toBe("Running");
-    expect(activityStatusLabel("waiting")).toBe("Needs you");
-    expect(activityStatusLabel("failed")).toBe("Needs you");
-    expect(activityStatusLabel("completed")).toBe("Finished");
-  });
-
   test("an orchestrator-supplied title beats the command", () => {
     const [named] = deriveActivities("s", [
       {
@@ -91,7 +83,8 @@ describe("activity presentation model", () => {
     expect(shouldSurfaceActivity([completed], false)).toBe(false);
     expect(shouldSurfaceActivity([], false)).toBe(false);
 
-    // A failure still needs the user once the turn is over.
+    // The sidebar badge (the only surface that shows failures) resolves the
+    // failed activity; the composer strip never does.
     const failed = activity({ id: "f", status: "failed" });
     expect(currentActivity([failed])?.id).toBe("f");
     expect(runningActivities([running, failed])).toEqual([running]);

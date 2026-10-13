@@ -54,7 +54,7 @@ export type ExtensionItem = {
   removedUpstream?: boolean;
   orgMcpConnection?: DenExternalMcpConnection;
   mcpEntry?: McpDirectoryInfo;
-  skill?: { name: string; description?: string; path: string };
+  skill?: SkillCard;
 };
 
 /**
@@ -90,7 +90,7 @@ export function resolveExtensionInventoryGroup(
 export type ExtensionItemBuildInput = {
   quickConnect: McpDirectoryInfo[];
   mcpServers: McpServerEntry[];
-  installedSkills: Array<{ name: string; description?: string; path: string }>;
+  installedSkills: SkillCard[];
   importedCloudPlugins: Record<string, CloudImportedPlugin>;
   pendingCloudPluginChanges?: Record<string, PendingCloudPluginChange>;
   cloudMarketplaces: DenOrgMarketplaceResolved[];

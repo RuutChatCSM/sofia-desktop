@@ -1,9 +1,14 @@
 // Maps the engine runtime provider map (the same data the UI model picker
 // uses) to a codex `config.toml` that the bundled codex engine can consume.
 // Additive — engine provider storage is untouched.
+import {
+  ENGINE_FEATURES,
+  resolveEngineFeatureEnabled,
+  type EngineFeatureOverrides,
+} from "./engine-features.js";
 import type { RuntimeWorkspaceEngineConfig } from "./runtime-engine-config-store.js";
 
-export type CodexWireApi = "responses" | "chatcompletions";
+export type CodexWireApi = "responses" | "chatcompletions" | "anthropic";
 
 export function codexWireApiForProvider(
   providerId: string,
@@ -14,12 +19,14 @@ export function codexWireApiForProvider(
     ?? readRequiredString(value.wire_api)
     ?? (options ? readRequiredString(options.wireApi) : null)
     ?? (options ? readRequiredString(options.wire_api) : null);
-  if (explicit === "responses" || explicit === "chatcompletions") return explicit;
+  if (explicit === "responses" || explicit === "chatcompletions" || explicit === "anthropic") return explicit;
 
-  const npm = readRequiredString(value.npm)?.toLowerCase() ?? "";
+  const npm = (readRequiredString(value.npm) ?? (options ? readRequiredString(options.npm) : null))?.toLowerCase() ?? "";
   const id = providerId.trim().toLowerCase();
   const officialOpenAiSdk = npm.includes("@ai-sdk/openai") && !npm.includes("openai-compatible");
-  return id === "openai" || officialOpenAiSdk ? "responses" : "chatcompletions";
+  if (id === "openai" || officialOpenAiSdk) return "responses";
+  if (id === "anthropic" || npm === "@ai-sdk/anthropic") return "anthropic";
+  return "chatcompletions";
 }
 
 /**
@@ -124,4 +131,78 @@ function tomlKey(value: string): string {
 
 function tomlString(value: string): string {
   return JSON.stringify(value);
+}
+
+/**
+ * Apply the engine feature flags the user has chosen.
+ *
+ * Merges per table rather than appending: a config that already carries
+ * `[features]` (for example `direct_only_tool_namespaces`) would fail to parse
+ * with a second `[features]` header, and the engine runs `--strict-config`, so a
+ * duplicate header is a start failure rather than a warning.
+ *
+ * Removed-stage flags are never emitted even if a stale override says otherwise.
+ */
+export function applyEngineCapabilitiesToml(
+  toml: string,
+  overrides?: EngineFeatureOverrides | null,
+): string {
+  let next = toml;
+  const features: string[] = [];
+  for (const feature of ENGINE_FEATURES) {
+    if (feature.stage === "removed") continue;
+    if (!resolveEngineFeatureEnabled(feature.key, overrides)) continue;
+    if (feature.kind === "tool") {
+      next = upsertTopLevelBool(next, `tools.${feature.key}`, "enabled", true);
+      continue;
+    }
+    features.push(`${feature.key} = true`);
+  }
+  if (features.length > 0) {
+    next = upsertTopLevelKeys(next, "features", features);
+  }
+  return next;
+}
+
+/** Set `key = true` inside `[table]`, creating the table or key when missing. */
+export function upsertTopLevelKeys(toml: string, table: string, assignments: string[]): string {
+  const keys = assignments.map((assignment) => assignment.split(" = ")[0] ?? "");
+  const header = `[${table}]`;
+  const lines = toml.split("\n");
+
+  const headerIndex = lines.findIndex((line) => line.trim() === header);
+  if (headerIndex === -1) {
+    return `${toml.trim() ? `${toml.trimEnd()}\n\n` : ""}${header}\n${assignments.join("\n")}\n`;
+  }
+
+  // Walk this table's body, bounded by the next header.
+  let bodyEnd = lines.length;
+  for (let index = headerIndex + 1; index < lines.length; index += 1) {
+    if (lines[index].trimStart().startsWith("[")) {
+      bodyEnd = index;
+      break;
+    }
+  }
+  const missing: string[] = [];
+  for (const [index, assignment] of assignments.entries()) {
+    const key = keys[index] ?? "";
+    // Set an existing key in place; otherwise append and keep scanning.
+    let found = false;
+    for (let scan = headerIndex + 1; scan < bodyEnd; scan += 1) {
+      const keyMatch = /^\s*([A-Za-z0-9_.-]+)\s*=/.exec(lines[scan] ?? "");
+      if (keyMatch?.[1] === key) {
+        lines[scan] = assignment;
+        found = true;
+        break;
+      }
+    }
+    if (!found) missing.push(assignment);
+  }
+  if (missing.length > 0) lines.splice(bodyEnd, 0, ...missing);
+  return lines.join("\n");
+}
+
+/** Set `table.key = value`, creating the table or the key when missing. */
+function upsertTopLevelBool(toml: string, table: string, key: string, value: boolean): string {
+  return upsertTopLevelKeys(toml, table, [`${key} = ${value}`]);
 }

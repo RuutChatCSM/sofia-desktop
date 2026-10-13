@@ -13,7 +13,8 @@ import {
 } from "./engine/workspace-engine-client.js";
 import { LatestTrailingWorkQueue } from "./latest-trailing-work-queue.js";
 import { addPlugin, listPlugins, normalizePluginSpec, removePlugin } from "./plugins.js";
-import { addMcp, listMcp, removeMcp, setMcpEnabled } from "./mcp.js";
+import { addMcp, listMcp, removeMcp, setMcpEnabled, type McpScope } from "./mcp.js";
+import { probeMcpServer } from "./mcp-probe.js";
 import {
   callMcpAppTool,
   McpAppHostError,
@@ -84,7 +85,8 @@ import { registerOperationRoutes } from "./routes/operations.js";
 import { addRoute, matchRoute, type AuthMode, type RequestContext, type Route } from "./routes/registry.js";
 import { registerSessionRoutes } from "./routes/sessions.js";
 import { registerCodexRoutes } from "./codex-routes.js";
-import { applyCodexWorkspaceMcpConfiguration, codexWorkspaceConfigFile, getOrCreateCodexSessionManager } from "./codex-registry.js";
+import { applyCodexWorkspaceMcpConfiguration, codexWorkspaceConfigFile, getOrCreateCodexSessionManager, codexBinaryForConfig } from "./codex-registry.js";
+import { discoveredSkillInventory } from "./codex-skill-inventory.js";
 import { CodexAttentionHub } from "./codex-attention.js";
 import { bridgeCodexApprovals } from "./codex-approvals.js";
 import { registerWorkspaceRoutes } from "./routes/workspaces.js";
@@ -113,6 +115,7 @@ import {
   mergeWorkspaceEngineConfigs,
   mergeRuntimeProviderUpdate,
   readGlobalRuntimeWorkspaceEngineConfig,
+  runtimeEngineFeatureOverrides,
   readRuntimeWorkspaceEngineConfig,
   runtimeDisabledProviderList,
   runtimeMcpMap,
@@ -132,6 +135,7 @@ import { buildSofiaRuntimeConfigObject } from "./sofia-runtime-config.js";
 import { readLegacyConfigSweepState } from "./legacy-config-sweep.js";
 import { findManagedEngineWorkspace } from "./workspaces.js";
 import { CloudProviderSync, parseCloudProviderDenSession } from "./cloud-provider-sync.js";
+import { engineFeatureCatalog, isKnownEngineFeatureKey, sanitizeEngineFeatureOverrides } from "./engine-features.js";
 import pkg from "../package.json" with { type: "json" };
 import constants from "../../../constants.json" with { type: "json" };
 
@@ -255,6 +259,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/** MCP entries default to the workspace layer; only an explicit "global" opts out. */
+function readMcpScope(value: unknown): McpScope {
+  return value === "global" ? "global" : "project";
+}
+
 function readStringField(value: unknown, key: string): string {
   if (!isRecord(value)) return "";
   const field = value[key];
@@ -334,6 +343,24 @@ function parseDisabledProvidersPayload(value: unknown): string[] {
     if (!providers.includes(provider)) providers.push(provider);
   }
   return providers;
+}
+
+function parseEngineFeaturePatchPayload(body: Record<string, unknown>): Record<string, boolean> {
+  const raw = body.engineFeatures ?? body.engine_features;
+  if (!isRecord(raw)) {
+    throw new ApiError(400, "invalid_payload", "engineFeatures must be an object");
+  }
+  const overrides: Record<string, boolean> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    if (typeof value !== "boolean") {
+      throw new ApiError(400, "invalid_payload", `engineFeatures.${key} must be a boolean`);
+    }
+    if (!isKnownEngineFeatureKey(key)) {
+      throw new ApiError(400, "unknown_engine_feature", `Unknown engine feature: ${key}`);
+    }
+    overrides[key] = value;
+  }
+  return overrides;
 }
 
 function parseRuntimeProviderPatchPayload(body: Record<string, unknown>): Record<string, unknown> {
@@ -2047,6 +2074,37 @@ function createRoutes(
     });
   });
 
+  addRoute(routes, "GET", "/engine-features", "client", async () => {
+    const runtime = await readGlobalRuntimeWorkspaceEngineConfig(config);
+    return jsonResponse({ features: engineFeatureCatalog(runtimeEngineFeatureOverrides(runtime)) });
+  });
+
+  addRoute(routes, "PATCH", "/engine-features", "host-token", async (ctx) => {
+    ensureWritable(config);
+    const workspace = resolveEngineRuntimeWorkspace(config);
+    const overrides = parseEngineFeaturePatchPayload(await readJsonBody(ctx.request));
+    const result = await writeGlobalRuntimeWorkspaceEngineConfig(config, (current) => {
+      const next = sanitizeEngineFeatureOverrides({
+        ...runtimeEngineFeatureOverrides(current),
+        ...overrides,
+      });
+      return { ...current, engine_features: next };
+    });
+
+    // The engine reloads its tool plan per turn from config, but the generated
+    // file has to be rewritten for the change to be visible at all.
+    const shouldReload = result.changed;
+    if (shouldReload) {
+      await reloadWorkspaceEngineEngine(config, workspace, engineMcpServerState);
+    }
+    return jsonResponse({
+      ok: true,
+      changed: result.changed,
+      features: engineFeatureCatalog(sanitizeEngineFeatureOverrides(overrides)),
+      reload: shouldReload ? "reloaded" : "skipped",
+    });
+  });
+
   addRoute(routes, "GET", "/workspace/:id/runtime-config", "client", async (ctx) => {
     const workspace = await resolveWorkspace(config, ctx.params.id);
     const runtime = await readRuntimeWorkspaceEngineConfig(config, workspace.id);
@@ -2282,7 +2340,8 @@ function createRoutes(
   addRoute(routes, "GET", "/workspace/:id/skills", "client", async (ctx) => {
     const workspace = await resolveWorkspace(config, ctx.params.id);
     const includeGlobal = ctx.url.searchParams.get("includeGlobal") === "true";
-    const items = await listSkills(workspace.path, includeGlobal);
+    const manager = codexBinaryForConfig(config) ? await getOrCreateCodexSessionManager(config, workspace.id) : null;
+    const items = manager ? discoveredSkillInventory(await manager.listDiscoveredSkills(), [], workspace.path) : await listSkills(workspace.path, includeGlobal);
     return jsonResponse({ items });
   });
 
@@ -2293,7 +2352,8 @@ function createRoutes(
     if (!name) {
       throw new ApiError(400, "invalid_skill_name", "Skill name is required");
     }
-    const items = await listSkills(workspace.path, includeGlobal);
+    const manager = codexBinaryForConfig(config) ? await getOrCreateCodexSessionManager(config, workspace.id) : null;
+    const items = manager ? discoveredSkillInventory(await manager.listDiscoveredSkills(), [], workspace.path) : await listSkills(workspace.path, includeGlobal);
     const item = items.find((skill) => skill.name === name);
     if (!item) {
       throw new ApiError(404, "skill_not_found", `Skill not found: ${name}`);
@@ -2612,6 +2672,7 @@ function createRoutes(
     const workspace = await resolveWorkspace(config, ctx.params.id);
     const body = await readJsonBody(ctx.request);
     const name = String(body.name ?? "");
+    const scope = readMcpScope(body.scope);
     validateUserMcpName(name);
     const configPayload = body.config as Record<string, unknown> | undefined;
     if (!configPayload) {
@@ -2620,10 +2681,10 @@ function createRoutes(
     await requireApproval(ctx, {
       workspaceId: workspace.id,
       action: "mcp.add",
-      summary: `Add MCP ${name}`,
+      summary: `Add MCP ${name} (${scope})`,
       paths: [join(workspace.path, ".sofia")],
     });
-    const result = await addMcp(config, workspace.id, name, configPayload);
+    const result = await addMcp(config, workspace.id, name, configPayload, scope);
     // Hot-add into the running engine so connect/auth works immediately,
     // without waiting for an engine instance rebuild.
     await syncRuntimeMcpToWorkspaceEngineEngine(
@@ -2639,7 +2700,7 @@ function createRoutes(
       actor: ctx.actor ?? { type: "remote" },
       action: "mcp.add",
       target: workspace.id,
-      summary: `Added MCP ${name}`,
+      summary: `Added MCP ${name} (${scope})`,
       timestamp: Date.now(),
     });
     emitReloadEvent(ctx.reloadEvents, workspace, "mcp", {
@@ -2649,6 +2710,37 @@ function createRoutes(
     });
     const items = await listMcp(config, workspace.id, workspace.path);
     return jsonResponse({ items });
+  });
+
+  // Active handshake probe. A configured entry is not proof the command speaks
+  // MCP: a package installer starts, prints, and exits with zero tools. This
+  // runs initialize + tools/list before anything is written, so the add flow can
+  // refuse dead entries instead of reporting them healthy.
+  addRoute(routes, "POST", "/workspace/:id/mcp/probe", "client", async (ctx) => {
+    requireClientScope(ctx, "collaborator");
+    const workspace = await resolveWorkspace(config, ctx.params.id);
+    const body = await readJsonBody(ctx.request);
+    const url = typeof body.url === "string" ? body.url.trim() : undefined;
+    const command = Array.isArray(body.command)
+      ? body.command.filter((token): token is string => typeof token === "string" && token.trim().length > 0)
+      : undefined;
+    if (!url && (!command || command.length === 0)) {
+      throw new ApiError(400, "invalid_payload", "An MCP URL or command is required");
+    }
+    const headers = isRecord(body.headers)
+      ? Object.fromEntries(Object.entries(body.headers).filter((entry): entry is [string, string] => typeof entry[1] === "string"))
+      : undefined;
+    const environment = isRecord(body.env)
+      ? Object.fromEntries(Object.entries(body.env).filter((entry): entry is [string, string] => typeof entry[1] === "string"))
+      : undefined;
+    const result = await probeMcpServer({
+      ...(url ? { url } : {}),
+      ...(command ? { command } : {}),
+      ...(headers ? { headers } : {}),
+      ...(environment ? { env: environment } : {}),
+      ...(typeof body.timeoutMs === "number" ? { timeoutMs: body.timeoutMs } : {}),
+    });
+    return jsonResponse({ workspaceId: workspace.id, ...result });
   });
 
   addRoute(routes, "DELETE", "/workspace/:id/mcp/:name", "client", async (ctx) => {
@@ -2662,8 +2754,9 @@ function createRoutes(
       summary: `Remove MCP ${name}`,
       paths: [join(workspace.path, ".sofia")],
     });
+    const scope = readMcpScope(new URL(ctx.request.url).searchParams.get("scope"));
     const managedRemoved = await deleteLocalManagedMcp(config, workspace.id, name);
-    const removed = managedRemoved || await removeMcp(config, workspace.id, name);
+    const removed = managedRemoved || await removeMcp(config, workspace.id, name, scope);
     await recordAudit(workspace.path, {
       id: shortId(),
       workspaceId: workspace.id,
@@ -2706,8 +2799,9 @@ function createRoutes(
       summary,
       paths: [join(workspace.path, ".sofia")],
     });
+    const scope = readMcpScope(body.scope);
     const managedUpdated = await setLocalManagedMcpEnabled(config, workspace.id, name, enabled);
-    const updated = managedUpdated || await setMcpEnabled(config, workspace.id, name, enabled);
+    const updated = managedUpdated || await setMcpEnabled(config, workspace.id, name, enabled, scope);
     if (!updated) {
       throw new ApiError(404, "mcp_not_found", `MCP ${name} not found in workspace config`);
     }

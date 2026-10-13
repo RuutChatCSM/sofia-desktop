@@ -503,7 +503,7 @@ export function DebugView(props: DebugViewProps) {
         </div>
         <div className="grid gap-2 text-[12px] text-dls-secondary md:grid-cols-2">
           <div>{t("settings.debug_desktop_app", { version: props.runtimeSummary.appVersionLabel })}</div>
-          <div>{t("settings.debug_commit", { commit: props.runtimeSummary.appCommitLabel })}</div>
+          <div>{t("settings.debug_commit", { sha: props.runtimeSummary.appCommitLabel })}</div>
           <div>
             {t("settings.debug_engine_version", { version: props.runtimeSummary.engineVersionLabel })}
           </div>

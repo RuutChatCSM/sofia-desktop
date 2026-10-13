@@ -4,10 +4,12 @@
 // Extracted from main.mjs; consumed only by the desktop IPC registry.
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
+import { readFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { app, shell } from "electron";
+import { app, desktopCapturer, shell } from "electron";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -161,9 +163,70 @@ async function openComputerUseSetupApp() {
   child.unref();
 }
 
+const COMPUTER_PEEK_MAX_AGE_MS = 10 * 60_000;
+
+async function readComputerUsePreview() {
+  if (process.platform !== "darwin" || typeof process.getuid !== "function") return null;
+  try {
+    const file = path.join(os.tmpdir(), `sofia-computer-peek-${process.getuid()}.json`);
+    const raw = await readFile(file, "utf8");
+    if (raw.length > 8_000_000) return null;
+    const preview = JSON.parse(raw);
+    if (!Number.isInteger(preview.pid) || preview.pid <= 0 ||
+        !Number.isInteger(preview.helperPid) || preview.helperPid <= 0 ||
+        !Number.isInteger(preview.windowNumber) || preview.windowNumber < 0 ||
+        typeof preview.app !== "string" || typeof preview.image !== "string" ||
+        typeof preview.capturedAt !== "number" || preview.mimeType !== "image/jpeg" ||
+        !Number.isFinite(preview.capturedAt) || preview.capturedAt * 1000 > Date.now() + 5_000 ||
+        typeof preview.presentationId !== "string" || !preview.presentationId ||
+        !Number.isSafeInteger(preview.revision) || preview.revision < 1 ||
+        !Number.isSafeInteger(preview.imageWidth) || preview.imageWidth < 1 ||
+        !Number.isSafeInteger(preview.imageHeight) || preview.imageHeight < 1 ||
+        Date.now() - preview.capturedAt * 1000 > COMPUTER_PEEK_MAX_AGE_MS) return null;
+    process.kill(preview.pid, 0);
+    process.kill(preview.helperPid, 0);
+    return {
+      helperPid: preview.helperPid,
+      presentationId: preview.presentationId,
+      revision: preview.revision,
+      imageWidth: preview.imageWidth,
+      imageHeight: preview.imageHeight,
+      app: preview.app,
+      pid: preview.pid,
+      windowNumber: preview.windowNumber,
+      windowTitle: typeof preview.windowTitle === "string" ? preview.windowTitle : "",
+      capturedAt: preview.capturedAt,
+      imageUrl: `data:image/jpeg;base64,${preview.image}`,
+      applicationIconUrl: typeof preview.applicationIcon === "string" && preview.applicationIcon.length < 1_000_000 ? `data:image/png;base64,${preview.applicationIcon}` : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function computerUseCaptureSource(preview) {
+  if (!preview?.windowNumber) return null;
+  const sources = await desktopCapturer.getSources({ types: ["window"], thumbnailSize: { width: 0, height: 0 } });
+  return sources.find((source) => source.id.startsWith(`window:${preview.windowNumber}:`)) ?? null;
+}
+
+async function openComputerUsePreview(preview) {
+  const binary = resolveComputerUseExecutable();
+  if (!preview || !binary) return false;
+  return new Promise((resolve) => {
+    const child = spawn(binary, ["--activate-pid", String(preview.pid)], { stdio: "ignore", timeout: 5_000 });
+    child.on("error", () => resolve(false));
+    child.on("close", (code) => resolve(code === 0));
+  });
+}
+
 export {
+  resolveComputerUseExecutable,
   checkComputerUsePermissions,
   getComputerUseMcpCommand,
   listRunningApps,
   openComputerUseSetupApp,
+  openComputerUsePreview,
+  readComputerUsePreview,
+  computerUseCaptureSource,
 };

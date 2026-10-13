@@ -11,7 +11,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 import { readCodexAuthStore } from "./codex-auth-store.js";
-import { readCodexEngineConfig } from "./codex-providers.js";
+import { readCodexEngineConfig, readCodexProviders, writeCodexProviders } from "./codex-providers.js";
 import { resetProviderModelDiscoveryCache } from "./codex-model-discovery.js";
 import { resetModelsDevCatalogCache } from "./models-dev-catalog.js";
 import { startServer } from "./server.js";
@@ -48,6 +48,13 @@ const CATALOG_STUB = {
     env: ["OPENROUTER_API_KEY"],
     api: "https://openrouter.ai/api/v1",
     models: {},
+  },
+  anthropic: {
+    id: "anthropic",
+    name: "Anthropic",
+    env: ["ANTHROPIC_API_KEY"],
+    api: "https://api.anthropic.com/v1",
+    models: { "claude-test": { id: "claude-test", name: "Claude Test" } },
   },
   perplexity: {
     id: "perplexity",
@@ -279,10 +286,39 @@ describe("disconnecting a provider", () => {
     expect(auth.ANTHROPIC_API_KEY).toBeUndefined();
     // No key may remain under any name the engine could resolve.
     expect(Object.keys(auth)).toHaveLength(0);
+    expect((await readCodexEngineConfig()).providers.some((provider) => provider.providerId === "anthropic")).toBe(false);
   });
 });
 
 describe("model discovery at connect time", () => {
+  test("repairs a previously connected Anthropic provider when the picker loads", async () => {
+    const root = resolve(await createTempRoot("sofia-provider-connect-ws-"));
+    const { base } = await startSofiaServer(root, {
+      providerDiscoveryFetch: discoveryRoutes({ catalog: CATALOG_STUB }),
+    });
+    const file = await readCodexProviders();
+    file.providers.anthropic = {
+      api_key: "", base_url: "https://api.anthropic.com/v1", wire_api: "chat_completions",
+      name: "Anthropic", models: [],
+    };
+    await writeCodexProviders(file);
+    const response = await fetch(`${base}/workspace/ws_1/codex/config`, { headers: clientAuth() });
+    expect(response.status).toBe(200);
+    const body = await response.json() as { config: { providers: Array<{ providerId: string; models: Array<{ id: string }> }> } };
+    expect(body.config.providers.find((provider) => provider.providerId === "anthropic")?.models.map((model) => model.id)).toEqual(["claude-test"]);
+  });
+
+  test("repairs an existing empty Anthropic catalog from models.dev on reconnect", async () => {
+    const root = resolve(await createTempRoot("sofia-provider-connect-ws-"));
+    const { base } = await startSofiaServer(root, {
+      providerDiscoveryFetch: discoveryRoutes({ catalog: CATALOG_STUB }),
+    });
+    await fetch(`${base}/workspace/ws_1/codex/auth/anthropic`, {
+      method: "PUT", headers: clientAuth(), body: JSON.stringify({ key: "sk-ant-test" }),
+    });
+    const provider = (await readCodexEngineConfig()).providers.find((entry) => entry.providerId === "anthropic");
+    expect(provider?.models.map((model) => model.id)).toEqual(["claude-test"]);
+  });
   /**
    * A provider with an empty model catalog is still invisible in the picker, so
    * a connect must resolve the catalog before returning rather than leaving the

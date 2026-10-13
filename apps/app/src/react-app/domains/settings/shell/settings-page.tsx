@@ -234,13 +234,12 @@ function SettingsSidebarTabLabel({ tab }: { tab: SettingsTab }) {
 }
 
 /**
- * Cloud settings tabs, gated by client-only preview flags. The Memory tab is
- * surfaced only when `featureFlags.memory` is on (C-4). Both settings nav
+ * Cloud settings and the always-available local memory controls. Both settings nav
  * surfaces (sidebar + compact section menu) must use this so they can't drift.
  */
-export function getCloudSettingsTabs(memoryEnabled: boolean): SettingsTab[] {
+export function getCloudSettingsTabs(_memoryEnabled: boolean): SettingsTab[] {
   const cloudTabs: SettingsTab[] = SOFIA_CLOUD_AVAILABLE ? CLOUD_SETTINGS_TABS : [];
-  return memoryEnabled ? [...cloudTabs, "memory"] : cloudTabs;
+  return [...cloudTabs, "memory"];
 }
 
 type SettingsPageProps = {

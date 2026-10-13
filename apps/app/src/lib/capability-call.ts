@@ -146,6 +146,34 @@ export function getCapabilityCallSentence(
 ): CapabilityCallSentence {
   const toolName = part.toolName
   const argumentsInput = isRecord(part.input) && isRecord(part.input.arguments) ? part.input.arguments : part.input
+  const agentActions: Record<string, [string, string]> = {
+    spawn_agent: ["Starting an agent", "Started an agent"],
+    send_message: ["Sending a message to an agent", "Sent a message to an agent"],
+    followup_task: ["Assigning an agent task", "Assigned an agent task"],
+    wait_agent: ["Waiting for agents", "Waited for agents"],
+    interrupt_agent: ["Interrupting an agent", "Interrupted an agent"],
+    list_agents: ["Checking agents", "Checked agents"],
+  };
+  const agentAction = agentActions[toolName.split("__").pop() ?? toolName];
+  if (agentAction) return { service: "Subagents", present: agentAction[0], past: agentAction[1] };
+  if (toolName === "collaboration") {
+    const input = isRecord(argumentsInput) ? argumentsInput : {};
+    const operation = typeof input.operation === "string" ? input.operation : "";
+    const actions: Record<string, [string, string]> = {
+      spawnAgent: ["Starting an agent", "Started an agent"],
+      sendInput: ["Sending input to an agent", "Sent input to an agent"],
+      wait: ["Waiting for agents", "Waited for agents"],
+      closeAgent: ["Closing an agent", "Closed an agent"],
+      resumeAgent: ["Resuming an agent", "Resumed an agent"],
+    };
+    const labels = actions[operation] ?? ["Working with agents", "Worked with agents"];
+    const states = isRecord(input.agentsStates) ? Object.values(input.agentsStates).filter(isRecord) : [];
+    const working = states.filter(state => state.status === "running" || state.status === "pendingInit").length;
+    const done = states.filter(state => state.status === "completed").length;
+    const failed = states.filter(state => state.status === "errored").length;
+    const status = [working ? `${working} working` : "", done ? `${done} done` : "", failed ? `${failed} failed` : ""].filter(Boolean).join(", ");
+    return { service: "Subagents", present: labels[0], past: status ? `${labels[1]} · ${status}` : labels[1] };
+  }
   const browserCode = isRecord(argumentsInput) && typeof argumentsInput.code === "string" && /setupBrowserRuntime\s*\(|browsers\.get\s*\(["']iab["']\)/.test(argumentsInput.code)
   if ((toolName === "js" && browserCode) || toolName === "node_repl_js" || toolName === "mcp__node_repl__js") {
     return { service: "Browser", present: "Using Browser", past: "Used Browser" }

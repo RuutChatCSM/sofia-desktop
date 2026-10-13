@@ -11,6 +11,10 @@ type SessionActivityRecord = {
   status: SessionActivityStatus;
   runActive: boolean;
   runStatusAt: number;
+  /** Stable for a continuous run; status refreshes must not remount media. */
+  runStartedAt: number | null;
+  previewRunStartedAt: number | null;
+  previewCompletedAt: number | null;
   assistantOutput: boolean;
   errorActive: boolean;
   errorMessage: string | null;
@@ -41,6 +45,7 @@ type SessionActivityStore = {
     assistantOutput: boolean | undefined,
     options?: { snapshotStartedAt?: number },
   ) => void;
+  completePreview: (workspaceId: string, sessionId: string, outcome: string | undefined) => void;
   setRunStatus: (workspaceId: string, sessionId: string, status: unknown) => void;
   markMessageRole: (workspaceId: string, sessionId: string, messageId: string, role: SessionMessageRole) => void;
   markAssistantOutput: (workspaceId: string, sessionId: string, messageId?: string, options?: { allowUnknownMessageRole?: boolean }) => void;
@@ -56,6 +61,9 @@ const createRecord = (): SessionActivityRecord => ({
   status: "idle",
   runActive: false,
   runStatusAt: 0,
+  runStartedAt: null,
+  previewRunStartedAt: null,
+  previewCompletedAt: null,
   assistantOutput: false,
   errorActive: false,
   errorMessage: null,
@@ -180,6 +188,9 @@ export const useSessionActivityStore = create<SessionActivityStore>((set, get) =
             return {
               ...record,
               runActive,
+              runStartedAt: runActive ? record.runStartedAt ?? Date.now() : null,
+        previewRunStartedAt: runActive ? record.runStartedAt ?? Date.now() : record.previewRunStartedAt,
+        previewCompletedAt: runActive ? null : record.previewCompletedAt,
               assistantOutput: runActive && record.runActive ? record.assistantOutput : false,
               errorActive: runActive ? false : record.errorActive,
               errorMessage: runActive ? null : record.errorMessage,
@@ -209,6 +220,9 @@ export const useSessionActivityStore = create<SessionActivityStore>((set, get) =
         ...record,
         runActive,
         runStatusAt: snapshotStartedAt ?? record.runStatusAt,
+        runStartedAt: runActive ? record.runStartedAt ?? Date.now() : null,
+        previewRunStartedAt: runActive ? record.runStartedAt ?? Date.now() : record.previewRunStartedAt,
+        previewCompletedAt: runActive ? null : record.previewCompletedAt,
         assistantOutput: runActive && (assistantOutput ?? record.assistantOutput),
         errorActive: runActive ? false : record.errorActive,
         errorMessage: runActive ? null : record.errorMessage,
@@ -217,6 +231,13 @@ export const useSessionActivityStore = create<SessionActivityStore>((set, get) =
         waitingQuestionIds: runActive ? record.waitingQuestionIds : [],
       };
     }));
+  },
+  completePreview: (workspaceId, sessionId, outcome) => {
+    set((state) => updateRecord(state, workspaceId, sessionId, (record) => ({
+      ...record,
+      previewCompletedAt: outcome === "completed" && record.previewRunStartedAt !== null ? Date.now() : null,
+      previewRunStartedAt: outcome === "completed" ? record.previewRunStartedAt : null,
+    })));
   },
   setRunStatus: (workspaceId, sessionId, status) => {
     const workspace = workspaceId.trim();
@@ -229,6 +250,9 @@ export const useSessionActivityStore = create<SessionActivityStore>((set, get) =
         ...record,
         runActive,
         runStatusAt: Date.now(),
+        runStartedAt: runActive ? record.runStartedAt ?? Date.now() : null,
+        previewRunStartedAt: runActive ? record.runStartedAt ?? Date.now() : record.previewRunStartedAt,
+        previewCompletedAt: runActive ? null : record.previewCompletedAt,
         assistantOutput: runActive && record.runActive ? record.assistantOutput : false,
         errorActive: runActive ? false : record.errorActive,
         errorMessage: runActive ? null : record.errorMessage,
@@ -295,7 +319,10 @@ export const useSessionActivityStore = create<SessionActivityStore>((set, get) =
       errorActive: true,
       errorMessage: message ? message : "Session failed",
       runActive: false,
+      runStartedAt: null,
       runStatusAt: Date.now(),
+      previewRunStartedAt: null,
+      previewCompletedAt: null,
       assistantOutput: false,
       compacting: false,
     })));

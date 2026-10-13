@@ -1,4 +1,5 @@
 import type { Message, Part, Session, Todo } from "@/app/lib/engine-types";
+import type { ProviderWireApi } from "@/app/utils/providers";
 import {
   agentContextDiagnosticsReportSchema,
   agentContextDiagnosticsRequestSchema,
@@ -226,6 +227,8 @@ export type SofiaPluginItem = {
 };
 
 export type SofiaSkillItem = {
+  sourceDirectory?: string;
+  readOnly?: boolean;
   name: string;
   path: string;
   description: string;
@@ -295,6 +298,19 @@ export type SofiaLegacyConfigSweepState = {
     backupPath: string | null;
   }>;
   error?: string;
+};
+
+/** One engine feature flag as Settings renders it. Mirrors the server registry. */
+export type EngineFeatureInfo = {
+  key: string;
+  label: string;
+  description: string;
+  stage: "stable" | "under_development" | "removed";
+  kind: "feature" | "tool";
+  defaultEnabled: boolean;
+  enabled: boolean;
+  /** False for retired flags: shown, explained, but never switchable on. */
+  toggleable: boolean;
 };
 
 export type SofiaRuntimeConfigStatus = {
@@ -388,9 +404,17 @@ export type SofiaMcpItem = {
   name: string;
   config: Record<string, unknown>;
   source: "config.project" | "config.global" | "config.remote";
+  /** Runtime config layer the entry is recorded in. Global entries are inherited by every workspace. */
+  scope?: "global" | "project";
   disabledByTools?: boolean;
   managedOAuth?: SofiaManagedMcpConnection | null;
 };
+
+export type SofiaMcpProbeTool = { name: string; description?: string };
+
+export type SofiaMcpProbeResult =
+  | { ok: true; transport: "http" | "stdio"; tools: SofiaMcpProbeTool[]; durationMs: number }
+  | { ok: false; transport: "http" | "stdio"; stage: "spawn" | "initialize" | "tools/list"; error: string; durationMs: number };
 
 export type SofiaMcpAppResource = {
   serverName: string;
@@ -1529,6 +1553,10 @@ export function createSofiaServerClient(options: { baseUrl: string; token?: stri
         body: payload,
         timeoutMs: timeouts.binary,
       }),
+    getCodexSubagentItems: (workspaceId: string, parentSessionId: string, threadId: string) =>
+      requestJson<{ ok: boolean; items: Array<{ turnId: string; item: Record<string, unknown> }> }>(baseUrl,
+        `/workspace/${encodeURIComponent(workspaceId)}/codex/sessions/${encodeURIComponent(parentSessionId)}/subagents/${encodeURIComponent(threadId)}/items`,
+        { token, hostToken, timeoutMs: timeouts.config }),
     listWorkspaces: () => requestJson<SofiaWorkspaceList>(baseUrl, "/workspaces", { token, hostToken, timeoutMs: timeouts.listWorkspaces }),
     createLocalWorkspace: (payload: { folderPath: string; name: string; preset: string }) =>
       requestJson<WorkspaceList>(baseUrl, "/workspaces/local", {
@@ -1768,6 +1796,23 @@ export function createSofiaServerClient(options: { baseUrl: string; token?: stri
           hostToken,
           method: "POST",
           body: { providers },
+          timeoutMs: timeouts.config,
+        },
+      ),
+    getEngineFeatures: () =>
+      requestJson<{ features: EngineFeatureInfo[] }>(baseUrl, "/engine-features", {
+        token,
+        timeoutMs: timeouts.config,
+      }),
+    patchEngineFeatures: (engineFeatures: Record<string, boolean>) =>
+      requestJson<{ ok: boolean; changed: boolean; features: EngineFeatureInfo[]; reload: string }>(
+        baseUrl,
+        "/engine-features",
+        {
+          token,
+          hostToken,
+          method: "PATCH",
+          body: { engineFeatures },
           timeoutMs: timeouts.config,
         },
       ),
@@ -2022,12 +2067,23 @@ export function createSofiaServerClient(options: { baseUrl: string; token?: stri
       );
       return agentContextDiagnosticsReportSchema.parse(payload);
     },
-    addMcp: (workspaceId: string, payload: { name: string; config: Record<string, unknown> }) =>
+    addMcp: (workspaceId: string, payload: { name: string; config: Record<string, unknown>; scope?: "global" | "project" }) =>
       requestJson<{ items: SofiaMcpItem[] }>(baseUrl, `/workspace/${workspaceId}/mcp`, {
         token,
         hostToken,
         method: "POST",
         body: payload,
+      }),
+    probeMcp: (
+      workspaceId: string,
+      payload: { url?: string; command?: string[]; headers?: Record<string, string>; env?: Record<string, string>; timeoutMs?: number },
+    ) =>
+      requestJson<SofiaMcpProbeResult>(baseUrl, `/workspace/${encodeURIComponent(workspaceId)}/mcp/probe`, {
+        token,
+        hostToken,
+        method: "POST",
+        body: payload,
+        timeoutMs: timeouts.diagnostics,
       }),
     addManagedMcp: (
       workspaceId: string,
@@ -2061,13 +2117,13 @@ export function createSofiaServerClient(options: { baseUrl: string; token?: stri
         `/workspace/${encodeURIComponent(workspaceId)}/mcp/${encodeURIComponent(name)}/managed/connect`,
         { token, hostToken, method: "POST" },
       ),
-    removeMcp: (workspaceId: string, name: string) =>
-      requestJson<{ items: SofiaMcpItem[] }>(baseUrl, `/workspace/${workspaceId}/mcp/${encodeURIComponent(name)}`, {
+    removeMcp: (workspaceId: string, name: string, scope: "global" | "project" = "project") =>
+      requestJson<{ items: SofiaMcpItem[] }>(baseUrl, `/workspace/${workspaceId}/mcp/${encodeURIComponent(name)}?scope=${scope}`, {
         token,
         hostToken,
         method: "DELETE",
       }),
-    setMcpEnabled: (workspaceId: string, name: string, enabled: boolean) =>
+    setMcpEnabled: (workspaceId: string, name: string, enabled: boolean, scope: "global" | "project" = "project") =>
       requestJson<{ items: SofiaMcpItem[] }>(
         baseUrl,
         `/workspace/${workspaceId}/mcp/${encodeURIComponent(name)}/enabled`,
@@ -2075,7 +2131,7 @@ export function createSofiaServerClient(options: { baseUrl: string; token?: stri
           token,
           hostToken,
           method: "POST",
-          body: { enabled },
+          body: { enabled, scope },
         },
       ),
 
@@ -2391,7 +2447,7 @@ export function createSofiaServerClient(options: { baseUrl: string; token?: stri
         providerName: string;
         baseUrl: string | null;
         envKey: string | null;
-        wireApi: "responses" | "chatcompletions";
+        wireApi: ProviderWireApi;
         models: Array<{ id: string; name: string; reasoning: boolean }>;
       }>,
     ) =>

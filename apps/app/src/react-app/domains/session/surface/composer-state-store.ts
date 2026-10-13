@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { ComposerQueuePersistence, composerQueueIndexedDbBackend } from "./composer-queue-persistence";
 
 import type { ComposerAttachment, ComposerDraft } from "../../../../app/types";
 import type { ComposerMentionKind } from "./composer/mention-encoding";
@@ -6,6 +7,8 @@ import type { ComposerMentionKind } from "./composer/mention-encoding";
 export type QueuedComposerItem = {
   id: string;
   draft: ComposerDraft;
+  deliveryState?: "ready" | "sending" | "outcome-unknown";
+  recovered?: boolean;
 };
 
 export type ComposerPastePart = {
@@ -28,6 +31,9 @@ export type ComposerSessionState = {
 export type ComposerStateStore = {
   sessions: Record<string, ComposerSessionState>;
   queuedDrafts: Record<string, QueuedComposerItem[]>;
+  queueHydrated: boolean;
+  queueStorageError: string | null;
+  setQueuedDeliveryState: (sessionId: string, id: string, deliveryState: "ready" | "sending" | "outcome-unknown") => void;
   /**
    * Sent-prompt history per session, oldest first. Kept outside
    * `sessions` because `clearSession` resets the composer after every
@@ -78,6 +84,13 @@ function createQueuedItem(draft: ComposerDraft, id?: string): QueuedComposerItem
 export const useComposerStateStore = create<ComposerStateStore>((set) => ({
   sessions: {},
   queuedDrafts: {},
+  queueHydrated: typeof indexedDB === "undefined",
+  queueStorageError: null,
+  setQueuedDeliveryState: (sessionId, id, deliveryState) => set((state) => {
+    const items = state.queuedDrafts[sessionId];
+    if (!items?.some((item) => item.id === id)) return state;
+    return { queuedDrafts: { ...state.queuedDrafts, [sessionId]: items.map((item) => item.id === id ? { ...item, deliveryState } : item) } };
+  }),
   history: {},
   setDraft: (sessionId, draft) => set((state) => {
     const current = getWritableSession(state, sessionId);
@@ -183,6 +196,50 @@ export const useComposerStateStore = create<ComposerStateStore>((set) => ({
     return { sessions };
   }),
 }));
+
+const queuePersistence = typeof indexedDB === "undefined" ? null : new ComposerQueuePersistence(composerQueueIndexedDbBackend());
+let queueHydration: Promise<void> = Promise.resolve();
+let queueLoaded = queuePersistence === null;
+function restoreQueuedComposerState() {
+  if (!queuePersistence) return Promise.resolve();
+  useComposerStateStore.setState({ queueHydrated: false });
+  return queuePersistence.load().then((stored) => {
+    const current = useComposerStateStore.getState().queuedDrafts;
+    const merged = { ...stored };
+    for (const [sessionId, items] of Object.entries(current)) {
+      const ids = new Set(items.map((item) => item.id));
+      merged[sessionId] = [...(stored[sessionId] ?? []).filter((item) => !ids.has(item.id)), ...items];
+    }
+    queueLoaded = true;
+    useComposerStateStore.setState({ queuedDrafts: merged, queueHydrated: true, queueStorageError: null });
+  }).catch(() => {
+    queueLoaded = false;
+    useComposerStateStore.setState({ queueHydrated: true, queueStorageError: "Queued messages could not be restored. Keep this window open and retry." });
+  });
+}
+if (queuePersistence) {
+  queueHydration = restoreQueuedComposerState();
+  useComposerStateStore.subscribe((state, previous) => {
+    if (!queueLoaded || !state.queueHydrated || state.queuedDrafts === previous.queuedDrafts) return;
+    void queuePersistence.save(state.queuedDrafts).then(() => {
+      if (useComposerStateStore.getState().queueStorageError) useComposerStateStore.setState({ queueStorageError: null });
+    }).catch(() => {
+      useComposerStateStore.setState({ queueStorageError: "Queued messages could not be saved. Keep this window open and retry." });
+    });
+  });
+}
+
+export async function flushComposerQueuePersistence() {
+  await queueHydration;
+  if (!queueLoaded) await retryComposerQueueRecovery();
+  if (!queueLoaded) throw new Error("Queued messages could not be restored. Retry before sending.");
+  await queuePersistence?.flush();
+}
+
+export function retryComposerQueueRecovery() {
+  queueHydration = restoreQueuedComposerState();
+  return queueHydration;
+}
 
 export function getComposerDraft(state: ComposerStateStore, sessionId: string): string {
   return state.sessions[sessionId]?.draft ?? "";

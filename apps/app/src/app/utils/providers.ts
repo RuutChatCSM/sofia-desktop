@@ -1,5 +1,20 @@
 import type { ProviderListResponse } from "@/app/lib/engine-types";
 
+/** Wire protocol the bundled engine speaks to a provider. */
+export type ProviderWireApi = "responses" | "chatcompletions" | "anthropic";
+
+/**
+ * Pick the engine wire for a provider id. OpenAI uses the Responses API and
+ * Anthropic uses its native Messages wire; every other provider is treated as
+ * OpenAI-compatible chat completions.
+ */
+export const wireApiForProvider = (providerId: string): ProviderWireApi => {
+  const id = providerId.trim().toLowerCase();
+  if (id === "openai") return "responses";
+  if (id === "anthropic") return "anthropic";
+  return "chatcompletions";
+};
+
 const PINNED_PROVIDER_ORDER = ["engine", "openai", "anthropic"] as const;
 
 export const providerPriorityRank = (id: string) => {

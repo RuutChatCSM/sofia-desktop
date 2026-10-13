@@ -13,6 +13,9 @@ describe("peek shield document", () => {
     assert.ok(url.startsWith("data:text/html;charset=utf-8,"));
     assert.ok(url.includes(encodeURIComponent("<!doctype html>")));
     assert.match(PEEK_SHIELD_DOCUMENT, /html, body \{[^}]*background: transparent/);
+    // The browser harness filters this marker, so the shield never surfaces as a
+    // page the agent can drive.
+    assert.ok(url.endsWith("#sofia-internal-peek-shield"));
   });
 
   it("keeps its chrome for hover only", () => {

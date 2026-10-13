@@ -1,10 +1,10 @@
-import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { CodexSessionManager, codexSessionId, isCodexSessionId, isMissingRolloutError, isThreadWriterConflict, threadBelongsToWorkspace, threadTitleFromEngineText, resolveRevertBoundary, THREAD_TITLE_MAX_LENGTH } from "./codex-sessions.js";
+import { CodexSessionManager, codexSessionId, isCodexSessionId, isMissingRolloutError, isThreadWriterConflict, threadBelongsToWorkspace, threadTitleFromEngineText, resolveRevertBoundary, THREAD_TITLE_MAX_LENGTH, type CodexEvent } from "./codex-sessions.js";
 
 const roots: string[] = [];
 
@@ -34,6 +34,7 @@ type FakeCodexOptions = {
   inputLogPath?: string;
   /** Append every `thread/settings/update` payload so tests can assert the pair. */
   settingsLogPath?: string;
+  forkLogPath?: string;
   /** `thread/items/list` payload (materialized store items). */
   items?: unknown[];
   /** Paged `thread/items/list` payloads, oldest first; each links to the next. */
@@ -46,6 +47,12 @@ type FakeCodexOptions = {
   loadedThreads?: string[];
   /** Make `thread/resume` fail the way a competing writer does. */
   resumeConflict?: boolean;
+  /**
+   * Per-turn notification sets, consumed in turn order. Lets a test put an item
+   * in one turn and complete it in a later one, which is the only way to observe
+   * a process that outlived its turn.
+   */
+  turnNotifications?: Array<Array<{ method: string; params: Record<string, unknown> }>>;
 };
 
 async function writeFakeCodex(
@@ -65,6 +72,7 @@ async function writeFakeCodex(
     "const notifications = " + JSON.stringify(notifications) + ";",
     "const logPath = " + JSON.stringify(options.logPath ?? null) + ";",
     "const inputLogPath = " + JSON.stringify(options.inputLogPath ?? null) + ";",
+    "const forkLogPath = " + JSON.stringify(options.forkLogPath ?? null) + ";",
     "const settingsLogPath = " + JSON.stringify(options.settingsLogPath ?? null) + ";",
     "const listItems = " + JSON.stringify(options.items ?? []) + ";",
     "const itemPages = " + JSON.stringify(options.itemsPages ?? []) + ";",
@@ -72,10 +80,12 @@ async function writeFakeCodex(
     "const readThreads = " + JSON.stringify(options.readThreads ?? {}) + ";",
     "const loadedThreads = " + JSON.stringify(options.loadedThreads ?? []) + ";",
     "const resumeConflict = " + JSON.stringify(options.resumeConflict === true) + ";",
+    "const turnNotifications = " + JSON.stringify(options.turnNotifications ?? null) + ";",
+    "let turnIndex = 0;",
     "const send = (m) => process.stdout.write(JSON.stringify(m) + '\\n');",
     "let id = 0;",
-    "function emitNotifications(threadId, turnId) {",
-    "  for (const n of notifications) {",
+    "function emitNotifications(threadId, turnId, list) {",
+    "  for (const n of (list ?? notifications)) {",
     "    send({ jsonrpc: '2.0', method: n.method, params: { threadId, turnId, ...n.params } });",
     "  }",
     "}",
@@ -95,6 +105,7 @@ async function writeFakeCodex(
     "    const threadId = msg.params.threadId;",
     "    if (inputLogPath) appendFileSync(inputLogPath, JSON.stringify(msg.params.input) + '\\n');",
     "    send({ jsonrpc: '2.0', id: msg.id, result: { threadId, turnId } });",
+    "    const turnSpecific = turnNotifications ? (turnNotifications[turnIndex++] ?? []) : null;",
     "    // Stream a fake agent message delta, then complete the turn — unless the",
     "    // input asks to hold it open (so tests can steer an in-flight turn).",
     "    const hold = JSON.stringify(msg.params.input ?? '').includes('hold');",
@@ -102,10 +113,11 @@ async function writeFakeCodex(
     "      send({ jsonrpc: '2.0', method: 'item/started', params: { threadId, itemType: 'agentMessage' } });",
     "      send({ jsonrpc: '2.0', method: 'item/agentMessage/delta', params: { threadId, delta: 'hello from codex' } });",
     "      send({ jsonrpc: '2.0', method: 'item/completed', params: { threadId, itemType: 'agentMessage' } });",
-    "      emitNotifications(threadId, turnId);",
+    "      emitNotifications(threadId, turnId, turnSpecific);",
     "      if (!hold) send({ jsonrpc: '2.0', method: 'turn/completed', params: { threadId, turnId } });",
     "    }, 30);",
     "  } else if (msg.method === 'thread/fork') {",
+    "    if (forkLogPath) appendFileSync(forkLogPath, JSON.stringify(msg.params) + '\\n');",
     "    send({ jsonrpc: '2.0', id: msg.id, result: { threadId: 'forked-' + (++id) } });",
     "  } else if (msg.method === 'turn/steer') {",
     "    const steerText = JSON.stringify(msg.params.input ?? '');",
@@ -197,6 +209,105 @@ describe("CodexSessionManager", () => {
     }
   });
 
+  test("emits plan.updated, normalized, for the update_plan checklist", async () => {
+    const root = await createRoot();
+    const bin = await writeFakeCodex(root, [{
+      method: "turn/plan/updated",
+      params: {
+        explanation: "Working the checklist",
+        plan: [
+          { step: "Read the README", status: "inProgress" },
+          { step: "Check the commands", status: "completed" },
+          { step: "Report findings", status: "pending" },
+          { step: "   ", status: "pending" },
+        ],
+      },
+    }]);
+    const manager = new CodexSessionManager({ bin, cwd: root, interpreter: process.execPath });
+
+    const events: CodexEvent[] = [];
+    manager.on((event) => events.push(event));
+
+    try {
+      const session = await manager.createSession({ title: "Test", workspaceId: "ws_1" });
+      await manager.prompt(session.id, "hi");
+
+      const deadline = Date.now() + 2000;
+      while (Date.now() < deadline && !events.some((event) => event.type === "plan.updated")) {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+
+      const planEvent = events.find((event) => event.type === "plan.updated");
+      if (!planEvent || planEvent.type !== "plan.updated") throw new Error("expected a plan.updated event");
+      expect(planEvent.sessionId).toBe(session.id);
+      expect(planEvent.threadId).toBe(session.threadId);
+      expect(planEvent.explanation).toBe("Working the checklist");
+      // Statuses are normalized to the Sofia todo vocabulary and blank steps dropped.
+      expect(planEvent.plan).toEqual([
+        { step: "Read the README", status: "in_progress" },
+        { step: "Check the commands", status: "completed" },
+        { step: "Report findings", status: "pending" },
+      ]);
+    } finally {
+      await manager.close();
+    }
+  });
+
+  test("getSessionPlan restores the last update_plan checklist from the rollout", async () => {
+    const root = await createRoot();
+    const bin = await writeFakeCodex(root);
+    const manager = new CodexSessionManager({ bin, cwd: root, interpreter: process.execPath });
+    try {
+      const session = await manager.createSession({ title: "Test", workspaceId: "ws_1" });
+      const rolloutPath = join(root, "rollout.jsonl");
+      await writeFile(rolloutPath, [
+        JSON.stringify({ type: "response_item", payload: { type: "message", role: "user", content: [{ type: "text", text: "plan please" }] } }),
+        JSON.stringify({ type: "response_item", payload: { type: "function_call", name: "update_plan", call_id: "c1", arguments: JSON.stringify({ plan: [
+          { step: "First", status: "completed" },
+          { step: "Second", status: "inProgress" },
+        ] }) } }),
+        // The latest call wins, and camelCase status normalizes.
+        JSON.stringify({ type: "response_item", payload: { type: "function_call", name: "update_plan", call_id: "c2", arguments: JSON.stringify({ plan: [
+          { step: "First", status: "completed" },
+          { step: "Second", status: "completed" },
+          { step: "Third", status: "pending" },
+        ] }) } }),
+      ].join("\n"));
+      const stored = manager.getSession(session.id);
+      if (!stored) throw new Error("expected the created session to be registered");
+      stored.rolloutPath = rolloutPath;
+
+      await expect(manager.getSessionPlan(session.id)).resolves.toEqual([
+        { step: "First", status: "completed" },
+        { step: "Second", status: "completed" },
+        { step: "Third", status: "pending" },
+      ]);
+    } finally {
+      await manager.close();
+    }
+  });
+
+  test("getSessionPlan does not restore a fully completed checklist", async () => {
+    const root = await createRoot();
+    const bin = await writeFakeCodex(root);
+    const manager = new CodexSessionManager({ bin, cwd: root, interpreter: process.execPath });
+    try {
+      const session = await manager.createSession({ title: "Test", workspaceId: "ws_1" });
+      const rolloutPath = join(root, "rollout-done.jsonl");
+      await writeFile(rolloutPath, JSON.stringify({ type: "response_item", payload: { type: "function_call", name: "update_plan", call_id: "c1", arguments: JSON.stringify({ plan: [
+        { step: "First", status: "completed" },
+        { step: "Second", status: "completed" },
+      ] }) } }));
+      const stored = manager.getSession(session.id);
+      if (!stored) throw new Error("expected the created session to be registered");
+      stored.rolloutPath = rolloutPath;
+
+      await expect(manager.getSessionPlan(session.id)).resolves.toBeNull();
+    } finally {
+      await manager.close();
+    }
+  });
+
   test("isRunning and engineInfo reflect the engine lifecycle", async () => {
     const root = await createRoot();
     const bin = await writeFakeCodex(root);
@@ -238,6 +349,27 @@ describe("CodexSessionManager", () => {
     } finally {
       await manager.close();
     }
+  });
+
+  test("external session continuation forks history into Sofia with selected provider", async () => {
+    const root = await createRoot();
+    const home = join(root, "sofia-home");
+    await mkdir(home, { recursive: true });
+    const source = join(root, "external-rollout.jsonl");
+    const history = '{"type":"session_meta","payload":{"id":"external-thread"}}\n';
+    await writeFile(source, history);
+    const forkLogPath = join(root, "fork.log");
+    const logPath = join(root, "calls.log");
+    const bin = await writeFakeCodex(root, [], { forkLogPath, logPath, threads: [{ id: "external-thread", cwd: root, rolloutPath: source }] });
+    const manager = new CodexSessionManager({ bin, cwd: root, codexHome: home, interpreter: process.execPath });
+    try {
+      await manager.start();
+      await manager.prompt(codexSessionId("external-thread"), "continue", { model: "small-model", providerId: "custom" });
+      expect(JSON.parse(readFileSync(forkLogPath, "utf8").trim())).toMatchObject({ path: source, model: "small-model", modelProvider: "custom", cwd: root });
+      expect(readCallLog(logPath)).not.toContain("thread/resume");
+      expect(readFileSync(source, "utf8")).toBe(history);
+      expect(manager.getSession(codexSessionId("external-thread"))?.threadId).toMatch(/^forked-/);
+    } finally { await manager.close(); }
   });
 
   test("RPC parity: steer, fork, archive, unsubscribe at the session level", async () => {
@@ -570,6 +702,99 @@ describe("CodexSessionManager", () => {
         ["thread-pending", "review the release driver"],
         ["thread-renamed", "My rename"],
       ]);
+    } finally {
+      await manager.close();
+    }
+  });
+});
+
+describe("background process membership", () => {
+  /** A unified-exec command item; the engine stamps this source on every shell call. */
+  function execItem(overrides: Record<string, unknown> = {}) {
+    return {
+      type: "commandExecution",
+      id: "call-1",
+      source: "unifiedExecStartup",
+      processId: "proc-1",
+      command: "pnpm test",
+      ...overrides,
+    };
+  }
+
+  async function waitFor(events: CodexEvent[], type: string): Promise<void> {
+    const deadline = Date.now() + 2000;
+    while (Date.now() < deadline && !events.some((event) => event.type === type)) {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+  }
+
+  test("a command that finishes inside its turn never becomes a background process", async () => {
+    const root = await createRoot();
+    const bin = await writeFakeCodex(root, [
+      { method: "item/started", params: { item: execItem() } },
+      { method: "item/completed", params: { item: execItem({ status: "failed", exitCode: 1 }) } },
+    ]);
+    const manager = new CodexSessionManager({ bin, cwd: root, interpreter: process.execPath });
+    const events: CodexEvent[] = [];
+    manager.on((event) => events.push(event));
+    try {
+      const session = await manager.createSession({ title: "Test", workspaceId: "ws_1" });
+      await manager.prompt(session.id, "run it");
+      await waitFor(events, "turn.completed");
+      // The exit code is a result the agent already saw, not background work.
+      expect(manager.listTrackedBackgroundProcesses(session.id)).toEqual([]);
+      expect(events.some((event) => event.type === "backgroundProcess.failed")).toBe(false);
+    } finally {
+      await manager.close();
+    }
+  });
+
+  test("a command still running when its turn ends becomes background work", async () => {
+    const root = await createRoot();
+    const bin = await writeFakeCodex(root, [
+      { method: "item/started", params: { item: execItem({ command: "pnpm dev" }) } },
+    ]);
+    const manager = new CodexSessionManager({ bin, cwd: root, interpreter: process.execPath });
+    const events: CodexEvent[] = [];
+    manager.on((event) => events.push(event));
+    try {
+      const session = await manager.createSession({ title: "Test", workspaceId: "ws_1" });
+      await manager.prompt(session.id, "start the dev server");
+      await waitFor(events, "turn.completed");
+      const tracked = manager.listTrackedBackgroundProcesses(session.id);
+      expect(tracked).toHaveLength(1);
+      expect(tracked[0]).toMatchObject({ itemId: "call-1", processId: "proc-1", command: "pnpm dev", status: "running" });
+      // Server bookkeeping never leaks into the wire shape.
+      expect(tracked[0]).not.toHaveProperty("detached");
+      expect(tracked[0]).not.toHaveProperty("turnId");
+      expect(events.filter((event) => event.type === "backgroundProcess.failed")).toEqual([]);
+    } finally {
+      await manager.close();
+    }
+  });
+
+  test("a detached process that later stops non-zero raises attention", async () => {
+    const root = await createRoot();
+    const bin = await writeFakeCodex(root, [], {
+      turnNotifications: [
+        [{ method: "item/started", params: { item: execItem({ command: "pnpm dev" }) } }],
+        [{ method: "item/completed", params: { item: execItem({ command: "pnpm dev", status: "failed", exitCode: 1 }) } }],
+      ],
+    });
+    const manager = new CodexSessionManager({ bin, cwd: root, interpreter: process.execPath });
+    const events: CodexEvent[] = [];
+    manager.on((event) => events.push(event));
+    try {
+      const session = await manager.createSession({ title: "Test", workspaceId: "ws_1" });
+      await manager.prompt(session.id, "start the dev server");
+      await waitFor(events, "turn.completed");
+      await manager.prompt(session.id, "check something else");
+      await waitFor(events, "backgroundProcess.failed");
+      const failed = events.find((event) => event.type === "backgroundProcess.failed");
+      if (!failed || failed.type !== "backgroundProcess.failed") throw new Error("expected backgroundProcess.failed");
+      expect(failed.itemId).toBe("call-1");
+      expect(failed.command).toBe("pnpm dev");
+      expect(failed.exitCode).toBe(1);
     } finally {
       await manager.close();
     }

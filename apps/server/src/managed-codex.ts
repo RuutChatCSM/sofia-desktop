@@ -214,10 +214,19 @@ export class ManagedCodexEngine {
     this.rl?.close();
     this.rl = null;
     this.child = null;
+    // The child's own last words are the only clue to *why* it died: a rejected
+    // config field (--strict-config), a panic, an unusable provider. Reporting
+    // "code=1" alone sends the next reader hunting; carry the stderr tail into
+    // the error the caller sees and into the log.
+    const engineStderr = this.stderrBuf.trim();
+    const exitReason = `Sofia app-server exited (code=${code}, signal=${signal})${engineStderr ? `\n--- engine stderr (tail) ---\n${engineStderr}` : ""}`;
+    if (engineStderr) {
+      console.error(`[sofia-engine] app-server exited (code=${code}, signal=${signal})\n${engineStderr}`);
+    }
     // Reject pending requests — they cannot be answered by a dead server.
     for (const { reject, timer } of this.pending.values()) {
       clearTimeout(timer);
-      reject(new Error(`Sofia app-server exited (code=${code}, signal=${signal})`));
+      reject(new Error(exitReason));
     }
     this.pending.clear();
 
@@ -461,9 +470,13 @@ export class ManagedCodexEngine {
    * Fork a thread into a new thread (thread/fork). The engine forks history at
    * a turn boundary and does not start a turn, so no `input` is sent.
    */
-  async forkThread(params: { threadId: string; lastTurnId?: string; beforeTurnId?: string }): Promise<string | null> {
+  async forkThread(params: { threadId: string; lastTurnId?: string; beforeTurnId?: string; path?: string; model?: string; modelProvider?: string; cwd?: string }): Promise<string | null> {
     const result = await this.request("thread/fork", {
       threadId: params.threadId,
+      ...(params.path ? { path: params.path } : {}),
+      ...(params.model ? { model: params.model } : {}),
+      ...(params.modelProvider ? { modelProvider: params.modelProvider } : {}),
+      ...(params.cwd ? { cwd: params.cwd } : {}),
       ...(params.lastTurnId ? { lastTurnId: params.lastTurnId } : {}),
       ...(params.beforeTurnId ? { beforeTurnId: params.beforeTurnId } : {}),
     });
@@ -511,13 +524,25 @@ export class ManagedCodexEngine {
     sourceKinds?: string[];
     archived?: boolean;
   }): Promise<Array<Record<string, unknown>>> {
-    const result = await this.request("thread/list", {
-      ...(params?.limit ? { limit: params.limit } : {}),
-      ...(params?.sourceKinds ? { sourceKinds: params.sourceKinds } : {}),
-      ...(params?.archived !== undefined ? { archived: params.archived } : {}),
-    });
-    const payload = result as { data?: Array<Record<string, unknown>> };
-    return payload.data ?? [];
+    const threads: Array<Record<string, unknown>> = [];
+    const cursors = new Set<string>();
+    let cursor: string | undefined;
+    // Follow history pages, with a budget and repeated-cursor guard for a
+    // malformed engine response. One first page hid older root conversations.
+    for (let page = 0; page < 100; page += 1) {
+      const result = await this.request("thread/list", {
+        ...(params?.limit ? { limit: params.limit } : {}),
+        ...(params?.sourceKinds ? { sourceKinds: params.sourceKinds } : {}),
+        ...(params?.archived !== undefined ? { archived: params.archived } : {}),
+        ...(cursor ? { cursor } : {}),
+      });
+      const payload = result as { data?: Array<Record<string, unknown>>; nextCursor?: string | null };
+      threads.push(...(payload.data ?? []));
+      if (!payload.nextCursor || cursors.has(payload.nextCursor)) break;
+      cursor = payload.nextCursor;
+      cursors.add(cursor);
+    }
+    return threads;
   }
 
   /** Thread ids currently loaded in the app-server process (writer-lock holders). */

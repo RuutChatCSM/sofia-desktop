@@ -6,9 +6,17 @@ import { createWorkspaceKvStore, isRecord } from "./workspace-kv-store.js";
 export { runtimeDbPath, runtimeStorageDir } from "./runtime-db.js";
 
 export type RuntimeWorkspaceEngineConfig = {
+  [key: string]: unknown;
   default_agent?: string;
+  memories?: { use_memories: boolean; generate_memories: boolean };
   plugin?: string[];
   disabled_providers?: string[];
+  /**
+   * User overrides for the engine feature flags the desktop exposes in
+   * Settings. Absent keys fall back to each feature's desktop default, so an
+   * older config keeps behaving as it did. See `engine-features.ts`.
+   */
+  engine_features?: Record<string, boolean>;
   mcp?: Record<string, Record<string, unknown>>;
   permission?: {
     external_directory?: Record<string, unknown>;
@@ -24,19 +32,33 @@ export function isEngineGlobalRuntimeConfigId(workspaceId: string): boolean {
 
 function normalizeRuntimeWorkspaceEngineConfig(value: unknown): RuntimeWorkspaceEngineConfig {
   if (!isRecord(value)) return {};
+  const knownKeys = new Set(["default_agent", "plugin", "disabled_providers", "engine_features", "mcp", "permission", "provider", "memories"]);
+  const additionalSettings = Object.fromEntries(Object.entries(value).filter(([key]) => !knownKeys.has(key)));
+  const memories = isRecord(value.memories) ? { use_memories: value.memories.use_memories === true, generate_memories: value.memories.generate_memories === true } : undefined;
   const defaultAgent = typeof value.default_agent === "string" ? value.default_agent : undefined;
   const plugin = Array.isArray(value.plugin) ? value.plugin.filter((item) => typeof item === "string") : undefined;
   const disabledProviders = Array.isArray(value.disabled_providers)
     ? value.disabled_providers.filter((item) => typeof item === "string")
+    : undefined;
+  // Narrow to booleans here: the wire value is untrusted and a non-boolean would
+  // otherwise survive into the generated config as a malformed flag.
+  const rawEngineFeatures = isRecord(value.engine_features) ? value.engine_features : undefined;
+  const engineFeatures = rawEngineFeatures
+    ? Object.fromEntries(
+        Object.entries(rawEngineFeatures).filter((entry): entry is [string, boolean] => typeof entry[1] === "boolean"),
+      )
     : undefined;
   const mcp = isRecord(value.mcp) ? value.mcp as Record<string, Record<string, unknown>> : undefined;
   const permission = isRecord(value.permission) ? value.permission : undefined;
   const externalDirectory = permission && isRecord(permission.external_directory) ? permission.external_directory : undefined;
   const provider = isRecord(value.provider) ? value.provider : undefined;
   return {
+    ...additionalSettings,
+    ...(memories ? { memories } : {}),
     ...(defaultAgent ? { default_agent: defaultAgent } : {}),
     ...(plugin ? { plugin } : {}),
     ...(disabledProviders ? { disabled_providers: disabledProviders } : {}),
+    ...(engineFeatures ? { engine_features: engineFeatures } : {}),
     ...(mcp ? { mcp } : {}),
     ...(externalDirectory ? { permission: { external_directory: externalDirectory } } : {}),
     ...(provider ? { provider } : {}),
@@ -70,6 +92,19 @@ const writeListeners = new Set<RuntimeWorkspaceEngineConfigWriteListener>();
 export function onRuntimeWorkspaceEngineConfigWrite(listener: RuntimeWorkspaceEngineConfigWriteListener): () => void {
   writeListeners.add(listener);
   return () => writeListeners.delete(listener);
+}
+
+/** User overrides for engine feature flags, sanitized to known boolean keys. */
+export function runtimeEngineFeatureOverrides(
+  config: RuntimeWorkspaceEngineConfig,
+): Record<string, boolean> {
+  const raw = config.engine_features;
+  if (!isRecord(raw)) return {};
+  const overrides: Record<string, boolean> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    if (typeof value === "boolean") overrides[key] = value;
+  }
+  return overrides;
 }
 
 export function runtimePluginList(config: RuntimeWorkspaceEngineConfig): string[] {
@@ -181,11 +216,20 @@ function mergeRuntimeWorkspaceEngineConfigLayers(
     ...runtimeProviderMap(base),
     ...runtimeProviderMap(overlay),
   };
+  // A workspace layer switches a capability off; the global layer is the default.
+  const engineFeatures = {
+    ...runtimeEngineFeatureOverrides(base),
+    ...runtimeEngineFeatureOverrides(overlay),
+  };
 
   return normalizeRuntimeWorkspaceEngineConfig({
+    ...base,
+    ...overlay,
+    ...((base.memories || overlay.memories) ? { memories: overlay.memories ?? base.memories } : {}),
     ...(base.default_agent || overlay.default_agent ? { default_agent: overlay.default_agent ?? base.default_agent } : {}),
     ...(plugin.length ? { plugin } : {}),
     ...(disabledProviders.length ? { disabled_providers: disabledProviders } : {}),
+    ...(Object.keys(engineFeatures).length ? { engine_features: engineFeatures } : {}),
     ...(Object.keys(mcp).length ? { mcp } : {}),
     ...(Object.keys(permission).length ? { permission } : {}),
     ...(Object.keys(provider).length ? { provider } : {}),
@@ -394,6 +438,7 @@ export function mergeWorkspaceEngineConfigs(
   const runtimeProvider = runtimeProviderMap(runtime);
   return {
     ...persisted,
+    ...(runtime.memories ? { memories: runtime.memories } : {}),
     plugin: [
       ...(Array.isArray(persisted.plugin) ? persisted.plugin.filter((item) => typeof item === "string") : []),
       ...runtimePluginList(runtime),

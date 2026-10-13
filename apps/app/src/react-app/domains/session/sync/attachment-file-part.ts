@@ -48,6 +48,8 @@ const MAX_PATH_COMPONENT_BYTES = 255;
 const UTF8_ENCODER = new TextEncoder();
 
 const EXTENSION_MIME_TYPES: Record<string, string> = {
+  heic: "image/heic",
+  heif: "image/heif",
   jpg: "image/jpeg",
   jpeg: "image/jpeg",
   png: "image/png",

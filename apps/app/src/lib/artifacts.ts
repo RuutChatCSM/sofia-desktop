@@ -298,7 +298,7 @@ function getArtifactPathsFromMessage(message: UIMessage) {
   }
 
   return paths.flatMap((path) => {
-    const normalized = path?.trim().toLowerCase();
+    const normalized = path?.trim();
     return normalized ? [normalized] : [];
   });
 }

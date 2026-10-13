@@ -13,7 +13,9 @@
 // so a connect does not re-fetch per request.
 import { readFile } from "node:fs/promises";
 
+import { providerModelContextWindow } from "./codex-model-limits.js";
 import { externalFetch } from "./server-fetch.js";
+import { catalogProvider } from "./provider-catalog.js";
 
 const MODELS_DEV_URLS = [
   "https://sofia-models.ruut.chat/api.json",
@@ -56,11 +58,6 @@ function asString(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
-function asPositiveInt(value: unknown): number | null {
-  const parsed = typeof value === "number" ? value : typeof value === "string" ? Number(value) : Number.NaN;
-  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : null;
-}
-
 /**
  * Non-chat endpoints multi-modal providers advertise on `/models` (ASR, TTS,
  * embeddings, moderation). They cannot be prompted and must not reach the picker.
@@ -75,9 +72,8 @@ function isChatModelId(id: string): boolean {
  * Parse a models.dev `api.json` payload into catalog entries.
  *
  * A provider is connectable only when it advertises a credential (`env`) — the
- * app has nothing to store otherwise. Providers with no `api` base URL are kept
- * when they are locally hosted, and skipped otherwise, because the engine has
- * no endpoint to call.
+ * app has nothing to store otherwise. A provider with no `api` base URL is
+ * kept only when the engine's known-provider registry supplies its endpoint.
  */
 export function parseModelsDevCatalog(payload: unknown): CatalogEntry[] {
   if (!isRecord(payload)) return [];
@@ -90,7 +86,10 @@ export function parseModelsDevCatalog(payload: unknown): CatalogEntry[] {
       ? rawProvider.env.filter((value): value is string => typeof value === "string" && !!value.trim()).map((value) => value.trim())
       : [];
     if (envKeys.length === 0) continue;
-    const baseUrl = asString(rawProvider.api);
+    // Native providers such as Anthropic omit `api` in models.dev because
+    // their wire format is not OpenAI-compatible. Keep their model metadata
+    // using the engine's known endpoint instead of dropping the provider.
+    const baseUrl = asString(rawProvider.api) ?? catalogProvider(id)?.baseUrl ?? null;
     if (!baseUrl) continue;
 
     const modelsRecord = isRecord(rawProvider.models) ? rawProvider.models : {};
@@ -98,12 +97,11 @@ export function parseModelsDevCatalog(payload: unknown): CatalogEntry[] {
     for (const [modelKey, rawModel] of Object.entries(modelsRecord)) {
       const modelId = isRecord(rawModel) ? asString(rawModel.id) ?? modelKey : modelKey;
       if (!isChatModelId(modelId)) continue;
-      const limit = isRecord(rawModel) ? rawModel.limit : undefined;
       models.push({
         id: modelId,
         name: (isRecord(rawModel) ? asString(rawModel.name) : null) ?? modelId,
         reasoning: isRecord(rawModel) && rawModel.reasoning === true,
-        contextWindow: isRecord(limit) ? asPositiveInt(limit.context) : null,
+        contextWindow: providerModelContextWindow(rawModel),
       });
     }
     models.sort((left, right) => left.name.localeCompare(right.name));

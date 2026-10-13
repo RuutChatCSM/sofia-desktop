@@ -59,6 +59,7 @@ describe("codex routes", () => {
       setArchived: async () => session,
       rename: async () => session,
       getSessionItems: async () => [],
+      getSessionPlan: async () => null,
       getTurnChanges: async () => [],
       forkSession: async () => session,
       listBackgroundProcesses: async () => [],
@@ -95,5 +96,15 @@ describe("codex routes", () => {
       { method: "prompt", text: "look", images: [image] },
       { method: "steer", text: "more", images: [image] },
     ]);
+
+    // An image-only turn is valid — a pasted screenshot has no words. The old
+    // hard 400 here is the "text is required" the client retried in a loop.
+    const imageOnly = await invoke("/workspace/ws_1/codex/sessions/codex-t1/prompt", { text: "", images: [image] });
+    expect(imageOnly.status).toBe(200);
+    expect(calls.at(-1)).toEqual({ method: "prompt", text: "", images: [image] });
+
+    // A turn with neither text nor images is still rejected (the handler throws
+    // the ApiError, so assert on the rejection rather than a response).
+    await expect(invoke("/workspace/ws_1/codex/sessions/codex-t1/prompt", {})).rejects.toMatchObject({ status: 400 });
   });
 });

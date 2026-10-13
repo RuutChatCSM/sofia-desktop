@@ -69,6 +69,7 @@ export type CloudMcpSubmissionAuthResolution =
 export type CloudMcpSubmissionResult =
   | { outcome: "sent"; bypassed: boolean }
   | { outcome: "accepted" }
+  | { outcome: "queued" }
   | { outcome: "blocked"; issue: CloudMcpSubmissionIssue }
   | { outcome: "cancelled"; reason: "context_changed" | "unmounted" };
 

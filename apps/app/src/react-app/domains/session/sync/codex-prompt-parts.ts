@@ -6,12 +6,25 @@
 // stay in the prompt, image data URLs ride as image inputs.
 import type { AgentPartInput, FilePartInput, TextPartInput } from "@/app/lib/engine-types";
 
+import { filePathFromFileUrl } from "../artifacts/open-target";
+import { createMessageReference, serializeMessageReference } from "../surface/composer/message-reference";
+
 const IMAGE_DATA_URL_RE = /^data:image\//i;
 
 export type CodexPromptFromParts = {
   text: string;
   images: string[];
 };
+
+/**
+ * The workspace path a file part points at: the absolute `file://` url when it
+ * has one (a tagged `@file`), otherwise the attachment's copied `source.path`.
+ */
+function filePartPath(part: FilePartInput): string {
+  const absolute = filePathFromFileUrl(part.url);
+  if (absolute) return absolute;
+  return part.source?.type === "file" ? part.source.path : "";
+}
 
 export function codexPromptFromParts(
   parts: ReadonlyArray<TextPartInput | FilePartInput | AgentPartInput>,
@@ -37,9 +50,14 @@ export function codexPromptFromParts(
       images.push(part.url);
       continue;
     }
-    // Every other attachment is already a structured file part carrying its own
-    // url/source; spelling its path out as prose put `file:///…` in the user's
-    // own message. The path is not the message.
+    // Sofia sends a turn as flat text, so a workspace file part that is not an
+    // image has no structured channel: its path must ride in the prompt or the
+    // file never reaches the engine (a tagged `@file` read as an empty message).
+    // Use the same readable, self-contained reference the composer and
+    // transcript render, so the path arrives without a raw `file:///…` URL in
+    // the user's own message.
+    const path = filePartPath(part);
+    if (path) chunks.push(serializeMessageReference(createMessageReference(path)));
   }
 
   return { text: chunks.join(""), images };

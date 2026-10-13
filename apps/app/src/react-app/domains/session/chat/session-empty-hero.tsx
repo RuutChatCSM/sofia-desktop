@@ -50,7 +50,9 @@ export type SessionEmptyHeroProps = {
  * built-in defaults otherwise.
  */
 export function SessionEmptyHero(props: SessionEmptyHeroProps) {
-  const [prompt, setPrompt] = useState("");
+  const [localPrompt, setLocalPrompt] = useState("");
+  const prompt = props.composer?.draft ?? localPrompt;
+  const setPrompt = props.composer?.onDraftChange ?? setLocalPrompt;
   const orgRestrictions = useOrgRestrictions();
   const checkDesktopRestriction = useCheckDesktopRestriction();
   const canAddProviders = !checkDesktopRestriction({ restriction: "allowCustomProviders" });

@@ -328,6 +328,8 @@ actor MCPServer {
             windowTitle: args["window_title"] as? String,
             strict: boolArg(args, "strict"), crop: crop, imageWidth: intArg(args, "image_width") ?? 768, waitFor: args["wait_for"] as? String, waitMilliseconds: intArg(args, "wait_milliseconds") ?? 2000
         )
+        PreviewPublication.publish(snapshot)
+        AgentCursorOverlay.shared.present(in: snapshot.screenshotMeta.capturedBounds, pid: snapshot.pid, windowNumber: snapshot.windowNumber)
         let payload = SnapshotPage.payload(snapshot, limit: 8)
         guard let text = jsonString(payload) else {
             return textResult("Failed to serialize semantic AX snapshot.")

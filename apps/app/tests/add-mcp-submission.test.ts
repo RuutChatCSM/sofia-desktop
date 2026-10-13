@@ -2,7 +2,8 @@ import { describe, expect, test } from "bun:test";
 
 import type { McpDirectoryInfo } from "../src/app/constants";
 import { conflictsWithSofiaConnect } from "../src/react-app/domains/connections/mcp-connection-boundary";
-import { submitMcpEntry } from "../src/react-app/domains/connections/modals/add-mcp-submission";
+import { installIssueMessage, submitMcpEntry } from "../src/react-app/domains/connections/modals/add-mcp-submission";
+import { planInstall } from "../src/react-app/domains/connections/install-flow";
 
 const entry: McpDirectoryInfo = {
   name: "BigQuery",
@@ -45,5 +46,85 @@ describe("local MCP submission feedback", () => {
       entry,
       "Fallback",
     )).toBe("Unexpected server error");
+  });
+});
+
+describe("non-MCP candidates are rejected before the write", () => {
+  test("blocks a skill installer and never calls the connect path", async () => {
+    let called = false;
+    const error = await submitMcpEntry(
+      async () => {
+        called = true;
+        return { ok: true };
+      },
+      {
+        name: "video-maker",
+        description: "",
+        type: "local",
+        command: ["npx", "skills", "add", "remotion-dev/skills"],
+        oauth: false,
+      },
+      "Fallback",
+    );
+
+    expect(called).toBe(false);
+    expect(error).toBeString();
+    expect(error).toContain("remotion-dev/skills");
+    expect(error).toContain("skill");
+  });
+
+  test("still submits a real local MCP command", async () => {
+    const error = await submitMcpEntry(
+      async () => ({ ok: true }),
+      {
+        name: "Filesystem",
+        description: "",
+        type: "local",
+        command: ["npx", "-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+        oauth: false,
+      },
+      "Fallback",
+    );
+
+    expect(error).toBeNull();
+  });
+
+  test("explains a command that starts with a flag", () => {
+    const message = installIssueMessage(
+      planInstall({ name: "Broken", type: "local", command: ["--yes", "server"] }),
+    );
+    expect(message).toContain("executable");
+  });
+});
+
+describe("install scope reaches the connect path", () => {
+  test("forwards the chosen scope to the connector", async () => {
+    const seen: Array<string | undefined> = [];
+    const error = await submitMcpEntry(
+      async (_entry, scope) => {
+        seen.push(scope);
+        return { ok: true };
+      },
+      { name: "Linear", description: "", type: "remote", url: "https://mcp.linear.app/sse", oauth: false },
+      "Fallback",
+      "global",
+    );
+
+    expect(error).toBeNull();
+    expect(seen).toEqual(["global"]);
+  });
+
+  test("defaults to the project scope", async () => {
+    const seen: Array<string | undefined> = [];
+    await submitMcpEntry(
+      async (_entry, scope) => {
+        seen.push(scope);
+        return { ok: true };
+      },
+      { name: "Filesystem", description: "", type: "local", command: ["mcp-server"], oauth: false },
+      "Fallback",
+    );
+
+    expect(seen).toEqual(["project"]);
   });
 });

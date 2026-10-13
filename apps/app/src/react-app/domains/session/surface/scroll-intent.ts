@@ -90,7 +90,9 @@ export function intentFromKey(
   key: string,
   geometry: ScrollGeometry,
   thresholdPx = BOTTOM_THRESHOLD_PX,
+  shiftKey = false,
 ): ScrollIntent | null {
+  if(key === " " || key === "Spacebar")return shiftKey ? detach("user-scroll") : intentFromUserScroll(geometry,thresholdPx);
   if (DETACH_KEYS.includes(key)) return detach("user-scroll");
   if (FOLLOW_KEYS.includes(key)) return intentFromUserScroll(geometry, thresholdPx);
   return null;

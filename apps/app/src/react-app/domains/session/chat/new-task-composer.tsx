@@ -1,5 +1,6 @@
 /** @jsxImportSource react */
 import { useRef, useState } from "react";
+import { ProjectComposerStrip } from "./project-composer-strip";
 import type { Agent } from "@/app/lib/engine-types";
 
 import type { CloudImportedPlugin } from "@/app/cloud/import-state";
@@ -35,6 +36,16 @@ export type NewTaskComposerContext = {
   client: SofiaServerClient | null;
   workspaceId: string | null;
   workspaceRoot?: string;
+  projects?: readonly { id: string; name: string; path: string }[];
+  onSelectProject?: (id: string) => void;
+  mentions?: Record<string, ComposerMentionKind>;
+  onMentionsChange?: React.Dispatch<React.SetStateAction<Record<string, ComposerMentionKind>>>;
+  pastedText?: PastedTextChip[];
+  onPastedTextChange?: React.Dispatch<React.SetStateAction<PastedTextChip[]>>;
+  draft?: string;
+  onDraftChange?: (value: string) => void;
+  attachments?: ComposerAttachment[];
+  onAttachmentsChange?: React.Dispatch<React.SetStateAction<ComposerAttachment[]>>;
   selectedModel: ModelRef;
   modelOptions?: readonly ModelOption[];
   modelUnavailable?: boolean;
@@ -85,14 +96,20 @@ const FALLBACK_MODEL: ModelRef = { providerID: "", modelID: "" };
  * created session, where the normal send path uploads them into the workspace.
  */
 export function NewTaskComposer(props: NewTaskComposerProps) {
-  const [mentions, setMentions] = useState<Record<string, ComposerMentionKind>>({});
-  const [attachments, setAttachments] = useState<ComposerAttachment[]>([]);
+  const [localMentions, setLocalMentions] = useState<Record<string, ComposerMentionKind>>({});
+  const mentions = props.context?.mentions ?? localMentions;
+  const setMentions = props.context?.onMentionsChange ?? setLocalMentions;
+  const [localAttachments, setLocalAttachments] = useState<ComposerAttachment[]>([]);
+  const attachments = props.context?.attachments ?? localAttachments;
+  const setAttachments = props.context?.onAttachmentsChange ?? setLocalAttachments;
   const [skills, setSkills] = useState<SkillCard[]>([]);
   const [mcpServers, setMcpServers] = useState<McpServerEntry[]>([]);
   const [mcpStatuses, setMcpStatuses] = useState<McpStatusMap>({});
   const [mcpStatus, setMcpStatus] = useState<string | null>(null);
   const [importedPlugins, setImportedPlugins] = useState<CloudImportedPlugin[]>([]);
-  const [pastedText, setPastedText] = useState<PastedTextChip[]>([]);
+  const [localPastedText, setLocalPastedText] = useState<PastedTextChip[]>([]);
+  const pastedText = props.context?.pastedText ?? localPastedText;
+  const setPastedText = props.context?.onPastedTextChange ?? setLocalPastedText;
   const skillsConnectPushRef = useRef(0);
   const mcpConnectPushRef = useRef(0);
   const pluginConnectPushRef = useRef(0);
@@ -271,6 +288,8 @@ export function NewTaskComposer(props: NewTaskComposerProps) {
   };
 
   return (
+    <div className="w-full">
+      {context ? <ProjectComposerStrip context={context} /> : null}
     <ReactSessionComposer
       draft={props.draft}
       mentions={mentions}
@@ -333,8 +352,9 @@ export function NewTaskComposer(props: NewTaskComposerProps) {
       onUploadInboxFiles={null}
       // The hero owns its own page padding, so the composer must fill the hero column and line up with the suggestion cards.
       flush
-      draftScopeKey={`new-task:${workspaceId ?? "chat-first"}`}
+      draftScopeKey="new-task"
     />
+    </div>
   );
 }
 

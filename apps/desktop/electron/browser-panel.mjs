@@ -1,6 +1,7 @@
 // Embedded browser panel: tab state, BrowserView lifecycle, menu overlay,
 // proxy configuration, and browser IPC registrations. Extracted from
 // main.mjs as a factory so the main process only owns window creation.
+import { createBrowserCursorOverlay } from "./browser-cursor-overlay.mjs";
 import path from "node:path";
 import { readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
@@ -16,6 +17,7 @@ import {
   peekShieldUrl,
 } from "./browser-peek-shield.mjs";
 import {
+  browserScopeIsPresented,
   effectiveBrowserViewport,
   browserPeekLayoutZoom,
   browserViewBackground,
@@ -25,7 +27,11 @@ import {
   normalizeBrowserViewport,
   normalizeBrowserZoom,
   normalizePanOffset,
+  pickScopedBrowserTab,
+  resolveAgentBrowserScope,
   resolvePageZoomFactor,
+  shouldReloadCrashedRenderer,
+  shouldReuseBrowserTab,
   transitionPageState,
 } from "./browser-tab-state.mjs";
 
@@ -42,10 +48,32 @@ const MENU_OVERLAY_WIDTH = 196;
 const MENU_OVERLAY_HEIGHT = 176;
 const MENU_OVERLAY_READY_TIMEOUT_MS = 2000;
 
+/**
+ * Size given to an agent tab that is not on screen. A native view with no
+ * bounds reports a 0×0 viewport, so a background session's page would answer
+ * every read with an empty document. The size is replaced the moment the tab is
+ * presented, so it never overrides the user's layout.
+ */
+const DETACHED_TAB_VIEWPORT = { width: 1280, height: 800 };
+
+/** Delay before retrying a tab whose renderer crashed. */
+const RENDERER_RECOVERY_DELAY_MS = 400;
+
 export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, agentCdpBaseUrl }) {
   const browserTabs = new Map();
   let browserTabOrder = [];
   let activeBrowserTabId = null;
+  // Which project (workspace) owns the browser right now. Tabs are stamped with
+  // the scope that created them, the panel lists only the current scope's tabs,
+  // and the agent only ever reuses a same-scope tab — so a session in one
+  // project can never drive, or be listed against, another project's page.
+  let activeScopeId = "";
+  // The session the desktop reports as currently running an agent turn. Raw CDP
+  // commands carry no session, so this is how `tabs.open`/`new_page` get
+  // attributed to the agent that actually issued them instead of the session on
+  // screen. Empty means "unknown", and callers fall back to the presented scope.
+  let agentScopeId = "";
+  const endedAgentScopes = new Set();
   const peekCursorVisibility = new Map();
   let browserViewVisible = false;
   // Last browser panel bounds reported by the renderer, in renderer CSS pixels.
@@ -96,11 +124,31 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
     });
   }
 
+  /**
+   * Whether the main renderer can receive IPC right now. A live window is not
+   * enough: during a reload or teardown the renderer *frame* is disposed while
+   * the WebContents is still alive, and `send()` then logs "Render frame was
+   * disposed before WebFrameMain could be accessed". A try/catch cannot
+   * suppress that — Electron reports it before throwing — so the frame is
+   * checked first and the send is skipped.
+   */
+  function mainRendererAvailable() {
+    const mainWindow = window();
+    if (!mainWindow || mainWindow.isDestroyed()) return false;
+    const webContents = mainWindow.webContents;
+    if (!webContents || webContents.isDestroyed() || webContents.isCrashed()) return false;
+    try {
+      return !webContents.mainFrame.detached;
+    } catch {
+      // Touching the frame throws once it is gone.
+      return false;
+    }
+  }
+
   /** Send an IPC message to the main renderer, guarding against disposed frames. */
   function sendToRenderer(channel, payload) {
-    const mainWindow = window();
-    if (!mainWindow || mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return;
-    try { mainWindow.webContents.send(channel, payload); } catch { /* window closing */ }
+    if (!mainRendererAvailable()) return;
+    try { window().webContents.send(channel, payload); } catch { /* frame disposed mid-send */ }
   }
 
   function createBrowserTabId() {
@@ -170,21 +218,71 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
         typeof candidate.url === "string" &&
         candidate.url.includes(marker)
       ));
-      if (target?.id) return target.id;
+      if (target?.id) { const tab = browserTabs.get(tabId); if (tab) tab.cdpTargetId = target.id; return target.id; }
       await new Promise((resolve) => setTimeout(resolve, BROWSER_TARGET_RESOLVE_INTERVAL_MS));
     }
     throw new Error("Could not resolve built-in browser CDP target.");
   }
 
-  async function openBrowserUrlForAutomation(rawUrl, provider = "auto") {
+  /**
+   * The tab an agent navigation should drive, or null to create one. Reuse is
+   * the default because repeated "open this URL" calls (every browsing step,
+   * plus retries after a slow background load) used to leak one tab each.
+   *
+   * Reuse is scoped: a tab owned by another session is never a candidate, so a
+   * background agent can never drive — or be confused with — the page the user
+   * is reading in a different session.
+   */
+  function reusableAgentTab(newTab, scopeId) {
+    const active = activeTabForScope(scopeId);
+    return shouldReuseBrowserTab({
+      newTab,
+      active: Boolean(active),
+      destroyed: Boolean(active?.view.webContents.isDestroyed()),
+      leased: Boolean(active && agentLeases.leaseForTab(active.tabId)),
+      url: active?.view.webContents.getURL() ?? "",
+      scopeMatches: active?.scopeId === scopeId,
+    }) ? active : null;
+  }
+
+  /**
+   * The tab to drive for `scopeId`: the on-screen tab when that scope is the
+   * one being presented, otherwise the most recent parked tab for that scope (or
+   * null, which opens a fresh one in the scope).
+   */
+  function activeTabForScope(scopeId) {
+    const tabs = browserTabOrder
+      .map((tabId) => browserTabs.get(tabId))
+      .filter((tab) => tab && !tab.view.webContents.isDestroyed());
+    return pickScopedBrowserTab({
+      tabs,
+      activeTabId: activeBrowserTabId,
+      activeScopeId,
+      scopeId,
+    });
+  }
+
+  async function openBrowserUrlForAutomation(rawUrl, provider = "auto", options = {}) {
     const requestedProvider = String(provider || "auto").trim().toLowerCase();
     if (requestedProvider && requestedProvider !== "auto" && requestedProvider !== "builtin") {
       throw new Error(`Browser provider is not available yet: ${requestedProvider}`);
     }
     const url = normalizeBrowserUrl(rawUrl);
-    const tab = createBrowserTab("about:blank", { select: true });
+    // Attribute the tab to the session that invoked the agent. A background
+    // session's browsing must never surface in, or drive, the session the user
+    // is looking at: only the presented scope selects/attaches the native view.
+    const requestedScope = resolveAgentBrowserScope(options?.scopeId, activeScopeId);
+    const presented = browserScopeIsPresented(requestedScope, activeScopeId);
+    // "Create or select": drive the tab the agent already owns (or the panel's
+    // untouched placeholder) instead of leaking a new one per call.
+    const reusable = reusableAgentTab(options?.newTab === true, requestedScope);
+    const tab = reusable ?? createBrowserTab("about:blank", { select: presented, scopeId: requestedScope });
+    if (reusable && presented) selectBrowserTab(reusable.tabId);
     await tab.view.webContents.loadURL(browserTargetMarkerUrl(tab.tabId));
     const targetId = await resolveBrowserCdpTargetId(tab.tabId);
+    // Take the lease here too: without it the *next* call sees an unleased tab
+    // with a real URL, refuses to reuse it, and opens another tab after all.
+    agentLeases.acquire(tab.tabId, { cdpSessionId: targetId });
     // Kick off the real navigation without awaiting full load — heavy pages
     // (Netflix, dashboards) can take longer than the agent's bridge timeout,
     // which made browser.open_url time out and forced the agent to fall back
@@ -200,16 +298,35 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
     };
   }
 
-  // Backing for the broker's Target.createTarget interception: creates a real,
-  // visible built-in browser tab (so new_page works on Electron, which cannot
-  // create raw CDP targets) and returns its CDP target id.
+  // Backing for the broker's Target.createTarget interception: creates a real
+  // built-in browser tab (so new_page works on Electron, which cannot create raw
+  // CDP targets) and returns its CDP target id.
   /**
-   * @param {{ url?: string, background?: boolean, width?: number, height?: number }} [options]
+   * @param {{ url?: string, background?: boolean, width?: number, height?: number, scopeId?: string }} [options]
    * @returns {Promise<{ targetId: string, tabId: string, url: string }>}
    */
-  async function createTargetForAgent({ url, background = false } = {}) {
+  async function createTargetForAgent({ url, background = false, scopeId } = {}) {
     const target = url ? normalizeBrowserUrl(url) : "about:blank";
-    const tab = createBrowserTab("about:blank", { select: !background });
+    // Backs every CDP Target.createTarget the agent issues (its `new_page` tool
+    // and the Node-REPL harness's `tabs.open`). A CDP connection carries no
+    // session identity, so the tab belongs to the session the desktop reported
+    // as running an agent turn — the one that actually asked — falling back to
+    // the session on screen only when no session is known to be working. The tab
+    // must be attached for the page to composite into the main window: an
+    // unattached tab reports a 0×0 viewport and reads come back empty.
+    const requestedScope = resolveAgentBrowserScope(scopeId, agentScopeId || activeScopeId);
+    const presented = browserScopeIsPresented(requestedScope, activeScopeId);
+    const reusable = background ? null : reusableAgentTab(false, requestedScope);
+    const tab = reusable
+      ?? createBrowserTab("about:blank", { select: presented && !background, scopeId: requestedScope });
+    if (reusable && presented) selectBrowserTab(reusable.tabId);
+    if (!presented) {
+      // The tab belongs to a session that is not on screen: it must not attach,
+      // but it still needs a size or the page reports a 0×0 viewport and the
+      // agent's reads come back empty.
+      tab.container.setBounds({ x: 0, y: 0, ...DETACHED_TAB_VIEWPORT });
+      tab.view.setBounds({ x: 0, y: 0, ...DETACHED_TAB_VIEWPORT });
+    }
     await tab.view.webContents.loadURL(browserTargetMarkerUrl(tab.tabId));
     const targetId = await resolveBrowserCdpTargetId(tab.tabId);
     // Agent control is a lease over the tab the user already owns. Acquiring it
@@ -278,8 +395,15 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
     return browserTabOrder
       .map((tabId) => {
         const tab = browserTabs.get(tabId);
-        if (!tab || tab.view.webContents.isDestroyed()) return null;
-        return browserTabToPanelTab(tabId, tab);
+        if (!tab || tab.view.webContents.isDestroyed() || tab.scopeId !== activeScopeId) return null;
+        // A tab whose renderer frame is disposed (mid-navigation, or after a
+        // renderer crash) throws from getURL/getTitle. Skipping it keeps a dead
+        // tab from taking the whole main process down through an event handler.
+        try {
+          return browserTabToPanelTab(tabId, tab);
+        } catch {
+          return null;
+        }
       })
       .filter(Boolean);
   }
@@ -750,7 +874,7 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
     callback(browserProxy.username, browserProxy.password);
   });
 
-  function createBrowserTab(url = "about:blank", { select = true } = {}) {
+  function createBrowserTab(url = "about:blank", { select = true, scopeId } = {}) {
     const tabId = createBrowserTabId();
     const view = new WebContentsView({
       webPreferences: {
@@ -771,7 +895,14 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
     // One pixel keeps the workspace visually square while clipping children.
     container.setBorderRadius(1);
     container.addChildView(view);
-    const tab = { tabId, view, container, favicon: null, state: createBrowserTabRuntimeState(tabId) };
+    const tab = {
+      tabId,
+      view,
+      container,
+      favicon: null,
+      scopeId: typeof scopeId === "string" ? scopeId : activeScopeId,
+      state: createBrowserTabRuntimeState(tabId),
+    };
     browserTabs.set(tabId, tab);
     browserTabOrder.push(tabId);
     // Load about:blank immediately to preempt persistent-session restore.
@@ -780,6 +911,31 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
     view.webContents.setWindowOpenHandler(({ url: targetUrl }) => {
       void shell.openExternal(targetUrl);
       return { action: "deny" };
+    });
+    // A tab whose renderer dies (Chromium crash, OOM) keeps its URL but loses
+    // its document: `document.body` stays null, every agent read sees an empty
+    // page, and the tab is permanently poisoned — the session is stuck on a
+    // "blank window" until the user closes it by hand. Reload a bounded number
+    // of times so the tab heals on its own, and report the failure in the
+    // meantime instead of leaving a silently empty page.
+    let rendererRecoveries = 0;
+    let mainResponseCode = 0;
+    view.webContents.on("render-process-gone", (_event, details) => {
+      tab.state.pageState = transitionPageState(tab.state.pageState, "fail", {
+        code: 0,
+        description: `Renderer ${details?.reason ?? "gone"}`,
+        url: view.webContents.getURL(),
+      });
+      sendBrowserState();
+      if (!shouldReloadCrashedRenderer({ recoveries: rendererRecoveries, destroyed: view.webContents.isDestroyed() })) return;
+      rendererRecoveries += 1;
+      setTimeout(() => {
+        try {
+          if (!view.webContents.isDestroyed()) view.webContents.reload();
+        } catch {
+          // Tab torn down before the retry fired.
+        }
+      }, RENDERER_RECOVERY_DELAY_MS);
     });
     view.webContents.on("did-start-navigation", (_event, targetUrl, isInPlace, isMainFrame) => {
       if (!isMainFrame || isInPlace) return;
@@ -807,9 +963,11 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
         return;
       }
       // Agent-driven CDP navigation can target a background tab whose view is
-      // detached. Bring that tab on screen, otherwise navigation "succeeds"
-      // while the visible tab stays on about:blank (#2015).
-      if (activeBrowserTabId !== tabId) {
+      // detached. Bring that tab on screen — but only when it belongs to the
+      // session being presented. A background session's navigation must stay
+      // off screen, or it is exactly the cross-session bleed we are fixing
+      // (#2015).
+      if (browserScopeIsPresented(tab.scopeId, activeScopeId) && activeBrowserTabId !== tabId) {
         try {
           selectBrowserTab(tabId);
         } catch {
@@ -818,10 +976,12 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
       }
       // A fact, not a product decision: a real page is now on screen in a tab.
       // Whether the user sees a peek, a docked panel or nothing is renderer
-      // presentation policy.
-      sendToRenderer("sofia:browser:tab-activated", { tabId });
+      // presentation policy. The scope lets the renderer ignore activity that
+      // belongs to a session it is not presenting.
+      sendToRenderer("sofia:browser:tab-activated", { tabId, scopeId: tab.scopeId });
     });
-    view.webContents.on("did-navigate", () => {
+    view.webContents.on("did-navigate", (_event, _url, responseCode) => {
+      mainResponseCode = responseCode;
       syncPeekCursorVisibility(tabId, { force: true });
       // Navigations can drop the renderer's metrics override; re-assert the
       // tab's own viewport. Detaching an agent never does this.
@@ -837,13 +997,32 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
       sendBrowserState();
     });
     view.webContents.on("did-start-loading", () => {
+      mainResponseCode = 0;
       tab.state.pageState = transitionPageState(tab.state.pageState, "start");
       sendBrowserState();
     });
     view.webContents.on("did-stop-loading", () => {
+      // A healthy load clears the recovery budget (see render-process-gone).
+      rendererRecoveries = 0;
       syncPeekCursorVisibility(tabId, { force: true });
       tab.state.pageState = transitionPageState(tab.state.pageState, "stop");
       sendBrowserState();
+      // HTTP errors are successful Chromium navigations. Preserve useful server
+      // error pages, but expose empty responses instead of a silent white view.
+      if (mainResponseCode >= 400) {
+        const responseCode = mainResponseCode;
+        const responseUrl = view.webContents.getURL();
+        void view.webContents.executeJavaScript(`!document.body || (!document.body.innerText.trim() && !document.body.querySelector('img,svg,canvas,video,iframe,input,button'))`)
+          .then((empty) => {
+            if (!empty || view.webContents.isDestroyed() || view.webContents.isLoading() || view.webContents.getURL() !== responseUrl) return;
+            tab.state.pageState = transitionPageState(tab.state.pageState, "fail", {
+              code: responseCode,
+              description: `This address returned HTTP ${responseCode} with an empty page`,
+              url: responseUrl,
+            });
+            sendBrowserState();
+          }).catch(() => {});
+      }
     });
     view.webContents.on("did-fail-load", (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
       // ERR_ABORTED (-3) is a superseded navigation, not a broken page.
@@ -864,7 +1043,10 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
       if (activeBrowserTabId === tabId) activeBrowserTabId = browserTabOrder[0] ?? null;
       sendBrowserState();
     });
-    if (select || !activeBrowserTabId) {
+    // Only the presented scope may take over the visible tab. A tab the agent
+    // opens for another session loads off screen until that session is shown.
+    const presentedScope = browserScopeIsPresented(tab.scopeId, activeScopeId);
+    if (presentedScope && (select || !activeBrowserTabId)) {
       selectBrowserTab(tabId);
     } else {
       sendBrowserState();
@@ -924,6 +1106,34 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
   // (never in the persisted renderer store) and reach the page only through CDP
   // emulation, which is derived from tab state alone.
   const agentLeases = createAgentLeaseRegistry();
+  async function tabForTarget(targetId) {
+    if (!targetId) return null;
+    for (const tab of browserTabs.values()) {
+      if (tab.cdpTargetId === targetId) return tab;
+    }
+    for (const tab of browserTabs.values()) {
+      if (tab.view.webContents.isDestroyed()) continue;
+      const info = await sendTabCdpCommand(tab.tabId, "Target.getTargetInfo", {});
+      tab.cdpTargetId = info?.targetInfo?.targetId;
+      if (tab.cdpTargetId === targetId) return tab;
+    }
+    return null;
+  }
+  const cursorOverlay = createBrowserCursorOverlay({getWindow, resolveTarget: async (targetId) => {
+    const tab = await tabForTarget(targetId);
+    if (!tab) return null;
+    const local = tab.view.getBounds(), container = tab.container.getBounds();
+    return {visible: browserViewVisible && activeBrowserTabId === tab.tabId && browserPresentation !== "hidden", bounds:{x:container.x+local.x,y:container.y+local.y,width:local.width,height:local.height}, zoom:tab.view.webContents.getZoomFactor()};
+  }});
+  async function canExecuteAgentCommand(targetId, method) {
+    const tab = await tabForTarget(targetId);
+    if (!tab || endedAgentScopes.has(tab.scopeId) || tab.scopeId !== resolveAgentBrowserScope(agentScopeId, activeScopeId)) return false;
+    if (agentLeases.statusFor(tab.tabId).status === "paused") return false;
+    const lease = agentLeases.leaseForTab(tab.tabId);
+    if (!lease) {agentLeases.acquire(tab.tabId, {cdpSessionId:targetId});sendBrowserState();}
+    return true;
+  }
+
 
   async function sendTabCdpCommand(tabId, method, params) {
     const tab = getBrowserTab(tabId);
@@ -1274,6 +1484,31 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
     return getBrowserTab(tabId);
   }
 
+  /**
+   * Switch the browser to another project. The previous project's page is
+   * detached from the window and its tabs stay parked (and are listed again when
+   * the user returns), so nothing floats over, or is driven from, a project the
+   * agent is not working in.
+   */
+  function setBrowserScope(scopeId) {
+    const next = typeof scopeId === "string" ? scopeId : "";
+    if (next === activeScopeId) return activeScopeId;
+    cursorOverlay.hide();
+    const previousView = getActiveBrowserView();
+    if (previousView) detachBrowserView(previousView);
+    browserViewVisible = false;
+    lastBrowserBounds = null;
+    browserPresentation = "docked";
+    activeScopeId = next;
+    const scoped = browserTabOrder.filter((id) => browserTabs.get(id)?.scopeId === next);
+    const previousActiveTabId = activeBrowserTabId;
+    activeBrowserTabId = scoped[scoped.length - 1] ?? null;
+    if (previousActiveTabId && previousActiveTabId !== activeBrowserTabId) syncPeekCursorVisibility(previousActiveTabId);
+    if (activeBrowserTabId) selectBrowserTab(activeBrowserTabId);
+    else sendBrowserState();
+    return activeScopeId;
+  }
+
   function closeBrowserTab(tabId = activeBrowserTabId) {
     const tab = getBrowserTab(tabId);
     if (!tab) return null;
@@ -1337,8 +1572,27 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
     return listBrowserTabs();
   }
 
+  let browserStateScheduled = false;
+  /**
+   * Push the panel state to the renderer, coalescing bursts. One navigation
+   * fires start / navigate / title / loading / favicon events in quick
+   * succession, and each used to be its own send.
+   *
+   * Every step is guarded: this runs from WebContents event handlers, where an
+   * uncaught throw — a disposed render frame, a tab destroyed mid-read — is an
+   * uncaught exception in the main process, which quits the whole app.
+   */
   function sendBrowserState() {
-    sendToRenderer("sofia:browser:state", browserStatePayload());
+    if (browserStateScheduled) return;
+    browserStateScheduled = true;
+    setTimeout(() => {
+      browserStateScheduled = false;
+      try {
+        sendToRenderer("sofia:browser:state", browserStatePayload());
+      } catch {
+        // Tab or window torn down between the schedule and the send.
+      }
+    }, 0);
   }
 
   /**
@@ -1366,6 +1620,7 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
   }
 
   function hideBrowserView() {
+    cursorOverlay.hide();
     hideMenuOverlay();
     detachPeekShield();
     browserViewVisible = false;
@@ -1377,6 +1632,7 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
   }
 
   function destroyBrowserView() {
+    cursorOverlay.close();
     hideBrowserView();
     destroyPeekShield();
     const overlayView = menuOverlayView;
@@ -1457,10 +1713,11 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
         else if (tabId) agentLeases.releaseTab(tabId);
         break;
       case "pause":
-        agentLeases.pause(leaseId);
+        agentLeases.pause(leaseId ?? agentLeases.leaseForTab(tabId)?.leaseId);
+        cursorOverlay.hide();
         break;
       case "resume":
-        agentLeases.resume(leaseId);
+        agentLeases.resume(leaseId ?? agentLeases.leaseForTab(tabId)?.leaseId);
         break;
       case "fail":
         agentLeases.fail(leaseId, payload?.error);
@@ -1477,7 +1734,23 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
     void ensureBrowserExtensionsRestored();
     ipcMain.handle("sofia:browser:show", (_event, bounds) => attachBrowserView(bounds));
     ipcMain.handle("sofia:browser:hide", () => hideBrowserView());
-    ipcMain.handle("sofia:browser:openUrl", (_event, url, provider) => openBrowserUrlForAutomation(url, provider));
+    ipcMain.handle("sofia:browser:openUrl", (_event, url, provider, options) => openBrowserUrlForAutomation(url, provider, options ?? {}));
+    ipcMain.handle("sofia:browser:setScope", (_event, scopeId) => setBrowserScope(scopeId));
+    ipcMain.handle("sofia:browser:setAgentScope", (_event, scopeId) => {
+      const next = typeof scopeId === "string" ? scopeId.trim() : "";
+      if (agentScopeId && agentScopeId !== next) {
+        endedAgentScopes.add(agentScopeId);
+        if (endedAgentScopes.size > 128) endedAgentScopes.delete(endedAgentScopes.values().next().value);
+        for (const tab of browserTabs.values()) {
+          if (tab.scopeId === agentScopeId && agentLeases.statusFor(tab.tabId).status !== "paused") agentLeases.releaseTab(tab.tabId);
+        }
+        cursorOverlay.hide();
+      }
+      if (next) endedAgentScopes.delete(next);
+      agentScopeId = next;
+      sendBrowserState();
+      return agentScopeId;
+    });
     ipcMain.handle("sofia:browser:navigate", (_event, url) => {
       const view = getActiveBrowserView() ?? createBrowserTab("about:blank", { select: true }).view;
       view.webContents.loadURL(normalizeBrowserUrl(url));
@@ -1589,5 +1862,16 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
     registerIpc,
     routeBlockedMainWindowNavigation,
     createTargetForAgent,
+    cursor: async (targetId, state) => {
+      if (state.action === "detach") {
+        const tab = await tabForTarget(targetId);
+        if (tab && agentLeases.statusFor(tab.tabId).status !== "paused") agentLeases.releaseTab(tab.tabId);
+        sendBrowserState();
+        return cursorOverlay.command(targetId, {...state,action:"hide"});
+      }
+      return cursorOverlay.command(targetId,state);
+    },
+    canExecuteAgentCommand,
+    canDiscoverTarget: async (targetId) => { const tab = await tabForTarget(targetId); return Boolean(tab && tab.scopeId === resolveAgentBrowserScope(agentScopeId, activeScopeId)); },
   };
 }

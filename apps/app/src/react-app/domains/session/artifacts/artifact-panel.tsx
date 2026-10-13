@@ -1,3 +1,5 @@
+import { SourceImagePanel } from "../panel/source-image-panel";
+import { workspaceFilePath } from "./workspace-file-path";
 /** @jsxImportSource react */
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -11,8 +13,8 @@ import { toast } from "@/components/ui/sonner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { usePlatform } from "@/react-app/kernel/platform";
 import { type ArtifactPanelTab, usePanelTabStore } from "../panel/panel-tab-store";
-import { isCollectibleArtifactTarget, type BinaryData, type Data, type OpenTarget, type TextData } from "./open-target";
-import { HTMLPreview, ImagePreview, MarkdownPreview, PdfPreview, PlainText, PreviewError, PreviewLoading, PreviewUnavailable } from "./preview";
+import { isOpenableFileTarget, type BinaryData, type Data, type OpenTarget, type TextData } from "./open-target";
+import { HTMLPreview, MarkdownPreview, PdfPreview, PlainText, PreviewError, PreviewLoading, PreviewUnavailable } from "./preview";
 
 const ArtifactTextEditor = lazy(() =>
   import("./artifact-text-editor").then((module) => ({ default: module.ArtifactTextEditor })),
@@ -61,6 +63,7 @@ type SaveArtifactInput = Data & { baseUpdatedAt: number | null };
 function absoluteWorkspacePath(root: string, path: string) {
   const cleanRoot = root.trim().replace(/[/\\]+$/, "");
   const cleanPath = path.trim().replace(/^\.\//, "");
+  if (/^(?:\/|[A-Za-z]:[/\\])/.test(cleanPath)) return cleanPath;
   
   return cleanRoot ? `${cleanRoot}/${cleanPath}` : cleanPath;
 }
@@ -71,7 +74,7 @@ function isTextContent(target: OpenTarget): boolean {
 
 export function ArtifactPanel({ sessionId, tab, client, workspaceId, workspaceRoot, isRemoteWorkspace = false, onClose }: ArtifactPanelProps) {
   const transcriptTargets = usePanelTabStore((state) => state.transcriptArtifactTargets[sessionId] ?? EMPTY_TRANSCRIPT_TARGETS);
-  const artifactTargets = useMemo(() => transcriptTargets.filter(isCollectibleArtifactTarget), [transcriptTargets]);
+  const artifactTargets = useMemo(() => transcriptTargets.filter(isOpenableFileTarget), [transcriptTargets]);
   const target = artifactTargets.find((item) => item.id === tab.id) ?? null;
 
   if (!target || !client || !workspaceId) {
@@ -91,6 +94,7 @@ export function ArtifactPanel({ sessionId, tab, client, workspaceId, workspaceRo
 }
 
 function ArtifactPanelView({ client, workspaceId, workspaceRoot, isRemoteWorkspace = false, target, onClose }: ArtifactPanelViewProps) {
+  const filePath = workspaceFilePath(workspaceRoot, target.value);
   const platform = usePlatform();
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
@@ -120,12 +124,12 @@ function ArtifactPanelView({ client, workspaceId, workspaceRoot, isRemoteWorkspa
       }
 
       if (isTextContent(target)) {
-        const result = await client.readWorkspaceFile(workspaceId, target.value);
+        const result = await client.readWorkspaceFile(workspaceId, filePath);
 
         return { kind: "text", data: result.content, updatedAt: result.updatedAt ?? null };
       }
 
-      const result = await client.downloadWorkspaceFile(workspaceId, target.value);
+      const result = await client.downloadWorkspaceFile(workspaceId, filePath);
 
       return { kind: "binary", data: result.data, contentType: result.contentType, updatedAt: target.updatedAt ?? null };
     },
@@ -173,10 +177,10 @@ function ArtifactPanelView({ client, workspaceId, workspaceRoot, isRemoteWorkspa
       }
 
       if (input.kind === "text") {
-        return client.writeWorkspaceFile(workspaceId, { path: target.value, content: input.data, baseUpdatedAt: input.baseUpdatedAt });
+        return client.writeWorkspaceFile(workspaceId, { path: filePath, content: input.data, baseUpdatedAt: input.baseUpdatedAt });
       }
 
-      return client.writeWorkspaceBinaryFile(workspaceId, { path: target.value, data: input.data, baseUpdatedAt: input.baseUpdatedAt });
+      return client.writeWorkspaceBinaryFile(workspaceId, { path: filePath, data: input.data, baseUpdatedAt: input.baseUpdatedAt });
     },
     onSuccess: (result, input) => {
       queryClient.setQueryData<ArtifactQueryState>(
@@ -205,7 +209,7 @@ function ArtifactPanelView({ client, workspaceId, workspaceRoot, isRemoteWorkspa
       return;
     }
     
-    const result = await client.downloadWorkspaceFile(workspaceId, target.value);
+    const result = await client.downloadWorkspaceFile(workspaceId, filePath);
     const url = URL.createObjectURL(new Blob([result.data], { type: result.contentType ?? "application/octet-stream" }));
     const anchor = document.createElement("a");
 
@@ -276,6 +280,10 @@ function ArtifactPanelView({ client, workspaceId, workspaceRoot, isRemoteWorkspa
       baseUpdatedAt: data?.kind === payload.kind ? data.updatedAt : target.updatedAt ?? null,
     });
   };
+
+  if(target.preview === "image" && data?.kind === "binary" && binaryObjectUrl) {
+    return <SourceImagePanel key={target.id} src={binaryObjectUrl} label={target.name} onOpenExternal={canUseDesktopFileActions ? ()=>void openExternal() : undefined}/>;
+  }
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-dls-canvas">
@@ -371,7 +379,7 @@ function ArtifactPanelView({ client, workspaceId, workspaceRoot, isRemoteWorkspa
         ) : target.preview === "html" && data?.kind === "text" ? (
           <HTMLPreview type="text" title={target.name} content={data.data} />
         ) : target.preview === "image" && data?.kind === "binary" && binaryObjectUrl ? (
-          <ImagePreview src={binaryObjectUrl} alt={target.name} />
+          <SourceImagePanel key={target.id} src={binaryObjectUrl} label={target.name} />
         ) : target.preview === "pdf" && data?.kind === "binary" && binaryObjectUrl ? (
           <PdfPreview url={binaryObjectUrl} title={target.name} />
         ) : data?.kind === "binary" && binaryObjectUrl && target.preview === "html" ? (

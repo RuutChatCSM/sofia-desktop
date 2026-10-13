@@ -1,0 +1,72 @@
+import { expect } from "vitest";
+import { evalIn, waitFor } from "@sofia/behaviors";
+import { desktop } from "@sofia/hosts";
+import { needs, test } from "@sofia/testkit";
+
+test("project picker preserves drafts, overlaps composer, and summary copy excludes progress", { timeout: 180_000 }, async ({ evidence }) => {
+  needs({ optIn: ["SOFIA_EVAL_E2E_TESTS"], placement: "local" });
+  await using app = await desktop({ name: "new-task-project-picker" });
+  const mounted = await evalIn(app, `(async()=>{ try {
+    window.__projectFixtureErrors=[];window.addEventListener('error',event=>window.__projectFixtureErrors.push(event.message));
+    const React=(await import('/node_modules/.vite/deps/react.js')).default;
+    const {createRoot}=(await import('/node_modules/.vite/deps/react-dom_client.js')).default;
+    const {MessageList}=await import('/src/components/chat/message-list.tsx');
+    const {MessageListProvider}=await import('/src/components/chat/message-list-provider.tsx');
+    const {ReactSessionComposer}=await import('/src/react-app/domains/session/surface/composer/composer.tsx');
+    const {ProjectComposerStrip}=await import('/src/react-app/domains/session/chat/project-composer-strip.tsx');
+    const {NewTaskComposer}=await import('/src/react-app/domains/session/chat/new-task-composer.tsx');
+    const noop=()=>{};const file=new File(['original bytes'],'project-note.txt',{type:'text/plain'});
+    const proof=window.__projectPickerProof={draft:'Inspect architecture [attachment file]',attachments:[{id:'file',name:file.name,size:file.size,mimeType:file.type,kind:'file',file}],selections:[],submits:0};
+    const container=document.createElement('div');container.id='project-proof';container.style.cssText='position:fixed;inset:0;background:#111;z-index:100000;padding:40px';document.body.append(container);
+    function Harness(){const[busy,setBusy]=React.useState(false);proof.setBusy=setBusy;const[copy,setCopy]=React.useState(false);proof.setCopy=setCopy;const[id,setId]=React.useState('alpha');const[draft,setDraft]=React.useState(proof.draft);const[attachments,setAttachments]=React.useState(proof.attachments);
+      const context={client:null,workspaceId:id,workspaceRoot:'/tmp/'+id,projects:[{id:'alpha',name:'Alpha project',path:'/tmp/alpha'},{id:'beta',name:'Beta project',path:'/tmp/beta'}],onSelectProject:next=>{proof.selections.push(next);setId(next)},draft,onDraftChange:value=>{proof.draft=value;setDraft(value)},attachments,onAttachmentsChange:value=>setAttachments(current=>{const next=typeof value==='function'?value(current):value;proof.attachments=next;return next}),selectedModel:{providerID:'fixture',modelID:'fixture'},modelOptions:[],modelPickerOpen:false,onModelPickerOpenChange:noop,onModelChange:noop,modelVariantLabel:'Default',modelVariant:null,onModelVariantChange:noop,agentLabel:'Default',selectedAgent:null,listAgents:async()=>[],onSelectAgent:noop,listCommands:async()=>[],searchFiles:async()=>[],isRemoteWorkspace:false,isSandboxWorkspace:false};
+      if(copy)return React.createElement(MessageListProvider,{workspaceId:'alpha',workspaceRoot:'/tmp',mediaClient:null,sessionId:'copy-proof',showThinking:true,developerMode:false,displaySuggestions:false,providerConnectedCount:0,dispatchAction:noop,setPrompt:noop,onRevertToUserMessage:noop,onForkAtMessage:noop,onEditUserMessage:noop,onMcpReconnect:async()=>({ok:true}),onMcpReopenAuthorization:async()=>{},onMcpRetry:noop},React.createElement(MessageList,{status:'idle',messages:[{id:'commentary',role:'assistant',metadata:{engine:{turnId:'copy-turn',phase:'commentary'}},parts:[{type:'text',text:'PROGRESS_ONLY'}]},{id:'final',role:'assistant',metadata:{engine:{turnId:'copy-turn',phase:'final_answer'}},parts:[{type:'reasoning',text:'PRIVATE_REASONING'},{type:'text',text:'FINAL_ANSWER_ONLY'}]}]}));
+      if(busy)return React.createElement(React.Fragment,null,React.createElement(ProjectComposerStrip,{context,docked:true}),React.createElement(ReactSessionComposer,{...context,draft,onDraftChange:context.onDraftChange,mentions:{},onSend:()=>proof.submits++,onSteer:()=>proof.submits++,onQueue:()=>proof.submits++,onStop:noop,busy:true,steering:false,queuedCount:0,disabled:false,statusLabel:'',attachments,attachmentsUploading:false,onAttachFiles:noop,onRemoveAttachment:noop,attachmentsEnabled:true,attachmentsDisabledReason:null,skills:[],listSkills:async()=>[],mcpServers:[],mcpStatuses:{},mcpStatus:null,listMcp:async()=>[],recentFiles:[],onInsertMention:noop,onPasteText:noop,onUnsupportedFileLinks:noop,pastedText:[],onExpandPastedText:noop,onRemovePastedText:noop,onUploadInboxFiles:null}));
+      return React.createElement(NewTaskComposer,{key:id,draft,onDraftChange:context.onDraftChange,onRunTask:()=>proof.submits++,busy,context});}
+    const {DenAuthProvider}=await import('/src/react-app/domains/cloud/den-auth-provider.tsx');
+    const {DesktopConfigProvider}=await import('/src/react-app/domains/cloud/desktop-config-provider.tsx');
+    const {ServerProvider}=await import('/src/react-app/kernel/server-provider.tsx');
+    const {WorkspaceProvider}=await import('/src/react-app/shell/workspace-provider.ts');
+    const {PlatformProvider,createDefaultPlatform}=await import('/src/react-app/kernel/platform.tsx');
+    const {QueryClientProvider}=await import(performance.getEntriesByType('resource').map(entry=>entry.name).find(name=>name.includes('/.vite/deps/@tanstack_react-query.js'))??'/node_modules/.vite/deps/@tanstack_react-query.js');
+    const {getReactQueryClient}=await import('/src/react-app/infra/query-client.ts');
+    createRoot(container).render(React.createElement(QueryClientProvider,{client:getReactQueryClient()},React.createElement(PlatformProvider,{value:createDefaultPlatform()},React.createElement(ServerProvider,{defaultUrl:'http://127.0.0.1:4096'},React.createElement(DenAuthProvider,null,React.createElement(DesktopConfigProvider,null,React.createElement(WorkspaceProvider,{client:null,selectedWorkspaceRoot:'/tmp'},React.createElement(Harness))))))));
+    return "mounted"; } catch(error) { return String(error.stack??error); }
+  })()`, { awaitPromise: true });
+  expect(mounted).toBe("mounted");
+  await new Promise(resolve=>setTimeout(resolve,1000));
+  expect(await evalIn(app, `window.__projectFixtureErrors`)).toEqual([]);
+  await waitFor(app, `Boolean(document.querySelector('#project-proof [aria-label="Choose project"]'))`, { label: "project picker rendered" });
+  await evalIn(app, `document.querySelector('#project-proof [aria-label="Choose project"]').click()`);
+  await waitFor(app, `Boolean(document.querySelector('[aria-label="Search projects"]'))`, { label: "search opened" });
+  await evalIn(app, `(()=>{const input=document.querySelector('[aria-label="Search projects"]');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'Beta');input.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+  await waitFor(app, `Boolean([...document.querySelectorAll('button')].find(b=>b.title==='/tmp/beta')) && ![...document.querySelectorAll('button')].some(b=>b.title==='/tmp/alpha')`, { label: "search filters choices" });
+  await evalIn(app, `[...document.querySelectorAll('button')].find(b=>b.title==='/tmp/beta').click()`);
+  await waitFor(app, `document.querySelector('#project-proof [aria-label="Choose project"]')?.textContent.includes('Beta project')`, { label: "remounted selected project" });
+  expect(await evalIn(app, `window.__projectPickerProof.selections`)).toEqual(["beta"]);
+  expect(await evalIn(app, `window.__projectPickerProof.draft`)).toBe("Inspect architecture [attachment file]");
+  expect(await evalIn(app, `window.__projectPickerProof.attachments.length`)).toBe(1);
+  expect(await evalIn(app, `window.__projectPickerProof.attachments[0].file.text()`, { awaitPromise: true })).toBe("original bytes");
+  expect(await evalIn(app, `window.__projectPickerProof.submits`)).toBe(0);
+  expect(await evalIn(app, `document.querySelector('#project-proof')?.textContent.includes('project-note.txt')`)).toBe(true);
+  expect(await evalIn(app, `(()=>{const strip=document.querySelector('#project-proof [data-project-composer-strip]');const panel=document.querySelector('#project-proof .sofia-composer-panel');const a=strip.getBoundingClientRect(),b=panel.getBoundingClientRect();return a.bottom>b.top;})()`)).toBe(true);
+  await evalIn(app, `window.__projectPickerProof.setBusy(true)`);
+  await waitFor(app, `Boolean(document.querySelector('#project-proof [aria-label="Follow-up behavior"]'))`, { label: "follow-up menu trigger" });
+  expect(await evalIn(app, `document.querySelector('#project-proof [aria-label="Follow-up behavior"]').tagName`)).toBe("BUTTON");
+  const geometry = await evalIn(app, `(()=>{const strip=document.querySelector('#project-proof [data-project-composer-strip]').getBoundingClientRect();const panel=document.querySelector('#project-proof .sofia-composer-panel').getBoundingClientRect();return {left:strip.left-panel.left,right:panel.right-strip.right,width:strip.width,panelWidth:panel.width}})()`);
+  expect(geometry.left).toBeCloseTo(8, 0);
+  expect(geometry.right).toBeCloseTo(8, 0);
+  expect(geometry.panelWidth).toBeLessThanOrEqual(800);
+
+  await evalIn(app, `document.querySelector('#project-proof [aria-label="Follow-up behavior"]').click()`);
+  await waitFor(app, `Boolean(document.querySelector('[role="menuitemradio"]'))`, { label: "accessible follow-up choices" });
+  await evalIn(app, `[...document.querySelectorAll('[role="menuitemradio"]')].find(item=>item.textContent.startsWith('Queue')).click()`);
+  await waitFor(app, `document.querySelector('#project-proof [aria-label="Follow-up behavior"]')?.textContent.includes('Queue')`, { label: "queue selected" });
+  expect(await evalIn(app, `window.__projectPickerProof.submits`)).toBe(0);
+  await evalIn(app, `(()=>{Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async(text)=>{window.__copiedFinal=text}}});window.__projectPickerProof.setCopy(true)})()`);
+  await waitFor(app, `Boolean(document.querySelector('#project-proof [aria-label="Copy message"]'))`, { label: "final answer copy control" });
+  await evalIn(app, `[...document.querySelectorAll('#project-proof [aria-label="Copy message"]')].at(-1).click()`);
+  await waitFor(app, `window.__copiedFinal==='FINAL_ANSWER_ONLY'`, { label: "clipboard contains final answer only" });
+  expect(await evalIn(app, `window.__copiedFinal`)).toBe("FINAL_ANSWER_ONLY");
+  evidence.recordAssertionEvidence("Project draft continuity", "Production Electron composer filters projects and remounts with original draft and File bytes/name intact, without submission. The busy production composer uses an accessible radio menu and selecting Queue changes preference without dispatch. Project backing strip overlaps the composer panel. Production MessageList summary Copy writes only final-answer text, excluding same-turn commentary and reasoning. Host state and clipboard are deterministic; no inference.", true);
+});

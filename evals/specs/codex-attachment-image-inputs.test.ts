@@ -2,6 +2,7 @@ import { expect } from "vitest";
 import { test } from "@sofia/testkit";
 
 import { codexPromptFromParts } from "../../apps/app/src/react-app/domains/session/sync/codex-prompt-parts.js";
+import { messageReferences } from "../../apps/app/src/react-app/domains/session/surface/composer/message-reference.js";
 import { registerCodexRoutes } from "../../apps/server/src/codex-routes.js";
 import { matchRoute, type RequestContext, type Route } from "../../apps/server/src/routes/registry.js";
 import type { ServerConfig } from "../../apps/server/src/types.js";
@@ -17,11 +18,13 @@ test("a pasted image rides Sofia's turn as an image input, not as base64 prompt 
 
   expect(turn.images).toEqual([IMAGE_DATA_URL]);
   expect(turn.text).toContain("what does this screenshot show?");
-  // A non-image attachment rides as its own structured file part carrying the
-  // url, so nothing is spelled out as prose. Inlining "Referenced file: …" put a
-  // file:/// URL into the user's own message; the path is not the message.
+  // Sofia sends a turn as flat text: a non-image file part has no structured
+  // channel, so its path must ride in the prompt. It travels as the readable
+  // reference (which the transcript renders as a chip), never as raw `file:///`
+  // prose — inlining "Referenced file: … (file:///…)" was the old, uglier way.
   expect(turn.text).not.toContain("file:///workspace/.sofia/inbox/scan.pdf");
   expect(turn.text).not.toContain("Referenced file");
+  expect(messageReferences(turn.text, "ws_1").map((reference) => reference.path)).toEqual(["/workspace/.sofia/inbox/scan.pdf"]);
   expect(turn.text).not.toContain("iVBORw0KGgo");
   expect(turn.text).not.toContain("data:image");
   evidence.recordAssertionEvidence(

@@ -1,0 +1,15 @@
+/* Image tokens keep their serialized insertion order, but get a dedicated
+   attachment row before the prose, as in the desktop reference composer. */
+[data-sofia-composer-editor] p:has(> [data-attachment-kind="image"]) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+}
+[data-sofia-composer-editor] p:has(> [data-attachment-kind="image"])::after {
+  content: "";
+  flex-basis: 100%;
+  order: -1;
+}
+[data-sofia-composer-editor] [data-attachment-kind="image"] {
+  order: -2;
+}

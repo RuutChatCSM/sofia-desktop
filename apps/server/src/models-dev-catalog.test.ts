@@ -50,6 +50,17 @@ describe("parseModelsDevCatalog", () => {
     expect(parseModelsDevCatalog({ foo: { name: "Foo", env: ["FOO_KEY"], models: {} } })).toEqual([]);
   });
 
+  it("keeps native Anthropic models when the catalog omits an OpenAI-compatible api", () => {
+    const [entry] = parseModelsDevCatalog({
+      anthropic: {
+        id: "anthropic", name: "Anthropic", env: ["ANTHROPIC_API_KEY"],
+        models: { "claude-test": { name: "Claude Test" } },
+      },
+    });
+    expect(entry?.baseUrl).toBe("https://api.anthropic.com/v1");
+    expect(entry?.models.map((model) => model.id)).toEqual(["claude-test"]);
+  });
+
   it("keeps every env alias so the engine finds the key", () => {
     const [entry] = parseModelsDevCatalog({
       google: {

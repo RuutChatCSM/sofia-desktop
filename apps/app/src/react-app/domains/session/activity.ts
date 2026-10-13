@@ -55,17 +55,6 @@ export function activityTitleForStatus(activity: Activity): string {
 }
 
 /**
- * The state belongs *inside* the activity ("Activity › Running the app tests ›
- * ● Running"), so the words describe what the user is waiting on, not a
- * process state machine.
- */
-export function activityStatusLabel(status: ActivityStatus): string {
-  if (status === "running") return "Running";
-  if (status === "waiting" || status === "failed") return "Needs you";
-  return "Finished";
-}
-
-/**
  * One Activity per background process for now. When several resources belong to
  * one operation (or the agent supplies a semantic title), this is the single
  * place to group them — the UI reads Activities, never resources.

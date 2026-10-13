@@ -13,6 +13,7 @@ const CONTEXT_BLOCK_NAMES = [
   "user_instructions",
   "INSTRUCTIONS",
   "environment_context",
+  "external_codex_apps_open_page",
   "recovered_thread_context",
 ];
 

@@ -55,7 +55,7 @@ test("an assistant turn renders as a single work block", () => {
   expect(source).not.toContain("COLLAPSED_STEP_RUN_MIN_ROWS");
   // The block owns the whole turn: commentary, milestones and detail all render
   // inside the disclosure, and only the answer is rendered outside it.
-  expect(source).toContain("{workItems.map(renderWorkEntry)}");
+  expect(source).toContain("workItems.map(renderWorkEntry)");
   expect(source).toContain('data-final-answer=""');
   // The disclosure's children are work rows, not transcript messages: reusing
   // `MessageComponent` inside the block is what made each progress update carry

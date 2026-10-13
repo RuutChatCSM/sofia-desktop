@@ -31,6 +31,7 @@ import { isDesktopRuntime, safeStringify } from "../../../../app/utils";
 import {
   compareProviders,
   filterProviderList,
+  wireApiForProvider,
 } from "../../../../app/utils/providers";
 import { getReactQueryClient } from "../../../infra/query-client";
 import {
@@ -983,6 +984,33 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
   // want to fire "new provider" events for providers that were already
   // there. After the first load, any new provider IS genuinely new.
   let providerListInitialized = false;
+  let lastCodexProviderSync = "";
+
+  const syncConnectedCodexProviders = async (list: ProviderListResponse) => {
+    const connected = getConnectedProviderItems(list)
+      .filter((provider) => provider.id.trim().toLowerCase() !== "engine")
+      .map((provider) => ({
+        providerId: provider.id,
+        providerName: provider.name?.trim() || provider.id,
+        baseUrl: (typeof provider.options?.baseURL === "string" && provider.options.baseURL.trim()) ||
+          (typeof provider.options?.baseUrl === "string" && provider.options.baseUrl.trim()) || null,
+        envKey: null,
+        wireApi: wireApiForProvider(provider.id),
+        models: Object.entries(provider.models ?? {}).map(([id, model]) => ({
+          id,
+          name: model.name?.trim() || id,
+          reasoning: model.capabilities.reasoning === true,
+        })),
+      }));
+    if (!connected.length) return;
+    const signature = JSON.stringify(connected);
+    if (signature === lastCodexProviderSync) return;
+    const { sofiaClient, sofiaWorkspaceId } = await resolveSofiaConfigTarget("write");
+    if (!sofiaClient || !sofiaWorkspaceId) return;
+    await sofiaClient.setCodexProviders(sofiaWorkspaceId, connected);
+    lastCodexProviderSync = signature;
+    window.dispatchEvent(new Event("sofia:codex-providers-changed"));
+  };
 
   const applyProviderListState = (value: ProviderListResponse, opts?: { suppressNewProviderEvent?: boolean }) => {
     const prevConnected = new Set(options.providerConnectedIds());
@@ -1297,7 +1325,7 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
 
     if (optionsArg?.dispose) {
       const now = Date.now();
-      const shouldDispose = now - lastGlobalProviderDisposeRefreshAt >= 10_000;
+      const shouldDispose = Boolean(optionsArg.force) || now - lastGlobalProviderDisposeRefreshAt >= 10_000;
       const shouldUseServerReload = !(
         isDesktopRuntime() && options.selectedWorkspaceDisplay().workspaceType === "local"
       );
@@ -1377,6 +1405,7 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
         disabledProviders,
       );
       applyProviderListState(updated);
+      await syncConnectedCodexProviders(updated).catch(() => undefined);
       return updated;
     } catch {
       return null;
@@ -1427,9 +1456,7 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
     };
 
     try {
-      if (resolved.toLowerCase() === DESKTOP_RESTRICTION_SOFIA_ENGINE_PROVIDER_ID) {
-        await ensureProjectProviderDisabledState(resolved, false);
-      }
+      await ensureProjectProviderDisabledState(resolved, false);
       const trimmedCode = code?.trim();
       const result = await c.provider.oauth.callback({
         providerID: resolved,
@@ -1480,15 +1507,14 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
 
     setStateField("providerAuthBusy", true);
     try {
-      if (providerId.trim().toLowerCase() === DESKTOP_RESTRICTION_SOFIA_ENGINE_PROVIDER_ID) {
-        await ensureProjectProviderDisabledState(providerId, false);
-      }
+      await ensureProjectProviderDisabledState(providerId, false);
       await c.auth.set({ providerID: providerId, auth: { type: "api", key: trimmed } });
       // Mirror the key into the codex auth store so the bundled codex engine
       // can read it at spawn via its provider `env_key` (codexengine.json).
       // This mirrors how engine receives UI-entered keys (its auth API).
       await mirrorCodexAuthKey(providerId, trimmed);
-      await refreshProviders({ dispose: true });
+      await refreshProviders({ dispose: true, force: true });
+      window.dispatchEvent(new Event("sofia:codex-providers-changed"));
       return `${t("status.connected")} ${providerId}`;
     } catch (error) {
       const message = describeProviderError(error, t("providers.save_api_key_failed"));
@@ -2034,28 +2060,18 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
     }
 
     try {
-      // Sofia Zen is built-in / env-backed. Credential removal alone leaves
-      // it connected — disable it via runtime SOFIA_ENGINE_CONFIG injection.
-      if (resolved.toLowerCase() === DESKTOP_RESTRICTION_SOFIA_ENGINE_PROVIDER_ID) {
-        try {
-          await removeProviderAuthCredentials(resolved);
-        } catch {
-          // Zen may have no stored credentials; disable still applies.
-        }
-        await ensureProjectProviderDisabledState(resolved, true);
-        await refreshProviders({ dispose: true });
-        removeProviderFromState(resolved);
-        return `${t("providers.disconnected_prefix")} ${resolved}`;
-      }
-
+      // Worker auth, the Codex credential mirror, and its model catalog are
+      // separate stores. Disconnect all three, then mask any env-backed copy
+      // that the worker would otherwise rediscover on restart.
       await removeProviderAuthCredentials(resolved);
-      const updated = await refreshProviders({ dispose: true });
-      if (Array.isArray(updated?.connected) && updated.connected.includes(resolved)) {
-        // Provider is still connected (e.g. via env var). Just remove
-        // stored credentials; do NOT add to disabled_providers.
-        return `Removed stored credentials for ${resolved}${t("providers.still_connected_suffix")}`;
+      const { sofiaClient, sofiaWorkspaceId } = await resolveSofiaConfigTarget("write");
+      if (sofiaClient && sofiaWorkspaceId) {
+        await sofiaClient.removeCodexAuth(sofiaWorkspaceId, resolved);
       }
+      await ensureProjectProviderDisabledState(resolved, true);
+      await refreshProviders({ dispose: true, force: true });
       removeProviderFromState(resolved);
+      window.dispatchEvent(new Event("sofia:codex-providers-changed"));
       return `${t("providers.disconnected_prefix")} ${resolved}`;
     } catch (error) {
       const message = describeProviderError(error, t("providers.disconnect_failed"));

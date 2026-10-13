@@ -327,6 +327,44 @@ export function browserPresentationVisible(mode: BrowserPresentationMode): boole
   return mode !== "hidden";
 }
 
+/**
+ * Whether a browser fact belongs to the session the desktop is presenting.
+ *
+ * Facts are stamped with the session that owns the tab, so a background
+ * session's agent activity never drives the preview (or any other surface) of
+ * the session on screen. An unstamped fact is legacy/unscoped and passes, which
+ * keeps older Electron builds working.
+ */
+export function browserFactMatchesScope(
+  factScopeId: string | null | undefined,
+  presentedScopeId: string,
+): boolean {
+  if (!factScopeId) return true;
+  return factScopeId === presentedScopeId;
+}
+
+/**
+ * The session an unattributed browser command (raw CDP: `tabs.open`, `new_page`)
+ * belongs to.
+ *
+ * The CDP harness carries no session, so the desktop infers it from who is
+ * actually running: the session on screen when it is the one working, otherwise
+ * the single working session — never a session that is merely on screen. When
+ * more than one session is working and none is on screen the command stays
+ * unattributed rather than guessing.
+ *
+ * @param presentedScope The session on screen, as a browser scope key.
+ * @param activeScopes Every session currently running an agent turn.
+ */
+export function pickAgentBrowserScope(
+  presentedScope: string,
+  activeScopes: readonly string[],
+): string | null {
+  if (presentedScope && activeScopes.includes(presentedScope)) return presentedScope;
+  if (activeScopes.length === 1) return activeScopes[0];
+  return null;
+}
+
 function currentRestore(state: BrowserPresentationState): BrowserRestorePresentation {
   return { mode: "docked", width: state.preferences.dockedWidth };
 }

@@ -15,7 +15,8 @@ import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
-import { type CodexWireApi } from "./codex-config.js";
+import { providerModelContextWindow } from "./codex-model-limits.js";
+import { codexWireApiForProvider, type CodexWireApi } from "./codex-config.js";
 import { readCodexAuthStore } from "./codex-auth-store.js";
 
 export type CodexProviderModel = {
@@ -123,7 +124,7 @@ export async function readCodexEngineConfig(
     providerName: record.name,
     baseUrl: record.base_url,
     envKey: codexEnvKeyForProvider(providerId),
-    wireApi: record.wire_api === "responses" ? "responses" : "chatcompletions",
+    wireApi: record.wire_api === "responses" ? "responses" : record.wire_api === "anthropic" ? "anthropic" : "chatcompletions",
     models: record.models,
   }));
 
@@ -175,6 +176,17 @@ export async function writeCodexEngineConfigFromProviders(
     };
   }
   return writeCodexProviders({ providers: records }, opts);
+}
+
+/** Remove a disconnected provider from the catalog the Codex picker reads. */
+export async function removeCodexProvider(
+  providerId: string,
+  opts?: { path?: string; env?: NodeJS.ProcessEnv },
+): Promise<void> {
+  const file = await readCodexProviders(opts);
+  if (!(providerId in file.providers)) return;
+  delete file.providers[providerId];
+  await writeCodexProviders(file, opts);
 }
 
 /**
@@ -262,10 +274,7 @@ function normalizeCodexEngineConfig(value: unknown): CodexEngineConfig {
       ? record.providerId.trim()
       : null;
     if (!providerId) continue;
-    const rawWireApi = record && typeof record.wireApi === "string" ? record.wireApi : null;
-    const wireApi: CodexWireApi = rawWireApi === "responses" || rawWireApi === "chatcompletions"
-      ? rawWireApi
-      : providerId.toLowerCase() === "openai" ? "responses" : "chatcompletions";
+    const wireApi = codexWireApiForProvider(providerId, record ?? {});
     providers.push({
       providerId,
       providerName: record && typeof record.providerName === "string" && record.providerName.trim()
@@ -296,15 +305,10 @@ function normalizeProviderModels(value: unknown): CodexProviderModel[] {
       id,
       name: record && typeof record.name === "string" && record.name.trim() ? record.name.trim() : id,
       reasoning: record ? record.reasoning === true : false,
-      contextWindow: normalizeContextWindow(record?.contextWindow ?? record?.context_window),
+      contextWindow: providerModelContextWindow(record),
     });
   }
   return models;
-}
-
-function normalizeContextWindow(value: unknown): number | null {
-  const parsed = typeof value === "number" ? value : typeof value === "string" ? Number(value) : Number.NaN;
-  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : null;
 }
 
 /// Serialize a provider model to codex's on-disk snake_case shape, including

@@ -66,7 +66,7 @@ describe("Sofia Connect status", () => {
     expect(resolveSofiaConnectStatus(true, undefined)).toEqual({
       state: "ready",
       label: "Ready",
-      description: "Signed in to Organization cloud. Connected service tools will be checked when a workspace is active.",
+      description: "Signed in to Sofia Cloud. Connected service tools are checked when the active engine supports this diagnostic.",
     });
     expect(resolveSofiaConnectStatus(true, maintenance("idle"))).toMatchObject({
       state: "ready",

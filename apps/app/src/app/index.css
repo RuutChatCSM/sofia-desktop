@@ -699,3 +699,48 @@ select:disabled {
   .sofia-composer-panel button { min-height: 44px; }
   .sofia-followup-button { padding-inline: 10px; }
 }
+
+/* Shipped ChatGPT summary panel: neutral secondary labels and elevated surface. */
+.session-resources-card {
+  --summary-secondary: #5d5d5d;
+  --summary-tertiary: #8f8f8f;
+  --summary-border: rgb(0 0 0 / 8%);
+  background: #f9f9f9;
+  border-color: var(--summary-border);
+  color: var(--summary-secondary);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 20px;
+  gap: 14px;
+  padding-top: 12px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 5%);
+  padding-bottom: 14px;
+}
+[data-theme="dark"] .session-resources-card {
+  --summary-secondary: #9b9b9b;
+  --summary-tertiary: #707070;
+  --summary-border: rgb(255 255 255 / 7%);
+  background: #2a2b2bd6;
+  border: none;
+}
+.session-resources-card h2,
+.session-resources-card h3,
+.session-resources-card [data-resource-source],
+.session-resources-card [data-resource-output],
+.session-resources-card button[aria-label] { color: var(--summary-secondary); }
+.session-resources-card > div > .border-t,
+.session-resources-card > .border-t { border-color: var(--summary-border); padding-top: 10px; }
+.session-resources-card button[class*="text-muted-foreground"] { color: var(--summary-tertiary); }
+.session-resources-card [data-resource-source] { gap: 12px; padding-block: 5px; }
+.session-resources-card button[aria-label="Create an output"],
+.session-resources-card button[aria-label="Attach source files"] { width: 28px; height: 28px; }
+.session-resources-card button:hover { color: var(--summary-secondary); }
+
+/* Transcript scrollbar: narrow thumb, transparent track, no wide native gutter. */
+[data-session-scroll]::-webkit-scrollbar { width: 6px; height: 6px; }
+[data-session-scroll]::-webkit-scrollbar-track { background: transparent; }
+[data-session-scroll]::-webkit-scrollbar-thumb { background: transparent; border-radius: 999px; }
+[data-session-scroll][data-scroll-active]::-webkit-scrollbar-thumb { background: rgb(128 128 128 / 45%); }
+[data-session-scroll][data-scroll-hover]::-webkit-scrollbar-thumb { background: rgb(128 128 128 / 70%); }
+[data-session-scroll]::-webkit-scrollbar-corner { background: transparent; }

@@ -36,11 +36,19 @@ test("Sofia preserves native engine behavior while wiring multi-provider and bro
       api: "https://api.xiaomimimo.com/v1",
       env: ["XIAOMI_API_KEY"],
     },
+    anthropic: {
+      name: "Anthropic",
+      npm: "@ai-sdk/anthropic",
+      api: "https://api.anthropic.com/v1",
+      env: ["ANTHROPIC_API_KEY"],
+    },
   });
   expect(config).toContain("[model_providers.openai]");
   expect(config).toContain("[model_providers.xiaomi]");
+  expect(config).toContain("[model_providers.anthropic]");
   expect(config).toMatch(/\[model_providers\.openai\][\s\S]*?wire_api = "responses"/);
   expect(config).toMatch(/\[model_providers\.xiaomi\][\s\S]*?wire_api = "chatcompletions"/);
+  expect(config).toMatch(/\[model_providers\.anthropic\][\s\S]*?wire_api = "anthropic"/);
 
   const browserSkill = codexRuntimeSkill("browser");
   expect(browserSkill).toContain("mcp__node_repl__js");

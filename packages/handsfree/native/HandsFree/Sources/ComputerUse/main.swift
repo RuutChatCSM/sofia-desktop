@@ -39,6 +39,10 @@ case "--list-apps":
     let data = (try? JSONSerialization.data(withJSONObject: payload)) ?? Data("{\"ok\":false,\"apps\":[]}".utf8)
     print(String(decoding: data, as: UTF8.self))
     exit(0)
+case "--activate-pid":
+    guard args.count >= 3, let pid = Int32(args[2]),
+          let target = NSRunningApplication(processIdentifier: pid) else { exit(1) }
+    exit(target.activate() ? 0 : 1)
 default:
     await runPermissionSetupApp()
 }

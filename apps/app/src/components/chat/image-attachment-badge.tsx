@@ -13,6 +13,9 @@ type ImageAttachmentBadgeProps = {
   alt: string
   onRemove?: () => void
   className?: string
+  /** Thumbnail size. The composer uses the compact default; the transcript
+   * renders sent images larger. */
+  sizeClassName?: string
 }
 
 export function ImageAttachmentBadge({
@@ -20,6 +23,7 @@ export function ImageAttachmentBadge({
   alt,
   onRemove,
   className,
+  sizeClassName = "h-10 w-10",
 }: ImageAttachmentBadgeProps) {
   const [open, setOpen] = React.useState(false)
 
@@ -27,7 +31,10 @@ export function ImageAttachmentBadge({
     <div className={cn("relative inline-flex shrink-0", className)}>
       <button
         type="button"
-        className="h-10 w-10 overflow-hidden rounded-xl border border-border/70 bg-background/50 transition-opacity hover:opacity-90"
+        className={cn(
+          sizeClassName,
+          "overflow-hidden rounded-xl border border-border/70 bg-background/50 transition-opacity hover:opacity-90",
+        )}
         onClick={() => setOpen(true)}
         aria-label={`Expand ${alt}`}
         title={alt}

@@ -519,9 +519,13 @@ async function executeSofiaAffordance(
       "This affordance declares a dedicated Connect executor. Call the tool named in sofia_context.",
     );
   }
+  // The engine context, not the model's args, decides which session the
+  // command belongs to. UI commands that open durable surfaces (browser tabs,
+  // files) use this to attach them to the invoking session instead of whichever
+  // session the desktop happens to be presenting.
   const result = await uiBridgeRequest("/command", {
     method: "POST",
-    body: request,
+    body: { ...request, context: contextPayload(context) },
   });
   return isRecord(result) && typeof result.ok === "boolean"
     ? result

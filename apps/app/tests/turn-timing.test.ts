@@ -73,14 +73,14 @@ describe("one clock per logical assistant turn", () => {
     expect(timing).toEqual({ startedAt: 2_000, completedAt: 6_000 });
   });
 
-  test("imported history with no timing at all is the only 'Worked' fallback", () => {
+  test("imported history with no timing displays Activity", () => {
     const timing = resolveTurnTiming([
       { id: "old", role: "assistant", parts: [{ type: "text", text: "hi", state: "done" }] } as UIMessage,
     ]);
 
     expect(timing).toEqual({ startedAt: null, completedAt: null });
     expect(finishedTurnDurationMs(timing)).toBeNull();
-    expect(label(null)).toBe("Worked");
+    expect(label(null)).toBe("Activity");
   });
 
   test("a live turn is named by the operation, not by a duration", () => {
