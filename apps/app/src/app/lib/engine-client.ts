@@ -1017,15 +1017,18 @@ export function createEngineClient(options: EngineClientOptions) {
     question: {
       async list(params: { directory?: string } = {}): Promise<EngineResult<QuestionRequest[]>> {
         void params;
-        return okResult<QuestionRequest[]>([]);
+        const id = workspaceId();
+        if (!id) return failResult("Workspace is not mounted.", "/codex/questions");
+        return mapResult(await request<{ questions: QuestionRequest[] }>(`${workspacePath(id)}/codex/questions`), data => data.questions);
       },
       async reply(params: {
         requestID: string;
         answers: string[][];
         directory?: string;
       }): Promise<EngineResult<Record<string, never>>> {
-        void params;
-        return okResult<Record<string, never>>({});
+        const id = workspaceId();
+        if (!id) return failResult("Workspace is not mounted.", "/codex/questions");
+        return mapResult(await request<{ ok: boolean }>(`${workspacePath(id)}/codex/questions/${encodeURIComponent(params.requestID)}`, { method: "POST", body: { answers: params.answers } }), () => ({}));
       },
     },
 

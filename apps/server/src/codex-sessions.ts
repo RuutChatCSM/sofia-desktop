@@ -349,7 +349,12 @@ function parsePlanArguments(value: unknown): CodexPlanItem[] | null {
     .filter((entry) => entry.step.trim().length > 0);
 }
 
+export type CodexQuestion = { id: string; sessionID: string; questions: { id: string; question: string; header: string; options: { label: string; description: string }[]; secret?: boolean; custom?: boolean }[]; isBlocking: boolean };
+
 export type CodexEvent =
+  | { type: "question.asked"; sessionId: string; properties: CodexQuestion }
+  | { type: "question.rejected"; sessionId: string; properties: { sessionID: string; requestID: string } }
+  | { type: "question.replied"; sessionId: string; properties: { sessionID: string; requestID: string } }
   | { type: "session.created"; session: CodexSession }
   | { type: "session.updated"; session: CodexSession }
   | { type: "message.delta"; sessionId: string; threadId: string; text: string; itemId?: string }
@@ -419,6 +424,7 @@ export class CodexSessionManager {
   private titleIndexCache = new Map<string, { fingerprint: string; titles: Map<string, string> }>();
   private events = new EventEmitter();
   private starting: Promise<void> | null = null;
+  private pendingQuestions = new Map<string, { requestId: string | number; question: CodexQuestion }>();
   private approvalQueue: { sessionId: string; threadId: string; params: unknown; resolve: () => void; reject: (reason?: unknown) => void }[] = [];
   private threadAliases: Record<string, string>;
   private loadedThreads = new Set<string>();
@@ -695,6 +701,23 @@ export class CodexSessionManager {
     const onReq = (request: unknown) => {
       const r = request as Record<string, unknown>;
       const method = r.method as string;
+      if (method === "item/tool/requestUserInput" && (typeof r.id === "string" || typeof r.id === "number") && isRecord(r.params)) {
+        const params = r.params;
+        const session = typeof params.threadId === "string" ? this.sessionFor(params.threadId) : undefined;
+        if (!session || !Array.isArray(params.questions)) return;
+        const questions = params.questions.filter(isRecord).map(q => ({
+          id: typeof q.id === "string" ? q.id : "",
+          question: typeof q.question === "string" ? q.question : "",
+          header: typeof q.header === "string" ? q.header : "",
+          options: Array.isArray(q.options) ? q.options.filter(isRecord).map(o => ({ label: String(o.label ?? ""), description: String(o.description ?? "") })) : [],
+          secret: q.isSecret === true,
+          custom: true,
+        }));
+        const question: CodexQuestion = { id: String(r.id), sessionID: session.id, questions, isBlocking: params.isBlocking !== false };
+        this.pendingQuestions.set(question.id, { requestId: r.id, question });
+        this.emit({ type: "question.asked", sessionId: session.id, properties: question });
+        return;
+      }
       if (method === "item/commandExecution/requestApproval" ||
           method === "item/fileChange/requestApproval" ||
           method === "item/permissions/requestApproval") {
@@ -714,6 +737,15 @@ export class CodexSessionManager {
       }
     };
     (engine as unknown as { on: (method: string, listener: (params: unknown) => void) => unknown }).on("request", onReq);
+    engine.on("serverRequest/resolved", params => {
+      if (!isRecord(params)) return;
+      const id = String(params.requestId);
+      const pending = this.pendingQuestions.get(id);
+      const session = typeof params.threadId === "string" ? this.sessionFor(params.threadId) : null;
+      if (!pending || session?.id !== pending.question.sessionID) return;
+      this.pendingQuestions.delete(id);
+      this.emit({ type: "question.rejected", sessionId: session.id, properties: { sessionID: session.id, requestID: id } });
+    });
     engine.on("error", (params) => {
       const detail = isRecord(params) ? params : {};
       // A retry notification is progress, not a failed turn. Route terminal
@@ -2040,6 +2072,20 @@ export class CodexSessionManager {
     const session = this.sessionFor(threadId ?? "");
     if (!session) return;
     this.emit({ type: "rateLimit.updated", sessionId: session.id, threadId: threadId ?? "", rateLimits: rateLimits ?? null });
+  }
+
+  listQuestions(): CodexQuestion[] {
+    return [...this.pendingQuestions.values()].map(entry => entry.question);
+  }
+
+  respondQuestion(requestId: string, answers: string[][]): void {
+    const pending = this.pendingQuestions.get(requestId);
+    if (!pending || !this.engine) throw new Error("Question is no longer pending");
+    if (answers.length !== pending.question.questions.length) throw new Error("Answer every question");
+    const response = Object.fromEntries(pending.question.questions.map((q, index) => [q.id, { answers: answers[index] }]));
+    this.engine.respond(pending.requestId, { answers: response });
+    this.pendingQuestions.delete(requestId);
+    this.emit({ type: "question.replied", sessionId: pending.question.sessionID, properties: { sessionID: pending.question.sessionID, requestID: requestId } });
   }
 
   /** Answer an inbound approval request from the codex engine. */

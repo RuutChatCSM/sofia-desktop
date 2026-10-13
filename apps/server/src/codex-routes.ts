@@ -22,7 +22,7 @@ import {
   writeCodexEngineConfigFromProviders,
   writeCodexProviders,
 } from "./codex-providers.js";
-import type { BackgroundProcess, CodexEvent, CodexPlanItem, CodexSession } from "./codex-sessions.js";
+import type { BackgroundProcess, CodexQuestion, CodexEvent, CodexPlanItem, CodexSession } from "./codex-sessions.js";
 import type { TurnChangeRecord } from "./turn-changes.js";
 import {
   countUntrackedLines,
@@ -50,6 +50,8 @@ export interface CodexSessionRegistry {
     engineInfo: unknown;
     start: () => Promise<void>;
     listSessions: () => CodexSession[];
+    listQuestions?: () => CodexQuestion[];
+    respondQuestion?: (requestId: string, answers: string[][]) => void;
     getSubagents?: (parentSessionId: string) => CodexSession[];
     refreshSubagents?: (parentSessionId: string) => Promise<CodexSession[]>;
     getSession?: (sessionId: string) => CodexSession | null | undefined;
@@ -202,6 +204,20 @@ export function registerCodexRoutes(options: RegisterCodexRoutesOptions): void {
     }
     const path = await writeCodexEngineConfigFromProviders(parsed.providers);
     return jsonResponse({ ok: true, path });
+  });
+
+  addRoute(routes, "GET", "/workspace/:id/codex/questions", "client", async ctx => {
+    const manager = await workspaceManager(ctx.params.id);
+    return jsonResponse({ questions: manager.listQuestions?.() ?? [] });
+  });
+  addRoute(routes, "POST", "/workspace/:id/codex/questions/:requestId", "client", async ctx => {
+    requireClientScope(ctx, "collaborator");
+    const body = await readJsonBody(ctx.request);
+    if (!Array.isArray(body.answers) || !body.answers.every(answer => Array.isArray(answer) && answer.every(value => typeof value === "string"))) throw new ApiError(400, "invalid_payload", "invalid answers");
+    const manager = await workspaceManager(ctx.params.id);
+    if (!manager.respondQuestion) throw new ApiError(503, "unavailable", "Question responses unavailable");
+    manager.respondQuestion(ctx.params.requestId, body.answers);
+    return jsonResponse({ ok: true });
   });
 
   addRoute(routes, "POST", "/workspace/:id/codex/sessions", "client", async (ctx) => {
@@ -709,6 +725,11 @@ export function registerCodexRoutes(options: RegisterCodexRoutesOptions): void {
         closed = true;
         break;
       }
+    }
+
+    for (const question of manager.listQuestions?.() ?? []) {
+      if (closed || !controllerRef.controller) break;
+      controllerRef.controller.enqueue(encoder.encode(sseEncode({ type: "question.asked", sessionId: question.sessionID, properties: question })));
     }
 
     request.signal.addEventListener("abort", () => {

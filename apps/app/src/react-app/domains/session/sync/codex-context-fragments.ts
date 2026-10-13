@@ -15,10 +15,12 @@ const CONTEXT_BLOCK_NAMES = [
   "environment_context",
   "external_codex_apps_open_page",
   "recovered_thread_context",
+  "sofia_internal_context",
+  "codex_internal_context",
 ];
 
 const LEADING_CONTEXT_BLOCK = new RegExp(
-  `^\\s*<(${CONTEXT_BLOCK_NAMES.join("|")})>[\\s\\S]*?<\\/\\1>\\s*`,
+  `^\\s*<(${CONTEXT_BLOCK_NAMES.join("|")})(?:\\s+[^>]*)?>[\\s\\S]*?<\\/\\1>\\s*`,
 );
 const AGENTS_MD_HEADER = /^\s*#\s*AGENTS\.md instructions for [^\n]*\n+/;
 
