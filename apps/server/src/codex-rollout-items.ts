@@ -142,10 +142,14 @@ export function parseRolloutLines(lines: Iterable<string>, limit = 200): Array<{
 /** Root durable messages define narrative/order; materialization supplies stable IDs. */
 export function reconcileRolloutItems(recorded: Array<{ turnId: string; item: Record<string, unknown> }>, materialized: Array<{ turnId: string; item: Record<string, unknown> }>): Array<{ turnId: string; item: Record<string, unknown> }> {
   if (!recorded.some(entry => entry.item.type === "userMessage") || !recorded.some(entry => entry.item.type === "agentMessage")) return materialized;
+  const groupKey = (entry: (typeof recorded)[number]) => JSON.stringify([
+    entry.turnId, entry.item.type,
+    entry.item.type === "userMessage" || entry.item.type === "agentMessage" ? narrativeContent(entry.item) : null,
+  ]);
   const counts = (items: typeof recorded) => {
     const groups = new Map<string, typeof recorded>();
     for (const entry of items) {
-      const key = JSON.stringify([entry.turnId, entry.item.type]);
+      const key = groupKey(entry);
       const group = groups.get(key) ?? [];
       group.push(entry);
       groups.set(key, group);
@@ -156,7 +160,7 @@ export function reconcileRolloutItems(recorded: Array<{ turnId: string; item: Re
   const canonicalGroups = counts(materialized);
   const ordinals = new Map<string, number>();
   return recorded.map(entry => {
-    const key = JSON.stringify([entry.turnId, entry.item.type]);
+    const key = groupKey(entry);
     const ordinal = ordinals.get(key) ?? 0;
     ordinals.set(key, ordinal + 1);
     let match = materialized.find(candidate => candidate.turnId === entry.turnId && candidate.item.id === entry.item.id);

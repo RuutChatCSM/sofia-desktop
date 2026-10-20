@@ -33,6 +33,8 @@ export type SidePanelItem = (typeof SIDE_PANEL_ITEMS)[number];
 export type SidePanelState = Record<string, SidePanelItem | null>;
 
 export type PersistedUiState = {
+  sidePanelState?: SidePanelState;
+  sidePanelExpandedState?: Record<string, boolean>;
   applicationMenuVisible?: boolean;
   workspaceLeftSidebarWidth?: number;
   workspaceRightSidebarExpanded?: boolean;
@@ -41,8 +43,8 @@ export type PersistedUiState = {
 
 export type UiState = {
   sidebarOpen: boolean;
-  // Deliberately not persisted so each app load starts with only chat visible.
   sidePanelState: SidePanelState;
+  sidePanelExpandedState: Record<string, boolean>;
   applicationMenuVisible: boolean;
   workspaceLeftSidebarWidth: number;
   workspaceLeftSidebarResizing: boolean;
@@ -53,6 +55,7 @@ export type UiState = {
 const initialState: UiState = {
   sidebarOpen: true,
   sidePanelState: {},
+  sidePanelExpandedState: {},
   applicationMenuVisible: false,
   workspaceLeftSidebarWidth: DEFAULT_WORKSPACE_LEFT_SIDEBAR_WIDTH,
   workspaceLeftSidebarResizing: false,
@@ -126,6 +129,22 @@ function readSidebarCookieOpen(): boolean | null {
   return cookie.slice(prefix.length) === "true";
 }
 
+function normalizeSidePanelExpandedState(value: unknown): Record<string, boolean> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return Object.fromEntries(Object.entries(value).filter((entry): entry is [string, boolean] => typeof entry[1] === "boolean"));
+}
+
+function normalizeSidePanelState(value: unknown): SidePanelState {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const panels: SidePanelState = {};
+  for (const [sessionId, panel] of Object.entries(value)) {
+    if (panel === null || panel === "panel" || panel === "extensions" || panel === "voice") {
+      panels[sessionId] = panel;
+    }
+  }
+  return panels;
+}
+
 function readPersistedUiState(): UiState {
   if (globalThis.window === undefined) {
     return initialState;
@@ -154,6 +173,8 @@ function readPersistedUiState(): UiState {
     return {
       ...initialState,
       sidebarOpen,
+      sidePanelState: normalizeSidePanelState(parsed.sidePanelState),
+      sidePanelExpandedState: normalizeSidePanelExpandedState(parsed.sidePanelExpandedState),
       applicationMenuVisible: parsed.applicationMenuVisible ?? initialState.applicationMenuVisible,
       workspaceLeftSidebarWidth: normalizeNumber(
         parsed.workspaceLeftSidebarWidth,
@@ -184,6 +205,8 @@ export function persistUiState(state: UiState): void {
     window.localStorage.setItem(
       PERSISTED_UI_STATE_KEY,
       JSON.stringify({
+        sidePanelState: normalizeSidePanelState(state.sidePanelState),
+        sidePanelExpandedState: normalizeSidePanelExpandedState(state.sidePanelExpandedState),
         applicationMenuVisible: state.applicationMenuVisible,
         workspaceLeftSidebarWidth: state.workspaceLeftSidebarWidth,
         workspaceRightSidebarExpanded: state.workspaceRightSidebarExpanded,
@@ -310,6 +333,7 @@ function syncApplicationMenuVisible(visible: boolean): void {
 }
 
 type UiStateStore = UiState & {
+  setSidePanelExpanded: (sessionId: string, expanded: boolean) => void;
   setSidebarOpen: (open: boolean) => void;
   toggleSidebar: () => void;
   setSidePanelState: (sessionId: string | null | undefined, panel: SidePanelItem | null) => void;
@@ -324,6 +348,12 @@ type UiStateStore = UiState & {
 
 export const useUiStateStore = create<UiStateStore>((set) => ({
   ...readPersistedUiState(),
+  setSidePanelExpanded: (sessionId, expanded) => set((state) => (
+    state.sidePanelExpandedState[sessionId] === expanded ? state : {
+      ...state,
+      sidePanelExpandedState: { ...state.sidePanelExpandedState, [sessionId]: expanded },
+    }
+  )),
   setSidebarOpen: (open) => set((state) => setSidebarOpen(state, open)),
   toggleSidebar: () => set((state) => toggleSidebar(state)),
   setSidePanelState: (sessionId, panel) => set((state) => setSidePanelState(state, sessionId, panel)),

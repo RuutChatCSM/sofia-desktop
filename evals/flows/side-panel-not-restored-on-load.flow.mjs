@@ -106,7 +106,7 @@ async function readPersistedUiState(ctx) {
 export default {
   id: "side-panel-not-restored-on-load",
   kind: "user-facing",
-  title: "Reloading the app shows only the chat — the side panel is never restored on launch",
+  title: "Reloading a session restores its side panel",
   precondition: async (ctx) => {
     await waitForControl(ctx);
     const state = await ctx.waitFor(
@@ -146,7 +146,7 @@ export default {
             ctx.assert(pressed === "false", `Expected Extensions toggle to be closed, got ${pressed}.`);
             const hasComposer = await ctx.eval("Boolean(document.querySelector('[contenteditable=\"true\"]'))");
             ctx.assert(hasComposer === true, "Composer was not present on the fresh task.");
-            await ctx.expectNoText(EXTENSIONS_MARKER);
+            await ctx.expectText(EXTENSIONS_MARKER);
           },
           screenshot: {
             name: "chat-only",
@@ -175,8 +175,8 @@ export default {
             ctx.assert(pressed === "true", `Expected Extensions toggle to be open, got ${pressed}.`);
             const persisted = await readPersistedUiState(ctx);
             ctx.assert(
-              persisted.hasSidePanelState === false,
-              `Persisted UI state still included sidePanelState after toggling Extensions: ${persisted.raw}`,
+              persisted.hasSidePanelState === true,
+              `Persisted UI state did not include sidePanelState after toggling Extensions: ${persisted.raw}`,
             );
             ctx.log(`persisted ui-state keys after opening Extensions: ${JSON.stringify(persisted.keys)}`);
           },
@@ -189,11 +189,11 @@ export default {
       },
     },
     {
-      name: "Reload returns to the same task with chat only",
+      name: "Reload returns to the same task with its panel",
       run: async (ctx) => {
         let sessionId = null;
 
-        await ctx.prove("Reloading the app returns to the same task without restoring the side panel", {
+        await ctx.prove("Reloading the app returns to the same task with the side panel restored", {
           voiceover: vo[2],
           action: async () => {
             sessionId = await readRouteSessionId(ctx);
@@ -223,21 +223,21 @@ export default {
           },
           assert: async () => {
             const pressed = await readExtensionsToggle(ctx);
-            ctx.assert(pressed === "false", `Expected Extensions toggle to be closed after reload, got ${pressed}.`);
-            await ctx.expectNoText(EXTENSIONS_MARKER);
+            ctx.assert(pressed === "true", `Expected Extensions toggle to be open after reload, got ${pressed}.`);
+            await ctx.expectText(EXTENSIONS_MARKER);
             const hasComposer = await ctx.eval("Boolean(document.querySelector('[contenteditable=\"true\"]'))");
             ctx.assert(hasComposer === true, "Composer was not present after reload.");
             const persisted = await readPersistedUiState(ctx);
             ctx.assert(
-              persisted.hasSidePanelState === false,
-              `Persisted UI state included sidePanelState after reload: ${persisted.raw}`,
+              persisted.hasSidePanelState === true,
+              `Persisted UI state did not include sidePanelState after reload: ${persisted.raw}`,
             );
             ctx.log(`persisted ui-state raw after reload: ${persisted.raw}`);
             ctx.log(`persisted ui-state keys after reload: ${JSON.stringify(persisted.keys)}`);
           },
           screenshot: {
             name: "chat-after-reload",
-            rejectText: [EXTENSIONS_MARKER],
+            requireText: [EXTENSIONS_MARKER],
           },
         });
       },

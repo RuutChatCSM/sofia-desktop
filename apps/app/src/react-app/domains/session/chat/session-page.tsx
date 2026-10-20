@@ -360,6 +360,8 @@ function browserScopeKey(workspaceId: string, sessionId: string | null) {
   return session ? `session:${session}` : `workspace:${workspaceId}`;
 }
 
+const WORKSPACE_PANEL_FRAME = "rounded-[14px] border border-border bg-dls-canvas shadow-[0_8px_24px_rgba(15,23,42,0.06)] dark:shadow-[0_10px_30px_rgba(0,0,0,0.45)] mac:bg-dls-canvas/85 mac:backdrop-blur-2xl mac:backdrop-saturate-150";
+
 export function SessionPage(props: SessionPageProps) {
   const { config: shellConfig } = useShellConfig();
   const platform = usePlatform();
@@ -381,7 +383,7 @@ export function SessionPage(props: SessionPageProps) {
   const transcriptTargets = usePanelTabStore((state) => (
     props.selectedSessionId ? state.transcriptArtifactTargets[props.selectedSessionId] ?? EMPTY_TRANSCRIPT_TARGETS : EMPTY_TRANSCRIPT_TARGETS
   ));
-  useBrowserTabSync(sidePanelSessionKey);
+  useBrowserTabSync(sidePanelSessionKey, props.selectedWorkspaceId);
   const sessionPanelState = useSessionPanelState(sidePanelSessionKey);
   const activePanelTab = useActivePanelTab(sidePanelSessionKey);
   const [hiddenTargetRevision, setHiddenTargetRevision] = useState(0);
@@ -412,7 +414,11 @@ export function SessionPage(props: SessionPageProps) {
   const computerPreviewActive = useSessionActivityStore((state) => props.selectedSessionId ? state.recordsByWorkspaceId[props.selectedWorkspaceId]?.[props.selectedSessionId]?.runActive ?? false : false);
   // Expansion belongs to the shared panel shell, preserving the split width
   // and the active tab across Browser, Review, Files and artifacts.
-  const [sidePanelExpanded, setSidePanelExpanded] = useState(false);
+  const sidePanelExpanded = useUiStateStore((state) => state.sidePanelExpandedState[sidePanelSessionKey] ?? false);
+  const updateSidePanelExpanded = useUiStateStore((state) => state.setSidePanelExpanded);
+  const setSidePanelExpanded = useCallback((expanded: boolean) => {
+    updateSidePanelExpanded(sidePanelSessionKey, expanded);
+  }, [sidePanelSessionKey, updateSidePanelExpanded]);
   const panelExpanded = sidePanelExpanded || browserPresentationMode === "expanded";
   const toggleSidePanelExpanded = useCallback(() => {
     if (panelExpanded) {
@@ -421,7 +427,7 @@ export function SessionPage(props: SessionPageProps) {
     } else {
       setSidePanelExpanded(true);
     }
-  }, [panelExpanded, browserPresentationMode]);
+  }, [panelExpanded, browserPresentationMode, setSidePanelExpanded]);
   const activeSidePanel = voiceSidePanelOpen ? "voice" : sessionSidePanel;
   const sidePanelOpen = activeSidePanel !== null;
   const panelRailActive = activeSidePanel === "panel";
@@ -527,7 +533,6 @@ export function SessionPage(props: SessionPageProps) {
     const scope = browserScopeKey(props.selectedWorkspaceId, props.selectedSessionId);
     if (presentedScopeRef.current === scope) return;
     presentedScopeRef.current = scope;
-    setSidePanelExpanded(false);
     dispatchBrowserPresentation({ type: "session-changed" });
     if (isElectronRuntime()) {
       const browser = window.__SOFIA_ELECTRON__?.browser;
@@ -577,7 +582,7 @@ export function SessionPage(props: SessionPageProps) {
 
   useEffect(() => {
     if (browserPresentationMode === "peek") setSidePanelExpanded(false);
-  }, [browserPresentationMode]);
+  }, [browserPresentationMode, setSidePanelExpanded]);
 
   // The main process mirrors the mode so a Peek can render a desktop viewport
   // without ever rewriting the tab's own viewport.
@@ -796,13 +801,14 @@ export function SessionPage(props: SessionPageProps) {
       type: "artifact",
       label: target.name,
       preview: target.preview,
+      ...(target.kind === "file" ? { target: { kind: "file", value: target.value } } : {}),
     });
     setCurrentSidePanel("panel");
   }, [activePanelTab?.id, browserUrlForTarget, downloadOpenTarget, openTab, props.selectedSessionId, props.selectedWorkspaceDisplay.workspaceType, props.selectedWorkspaceRoot, setCurrentSidePanel]);
   const closeRightPane = useCallback(() => {
     setSidePanelExpanded(false);
     setCurrentSidePanel(null);
-  }, [setCurrentSidePanel]);
+  }, [setCurrentSidePanel, setSidePanelExpanded]);
   const openGeneralSidePanel = useCallback(() => {
     setCurrentSidePanel("panel");
   }, [setCurrentSidePanel]);
@@ -896,6 +902,7 @@ export function SessionPage(props: SessionPageProps) {
         type: "artifact",
         label: target.name,
         preview: target.preview,
+        ...(target.kind === "file" ? { target: { kind: "file", value: target.value } } : {}),
       });
     }
 
@@ -1395,7 +1402,7 @@ export function SessionPage(props: SessionPageProps) {
             className="min-h-0 flex-1 max-lg:rounded-none lg:rounded-[14px]"
           >
             <ResizablePanel minSize={isMobile ? "0px" : "360px"} className="min-w-0">
-              <main className="relative flex h-full min-w-0 flex-col overflow-hidden bg-dls-canvas max-lg:rounded-none max-lg:border-0 max-lg:shadow-none lg:rounded-[14px] lg:border lg:border-border lg:shadow-[0_8px_24px_rgba(15,23,42,0.06)] dark:lg:shadow-[0_10px_30px_rgba(0,0,0,0.45)] mac:bg-dls-canvas/85 mac:backdrop-blur-2xl mac:backdrop-saturate-150">
+              <main className={cn("relative flex h-full min-w-0 flex-col overflow-hidden max-lg:rounded-none max-lg:border-0 max-lg:shadow-none", WORKSPACE_PANEL_FRAME)}>
           <header className="sofia-task-header z-10 flex h-11 shrink-0 items-center justify-between border-b border-border px-3 max-lg:h-12 lg:px-6 mac:titlebar-drag  mac:backdrop-blur-2xl mac:backdrop-saturate-150 @container/titlebar">
             <div className="flex min-w-0 items-center gap-3">
               {shellConfig.sidebar ? <SidebarTrigger className="mac:hidden" /> : null}
@@ -1803,7 +1810,7 @@ export function SessionPage(props: SessionPageProps) {
                   )}px`}
                   minSize={activeSidePanel === "extensions" ? "420px" : "320px"}
                   maxSize="70%"
-                  className={cn("min-h-0 overflow-hidden lg:flex lg:flex-col", !panelRailActive && "pl-2")}
+                  className="min-h-0 overflow-hidden pl-2 lg:flex lg:flex-col"
                 >
                   <div
                     data-testid="browser-panel-shell"
@@ -1817,13 +1824,10 @@ export function SessionPage(props: SessionPageProps) {
                       width: browserFullViewBounds.width,
                       height: browserFullViewBounds.height,
                       zIndex: 40,
-                      boxShadow: "none",
-                    } : panelRailActive ? { boxShadow: "none" } : undefined}
+                    } : undefined}
                     className={cn(
                       "flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-dls-canvas",
-                      panelRailActive
-                        ? "rounded-none border-0 border-l border-border shadow-none"
-                        : "rounded-[14px] border border-border shadow-[0_8px_24px_rgba(15,23,42,0.06)] dark:shadow-[0_10px_30px_rgba(0,0,0,0.45)] mac:bg-dls-canvas/85 mac:backdrop-blur-2xl mac:backdrop-saturate-150",
+                      WORKSPACE_PANEL_FRAME,
                     )}
                   >
                   {activeSidePanel === "extensions" && props.settingsSlot ? (

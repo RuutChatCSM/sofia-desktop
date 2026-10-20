@@ -2610,6 +2610,7 @@ async function createMainWindow() {
   mainWindow.webContents.on("did-start-navigation", (_event, _url, isInPlace, isMainFrame) => {
     if (isMainFrame && !isInPlace) computerPreviewLease.releaseOwner(computerPreviewOwner);
   });
+  mainWindow.on("close", () => browserPanel.prepareForWindowClose());
   mainWindow.on("closed", () => {
     computerPreviewLease.releaseOwner(computerPreviewOwner);
     browserPanel.destroy();

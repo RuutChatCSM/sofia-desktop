@@ -14,9 +14,8 @@ import {
   normalizeBrowserZoom,
 } from "../../../../app/lib/browser-tab-state";
 
-// v2 persists the durable, user-owned part of a browser tab (viewport, zoom,
-// interaction mode, annotations). Navigation and health stay with Electron and
-// agent leases are never persisted at all.
+// v2 stores safe workspace descriptors and the durable, user-owned browser
+// state. Navigation and health stay with Electron; agent leases never persist.
 export const PERSISTED_PANEL_TAB_STORE_KEY = "sofia:panel-tabs:v2";
 export const LEGACY_PANEL_TAB_STORE_KEY = "sofia:panel-tabs:v1";
 
@@ -39,13 +38,14 @@ export type ArtifactPanelTab = {
   type: "artifact";
   label: string;
   preview: OpenTargetPreview;
+  target?: { kind: "file"; value: string };
 }
 
 /**
  * A review workspace tab. It carries the *immutable* change set id it reviews, so
  * a tab opened from an old turn keeps showing that turn's patch — never whatever
- * is dirty in the repository now. Changes tabs are not persisted (only browser
- * tabs are), so a reload does not resurrect a stale review.
+ * is dirty in the repository now. Persistence retains only that immutable id
+ * and optional selected file, never the patch contents.
  */
 export type ChangesPanelTab = {
   id: string;
@@ -71,7 +71,7 @@ export type SessionPanelState = {
 type PersistedBrowserTabState = BrowserTabId & BrowserTabPersistentState;
 
 type PersistedSessionPanelState = {
-  tabs: PersistedBrowserTabState[];
+  tabs: (PersistedBrowserTabState | Exclude<PanelTab, BrowserPanelTab>)[];
   activeTabId: string | null;
 };
 
@@ -97,7 +97,7 @@ export type PanelTabStore = {
   addBrowserAnnotation: (sessionId: string, tabId: string, annotation: BrowserAnnotation) => void;
   syncArtifactTargets: (
     sessionId: string,
-    targets: Array<{ id: string; name: string; preview: OpenTargetPreview }>,
+    targets: Array<{ id: string; name: string; preview: OpenTargetPreview; kind?: "file" | "url"; value?: string }>,
   ) => void;
   syncTranscriptArtifacts: (sessionId: string, targets: OpenTarget[]) => void;
   clearSession: (sessionId: string) => void;
@@ -162,7 +162,7 @@ function updateBrowserTab(
 
 function reconcileOpenArtifactTabs(
   session: SessionPanelState,
-  targets: Array<{ id: string; name: string; preview: OpenTargetPreview }>,
+  targets: Array<{ id: string; name: string; preview: OpenTargetPreview; kind?: "file" | "url"; value?: string }>,
 ): SessionPanelState {
   const targetMap = new Map(targets.map((target) => [target.id, target]));
 
@@ -175,13 +175,17 @@ function reconcileOpenArtifactTabs(
       const target = targetMap.get(tab.id);
 
       if (!target) {
-        return null;
+        // Discovery can be empty while a restored session is still loading.
+        return tab;
       }
 
+      const backingFile: ArtifactPanelTab["target"] = target.kind === "file" && backingFilePath(target.value)
+        ? { kind: "file", value: target.value } : tab.target;
       return {
         ...tab,
         label: target.name,
         preview: target.preview,
+        target: backingFile,
       };
     })
     .filter((tab): tab is PanelTab => tab !== null);
@@ -221,7 +225,8 @@ function isSameTab(left: PanelTab, right: PanelTab) {
   if (left.type === "artifact" && right.type === "artifact") {
     return (
       left.label === right.label &&
-      left.preview === right.preview
+      left.preview === right.preview &&
+      left.target?.value === right.target?.value
     );
   }
 
@@ -248,29 +253,21 @@ function mergePersistedSessions(
   persistedState: unknown,
   currentState: PanelTabStore,
 ): PanelTabStore {
-  const persisted = persistedState as PersistedPanelTabStore | undefined;
-
-  if (!persisted?.sessions) {
+  if (!isRecord(persistedState) || !isRecord(persistedState.sessions)) {
     return currentState;
   }
 
   const sessions: Record<string, SessionPanelState> = {};
-
-  for (const [sessionId, session] of Object.entries(persisted.sessions)) {
-    const tabs = session.tabs
-      .filter(({ type }) => type === "browser")
-      .map((tab): PanelTab => ({
-        ...createBrowserPanelTab(tab.id),
-        viewport: normalizeBrowserViewport(tab.viewport),
-        zoom: normalizeBrowserZoom(tab.zoom),
-        interactionMode: normalizeBrowserInteractionMode(tab.interactionMode),
-        annotations: normalizeBrowserAnnotations(tab.annotations),
-        scroll: normalizeBrowserScroll(tab.scroll),
-      }));
-
+  for (const [sessionId, session] of Object.entries(persistedState.sessions)) {
+    if (!isRecord(session) || !Array.isArray(session.tabs)) continue;
+    const tabs: PanelTab[] = [];
+    for (const value of session.tabs.slice(0, 100)) {
+      const tab = restorePanelTab(value);
+      if (tab && !tabs.some((entry) => entry.id === tab.id)) tabs.push(tab);
+    }
     sessions[sessionId] = {
       tabs,
-      activeTabId: resolveActiveTabId(tabs, session.activeTabId),
+      activeTabId: resolveActiveTabId(tabs, typeof session.activeTabId === "string" ? session.activeTabId : null),
     };
   }
 
@@ -295,6 +292,75 @@ function toPersistedBrowserTabState(tab: BrowserPanelTab): PersistedBrowserTabSt
     annotations: tab.annotations,
     scroll: tab.scroll,
   };
+}
+
+// Keep descriptors small and reconstruct previews from their backing files.
+// In particular, transient image data and arbitrary object fields never persist.
+function descriptorString(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0 && value.length <= 4096;
+}
+
+function backingFilePath(value: unknown): value is string {
+  return descriptorString(value) && !/^(?:data|blob|https?):/i.test(value);
+}
+
+function restorePanelTab(value: unknown): PanelTab | null {
+  if (!isRecord(value) || !descriptorString(value.id)) return null;
+  if (value.type === "browser") return {
+    ...createBrowserPanelTab(value.id),
+    viewport: normalizeBrowserViewport(value.viewport),
+    zoom: normalizeBrowserZoom(value.zoom),
+    interactionMode: normalizeBrowserInteractionMode(value.interactionMode),
+    annotations: normalizeBrowserAnnotations(value.annotations),
+    scroll: normalizeBrowserScroll(value.scroll),
+  };
+  if (!descriptorString(value.label)) return null;
+  const identity = { id: value.id, label: value.label };
+  switch (value.type) {
+    case "artifact":
+      switch (value.preview) {
+        case "browser": case "markdown": case "sheet": case "slides": case "document":
+        case "image": case "pdf": case "html": case "text": case "external":
+          return { ...identity, type: "artifact", preview: value.preview,
+            ...(isRecord(value.target) && value.target.kind === "file" && backingFilePath(value.target.value)
+              ? { target: { kind: "file", value: value.target.value } } : {}) };
+        default: return null;
+      }
+    case "changes":
+      return descriptorString(value.changeSetId)
+        ? { ...identity, type: "changes", changeSetId: value.changeSetId,
+          ...(descriptorString(value.filePath) ? { filePath: value.filePath } : {}) }
+        : null;
+    case "source-image":
+      return descriptorString(value.src) && /^(https?:|file:|\/)/i.test(value.src)
+        ? { ...identity, type: "source-image", src: value.src } : null;
+    case "start": case "files": case "outputs": case "sources": case "subagents":
+      return { ...identity, type: value.type,
+        ...(descriptorString(value.path) ? { path: value.path } : {}) };
+    default: return null;
+  }
+}
+
+/** Resolve a restored file preview before transcript discovery has completed. */
+export function resolveArtifactPanelTarget(tab: ArtifactPanelTab, targets: OpenTarget[]): OpenTarget | null {
+  const target = targets.find((entry) => entry.id === tab.id && isOpenableFileTarget(entry));
+  if (target) return target;
+  if (!tab.target || !backingFilePath(tab.target.value)) return null;
+  return {
+    id: tab.id,
+    kind: "file",
+    value: tab.target.value,
+    name: tab.label,
+    preview: tab.preview,
+    confidence: 100,
+    reason: "restored workspace tab",
+  };
+}
+
+function persistPanelTab(tab: PanelTab) {
+  if (tab.type === "browser") return toPersistedBrowserTabState(tab);
+  const descriptor = restorePanelTab(tab);
+  return descriptor?.type === "browser" ? null : descriptor;
 }
 
 function isLegacyBrowserTabRef(value: unknown): value is { id: string; type: "browser" } {
@@ -364,6 +430,12 @@ export const usePanelTabStore = create<PanelTabStore>()(
       transcriptArtifactTargets: {},
       openTab: (sessionId, tab) => set((state) => {
         const session = getWritableSession(state, sessionId);
+        if (tab.type === "artifact") {
+          const target = state.transcriptArtifactTargets[sessionId]?.find((entry) => entry.id === tab.id);
+          if (target?.kind === "file" && backingFilePath(target.value)) {
+            tab = { ...tab, target: { kind: "file", value: target.value } };
+          }
+        }
         const existingIndex = session.tabs.findIndex((entry) => entry.id === tab.id);
 
         if (existingIndex >= 0) {
@@ -504,6 +576,8 @@ export const usePanelTabStore = create<PanelTabStore>()(
             id: target.id,
             name: target.name,
             preview: target.preview,
+            kind: target.kind,
+            value: target.value,
           }));
         const nextSession = reconcileOpenArtifactTabs(session, collectibleTargets);
         const transcriptChanged = !isSameTranscriptArtifactTargets(currentTranscript, targets);
@@ -555,9 +629,10 @@ export const usePanelTabStore = create<PanelTabStore>()(
       partialize: (state) => ({
         sessions: Object.fromEntries(
           Object.entries(state.sessions).map(([sessionId, session]) => {
-            const tabs = session.tabs
-              .filter((tab) => tab.type === "browser")
-              .map(toPersistedBrowserTabState);
+            const tabs = session.tabs.slice(0, 100).flatMap((tab) => {
+              const descriptor = persistPanelTab(tab);
+              return descriptor ? [descriptor] : [];
+            });
 
             return [
               sessionId,

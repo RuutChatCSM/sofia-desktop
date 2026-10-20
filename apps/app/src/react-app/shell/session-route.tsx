@@ -99,7 +99,7 @@ import { usePlatform } from "@/react-app/kernel/platform";
 import { SessionPage, type OpenSessionTab } from "@/react-app/domains/session/chat/session-page";
 import { SessionSurfaceBoundary } from "@/react-app/shell/session-surface-boundary";
 import { useCodexEngine } from "@/react-app/domains/session/use-codex-engine";
-import { useCodexSessionStore } from "@/react-app/domains/session/codex-session-store";
+import { isVisibleCodexUserItem, useCodexSessionStore } from "@/react-app/domains/session/codex-session-store";
 import { recordSentAttachments } from "@/react-app/domains/session/sync/sent-attachment-store";
 import { transcriptDisplayParts } from "@/react-app/domains/session/sync/transcript-display-parts";
 import { useCodexApprovals } from "@/react-app/domains/session/codex/use-codex-approvals";
@@ -1581,7 +1581,7 @@ export function SessionRoute() {
           const attachmentParts = await transcriptDisplayParts(draft, uploadedAttachmentParts);
           const sessionEntry = useCodexSessionStore.getState().sessions[targetSessionId];
           const userMessageOrdinal = sessionEntry
-            ? sessionEntry.items.filter((item) => item.type === "userMessage").length + sessionEntry.pendingUserMessages.length + (sessionEntry.settledUserMessages?.length ?? 0)
+            ? sessionEntry.items.filter(isVisibleCodexUserItem).length + sessionEntry.pendingUserMessages.length + (sessionEntry.settledUserMessages?.length ?? 0)
             : undefined;
           // Store by echo ordinal as well as prompt text. Repeated prompts and
           // text-only engine echoes must not move a file to an older message.

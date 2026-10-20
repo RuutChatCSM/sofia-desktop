@@ -1,3 +1,4 @@
+import { stripInjectedCodexContext } from "./sync/codex-context-fragments";
 import { restoreRecordedTurnChanges } from "./changes/change-set-store";
 // Sofia session store: holds codex engine sessions and their transcripts as
 // accumulated from the SSE stream. Mirrors the engine session surface enough
@@ -30,6 +31,15 @@ function userMessageText(item: Record<string, unknown>): string {
       .join("");
   }
   return "";
+}
+
+/** Context-only rollout messages do not consume a user submission ordinal. */
+export function isVisibleCodexUserItem(item: { type: string; item: Record<string, unknown> }): boolean {
+  if (item.type !== "userMessage") return false;
+  const text = userMessageText(item.item);
+  // An image-only echo can have no text; only known context is excluded.
+  return !text.trim() || Boolean(stripInjectedCodexContext(text)) ||
+    (Array.isArray(item.item.content) && item.item.content.some(part => isRecord(part) && part.type === "image"));
 }
 
 export type SofiaErrorDetails = {
@@ -575,7 +585,7 @@ export async function runCodexStream(
               status: "pending",
             });
             if (event.itemType === "userMessage") {
-              const ordinal = useCodexSessionStore.getState().sessions[event.sessionId]?.items.filter((tracked) => tracked.type === "userMessage").findIndex((tracked) => tracked.id === itemId);
+              const ordinal = useCodexSessionStore.getState().sessions[event.sessionId]?.items.filter(isVisibleCodexUserItem).findIndex((tracked) => tracked.id === itemId);
               s.confirmPendingUserMessage(event.sessionId, userMessageText(item), ordinal);
             }
             // Replayed starts cannot reopen an item/turn already completed.
@@ -597,7 +607,7 @@ export async function runCodexStream(
             // The engine echoed a submitted user message: drop the optimistic
             // pending copy so it isn't rendered twice.
             if (event.itemType === "userMessage") {
-              const ordinal = useCodexSessionStore.getState().sessions[event.sessionId]?.items.filter((tracked) => tracked.type === "userMessage").findIndex((tracked) => tracked.id === itemId);
+              const ordinal = useCodexSessionStore.getState().sessions[event.sessionId]?.items.filter(isVisibleCodexUserItem).findIndex((tracked) => tracked.id === itemId);
               s.confirmPendingUserMessage(event.sessionId, userMessageText(item), ordinal);
             }
             break;

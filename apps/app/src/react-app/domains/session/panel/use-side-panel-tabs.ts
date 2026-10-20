@@ -8,40 +8,55 @@ import {
   usePanelTabStore,
 } from "./panel-tab-store";
 import { getElectronBrowser } from "./utils";
+import { NO_SESSION_SIDE_PANEL_KEY } from "./side-panel-session";
 
-export function useBrowserTabSync(sessionId: string) {
+/** Native state is authoritative only after the requested session owns the scope. */
+export function subscribeSessionBrowserTabs(
+  browser: NonNullable<ReturnType<typeof getElectronBrowser>>,
+  scopeId: string,
+  applyBrowserState: (state: BrowserStatePayload) => void,
+  applyControls: (controls: { tabId: string; viewport: BrowserViewport; zoom: BrowserZoom }) => void,
+) {
+  let disposed = false;
+  let ready = false;
+  const apply = (state: BrowserStatePayload) => {
+    if (!disposed && ready && state.scopeId === scopeId) applyBrowserState(state);
+  };
+  const unsubscribe = browser.onStateChange?.(apply);
+  const unsubscribeControls = browser.onControlsChange?.((controls) => {
+    if (!disposed && ready) applyControls(controls);
+  });
+  void (async () => {
+    if (!browser.setScope || await browser.setScope(scopeId) !== scopeId || disposed) return;
+    ready = true;
+    const state = await browser.getState?.();
+    if (state) apply(state);
+  })().catch(() => {
+    // A disconnected native bridge must not clear the durable renderer state.
+  });
+  return () => {
+    disposed = true;
+    unsubscribe?.();
+    unsubscribeControls?.();
+  };
+}
+
+export function useBrowserTabSync(sessionId: string, workspaceId: string) {
   const syncBrowserTabs = usePanelTabStore((state) => state.syncBrowserTabs);
-
-  const applyBrowserState = React.useCallback((browserState: BrowserStatePayload) => {
-    const tabs = browserState.tabs ?? [];
-    const activeTabId = browserState.activeTabId ?? tabs[0]?.id ?? null;
-
-    syncBrowserTabs(sessionId, tabs, activeTabId);
-  }, [sessionId, syncBrowserTabs]);
-
   React.useEffect(() => {
     const browser = getElectronBrowser();
-
-    if (!browser) {
-      return;
-    }
-
-    const unsub = browser.onStateChange?.(applyBrowserState);
-    const unsubControls = browser.onControlsChange?.(({ tabId, viewport, zoom }) => {
+    if (!browser) return;
+    const scopeId = sessionId === NO_SESSION_SIDE_PANEL_KEY
+      ? `workspace:${workspaceId}` : `session:${sessionId.trim()}`;
+    return subscribeSessionBrowserTabs(browser, scopeId, (state) => {
+      const tabs = state.tabs ?? [];
+      syncBrowserTabs(sessionId, tabs, state.activeTabId ?? tabs[0]?.id ?? null);
+    }, ({ tabId, viewport, zoom }) => {
       const store = usePanelTabStore.getState();
       store.setBrowserViewport(sessionId, tabId, viewport);
       store.setBrowserZoom(sessionId, tabId, zoom);
     });
-
-    void browser.getState?.().then((browserState) => {
-      if (browserState) {
-        applyBrowserState(browserState);
-      }
-    });
-
-    return () => { unsub?.(); unsubControls?.(); };
-  }, [applyBrowserState]);
-
+  }, [sessionId, workspaceId, syncBrowserTabs]);
 }
 
 export function useSidePanelTabs(sessionId: string) {

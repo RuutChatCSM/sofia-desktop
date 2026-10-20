@@ -15,7 +15,7 @@ import type { TodoItem } from "@/app/types";
 import { useSessionActivityStore } from "@/react-app/domains/session/status/session-activity-store";
 import { codexItemToParts, codexItemLabel, codexItemToToolPart, codexItemToToolParts } from "./codex-item-translator";
 import { stripInjectedCodexContext } from "./codex-context-fragments";
-import { useCodexSessionStore, type CodexTrackedItem } from "../codex-session-store";
+import { isVisibleCodexUserItem, useCodexSessionStore, type CodexTrackedItem } from "../codex-session-store";
 import { sentAttachments } from "./sent-attachment-store";
 
 /** Map a tracked codex item into UIMessage parts (mirroring engine shapes). */
@@ -104,7 +104,7 @@ function buildUIMessages(workspaceId: string, sessionId: string): UIMessage[] {
   // submission order — and merged back below. Without this an image the user
   // attached never appears in the transcript.
   const unsentAttachments = [...entry.sentUserMessages];
-  const userMessageCount = entry.items.filter((item) => item.type === "userMessage").length;
+  const userMessageCount = entry.items.filter(isVisibleCodexUserItem).length;
   const takeSentParts = (text: string, ordinal: number) => {
     if (!unsentAttachments.length) return null;
     const target = text.trim();
@@ -166,6 +166,7 @@ function buildUIMessages(workspaceId: string, sessionId: string): UIMessage[] {
       },
     };
     if (item.type === "userMessage") {
+      if (!isVisibleCodexUserItem(item)) continue;
       const ordinal = userMessageOrdinal++;
       const content = Array.isArray(item.item.content)
         ? item.item.content.map((part) => isRecord(part) && typeof part.text === "string" ? part.text : "").join("")
@@ -395,7 +396,7 @@ export async function restoreCodexSessionItems(
     // prompt cannot acknowledge a newer submission with the same text.
     let userOrdinal = 0;
     for (const entry of result.items) {
-      if (entry.item.type !== "userMessage") continue;
+      if (!isVisibleCodexUserItem({ type: String(entry.item.type), item: entry.item })) continue;
       const content = Array.isArray(entry.item.content) ? entry.item.content.map(part => isRecord(part) && typeof part.text === "string" ? part.text : "").join("") : "";
       store.confirmPendingUserMessage(sessionId, typeof entry.item.text === "string" ? entry.item.text : content, userOrdinal++);
     }
@@ -480,9 +481,9 @@ export async function recoverCodexSessions(
   for (const session of sessions) {
     const current = useCodexSessionStore.getState().sessions[session.id];
     const previous = before[session.id]?.session;
-    const liveChanged = current && (current.session.status !== previous?.status || current.session.turnId !== previous?.turnId);
-    const restored = { ...session, workspaceId: workspaceId ?? session.workspaceId,
-      ...(liveChanged ? { status: current.session.status, turnId: current.session.turnId } : {}) };
+    // A list started before a live event cannot replace its newer title/status.
+    const latest = current && current.session !== previous ? current.session : session;
+    const restored = { ...latest, workspaceId: workspaceId ?? latest.workspaceId };
     useCodexSessionStore.getState().upsertSession(restored);
     await restoreCodexSessionItems(client, restored.workspaceId, restored.id, signal);
     if (signal.aborted) return;

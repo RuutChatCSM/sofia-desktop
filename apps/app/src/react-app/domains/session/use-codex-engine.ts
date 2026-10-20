@@ -4,9 +4,9 @@ import { useShallow } from "zustand/react/shallow";
 
 import { createCodexSessionClient, isThreadWriterConflictError, type CodexEngineConfigWire } from "@/app/lib/codex-session";
 import { setCodexAbortHandler, setCodexForkHandler } from "@/app/lib/engine-session";
-import { refreshBackgroundProcesses, runCodexStream, setCodexClient, useCodexSessionStore } from "./codex-session-store";
-import { syncCodexTranscriptToCache, restoreCodexSessionItems, ensureCodexTranscriptCached, recoverCodexSessions } from "./sync/codex-transcript-adapter";
-import { createReconnectRecovery, createSessionHistoryRecovery } from "./sync/reconnect-recovery";
+import { refreshBackgroundProcesses, setCodexClient, useCodexSessionStore } from "./codex-session-store";
+import { syncCodexTranscriptToCache, ensureCodexTranscriptCached } from "./sync/codex-transcript-adapter";
+import { syncCodexWorkspace } from "./sync/codex-workspace-sync";
 import { changedSessionIds } from "./sync/transcript-mirror";
 import { subscribeSentAttachments, whenSentAttachmentsReady } from "./sync/sent-attachment-store";
 import { useCodexAttentionFeed } from "./use-codex-attention";
@@ -151,37 +151,9 @@ export function useCodexEngine(endpoint: CodexEngineEndpoint | null, activeSessi
     // Background-process UI (footer/list/stop) needs the same client the stream
     // uses; the store owns the registry so it stays in sync with this effect.
     if (displayWorkspaceId) setCodexClient(displayWorkspaceId, client);
-    void (async () => {
-      try {
-        const snapshot = useCodexSessionStore.getState().sessions;
-        const list = (await client.listSessions()).map((session) => ({ ...session, workspaceId: displayWorkspaceId ?? session.workspaceId }));
-        if (controller.signal.aborted) return;
-        store.replaceSessions(list, { workspaceId: displayWorkspaceId, entries: snapshot });
-        setSessionListResolution({ client, status: "ready", error: null });
-        // Restore persisted items so existing sessions show their transcript
-        // (tools, reasoning) on open — not just live streams.
-        await Promise.all(
-          list.map((session) => restoreCodexSessionItems(client, session.workspaceId, session.id, controller.signal)),
-        );
-      } catch {
-        if (controller.signal.aborted) return;
-        setSessionListResolution({ client, status: "error", error: "Unable to load tasks. Reconnect the workspace and try again." });
-        store.setError("Failed to load codex sessions");
-      }
-      const requestRecovery = createReconnectRecovery(
-        () => recoverCodexSessions(client, controller.signal, displayWorkspaceId),
-        controller.signal,
-        (error) => store.setError(error instanceof Error ? error.message : "Failed to recover sessions"),
-      );
-      const requestSessionHistory = createSessionHistoryRecovery(async sessionId => {
-        const entry = useCodexSessionStore.getState().sessions[sessionId];
-        if (entry) await restoreCodexSessionItems(client, entry.session.workspaceId, sessionId, controller.signal);
-      }, controller.signal, error => store.setError(error instanceof Error ? error.message : "Failed to recover thread history"));
-      if (!controller.signal.aborted) await runCodexStream(client, controller.signal, (event) => {
-        if (event.type === "stream.ready") requestRecovery();
-        if (event.type === "turn.completed" || event.type === "error") requestSessionHistory(event.sessionId);
-      }, displayWorkspaceId);
-    })();
+    void syncCodexWorkspace(client, displayWorkspaceId, controller.signal, (resolution) => {
+      setSessionListResolution({ client, ...resolution });
+    });
     return () => {
       if (displayWorkspaceId) setCodexClient(displayWorkspaceId, null);
       controller.abort();

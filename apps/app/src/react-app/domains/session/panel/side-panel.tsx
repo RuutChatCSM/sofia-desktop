@@ -311,6 +311,7 @@ export function SidePanel({
             type: "artifact",
             label: target.name,
             preview: target.preview,
+            target: { kind: "file", value: target.value },
           });
         }
 
@@ -356,7 +357,7 @@ export function SidePanel({
 
         const store = usePanelTabStore.getState();
         store.syncTranscriptArtifacts(sessionId, [target]);
-        store.openTab(sessionId, { id: target.id, type: "artifact", label: target.name, preview: target.preview });
+        store.openTab(sessionId, { id: target.id, type: "artifact", label: target.name, preview: target.preview, target: { kind: "file", value: target.value } });
         store.selectTab(sessionId, target.id);
 
         return { ok: true, activeTabId: target.id, path: value };
@@ -401,7 +402,7 @@ export function SidePanel({
 
         const store = usePanelTabStore.getState();
         store.syncTranscriptArtifacts(sessionId, [target]);
-        store.openTab(sessionId, { id: target.id, type: "artifact", label: target.name, preview: target.preview });
+        store.openTab(sessionId, { id: target.id, type: "artifact", label: target.name, preview: target.preview, target: { kind: "file", value: target.value } });
         store.selectTab(sessionId, target.id);
 
         return { ok: true, activeTabId: target.id };

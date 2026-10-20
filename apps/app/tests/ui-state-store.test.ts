@@ -53,7 +53,7 @@ function objectValue(object: object, key: string): unknown {
 const storage = memoryStorage();
 storage.setItem(
   PERSISTED_UI_STATE_KEY,
-  JSON.stringify({ sidePanelState: { ses_1: "extensions" }, workspaceRightSidebarExpanded: true }),
+  JSON.stringify({ sidePanelState: { ses_1: "extensions" }, sidePanelExpandedState: { ses_1: true, ses_2: false }, workspaceRightSidebarExpanded: true }),
 );
 
 Object.defineProperty(globalThis, "window", {
@@ -74,6 +74,7 @@ const { persistUiState, toggleSidePanelState, useUiStateStore } = await import(
 const { usePanelTabStore } = await import("../src/react-app/domains/session/panel/panel-tab-store");
 
 const importedSidePanelState = useUiStateStore.getState().sidePanelState;
+const importedSidePanelExpandedState = useUiStateStore.getState().sidePanelExpandedState;
 const importedWorkspaceRightSidebarExpanded = useUiStateStore.getState().workspaceRightSidebarExpanded;
 
 afterAll(() => {
@@ -88,10 +89,11 @@ afterAll(() => {
 });
 
 describe("ui state store", () => {
-  test("persists UI state without side panel state", () => {
+  test("persists per-session panel visibility and expansion with UI layout", () => {
     const state: UiState = {
       sidebarOpen: true,
       sidePanelState: { ses_1: "extensions" },
+      sidePanelExpandedState: { ses_1: true, ses_2: false },
       applicationMenuVisible: false,
       workspaceLeftSidebarWidth: 260,
       workspaceLeftSidebarResizing: false,
@@ -102,20 +104,23 @@ describe("ui state store", () => {
     persistUiState(state);
 
     const parsed = requireJsonObject(storage.getItem(PERSISTED_UI_STATE_KEY));
-    expect("sidePanelState" in parsed).toBe(false);
+    expect(objectValue(parsed, "sidePanelState")).toEqual({ ses_1: "extensions" });
+    expect(objectValue(parsed, "sidePanelExpandedState")).toEqual({ ses_1: true, ses_2: false });
     expect(objectValue(parsed, "workspaceRightSidebarExpanded")).toBe(true);
     expect(objectValue(parsed, "workspaceRightSidebarExpandedWidth")).toBe(520);
   });
 
-  test("ignores legacy persisted side panel state on startup", () => {
-    expect(importedSidePanelState).toEqual({});
+  test("restores persisted per-session panel state on startup", () => {
+    expect(importedSidePanelState).toEqual({ ses_1: "extensions" });
+    expect(importedSidePanelExpandedState).toEqual({ ses_1: true, ses_2: false });
     expect(importedWorkspaceRightSidebarExpanded).toBe(true);
   });
 
-  test("keeps side panel toggles in memory", () => {
+  test("toggles per-session panel visibility", () => {
     const state: UiState = {
       sidebarOpen: true,
       sidePanelState: {},
+      sidePanelExpandedState: {},
       applicationMenuVisible: false,
       workspaceLeftSidebarWidth: 260,
       workspaceLeftSidebarResizing: false,

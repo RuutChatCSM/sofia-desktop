@@ -1,6 +1,7 @@
 // Embedded browser panel: tab state, BrowserView lifecycle, menu overlay,
 // proxy configuration, and browser IPC registrations. Extracted from
 // main.mjs as a factory so the main process only owns window creation.
+import { createBrowserWorkspaceStore } from "./browser-workspace-store.mjs";
 import { createBrowserCursorOverlay } from "./browser-cursor-overlay.mjs";
 import path from "node:path";
 import { readFile, writeFile } from "node:fs/promises";
@@ -61,6 +62,81 @@ const RENDERER_RECOVERY_DELAY_MS = 400;
 
 export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, agentCdpBaseUrl }) {
   const browserTabs = new Map();
+  let workspaceStore = null;
+  let snapshotTimer = null;
+  let tearingDown = false;
+  function savedBrowserWorkspace() {
+    workspaceStore ??= createBrowserWorkspaceStore(path.join(app.getPath("userData"), "browser-workspaces-v1.json"), {
+      onError: error => console.warn("[browser] workspace persistence failed", error.message),
+    });
+    return workspaceStore;
+  }
+  function snapshotBrowserWorkspaces() {
+    if (tearingDown) return;
+    const store = savedBrowserWorkspace();
+    for (const tab of browserTabs.values()) {
+      try {
+        const contents = tab.view.webContents;
+        if (contents.isDestroyed()) continue;
+        const previous = tab.restoredSnapshot;
+        const currentUrl = contents.getURL();
+        // A suspended/rehydrating page must retain its saved history until the
+        // restore finishes; about:blank is only an implementation detail.
+        const snapshot = previous ?? {
+          url: tab.state.pageState.error?.url || currentUrl || "about:blank",
+          title: contents.getTitle(),
+          favicon: tab.favicon,
+          navigation: { entries: contents.navigationHistory.getAllEntries(), index: contents.navigationHistory.getActiveIndex() },
+        };
+        store.upsert({ ...snapshot, id: tab.tabId, scopeId: tab.scopeId, updatedAt: Date.now() });
+      } catch { /* A frame may disappear during shutdown. Keep its last snapshot. */ }
+    }
+    if (activeBrowserTabId) store.select(activeScopeId, activeBrowserTabId);
+    for (const scope of new Set([...browserTabs.values()].map(tab => tab.scopeId))) {
+      store.reorder(scope, browserTabOrder.filter(id => browserTabs.get(id)?.scopeId === scope));
+    }
+    store.flush();
+  }
+  function scheduleBrowserSnapshot() {
+    if (tearingDown || snapshotTimer) return;
+    snapshotTimer = setTimeout(() => { snapshotTimer = null; snapshotBrowserWorkspaces(); }, 250);
+    snapshotTimer.unref?.();
+  }
+  function materializeBrowserTab(tab) {
+    const saved = tab?.restoredSnapshot;
+    if (!saved || tab.restorePromise) return;
+    const contents = tab.view.webContents;
+    const navigation = saved.navigation;
+    tab.restorePromise = Promise.resolve().then(async () => {
+      if (navigation?.entries.length) {
+        try {
+          await contents.navigationHistory.restore({ entries: navigation.entries, index: navigation.index });
+          return;
+        } catch { /* The current URL still gives a useful fallback. */ }
+      }
+      if (!contents.isDestroyed()) await contents.loadURL(saved.url);
+    }).catch(error => {
+      console.warn("[browser] page restoration failed", error.message);
+    }).finally(() => {
+      if (contents.isDestroyed()) return;
+      tab.restoredSnapshot = null;
+      tab.restorePromise = null;
+      sendBrowserState();
+    });
+  }
+  function restoreBrowserScope(scopeId) {
+    const store = savedBrowserWorkspace();
+    for (const snapshot of store.list(scopeId)) {
+      if (!browserTabs.has(snapshot.id)) createBrowserTab(snapshot.url, { select: false, scopeId, snapshot });
+    }
+  }
+  function flushBrowserWorkspace() {
+    if (snapshotTimer) clearTimeout(snapshotTimer);
+    snapshotTimer = null;
+    snapshotBrowserWorkspaces();
+  }
+  app.on("before-quit", flushBrowserWorkspace);
+
   let browserTabOrder = [];
   let activeBrowserTabId = null;
   // Which project (workspace) owns the browser right now. Tabs are stamped with
@@ -251,15 +327,21 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
    * null, which opens a fresh one in the scope).
    */
   function activeTabForScope(scopeId) {
+    restoreBrowserScope(scopeId);
     const tabs = browserTabOrder
       .map((tabId) => browserTabs.get(tabId))
       .filter((tab) => tab && !tab.view.webContents.isDestroyed());
-    return pickScopedBrowserTab({
+    const selected = savedBrowserWorkspace().selected(scopeId);
+    const scopedActive = selected && tabs.find(tab => tab.tabId === selected && tab.scopeId === scopeId);
+    if (scopedActive) { materializeBrowserTab(scopedActive); return scopedActive; }
+    const tab = pickScopedBrowserTab({
       tabs,
       activeTabId: activeBrowserTabId,
       activeScopeId,
       scopeId,
     });
+    materializeBrowserTab(tab);
+    return tab;
   }
 
   async function openBrowserUrlForAutomation(rawUrl, provider = "auto", options = {}) {
@@ -278,6 +360,7 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
     const reusable = reusableAgentTab(options?.newTab === true, requestedScope);
     const tab = reusable ?? createBrowserTab("about:blank", { select: presented, scopeId: requestedScope });
     if (reusable && presented) selectBrowserTab(reusable.tabId);
+    if (tab.restorePromise) await tab.restorePromise;
     await tab.view.webContents.loadURL(browserTargetMarkerUrl(tab.tabId));
     const targetId = await resolveBrowserCdpTargetId(tab.tabId);
     // Take the lease here too: without it the *next* call sees an unleased tab
@@ -324,6 +407,7 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
       // The tab belongs to a session that is not on screen: it must not attach,
       // but it still needs a size or the page reports a 0×0 viewport and the
       // agent's reads come back empty.
+      tab.container.setBorderRadius(1);
       tab.container.setBounds({ x: 0, y: 0, ...DETACHED_TAB_VIEWPORT });
       tab.view.setBounds({ x: 0, y: 0, ...DETACHED_TAB_VIEWPORT });
     }
@@ -369,8 +453,8 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
     // A failed load leaves Chromium on its own chrome-error:// page, which would
     // blank the address bar. Report the URL the user actually asked for.
     const failedUrl = tab.state.pageState.status === "error" ? tab.state.pageState.error?.url : null;
-    const url = failedUrl && failedUrl !== "about:blank" ? failedUrl : webContents.getURL();
-    const title = webContents.getTitle();
+    const url = tab.restoredSnapshot?.url || (failedUrl && failedUrl !== "about:blank" ? failedUrl : webContents.getURL());
+    const title = tab.restoredSnapshot?.title || webContents.getTitle();
 
     return {
       id: tabId,
@@ -378,8 +462,8 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
       label: getBrowserTabLabel(title, url),
       url,
       favicon: tab.favicon ?? null,
-      canGoBack: webContents.navigationHistory.canGoBack(),
-      canGoForward: webContents.navigationHistory.canGoForward(),
+      canGoBack: tab.restoredSnapshot?.navigation ? tab.restoredSnapshot.navigation.index > 0 : webContents.navigationHistory.canGoBack(),
+      canGoForward: tab.restoredSnapshot?.navigation ? tab.restoredSnapshot.navigation.index < tab.restoredSnapshot.navigation.entries.length - 1 : webContents.navigationHistory.canGoForward(),
       // Page health and agent health are reported separately: a page the user
       // can still read must never be described as a browser failure.
       pageState: tab.state.pageState,
@@ -410,6 +494,7 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
 
   function browserStatePayload() {
     return {
+      scopeId: activeScopeId,
       activeTabId: activeBrowserTabId,
       viewVisible: browserViewVisible,
       tabs: listBrowserTabs(),
@@ -874,8 +959,9 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
     callback(browserProxy.username, browserProxy.password);
   });
 
-  function createBrowserTab(url = "about:blank", { select = true, scopeId } = {}) {
-    const tabId = createBrowserTabId();
+  /** @param {string} [url] @param {{select?: boolean, scopeId?: string, snapshot?: object}} [options] */
+  function createBrowserTab(url = "about:blank", { select = true, scopeId, snapshot } = {}) {
+    const tabId = snapshot?.id ?? createBrowserTabId();
     const view = new WebContentsView({
       webPreferences: {
         backgroundThrottling: false,
@@ -897,9 +983,11 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
     container.addChildView(view);
     const tab = {
       tabId,
+      restoredSnapshot: snapshot ?? null,
+      restorePromise: null,
       view,
       container,
-      favicon: null,
+      favicon: snapshot?.favicon ?? null,
       scopeId: typeof scopeId === "string" ? scopeId : activeScopeId,
       state: createBrowserTabRuntimeState(tabId),
     };
@@ -907,7 +995,7 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
     browserTabOrder.push(tabId);
     // Load about:blank immediately to preempt persistent-session restore.
     // Cookies live on the session object, not the document — they survive this.
-    view.webContents.loadURL("about:blank");
+    if (!snapshot) void view.webContents.loadURL("about:blank").catch(() => {});
     view.webContents.setWindowOpenHandler(({ url: targetUrl }) => {
       void shell.openExternal(targetUrl);
       return { action: "deny" };
@@ -1035,24 +1123,29 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
       sendBrowserState();
     });
     view.webContents.once("destroyed", () => {
+      if (tearingDown || tab.preserveOnDestroy) return;
+      savedBrowserWorkspace().remove(tabId);
       detachBrowserView(view);
       agentLeases.releaseTab(tabId);
       viewportController.forget(tabId);
       browserTabs.delete(tabId);
       browserTabOrder = browserTabOrder.filter((id) => id !== tabId);
-      if (activeBrowserTabId === tabId) activeBrowserTabId = browserTabOrder[0] ?? null;
+      if (activeBrowserTabId === tabId) {
+        activeBrowserTabId = browserTabOrder.find(id => browserTabs.get(id)?.scopeId === activeScopeId) ?? null;
+        materializeBrowserTab(getBrowserTab());
+      }
       sendBrowserState();
     });
     // Only the presented scope may take over the visible tab. A tab the agent
     // opens for another session loads off screen until that session is shown.
     const presentedScope = browserScopeIsPresented(tab.scopeId, activeScopeId);
-    if (presentedScope && (select || !activeBrowserTabId)) {
+    if (!snapshot && presentedScope && (select || !activeBrowserTabId)) {
       selectBrowserTab(tabId);
     } else {
       sendBrowserState();
     }
     const finalUrl = normalizeBrowserUrl(url, "about:blank");
-    if (finalUrl !== "about:blank") {
+    if (!snapshot && finalUrl !== "about:blank") {
       view.webContents.loadURL(finalUrl);
     }
     return tab;
@@ -1162,8 +1255,17 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
       if (!bounds) return;
       const tab = getBrowserTab(tabId);
       if (tab && !tab.view.webContents.isDestroyed()) {
-        tab.container.setBounds(bounds);
-        tab.view.setBounds({ x: 0, y: 0, width: bounds.width, height: bounds.height });
+        // CSS cannot clip native web contents. Extend the transparent parent
+        // upward beneath the toolbar, keeping its top arcs above the webpage.
+        // Only the bottom corners then clip the page, matching the 14px shell
+        // (13px inside its border), without changing the page's viewport.
+        const zoom = mainWindowZoomFactor();
+        const desktop = (window()?.getContentBounds().width ?? 0) / zoom >= 1024;
+        const rounded = desktop && browserPresentation !== "peek" && tab.state.viewport.mode === "panel";
+        const radius = rounded ? Math.round(13 * zoom) : 0;
+        tab.container.setBorderRadius(radius || 1);
+        tab.container.setBounds({ ...bounds, y: bounds.y - radius, height: bounds.height + radius });
+        tab.view.setBounds({ x: 0, y: radius, width: bounds.width, height: bounds.height });
       }
     },
   });
@@ -1469,6 +1571,7 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
   }
 
   function selectBrowserTab(tabId) {
+    materializeBrowserTab(browserTabs.get(tabId));
     if (!browserTabs.has(tabId)) throw new Error(`Unknown browser tab: ${tabId}`);
     hideMenuOverlay();
     const previousTabId = activeBrowserTabId;
@@ -1493,6 +1596,7 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
   function setBrowserScope(scopeId) {
     const next = typeof scopeId === "string" ? scopeId : "";
     if (next === activeScopeId) return activeScopeId;
+    snapshotBrowserWorkspaces();
     cursorOverlay.hide();
     const previousView = getActiveBrowserView();
     if (previousView) detachBrowserView(previousView);
@@ -1500,9 +1604,11 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
     lastBrowserBounds = null;
     browserPresentation = "docked";
     activeScopeId = next;
+    restoreBrowserScope(next);
     const scoped = browserTabOrder.filter((id) => browserTabs.get(id)?.scopeId === next);
     const previousActiveTabId = activeBrowserTabId;
-    activeBrowserTabId = scoped[scoped.length - 1] ?? null;
+    const savedActive = savedBrowserWorkspace().selected(next);
+    activeBrowserTabId = scoped.includes(savedActive) ? savedActive : scoped[scoped.length - 1] ?? null;
     if (previousActiveTabId && previousActiveTabId !== activeBrowserTabId) syncPeekCursorVisibility(previousActiveTabId);
     if (activeBrowserTabId) selectBrowserTab(activeBrowserTabId);
     else sendBrowserState();
@@ -1513,19 +1619,18 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
     const tab = getBrowserTab(tabId);
     if (!tab) return null;
     if (menuOverlayRequest?.tabId === tabId) hideMenuOverlay();
+    savedBrowserWorkspace().remove(tabId);
     const closingIndex = browserTabOrder.indexOf(tabId);
     const wasActive = activeBrowserTabId === tabId;
     detachBrowserView(tab.view);
     browserTabs.delete(tabId);
     browserTabOrder = browserTabOrder.filter((id) => id !== tabId);
     if (wasActive) {
-      const nextTabId =
-        browserTabOrder[Math.min(closingIndex, browserTabOrder.length - 1)] ??
-        browserTabOrder[closingIndex - 1] ??
-        null;
+      const remaining = browserTabOrder.filter(id => browserTabs.get(id)?.scopeId === activeScopeId);
+      const nextTabId = remaining[Math.min(closingIndex, remaining.length - 1)] ?? null;
       activeBrowserTabId = nextTabId;
       if (nextTabId) {
-        attachActiveBrowserView();
+        selectBrowserTab(nextTabId);
       } else {
         hideBrowserView();
         sendToRenderer("sofia:browser:tabs-closed");
@@ -1537,15 +1642,16 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
   }
 
   function closeAllBrowserTabs() {
-    const closedTabIds = [...browserTabOrder];
+    const closedTabIds = browserTabOrder.filter(id => browserTabs.get(id)?.scopeId === activeScopeId);
     if (closedTabIds.length === 0) return [];
     hideMenuOverlay();
+    for (const id of closedTabIds) savedBrowserWorkspace().remove(id);
     const tabsToClose = closedTabIds
       .map((tabId) => browserTabs.get(tabId))
       .filter(Boolean);
     hideBrowserView();
-    browserTabs.clear();
-    browserTabOrder = [];
+    for (const id of closedTabIds) browserTabs.delete(id);
+    browserTabOrder = browserTabOrder.filter(id => !closedTabIds.includes(id));
     activeBrowserTabId = null;
     for (const tab of tabsToClose) {
       try { tab.view.webContents.close(); } catch { /* already destroyed */ }
@@ -1557,17 +1663,19 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
 
   function reorderBrowserTabs(tabIds) {
     const nextOrder = Array.isArray(tabIds) ? tabIds.map(String) : [];
-    if (nextOrder.length !== browserTabOrder.length) {
+    const scopedOrder = browserTabOrder.filter(id => browserTabs.get(id)?.scopeId === activeScopeId);
+    if (nextOrder.length !== scopedOrder.length) {
       throw new Error("Tab order must include every open tab.");
     }
     if (new Set(nextOrder).size !== nextOrder.length) {
       throw new Error("Tab order must not contain duplicate tabs.");
     }
-    const current = new Set(browserTabOrder);
+    const current = new Set(scopedOrder);
     if (nextOrder.some((tabId) => !current.has(tabId))) {
       throw new Error("Tab order contains an unknown tab.");
     }
-    browserTabOrder = nextOrder;
+    let index = 0;
+    browserTabOrder = browserTabOrder.map(id => browserTabs.get(id)?.scopeId === activeScopeId ? nextOrder[index++] : id);
     sendBrowserState();
     return listBrowserTabs();
   }
@@ -1583,6 +1691,8 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
    * uncaught exception in the main process, which quits the whole app.
    */
   function sendBrowserState() {
+    if (tearingDown) return;
+    scheduleBrowserSnapshot();
     if (browserStateScheduled) return;
     browserStateScheduled = true;
     setTimeout(() => {
@@ -1640,6 +1750,8 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
     menuOverlayRequest = null;
     try { overlayView?.webContents.close(); } catch { /* already destroyed */ }
     for (const tab of browserTabs.values()) {
+      if (tearingDown) tab.preserveOnDestroy = true;
+      else savedBrowserWorkspace().remove(tab.tabId);
       agentLeases.releaseTab(tab.tabId);
       viewportController.forget(tab.tabId);
       try { tab.view.webContents.close(); } catch { /* already destroyed */ }
@@ -1658,6 +1770,7 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
   function requireBrowserTab(tabId) {
     const tab = getBrowserTab(resolveBrowserTabId(tabId));
     if (!tab) throw new Error(`Unknown browser tab: ${tabId ?? "(active)"}`);
+    materializeBrowserTab(tab);
     return tab;
   }
 
@@ -1751,9 +1864,11 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
       sendBrowserState();
       return agentScopeId;
     });
-    ipcMain.handle("sofia:browser:navigate", (_event, url) => {
-      const view = getActiveBrowserView() ?? createBrowserTab("about:blank", { select: true }).view;
-      view.webContents.loadURL(normalizeBrowserUrl(url));
+    ipcMain.handle("sofia:browser:navigate", async (_event, url) => {
+      const tab = getBrowserTab() ?? createBrowserTab("about:blank", { select: true });
+      materializeBrowserTab(tab);
+      if (tab.restorePromise) await tab.restorePromise;
+      await tab.view.webContents.loadURL(normalizeBrowserUrl(url));
     });
     ipcMain.handle("sofia:browser:back", () => {
       const webContents = getActiveWebContents();
@@ -1857,7 +1972,25 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
   }
 
   return {
-    destroy: destroyBrowserView,
+    flush: flushBrowserWorkspace,
+    prepareForWindowClose: () => {
+      flushBrowserWorkspace();
+      for (const tab of browserTabs.values()) tab.preserveOnDestroy = true;
+      // A listener may cancel closing. Resume normal page lifecycle handling
+      // when the window survives; otherwise its child teardown is shutdown.
+      setImmediate(() => {
+        const owner = window();
+        if (owner && !owner.isDestroyed()) {
+          for (const tab of browserTabs.values()) tab.preserveOnDestroy = false;
+        }
+      });
+    },
+    destroy: () => {
+      flushBrowserWorkspace();
+      tearingDown = true;
+      destroyBrowserView();
+      tearingDown = false;
+    },
     isMainWindowAllowedNavigation,
     registerIpc,
     routeBlockedMainWindowNavigation,

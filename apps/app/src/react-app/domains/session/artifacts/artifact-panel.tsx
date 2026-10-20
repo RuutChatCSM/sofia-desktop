@@ -12,8 +12,8 @@ import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { usePlatform } from "@/react-app/kernel/platform";
-import { type ArtifactPanelTab, usePanelTabStore } from "../panel/panel-tab-store";
-import { isOpenableFileTarget, type BinaryData, type Data, type OpenTarget, type TextData } from "./open-target";
+import { type ArtifactPanelTab, resolveArtifactPanelTarget, usePanelTabStore } from "../panel/panel-tab-store";
+import { type BinaryData, type Data, type OpenTarget, type TextData } from "./open-target";
 import { HTMLPreview, MarkdownPreview, PdfPreview, PlainText, PreviewError, PreviewLoading, PreviewUnavailable } from "./preview";
 
 const ArtifactTextEditor = lazy(() =>
@@ -74,8 +74,7 @@ function isTextContent(target: OpenTarget): boolean {
 
 export function ArtifactPanel({ sessionId, tab, client, workspaceId, workspaceRoot, isRemoteWorkspace = false, onClose }: ArtifactPanelProps) {
   const transcriptTargets = usePanelTabStore((state) => state.transcriptArtifactTargets[sessionId] ?? EMPTY_TRANSCRIPT_TARGETS);
-  const artifactTargets = useMemo(() => transcriptTargets.filter(isOpenableFileTarget), [transcriptTargets]);
-  const target = artifactTargets.find((item) => item.id === tab.id) ?? null;
+  const target = resolveArtifactPanelTarget(tab, transcriptTargets);
 
   if (!target || !client || !workspaceId) {
     return null;

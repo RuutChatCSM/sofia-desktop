@@ -58,6 +58,7 @@ import type {
 } from "./desktop-types";
 
 export type BrowserStatePayload = {
+  scopeId?: string;
   activeTabId?: string | null;
   tabs?: BrowserTabSyncState[];
 };
