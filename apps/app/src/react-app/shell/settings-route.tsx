@@ -96,6 +96,7 @@ import { CloudProvidersView } from "@/react-app/domains/settings/pages/cloud-pro
 import { MemoryView } from "@/react-app/domains/settings/pages/memory-view";
 import { useFeatureFlagsPreferences } from "@/react-app/domains/settings/state/feature-flags-preferences";
 import { useEngineFeatures } from "@/react-app/domains/settings/state/engine-features-store";
+import { useFreeTier } from "@/react-app/domains/settings/state/free-tier-store";
 import { DebugView } from "@/react-app/domains/settings/pages/debug-view";
 import { EnvironmentView } from "@/react-app/domains/settings/pages/environment-view";
 import { ExtensionsView, type ExtensionsSection } from "@/react-app/domains/settings/pages/extensions-view";
@@ -505,6 +506,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
   const [token, setToken] = useState("");
   const [sofiaClient, setSofiaClient] = useState<SofiaServerClient | null>(null);
   const engineFeatures = useEngineFeatures(sofiaClient);
+  const freeTier = useFreeTier(sofiaClient);
   const [activeClient, setActiveClient] = useState<Client | null>(null);
   const [busy, setBusy] = useState(false);
   const [busyLabel, setBusyLabel] = useState<string | null>(null);
@@ -2561,6 +2563,13 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
             engineFeaturesError={engineFeatures.error}
             onToggleEngineFeature={(key, enabled) => {
               void engineFeatures.setEnabled(key, enabled);
+            }}
+            freeTierStatus={freeTier.status}
+            freeTierLoading={freeTier.loading}
+            freeTierBusy={freeTier.busy}
+            freeTierError={freeTier.error}
+            onToggleFreeTier={(enabled) => {
+              void freeTier.setEnabled(enabled);
             }}
             sofiaServerStatus={sofiaServerSnapshot.sofiaServerStatus}
             developerMode={developerMode}

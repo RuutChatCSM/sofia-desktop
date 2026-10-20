@@ -7,6 +7,7 @@ import type { WorkspaceEngineConnectStatus } from "@/app/types";
 import type {
   EngineFeatureInfo,
   SofiaCloudMcpHealth,
+  SofiaFreeTierStatus,
   SofiaRuntimeConfigStatus,
   SofiaServerStatus,
 } from "@/app/lib/sofia-server";
@@ -23,6 +24,7 @@ import {
   AdvancedRuntimeMigrationSection,
   AdvancedRuntimeSection,
   EngineFeaturesSection,
+  FreeTierSection,
 } from "./advanced-view-sections";
 
 type AdvancedOrganizationServerSession = Pick<
@@ -61,6 +63,11 @@ export type AdvancedViewProps = {
   engineFeaturesBusy: boolean;
   engineFeaturesError: string | null;
   onToggleEngineFeature: (key: string, enabled: boolean) => void;
+  freeTierStatus: SofiaFreeTierStatus | null;
+  freeTierLoading: boolean;
+  freeTierBusy: boolean;
+  freeTierError: string | null;
+  onToggleFreeTier: (enabled: boolean) => void;
 };
 
 type AdvancedStatusTone = "ready" | "warning" | "error" | "neutral";
@@ -224,6 +231,14 @@ export function AdvancedView(props: AdvancedViewProps) {
         busy={props.engineFeaturesBusy}
         error={props.engineFeaturesError}
         onToggle={props.onToggleEngineFeature}
+      />
+
+      <FreeTierSection
+        status={props.freeTierStatus}
+        loading={props.freeTierLoading}
+        busy={props.freeTierBusy}
+        error={props.freeTierError}
+        onToggle={(enabled) => props.onToggleFreeTier(enabled)}
       />
 
       <AdvancedCloudMcpDiagnosticsSection

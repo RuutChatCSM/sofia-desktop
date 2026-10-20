@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import type {
   EngineFeatureInfo,
   SofiaCloudMcpHealth,
+  SofiaFreeTierStatus,
   SofiaRuntimeConfigStatus,
   SofiaServerStatus,
 } from "@/app/lib/sofia-server";
@@ -809,6 +810,80 @@ export function EngineFeaturesSection(props: EngineFeaturesSectionProps) {
           </LayoutSectionItemHeader>
         </LayoutSectionItem>
       ))}
+    </LayoutSection>
+  );
+}
+
+interface FreeTierSectionProps {
+  status: SofiaFreeTierStatus | null;
+  loading: boolean;
+  busy: boolean;
+  error: string | null;
+  onToggle: (enabled: boolean) => void;
+}
+
+/**
+ * Sofia Free. The server owns the whole contract — upstream fingerprint,
+ * allowlist, and model reconciliation — so this section only reports what it
+ * was handed. The copy avoids implying the models are ours: they are a remote
+ * free tier reached from this machine.
+ */
+export function FreeTierSection(props: FreeTierSectionProps) {
+  const status = props.status;
+  const enabled = status?.providerEnabled ?? false;
+  const sourceLabel =
+    status?.source === "remote"
+      ? "Live config from Sofia Cloud"
+      : status?.source === "cached"
+        ? "Cached config (Sofia Cloud unreachable)"
+        : "Built-in config";
+
+  return (
+    <LayoutSection>
+      <LayoutSectionHeader>
+        <LayoutSectionTitle>Sofia Free</LayoutSectionTitle>
+        <LayoutSectionDescription>
+          Free models served from this machine. Requests leave from your network; Sofia Cloud only
+          supplies the model list and client contract.
+        </LayoutSectionDescription>
+      </LayoutSectionHeader>
+
+      {props.error || status?.error || status?.modelError ? (
+        <LayoutSectionItem>
+          <SettingsNotice tone="error">
+            {props.error ?? status?.error ?? status?.modelError}
+          </SettingsNotice>
+        </LayoutSectionItem>
+      ) : null}
+
+      <LayoutSectionItem>
+        <LayoutSectionItemHeader>
+          <LayoutSectionItemTitle>Enable Sofia Free models</LayoutSectionItemTitle>
+          <LayoutSectionItemDescription>
+            Adds the provider to this workspace&apos;s model list. Turning it off removes it again.
+          </LayoutSectionItemDescription>
+          <LayoutSectionItemHeaderActions>
+            <Switch
+              aria-label="Enable Sofia Free models"
+              checked={enabled}
+              disabled={props.busy || props.loading || !status}
+              onCheckedChange={(next) => props.onToggle(next)}
+            />
+          </LayoutSectionItemHeaderActions>
+        </LayoutSectionItemHeader>
+
+        {status ? (
+          <LayoutSectionItemFootnote>
+            {sourceLabel} · contract v{status.version} · {status.models.length} model
+            {status.models.length === 1 ? "" : "s"} · {status.discovery} discovery
+            {status.withdrawn && status.withdrawn.length > 0
+              ? ` · ${status.withdrawn.length} withdrawn upstream`
+              : ""}
+          </LayoutSectionItemFootnote>
+        ) : (
+          <LayoutSectionItemFootnote>Loading free-tier status…</LayoutSectionItemFootnote>
+        )}
+      </LayoutSectionItem>
     </LayoutSection>
   );
 }

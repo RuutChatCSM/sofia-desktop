@@ -91,6 +91,15 @@ import { CodexAttentionHub } from "./codex-attention.js";
 import { bridgeCodexApprovals } from "./codex-approvals.js";
 import { registerWorkspaceRoutes } from "./routes/workspaces.js";
 import { registerCloudMcpRoutes } from "./routes/cloud-mcp.js";
+import { registerFreeTierRoutes } from "./routes/free-tier.js";
+import { loadFreeTierConfig, type FreeTierConfig } from "./free-tier-config.js";
+
+import {
+  applyFreeTierProvider,
+  freeTierDisabledByEnv,
+  freeTierProviderRecord,
+  isFreeTierProviderRegistered,
+} from "./free-tier-provider.js";
 import { captureServerException, isExpectedRequestCancellation } from "./telemetry.js";
 import {
   completeLocalManagedMcpAuthorization,
@@ -921,6 +930,38 @@ export async function startServer(
     engineBusy: () => engineHasActiveSessions(config, resolveEngineRuntimeWorkspace(config)),
     logger: toManagedProviderAuthLogger(logger),
   });
+
+  // Free-tier provider plumbing. The remote document is re-read on every call
+  // (cached in-process), so a toggle and a boot both use whatever Sofia Cloud
+  // currently serves.
+  const freeTierConfigUrl = process.env.SOFIA_FREE_TIER_CONFIG_URL ?? null;
+  const freeTierConfigToken = process.env.SOFIA_FREE_TIER_CONFIG_TOKEN ?? null;
+  const resolveFreeTierProvider = async () => {
+    const resolved = await loadFreeTierConfig({ url: freeTierConfigUrl, authorization: freeTierConfigToken });
+    return {
+      resolved,
+      providerConfig: freeTierProviderRecord(resolved.config, `http://127.0.0.1:${config.port}`),
+    };
+  };
+  const setFreeTierEnabled = async (enabled: boolean) => {
+    if (config.readOnly) throw new ApiError(403, "read_only", "Server is read-only");
+    const { resolved } = await resolveFreeTierProvider();
+    // The picker reads providers.json on demand and config.toml is regenerated
+    // before the next engine request, so no engine reload is needed here — and
+    // reloading would interrupt live sessions for a catalog-only change.
+    const result = await applyFreeTierProvider({
+      config: resolved.config,
+      loopbackBaseUrl: `http://127.0.0.1:${config.port}`,
+      enabled: enabled && resolved.config.enabled,
+    });
+    return {
+      ok: true,
+      enabled: result.enabled,
+      changed: result.changed,
+      reload: "skipped",
+    };
+  };
+
   const routes = createRoutes(
     config,
     approvals,
@@ -930,7 +971,17 @@ export async function startServer(
     engineMcpServerState,
     logger,
     cloudProviderSync,
-    hooks,
+    {
+      ...hooks,
+      freeTier: {
+        resolveProviderConfig: async () => {
+          const { resolved, providerConfig } = await resolveFreeTierProvider();
+          return { config: resolved.config, providerConfig };
+        },
+        setEnabled: setFreeTierEnabled,
+        isRegistered: async (providerId: string) => await isFreeTierProviderRegistered(providerId),
+      },
+    },
   );
 
   const serverOptions: {
@@ -1094,6 +1145,33 @@ export async function startServer(
   // forget: a credential problem must never stop the server from serving.
   resetManagedProviderAuthCache();
   void syncManagedProviderAuth({ config, env, logger: toManagedProviderAuthLogger(logger) }).catch(() => undefined);
+
+  // Free-tier provider: opt-in. The boot pass preserves the user's choice —
+  // it rewrites an existing registration (the gateway URL embeds the port) and
+  // never enrolls the machine on its own. `SOFIA_FREE_TIER_ENABLED=0` is the
+  // fleet kill-switch: it removes the entry even if the user had enabled it.
+  // Fire and forget — a free-tier problem must never stop the server serving.
+  void (async () => {
+    const { resolved } = await resolveFreeTierProvider();
+    if (freeTierDisabledByEnv()) {
+      await applyFreeTierProvider({
+        config: resolved.config,
+        loopbackBaseUrl: `http://127.0.0.1:${config.port}`,
+        enabled: false,
+      });
+      return;
+    }
+    if (!(await isFreeTierProviderRegistered(resolved.config.provider.id))) return;
+    await applyFreeTierProvider({
+      config: resolved.config,
+      loopbackBaseUrl: `http://127.0.0.1:${config.port}`,
+      enabled: resolved.config.enabled,
+    });
+  })().catch((error: unknown) => {
+    logger.log("warn", "Failed to refresh the free-tier provider during startup.", {
+      error: error instanceof Error ? error.message : "unknown",
+    });
+  });
 
   return {
     ...server,
@@ -1471,7 +1549,14 @@ function createRoutes(
   engineMcpServerState: EngineMcpServerState,
   logger: ServerLogger,
   cloudProviderSync: CloudProviderSync,
-  hooks?: { providerDiscoveryFetch?: typeof fetch },
+  hooks?: {
+    providerDiscoveryFetch?: typeof fetch;
+    freeTier?: {
+      resolveProviderConfig: () => Promise<{ config: FreeTierConfig; providerConfig: Record<string, unknown> }>;
+      setEnabled: (enabled: boolean) => Promise<{ changed: boolean; enabled: boolean }>;
+      isRegistered: (providerId: string) => Promise<boolean>;
+    };
+  },
 ): Route[] {
   const routes: Route[] = [];
   registerCoreRoutes({
@@ -1578,6 +1663,21 @@ function createRoutes(
         engineMcpServerState,
       ),
     serverMetadata: { serverVersion: SERVER_VERSION, expectedWorkspaceEngineVersion: SOFIA_ENGINE_VERSION },
+  });
+
+  // Free-tier provider: a loopback OpenAI-compatible surface whose fingerprint
+  // comes from Sofia Cloud, so upstream gate changes do not require a build.
+  registerFreeTierRoutes({
+    routes,
+    config,
+    jsonResponse,
+    readJsonBody,
+    onEnabledChange: hooks?.freeTier?.setEnabled,
+    isProviderRegistered: async () => {
+      if (!hooks?.freeTier) return false;
+      const { config: freeTierConfig } = await hooks.freeTier.resolveProviderConfig();
+      return await hooks.freeTier.isRegistered(freeTierConfig.provider.id);
+    },
   });
 
   addRoute(routes, "POST", "/workspace/:id/diagnostics/agent-context", "client", async (ctx) => {

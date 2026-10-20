@@ -313,6 +313,22 @@ export type EngineFeatureInfo = {
   toggleable: boolean;
 };
 
+export type SofiaFreeTierStatus = {
+  enabled: boolean;
+  providerEnabled: boolean;
+  source: "remote" | "cached" | "bundled";
+  version: number;
+  updatedAt: string | null;
+  provider: { id: string; name: string };
+  models: Array<{ id: string; name?: string; contextWindow?: number; maxOutputTokens?: number }>;
+  modelSource: "allowlist" | "upstream" | "cached";
+  withdrawn?: string[];
+  identity: { version: string; userAgentTemplate: string; hasAuthorization: boolean };
+  discovery: "off" | "intersect" | "replace";
+  error?: string;
+  modelError?: string;
+};
+
 export type SofiaRuntimeConfigStatus = {
   runtime: Record<string, unknown>;
   runtimeKeys: string[];
@@ -1821,6 +1837,17 @@ export function createSofiaServerClient(options: { baseUrl: string; token?: stri
         baseUrl,
         `/workspace/${encodeURIComponent(workspaceId)}/runtime-config`,
         { token, hostToken, timeoutMs: timeouts.config },
+      ),
+    getFreeTierStatus: () =>
+      requestJson<SofiaFreeTierStatus>(baseUrl, "/free-tier/status", {
+        token,
+        timeoutMs: timeouts.config,
+      }),
+    setFreeTierEnabled: (enabled: boolean) =>
+      requestJson<{ ok: boolean; changed: boolean; enabled: boolean; reload: string }>(
+        baseUrl,
+        "/free-tier/enabled",
+        { token, method: "POST", body: { enabled }, timeoutMs: timeouts.config },
       ),
     patchConfig: (workspaceId: string, payload: { engine?: Record<string, unknown>; sofia?: Record<string, unknown> }) =>
       requestJson<{ updatedAt?: number | null }>(baseUrl, `/workspace/${workspaceId}/config`, {

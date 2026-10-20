@@ -1,6 +1,8 @@
 /** @jsxImportSource react */
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
+import { getResolvedThemeMode, subscribeToTheme } from "@/app/theme";
+import { resolveExtensionIconSrc } from "./extension-icon-src";
 import { providerLogoCandidates } from "./provider-logo-src";
 
 export type ProviderIconProps = {
@@ -27,7 +29,14 @@ export function ProviderIcon(props: ProviderIconProps) {
 
   const isAnthropic = hasProviderFamily("anthropic");
   const isOpenAI = hasProviderFamily("openai");
-  const isSofia = hasProviderFamily("engine");
+  // Sofia's own providers. `engine` is the legacy id; the free tier is
+  // configured remotely under a `sofia-*` id and displays as "Sofia Free".
+  // Without this they fall through to the favicon heuristic, which slugifies
+  // `sofia-free` into the domain `sofia.free` and renders Google's generic
+  // globe placeholder.
+  const isSofiaFree =
+    normalizedId.startsWith("sofia-") || normalizedName.includes("sofia free");
+  const isSofia = hasProviderFamily("engine") || isSofiaFree;
   const hasInlineMark = isAnthropic || isOpenAI || isSofia;
 
   // Remote logos are walked in order and each failure advances one step, so a
@@ -36,6 +45,17 @@ export function ProviderIcon(props: ProviderIconProps) {
     ? []
     : providerLogoCandidates({ providerId: props.providerId, baseUrl: props.baseUrl });
   const [candidateIndex, setCandidateIndex] = useState(0);
+
+  // The Sofia mark ships as a light and a dark asset rather than a
+  // currentColor glyph, so the icon has to follow the resolved theme.
+  const resolvedTheme = useSyncExternalStore(
+    subscribeToTheme,
+    getResolvedThemeMode,
+    getResolvedThemeMode,
+  );
+  const sofiaMarkSrc = resolveExtensionIconSrc(
+    resolvedTheme === "dark" ? "/sofia-mark-inverse.svg" : "/sofia-mark.svg",
+  );
 
   useEffect(() => {
     setCandidateIndex(0);
@@ -81,22 +101,16 @@ export function ProviderIcon(props: ProviderIconProps) {
           <path d="M17.304 3.541h-3.672l6.696 16.918H24Zm-10.608 0L0 20.459h3.744l1.369-3.553h7.005l1.369 3.553h3.744L10.536 3.541Zm-.371 10.223 2.291-5.946 2.291 5.946Z" />
         </svg>
       ) : isSofia ? (
-        <svg
-          role="img"
-          viewBox="0 0 24 24"
-          xmlns="http://www.w3.org/2000/svg"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={2}
-          strokeLinecap="round"
-          strokeLinejoin="round"
+        // The real Sofia mark, not a generic cube: the engine's built-in icon
+        // and the free-tier provider are both first-party.
+        <img
+          src={sofiaMarkSrc}
+          alt=""
           width={size}
           height={size}
-        >
-          <path d="M12 2L2 7l10 5 10-5-10-5Z" />
-          <path d="M2 17l10 5 10-5" />
-          <path d="M2 12l10 5 10-5" />
-        </svg>
+          className="object-contain"
+          style={{ width: `${size}px`, height: `${size}px` }}
+        />
       ) : logoUrl ? (
         <img
           src={logoUrl}

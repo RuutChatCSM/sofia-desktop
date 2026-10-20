@@ -78,4 +78,14 @@ describe("ProviderIcon", () => {
     expect(markup).toContain("AI");
     expect(markup).toContain("<div");
   });
+
+  // Regression: `sofia-free` slugifies to the domain `sofia.free`, so the
+  // favicon step returned Google's generic globe for every free-tier model.
+  test("renders the Sofia mark for the free tier instead of a favicon", () => {
+    const markup = renderToStaticMarkup(
+      <ProviderIcon providerId="sofia-free" providerName="Sofia Free" size={20} />,
+    );
+    expect(markup).toContain("/sofia-mark.svg");
+    expect(markup.includes("s2/favicons")).toBe(false);
+  });
 });
