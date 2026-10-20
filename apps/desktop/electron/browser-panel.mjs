@@ -408,6 +408,7 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
       // but it still needs a size or the page reports a 0×0 viewport and the
       // agent's reads come back empty.
       tab.container.setBorderRadius(1);
+      tab.view.setBorderRadius(0);
       tab.container.setBounds({ x: 0, y: 0, ...DETACHED_TAB_VIEWPORT });
       tab.view.setBounds({ x: 0, y: 0, ...DETACHED_TAB_VIEWPORT });
     }
@@ -1066,7 +1067,9 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
       // Whether the user sees a peek, a docked panel or nothing is renderer
       // presentation policy. The scope lets the renderer ignore activity that
       // belongs to a session it is not presenting.
-      sendToRenderer("sofia:browser:tab-activated", { tabId, scopeId: tab.scopeId });
+      // Rehydrating saved history is not new browser/agent activity. In
+      // particular it must not promote a restored hidden session into Peek.
+      if (!tab.restoredSnapshot) sendToRenderer("sofia:browser:tab-activated", { tabId, scopeId: tab.scopeId });
     });
     view.webContents.on("did-navigate", (_event, _url, responseCode) => {
       mainResponseCode = responseCode;
@@ -1255,17 +1258,17 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
       if (!bounds) return;
       const tab = getBrowserTab(tabId);
       if (tab && !tab.view.webContents.isDestroyed()) {
-        // CSS cannot clip native web contents. Extend the transparent parent
-        // upward beneath the toolbar, keeping its top arcs above the webpage.
-        // Only the bottom corners then clip the page, matching the 14px shell
-        // (13px inside its border), without changing the page's viewport.
+        // Native child surfaces do not inherit their parent's rounded mask on
+        // macOS. Clip the WebContentsView itself, as well as its compositor
+        // container, so white page content cannot paint square panel corners.
         const zoom = mainWindowZoomFactor();
         const desktop = (window()?.getContentBounds().width ?? 0) / zoom >= 1024;
         const rounded = desktop && browserPresentation !== "peek" && tab.state.viewport.mode === "panel";
         const radius = rounded ? Math.round(13 * zoom) : 0;
         tab.container.setBorderRadius(radius || 1);
-        tab.container.setBounds({ ...bounds, y: bounds.y - radius, height: bounds.height + radius });
-        tab.view.setBounds({ x: 0, y: radius, width: bounds.width, height: bounds.height });
+        tab.view.setBorderRadius(radius);
+        tab.container.setBounds(bounds);
+        tab.view.setBounds({ x: 0, y: 0, width: bounds.width, height: bounds.height });
       }
     },
   });

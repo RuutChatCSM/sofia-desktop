@@ -1,5 +1,7 @@
 // Runs the real browser-panel factory in an isolated Electron process/profile.
 import { app, BrowserWindow, session, webContents } from "electron";
+import { execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { writeFileSync } from "node:fs";
 import { createBrowserPanel } from "../../apps/desktop/electron/browser-panel.mjs";
 
@@ -22,8 +24,14 @@ let panel;
 async function run() {
 try {
   await app.whenReady();
-  win = new BrowserWindow({ width: 1280, height: 900, show: false, webPreferences: { sandbox: true } });
-  await win.loadURL("about:blank");
+  win = new BrowserWindow({ width: 1280, height: 900, frame: false, show: false, webPreferences: { sandbox: true } });
+  await win.loadURL('data:text/html,<body style="margin:0;background:rgb(32,59,67)"></body>');
+  const activations = [];
+  const send = win.webContents.send.bind(win.webContents);
+  win.webContents.send = (channel, ...args) => {
+    if (channel === "sofia:browser:tab-activated") activations.push(args[0]);
+    return send(channel, ...args);
+  };
   panel = createBrowserPanel({ getWindow: () => win, remoteDebugPort: 0 });
   win.on("close", () => panel.prepareForWindowClose());
   win.on("closed", () => panel.destroy());
@@ -53,8 +61,15 @@ try {
       invoke("setPresentation", presentation);
       invoke("show", { x: 400, y: 130, width: 600, height: 500 });
       const container = await until(() => win.contentView.children.find(child => child.children.some(view => view.webContents === page)), Boolean);
-      await until(() => container.children[0].getBounds().y, value => value === 13);
-      frames.push({ presentation, container: container.getBounds(), page: container.children[0].getBounds() });
+      await until(() => container.children[0].getBounds().height, value => value === 500);
+      let corners;
+      if (process.platform === "darwin") {
+        win.showInactive();
+        await new Promise(resolve => setTimeout(resolve, 300));
+        const sample = (x, y) => execFileSync("swift", [fileURLToPath(new URL("./native/browser-edge.swift", import.meta.url)), String(x), String(y), `${report}-${presentation}.png`, String(process.pid)], { encoding: "utf8" }).trim().split(",").map(Number);
+        corners = { backdrop: sample(390, 620), left: sample(401, 629), right: sample(998, 629), center: sample(700, 620) };
+      }
+      frames.push({ presentation, container: container.getBounds(), page: container.children[0].getBounds(), corners });
     }
     invoke("hide");
     result = { stage, first, second, other, frames, state: state() };
@@ -81,7 +96,7 @@ try {
       invoke("setScope", "session:B");
       remainingOther = state();
     }
-    result = { stage, initial, restored, storage, remainingOther, cookieRestored: cookies.some(cookie => cookie.name === "restoration-proof"), entries, historyIndex, afterClose: state() };
+    result = { stage, activations, initial, restored, storage, remainingOther, cookieRestored: cookies.some(cookie => cookie.name === "restoration-proof"), entries, historyIndex, afterClose: state() };
   }
   panel.flush();
   await session.fromPartition("persist:sofia-browser").cookies.flushStore();

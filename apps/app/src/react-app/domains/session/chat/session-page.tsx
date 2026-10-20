@@ -2,7 +2,7 @@ import { SessionResourcesPanel } from "../panel/session-resources-panel";
 import { useSessionSummaryPreferences } from "../panel/session-summary-preferences";
 /** @jsxImportSource react */
 import type { CSSProperties } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { usePanelRef } from "react-resizable-panels";
 import { Cloud, FileText, Globe, ListFilter, Mic2, MoreHorizontal, PanelRight, TextSearch, Zap } from "lucide-react";
 
@@ -400,7 +400,6 @@ export function SessionPage(props: SessionPageProps) {
   const artifactTargetCount = artifactFileTargets.length;
   const hasArtifactTargets = artifactTargetCount > 0;
   const hasBrowserTabs = sessionPanelState.tabs.some((tab) => tab.type === "browser");
-  const browserPresentationMode = useBrowserPresentationStore((state) => state.state.runtime.mode);
   const browserDockedWidth = useBrowserPresentationStore((state) => state.state.preferences.dockedWidth);
   const peekBrowserTab = activePanelTab?.type === "browser" ? activePanelTab : null;
   const computerUseRunStartedAt = useSessionActivityStore((state) => {
@@ -419,6 +418,11 @@ export function SessionPage(props: SessionPageProps) {
   const setSidePanelExpanded = useCallback((expanded: boolean) => {
     updateSidePanelExpanded(sidePanelSessionKey, expanded);
   }, [sidePanelSessionKey, updateSidePanelExpanded]);
+  const browserScope = browserScopeKey(props.selectedWorkspaceId, props.selectedSessionId);
+  const browserPresentationMode = useBrowserPresentationStore((state) => state.scopeId === browserScope
+    ? state.state.runtime.mode
+    : state.sessions[browserScope]?.mode ?? (sessionSidePanel === "panel" && hasBrowserTabs
+      ? (sidePanelExpanded ? "expanded" : "docked") : "hidden"));
   const panelExpanded = sidePanelExpanded || browserPresentationMode === "expanded";
   const toggleSidePanelExpanded = useCallback(() => {
     if (panelExpanded) {
@@ -492,8 +496,9 @@ export function SessionPage(props: SessionPageProps) {
       return;
     }
     setSidePanelState(GLOBAL_VOICE_SIDE_PANEL_KEY, null);
+    if (panel === "panel" && sessionSidePanel === "panel") dispatchBrowserPresentation({ type: "user-hide-peek" });
     toggleSidePanelState(sidePanelSessionKey, panel);
-  }, [setSidePanelState, sidePanelSessionKey, toggleSidePanelState]);
+  }, [setSidePanelState, sidePanelSessionKey, sessionSidePanel, toggleSidePanelState]);
 
   // Electron reports facts: a real page reached a tab, or every tab is gone.
   // It never says "open the panel" — presentation policy decides what the user
@@ -524,16 +529,16 @@ export function SessionPage(props: SessionPageProps) {
   const sessionSidePanelRef = useRef(sessionSidePanel);
   sessionSidePanelRef.current = sessionSidePanel;
 
-  // The built-in browser belongs to one session inside one project: switching
-  // either way must detach the previous page and show nothing of it here — not
-  // the docked panel, not a Peek, not a tab list. The main process keys its tab
-  // registry by this same scope.
+  // Restore this session's presentation before native tabs synchronize. A
+  // different session must never inherit the previous one's Peek or layout.
+  // The main process keys its tab registry by the same scope.
   const presentedScopeRef = useRef(browserScopeKey(props.selectedWorkspaceId, props.selectedSessionId));
-  useEffect(() => {
+  useLayoutEffect(() => {
     const scope = browserScopeKey(props.selectedWorkspaceId, props.selectedSessionId);
+    useBrowserPresentationStore.getState().activateScope(scope,
+      sessionSidePanel === "panel" && hasBrowserTabs ? (sidePanelExpanded ? "expanded" : "docked") : "hidden");
     if (presentedScopeRef.current === scope) return;
     presentedScopeRef.current = scope;
-    dispatchBrowserPresentation({ type: "session-changed" });
     if (isElectronRuntime()) {
       const browser = window.__SOFIA_ELECTRON__?.browser;
       void browser?.hide?.();
@@ -806,6 +811,7 @@ export function SessionPage(props: SessionPageProps) {
     setCurrentSidePanel("panel");
   }, [activePanelTab?.id, browserUrlForTarget, downloadOpenTarget, openTab, props.selectedSessionId, props.selectedWorkspaceDisplay.workspaceType, props.selectedWorkspaceRoot, setCurrentSidePanel]);
   const closeRightPane = useCallback(() => {
+    dispatchBrowserPresentation({ type: "user-hide-peek" });
     setSidePanelExpanded(false);
     setCurrentSidePanel(null);
   }, [setCurrentSidePanel, setSidePanelExpanded]);

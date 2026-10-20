@@ -3,10 +3,11 @@ import CoreGraphics
 let x = Double(CommandLine.arguments[1])!
 let y = Double(CommandLine.arguments[2])!
 let path = CommandLine.arguments[3]
+let requestedPid = CommandLine.arguments.count > 4 ? Int(CommandLine.arguments[4]) : nil
 let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as! [[String: Any]]
 let candidates = windows.filter { w in
   let owner = w[kCGWindowOwnerName as String] as? String ?? ""
-  return (owner.contains("Sofia") || owner == "Electron") && (w[kCGWindowLayer as String] as? Int == 0)
+  return (requestedPid.map { (w[kCGWindowOwnerPID as String] as? Int) == $0 } ?? (owner.contains("Sofia") || owner == "Electron")) && (w[kCGWindowLayer as String] as? Int == 0)
 }.sorted { ($0[kCGWindowOwnerPID as String] as? Int ?? 0) > ($1[kCGWindowOwnerPID as String] as? Int ?? 0) }
 guard let window = candidates.first, let id = window[kCGWindowNumber as String] as? Int,
  let bounds = window[kCGWindowBounds as String] as? [String: Double], let width = bounds["Width"] else { fatalError("No Sofia window") }

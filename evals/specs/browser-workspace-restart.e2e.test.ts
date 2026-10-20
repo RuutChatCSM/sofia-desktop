@@ -40,17 +40,23 @@ test("real Electron restart restores session tabs and history lazily, retains br
   const created = await launch("create");
   expect(created.frames.map((frame: { presentation: string }) => frame.presentation)).toEqual(["docked", "expanded"]);
   for (const frame of created.frames) {
-    expect(frame.container).toEqual({ x: 400, y: 117, width: 600, height: 513 });
-    expect(frame.page).toEqual({ x: 0, y: 13, width: 600, height: 500 });
+    expect(frame.container).toEqual({ x: 400, y: 130, width: 600, height: 500 });
+    expect(frame.page).toEqual({ x: 0, y: 0, width: 600, height: 500 });
     // Native framing preserves the canvas's absolute origin and viewport.
     expect(frame.container.y + frame.page.y).toBe(130);
     expect(frame.container.y + frame.container.height).toBe(630);
+    if (process.platform === "darwin") {
+      expect(frame.corners.left).toEqual(frame.corners.backdrop);
+      expect(frame.corners.right).toEqual(frame.corners.backdrop);
+      expect(frame.corners.center).toEqual([255, 255, 255]);
+    }
   }
   expect(created.state.activeTabId).toBe(created.first);
   expect(created.state.tabs.map((tab: { id: string }) => tab.id)).toEqual([created.second, created.first]);
   visits.length = 0;
   const restored = await launch("restore");
   expect(restored.initial.tabs).toEqual([]);
+  expect(restored.activations).toEqual([]);
   expect(restored.restored.scopeId).toBe("session:A");
   expect(restored.restored.activeTabId).toBe(created.first);
   expect(restored.restored.tabs.map((tab: { id: string }) => tab.id)).toEqual([created.second, created.first]);

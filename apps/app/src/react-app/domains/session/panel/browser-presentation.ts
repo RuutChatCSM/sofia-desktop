@@ -13,9 +13,8 @@
 // writes to `BrowserPanelTab.viewport`, and nothing here reuses or releases an
 // agent lease.
 //
-// Durable pieces (autoShow, dockedWidth) persist. Live pieces (current mode,
-// suppression, attention, restore target) do not: restarting the app must never
-// resurrect a transient presentation state.
+// Preferences and session layout persist. Attention and agent activity are
+// transient; restoring a page must not be treated as new agent activity.
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
@@ -466,30 +465,76 @@ export function reduceBrowserPresentation(
   }
 }
 
+type SavedBrowserPresentation = Pick<BrowserPresentationRuntime, "mode" | "peekSuppressed" | "peekPosition">;
+
 type BrowserPresentationStore = {
   state: BrowserPresentationState;
+  scopeId: string | null;
+  sessions: Record<string, SavedBrowserPresentation>;
+  activateScope: (scopeId: string, fallback: BrowserPresentationMode) => void;
   dispatch: (event: BrowserPresentationEvent) => void;
 };
+
+function savedPresentation(runtime: BrowserPresentationRuntime): SavedBrowserPresentation {
+  return { mode: runtime.mode, peekSuppressed: runtime.peekSuppressed, peekPosition: runtime.peekPosition };
+}
+
+function readSavedPresentations(value: unknown): Record<string, SavedBrowserPresentation> {
+  if (!value || typeof value !== "object") return {};
+  const sessions: Record<string, SavedBrowserPresentation> = {};
+  for (const [scope, entry] of Object.entries(value).slice(-500)) {
+    if (!scope || scope.length > 512 || !entry || typeof entry !== "object" || !("mode" in entry)) continue;
+    const mode = entry.mode;
+    if (mode !== "hidden" && mode !== "peek" && mode !== "docked" && mode !== "expanded") continue;
+    const position = "peekPosition" in entry ? entry.peekPosition : null;
+    sessions[scope] = {
+      mode,
+      peekSuppressed: "peekSuppressed" in entry && entry.peekSuppressed === true,
+      peekPosition: position && typeof position === "object" && "x" in position && "y" in position &&
+        typeof position.x === "number" && Number.isFinite(position.x) && typeof position.y === "number" && Number.isFinite(position.y)
+        ? { x: position.x, y: position.y } : null,
+    };
+  }
+  return sessions;
+}
 
 export const useBrowserPresentationStore = create<BrowserPresentationStore>()(
   persist(
     (set) => ({
       state: createBrowserPresentationState(),
-      dispatch: (event) =>
-        set((previous) => ({ state: reduceBrowserPresentation(previous.state, event) })),
+      scopeId: null,
+      sessions: {},
+      activateScope: (scopeId, fallback) => set(previous => {
+        if (previous.scopeId === scopeId) return previous;
+        const saved = previous.sessions[scopeId];
+        const state = createBrowserPresentationState(previous.state.preferences);
+        state.runtime = {
+          ...state.runtime,
+          ...(saved ?? { mode: fallback }),
+          restore: (saved?.mode ?? fallback) === "expanded" ? { mode: "docked", width: state.preferences.dockedWidth } : null,
+        };
+        return { scopeId, state, sessions: Object.fromEntries(Object.entries({ ...previous.sessions, [scopeId]: savedPresentation(state.runtime) }).slice(-500)) };
+      }),
+      dispatch: (event) => set(previous => {
+        const state = reduceBrowserPresentation(previous.state, event);
+        return { state, sessions: previous.scopeId
+          ? Object.fromEntries(Object.entries({ ...previous.sessions, [previous.scopeId]: savedPresentation(state.runtime) }).slice(-500))
+          : previous.sessions };
+      }),
     }),
     {
       name: PERSISTED_BROWSER_PRESENTATION_KEY,
       storage: createJSONStorage(() => localStorage),
-      // Preferences only: a restart must never reopen into transient UI.
-      partialize: (store) => ({ state: { preferences: store.state.preferences } }),
+      partialize: (store) => ({ state: { preferences: store.state.preferences }, sessions: store.sessions }),
       merge: (persisted, current) => {
         const preferences =
           persisted && typeof persisted === "object"
             ? (persisted as { state?: { preferences?: Partial<BrowserPresentationPreferences> } }).state
                 ?.preferences
             : undefined;
-        return { ...current, state: createBrowserPresentationState(preferences ?? {}) };
+        const sessions = persisted && typeof persisted === "object" && "sessions" in persisted
+          ? readSavedPresentations(persisted.sessions) : {};
+        return { ...current, sessions, state: createBrowserPresentationState(preferences ?? {}), scopeId: null };
       },
     },
   ),
