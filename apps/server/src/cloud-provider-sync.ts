@@ -22,7 +22,7 @@ import {
   type LlmProviderWire,
   type LlmProviderWireModel,
   type UnreadableLlmProvider,
-} from "@sofia/types/den/llm-providers";
+} from "./den-llm-providers.js";
 import type { ServerConfig } from "./types.js";
 import { findManagedEngineWorkspace } from "./workspaces.js";
 
