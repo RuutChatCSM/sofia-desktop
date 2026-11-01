@@ -11,11 +11,10 @@ import {
 import { applyEngineCapabilitiesToml } from "./codex-config.js";
 
 describe("engine feature registry", () => {
-  it("only defaults on features the desktop has a surface for", () => {
+  it("only defaults on stable features", () => {
     const defaultOn = ENGINE_FEATURES.filter((feature) => feature.defaultEnabled);
     expect(defaultOn.map((feature) => feature.key).sort()).toEqual([
       "multi_agent_v2",
-      "request_permissions_tool",
       "update_plan",
     ]);
   });
@@ -63,11 +62,16 @@ describe("applyEngineCapabilitiesToml", () => {
     const toml = applyEngineCapabilitiesToml('model_provider = "xiaomi"\n');
     expect(toml).toContain("[features]");
     expect(toml).toContain("multi_agent_v2 = true");
-    expect(toml).toContain("request_permissions_tool = true");
     expect(toml).toContain("[tools.update_plan]");
     // Experimental and removed flags stay off unless asked for.
+    expect(toml).not.toContain("request_permissions_tool");
     expect(toml).not.toContain("code_mode = true");
     expect(toml).not.toContain("js_repl");
+  });
+
+  it("keeps the experimental permissions tool opt-in", () => {
+    const toml = applyEngineCapabilitiesToml("", { request_permissions_tool: true });
+    expect(toml).toContain("request_permissions_tool = true");
   });
 
   it("honours a user override in both directions", () => {

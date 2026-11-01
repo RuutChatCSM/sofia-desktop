@@ -18,7 +18,7 @@ final class AccessibilityService: @unchecked Sendable {
     private let enhancedLock = NSLock()
     private var enhancedPIDs = Set<pid_t>()
 
-    func resolveTarget(appName: String?, pid requestedPID: pid_t? = nil, windowTitle: String? = nil) throws -> WindowTarget {
+    func listTargets(appName: String?, pid requestedPID: pid_t? = nil) throws -> [WindowTarget] {
         guard AXIsProcessTrusted() else { throw ComputerUseError.accessibilityDenied }
 
         let app = try resolveApp(appName: appName, pid: requestedPID)
@@ -28,24 +28,68 @@ final class AccessibilityService: @unchecked Sendable {
             // Chromium and Electron build the renderer AX tree lazily; give it a moment.
             Thread.sleep(forTimeInterval: 0.35)
         }
-        let axWindow = firstAXWindow(axApp: axApp, title: windowTitle)
-        let title = axWindow.flatMap { axString($0, kAXTitleAttribute) }
-        let info = firstCGWindowInfo(pid: pid, title: title)
-        let bounds = axWindow.flatMap(axFrame) ?? info?.bounds
-
-        guard let bounds, bounds.width > 20, bounds.height > 20 else {
-            throw ComputerUseError.noWindow(app.localizedName ?? appName ?? "frontmost app")
+        var availableCGWindows = cgWindowCandidates(pid: pid)
+        let targets = axWindows(axApp: axApp).compactMap { axWindow -> WindowTarget? in
+            guard let frame = axFrame(axWindow), frame.width > 20, frame.height > 20 else { return nil }
+            let title = axString(axWindow, kAXTitleAttribute)
+            let matchIndex = bestCGWindowIndex(in: availableCGWindows, title: title, bounds: frame)
+            let info = matchIndex.map { availableCGWindows.remove(at: $0) }
+            let bounds = info?.bounds ?? frame
+            return WindowTarget(
+                appName: app.localizedName ?? "Unknown",
+                bundleID: app.bundleIdentifier,
+                pid: pid,
+                windowNumber: info?.number,
+                windowTitle: title ?? info?.title,
+                bounds: bounds,
+                isFrontmost: NSWorkspace.shared.frontmostApplication?.processIdentifier == pid,
+                axWindow: axWindow
+            )
         }
 
-        return WindowTarget(
-            appName: app.localizedName ?? "Unknown",
-            pid: pid,
-            windowNumber: info?.number,
-            windowTitle: title ?? info?.title,
-            bounds: bounds,
-            isFrontmost: NSWorkspace.shared.frontmostApplication?.processIdentifier == pid,
-            axWindow: axWindow
-        )
+        guard !targets.isEmpty else {
+            throw ComputerUseError.noWindow(app.localizedName ?? appName ?? "frontmost app")
+        }
+        return targets
+    }
+
+    func resolveTarget(appName: String?, pid requestedPID: pid_t? = nil, windowTitle: String? = nil, windowNumber: Int? = nil) throws -> WindowTarget {
+        let targets = try listTargets(appName: appName, pid: requestedPID)
+        if let windowNumber {
+            guard let target = targets.first(where: { $0.windowNumber == windowNumber }) else {
+                throw ComputerUseError.noWindow("\(appName ?? "pid \(requestedPID ?? 0)") window \(windowNumber)")
+            }
+            return target
+        }
+        if let windowTitle, !windowTitle.isEmpty {
+            let matches = targets.filter { $0.windowTitle == windowTitle }
+            guard let first = matches.first else {
+                throw ComputerUseError.noWindow("\(appName ?? "pid \(requestedPID ?? 0)") window titled \(windowTitle)")
+            }
+            guard matches.count == 1 else {
+                throw ComputerUseError.ambiguousWindow(appName ?? "pid \(requestedPID ?? 0)", matches.map(\.targetID))
+            }
+            return first
+        }
+        guard let only = targets.first else {
+            throw ComputerUseError.noWindow(appName ?? "frontmost app")
+        }
+        guard targets.count == 1 else {
+            throw ComputerUseError.ambiguousWindow(appName ?? "frontmost app", targets.map(\.targetID))
+        }
+        return only
+    }
+
+    func resolveTarget(targetID: String) throws -> WindowTarget {
+        let parts = targetID.split(separator: ":", maxSplits: 1).map(String.init)
+        guard parts.count == 2, let pid = Int32(parts[0]), let windowNumber = Int(parts[1]) else {
+            throw ComputerUseError.noWindow("invalid target id \(targetID)")
+        }
+        let targets = try listTargets(appName: nil, pid: pid)
+        guard let target = targets.first(where: { $0.windowNumber == windowNumber }) else {
+            throw ComputerUseError.noWindow("target \(targetID)")
+        }
+        return target
     }
 
     func snapshot(target: WindowTarget, strictMode: Bool, backgroundActivated: Bool, crop: CGRect? = nil, imageWidth: Int = 768, waitFor: String? = nil, waitMilliseconds: Int = 2000) async throws -> AppSnapshot {
@@ -56,11 +100,14 @@ final class AccessibilityService: @unchecked Sendable {
 
         return AppSnapshot(
             id: "",
+            targetID: target.targetID,
             observation: 0,
             appName: target.appName,
+            bundleID: target.bundleID,
             pid: target.pid,
             windowNumber: target.windowNumber,
             windowTitle: target.windowTitle,
+            windowBounds: target.bounds,
             screenshotData: data,
             screenshotMimeType: "image/jpeg",
             screenshotMeta: meta,
@@ -166,20 +213,13 @@ final class AccessibilityService: @unchecked Sendable {
         throw ComputerUseError.appNotFound(rawName)
     }
 
-    private func firstAXWindow(axApp: AXUIElement, title preferredTitle: String?) -> AXUIElement? {
+    private func axWindows(axApp: AXUIElement) -> [AXUIElement] {
         var windowValue: CFTypeRef?
         guard AXUIElementCopyAttributeValue(axApp, kAXWindowsAttribute as CFString, &windowValue) == .success,
               let windows = windowValue as? [AXUIElement] else {
-            return nil
+            return []
         }
-        let usable = windows.filter { window in
-            guard let frame = axFrame(window) else { return false }
-            return frame.width > 20 && frame.height > 20
-        }
-        if let preferredTitle, let match = usable.first(where: { axString($0, kAXTitleAttribute) == preferredTitle }) {
-            return match
-        }
-        return usable.first
+        return windows
     }
 
     private func semanticRecords(window: AXUIElement) -> AXRecordCollection {
@@ -370,12 +410,12 @@ final class AccessibilityService: @unchecked Sendable {
         rawRole.hasPrefix("AX") ? String(rawRole.dropFirst(2)) : rawRole
     }
 
-    private func firstCGWindowInfo(pid: pid_t, title: String?) -> (number: Int, title: String?, bounds: CGRect)? {
+    private func cgWindowCandidates(pid: pid_t) -> [(number: Int, title: String?, bounds: CGRect)] {
         guard let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else {
-            return nil
+            return []
         }
 
-        let candidates = list.compactMap { info -> (number: Int, title: String?, bounds: CGRect)? in
+        return list.compactMap { info -> (number: Int, title: String?, bounds: CGRect)? in
             guard let ownerPID = info[kCGWindowOwnerPID as String] as? Int32,
                   ownerPID == pid,
                   let layer = info[kCGWindowLayer as String] as? Int,
@@ -394,10 +434,18 @@ final class AccessibilityService: @unchecked Sendable {
             return (number, info[kCGWindowName as String] as? String, bounds)
         }
 
-        if let title, let exact = candidates.first(where: { $0.title == title }) {
-            return exact
+    }
+
+    private func bestCGWindowIndex(in candidates: [(number: Int, title: String?, bounds: CGRect)], title: String?, bounds: CGRect) -> Int? {
+        guard !candidates.isEmpty else { return nil }
+        let scored = candidates.enumerated().map { index, candidate -> (index: Int, score: Int) in
+            var score = 0
+            if let title, candidate.title == title { score += 4 }
+            if candidate.bounds.equalTo(bounds) { score += 4 }
+            if candidate.bounds.intersects(bounds) { score += 1 }
+            return (index, score)
         }
-        return candidates.first
+        return scored.max { left, right in left.score < right.score }?.index
     }
 
     private func captureScreenshot(target: WindowTarget, crop: CGRect?, imageWidth: Int) async throws -> (Data, ScreenshotMetadata) {

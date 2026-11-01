@@ -39,9 +39,9 @@ describe("engine capabilities in the managed config.toml", () => {
     expect(DEFAULT_ON_FEATURES.filter((key) => !keys.has(key))).toEqual([]);
   });
 
-  test("only stages the desktop has a surface for are enabled", () => {
-    // UnderDevelopment / Removed features must not ship from the desktop.
-    const unsafe = ["code_mode", "js_repl", "deferred_executor"];
+  test("only stable stages ship by default", () => {
+    // UnderDevelopment / Removed features must stay opt-in from the desktop.
+    const unsafe = ["request_permissions_tool", "code_mode", "js_repl", "deferred_executor"];
     expect(DEFAULT_ON_FEATURES.filter((key) => unsafe.includes(key))).toEqual([]);
   });
 

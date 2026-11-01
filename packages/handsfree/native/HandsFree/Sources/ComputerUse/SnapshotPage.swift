@@ -25,10 +25,19 @@ enum SnapshotPage {
             "semanticAXVersion": 1,
             "snapshotId": snapshot.id,
             "snapshot_id": snapshot.id,
+            "targetId": snapshot.targetID,
+            "target_id": snapshot.targetID,
             "observation": snapshot.observation,
             "app": snapshot.appName,
+            "bundleId": snapshot.bundleID ?? "",
             "pid": Int(snapshot.pid),
             "windowTitle": snapshot.windowTitle ?? "",
+            "windowBounds": [
+                "x": Int(snapshot.windowBounds.origin.x),
+                "y": Int(snapshot.windowBounds.origin.y),
+                "width": Int(snapshot.windowBounds.width),
+                "height": Int(snapshot.windowBounds.height),
+            ],
             "screenshot": snapshot.screenshotMeta.dictionary,
             "execution": [
                 "strictMode": snapshot.strictMode,
@@ -41,7 +50,7 @@ enum SnapshotPage {
             "offset": start,
             "nextOffset": end < filtered.count ? end as Any : NSNull(),
             "treeTruncated": snapshot.treeTruncated,
-            "hint": "Use refs like {e1}. Read more with snapshot_elements(snapshot_id, offset: nextOffset), or query by label/role; paging keeps refs stable. treeTruncated means collection hit its safety limit: scroll to the relevant area and take a new snapshot. Verify the resulting UI after actions; AX acceptance alone does not prove a visible change.",
+            "hint": "Use refs like {e1} with this snapshot_id. target_id identifies the app window and stays stable until that window closes; snapshot_id is this observation. Read more with snapshot_elements(snapshot_id, offset: nextOffset), or query by label/role; paging keeps refs stable. treeTruncated means collection hit its safety limit: scroll to the relevant area and take a new snapshot. Verify the resulting UI after actions; AX acceptance alone does not prove a visible change.",
         ]
         if !snapshot.recentActions.isEmpty {
             result["recentActions"] = snapshot.recentActions

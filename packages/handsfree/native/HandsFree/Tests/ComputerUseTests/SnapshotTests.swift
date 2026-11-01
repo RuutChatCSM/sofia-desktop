@@ -13,8 +13,8 @@ final class SnapshotTests: XCTestCase {
         ))
     }
 
-    private func snapshot() -> AppSnapshot {
-        AppSnapshot(id: "saved", observation: 1, appName: "Fixture", pid: 1, windowNumber: 1, windowTitle: "Fixture",
+    private func snapshot(id: String = "saved", targetID: String = "1:1", pid: pid_t = 1, windowNumber: Int = 1) -> AppSnapshot {
+        AppSnapshot(id: id, targetID: targetID, observation: 1, appName: "Fixture", bundleID: "test.fixture", pid: pid, windowNumber: windowNumber, windowTitle: "Fixture", windowBounds: CGRect(x: 0, y: 0, width: 640, height: 480),
             screenshotData: Data(), screenshotMimeType: "image/jpeg",
             screenshotMeta: ScreenshotMetadata(imageWidth: 768, imageHeight: 768, capturedBounds: CGRect(x: 0, y: 0, width: 768, height: 768)),
             records: (1...80).map { record($0, label: $0 == 65 ? "Search" : "Item \($0)") }, treeTruncated: true,
@@ -36,6 +36,8 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(second["nextOffset"] as? Int, 60)
         XCTAssertTrue(last["nextOffset"] is NSNull)
         XCTAssertEqual(search["snapshot_id"] as? String, "saved")
+        XCTAssertEqual(search["target_id"] as? String, "1:1")
+        XCTAssertEqual(search["bundleId"] as? String, "test.fixture")
         XCTAssertEqual(search["treeTruncated"] as? Bool, true)
         let matches = try XCTUnwrap(search["elements"] as? [[String: Any]])
         XCTAssertEqual(matches.count, 1)
@@ -62,6 +64,38 @@ final class SnapshotTests: XCTestCase {
         XCTAssertThrowsError(try SnapshotPolicy.validateFocus(strict: false, targetPID: 1, frontmostPID: nil, backgroundTargetPID: nil))
         XCTAssertNoThrow(try SnapshotPolicy.validateFocus(strict: true, targetPID: 1, frontmostPID: 2, backgroundTargetPID: 1))
         XCTAssertThrowsError(try SnapshotPolicy.validateFocus(strict: true, targetPID: 1, frontmostPID: 2, backgroundTargetPID: nil))
+    }
+
+    func testTargetIdentityDistinguishesWindowsWithinOneApp() {
+        let first = WindowTarget(appName: "Fixture", bundleID: "test.fixture", pid: 10, windowNumber: 100, windowTitle: "Same", bounds: CGRect(x: 0, y: 0, width: 100, height: 100), isFrontmost: false, axWindow: nil)
+        let second = WindowTarget(appName: "Fixture", bundleID: "test.fixture", pid: 10, windowNumber: 101, windowTitle: "Same", bounds: CGRect(x: 100, y: 0, width: 100, height: 100), isFrontmost: false, axWindow: nil)
+        XCTAssertEqual(first.targetID, "10:100")
+        XCTAssertEqual(second.targetID, "10:101")
+        XCTAssertNotEqual(first.targetID, second.targetID)
+    }
+
+    func testSnapshotRegistryKeepsTargetsIndependentAndInvalidatesGlobally() throws {
+        let firstA = snapshot(id: "a1", targetID: "10:100", pid: 10, windowNumber: 100)
+        let firstB = snapshot(id: "b1", targetID: "20:200", pid: 20, windowNumber: 200)
+        var registry = SnapshotRegistry()
+        registry.save(firstA)
+        registry.save(firstB)
+        XCTAssertEqual(try registry.require("a1").targetID, "10:100")
+        XCTAssertEqual(try registry.require("b1").targetID, "20:200")
+
+        let secondA = snapshot(id: "a2", targetID: "10:100", pid: 10, windowNumber: 100)
+        registry.save(secondA)
+        XCTAssertEqual(try registry.require("a2").targetID, "10:100")
+        XCTAssertEqual(try registry.require("b1").targetID, "20:200")
+        XCTAssertThrowsError(try registry.require("a1"))
+
+        registry.markAllStale(reason: "Focus changed")
+        XCTAssertThrowsError(try registry.require("a2"))
+        XCTAssertThrowsError(try registry.require("b1"))
+        let secondB = snapshot(id: "b2", targetID: "20:200", pid: 20, windowNumber: 200)
+        registry.save(secondB)
+        XCTAssertEqual(try registry.require("b2").targetID, "20:200")
+        XCTAssertThrowsError(try registry.require("a2"))
     }
     func testUnicodeChunksNeverSplitSurrogatePairs() {
         let texts = [String(repeating: "a", count: 19) + "😀z", "مرحبا 👩🏾‍💻 e\u{301} 日本語", "", String(repeating: "😀", count: 23)]

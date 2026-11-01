@@ -4,8 +4,7 @@ import Foundation
 actor ComputerUseRuntime {
     private let accessibility = AccessibilityService()
     private let foregroundInput = InputService()
-    private var lastSnapshot: AppSnapshot?
-    private var observedWindowBounds: CGRect?
+    private var snapshots = SnapshotRegistry()
     private var strictMode = true
     private var activationSession: BackgroundActivationSession?
     private var activationKey: String?
@@ -15,8 +14,7 @@ actor ComputerUseRuntime {
     private var frontmostMonitor: FrontmostApplicationMonitor?
     private var snapshotSequence = 0
     private var previousLabelsByWindow: [String: Set<String>] = [:]
-    private var recentActions: [String] = []
-    private var staleSnapshotReason: String?
+    private var recentActionsByTarget: [String: [String]] = [:]
     private var activationStartedAt: UInt64 = 0
 
     func setStrictMode(_ enabled: Bool) -> ActionMetadata {
@@ -34,18 +32,19 @@ actor ComputerUseRuntime {
         )
     }
 
-    func snapshot(appName: String?, pid: Int? = nil, windowTitle: String? = nil, strict requestedStrict: Bool?, crop: CGRect? = nil, imageWidth: Int = 768, waitFor: String? = nil, waitMilliseconds: Int = 2000) async throws -> AppSnapshot {
+    func snapshot(targetID: String? = nil, appName: String?, pid: Int? = nil, windowTitle: String? = nil, windowNumber: Int? = nil, strict requestedStrict: Bool?, crop: CGRect? = nil, imageWidth: Int = 768, waitFor: String? = nil, waitMilliseconds: Int = 2000) async throws -> AppSnapshot {
         let effectiveStrict = requestedStrict ?? strictMode
         if !effectiveStrict {
             resetBackgroundActivation()
         }
 
         let requestedPID = pid.map(pid_t.init)
-        var target = try accessibility.resolveTarget(appName: appName, pid: requestedPID, windowTitle: windowTitle)
+        var target = try targetID.map { try accessibility.resolveTarget(targetID: $0) }
+            ?? accessibility.resolveTarget(appName: appName, pid: requestedPID, windowTitle: windowTitle, windowNumber: windowNumber)
         let backgroundActivated: Bool
         if effectiveStrict, !target.isFrontmost {
             backgroundActivated = try await ensureBackgroundActivation(target: target)
-            target = try accessibility.resolveTarget(appName: appName, pid: requestedPID, windowTitle: windowTitle)
+            target = try accessibility.resolveTarget(targetID: target.targetID)
         } else {
             backgroundActivated = false
         }
@@ -56,16 +55,14 @@ actor ComputerUseRuntime {
             backgroundActivated: backgroundActivated, crop: crop, imageWidth: imageWidth, waitFor: waitFor, waitMilliseconds: waitMilliseconds
         )
         let annotatedSnapshot = annotate(snapshot: snapshot)
-        staleSnapshotReason = nil
-        observedWindowBounds = target.bounds
-        lastSnapshot = annotatedSnapshot
+        snapshots.save(annotatedSnapshot)
         return annotatedSnapshot
     }
 
     func click(snapshotID: String?, ref: String?, index: Int?, imageX: Double?, imageY: Double?, screenX: Double? = nil, screenY: Double? = nil, clickCount: Int, rightClick: Bool = false, strict requestedStrict: Bool?) async throws -> ActionMetadata {
         let snapshot = try requireSnapshot(snapshotID: snapshotID)
         let effectiveStrict = requestedStrict ?? snapshot.strictMode
-        try validateSnapshotForAction(snapshot: snapshot, strict: effectiveStrict)
+        _ = try await prepareAction(snapshot: snapshot, strict: effectiveStrict)
 
         if let record = findRecord(ref: ref, index: index, in: snapshot) {
             guard let fresh = freshRecord(matching: record, in: snapshot) else {
@@ -73,59 +70,56 @@ actor ComputerUseRuntime {
             }
             AgentCursorOverlay.shared.show(at: fresh.semantic.frame.center)
             if !rightClick, clickCount == 1, fresh.semantic.capabilities.canPress, accessibility.press(record: fresh) {
-                return recordAction(ActionMetadata(ok: true, path: .accessibility, strictMode: effectiveStrict, backgroundSafe: true, fallbackUsed: false, message: "Pressed \(record.semantic.ref) via AXPress."))
+                return recordAction(ActionMetadata(ok: true, path: .accessibility, strictMode: effectiveStrict, backgroundSafe: true, fallbackUsed: false, message: "Pressed \(record.semantic.ref) via AXPress."), targetID: snapshot.targetID)
             }
-            if !rightClick, clickCount == 1, fresh.semantic.capabilities.canFocus, accessibility.focus(record: fresh) {
-                return recordAction(ActionMetadata(ok: true, path: .accessibility, strictMode: effectiveStrict, backgroundSafe: true, fallbackUsed: false, message: "Focused \(record.semantic.ref) via AX."))
-            }
-            return try await clickPoint(fresh.semantic.frame.center, clickCount: clickCount, rightClick: rightClick, strict: effectiveStrict, fallbackUsed: true)
+            return try await clickPoint(fresh.semantic.frame.center, snapshot: snapshot, clickCount: clickCount, rightClick: rightClick, strict: effectiveStrict, fallbackUsed: true)
         }
 
         if ref != nil || index != nil {
             throw ComputerUseError.invalidElement(ref ?? index.map(String.init) ?? "<missing>")
         }
         if let screenX, let screenY {
-            return try await clickPoint(CGPoint(x: screenX, y: screenY), clickCount: clickCount, rightClick: rightClick, strict: effectiveStrict, fallbackUsed: false)
+            return try await clickPoint(CGPoint(x: screenX, y: screenY), snapshot: snapshot, clickCount: clickCount, rightClick: rightClick, strict: effectiveStrict, fallbackUsed: false)
         }
 
         if let imageX, let imageY {
             let point = snapshot.screenshotMeta.toScreen(imageX: imageX, imageY: imageY)
-            return try await clickPoint(point, clickCount: clickCount, rightClick: rightClick, strict: effectiveStrict, fallbackUsed: false)
+            return try await clickPoint(point, snapshot: snapshot, clickCount: clickCount, rightClick: rightClick, strict: effectiveStrict, fallbackUsed: false)
         }
 
         throw ComputerUseError.invalidElement(ref ?? index.map(String.init) ?? "<missing>")
     }
 
-    func typeText(snapshotID: String?, text: String, strict requestedStrict: Bool?) throws -> ActionMetadata {
+    func typeText(snapshotID: String?, text: String, strict requestedStrict: Bool?) async throws -> ActionMetadata {
         let snapshot = try requireSnapshot(snapshotID: snapshotID)
         let effectiveStrict = requestedStrict ?? snapshot.strictMode
-        try validateSnapshotForAction(snapshot: snapshot, strict: effectiveStrict)
+        _ = try await prepareAction(snapshot: snapshot, strict: effectiveStrict)
         if effectiveStrict {
             try BackgroundInputDispatcher.typeText(pid: snapshot.pid, text: text)
-            return recordAction(ActionMetadata(ok: true, path: .backgroundCGEvent, strictMode: true, backgroundSafe: true, fallbackUsed: false, message: "Typed text with postToPid."))
+            return recordAction(ActionMetadata(ok: true, path: .backgroundCGEvent, strictMode: true, backgroundSafe: true, fallbackUsed: false, message: "Typed text with postToPid."), targetID: snapshot.targetID)
         }
 
         try foregroundInput.typeText(text)
-        return recordAction(ActionMetadata(ok: true, path: .foregroundCGEvent, strictMode: false, backgroundSafe: false, fallbackUsed: true, message: "Typed text with foreground HID fallback."))
+        return recordAction(ActionMetadata(ok: true, path: .foregroundCGEvent, strictMode: false, backgroundSafe: false, fallbackUsed: true, message: "Typed text with foreground HID fallback."), targetID: snapshot.targetID)
     }
 
-    func pressKey(snapshotID: String?, combo: String, milliseconds: Int = 0, strict requestedStrict: Bool?) throws -> ActionMetadata {
+    func pressKey(snapshotID: String?, combo: String, milliseconds: Int = 0, strict requestedStrict: Bool?) async throws -> ActionMetadata {
         let snapshot = try requireSnapshot(snapshotID: snapshotID)
         let effectiveStrict = requestedStrict ?? snapshot.strictMode
-        try validateSnapshotForAction(snapshot: snapshot, strict: effectiveStrict)
+        _ = try await prepareAction(snapshot: snapshot, strict: effectiveStrict)
         if effectiveStrict {
             try BackgroundInputDispatcher.pressKey(pid: snapshot.pid, combo: combo, milliseconds: milliseconds)
-            return recordAction(ActionMetadata(ok: true, path: .backgroundCGEvent, strictMode: true, backgroundSafe: true, fallbackUsed: false, message: "Pressed key with postToPid."))
+            return recordAction(ActionMetadata(ok: true, path: .backgroundCGEvent, strictMode: true, backgroundSafe: true, fallbackUsed: false, message: "Pressed key with postToPid."), targetID: snapshot.targetID)
         }
 
         try foregroundInput.pressKey(combo, milliseconds: milliseconds)
-        return recordAction(ActionMetadata(ok: true, path: .foregroundCGEvent, strictMode: false, backgroundSafe: false, fallbackUsed: true, message: "Pressed key with foreground HID fallback."))
+        return recordAction(ActionMetadata(ok: true, path: .foregroundCGEvent, strictMode: false, backgroundSafe: false, fallbackUsed: true, message: "Pressed key with foreground HID fallback."), targetID: snapshot.targetID)
     }
 
-    func scroll(snapshotID: String?, direction: String?, pages: Double, imageX: Double?, imageY: Double?, strict requestedStrict: Bool?) throws -> ActionMetadata {
+    func scroll(snapshotID: String?, direction: String?, pages: Double, imageX: Double?, imageY: Double?, strict requestedStrict: Bool?) async throws -> ActionMetadata {
         let snapshot = try requireSnapshot(snapshotID: snapshotID)
         let effectiveStrict = requestedStrict ?? snapshot.strictMode
-        try validateSnapshotForAction(snapshot: snapshot, strict: effectiveStrict)
+        _ = try await prepareAction(snapshot: snapshot, strict: effectiveStrict)
         let amount = max(1, Int32(pages * 5))
         let deltas = scrollDeltas(direction: direction, amount: amount)
         let point: CGPoint = {
@@ -141,16 +135,16 @@ actor ComputerUseRuntime {
                 throw ComputerUseError.strictModeViolation("background scroll requires a CG window number")
             }
             try BackgroundInputDispatcher.scroll(pid: snapshot.pid, windowNumber: windowNumber, point: point, deltaX: deltas.x, deltaY: deltas.y)
-            return recordAction(ActionMetadata(ok: true, path: .backgroundCGEvent, strictMode: true, backgroundSafe: true, fallbackUsed: false, message: "Scrolled with postToPid."))
+            return recordAction(ActionMetadata(ok: true, path: .backgroundCGEvent, strictMode: true, backgroundSafe: true, fallbackUsed: false, message: "Scrolled with postToPid."), targetID: snapshot.targetID)
         }
 
         try foregroundInput.scroll(point: point, deltaX: deltas.x, deltaY: deltas.y)
-        return recordAction(ActionMetadata(ok: true, path: .foregroundCGEvent, strictMode: false, backgroundSafe: false, fallbackUsed: true, message: "Scrolled with foreground HID fallback."))
+        return recordAction(ActionMetadata(ok: true, path: .foregroundCGEvent, strictMode: false, backgroundSafe: false, fallbackUsed: true, message: "Scrolled with foreground HID fallback."), targetID: snapshot.targetID)
     }
 
-    func setValue(snapshotID: String?, ref: String?, index: Int?, value: String) throws -> ActionMetadata {
+    func setValue(snapshotID: String?, ref: String?, index: Int?, value: String) async throws -> ActionMetadata {
         let snapshot = try requireSnapshot(snapshotID: snapshotID)
-        try validateSnapshotForAction(snapshot: snapshot, strict: snapshot.strictMode)
+        _ = try await prepareAction(snapshot: snapshot, strict: snapshot.strictMode)
         guard let record = findRecord(ref: ref, index: index, in: snapshot) else {
             throw ComputerUseError.invalidElement(ref ?? index.map(String.init) ?? "<missing>")
         }
@@ -160,17 +154,17 @@ actor ComputerUseRuntime {
         AgentCursorOverlay.shared.show(at: fresh.semantic.frame.center)
         let axWriteAccepted = accessibility.setValue(record: fresh, value: value)
         if axWriteAccepted, valueMatches(record: fresh, expected: value) {
-            return recordAction(ActionMetadata(ok: true, path: .accessibility, strictMode: snapshot.strictMode, backgroundSafe: true, fallbackUsed: false, message: "Set \(record.semantic.ref) via AXValue."))
+            return recordAction(ActionMetadata(ok: true, path: .accessibility, strictMode: snapshot.strictMode, backgroundSafe: true, fallbackUsed: false, message: "Set \(record.semantic.ref) via AXValue."), targetID: snapshot.targetID)
         }
 
         // Web inputs (Chromium/Electron) accept AXValue writes without applying
         // them. Fall back to focus + select-all + retype, then verify.
         guard accessibility.focus(record: fresh) else {
-            return recordAction(ActionMetadata(ok: false, path: .accessibility, strictMode: snapshot.strictMode, backgroundSafe: true, fallbackUsed: false, message: "Could not focus the intended field; no keyboard input was sent."))
+            return recordAction(ActionMetadata(ok: false, path: .accessibility, strictMode: snapshot.strictMode, backgroundSafe: true, fallbackUsed: false, message: "Could not focus the intended field; no keyboard input was sent."), targetID: snapshot.targetID)
         }
         try BackgroundInputDispatcher.pressKey(pid: snapshot.pid, combo: "command+a")
         try BackgroundInputDispatcher.typeText(pid: snapshot.pid, text: value)
-        Thread.sleep(forTimeInterval: 0.08)
+        try await Task.sleep(nanoseconds: 80_000_000)
         let verified = valueMatches(record: fresh, expected: value)
         return recordAction(ActionMetadata(
             ok: verified,
@@ -181,16 +175,16 @@ actor ComputerUseRuntime {
             message: verified
                 ? "AXValue write did not stick; set \(record.semantic.ref) via select-all + retype fallback."
                 : "Could not verify the value of \(record.semantic.ref) after AXValue and retype fallback."
-        ))
+        ), targetID: snapshot.targetID)
     }
 
     private func valueMatches(record: AXElementRecord, expected: String) -> Bool {
         accessibility.value(record: record) == expected
     }
 
-    func performAction(snapshotID: String?, ref: String?, index: Int?, action: String) throws -> ActionMetadata {
+    func performAction(snapshotID: String?, ref: String?, index: Int?, action: String) async throws -> ActionMetadata {
         let snapshot = try requireSnapshot(snapshotID: snapshotID)
-        try validateSnapshotForAction(snapshot: snapshot, strict: snapshot.strictMode)
+        _ = try await prepareAction(snapshot: snapshot, strict: snapshot.strictMode)
         guard let record = findRecord(ref: ref, index: index, in: snapshot) else {
             throw ComputerUseError.invalidElement(ref ?? index.map(String.init) ?? "<missing>")
         }
@@ -199,7 +193,7 @@ actor ComputerUseRuntime {
         }
         AgentCursorOverlay.shared.show(at: fresh.semantic.frame.center)
         let ok = accessibility.performAction(record: fresh, action: action)
-        return recordAction(ActionMetadata(ok: ok, path: .accessibility, strictMode: snapshot.strictMode, backgroundSafe: true, fallbackUsed: false, message: ok ? "Performed \(action) on \(record.semantic.ref)." : "AX action \(action) failed."))
+        return recordAction(ActionMetadata(ok: ok, path: .accessibility, strictMode: snapshot.strictMode, backgroundSafe: true, fallbackUsed: false, message: ok ? "Performed \(action) on \(record.semantic.ref)." : "AX action \(action) failed."), targetID: snapshot.targetID)
     }
 
     func wait(milliseconds: Int) async -> ActionMetadata {
@@ -208,10 +202,12 @@ actor ComputerUseRuntime {
         return ActionMetadata(ok: true, path: .none, strictMode: strictMode, backgroundSafe: true, fallbackUsed: false, message: "Waited \(clamped)ms.")
     }
 
-    private func clickPoint(_ point: CGPoint, clickCount: Int, rightClick: Bool, strict: Bool, fallbackUsed: Bool) async throws -> ActionMetadata {
-        let snapshot = try requireSnapshot()
-        try validateSnapshotForAction(snapshot: snapshot, strict: strict)
-        guard point.x.isFinite, point.y.isFinite, let observedWindowBounds, observedWindowBounds.contains(point) else {
+    func listWindows(appName: String?, pid: Int?) throws -> [WindowTarget] {
+        try accessibility.listTargets(appName: appName, pid: pid.map(pid_t.init))
+    }
+
+    private func clickPoint(_ point: CGPoint, snapshot: AppSnapshot, clickCount: Int, rightClick: Bool, strict: Bool, fallbackUsed: Bool) async throws -> ActionMetadata {
+        guard point.x.isFinite, point.y.isFinite, snapshot.windowBounds.contains(point) else {
             throw ComputerUseError.staleSnapshot("Click coordinates fall outside the observed target window. Recapture before input.")
         }
         AgentCursorOverlay.shared.show(at: point)
@@ -220,11 +216,11 @@ actor ComputerUseRuntime {
                 throw ComputerUseError.strictModeViolation("background click requires a CG window number")
             }
             try await BackgroundInputDispatcher.click(pid: snapshot.pid, windowNumber: windowNumber, point: point, doubleClick: clickCount >= 2, rightClick: rightClick)
-            return recordAction(ActionMetadata(ok: true, path: .backgroundCGEvent, strictMode: true, backgroundSafe: true, fallbackUsed: fallbackUsed, message: "Clicked with postToPid at \(Int(point.x)),\(Int(point.y))."))
+            return recordAction(ActionMetadata(ok: true, path: .backgroundCGEvent, strictMode: true, backgroundSafe: true, fallbackUsed: fallbackUsed, message: "Clicked with postToPid at \(Int(point.x)),\(Int(point.y))."), targetID: snapshot.targetID)
         }
 
         try await foregroundInput.click(point: point, doubleClick: clickCount >= 2, rightClick: rightClick)
-        return recordAction(ActionMetadata(ok: true, path: .foregroundCGEvent, strictMode: false, backgroundSafe: false, fallbackUsed: true, message: "Clicked with foreground HID fallback at \(Int(point.x)),\(Int(point.y))."))
+        return recordAction(ActionMetadata(ok: true, path: .foregroundCGEvent, strictMode: false, backgroundSafe: false, fallbackUsed: true, message: "Clicked with foreground HID fallback at \(Int(point.x)),\(Int(point.y))."), targetID: snapshot.targetID)
     }
 
     private func ensureBackgroundActivation(target: WindowTarget) async throws -> Bool {
@@ -268,11 +264,11 @@ actor ComputerUseRuntime {
         // A callback queued for an earlier activation must not invalidate the new one.
         guard observedAt >= activationStartedAt, activationSession != nil else { return }
         if pid == activationPreviousPID {
-            staleSnapshotReason = "The user returned focus to the previous app. Take a new snapshot before sending more input."
+            snapshots.markAllStale(reason: "The user returned focus to the previous app. Take a new snapshot before sending more input.")
         } else if pid == activationTargetPID {
-            staleSnapshotReason = "The target app became frontmost. Take a new snapshot before continuing."
+            snapshots.markAllStale(reason: "The target app became frontmost. Take a new snapshot before continuing.")
         } else {
-            staleSnapshotReason = "The user changed app focus. Take a new snapshot before sending more input."
+            snapshots.markAllStale(reason: "The user changed app focus. Take a new snapshot before sending more input.")
         }
         resetBackgroundActivation()
     }
@@ -287,31 +283,32 @@ actor ComputerUseRuntime {
     }
 
     func requireSnapshot(snapshotID: String? = nil) throws -> AppSnapshot {
-        guard let lastSnapshot else { throw ComputerUseError.noSnapshot }
-        if let snapshotID, snapshotID != lastSnapshot.id {
-            throw ComputerUseError.staleSnapshot("Snapshot \(snapshotID) is no longer current. Take a new snapshot before retrying.")
-        }
-        return lastSnapshot
+        try snapshots.require(snapshotID)
     }
 
-    private func validateSnapshotForAction(snapshot: AppSnapshot, strict: Bool) throws {
-        if let staleSnapshotReason {
-            throw ComputerUseError.staleSnapshot(staleSnapshotReason)
-        }
-        let target = try accessibility.resolveTarget(appName: snapshot.appName, pid: snapshot.pid, windowTitle: snapshot.windowTitle)
-        guard target.windowNumber == snapshot.windowNumber, target.bounds == observedWindowBounds else {
+    private func prepareAction(snapshot: AppSnapshot, strict: Bool) async throws -> WindowTarget {
+        var target = try accessibility.resolveTarget(targetID: snapshot.targetID)
+        guard target.windowNumber == snapshot.windowNumber, target.bounds.equalTo(snapshot.windowBounds) else {
             throw ComputerUseError.staleSnapshot("The target window moved, resized, or was replaced. Take a fresh snapshot before input.")
+        }
+        if strict, !target.isFrontmost {
+            _ = try await ensureBackgroundActivation(target: target)
+            target = try accessibility.resolveTarget(targetID: snapshot.targetID)
+            guard target.windowNumber == snapshot.windowNumber, target.bounds.equalTo(snapshot.windowBounds) else {
+                throw ComputerUseError.staleSnapshot("The target window moved or was replaced during background activation. Take a fresh snapshot before input.")
+            }
         }
         try SnapshotPolicy.validateFocus(
             strict: strict, targetPID: snapshot.pid,
             frontmostPID: NSWorkspace.shared.frontmostApplication?.processIdentifier,
             backgroundTargetPID: activationSession == nil ? nil : activationTargetPID
         )
+        return target
     }
 
     private func annotate(snapshot: AppSnapshot) -> AppSnapshot {
         snapshotSequence += 1
-        let key = windowKey(snapshot: snapshot)
+        let key = snapshot.targetID
         let labels = Set(snapshot.records.map { stableLabel(for: $0.semantic) }.filter { !$0.isEmpty })
         let previous = previousLabelsByWindow[key] ?? []
         previousLabelsByWindow[key] = labels
@@ -321,22 +318,24 @@ actor ComputerUseRuntime {
         return snapshot.withSessionMetadata(
             id: UUID().uuidString.lowercased(),
             observation: snapshotSequence,
-            recentActions: Array(recentActions.suffix(8)),
+            recentActions: Array((recentActionsByTarget[key] ?? []).suffix(8)),
             addedLabels: Array(added.prefix(16)),
             removedLabels: Array(removed.prefix(16))
         )
     }
 
-    private func recordAction(_ metadata: ActionMetadata) -> ActionMetadata {
-        recentActions.append(metadata.message)
-        if recentActions.count > 12 {
-            recentActions.removeFirst(recentActions.count - 12)
+    private func recordAction(_ metadata: ActionMetadata, targetID: String) -> ActionMetadata {
+        var actions = recentActionsByTarget[targetID] ?? []
+        actions.append(metadata.message)
+        if actions.count > 12 {
+            actions.removeFirst(actions.count - 12)
         }
+        recentActionsByTarget[targetID] = actions
         return metadata
     }
 
     private func freshRecord(matching record: AXElementRecord, in snapshot: AppSnapshot) -> AXElementRecord? {
-        guard let target = try? accessibility.resolveTarget(appName: snapshot.appName, pid: snapshot.pid, windowTitle: snapshot.windowTitle) else {
+        guard let target = try? accessibility.resolveTarget(targetID: snapshot.targetID) else {
             return nil
         }
         let records = accessibility.records(target: target)
@@ -354,10 +353,6 @@ actor ComputerUseRuntime {
             .filter { !$0.isEmpty }
             .joined(separator: " ")
             .lowercased()
-    }
-
-    private func windowKey(snapshot: AppSnapshot) -> String {
-        "\(snapshot.pid):\(snapshot.windowNumber ?? -1)"
     }
 
     private func findRecord(ref: String?, index: Int?, in snapshot: AppSnapshot) -> AXElementRecord? {

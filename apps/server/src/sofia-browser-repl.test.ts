@@ -99,6 +99,10 @@ async function startFakeBridgeWithPage() {
           ws.send(JSON.stringify({ id: msg.id, result: { result: { type: "string", value: "complete" } } }));
           return;
         }
+        if (expression.includes(".moveTo(") || expression.includes(".present(") || expression.includes(".flash(")) {
+          ws.send(JSON.stringify({ id: msg.id, result: { result: { type: "object", value: { arrived: true }, description: "Object" } } }));
+          return;
+        }
         // `see()` reads `snapshot()`'s `.text` and JSON-parses it, so an
         // observation has to come back as a JSON string. A bare object here
         // is what made `see()` fail with '"[object Object]" is not valid JSON'.
@@ -116,10 +120,10 @@ async function startFakeBridgeWithPage() {
     url: `http://127.0.0.1:${server.port}`,
     expressions,
     methods,
-    moves: () => expressions.filter((e) => e.includes("__sofiaAgentCursor.moveTo(")),
+    moves: () => expressions.filter((e) => e.includes("__sofiaAgentCursor?.moveTo(")),
     // Match the fade call itself: the injected overlay script also defines
     // `fade()`, so a bare "fade" substring matches the install and never fails.
-    fades: () => expressions.filter((e) => e.includes("(c.fade || c.hide).call(c)")),
+    fades: () => expressions.filter((e) => e.includes("__sofiaAgentCursor?.hide()")),
     cursorExpressions: () => expressions.filter((e) => e.includes("__sofiaAgentCursor")),
   };
 }
@@ -166,6 +170,39 @@ describe("sofia browser Node REPL", () => {
       arguments: { code: "globalThis.counter += 1; return counter" },
     });
     expect(response.result.content).toEqual([{ type: "text", text: "42" }]);
+  });
+
+  test("keeps local bindings across tool calls and resets only the JavaScript session", async () => {
+    const repl = startRepl({ sofiaHome: await isolatedHome() });
+    const tools = await repl.request(1, "tools/list");
+    expect(tools.result.tools.map((tool: { name: string }) => tool.name)).toEqual(["js", "js_reset"]);
+    const first = await repl.request(2, "tools/call", {
+      name: "js",
+      arguments: { code: "const count = 41; let label = 'cell'; count" },
+    });
+    expect(first.result.content).toEqual([{ type: "text", text: "41" }]);
+    const second = await repl.request(3, "tools/call", {
+      name: "js",
+      arguments: { code: "label += '-two'; return { count, label }" },
+    });
+    expect(second.result.content).toEqual([{ type: "text", text: JSON.stringify({ count: 41, label: "cell-two" }) }]);
+    const redeclared = await repl.request(4, "tools/call", {
+      name: "js",
+      arguments: { code: "const count = 0; count" },
+    });
+    expect(redeclared.error.message).toContain("Identifier 'count' has already been declared");
+    const reset = await repl.request(5, "tools/call", { name: "js_reset", arguments: {} });
+    expect(reset.result.content).toEqual([{ type: "text", text: "JavaScript session reset. Browser tabs and native apps were left open." }]);
+    const cleared = await repl.request(6, "tools/call", {
+      name: "js",
+      arguments: { code: "typeof count + ':' + typeof label" },
+    });
+    expect(cleared.result.content).toEqual([{ type: "text", text: "undefined:undefined" }]);
+    const reused = await repl.request(7, "tools/call", {
+      name: "js",
+      arguments: { code: "const count = 9; count" },
+    });
+    expect(reused.result.content).toEqual([{ type: "text", text: "9" }]);
   });
 
   test("returns screenshot-like values as MCP image content", async () => {
@@ -238,7 +275,7 @@ describe("sofia browser Node REPL", () => {
 
     const attached = await repl.request(2, "tools/call", {
       name: "js",
-      arguments: { code: "const b = await setupBrowserRuntime(); const t = await b.browsers.get('iab').tabs.get('PAGE-MARKER'); return t.id;" },
+      arguments: { code: "const t = await b.browsers.get('iab').tabs.get('PAGE-MARKER'); return t.id;" },
     });
     expect(attached.result.content).toEqual([{ type: "text", text: "PAGE-MARKER" }]);
   });
@@ -260,25 +297,23 @@ describe("sofia browser Node REPL", () => {
 
     const hover = await repl.request(3, "tools/call", {
       name: "js",
-      arguments: { code: "const b = await setupBrowserRuntime(); const t = await b.browsers.get('iab').tabs.get((await b.browsers.get('iab').tabs.list())[0].id); await t.hover({ role: 'button' }); return 'hover'", },
+      arguments: { code: "await t.hover({ role: 'button' }); return 'hover'", },
     });
     expect(hover.error).toBeUndefined();
-    expect(page.moves().length).toBeGreaterThanOrEqual(2);
-    // A cursor that was not on screen arrives from nearby, then lands on target.
-    expect(page.moves()[0]).toContain("moveTo(14, 40)");
-    expect(page.moves()[1]).toContain("moveTo(40, 60)");
+    expect(page.moves()).toHaveLength(1);
+    expect(page.moves()[0]).toContain("moveTo(40,60)");
 
     // The hover and the navigation share one runtime on purpose. The cursor
     // belongs to the page connection, and a fresh `setupBrowserRuntime` opens a
     // new one, so a navigation in a later call has no cursor left to fade.
     const nav = await repl.request(4, "tools/call", {
       name: "js",
-      arguments: { code: "const b = await setupBrowserRuntime(); const t = await b.browsers.get('iab').tabs.get((await b.browsers.get('iab').tabs.list())[0].id); await t.hover({ role: 'button' }); await t.goto('https://example.com/next'); return 'nav';", },
+      arguments: { code: "await t.hover({ role: 'button' }); await t.goto('https://example.com/next'); return 'nav';", },
     });
     expect(nav.error).toBeUndefined();
     expect(page.fades().length).toBe(1);
     // The fade is the last thing the cursor does: a navigation must not carry
     // the pointer into the document that replaced it.
-    expect(page.cursorExpressions().at(-1)).toContain("(c.fade || c.hide).call(c)");
+    expect(page.cursorExpressions().at(-1)).toContain("__sofiaAgentCursor?.hide()");
   });
 });

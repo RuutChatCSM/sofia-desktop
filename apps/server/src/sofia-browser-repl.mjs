@@ -20,6 +20,8 @@ import { createInterface } from "node:readline";
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import { AsyncLocalStorage } from "node:async_hooks";
+import { start as startReplServer } from "node:repl";
+import { PassThrough } from "node:stream";
 import { createBrowserCursor } from "./browser-cursor.mjs";
 import path from "node:path";
 import vm from "node:vm";
@@ -197,7 +199,8 @@ async function humanClick(s, x, y) {
 const ELEMENT_ROLE = `function(e){const explicit=e.getAttribute('role');if(explicit)return explicit;const tag=e.tagName.toLowerCase();if(tag==='input'){if(e.type==='checkbox'||e.type==='radio')return e.type;if(e.type==='button'||e.type==='submit'||e.type==='reset')return 'button';if(e.type==='number')return 'spinbutton';if(e.type==='search')return 'searchbox';return 'textbox';}if(tag==='textarea')return 'textbox';if(tag==='select')return 'combobox';if(tag==='a')return 'link';return tag;}`;
 const SAFE_LABEL = `function(e){const referenced=(e.getAttribute('aria-labelledby')||'').split(/\\s+/).filter(Boolean).map(id=>document.getElementById(id)?.textContent||'').join(' ');const associated=Array.from(e.labels||[]).map(label=>label.textContent||'').join(' ');return e.getAttribute('aria-label')||referenced||associated||e.getAttribute('title')||e.innerText||e.getAttribute('placeholder')||'';}`;
 const ELEMENTS_EXPR = `Array.from(document.querySelectorAll('a,button,input:not([type="hidden"]),select,textarea,label,[role],[aria-label],[data-testid]')).filter(e=>e.getClientRects().length>0&&getComputedStyle(e).visibility!=='hidden'&&(e.matches('input,textarea,select')||(${SAFE_LABEL})(e).trim()))`;
-const RESOLVE = `function(t){t=t||{};const safeLabel=${SAFE_LABEL};const role=${ELEMENT_ROLE};const coll=()=>${ELEMENTS_EXPR};if(t.selector){const e=document.querySelector(t.selector);return e&&e.getClientRects().length>0?e:null;}if(t.index!=null){const observed=window.__sofiaBrowserObservation;if(!observed||observed.document!==document||observed.url!==location.href)throw new Error('Stale browser observation; take a fresh snapshot before using an index');const node=observed.elements[t.index];if(!node||!node.isConnected)throw new Error('Observed element was replaced; take a fresh snapshot');return node;}let matches=coll();if(t.role)matches=matches.filter(e=>role(e)===t.role.toLowerCase());if(t.text)matches=matches.filter(e=>safeLabel(e).trim().toLowerCase().includes(t.text.trim().toLowerCase()));if(t.placeholder)matches=matches.filter(e=>e.getAttribute('placeholder')===t.placeholder);if(t.testid)matches=matches.filter(e=>e.getAttribute('data-testid')===t.testid);if(t.label){matches=matches.filter(e=>safeLabel(e).trim()===t.label);const control=matches.find(e=>e.matches('input,textarea,select'));if(control)return control;const label=matches.find(e=>e.tagName==='LABEL'&&e.control);if(label)return label.control;}return matches[0]||null;}`;
+const RESOLVE = `function(t,observationState=false){t=t||{};const safeLabel=${SAFE_LABEL};const role=${ELEMENT_ROLE};const coll=()=>observationState?Array.from(document.querySelectorAll('a,button,input:not([type="hidden"]),select,textarea,label,[role],[aria-label],[data-testid]')):${ELEMENTS_EXPR};if(t.selector){const e=document.querySelector(t.selector);return e&&(observationState||e.getClientRects().length>0)?e:null;}if(t.index!=null){const observed=window.__sofiaBrowserObservation;if(!observed||observed.document!==document||observed.url!==location.href)throw new Error('Stale browser observation; take a fresh snapshot before using an index');const node=observed.elements[t.index];if(!node||!node.isConnected){if(observationState)return null;throw new Error('Observed element was replaced; take a fresh snapshot');}return node;}let matches=coll();if(t.role)matches=matches.filter(e=>role(e)===t.role.toLowerCase());if(t.text)matches=matches.filter(e=>safeLabel(e).trim().toLowerCase().includes(t.text.trim().toLowerCase()));if(t.placeholder)matches=matches.filter(e=>e.getAttribute('placeholder')===t.placeholder);if(t.testid)matches=matches.filter(e=>e.getAttribute('data-testid')===t.testid);if(t.label){matches=matches.filter(e=>safeLabel(e).trim()===t.label);const control=matches.find(e=>e.matches('input,textarea,select'));if(control)return control;const label=matches.find(e=>e.tagName==='LABEL'&&e.control);if(label)return label.control;}return matches[0]||null;}`;
+const OBSERVE_NODES = `function(nodes){let observed=window.__sofiaBrowserObservation;if(!observed||observed.document!==document||observed.url!==location.href){observed={document,url:location.href,elements:${ELEMENTS_EXPR}};window.__sofiaBrowserObservation=observed;}return nodes.map(e=>{let index=observed.elements.indexOf(e);if(index<0){index=observed.elements.length;observed.elements.push(e);}return {index,tag:e.tagName.toLowerCase(),role:(${ELEMENT_ROLE})(e),label:(${SAFE_LABEL})(e).trim().slice(0,80),text:(e.textContent||'').trim().slice(0,80)};});}`;
 const runAct = (target, action) => `(() => { const e=(${RESOLVE})(${JSON.stringify(target)}); if(!e) return {ok:false,error:'not found'}; try{e.scrollIntoView({block:'center'});}catch{} e.focus(); ${action} })()`;
 
 // Throws when the bridge is unreachable: an empty list would read as "no tabs
@@ -358,6 +361,48 @@ function makeTab(tabEntry) {
     }
     return page.send;
   };
+  let axRefs = new Map();
+  let axObservationSequence = 0;
+  const axTarget = async (ref) => {
+    const backendNodeId = axRefs.get(String(ref));
+    if (backendNodeId === undefined) throw new Error("AX ref was not observed or has no DOM target; call ax.get() before acting");
+    const send = await ensure();
+    const current = await send("Runtime.evaluate", { expression: `!!window.__sofiaAXObservation&&window.__sofiaAXObservation.sequence===${axObservationSequence}&&window.__sofiaAXObservation.document===document&&window.__sofiaAXObservation.url===location.href`, returnByValue: true });
+    if (!current.result?.value) throw new Error("Stale AX observation; call ax.get() before acting");
+    const resolved = await send("DOM.resolveNode", { backendNodeId });
+    const objectId = resolved.object?.objectId;
+    if (!objectId) throw new Error("AX target is unavailable; take a fresh observation");
+    try {
+      const result = await send("Runtime.callFunctionOn", {
+        objectId,
+        functionDeclaration: `function(){if(!this.isConnected||this.ownerDocument!==document)throw new Error('Observed AX element was replaced; take a fresh observation');if(window!==window.top)throw new Error('AX actions in child frames are unsupported');return (${OBSERVE_NODES})([this])[0];}`,
+        returnByValue: true,
+      });
+      const target = result.result?.value;
+      if (!target || !Number.isInteger(target.index)) throw new Error("AX target could not be bound to the observation");
+      return { index: target.index };
+    } finally {
+      await send("Runtime.releaseObject", { objectId }).catch(() => {});
+    }
+  };
+  const lookup = async (predicate) => {
+    const send = await ensure();
+    const result = await send("Runtime.evaluate", {
+      expression: `(() => {const e=(${ELEMENTS_EXPR}).find(e=>${predicate});return e?{ok:true,...(${OBSERVE_NODES})([e])[0]}:{ok:false};})()`,
+      returnByValue: true,
+    });
+    return result?.result?.value ?? { ok: false };
+  };
+  const navigateHistory = async (offset) => {
+    const send = await ensure();
+    const history = await send("Page.getNavigationHistory", {});
+    if (!Number.isInteger(history.currentIndex) || !Array.isArray(history.entries)) throw new Error("Browser returned invalid navigation history");
+    const entry = history.entries[history.currentIndex + offset];
+    if (!entry) return false;
+    if (cursor) await cursor.fade();
+    await send("Page.navigateToHistoryEntry", { entryId: entry.id });
+    return true;
+  };
   const tab = {
     id: tabEntry.id,
     toJSON: () => ({ id: tabEntry.id, url: tabEntry.url, title: tabEntry.title }),
@@ -367,8 +412,8 @@ function makeTab(tabEntry) {
     // position rather than carrying the pointer into the page that replaced it.
     // The fade is the last thing it does.
     goto: async (url) => { const s = await ensure(); if (cursor) await cursor.fade(); await s("Page.navigate", { url }); await waitForLoad(s); return true; },
-    back: async () => { const s = await ensure(); try { const h = await s("Page.getNavigationHistory", {}); const cur = h?.currentIndex ?? 0; if (cur > 0) { await s("Page.navigateToHistoryEntry", { entryId: h.entries[cur - 1].id }); return true; } return true; } catch { await s("Page.goBack", {}).catch(() => {}); return true; } },
-    forward: async () => { const s = await ensure(); try { const h = await s("Page.getNavigationHistory", {}); const cur = h?.currentIndex ?? 0; if (cur < (h?.entries?.length ?? 0) - 1) { await s("Page.navigateToHistoryEntry", { entryId: h.entries[cur + 1].id }); return true; } return true; } catch { await s("Page.goForward", {}).catch(() => {}); return true; } },
+    back: async () => navigateHistory(-1),
+    forward: async () => navigateHistory(1),
     reload: async () => { const s = await ensure(); if (cursor) await cursor.fade(); await s("Page.reload", {}); return true; },
     close: async () => { await (await ensure())("Target.closeTarget", { targetId: pageTargetId }); page?.ws.close(); return true; },
     screenshot: async () => { const s = await ensure(); const r = await s("Page.captureScreenshot", { format: "png", captureBeyondViewport: true }, 15000); return observe({ data: r?.data ?? "", mimeType: "image/png" }); },
@@ -387,14 +432,37 @@ function makeTab(tabEntry) {
     evaluate: async (script) => { if (typeof script !== "string") throw new Error('tab.evaluate expects a JavaScript string, e.g. await tab.evaluate("document.body.innerText"); functions and {expression} objects are not supported'); const s = await ensure(); const r = await s("Runtime.evaluate", { expression: script, returnByValue: true, awaitPromise: true }); return r?.result?.value ?? r?.result?.description ?? null; },
     waitForLoadState: async () => { const s = await ensure(); return await waitForLoad(s); },
     waitForTimeout: async (ms = 1000) => { await new Promise((r) => setTimeout(r, ms)); return true; },
-    waitFor: async (target, { state = "visible", timeout = 8000 } = {}) => { const s = await ensure(); const deadline = Date.now() + timeout; while (Date.now() < deadline) { const r = await s("Runtime.evaluate", { expression: `(() => { const e=(${RESOLVE})(${JSON.stringify(target)}); if(!e) return false; const vis=e.getClientRects().length>0&&getComputedStyle(e).visibility!=='hidden'; const present=document.documentElement.contains(e); return ${JSON.stringify(state)==='visible' ? 'vis' : JSON.stringify(state)==='attached' ? 'present' : 'vis'}; })()`, returnByValue: true }); if (r?.result?.value) return true; await new Promise((r) => setTimeout(r, 200)); } return false; },
-    getByText: async (text, { exact } = {}) => { const s = await ensure(); const r = await s("Runtime.evaluate", { expression: `(() => { const els=${ELEMENTS_EXPR}; const safeLabel=${SAFE_LABEL}; const needle=${JSON.stringify(String(text).toLowerCase())}; const i=els.findIndex(e=>{const val=safeLabel(e).trim();return ${exact ? 'val.toLowerCase()===needle' : 'val.toLowerCase().includes(needle)'};}); if(i<0) return {ok:false}; const e=els[i]; return {ok:true,index:i,tag:e.tagName.toLowerCase(),label:(e.textContent||'').trim().slice(0,80)}; })()`, returnByValue: true }); return r?.result?.value ?? { ok: false }; },
-    getByRole: async (role) => { const s = await ensure(); const r = await s("Runtime.evaluate", { expression: `(() => { const els=${ELEMENTS_EXPR}; const mapf=${ELEMENT_ROLE}; const needle=${JSON.stringify(String(role).toLowerCase())}; const i=els.findIndex(e=>mapf(e)===needle); if(i<0) return {ok:false}; const e=els[i]; return {ok:true,index:i,tag:e.tagName.toLowerCase(),role:mapf(e),label:(e.textContent||'').trim().slice(0,80)}; })()`, returnByValue: true }); return r?.result?.value ?? { ok: false }; },
-    getByLabel: async (label) => { const s = await ensure(); const r = await s("Runtime.evaluate", { expression: `(() => { const els=${ELEMENTS_EXPR}; const needle=${JSON.stringify(String(label))}; const i=els.findIndex(e=>(${SAFE_LABEL})(e).trim()===needle&&e.matches('input,textarea,select,button')); if(i<0) return {ok:false}; const e=els[i]; return {ok:true,index:i,tag:e.tagName.toLowerCase(),label:(e.textContent||e.getAttribute('aria-label')||'').trim().slice(0,80)}; })()`, returnByValue: true }); return r?.result?.value ?? { ok: false }; },
-    getByPlaceholder: async (placeholder) => { const s = await ensure(); const r = await s("Runtime.evaluate", { expression: `(() => { const els=${ELEMENTS_EXPR}; const needle=${JSON.stringify(String(placeholder))}; const i=els.findIndex(e=>(e.getAttribute('placeholder')||'')===needle); if(i<0) return {ok:false}; const e=els[i]; return {ok:true,index:i,tag:e.tagName.toLowerCase(),label:e.getAttribute('placeholder')||''}; })()`, returnByValue: true }); return r?.result?.value ?? { ok: false }; },
-    getByTestId: async (testid) => { const s = await ensure(); const r = await s("Runtime.evaluate", { expression: `(() => { const els=${ELEMENTS_EXPR}; const needle=${JSON.stringify(String(testid))}; const i=els.findIndex(e=>(e.getAttribute('data-testid')||'')===needle); if(i<0) return {ok:false}; const e=els[i]; return {ok:true,index:i,tag:e.tagName.toLowerCase(),label:(e.textContent||'').trim().slice(0,80)}; })()`, returnByValue: true }); return r?.result?.value ?? { ok: false }; },
+    waitFor: async (target, { state = "visible", timeout = 8000 } = {}) => {
+      if (!["visible", "hidden", "attached", "detached"].includes(state)) throw new Error(`Unsupported wait state: ${state}`);
+      if (!Number.isFinite(timeout) || timeout < 0) throw new Error("Wait timeout must be a non-negative finite number");
+      const send = await ensure();
+      const deadline = Date.now() + timeout;
+      do {
+        const result = await send("Runtime.evaluate", {
+          expression: `(() => {const e=(${RESOLVE})(${JSON.stringify(target)},true);const attached=!!e&&document.documentElement.contains(e);const visible=attached&&e.getClientRects().length>0&&getComputedStyle(e).visibility!=='hidden'&&getComputedStyle(e).visibility!=='collapse';return ${{ visible: "visible", hidden: "!visible", attached: "attached", detached: "!attached" }[state]};})()`,
+          returnByValue: true,
+        });
+        if (result?.result?.value) return true;
+        const remaining = deadline - Date.now();
+        if (remaining <= 0) return false;
+        await new Promise(resolve => setTimeout(resolve, Math.min(200, remaining)));
+      } while (Date.now() <= deadline);
+      return false;
+    },
+    getByText: async (text, { exact = false } = {}) => lookup(`(${SAFE_LABEL})(e).trim().toLowerCase()${exact ? "===" : ".includes"}${exact ? JSON.stringify(String(text).toLowerCase()) : `(${JSON.stringify(String(text).toLowerCase())})`}`),
+    getByRole: async (role) => lookup(`(${ELEMENT_ROLE})(e)===${JSON.stringify(String(role).toLowerCase())}`),
+    getByLabel: async (label) => lookup(`(${SAFE_LABEL})(e).trim()===${JSON.stringify(String(label))}&&e.matches('input,textarea,select,button')`),
+    getByPlaceholder: async (placeholder) => lookup(`e.getAttribute('placeholder')===${JSON.stringify(String(placeholder))}`),
+    getByTestId: async (testid) => lookup(`e.getAttribute('data-testid')===${JSON.stringify(String(testid))}`),
     querySelector: async (selector) => { const s = await ensure(); const r = await s("Runtime.evaluate", { expression: `(() => { const e=document.querySelector(${JSON.stringify(selector)}); if(!e) return {ok:false}; return {ok:true,tag:e.tagName.toLowerCase(),text:(e.textContent||'').trim().slice(0,120)}; })()`, returnByValue: true }); return r?.result?.value ?? { ok: false }; },
-    locator: async (selector) => { const s = await ensure(); const r = await s("Runtime.evaluate", { expression: `(() => { const els=Array.from(document.querySelectorAll(${JSON.stringify(selector)})).filter(e=>e.getClientRects().length>0); return els.map((e,i)=>({index:i,tag:e.tagName.toLowerCase(),text:(e.textContent||'').trim().slice(0,80)})); })()`, returnByValue: true }); return r?.result?.value ?? []; },
+    locator: async (selector) => {
+      const send = await ensure();
+      const result = await send("Runtime.evaluate", {
+        expression: `(${OBSERVE_NODES})(Array.from(document.querySelectorAll(${JSON.stringify(selector)})).filter(e=>e.getClientRects().length>0&&getComputedStyle(e).visibility!=='hidden'))`,
+        returnByValue: true,
+      });
+      return result?.result?.value ?? [];
+    },
     click: async (target = {}) => { const s = await ensure(); const hasTarget = target && (target.selector != null || target.index != null || target.text != null || target.role != null || target.label != null || target.placeholder != null || target.testid != null); if (hasTarget) { const c = await centreOf(s, target, true); if (!c?.ok) throw new Error(c?.error || "Click target not found"); await (await cursorFor(s)).click(c.x, c.y); return await humanClick(s, c.x, c.y); } const x = Number(target?.x) || 0, y = Number(target?.y) || 0; if (!(target?.x != null && target?.y != null)) return { ok: false, error: "no target and no coordinates" }; await (await cursorFor(s)).click(x, y); return await humanClick(s, x, y); },
     dblclick: async (target) => { const send = await ensure(); const point = await centreOf(send, target, true); if (!point?.ok) throw new Error(point?.error || "Double-click target not found"); await (await cursorFor(send)).doubleClick(point.x, point.y); await humanClick(send, point.x, point.y); await send("Input.dispatchMouseEvent", { type: "mousePressed", x: point.x, y: point.y, button: "left", clickCount: 2 }); await send("Input.dispatchMouseEvent", { type: "mouseReleased", x: point.x, y: point.y, button: "left", clickCount: 2 }); return { ok: true }; },
     hover: async (target) => { const send = await ensure(); const point = await centreOf(send, target); if (!point?.ok) throw new Error("Hover target not found"); await (await cursorFor(send)).move(point.x, point.y); await moveMouseHuman(send, point.x, point.y); return { ok: true }; },
@@ -410,18 +478,64 @@ function makeTab(tabEntry) {
       if (!verified?.result?.value) throw new Error("Field did not retain the entered value; inspect the page before retrying");
       return { ok: true };
     },
-    select: async (target, value) => { const s = await ensure(); const r = await s("Runtime.evaluate", { expression: runAct(target, `if(e.tagName!=='SELECT') return {ok:false,error:'not a select'}; const b=e.getBoundingClientRect(); e.value=${JSON.stringify(value)}; e.dispatchEvent(new Event('change',{bubbles:true})); return {ok:true, value:e.value, x:Math.round(b.x+b.width/2), y:Math.round(b.y+b.height/2)};`), returnByValue: true }); const v = r?.result?.value; if (v?.ok) await (await cursorFor(s)).click(v.x, v.y); return v ?? { ok: false }; },
+    select: async (target, value) => {
+      const send = await ensure();
+      const requested = String(value);
+      const validate = `if(!e||e.tagName!=='SELECT')throw new Error('Target is not a select');if(e.matches(':disabled')||e.getAttribute('aria-disabled')==='true')throw new Error('Select is disabled');const option=Array.from(e.options).find(option=>option.value===${JSON.stringify(requested)});if(!option)throw new Error('Requested select option does not exist');if(option.disabled||option.closest('optgroup')?.disabled)throw new Error('Requested select option is disabled');`;
+      const result = await send("Runtime.evaluate", {
+        expression: `(() => {const e=(${RESOLVE})(${JSON.stringify(target)});${validate}const target=(${OBSERVE_NODES})([e])[0];e.scrollIntoView({block:'center'});const bounds=e.getBoundingClientRect();return {index:target.index,x:Math.round(bounds.x+bounds.width/2),y:Math.round(bounds.y+bounds.height/2)};})()`,
+        returnByValue: true,
+      });
+      const selected = result.result.value;
+      await (await cursorFor(send)).move(selected.x, selected.y);
+      const boundTarget = JSON.stringify({ index: selected.index });
+      await send("Runtime.evaluate", {
+        expression: `(() => {const e=(${RESOLVE})(${boundTarget});${validate}e.focus();const setter=Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value').set;setter.call(e,${JSON.stringify(requested)});e.dispatchEvent(new Event('input',{bubbles:true,composed:true}));e.dispatchEvent(new Event('change',{bubbles:true}));return true;})()`,
+        returnByValue: true,
+      });
+      const verified = await send("Runtime.evaluate", {
+        expression: `(() => {const e=(${RESOLVE})(${boundTarget});return e.value===${JSON.stringify(requested)};})()`,
+        returnByValue: true,
+      });
+      if (!verified.result.value) throw new Error("Select did not retain the requested option; inspect the page before retrying");
+      return { ok: true, value: requested, eventSource: "synthetic" };
+    },
     check: async (target) => { const send = await ensure(); const read = async () => { const result = await send("Runtime.evaluate", { expression: `(() => {const e=(${RESOLVE})(${JSON.stringify(target)});if(!e||!(e.type==='checkbox'||e.type==='radio'||e.getAttribute('role')==='checkbox'))return {error:'Target is not a checkbox or radio'};return {checked:e.matches('input')?e.checked:e.getAttribute('aria-checked')==='true'};})()`, returnByValue: true }); const state = result?.result?.value; if (!state || state.error) throw new Error(state?.error || "Check target not found"); return state.checked; }; if (!await read()) await tab.click(target); if (!await read()) throw new Error("Checkbox did not become checked"); return { ok: true, checked: true }; },
     press: async (target, key) => { const send = await ensure(); const result = await send("Runtime.evaluate", { expression: runAct(target, "return {ok:true};"), returnByValue: true }); if (!result?.result?.value?.ok) throw new Error("Key target not found"); return await tab.keypress({ combo: key }); },
     type: async ({ text } = {}) => { const send = await ensure(); const result = await send("Runtime.evaluate", { expression: "(() => {const e=document.activeElement;return !!e&&(e.matches('input,textarea')||e.isContentEditable)&&!e.disabled&&!e.readOnly;})()", returnByValue: true }); if (!result?.result?.value) throw new Error("Focus an editable field before typing"); await send("Input.insertText", { text: String(text ?? '') }); return { ok: true }; },
     keypress: async ({ combo }) => { const s = await ensure(); const c = String(combo || "").split("+"); const [mod, key] = c.length > 1 ? [c[0], c.slice(1).join("+")] : [null, c[0]]; const mods = { command: "Meta", cmd: "Meta", meta: "Meta", ctrl: "Control", control: "Control", alt: "Alt", option: "Alt", shift: "Shift" }; const modifiers = mod ? (mods[mod.toLowerCase()] ?? mod) : null; const rawKey = { control: "Control", ctrl: "Control", command: "Meta", meta: "Meta", alt: "Alt", option: "Alt", shift: "Shift", return: "Enter", enter: "Enter", escape: "Escape", tab: "Tab", space: " ", " ": " " }[key.toLowerCase()] ?? key; await s("Input.dispatchKeyEvent", { type: rawKey === "Enter" && !modifiers ? "keyDown" : "rawKeyDown", ...(rawKey === "Enter" && !modifiers ? { text: "\r", unmodifiedText: "\r" } : {}), key: rawKey, code: rawKey, windowsVirtualKeyCode: { Enter: 13, Tab: 9, Escape: 27, Backspace: 8, Delete: 46, ArrowLeft: 37, ArrowUp: 38, ArrowRight: 39, ArrowDown: 40, " ": 32 }[rawKey] ?? (key.length === 1 ? key.toUpperCase().charCodeAt(0) : 0), modifiers: modifiers ? { "Meta": 4, "Control": 2, "Alt": 1, "Shift": 8 }[modifiers] ?? 0 : 0 }); await s("Input.dispatchKeyEvent", { type: "keyUp", key: rawKey, code: rawKey }); return true; },
     ax: {
-      get: async () => { const s = await ensure(); try { await s("Accessibility.enable", {}).catch(() => {}); const { nodes } = await s("Accessibility.getFullAXTree", {}, 15000); const interactive = ["button","link","textbox","checkbox","radio","combobox","menuitem","menuitemcheckbox","tab","heading","img","listitem","option","switch","slider","spinbutton"]; return (nodes ?? []).filter((n) => n.role?.value && interactive.includes(n.role.value)).map((n) => ({ ref: n.backendDOMNodeId ?? n.nodeId, role: n.role.value, name: n.name?.value ?? "" })).slice(0, 200); } catch { return []; } },
-      click: async ({ ref }) => { const t = await tab.ax.get(); const found = t.find((x) => String(x.ref) === String(ref)); if (!found?.name) return { ok: false, error: "ax ref not found" }; return await tab.click({ text: found.name }); },
-      pressKey: async ({ ref, combo }) => { const t = await tab.ax.get(); const found = t.find((x) => String(x.ref) === String(ref)); if (found?.name) await tab.click({ text: found.name }); return await tab.keypress({ combo }); },
-      setValue: async ({ ref, value }) => { const t = await tab.ax.get(); const found = t.find((x) => String(x.ref) === String(ref)); if (!found?.name) return { ok: false }; return await tab.fill({ label: found.name, text: found.name }, value); },
-      typeText: async ({ ref, text }) => { return await tab.keypress({ combo: "" }) && await tab.type({ text }); },
-      scroll: async ({ ref, direction }) => { const t = await tab.ax.get(); const found = t.find((x) => String(x.ref) === String(ref)); if (found?.name) await tab.click({ text: found.name }); const s = await ensure(); await s("Input.dispatchMouseEvent", { type: "mouseWheel", x: 0, y: 0, deltaX: direction === "left" || direction === "right" ? (direction === "right" ? 120 : -120) : 0, deltaY: direction === "down" ? 120 : direction === "up" ? -120 : 0 }); return true; },
+      get: async () => {
+        const send = await ensure();
+        await send("Accessibility.enable", {});
+        axRefs = new Map();
+        axObservationSequence += 1;
+        await send("Runtime.evaluate", { expression: `window.__sofiaAXObservation={document,url:location.href,sequence:${axObservationSequence}};true`, returnByValue: true });
+        const { nodes } = await send("Accessibility.getFullAXTree", {}, 15000);
+        const interactive = ["button","link","textbox","checkbox","radio","combobox","menuitem","menuitemcheckbox","tab","heading","img","listitem","option","switch","slider","spinbutton"];
+        const selected = (nodes ?? []).filter(node => node.role?.value && interactive.includes(node.role.value)).slice(0, 200);
+        axRefs = new Map(selected.filter(node => node.backendDOMNodeId !== undefined).map(node => [String(node.backendDOMNodeId), node.backendDOMNodeId]));
+        return observe(selected.map(node => ({ ref: node.backendDOMNodeId ?? `ax:${node.nodeId}`, role: node.role.value, name: node.name?.value ?? "", actionable: node.backendDOMNodeId !== undefined })));
+      },
+      click: async ({ ref }) => tab.click(await axTarget(ref)),
+      pressKey: async ({ ref, combo }) => tab.press(await axTarget(ref), combo),
+      setValue: async ({ ref, value }) => tab.fill(await axTarget(ref), value),
+      typeText: async ({ ref, text }) => {
+        const target = await axTarget(ref);
+        const send = await ensure();
+        await send("Runtime.evaluate", { expression: runAct(target, "return {ok:true};"), returnByValue: true });
+        return tab.type({ text });
+      },
+      scroll: async ({ ref, direction }) => {
+        if (!["up", "down", "left", "right"].includes(direction)) throw new Error("Unsupported AX scroll direction");
+        const target = await axTarget(ref);
+        const send = await ensure();
+        const point = await centreOf(send, target);
+        if (!point?.ok) throw new Error("AX scroll target not found");
+        await (await cursorFor(send)).move(point.x, point.y);
+        await send("Input.dispatchMouseEvent", { type: "mouseWheel", x: point.x, y: point.y, deltaX: direction === "right" ? 120 : direction === "left" ? -120 : 0, deltaY: direction === "down" ? 120 : direction === "up" ? -120 : 0 });
+        return true;
+      },
     },
     clipboard: {
       readText: async () => { const s = await ensure(); const r = await s("Runtime.evaluate", { expression: `(() => { const ta=document.createElement('textarea'); ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.focus(); document.execCommand('paste'); const v=ta.value; ta.remove(); return v; })()`, returnByValue: true }); return r?.result?.value ?? ""; },
@@ -551,7 +665,7 @@ Reliable browser protocol:
 - Screenshot ONLY when the a11y tree is ambiguous; otherwise read the tree.
 - Re-use the open tab; don't open new tabs repeatedly.
 - browser.tabs.list() returns plain {id,url,title} metadata, not tab handles. Use tabs.get(metadata.id) before actions; never choose the first tab as a recovery fallback. browser.tabs.get(id) reacquires an existing tab without reloading; tabs.attach(id) is an alias.
-- Tool-call local const/let variables do NOT survive the call. Store reusable handles on globalThis.tab/globalThis.iab, or reacquire by ID. After MCP restart, reacquire the existing tab; do not reload a partially completed form.
+- Tool-call const/let bindings persist in one JavaScript session. Reassign a mutable handle instead of redeclaring a const. js_reset discards all bindings but leaves tabs and native apps open; use it only for a genuinely broken runtime, never to recover a lost tab. After an MCP restart, reacquire the existing tab by ID; do not reload a partially completed form.
 - ReferenceError or an unknown method is a JavaScript/API error, not proof of a disconnected bridge.
 - If a call reports "in-app browser bridge is not answering", the app window that owns the bridge has probably restarted. Report that to the user; never reconnect to Chromium over raw CDP by hand.
 - CAPTCHA? Call tab.botDetection.check() once. If .captcha is true, STOP, report, hand off — never loop.`;
@@ -586,12 +700,18 @@ async function handleRequest(id, method, params) {
     case "ping":
       return reply(id, {});
     case "tools/list":
-      return reply(id, { tools: [jsTool()] });
+      return reply(id, { tools: [jsTool(), jsResetTool()] });
     case "tools/call": {
-      if (params.name !== "js") return replyError(id, "unknown tool");
-      const code = String(params.arguments?.code ?? params.arguments?.source ?? "");
-      const result = await runJs(code);
-      return reply(id, { content: result });
+      if (params.name === "js") {
+        const code = String(params.arguments?.code ?? params.arguments?.source ?? "");
+        const result = await runJs(code);
+        return reply(id, { content: result });
+      }
+      if (params.name === "js_reset") {
+        await serialize(resetRuntime);
+        return reply(id, { content: [{ type: "text", text: "JavaScript session reset. Browser tabs and native apps were left open." }] });
+      }
+      return replyError(id, "unknown tool");
     }
     default:
       return replyError(id, `method not found: ${method}`);
@@ -601,13 +721,21 @@ async function handleRequest(id, method, params) {
 function jsTool() {
   return {
     name: "js",
-    description: `Drive the visible, signed-in Sofia browser by running JavaScript. Initialize with setupBrowserRuntime(), read browser.documentation() before first use, reuse the current tab with browser.tabs.list() then browser.tabs.get(id) across calls (tabs.open creates a NEW tab every time; a missing local binding is not a lost page), inspect the latest page state with tab.see() or tab.ax.get(), then act by index/text/role. Re-inspect after navigation or state-changing actions before deciding what to do next. Pattern:
+    description: `Drive the visible, signed-in Sofia browser by running JavaScript. Cells share one persistent lexical scope, so const/let bindings remain across calls; reassign instead of redeclaring. Initialize with setupBrowserRuntime(), read browser.documentation() before first use, reuse the current tab with browser.tabs.list() then browser.tabs.get(id) across calls (tabs.open creates a NEW tab every time; a missing binding is not a lost page), inspect the latest page state with tab.see() or tab.ax.get(), then act by index/text/role. Re-inspect after navigation or state-changing actions before deciding what to do next. Pattern:
 globalThis.browser = (await setupBrowserRuntime()).browsers.get("iab"); await browser.documentation(); console.log(await browser.tabs.list()); // select the intended id
 globalThis.tab = await browser.tabs.get("chosen id"); globalThis.tabId = tab.id; await tab.see();
 Use tab.getByText/getByRole/fill/select/check/waitFor; use screenshots when the semantic tree is ambiguous.
 If a call reports "in-app browser bridge is not answering", the app window that owns the bridge has restarted: say so and stop, never reconnect over raw CDP by hand.
 CAPTCHA: if tab.botDetection.check().captcha is true, STOP — call tab.botDetection.report() and hand control to the user. Never loop or retry a captcha.`,
     inputSchema: { type: "object", properties: { code: { type: "string", description: "JavaScript to run (async allowed)" } }, required: ["code"] },
+  };
+}
+
+function jsResetTool() {
+  return {
+    name: "js_reset",
+    description: "Reset the persistent JavaScript session. All JavaScript bindings are discarded. Browser tabs and native apps stay open; do not reset to recover a lost tab, and do not reload a partially completed form.",
+    inputSchema: { type: "object", properties: {} },
   };
 }
 
@@ -620,46 +748,230 @@ function mcpContent(result) {
   return [{ type: "text", text: typeof result === "string" ? result : JSON.stringify(result) }];
 }
 
-// Browser and tab bindings assigned to globalThis survive later tool calls,
-// matching the persistent Node-REPL contract. Model-authored JavaScript does
-// not receive Node's process object or module loader.
+// JavaScript cells share one persistent lexical scope, matching the Node-REPL
+// contract. Model-authored JavaScript does not receive Node's process object or
+// module loader.
 const callOutput = new AsyncLocalStorage();
 const captureOutput = (...values) => {
   const output = callOutput.getStore();
   for (const value of values) output?.push(...mcpContent(value ?? "null"));
 };
-const runtimeSandbox = {
-  agent: globalThis.agent,
-  setupBrowserRuntime: globalThis.setupBrowserRuntime,
-  display: captureOutput,
-  console: { log: captureOutput, info: captureOutput, warn: captureOutput, error: captureOutput, debug: captureOutput },
-  fetch,
-  setTimeout,
-  clearTimeout,
-  setInterval,
-  clearInterval,
-  Buffer,
-  TextEncoder,
-  TextDecoder,
-  URL,
+function createRuntime() {
+  const input = new PassThrough();
+  const output = new PassThrough();
+  const server = startReplServer({ prompt: "", terminal: false, useGlobal: false, input, output });
+  let returnValue;
+  const returnSignal = new Error("__SOFIA_CELL_RETURN__");
+  const sandbox = {
+    agent: globalThis.agent,
+    setupBrowserRuntime: globalThis.setupBrowserRuntime,
+    __sofiaReturnValue(value) {
+      returnValue = value;
+      throw returnSignal;
+    },
+    display: captureOutput,
+    console: { log: captureOutput, info: captureOutput, warn: captureOutput, error: captureOutput, debug: captureOutput },
+    fetch,
+    setTimeout,
+    clearTimeout,
+    setInterval,
+    clearInterval,
+    Buffer,
+    TextEncoder,
+    TextDecoder,
+    URL,
+  };
+  const context = vm.createContext(sandbox, {
+    codeGeneration: { strings: false, wasm: false },
+  });
+  context.global = context;
+  server.context = context;
+  output.resume();
+  return {
+    context,
+    input,
+    output,
+    server,
+    takeReturnValue() {
+      const value = returnValue;
+      returnValue = undefined;
+      return value;
+    },
+  };
+}
+
+let runtime = createRuntime();
+let runtimeQueue = Promise.resolve();
+const serialize = (operation) => {
+  const result = runtimeQueue.then(operation, operation);
+  runtimeQueue = result.catch(() => {});
+  return result;
 };
-const runtimeContext = vm.createContext(runtimeSandbox, {
-  codeGeneration: { strings: false, wasm: false },
-});
+
+// Node's REPL preserves top-level lexical declarations and supports top-level
+// await. Tool calls historically also allow `return value`; translate only a
+// return at cell scope so function-local returns keep their normal semantics.
+function rewriteCell(code) {
+  let result = "";
+  let braces = 0;
+  let index = 0;
+  let state = "code";
+  while (index < code.length) {
+    const char = code[index];
+    const next = code[index + 1];
+    if (state === "line") {
+      result += char;
+      index += 1;
+      if (char === "\n") state = "code";
+      continue;
+    }
+    if (state === "block") {
+      result += char;
+      index += 1;
+      if (char === "*" && next === "/") {
+        result += "/";
+        index += 1;
+        state = "code";
+      }
+      continue;
+    }
+    if (state === "single" || state === "double" || state === "template") {
+      result += char;
+      index += 1;
+      if (char === "\\") {
+        if (index < code.length) result += code[index];
+        index += 1;
+      } else if ((state === "single" && char === "'") || (state === "double" && char === '"') || (state === "template" && char === "`")) {
+        state = "code";
+      }
+      continue;
+    }
+    if (char === "/" && next === "/") {
+      state = "line";
+      result += "//";
+      index += 2;
+      continue;
+    }
+    if (char === "/" && next === "*") {
+      state = "block";
+      result += "/*";
+      index += 2;
+      continue;
+    }
+    if (char === "'" || char === '"' || char === "`") {
+      state = char === "'" ? "single" : char === '"' ? "double" : "template";
+      result += char;
+      index += 1;
+      continue;
+    }
+    if (char === "{") braces += 1;
+    if (char === "}") braces -= 1;
+    const previous = code[index - 1] ?? "";
+    const after = code[index + 6] ?? "";
+    if (braces === 0 && code.startsWith("return", index) && !/[A-Za-z0-9_$]/.test(previous) && !/[A-Za-z0-9_$]/.test(after)) {
+      let end = index + 6;
+      let depth = 0;
+      let nested = "code";
+      while (end < code.length) {
+        const part = code[end];
+        const following = code[end + 1];
+        if (nested === "line") {
+          if (part === "\n") nested = "code";
+          end += 1;
+          continue;
+        }
+        if (nested === "block") {
+          if (part === "*" && following === "/") nested = "code";
+          end += 1;
+          continue;
+        }
+        if (nested === "single" || nested === "double" || nested === "template") {
+          if (part === "\\") end += 2;
+          else {
+            if ((nested === "single" && part === "'") || (nested === "double" && part === '"') || (nested === "template" && part === "`")) nested = "code";
+            end += 1;
+          }
+          continue;
+        }
+        if (part === "/" && following === "/") {
+          nested = "line";
+          end += 2;
+          continue;
+        }
+        if (part === "/" && following === "*") {
+          nested = "block";
+          end += 2;
+          continue;
+        }
+        if (part === "'" || part === '"' || part === "`") {
+          nested = part === "'" ? "single" : part === '"' ? "double" : "template";
+          end += 1;
+          continue;
+        }
+        if (part === "{" || part === "(" || part === "[") depth += 1;
+        if (part === "}" || part === ")" || part === "]") depth -= 1;
+        if (part === ";" && depth === 0) break;
+        end += 1;
+      }
+      const expression = code.slice(index + 6, end).trim();
+      const semicolon = code[end] === ";" ? ";" : "";
+      result += `__sofiaReturnValue((${expression || "void 0"}))${semicolon}`;
+      index = end + semicolon.length;
+      continue;
+    }
+    result += char;
+    index += 1;
+  }
+  return result;
+}
+
+function evaluateCell(code) {
+  runtime.takeReturnValue();
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let output = "";
+    const finish = (callback, value) => {
+      if (settled) return;
+      settled = true;
+      runtime.output.off("data", onOutput);
+      callback(value);
+    };
+    const onOutput = (chunk) => {
+      output += chunk.toString();
+      const lines = output.split("\n");
+      const uncaught = lines.findIndex(line => line.startsWith("Uncaught"));
+      if (uncaught < 0) return;
+      const sameLine = lines[uncaught].slice("Uncaught".length).replace(/^:\s*/, "").trim();
+      if (!sameLine && lines.length === uncaught + 1) return;
+      const message = sameLine || lines[uncaught + 1].trim();
+      if (message.includes("__SOFIA_CELL_RETURN__")) return finish(resolve, runtime.takeReturnValue());
+      const error = new Error(message);
+      const separator = message.indexOf(":");
+      if (separator > 0) error.name = message.slice(0, separator);
+      finish(reject, error);
+    };
+    runtime.output.on("data", onOutput);
+    runtime.server.eval(rewriteCell(code), runtime.context, "repl", (error, value) => {
+      if (error) finish(reject, error);
+      else finish(resolve, value);
+    });
+  });
+}
+
+async function resetRuntime() {
+  runtime.server.close();
+  runtime.input.destroy();
+  runtime.output.destroy();
+  runtime = createRuntime();
+}
 
 async function runJs(code) {
-  return callOutput.run([], async () => {
-    let value;
-    try {
-      value = await vm.runInContext(`(async()=>{ ${code} })()`, runtimeContext, { timeout: 1000 });
-    } catch (error) {
-      if (error?.name === "ReferenceError") throw new Error(`${error.message}. Local const/let bindings do not persist across calls. Reuse globalThis bindings or reacquire the existing tab with browser.tabs.list() and browser.tabs.get(id); do not reload the form.`);
-      throw error;
-    }
+  return serialize(() => callOutput.run([], async () => {
+    const value = await evaluateCell(code);
     const output = callOutput.getStore();
     if (value !== undefined) output.push(...mcpContent(value));
     return output.length ? output : mcpContent(output.observation ?? "done");
-  });
+  }));
 }
 
 waitBrowser().catch(() => {});

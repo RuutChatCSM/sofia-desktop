@@ -151,9 +151,10 @@ describe("codex workspace engine configuration", () => {
       const after = await readFile(configFile, "utf8");
       expect(after).not.toContain("multi_agent_v2 = true");
       expect(after).not.toContain("[tools.update_plan]");
-      // Untouched capabilities survive, and the table is still a single header.
-      expect(after).toContain("request_permissions_tool = true");
-      expect(after.match(/^\[features\]$/gm) ?? []).toHaveLength(1);
+      // Experimental capabilities stay off; with every default disabled the
+      // empty table is omitted entirely rather than left behind as a stub.
+      expect(after).not.toContain("request_permissions_tool");
+      expect(after.match(/^\[features\]$/gm) ?? []).toHaveLength(0);
     });
   });
 

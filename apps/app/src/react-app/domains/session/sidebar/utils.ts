@@ -70,29 +70,36 @@ export const partitionArchivedSessions = (sessions: WorkspaceSessionGroup["sessi
   return { active, archived };
 };
 
+const sessionRecency = (session: SessionListItem) =>
+  session.time?.updated ?? session.time?.created ?? 0;
+
 /**
- * Order root sessions: pinned first, then manual order, then server recency.
+ * Order root sessions: pinned first, then sessions with no saved manual slot
+ * (newest first), then the user's manual order.
+ *
+ * A codex session created after the initial list is appended to the store, so
+ * callers cannot rely on the incoming order being recency-sorted. Keeping that
+ * stale order put a brand-new task at the bottom of the sidebar and forced the
+ * workspace out of its preview limit to reveal it.
  */
 export const orderRootSessions = (
   roots: SessionListItem[],
   pinnedIds: Set<string>,
   orderIds: string[],
 ): SessionListItem[] => {
-  const byId = new Map(roots.map((root) => [root.id, root]));
-  const ordered: SessionListItem[] = [];
+  const recencySorted = [...roots].sort((left, right) => sessionRecency(right) - sessionRecency(left));
+  const byId = new Map(recencySorted.map((root) => [root.id, root]));
+  const manuallyOrdered: SessionListItem[] = [];
   const used = new Set<string>();
 
   for (const id of orderIds) {
     const root = byId.get(id);
     if (!root || used.has(id)) continue;
-    ordered.push(root);
+    manuallyOrdered.push(root);
     used.add(id);
   }
-  for (const root of roots) {
-    if (used.has(root.id)) continue;
-    ordered.push(root);
-    used.add(root.id);
-  }
+  const unlisted = recencySorted.filter((root) => !used.has(root.id));
+  const ordered = [...unlisted, ...manuallyOrdered];
 
   // Stable partition: pinned roots float to the top, preserving relative order.
   const pinned = ordered.filter((root) => pinnedIds.has(root.id));

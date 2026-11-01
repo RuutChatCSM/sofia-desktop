@@ -101,6 +101,17 @@ export function getSessionModelSelection(sessionId: string): SessionModelSelecti
   return useSessionModelStore.getState().bySessionId[sessionId] ?? null;
 }
 
+/** Resolve the model actually used by a session, falling back only when the
+ * conversation has no remembered selection. Keeping this next to the store
+ * prevents prompt/compaction code from bypassing the selector's value. */
+export function resolveSessionModelSelection(
+  sessionId: string,
+  fallbackModel: ModelRef,
+  fallbackVariant: string | null,
+): SessionModelSelection {
+  return getSessionModelSelection(sessionId) ?? { model: fallbackModel, variant: fallbackVariant };
+}
+
 export type UseSessionModelSelectionInput = {
   sessionId: string;
   /** Global default model (route prefs) used when the session has no memory. */

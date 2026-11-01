@@ -25,7 +25,8 @@ export type EngineFeatureSpec = {
   kind: EngineFeatureKind;
   /**
    * What the desktop enables when the user has expressed no preference. Only
-   * features with a desktop surface are ever defaulted on.
+   * stable features with a desktop surface are ever defaulted on; experimental
+   * flags stay opt-in so the engine never warns on startup.
    */
   defaultEnabled: boolean;
 };
@@ -47,7 +48,7 @@ export const ENGINE_FEATURES: readonly EngineFeatureSpec[] = [
       "Lets the agent request additional permissions instead of failing the action it was asked to perform.",
     stage: "under_development",
     kind: "feature",
-    defaultEnabled: true,
+    defaultEnabled: false,
   },
   {
     key: "multi_agent_v2",

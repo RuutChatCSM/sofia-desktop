@@ -321,14 +321,14 @@ async function waitForCdpOrExit(label: string, cdpUrl: string, spawned: SpawnedD
   ]);
 }
 
-async function runPrepareScript(scriptPath: string, outDir: string, desktopRoot: string): Promise<void> {
+async function runPrepareScript(scriptPath: string, outDir: string, desktopRoot: string, force = true): Promise<void> {
   try {
     await access(scriptPath, constants.R_OK);
   } catch {
     throw new Error(`Required Electron prepare helper is missing: ${scriptPath}`);
   }
   await new Promise<void>((resolveRun, reject) => {
-    execFile(process.execPath, [scriptPath, "--force", "--outdir", outDir], { cwd: desktopRoot, encoding: "utf8", maxBuffer: 16 * 1024 * 1024 }, (error, _stdout, stderr) => {
+    execFile(process.execPath, [scriptPath, ...(force ? ["--force"] : []), "--outdir", outDir], { cwd: desktopRoot, encoding: "utf8", maxBuffer: 16 * 1024 * 1024 }, (error, _stdout, stderr) => {
       if (error) {
         reject(new Error(`Electron shared resource prepare failed for ${scriptPath}: ${stderr || error.message}`));
         return;
@@ -346,7 +346,10 @@ async function prepareSharedElectronResources(repoRoot: string, log: (message: s
       const scriptsRoot = join(desktopRoot, "scripts");
       log("Preparing shared Electron sidecars/helpers once for local eval surfaces...");
       await runPrepareScript(join(scriptsRoot, "prepare-sidecar.mjs"), join(desktopRoot, "resources", "sidecars"), desktopRoot);
-      await runPrepareScript(join(scriptsRoot, "prepare-computer-use-helper.mjs"), join(desktopRoot, "resources", "helpers"), desktopRoot);
+      // Retain the existing signed helper: rebuilding ad-hoc native code changes
+      // its macOS permission identity. Native source changes require an explicit
+      // prepare-stack/manual helper build; ordinary browser evals must not do it.
+      await runPrepareScript(join(scriptsRoot, "prepare-computer-use-helper.mjs"), join(desktopRoot, "resources", "helpers"), desktopRoot, false);
     })();
   }
   await prepareSharedResourcesPromise;

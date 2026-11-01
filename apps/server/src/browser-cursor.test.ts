@@ -7,6 +7,8 @@ function fakePage() {
   const calls: { method: string; expression: string }[] = [];
   const send = async (method: string, params: Record<string, unknown> = {}) => {
     calls.push({ method, expression: String(params.expression ?? params.source ?? "") });
+    if (method === "Runtime.evaluate") return { result: { value: { arrived: true } } };
+    if (method === "Sofia.cursor") return { host: false };
     return {};
   };
   // The overlay script itself mentions moveTo/flash/fade, so only count the
@@ -34,7 +36,7 @@ describe("agent cursor presentation", () => {
     expect(page.calls.some((c) => c.expression === BROWSER_CURSOR_SCRIPT)).toBe(true);
   });
 
-  test("a cursor that is not on screen arrives from nearby, then glides", async () => {
+  test("a cursor that is not on screen glides to the target", async () => {
     const page = fakePage();
     const cursor = createBrowserCursor({ send: page.send });
     expect(cursor.isShown()).toBe(false);
@@ -42,10 +44,8 @@ describe("agent cursor presentation", () => {
     await cursor.move(300, 200);
 
     expect(cursor.isShown()).toBe(true);
-    // Two moves: the arrival approach, then the target itself.
-    expect(page.moves().length).toBe(2);
-    expect(page.moves()[0]).toContain("moveTo(274, 180)");
-    expect(page.moves()[1]).toContain("moveTo(300, 200)");
+    expect(page.moves()).toHaveLength(1);
+    expect(page.moves()[0]).toContain("moveTo(300,200)");
   });
 
   test("a cursor already on screen only glides", async () => {
@@ -55,8 +55,8 @@ describe("agent cursor presentation", () => {
 
     await cursor.move(120, 80);
 
-    expect(page.moves().length).toBe(3);
-    expect(page.moves()[2]).toContain("moveTo(120, 80)");
+    expect(page.moves()).toHaveLength(2);
+    expect(page.moves()[1]).toContain("moveTo(120,80)");
   });
 
   test("click glides and bursts; a double click bursts twice", async () => {
@@ -64,11 +64,11 @@ describe("agent cursor presentation", () => {
     const cursor = createBrowserCursor({ send: page.send });
 
     await cursor.click(50, 60);
-    expect(page.moves().at(-1)).toContain("moveTo(50, 60)");
-    expect(page.evaluates().filter((e) => e.includes("flash(50, 60)")).length).toBe(1);
+    expect(page.moves().at(-1)).toContain("moveTo(50,60)");
+    expect(page.evaluates().filter((e) => e.includes("flash(50,60)")).length).toBe(1);
 
     await cursor.doubleClick(70, 80);
-    expect(page.evaluates().filter((e) => e.includes("flash(70, 80)")).length).toBe(2);
+    expect(page.evaluates().filter((e) => e.includes("flash(70,80)")).length).toBe(2);
   });
 
   test("fade stops claiming a position, and the next move arrives again", async () => {
@@ -78,13 +78,11 @@ describe("agent cursor presentation", () => {
 
     await cursor.fade();
     expect(cursor.isShown()).toBe(false);
-    expect(page.evaluates().at(-1)).toContain("fade");
+    expect(page.evaluates().at(-1)).toContain("hide()");
 
     await cursor.move(90, 90);
     expect(cursor.isShown()).toBe(true);
-    // It arrives from nearby rather than gliding from where it used to be.
-    expect(page.moves().at(-1)).toContain("moveTo(90, 90)");
-    expect(page.moves().at(-2)).toContain("moveTo(64, 70)");
+    expect(page.moves().at(-1)).toContain("moveTo(90,90)");
   });
 
   test("fading a cursor that was never shown asks the page for nothing", async () => {
@@ -112,5 +110,18 @@ describe("agent cursor presentation", () => {
     await cursor.fade();
 
     expect(failures.count).toBeGreaterThan(0);
+  });
+
+  test("a hidden browser panel skips cursor feedback without blocking the action", async () => {
+    const cursor = createBrowserCursor({
+      send: async (method: string) => {
+        if (method === "Sofia.cursor") return { host: true, arrived: false, reason: "target-hidden" };
+        return {};
+      },
+    });
+
+    await cursor.move(10, 10);
+    await cursor.click(10, 10);
+    expect(cursor.isShown()).toBe(false);
   });
 });

@@ -122,6 +122,7 @@ struct ScreenshotMetadata: Sendable {
 
 struct WindowTarget: @unchecked Sendable {
     let appName: String
+    let bundleID: String?
     let pid: pid_t
     let windowNumber: Int?
     let windowTitle: String?
@@ -131,6 +132,10 @@ struct WindowTarget: @unchecked Sendable {
 
     var center: CGPoint {
         CGPoint(x: bounds.midX, y: bounds.midY)
+    }
+
+    var targetID: String {
+        "\(pid):\(windowNumber ?? -1)"
     }
 }
 
@@ -142,11 +147,14 @@ struct AXRecordCollection {
 
 struct AppSnapshot: @unchecked Sendable {
     let id: String
+    let targetID: String
     let observation: Int
     let appName: String
+    let bundleID: String?
     let pid: pid_t
     let windowNumber: Int?
     let windowTitle: String?
+    let windowBounds: CGRect
     let screenshotData: Data
     let screenshotMimeType: String
     let screenshotMeta: ScreenshotMetadata
@@ -165,11 +173,14 @@ struct AppSnapshot: @unchecked Sendable {
     func withSessionMetadata(id: String, observation: Int, recentActions: [String], addedLabels: [String], removedLabels: [String]) -> AppSnapshot {
         AppSnapshot(
             id: id,
+            targetID: targetID,
             observation: observation,
             appName: appName,
+            bundleID: bundleID,
             pid: pid,
             windowNumber: windowNumber,
             windowTitle: windowTitle,
+            windowBounds: windowBounds,
             screenshotData: screenshotData,
             screenshotMimeType: screenshotMimeType,
             screenshotMeta: screenshotMeta,
@@ -215,6 +226,7 @@ enum ComputerUseError: LocalizedError {
     case accessibilityDenied
     case screenshotFailed
     case appNotFound(String)
+    case ambiguousWindow(String, [String])
     case noFrontmostApplication
     case noWindow(String)
     case noSnapshot
@@ -233,6 +245,8 @@ enum ComputerUseError: LocalizedError {
             return "Screenshot capture failed."
         case .appNotFound(let name):
             return "App '\(name)' is not running."
+        case .ambiguousWindow(let app, let candidates):
+            return "Multiple windows match \(app). Select one by target_id or window_number: \(candidates.joined(separator: ", "))."
         case .noFrontmostApplication:
             return "No frontmost application found."
         case .noWindow(let app):

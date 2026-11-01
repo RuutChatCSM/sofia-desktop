@@ -73,6 +73,9 @@ describe("codex-runtime-mcp", () => {
     // Computer-use skill must reference the MCP surface it pairs with.
     const computer = codexRuntimeSkill("computer-use");
     expect(computer).toContain("snapshot");
+    expect(computer).toContain("list_windows");
+    expect(computer).toContain("target_id");
+    expect(computer).toContain("a newer snapshot of one target must not replace another target's snapshot");
     expect(computer).toContain("`computer-use` MCP server");
     expect(computer).toContain("call `list_apps` then `snapshot` targeting Safari");
     expect(computer).toContain("the tools are not limited to public URLs");

@@ -60,14 +60,24 @@ actor MCPServer {
                 name: "snapshot",
                 description: "Return target-window screenshot plus compact semantic AX state. Uses strict background activation by default.",
                 properties: [
+                    "target_id": ["type": "string", "description": "Exact window target id from list_windows or a previous snapshot. Preferred for every follow-up observation."],
                     "app": ["type": "string", "description": "Optional running app name. Omit for frontmost app."],
                     "pid": ["type": "number", "description": "Optional process id. Disambiguates multiple instances of the same app."],
+                    "window_number": ["type": "number", "description": "Exact CG window number from list_windows. Required when the app has multiple windows and target_id is not used."],
                     "window_title": ["type": "string", "description": "Optional window title to target a specific window."],
                     "wait_for": ["type": "string", "description": "Wait for this AX label/value substring before capturing. Never sends input."],
                     "wait_milliseconds": ["type": "integer", "minimum": 0, "maximum": 5000, "description": "Readiness timeout; default 2000."],
                     "crop": ["type": "object", "properties": ["x": ["type": "number"], "y": ["type": "number"], "width": ["type": "number"], "height": ["type": "number"]], "required": ["x", "y", "width", "height"], "description": "Zoom into absolute screen-point bounds. Clipped to the target window. New snapshot coordinates refer to this crop."],
                     "image_width": ["type": "integer", "minimum": 256, "maximum": 2048, "description": "Output image width; default 768. Increase for detail."],
                     "strict": ["type": "boolean", "description": "Keep actions on background-safe AX/postToPid paths. Default true."],
+                ]
+            ),
+            toolSchema(
+                name: "list_windows",
+                description: "List observable app windows with stable target ids. Use target_id for snapshots and actions; do not guess a window from list order.",
+                properties: [
+                    "app": ["type": "string", "description": "Optional running app name. Omit to list windows for the frontmost app."],
+                    "pid": ["type": "number", "description": "Optional process id. Disambiguates multiple instances of the same app."],
                 ]
             ),
             toolSchema(
@@ -158,7 +168,7 @@ actor MCPServer {
                 properties: ["enabled": ["type": "boolean", "description": "Whether strict background mode is enabled."]]
             ),
             toolSchema(name: "check_permissions", description: "Check Accessibility and Screen Recording permission status.", properties: [:]),
-            toolSchema(name: "get_app_state", description: "Compatibility alias for snapshot.", properties: ["app": ["type": "string"], "strict": ["type": "boolean"]]),
+            toolSchema(name: "get_app_state", description: "Compatibility alias for snapshot.", properties: ["target_id": ["type": "string"], "app": ["type": "string"], "pid": ["type": "number"], "window_number": ["type": "number"], "window_title": ["type": "string"], "strict": ["type": "boolean"]]),
             toolSchema(name: "launch_app", description: "Launch a macOS app by name.", properties: ["name": ["type": "string"]]),
             toolSchema(name: "activate_app", description: "Bring a running macOS app to the foreground.", properties: ["name": ["type": "string"]]),
             toolSchema(name: "list_apps", description: "List running regular macOS apps.", properties: [:]),
@@ -226,6 +236,8 @@ actor MCPServer {
             case "perform_action":
                 let metadata = try await runtime.performAction(snapshotID: snapshotIDArg(args), ref: args["ref"] as? String, index: intArg(args, "index"), action: args["action"] as? String ?? kAXPressAction)
                 return jsonResult(metadata.dictionary)
+            case "list_windows":
+                return try await listWindowsResult(args: args)
             case "wait":
                 let metadata = await runtime.wait(milliseconds: intArg(args, "milliseconds") ?? 1000)
                 return jsonResult(metadata.dictionary)
@@ -323,9 +335,11 @@ actor MCPServer {
             crop = CGRect(x: x, y: y, width: width, height: height)
         } else { crop = nil }
         let snapshot = try await runtime.snapshot(
+            targetID: args["target_id"] as? String,
             appName: args["app"] as? String,
             pid: intArg(args, "pid"),
             windowTitle: args["window_title"] as? String,
+            windowNumber: intArg(args, "window_number"),
             strict: boolArg(args, "strict"), crop: crop, imageWidth: intArg(args, "image_width") ?? 768, waitFor: args["wait_for"] as? String, waitMilliseconds: intArg(args, "wait_milliseconds") ?? 2000
         )
         PreviewPublication.publish(snapshot)
@@ -338,6 +352,29 @@ actor MCPServer {
             ["type": "image", "data": snapshot.screenshotData.base64EncodedString(), "mimeType": snapshot.screenshotMimeType],
             ["type": "text", "text": text],
         ]
+    }
+
+    private func listWindowsResult(args: [String: Any]) async throws -> [[String: Any]] {
+        let targets = try await runtime.listWindows(appName: args["app"] as? String, pid: intArg(args, "pid"))
+        let windows = targets.compactMap { target -> [String: Any]? in
+            guard let windowNumber = target.windowNumber else { return nil }
+            return [
+                "target_id": target.targetID,
+                "app": target.appName,
+                "bundle_id": target.bundleID ?? "",
+                "pid": Int(target.pid),
+                "window_number": windowNumber,
+                "window_title": target.windowTitle ?? "",
+                "bounds": [
+                    "x": Int(target.bounds.origin.x),
+                    "y": Int(target.bounds.origin.y),
+                    "width": Int(target.bounds.width),
+                    "height": Int(target.bounds.height),
+                ],
+                "frontmost": target.isFrontmost,
+            ]
+        }
+        return jsonResult(["ok": true, "windows": windows])
     }
 
     private func checkPermissions() -> [String: Any] {

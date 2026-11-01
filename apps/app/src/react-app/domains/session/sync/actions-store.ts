@@ -34,6 +34,7 @@ import { firstLineLocalFileParts } from "./prompt-file-parts";
 import { composerAttachmentToFilePart } from "./attachment-file-part";
 import { sanitizePromptText } from "@/lib/embedded-data-urls";
 import { appMentionInstruction } from "../surface/composer/app-mentions";
+import { resolveSessionModelSelection } from "../surface/session-model-store";
 
 type SessionModelConfig = {
   applyPendingSessionChoice: (sessionId: string) => void;
@@ -533,10 +534,11 @@ export function createSessionActionsStore(options: {
         options.setPrompt("");
       }
 
-      const model = options.selectedSessionModel();
+      const sessionModel = resolveSessionModelSelection(sessionID, options.selectedSessionModel(), options.modelVariant());
+      const model = sessionModel.model;
       const agent = selectedSessionAgent();
       const parts = await buildPromptParts(resolvedDraft);
-      const selectedVariant = options.sanitizeModelVariantForRef(model, options.modelVariant()) ?? undefined;
+      const selectedVariant = options.sanitizeModelVariantForRef(model, sessionModel.variant) ?? undefined;
       const reasoningEffort = options.resolveCodexReasoningEffort(model.modelID, selectedVariant ?? null);
       const requestVariant = reasoningEffort ? undefined : selectedVariant;
       const promptOverrides = reasoningEffort ? ({ reasoning_effort: reasoningEffort } as const) : undefined;
@@ -653,7 +655,7 @@ export function createSessionActionsStore(options: {
       throw new Error(t("app.error_compact_empty"));
     }
 
-    const model = options.selectedSessionModel();
+    const model = resolveSessionModelSelection(sessionID, options.selectedSessionModel(), options.modelVariant()).model;
     const startedAt = perfNow();
     const modelLabel = `${model.providerID}/${model.modelID}`;
     recordPerfLog(options.developerMode(), "session.compact", "start", {
