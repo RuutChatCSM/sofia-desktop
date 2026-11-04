@@ -233,3 +233,4 @@ Legacy cumulative release-asset totals. For classified v2 buckets, see `STATS_V2
 | 2026-11-01 | 455 (+31) | 455 (+31) |
 | 2026-11-02 | 468 (+13) | 468 (+13) |
 | 2026-11-03 | 475 (+7) | 475 (+7) |
+| 2026-11-04 | 482 (+7) | 482 (+7) |
