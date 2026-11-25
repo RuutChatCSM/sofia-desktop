@@ -678,6 +678,24 @@ select:disabled {
   --sofia-outline: #303946;
 }
 .sofia-task-header { min-height: 44px; }
+/* Live work glyph shared by the turn header and the sidebar: a short arc
+   orbiting a faint ring. Tone follows the state (working, thinking, warning);
+   reduced motion keeps a static ring with the arc. */
+.sofia-orbit {
+  --orbit-color: var(--sofia-blue);
+  display: inline-block; flex-shrink: 0; width: 12px; height: 12px; border-radius: 50%;
+  background: conic-gradient(from 0deg, transparent 0 62%, var(--orbit-color) 100%);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1.5px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1.5px));
+  box-shadow: inset 0 0 0 1.5px rgb(var(--dls-accent-rgb) / .14);
+}
+.sofia-orbit[data-tone="thinking"] { --orbit-color: #8b7cf6; }
+.sofia-orbit[data-tone="warning"] { --orbit-color: #d4a72c; }
+@media (prefers-reduced-motion: no-preference) {
+  .sofia-orbit { animation: sofia-orbit-spin .9s linear infinite; }
+  .sofia-orbit[data-tone="warning"] { animation-duration: 1.6s; }
+  @keyframes sofia-orbit-spin { to { transform: rotate(360deg); } }
+}
 .sofia-working-dot, .sofia-ready-dot {
   display: inline-block; width: 7px; height: 7px; flex-shrink: 0; border-radius: 50%; background: var(--sofia-blue);
 }

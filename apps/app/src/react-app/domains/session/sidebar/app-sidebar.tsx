@@ -202,9 +202,11 @@ function SessionLoadingIndicator({ status, isActiveWork }: SessionLoadingIndicat
     ? getSessionActivityStatusLabel(status)
     : t("workspace_list.session_streaming");
 
+  // Same live glyph as the turn header, so "running" reads identically in the
+  // sidebar and in the transcript.
   return (
     <SidebarGlyphSlot>
-      <SessionDotMatrixLoader label={title} />
+      <span className="sofia-orbit" data-tone="working" role="img" aria-label={title} title={title} />
     </SidebarGlyphSlot>
   );
 }

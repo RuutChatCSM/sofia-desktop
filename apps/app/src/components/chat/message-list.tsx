@@ -118,6 +118,8 @@ import { hasPreservedMcpAppResult, McpAppFrame } from "@/components/chat/mcp-app
 import { ReasoningBlock } from "@/components/chat/reasoning-block"
 import { SubagentRunLine } from "@/components/chat/subagent-run-line"
 import { ToolAggregateGroup } from "@/components/chat/tool-aggregate-group"
+import { getAggregateSummary, isAggregatableToolPart, type AnyToolPart } from "@/lib/tool-aggregate"
+import { liveTurnStatus, type LiveTurnStatus } from "@/components/chat/turn-status"
 import {
   isApplyPatchToolPart,
   isBashToolPart,
@@ -1098,6 +1100,8 @@ function TurnWorkBlock({
   active,
   streaming,
   elapsedMs,
+  liveStatus,
+  summary,
   defaultOpen,
   children,
 }: {
@@ -1105,6 +1109,10 @@ function TurnWorkBlock({
   active: boolean
   streaming: boolean
   elapsedMs: number | null
+  /** What Sofia is doing right now; replaces the generic label while live. */
+  liveStatus?: LiveTurnStatus | null
+  /** What a finished turn did, e.g. "ran 3 commands, edited 2 files". */
+  summary?: string
   defaultOpen: boolean
   children: React.ReactNode
 }) {
@@ -1127,14 +1135,40 @@ function TurnWorkBlock({
           aria-label={open ? `${label}. Hide work` : `${label}. Show work`}
           data-turn-work-header={active ? "active" : "done"}
         >
-          {active ? (
-            <Sparkles
-              aria-hidden="true"
-              className={cn("size-3.5 shrink-0 text-foreground/70", streaming && "animate-pulse")}
-            />
-          ) : null}
-          <span className={cn("truncate", streaming && "ow-text-shimmer font-medium")}>{label}</span>
-          {active && elapsedMs !== null && elapsedMs >= 1000 ? (
+          {active && liveStatus ? (
+            <>
+              <span className="sofia-orbit" data-tone={liveStatus.tone} aria-hidden="true" />
+              {/* Keyed by the step, so each new step fades in rather than the
+                  text swapping in place. */}
+              <span
+                key={liveStatus.title}
+                role="status"
+                className={cn(
+                  "truncate font-medium motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-300",
+                  liveStatus.tone === "warning" ? "text-amber-11" : "ow-text-shimmer",
+                )}
+              >
+                {liveStatus.title}
+              </span>
+              {liveStatus.meta.length ? (
+                <span className="shrink-0 tabular-nums text-muted-foreground/70">· {liveStatus.meta.join(" · ")}</span>
+              ) : null}
+            </>
+          ) : (
+            <>
+              {active ? (
+                <Sparkles
+                  aria-hidden="true"
+                  className={cn("size-3.5 shrink-0 text-foreground/70", streaming && "animate-pulse")}
+                />
+              ) : null}
+              <span className={cn("truncate", streaming && "ow-text-shimmer font-medium")}>{label}</span>
+              {!active && summary ? (
+                <span className="truncate text-muted-foreground/70">· {summary}</span>
+              ) : null}
+            </>
+          )}
+          {active && !liveStatus && elapsedMs !== null && elapsedMs >= 1000 ? (
             <span className="shrink-0 tabular-nums text-muted-foreground/70">
               {formatToolCallDuration(elapsedMs)}
             </span>
@@ -1335,6 +1369,8 @@ function MessageGroup({
   // The ticking clock is a hook, so it must run before the early return below.
   const timing = resolveTurnTiming(items.map((item) => item.message))
   const liveElapsedMs = useLiveElapsed(timing.startedAt, isLiveGroup)
+  // The codex stream drops while reconnecting; say so instead of spinning.
+  const codexConnected = useCodexSessionStore((state) => !sessionId.startsWith("codex-") || state.streaming)
   // What the turn changed, as its own durable object — separate from what it did
   // (the work block) and from what Sofia is doing now (Activity). Hints only for
   // now: there is no repository-backed producer yet, so this is explicitly
@@ -1405,6 +1441,21 @@ function MessageGroup({
   let proseItems = presentation.answerItems
 
   const durationMs = finishedTurnDurationMs(timing)
+  // The header names the real current step and, once done, what the turn did.
+  const toolParts = items.flatMap((item) => item.message.parts.filter((part): part is AnyToolPart => part.type === "dynamic-tool" || part.type.startsWith("tool-")))
+  const lastWork = workItems.at(-1)
+  const liveStatus = isLiveGroup && isStreaming
+    ? liveTurnStatus({
+        phase: lastWork?.kind === "thought" && lastWork.isStreaming ? "thinking" : proseItems.length > 0 ? "writing" : "working",
+        activityLabel: activeLabel ?? null,
+        connected: codexConnected,
+        elapsed: liveElapsedMs !== null && liveElapsedMs >= 1000 ? formatTurnWorkDuration(liveElapsedMs) : null,
+        steps: toolParts.length,
+        failed: toolParts.filter((part) => part.state === "output-error").length,
+      })
+    : null
+  const aggregatable = toolParts.filter(isAggregatableToolPart)
+  const turnSummary = !isLiveGroup && aggregatable.length ? getAggregateSummary(aggregatable, "past") : undefined
   // Shipped work header: elapsed time while working and after completion.
   const workLabel = turnWorkLabel({
     isLive: isLiveGroup,
@@ -1521,6 +1572,8 @@ function MessageGroup({
             active={isLiveGroup}
             streaming={isLiveGroup && isStreaming}
             elapsedMs={null}
+            liveStatus={liveStatus}
+            summary={turnSummary}
             // Open only while it works. A finished turn collapses whatever its
             // answer detection concluded: developer mode changes what expanding
             // shows, not whether a finished turn starts expanded.
