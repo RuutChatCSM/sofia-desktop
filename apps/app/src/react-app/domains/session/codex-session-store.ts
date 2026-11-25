@@ -634,7 +634,15 @@ export async function runCodexStream(
   workspaceId?: string,
 ): Promise<void> {
   const store = useCodexSessionStore.getState();
-  store.setStreaming(true);
+  // One stream owns the connection flag. A replaced stream (workspace switch,
+  // new client) winds down after its successor started; without ownership its
+  // exit cleared the flag and the UI showed "Reconnecting" forever.
+  const owner = Symbol("codex-stream");
+  streamOwner = owner;
+  const setConnected = (value: boolean) => {
+    if (streamOwner === owner) store.setStreaming(value);
+  };
+  setConnected(true);
   store.setError(null);
   // Last event number seen, so a reconnect replays only what was missed.
   let resume: CodexStreamResume | undefined;
@@ -656,7 +664,7 @@ export async function runCodexStream(
         }
         switch (event.type) {
           case "stream.ready":
-            s.setStreaming(true);
+            setConnected(true);
             s.setError(null);
             refreshTrackedBackgroundProcesses(workspaceId);
             break;
@@ -762,8 +770,8 @@ export async function runCodexStream(
       if (!signal.aborted) throw new Error("Sofia connection closed; reconnecting");
     } catch (error) {
       if (signal.aborted) break;
-      store.setStreaming(false);
-      store.setError(error instanceof Error ? error.message : "Sofia stream disconnected");
+      setConnected(false);
+      if (streamOwner === owner) store.setError(error instanceof Error ? error.message : "Sofia stream disconnected");
       await new Promise<void>((resolve) => {
         const done = () => { clearTimeout(timer); signal.removeEventListener("abort", done); resolve(); };
         const timer = setTimeout(done, Math.min(500 * attempt, 5_000));
@@ -771,8 +779,10 @@ export async function runCodexStream(
       });
     }
   }
-  store.setStreaming(false);
+  setConnected(false);
 }
+
+let streamOwner: symbol | null = null;
 
 export function useCodexSessionsForWorkspace(workspaceId: string): CodexSessionEntry[] {
   const sessions = useCodexSessionStore((state) => state.sessions);
