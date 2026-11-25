@@ -19,6 +19,7 @@ import { BootStateProvider } from "./boot-state";
 import { DesktopRuntimeBoot } from "./desktop-runtime-boot";
 import { useEnterpriseActivationRequired } from "@/react-app/domains/cloud/enterprise-activation-gate";
 import { startDebugLogger, stopDebugLogger } from "./debug-logger";
+import { startPerformanceTimelineGuard } from "./performance-timeline-guard";
 import { resolveSofiaConnection } from "./sofia-connection";
 import { ReloadCoordinatorProvider } from "./reload-coordinator";
 
@@ -77,6 +78,10 @@ export function AppProviders({ children }: AppProvidersProps) {
   hydrateSofiaServerSettingsFromEnv();
 
   useEffect(() => {
+    // React 19.2 development builds retain a `performance.measure` entry for
+    // every component render. Bound that buffer in dev so a long streaming
+    // session cannot push the renderer into its V8 heap limit.
+    const stopPerformanceGuard = startPerformanceTimelineGuard();
     // Start the dev observability forwarder. Reads the current sofia-server
     // URL on every flush so reconnects after port changes still work. In prod
     // builds `startDebugLogger` is a no-op.
@@ -85,6 +90,7 @@ export function AppProviders({ children }: AppProvidersProps) {
     });
     return () => {
       stopDebugLogger();
+      stopPerformanceGuard();
     };
   }, []);
 

@@ -1,4 +1,5 @@
 import { resolveSofiaEngine } from "./sofia-engine.mjs";
+import { installRendererRecovery } from "./renderer-recovery.mjs";
 import { processBlankSlateProfile, resolveBlankSlateLaunch } from "./blank-slate-profile.mjs";
 import { execFileSync, spawn } from "node:child_process";
 import { createServer } from "node:http";
@@ -2607,6 +2608,7 @@ async function createMainWindow() {
   const computerPreviewOwner = mainWindow.webContents.id;
   mainWindow.webContents.on("destroyed", () => computerPreviewLease.releaseOwner(computerPreviewOwner));
   mainWindow.webContents.on("render-process-gone", () => computerPreviewLease.releaseOwner(computerPreviewOwner));
+  installRendererRecovery(mainWindow, dialog);
   mainWindow.webContents.on("did-start-navigation", (_event, _url, isInPlace, isMainFrame) => {
     if (isMainFrame && !isInPlace) computerPreviewLease.releaseOwner(computerPreviewOwner);
   });
