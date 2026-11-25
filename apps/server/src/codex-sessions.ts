@@ -2,6 +2,7 @@ import { historyReadScheduler } from "./history-read-scheduler.js";
 import { readRolloutLines, RolloutRecordTooLargeError } from "./rollout-lines.js";
 import { isPlaceholderTaskTitle, parseCodexSessionTitles, selectCodexThreadName, threadDisplayTitle, threadTitleFromEngineText } from "./codex-session-titles.js";
 import { createRolloutParser, TRANSCRIPT_RETAINED_CHARS, reconcileRolloutItems } from "./codex-rollout-items.js";
+import { resolveImageBlobReferences, sofiaHomeForRollout } from "./rollout-image-blobs.js";
 import { parseDurableTurnOutcomes, type DurableTurnOutcome } from "./codex-turn-outcomes.js";
 import { recordedSubagentState, type RecordedAgentState } from "./codex-subagent-outcome.js";
 import { TurnChangeTracker, type TurnChangeRecord } from "./turn-changes.js";
@@ -1253,6 +1254,9 @@ export class CodexSessionManager {
       const parser = createRolloutParser(limit);
       for await (const line of readRolloutLines(path)) parser.push(line);
       const items = parser.finish();
+      // New engine rollouts store large images once and reference them.
+      const home = sofiaHomeForRollout(path) ?? this.handle.codexHome;
+      if (home) await resolveImageBlobReferences(items, home);
       rememberBounded(this.rolloutItemsCache, path, { fingerprint, limit, items });
       return items;
     } catch (error) {
