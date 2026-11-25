@@ -23,7 +23,9 @@ export type TurnWorkEntry =
       isCurrent: boolean
     }
   | { kind: "interjection"; key: string; item: UIMessageWithIndex }
-  | { kind: "detail"; key: string; item: UIMessageWithIndex };
+  | { kind: "detail"; key: string; item: UIMessageWithIndex }
+  /** Repeated calls to one connected service ("Used Browser" ×6), one row. */
+  | { kind: "capabilityRun"; key: string; service: string; past: string; items: UIMessageWithIndex[] };
 
 export type TurnPresentation = {
   work: TurnWorkEntry[];

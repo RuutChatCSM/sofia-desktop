@@ -177,7 +177,7 @@ function reasoningBlockStates(markup: string): string[] {
 }
 
 describe("a thought is a reasoning phase, not a reasoning packet", () => {
-  test("the phase in progress is open, and the phases behind it are folded", () => {
+  test("live thinking stays one line, and the phases behind it are folded", () => {
     const assistant: UIMessage = {
       id: "assistant-live",
       role: "assistant",
@@ -192,9 +192,10 @@ describe("a thought is a reasoning phase, not a reasoning packet", () => {
 
     const markup = renderList([userMessage, assistant], false, "streaming");
 
-    // She is mid-thought about the second thing, so that phase is open; the one
-    // she has already acted on is history and stays folded.
-    expect(reasoningBlockStates(markup)).toEqual(["closed", "open"]);
+    // Mid-thought, the live phase is a single line with its newest thought; the
+    // full text opens only when the reader asks. Earlier phases stay folded.
+    expect(reasoningBlockStates(markup)).toEqual(["closed", "closed"]);
+    expect(markup).toContain("and now the wrapper underneath it");
   });
 
   test("a finished turn leaves every phase folded", () => {

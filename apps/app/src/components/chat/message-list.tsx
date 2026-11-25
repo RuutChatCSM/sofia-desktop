@@ -8,6 +8,9 @@ import * as React from "react"
 import {
   AlertTriangle,
   Check,
+  CircleAlert,
+  Globe,
+  Plug,
   ChevronRight,
   Copy,
   Download,
@@ -120,6 +123,8 @@ import { SubagentRunLine } from "@/components/chat/subagent-run-line"
 import { ToolAggregateGroup } from "@/components/chat/tool-aggregate-group"
 import { getAggregateSummary, isAggregatableToolPart, type AnyToolPart } from "@/lib/tool-aggregate"
 import { liveTurnStatus, type LiveTurnStatus } from "@/components/chat/turn-status"
+import { condenseWork, windowLiveWork } from "@/components/chat/work-condense"
+import { isToolPartInFlight } from "@/lib/tool-activity"
 import {
   isApplyPatchToolPart,
   isBashToolPart,
@@ -1095,6 +1100,59 @@ function getRenderableMessage(message: UIMessage) {
  * the transcript settles into a record of outcomes; expanding it restores the
  * narrative exactly as it streamed.
  */
+/**
+ * True when the transcript draws this call as a plain capability line (the
+ * fallback branch of the tool renderer), so it may group with its neighbours.
+ * Mirrors the special cases checked before that fallback.
+ */
+export function rendersAsCapabilityLine(part: DynamicToolUIPart): boolean {
+  if (["network_status", "context_compaction", "sofia_session_create", "background_process"].includes(part.toolName)) return false
+  return !(
+    isCollaborationActivity(part) || isBashToolPart(part) || isEditToolPart(part) || isWriteToolPart(part) ||
+    isReadToolPart(part) || isGrepToolPart(part) || isGlobToolPart(part) || isLspToolPart(part) ||
+    isApplyPatchToolPart(part) || isSkillToolPart(part) || isTodoWriteToolPart(part) || isWebFetchToolPart(part) ||
+    isWebSearchToolPart(part) || isQuestionToolPart(part) || isEnvVarRequestToolPart(part) ||
+    isAutomationProposalToolPart(part) || isTaskToolPart(part)
+  )
+}
+
+/**
+ * Repeated calls to one connected service as one row — "Used Browser ×6" —
+ * with the same icon, chevron and status vocabulary as tool milestones.
+ * Expanding shows each call as before.
+ */
+function CapabilityRunRow({ service, past, items }: { service: string; past: string; items: UIMessageWithIndex[] }) {
+  "use memo"
+  const parts = items.flatMap((item) => item.message.parts.filter((part) => part.type === "dynamic-tool"))
+  const running = parts.some((part) => isToolPartInFlight(part))
+  const failed = parts.filter((part) => part.state === "output-error").length
+  const [open, setOpen] = React.useState(false)
+  const Icon = /browser|web/i.test(service) ? Globe : Plug
+  const label = items.length > 1 ? `${running ? "Using" : "Used"} ${service} ×${items.length}` : past
+  return (
+    <Collapsible open={open} onOpenChange={setOpen} className="w-full">
+      <CollapsibleTrigger className="group -mx-1 flex max-w-full cursor-pointer items-center gap-1.5 rounded-md px-1 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50">
+        {running ? <LoaderCircle aria-hidden="true" className="size-3.5 shrink-0 animate-spin" /> : <Icon aria-hidden="true" className="size-3.5 shrink-0" />}
+        <span className={cn("truncate", running && "ow-text-shimmer")}>{label}</span>
+        {failed ? (
+          <span className="flex shrink-0 items-center gap-1 text-xs text-red-11">
+            <CircleAlert aria-hidden="true" className="size-3" />
+            {failed} failed
+          </span>
+        ) : null}
+        <ChevronRight aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground/70 transition-transform duration-150 group-data-panel-open:rotate-90 motion-reduce:transition-none" />
+      </CollapsibleTrigger>
+      <CollapsibleContent className="h-(--collapsible-panel-height) overflow-hidden transition-[height] duration-150 ease-out data-starting-style:h-0 data-ending-style:h-0 motion-reduce:transition-none [&[hidden]:not([hidden='until-found'])]:hidden">
+        <div className="mt-1.5 ms-[6px] flex flex-col gap-1 border-s border-border ps-3.5">
+          {items.map((item) => (
+            <AssistantParts key={item.message.id} message={item.message} isStreaming={false} hideReasoning />
+          ))}
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
+  )
+}
+
 function TurnWorkBlock({
   label,
   active,
@@ -1374,6 +1432,7 @@ function MessageGroup({
   const liveElapsedMs = useLiveElapsed(timing.startedAt, isLiveGroup)
   // The codex stream drops while reconnecting; say so instead of spinning.
   const codexConnected = useCodexSessionStore((state) => !sessionId.startsWith("codex-") || state.streaming)
+  const [showAllSteps, setShowAllSteps] = React.useState(false)
   // What the turn changed, as its own durable object — separate from what it did
   // (the work block) and from what Sofia is doing now (Activity). Hints only for
   // now: there is no repository-backed producer yet, so this is explicitly
@@ -1440,7 +1499,9 @@ function MessageGroup({
   // "expand to see" controls made the reader learn a concept the turn does not
   // have; the "Thought" row was the work block's own content rendered as a
   // sibling of it.
-  let workItems = presentation.work
+  // Condensed the way a reader skims: short thoughts fold into the run they
+  // interrupt, and repeated actions become one row (see work-condense.ts).
+  let workItems = condenseWork(presentation.work, rendersAsCapabilityLine)
   let proseItems = presentation.answerItems
   // A steer is a user message: keep it visible even after the turn settles.
   const hasInterjection = workItems.some((entry) => entry.kind === "interjection")
@@ -1521,6 +1582,8 @@ function MessageGroup({
   // The narrative, rendered in the order it happened. Aggregation happened when
   // the presentation was derived, so this only has to place each entry — and a
   // milestone is already one row for a whole run of tool events.
+  // While the turn runs, keep the latest steps in view; history is one click away.
+  const liveWindow = windowLiveWork(workItems, isLiveGroup, showAllSteps)
   const renderWorkEntry = (entry: (typeof workItems)[number]) => {
     if (entry.kind === "interjection") {
       return (
@@ -1562,6 +1625,13 @@ function MessageGroup({
         </WorkRow>
       )
     }
+    if (entry.kind === "capabilityRun") {
+      return (
+        <WorkRow key={entry.key} kind="milestone">
+          <CapabilityRunRow service={entry.service} past={entry.past} items={entry.items} />
+        </WorkRow>
+      )
+    }
     return (
       <WorkRow key={entry.key} kind="detail">
         <AssistantParts message={entry.item.message} isStreaming={false} hideReasoning />
@@ -1599,7 +1669,19 @@ function MessageGroup({
                 closer together than transcript messages do, because they are not
                 messages. */}
             <div className="flex flex-col gap-2">
-              {workItems.map(renderWorkEntry)}
+              {liveWindow.hidden > 0 ? (
+                <WorkRow kind="detail">
+                  <button
+                    type="button"
+                    onClick={() => setShowAllSteps(true)}
+                    className="-mx-1 flex items-center gap-1.5 rounded-md px-1 text-sm text-muted-foreground/80 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                  >
+                    <ListCollapse aria-hidden="true" className="size-3.5 shrink-0" />
+                    {liveWindow.hidden} earlier {liveWindow.hidden === 1 ? "step" : "steps"}
+                  </button>
+                </WorkRow>
+              ) : null}
+              {liveWindow.visible.map(renderWorkEntry)}
             </div>
           </TurnWorkBlock>
         </div>
