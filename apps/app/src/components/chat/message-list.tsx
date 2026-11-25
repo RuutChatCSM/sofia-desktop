@@ -1473,16 +1473,14 @@ function MessageGroup({
     if (entry.kind === "thought") {
       // One row per reasoning *phase*, not per packet. Behind a detail inside the
       // work block: the narrative is commentary and milestones, and thinking is
-      // the reasoning behind them. The phase Sofia is in now stays open, so the
-      // reader can see her think; every earlier phase is folded, so nothing
-      // inherits a stack of expanded thoughts.
+      // the reasoning behind them. Every phase is one line; the live one shows
+      // its newest thought, and the full text opens only on request.
       return (
         <WorkRow key={entry.key} kind="thought">
           <ReasoningBlock
             text={entry.text}
             isStreaming={isLiveGroup && entry.isStreaming}
             durationKey={entry.key}
-            defaultOpen={isLiveGroup && entry.isCurrent}
           />
         </WorkRow>
       )

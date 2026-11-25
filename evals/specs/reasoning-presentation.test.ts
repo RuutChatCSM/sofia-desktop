@@ -4,6 +4,7 @@ import {
   createReasoningClock,
   formatThoughtDuration,
   isLongReasoning,
+  latestReasoningLine,
   reasoningLabel,
 } from '../../apps/app/src/components/chat/reasoning-presentation';
 
@@ -35,4 +36,14 @@ test('only long settled reasoning is capped behind "Show more"', () => {
   expect(isLongReasoning('word '.repeat(400))).toBe(true);
   expect(isLongReasoning(Array.from({ length: 15 }, (_, i) => `step ${i}`).join('\n'))).toBe(true);
   expect(isLongReasoning(Array.from({ length: 14 }, (_, i) => `step ${i}`).join('\n'))).toBe(false);
+});
+
+test("live thinking shows its newest line as plain text, stable while the line grows", () => {
+  expect(latestReasoningLine("")).toEqual({ line: "", start: 0 });
+  expect(latestReasoningLine("First idea.\n\n## Weighing **options**\n")).toEqual({ line: "Weighing options", start: 13 });
+  const partial = latestReasoningLine("Plan:\n- check the `cache`");
+  const grown = latestReasoningLine("Plan:\n- check the `cache` before writing");
+  expect(partial).toEqual({ line: "check the cache", start: 6 });
+  expect(grown.start).toBe(partial.start);
+  expect(latestReasoningLine("x".repeat(300)).line).toHaveLength(201);
 });

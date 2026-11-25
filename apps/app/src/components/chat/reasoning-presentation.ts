@@ -7,6 +7,31 @@
 export const REASONING_PREVIEW_CHARS = 1600
 export const REASONING_PREVIEW_LINES = 14
 
+/** Longest live preview; the row truncates visually, this bounds the work. */
+const LIVE_LINE_MAX_CHARS = 200
+
+/**
+ * The line shown beside "Thinking" while reasoning streams: the newest
+ * non-empty line, with markdown markers stripped so it reads as plain prose,
+ * and where it starts in the text. The start stays the same while the line
+ * grows, so the UI animates once per new line rather than once per token.
+ * Empty until the model has written something.
+ */
+export function latestReasoningLine(text: string): { line: string; start: number } {
+  let end = text.length
+  while (end > 0) {
+    const start = text.lastIndexOf("\n", end - 1) + 1
+    const line = text
+      .slice(start, end)
+      .replace(/^\s*(?:#{1,6}\s+|[-*+]\s+|\d+[.)]\s+|>\s*)/, "")
+      .replace(/[*_`~]+/g, "")
+      .trim()
+    if (line) return { line: line.length > LIVE_LINE_MAX_CHARS ? `${line.slice(0, LIVE_LINE_MAX_CHARS)}…` : line, start }
+    end = start - 1
+  }
+  return { line: "", start: 0 }
+}
+
 export function isLongReasoning(text: string): boolean {
   if (text.length > REASONING_PREVIEW_CHARS) return true
   let lines = 1
