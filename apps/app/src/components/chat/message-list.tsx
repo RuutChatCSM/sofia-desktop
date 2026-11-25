@@ -57,6 +57,7 @@ import { SkillTool } from "@/components/tools/skill"
 import { TodoWriteTool } from "@/components/tools/todowrite"
 import { WebfetchTool } from "@/components/tools/webfetch"
 import { WebsearchTool } from "@/components/tools/websearch"
+import { toolImagesFor } from "@/lib/tool-images"
 import { useMessageList, useSessionErrorMessage } from "@/components/chat/message-list-provider"
 import { useArtifacts, useOpenArtifactPath } from "@/lib/artifacts"
 import { changeSetFromToolHints } from "@/react-app/domains/session/changes/change-set-from-messages"
@@ -117,6 +118,7 @@ import {
 } from "@/components/ui/message"
 import { Tool } from "@/components/ui/tool"
 import { CapabilityCallLine } from "@/components/chat/capability-call-line"
+import { ToolImageStrip } from "@/components/chat/tool-image-strip"
 import { hasPreservedMcpAppResult, McpAppFrame } from "@/components/chat/mcp-app-frame"
 import { ReasoningBlock } from "@/components/chat/reasoning-block"
 import { SubagentRunLine } from "@/components/chat/subagent-run-line"
@@ -1130,19 +1132,23 @@ function CapabilityRunRow({ service, past, items }: { service: string; past: str
   const [open, setOpen] = React.useState(false)
   const Icon = /browser|web/i.test(service) ? Globe : Plug
   const label = items.length > 1 ? `${running ? "Using" : "Used"} ${service} ×${items.length}` : past
+  const runImages = parts.flatMap((part) => toolImagesFor(part))
   return (
     <Collapsible open={open} onOpenChange={setOpen} className="w-full">
-      <CollapsibleTrigger className="group -mx-1 flex max-w-full cursor-pointer items-center gap-1.5 rounded-md px-1 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50">
-        {running ? <LoaderCircle aria-hidden="true" className="size-3.5 shrink-0 animate-spin" /> : <Icon aria-hidden="true" className="size-3.5 shrink-0" />}
-        <span className={cn("truncate", running && "ow-text-shimmer")}>{label}</span>
-        {failed ? (
-          <span className="flex shrink-0 items-center gap-1 text-xs text-red-11">
-            <CircleAlert aria-hidden="true" className="size-3" />
-            {failed} failed
-          </span>
-        ) : null}
-        <ChevronRight aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground/70 transition-transform duration-150 group-data-panel-open:rotate-90 motion-reduce:transition-none" />
-      </CollapsibleTrigger>
+      <div className="flex min-w-0 max-w-full items-center gap-2">
+        <CollapsibleTrigger className="group -mx-1 flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 rounded-md px-1 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50">
+          {running ? <LoaderCircle aria-hidden="true" className="size-3.5 shrink-0 animate-spin" /> : <Icon aria-hidden="true" className="size-3.5 shrink-0" />}
+          <span className={cn("truncate", running && "ow-text-shimmer")}>{label}</span>
+          {failed ? (
+            <span className="flex shrink-0 items-center gap-1 text-xs text-red-11">
+              <CircleAlert aria-hidden="true" className="size-3" />
+              {failed} failed
+            </span>
+          ) : null}
+          <ChevronRight aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground/70 transition-transform duration-150 group-data-panel-open:rotate-90 motion-reduce:transition-none" />
+        </CollapsibleTrigger>
+        <ToolImageStrip images={runImages} latestOnly />
+      </div>
       <CollapsibleContent className="h-(--collapsible-panel-height) overflow-hidden transition-[height] duration-150 ease-out data-starting-style:h-0 data-ending-style:h-0 motion-reduce:transition-none [&[hidden]:not([hidden='until-found'])]:hidden">
         <div className="mt-1.5 ms-[6px] flex flex-col gap-1 border-s border-border ps-3.5">
           {items.map((item) => (

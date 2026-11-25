@@ -3,6 +3,7 @@ import * as React from "react";
 import { Minimize2, Sparkles, SquareTerminal } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { stripToolImages } from "@/lib/tool-images"
 import { cn } from "@/lib/utils";
 import type { BackgroundProcess } from "@/app/lib/codex-session";
 import {
@@ -162,7 +163,7 @@ export function ActivityStrip({
               </div>
               {process.aggregatedOutput?.trim() ? (
                 <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap rounded-md bg-dls-canvas/60 p-2 font-mono text-[11px] leading-5 text-gray-10">
-                  {process.aggregatedOutput.trim()}
+                  {stripToolImages(process.aggregatedOutput).trim()}
                 </pre>
               ) : null}
             </div>

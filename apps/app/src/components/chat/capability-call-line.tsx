@@ -16,8 +16,10 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
 import { DotMatrixLoader } from "@/components/ui/dot-matrix-loader"
+import { ToolImageStrip } from "@/components/chat/tool-image-strip"
 import { getCapabilityCallQuote, getCapabilityCallSentence, parseRecord } from "@/lib/capability-call"
 import { normalizeErrorText } from "@/lib/error-text"
+import { stripToolImages, toolImagesFor } from "@/lib/tool-images"
 import { trackToolCallDuration } from "@/lib/tool-call-duration"
 import { isToolPartInFlight } from "@/lib/tool-activity"
 import { cn } from "@/lib/utils"
@@ -75,19 +77,20 @@ function TechnicalDetailsPanel({ part }: { part: DynamicToolUIPart }) {
       <div className="font-mono text-[11px] text-muted-foreground">
         {part.toolName} · {part.toolCallId}
       </div>
+      <ToolImageStrip images={toolImagesFor(part)} />
       {part.input !== undefined && part.input !== null ? (
         <pre className="max-h-40 overflow-auto whitespace-pre-wrap wrap-break-word">
-          {formatTechnicalValue(part.input)}
+          {stripToolImages(formatTechnicalValue(part.input))}
         </pre>
       ) : null}
       {"output" in part && part.output !== undefined ? (
         <pre className="max-h-60 overflow-auto whitespace-pre-wrap wrap-break-word opacity-80">
-          {formatTechnicalValue(part.output)}
+          {stripToolImages(formatTechnicalValue(part.output))}
         </pre>
       ) : null}
       {part.state === "output-error" && part.errorText ? (
         <pre className="max-h-60 overflow-auto whitespace-pre-wrap wrap-break-word opacity-80">
-          {part.errorText}
+          {stripToolImages(part.errorText)}
         </pre>
       ) : null}
     </div>

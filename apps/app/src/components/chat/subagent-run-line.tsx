@@ -11,6 +11,7 @@ import { DotMatrixLoader } from "@/components/ui/dot-matrix-loader"
 import type { TaskToolPart } from "@/lib/build-in-tools"
 import { isToolPartInFlight } from "@/lib/tool-activity"
 import { trackToolCallDuration } from "@/lib/tool-call-duration"
+import { stripToolImages } from "@/lib/tool-images"
 import { cn } from "@/lib/utils"
 
 type SubagentRunLineProps = {
@@ -75,12 +76,12 @@ export function SubagentRunLine({ part, className }: SubagentRunLineProps) {
           ) : null}
           {part.state === "output-available" ? (
             <pre className="max-h-60 overflow-auto whitespace-pre-wrap wrap-break-word opacity-80">
-              {part.output}
+              {stripToolImages(part.output)}
             </pre>
           ) : null}
           {isFailed && part.errorText ? (
             <pre className="max-h-60 overflow-auto whitespace-pre-wrap wrap-break-word opacity-80">
-              {part.errorText}
+              {stripToolImages(part.errorText)}
             </pre>
           ) : null}
         </div>

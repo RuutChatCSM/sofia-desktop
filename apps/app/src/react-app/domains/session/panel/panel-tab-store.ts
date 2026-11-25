@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
-import { isOpenableFileTarget, type OpenTarget, type OpenTargetPreview } from "../artifacts/open-target";
+import { isOpenableFileTarget, type OpenTarget, type OpenTargetPreview, type OpenTargetRange } from "../artifacts/open-target";
 import {
   createBrowserPanelTab,
   isRecord,
@@ -39,6 +39,10 @@ export type ArtifactPanelTab = {
   label: string;
   preview: OpenTargetPreview;
   target?: { kind: "file"; value: string };
+  /** Ephemeral: the lines this click referred to (not persisted). */
+  range?: OpenTargetRange;
+  /** Ephemeral: the call's diff, shown instead of the whole file. */
+  diff?: string;
 }
 
 /**

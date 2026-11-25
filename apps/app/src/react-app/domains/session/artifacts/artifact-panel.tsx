@@ -13,8 +13,9 @@ import { toast } from "@/components/ui/sonner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { usePlatform } from "@/react-app/kernel/platform";
 import { type ArtifactPanelTab, resolveArtifactPanelTarget, usePanelTabStore } from "../panel/panel-tab-store";
-import { type BinaryData, type Data, type OpenTarget, type TextData } from "./open-target";
+import { type BinaryData, type Data, type OpenTarget, type OpenTargetRange, type TextData } from "./open-target";
 import { HTMLPreview, MarkdownPreview, PdfPreview, PlainText, PreviewError, PreviewLoading, PreviewUnavailable } from "./preview";
+import { DiffLines } from "@/components/ui/tool";
 
 const ArtifactTextEditor = lazy(() =>
   import("./artifact-text-editor").then((module) => ({ default: module.ArtifactTextEditor })),
@@ -51,6 +52,9 @@ type ArtifactPanelViewProps = {
   workspaceRoot: string;
   isRemoteWorkspace?: boolean;
   target: OpenTarget;
+  /** Ephemeral read range / call diff carried by the click, not the file. */
+  range?: OpenTargetRange;
+  diff?: string;
   onClose: () => void;
 };
 
@@ -87,16 +91,19 @@ export function ArtifactPanel({ sessionId, tab, client, workspaceId, workspaceRo
       workspaceRoot={workspaceRoot}
       isRemoteWorkspace={isRemoteWorkspace}
       target={target}
+      range={tab.range}
+      diff={tab.diff}
       onClose={onClose}
     />
   );
 }
 
-function ArtifactPanelView({ client, workspaceId, workspaceRoot, isRemoteWorkspace = false, target, onClose }: ArtifactPanelViewProps) {
+function ArtifactPanelView({ client, workspaceId, workspaceRoot, isRemoteWorkspace = false, target, range, diff, onClose }: ArtifactPanelViewProps) {
   const filePath = workspaceFilePath(workspaceRoot, target.value);
   const platform = usePlatform();
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
+  const [showFullFile, setShowFullFile] = useState(false);
   const [draft, setDraft] = useState("");
   const lastSyncedRef = useRef<string | null>(null);
   const failedDraftRef = useRef<string | null>(null);
@@ -158,9 +165,10 @@ function ArtifactPanelView({ client, workspaceId, workspaceRoot, isRemoteWorkspa
   useEffect(() => {
     setEditing(false);
     setDraft("");
+    setShowFullFile(false);
     lastSyncedRef.current = null;
     failedDraftRef.current = null;
-  }, [target.id, workspaceId]);
+  }, [target.id, workspaceId, diff]);
 
   useEffect(() => {
     if (data?.kind === "text" && data.data !== lastSyncedRef.current) {
@@ -296,11 +304,14 @@ function ArtifactPanelView({ client, workspaceId, workspaceRoot, isRemoteWorkspa
               {target.name}
             </h3>
             <span className="shrink-0 text-xs text-muted-foreground">
-              {target.exists === false ? "missing" : isTextEditing ? (isSaving || isDirty ? "Saving\u2026" : "Saved") : ""}
+              {target.exists === false ? "missing" : diff && !showFullFile ? "changes" : isTextEditing ? (isSaving || isDirty ? "Saving\u2026" : "Saved") : ""}
             </span>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-          {isTextContent(target) && data?.kind === "text" && !isDirectTextEdit ? (
+          {diff && !showFullFile ? (
+            <Button variant="ghost" size="sm" onClick={() => setShowFullFile(true)}>Open full file</Button>
+          ) : null}
+          {isTextContent(target) && data?.kind === "text" && !isDirectTextEdit && (!diff || showFullFile) ? (
             <Tooltip>
               <TooltipTrigger
                 render={(
@@ -360,7 +371,11 @@ function ArtifactPanelView({ client, workspaceId, workspaceRoot, isRemoteWorkspa
         </div>
       </div>
       <div className="min-h-0 flex-1 overflow-hidden">
-        {isLoading || (data?.kind === "binary" && !binaryObjectUrl) ? (
+        {diff && !showFullFile ? (
+          <div className="h-full overflow-auto p-3">
+            <DiffLines diff={diff} className="max-h-none" />
+          </div>
+        ) : isLoading || (data?.kind === "binary" && !binaryObjectUrl) ? (
           <PreviewLoading />
         ) : isError ? (
           <PreviewError message={error instanceof Error ? error.message : "Failed to load artifact" } />
@@ -384,7 +399,7 @@ function ArtifactPanelView({ client, workspaceId, workspaceRoot, isRemoteWorkspa
         ) : data?.kind === "binary" && binaryObjectUrl && target.preview === "html" ? (
           <HTMLPreview type="binary" title={target.name} url={binaryObjectUrl} />
         ) : data?.kind === "text" ? (
-          <PlainText content={data.data} />
+          <PlainText content={data.data} range={range} />
         ) : (
           <PreviewUnavailable />
         )}

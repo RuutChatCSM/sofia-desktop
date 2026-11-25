@@ -3,6 +3,7 @@
 import { CircleDashed, CircleCheck, CircleX, Terminal } from "lucide-react"
 import type { DynamicToolUIPart } from "ai"
 
+import { stripToolImages } from "@/lib/tool-images"
 import { cn } from "@/lib/utils"
 
 /**
@@ -15,7 +16,7 @@ export function BackgroundProcessTool({ part }: { part: DynamicToolUIPart }) {
   const input = (part.input ?? {}) as { command?: unknown; cwd?: unknown; processId?: unknown }
   const command = typeof input.command === "string" && input.command.trim() ? input.command.trim() : "Background task"
   const cwd = typeof input.cwd === "string" ? input.cwd : ""
-  const output = typeof part.output === "string" ? part.output.trim() : ""
+  const output = typeof part.output === "string" ? stripToolImages(part.output).trim() : ""
   const failed = part.state === "output-error"
   const running = part.state === "input-streaming" || part.state === "input-available"
 

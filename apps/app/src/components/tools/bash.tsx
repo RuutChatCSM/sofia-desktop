@@ -8,6 +8,7 @@ import {
   CollapsibleToolTrigger,
 } from "@/components/tools/collapsible-tool"
 import type { BashToolPart } from "@/lib/build-in-tools"
+import { stripToolImages } from "@/lib/tool-images"
 
 interface BashToolProps {
   part: BashToolPart
@@ -30,7 +31,7 @@ export function BashTool({ part }: BashToolProps) {
         <CollapsibleToolContent className="bg-muted rounded-lg p-2">
           <div className="flex flex-col gap-2 text-xs">
             <pre>$ {part.input.command}</pre>
-            <pre className="opacity-80">{part.output}</pre>
+            <pre className="opacity-80">{stripToolImages(part.output)}</pre>
           </div>
         </CollapsibleToolContent>
       </CollapsibleToolStep>

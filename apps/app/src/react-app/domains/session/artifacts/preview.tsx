@@ -1,8 +1,9 @@
 /** @jsxImportSource react */
-import type * as React from "react";
+import * as React from "react";
 import { Loader2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import type { OpenTargetRange } from "./open-target";
 import { MarkdownBlock } from "../surface/markdown";
 
 interface PreviewLoadingProps extends React.ComponentProps<"div"> {}
@@ -25,9 +26,66 @@ export function PreviewError({ message, className, ...props }: PreviewErrorProps
 
 interface PlainTextProps extends React.ComponentProps<"pre"> {
   content: string;
+  /** A read's line range: scroll there and highlight it. */
+  range?: OpenTargetRange;
 }
 
-export function PlainText({ content, className, ...props }: PlainTextProps) {
+const RANGE_CONTEXT_LINES = 200;
+
+function TextPreview({ content, range, className, ...props }: Omit<PlainTextProps, "range"> & { range: OpenTargetRange }) {
+  const firstLineRef = React.useRef<HTMLSpanElement>(null);
+  const [showAll, setShowAll] = React.useState(false);
+  const lines = React.useMemo(() => content.split("\n"), [content]);
+  const start = Math.max(1, Math.min(range.start, lines.length));
+  const end = Math.max(start, Math.min(range.end, lines.length));
+  const windowStart = showAll ? 1 : Math.max(1, start - RANGE_CONTEXT_LINES);
+  const windowEnd = showAll ? lines.length : Math.min(lines.length, end + RANGE_CONTEXT_LINES);
+  const visible = lines.slice(windowStart - 1, windowEnd);
+
+  React.useEffect(() => {
+    firstLineRef.current?.scrollIntoView({ block: "center" });
+  }, [content, range.start, range.end]);
+
+  return (
+    <pre
+      data-preview-range={`${start}-${end}`}
+      className={cn("h-full overflow-auto p-4 text-xs leading-5 text-foreground", className)}
+      {...props}
+    >
+      {visible.map((line, index) => {
+        const lineNumber = windowStart + index;
+        const highlighted = lineNumber >= start && lineNumber <= end;
+        return (
+          <span
+            key={lineNumber}
+            ref={lineNumber === start ? firstLineRef : undefined}
+            className={cn("block whitespace-pre-wrap break-words rounded-sm", highlighted && "bg-amber-3/50")}
+          >
+            <span
+              aria-hidden="true"
+              className={cn("me-3 inline-block w-10 select-none text-right text-muted-foreground/50", highlighted && "text-amber-11")}
+            >
+              {lineNumber}
+            </span>
+            <span>{line || " "}</span>
+          </span>
+        );
+      })}
+      {visible.length < lines.length ? (
+        <button
+          type="button"
+          onClick={() => setShowAll(true)}
+          className="mt-2 text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+        >
+          Show all {lines.length} lines
+        </button>
+      ) : null}
+    </pre>
+  );
+}
+
+export function PlainText({ content, range, className, ...props }: PlainTextProps) {
+  if (range) return <TextPreview content={content} range={range} className={cn("font-mono", className)} {...props} />;
   return <pre className={cn("h-full overflow-auto p-4 text-xs leading-5 text-foreground whitespace-pre-wrap", className)} {...props}>{content}</pre>;
 }
 

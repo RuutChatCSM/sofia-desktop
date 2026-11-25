@@ -14,7 +14,9 @@ import {
   type ToolErrorAttribution,
 } from "@/components/tools/error-attribution"
 import { useChatToolReconnect } from "@/components/tools/use-chat-tool-reconnect"
+import { ToolImageStrip } from "@/components/chat/tool-image-strip"
 import { getToolActivityLabel, isToolPartInFlight } from "@/lib/tool-activity"
+import { stripToolImages, toolImagesFor } from "@/lib/tool-images"
 import { cn } from "@/lib/utils"
 import {
   Bot,
@@ -34,7 +36,7 @@ import {
   SquareCode,
   Wrench,
 } from "lucide-react"
-import { useCallback, useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 import type { DynamicToolUIPart, ToolUIPart } from "ai"
 
 function toolIcon(part: ToolPart) {
@@ -131,12 +133,12 @@ function ShowAllButton({ hidden, onClick }: { hidden: string; onClick: () => voi
   )
 }
 
-function DiffLines({ diff }: { diff: string }) {
+export function DiffLines({ diff, className }: { diff: string; className?: string }) {
   const [showAll, setShowAll] = useState(false)
   const lines = diff.split("\n")
   const visible = showAll ? lines : lines.slice(0, DIFF_PREVIEW_LINES)
   return (
-    <div className="max-h-60 overflow-auto rounded-md font-mono leading-relaxed">
+    <div className={cn("max-h-60 overflow-auto rounded-md font-mono leading-relaxed", className)}>
       {visible.map((line, index) => (
         <div
           key={index}
@@ -201,13 +203,19 @@ const Tool = ({
       : null
   const label = title ?? getToolActivityLabel(toolPart)
   const hasInput = input !== null && input !== undefined
-  const hasOutput = "output" in toolPart && toolPart.output !== undefined
+  const rawOutput = "output" in toolPart ? toolPart.output : undefined
+  const hasOutput = rawOutput !== undefined
   // Serializing a large output for the copy button on every render is what
   // made long transcripts expensive; do it only when the reader copies.
   const hasResult = hasOutput || Boolean(isError && toolPart.errorText)
   const inputDiff = getInputDiff(input)
   const Icon = toolIcon(toolPart)
   const [copied, setCopied] = useState(false)
+  const images = toolImagesFor(toolPart)
+  // Images are shown as thumbnails; their base64 never becomes transcript text.
+  const outputText = useMemo(() => hasOutput ? stripToolImages(formatValue(rawOutput)) : "", [hasOutput, rawOutput])
+  const inputText = useMemo(() => hasInput ? stripToolImages(formatValue(input)) : "", [hasInput, input])
+  const errorText = useMemo(() => isError && toolPart.errorText ? stripToolImages(toolPart.errorText) : "", [isError, toolPart.errorText])
   const ReconnectIcon = reconnectState === "opening"
     ? LoaderCircle
     : reconnectState === "authorization_opened"
@@ -215,9 +223,9 @@ const Tool = ({
       : RefreshCcw
 
   const handleCopyResult = useCallback(async () => {
-    const resultText = "output" in toolPart && toolPart.output !== undefined
-      ? formatValue(toolPart.output)
-      : toolPart.state === "output-error" ? toolPart.errorText : undefined
+    const resultText = hasOutput
+      ? stripToolImages(formatValue(rawOutput))
+      : toolPart.state === "output-error" ? stripToolImages(toolPart.errorText) : undefined
     if (!resultText) return
     try {
       await navigator.clipboard.writeText(resultText)
@@ -226,7 +234,7 @@ const Tool = ({
     } catch {
       // Clipboard access can be unavailable outside a secure browser context.
     }
-  }, [toolPart])
+  }, [hasOutput, rawOutput, toolPart.errorText, toolPart.state])
 
   return (
     <Collapsible className={className} defaultOpen={defaultOpen}>
@@ -316,12 +324,13 @@ const Tool = ({
               {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
             </Button>
           ) : null}
+          <ToolImageStrip images={images} />
           {hasInput ? (
             inputDiff !== null ? (
               <DiffLines diff={inputDiff} />
             ) : (
               <pre className="whitespace-pre-wrap wrap-break-word">
-                {formatValue(input)}
+                {inputText}
               </pre>
             )
           ) : null}
@@ -329,12 +338,12 @@ const Tool = ({
             isDiffText(toolPart.output) ? (
               <DiffLines diff={toolPart.output} />
             ) : (
-              <OutputText text={formatValue(toolPart.output)} />
+              <OutputText text={outputText} />
             )
           ) : null}
           {isError && toolPart.errorText ? (
             <pre className="text-destructive max-h-60 overflow-auto whitespace-pre-wrap wrap-break-word">
-              {toolPart.errorText}
+              {errorText}
             </pre>
           ) : null}
           {inFlight && !hasInput ? (

@@ -15,6 +15,13 @@ export interface BinaryData {
 
 export type Data = TextData | BinaryData;
 
+export type OpenTargetRange = {
+  /** 1-based first line. */
+  start: number;
+  /** 1-based last line, inclusive. */
+  end: number;
+};
+
 export type OpenTarget = {
   id: string;
   kind: OpenTargetKind;
@@ -26,6 +33,10 @@ export type OpenTarget = {
   exists?: boolean;
   size?: number;
   updatedAt?: number;
+  /** Lines a tool read, so the preview can scroll to and highlight them. */
+  range?: OpenTargetRange;
+  /** The diff a tool call produced, shown instead of the whole file. */
+  diff?: string;
 };
 
 const WORKSPACES_PREFIX_PATTERN = /^workspaces\/[^/]+\//i;

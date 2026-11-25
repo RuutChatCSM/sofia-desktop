@@ -17,6 +17,7 @@ import { toast } from "@/components/ui/sonner";
 import { captureAnalyticsEvent } from "@/app/lib/analytics";
 import { createClient, unwrap } from "@/app/lib/engine";
 import { abortSessionSafe } from "@/app/lib/engine-session";
+import { stripToolImages } from "@/lib/tool-images";
 import { t } from "@/i18n";
 import type { ComposerSettingsSection } from "@/react-app/domains/settings/library";
 import { type CloudImportedPlugin } from "@/app/cloud/import-state";
@@ -405,9 +406,9 @@ function messageToReadableText(message: UIMessage) {
         return [`[file:${name}] ${url}`];
       }
       if (part.type === "dynamic-tool") {
-        if (part.state === "output-error") return [`[tool:${part.toolName}] ${part.errorText}`];
-        if (part.state === "output-available") return [`[tool:${part.toolName}] ${JSON.stringify(part.output)}`];
-        return [`[tool:${part.toolName}] ${JSON.stringify(part.input)}`];
+        if (part.state === "output-error") return [`[tool:${part.toolName}] ${stripToolImages(part.errorText)}`];
+        if (part.state === "output-available") return [`[tool:${part.toolName}] ${stripToolImages(part.output)}`];
+        return [`[tool:${part.toolName}] ${stripToolImages(part.input)}`];
       }
       return [];
     })

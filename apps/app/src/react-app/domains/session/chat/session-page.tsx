@@ -807,6 +807,8 @@ export function SessionPage(props: SessionPageProps) {
       label: target.name,
       preview: target.preview,
       ...(target.kind === "file" ? { target: { kind: "file", value: target.value } } : {}),
+      ...(target.range ? { range: target.range } : {}),
+      ...(target.diff ? { diff: target.diff } : {}),
     });
     setCurrentSidePanel("panel");
   }, [activePanelTab?.id, browserUrlForTarget, downloadOpenTarget, openTab, props.selectedSessionId, props.selectedWorkspaceDisplay.workspaceType, props.selectedWorkspaceRoot, setCurrentSidePanel]);

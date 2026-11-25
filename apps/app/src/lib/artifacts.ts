@@ -8,7 +8,7 @@ import {
   isWriteToolPart,
 } from "@/lib/build-in-tools";
 import { useOpenTargets } from "@/lib/target-provider";
-import { filePathFromFileUrl, isCollectibleArtifactTarget, isOpenableFileTarget, type OpenTarget, type OpenTargetPreview } from "@/react-app/domains/session/artifacts/open-target";
+import { filePathFromFileUrl, isCollectibleArtifactTarget, isOpenableFileTarget, type OpenTarget, type OpenTargetPreview, type OpenTargetRange } from "@/react-app/domains/session/artifacts/open-target";
 
 export type ArtifactType = "website" | "markdown" | "sheet" | "slides" | "document" | "image" | "video" | "audio" | "pdf" | "html" | "text" | "unknown";
 
@@ -373,19 +373,32 @@ export function useArtifacts(messages: UIMessage[], options: GetArtifactsOptions
   );
 }
 
+export type OpenArtifactPathOptions = {
+  external?: boolean;
+  /** 1-based lines the reader asked for, so the preview opens there. */
+  range?: OpenTargetRange;
+  /** What an edit/write call changed, shown instead of the whole file. */
+  diff?: string;
+};
+
 /** Open any file path in the artifact preview panel (markdown, code, images…). */
 export function useOpenArtifactPath() {
   const { openTargets, onOpenTarget } = useOpenTargets();
 
-  return React.useCallback((path: string, options?: { external?: boolean }) => {
+  return React.useCallback((path: string, options?: OpenArtifactPathOptions) => {
     const normalized = normalizeArtifactPath(path);
-    const target = openTargetFromArtifactPath(
+    const base = openTargetFromArtifactPath(
       normalized,
       getArtifactName(normalized),
       getArtifactType(normalized),
       openTargets,
     );
-    onOpenTarget?.(target, options);
+    const target: OpenTarget = {
+      ...base,
+      ...(options?.range ? { range: options.range } : {}),
+      ...(options?.diff ? { diff: options.diff } : {}),
+    };
+    onOpenTarget?.(target, options?.external ? { external: true } : undefined);
   }, [onOpenTarget, openTargets]);
 }
 
