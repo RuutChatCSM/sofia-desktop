@@ -103,8 +103,10 @@ describe("commentary is part of the work", () => {
     // When the answer lands the same block collapses, and the narration folds
     // away with the rest of the narrative rather than leaving orphaned prose.
     expect(finished).toContain("Worked for");
-    expect(finished).not.toContain("reverting the shared background");
-    expect(finished).not.toContain("shared Settings wrapper");
+    // Settled: the narration rows fold away, and a short digest of what Sofia
+    // said stays visible under the header (see turn-commentary.ts).
+    expect(finished).not.toContain('data-work-entry="commentary"');
+    expect(finished).toContain("data-turn-digest");
 
     // ...and the answer is still the answer.
     expect(finished).toContain(ANSWER);
@@ -177,10 +179,10 @@ describe("one assistant turn, one work grouping", () => {
     expect(markup).toContain('data-turn-work-header="done"');
     expect(markup).toContain("Worked for");
     expect(markup).toContain(ANSWER);
-    // The narrative went into the block with it — no orphaned progress prose.
-    expect(markup).not.toContain(first);
-    expect(markup).not.toContain(second);
-    expect(markup).not.toContain(closing);
+    // The narrative went into the block with it — no orphaned progress prose;
+    // only its short digest stays visible under the header.
+    expect(markup).not.toContain('data-work-entry="commentary"');
+    expect(markup).toContain("data-turn-digest");
   });
 
   test("the narrative streams inside the block, in the order it happened", () => {

@@ -124,6 +124,7 @@ import { ToolAggregateGroup } from "@/components/chat/tool-aggregate-group"
 import { getAggregateSummary, isAggregatableToolPart, type AnyToolPart } from "@/lib/tool-aggregate"
 import { liveTurnStatus, type LiveTurnStatus } from "@/components/chat/turn-status"
 import { condenseWork, windowLiveWork } from "@/components/chat/work-condense"
+import { commentaryDigest, commentaryNote } from "@/components/chat/turn-commentary"
 import { isToolPartInFlight } from "@/lib/tool-activity"
 import {
   isApplyPatchToolPart,
@@ -1160,6 +1161,7 @@ function TurnWorkBlock({
   elapsedMs,
   liveStatus,
   summary,
+  digest,
   defaultOpen,
   children,
 }: {
@@ -1171,6 +1173,8 @@ function TurnWorkBlock({
   liveStatus?: LiveTurnStatus | null
   /** What a finished turn did, e.g. "ran 3 commands, edited 2 files". */
   summary?: string
+  /** A finished turn's narration, shown while it is collapsed. */
+  digest?: string[]
   defaultOpen: boolean
   children: React.ReactNode
 }) {
@@ -1187,7 +1191,7 @@ function TurnWorkBlock({
   return (
     <Collapsible open={open} onOpenChange={setOpen} className="flex w-full flex-col gap-4">
       <div className="mx-auto flex w-full max-w-[800px] px-2 md:px-6">
-        <div data-turn-work-divider="" className="flex w-full border-b border-border/60 pb-2">
+        <div data-turn-work-divider="" className="flex w-full flex-col items-start border-b border-border/60 pb-2">
         <CollapsibleTrigger
           className="group flex cursor-pointer items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
           aria-label={open ? `${label}. Hide work` : `${label}. Show work`}
@@ -1239,6 +1243,29 @@ function TurnWorkBlock({
             )}
           />
         </CollapsibleTrigger>
+        {active && !open && liveStatus?.note ? (
+          // Collapsed while live: what Sofia said she is doing, under the step.
+          // (Open, the narration row itself is right below.)
+          <p
+            key={liveStatus.note}
+            className="mt-1 truncate ps-[18px] text-[13px] text-muted-foreground motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-300"
+          >
+            {liveStatus.note}
+          </p>
+        ) : null}
+        {!active && !open && digest?.length ? (
+          // A settled turn keeps its story visible: the narration, not the tool rows.
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            data-turn-digest=""
+            className="mt-1.5 flex w-full cursor-pointer flex-col gap-1 border-s border-border ps-3 text-start text-[13px] leading-5 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+          >
+            {digest.map((line, index) => (
+              <span key={index} className="line-clamp-2">{line}</span>
+            ))}
+          </button>
+        ) : null}
         </div>
       </div>
       <CollapsibleContent className="h-(--collapsible-panel-height) overflow-hidden transition-[height] duration-150 ease-out data-starting-style:h-0 data-ending-style:h-0 [&[hidden]:not([hidden='until-found'])]:hidden">
@@ -1297,16 +1324,20 @@ function WorkProse({
 
   return (
     <WorkRow kind={kind}>
-      <MessageContent
-        markdown
-        isStreaming={Boolean(isStreaming)}
-        highlightQuery={highlightQuery}
-        className={cn(
-          "prose w-full min-w-0 bg-transparent p-0 text-[13px] leading-6 text-foreground/90",
-        )}
-      >
-        {value}
-      </MessageContent>
+      {/* Sofia's narration reads as her voice beside the steps: a small mark
+          in the icon column and full-strength text, so "said → did → said"
+          is easy to follow. */}
+      <div data-commentary="" className="flex w-full min-w-0 items-start gap-2">
+        <span aria-hidden="true" className="mt-[9px] size-1.5 shrink-0 rounded-full bg-[var(--sofia-blue)]" />
+        <MessageContent
+          markdown
+          isStreaming={Boolean(isStreaming)}
+          highlightQuery={highlightQuery}
+          className="prose w-full min-w-0 bg-transparent p-0 text-[14px] leading-6 text-foreground"
+        >
+          {value}
+        </MessageContent>
+      </div>
     </WorkRow>
   )
 }
@@ -1510,6 +1541,7 @@ function MessageGroup({
   // The header names the real current step and, once done, what the turn did.
   const toolParts = items.flatMap((item) => item.message.parts.filter((part): part is AnyToolPart => part.type === "dynamic-tool" || part.type.startsWith("tool-")))
   const lastWork = workItems.at(-1)
+  const commentaryTexts = workItems.flatMap((entry) => entry.kind === "commentary" ? [getMessagesText([entry.item.message])] : [])
   const liveStatus = isLiveGroup && isStreaming
     ? liveTurnStatus({
         phase: lastWork?.kind === "thought" && lastWork.isStreaming ? "thinking" : proseItems.length > 0 ? "writing" : "working",
@@ -1518,8 +1550,10 @@ function MessageGroup({
         elapsed: liveElapsedMs !== null && liveElapsedMs >= 1000 ? formatTurnWorkDuration(liveElapsedMs) : null,
         steps: toolParts.length,
         failed: toolParts.filter((part) => part.state === "output-error").length,
+        note: commentaryTexts.length ? commentaryNote(commentaryTexts[commentaryTexts.length - 1]) : undefined,
       })
     : null
+  const turnDigest = !isLiveGroup ? commentaryDigest(commentaryTexts) : undefined
   const aggregatable = toolParts.filter(isAggregatableToolPart)
   const turnSummary = !isLiveGroup && aggregatable.length ? getAggregateSummary(aggregatable, "past") : undefined
   // Shipped work header: elapsed time while working and after completion.
@@ -1660,6 +1694,7 @@ function MessageGroup({
             elapsedMs={null}
             liveStatus={liveStatus}
             summary={turnSummary}
+            digest={turnDigest}
             // Open while it works, and keep a steered user message visible
             // afterwards. Otherwise a finished turn collapses whatever its
             // answer detection concluded.

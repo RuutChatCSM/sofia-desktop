@@ -6,9 +6,27 @@
 export type TurnPhase = "thinking" | "writing" | "working"
 export type TurnTone = "working" | "thinking" | "warning"
 
-export type LiveTurnStatus = { title: string; tone: TurnTone; meta: string[] }
+export type LiveTurnStatus = {
+  title: string
+  tone: TurnTone
+  meta: string[]
+  /** Sofia's latest narration, shown under the step ("I'll map the…"). */
+  note?: string
+}
 
 export function liveTurnStatus(input: {
+  phase: TurnPhase
+  activityLabel: string | null
+  connected: boolean
+  elapsed: string | null
+  steps: number
+  failed: number
+  note?: string
+}): LiveTurnStatus {
+  return { ...baseStatus(input), ...(input.note ? { note: input.note } : {}) }
+}
+
+function baseStatus(input: {
   phase: TurnPhase
   activityLabel: string | null
   connected: boolean

@@ -115,10 +115,13 @@ describe("progress narration belongs to the work, not the transcript", () => {
     expect(markup).toContain("All done.");
     // An earlier `final_answer` followed by more work is not this turn's answer,
     // so it stays inside the work block...
-    expect(markup).not.toContain("Let me find the evaluator banner");
+    // Settled: the narration rows fold away, and a short digest of what Sofia
+    // said stays visible under the header (see turn-commentary.ts).
+    expect(markup).not.toContain('data-work-entry="commentary"');
+    expect(markup).toContain("data-turn-digest");
     // ...and so does `commentary`: it is progress narration the user reads while
     // Sofia works, which means it belongs to the block and folds away with it.
-    expect(markup).not.toContain("Now the core change");
+    // Still in the digest, not as a work row (asserted above).
     expect(running).toContain("Now the core change");
     expect(markup).not.toContain("Sofia is working…");
   });
@@ -150,7 +153,10 @@ describe("progress narration belongs to the work, not the transcript", () => {
     expect(markup).toContain("The clock now belongs to the whole turn.");
     // The block has no tool or reasoning detail here, but the turn still reports
     // its duration, and its narration is inside the disclosure with it.
-    expect(markup).not.toContain("Let me check the timing path");
+    // Settled: the narration rows fold away, and a short digest of what Sofia
+    // said stays visible under the header (see turn-commentary.ts).
+    expect(markup).not.toContain('data-work-entry="commentary"');
+    expect(markup).toContain("data-turn-digest");
     expect(renderList([userMessage, ...proseOnly], "streaming")).toContain("Let me check the timing path");
   });
 
