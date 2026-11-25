@@ -10,9 +10,11 @@ import {
   isHeadlessStackCommand,
   mergeHeadlessServerConfig,
   normalizeDenTarget,
+  resolveHeadlessSidecarDirs,
   resolveHeadlessRuntimeManifestPath,
   resolveHeadlessServerConfigPath,
   resolveHeadlessTokens,
+  resolveMainWorktreeRoot,
 } from "./dev-headless-web-lib";
 
 describe("dev-headless-web helpers", () => {
@@ -231,5 +233,30 @@ describe("dev-headless-web helpers", () => {
     expect(isHeadlessStackCommand("node vite --host 127.0.0.1 --port 5178")).toBe(true);
     expect(isHeadlessStackCommand("/usr/bin/some-unrelated-daemon")).toBe(false);
     expect(isHeadlessStackCommand("ssh user@host")).toBe(false);
+  });
+
+  test("worktrees fall back to the main checkout's engine sidecars", () => {
+    const worktree = "/repo/sofia-wt/ui-bugs";
+    const commonDir = "/repo/sofia/.git";
+    expect(resolveMainWorktreeRoot(worktree, commonDir)).toBe("/repo/sofia");
+    expect(resolveHeadlessSidecarDirs(worktree, commonDir)).toEqual([
+      path.join(worktree, "apps", "desktop", "resources", "sidecars"),
+      path.join("/repo/sofia", "apps", "desktop", "resources", "sidecars"),
+    ]);
+  });
+
+  test("the main checkout does not duplicate its own sidecar dir", () => {
+    const main = "/repo/sofia";
+    expect(resolveMainWorktreeRoot(main, ".git")).toBe(main);
+    expect(resolveHeadlessSidecarDirs(main, ".git")).toEqual([
+      path.join(main, "apps", "desktop", "resources", "sidecars"),
+    ]);
+  });
+
+  test("without git metadata only the checkout's own sidecars are candidates", () => {
+    expect(resolveMainWorktreeRoot("/repo/sofia", null)).toBeNull();
+    expect(resolveHeadlessSidecarDirs("/repo/sofia", null)).toEqual([
+      path.join("/repo/sofia", "apps", "desktop", "resources", "sidecars"),
+    ]);
   });
 });

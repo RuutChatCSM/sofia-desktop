@@ -195,7 +195,13 @@ export type CodexSessionEntry = {
    * image or file) are merged back onto the echoed message — without this an
    * attachment the user sent never appears in the transcript at all. */
   sentUserMessages: CodexUserMessageRecord[];
+  /** When the user pressed send. A local fallback only: the engine boundary
+   * below wins so live and restored durations measure the same turn. */
   activeTurnStartedAt?: number;
+  /** Server-observed engine `turn/started` boundary for the live turn. */
+  engineTurnStartedAt?: number;
+  /** Server-observed engine turn-completion boundary for the live turn. */
+  engineTurnCompletedAt?: number;
   subagentSessions?: CodexSession[];
 };
 
@@ -272,12 +278,17 @@ export const useCodexSessionStore = create<CodexSessionStore>((set, get) => ({
   upsertSession: (session) =>
     set((state) => {
       const existing = state.sessions[session.id];
+      const beginsTurn = session.status === "running" && session.turnId !== null &&
+        (!existing || existing.session.status !== "running" || existing.session.turnId !== session.turnId);
+      const finishesTurn = existing?.session.status === "running" && session.status !== "running";
+      const observedAt = session.updated ? Date.parse(session.updated) : NaN;
+      const engineBoundaryAt = Number.isFinite(observedAt) ? observedAt : Date.now();
       return {
         sessions: {
           ...state.sessions,
           [session.id]: existing
-            ? { ...existing, session, ...(existing.session.turnId !== session.turnId ? { canonicalReady: false, canonicalEpoch: (existing.canonicalEpoch ?? 0) + 1 } : {}) }
-            : { session, messages: [], items: [], backgroundProcesses: [], pendingUserMessages: [], sentUserMessages: [] },
+            ? { ...existing, session, ...(beginsTurn ? { engineTurnStartedAt: engineBoundaryAt, engineTurnCompletedAt: undefined } : {}), ...(finishesTurn ? { engineTurnCompletedAt: engineBoundaryAt } : {}), ...(existing.session.turnId !== session.turnId ? { canonicalReady: false, canonicalEpoch: (existing.canonicalEpoch ?? 0) + 1 } : {}) }
+            : { session, messages: [], items: [], backgroundProcesses: [], pendingUserMessages: [], sentUserMessages: [], ...(beginsTurn ? { engineTurnStartedAt: engineBoundaryAt, engineTurnCompletedAt: undefined } : {}) },
         },
       };
     }),
@@ -294,7 +305,9 @@ export const useCodexSessionStore = create<CodexSessionStore>((set, get) => ({
       for (const item of incoming) {
         const index = indexById.get(item.id);
         const existing = index === undefined ? undefined : items[index];
-        const turnStartedAt=item.turnStartedAt ?? existing?.turnStartedAt ?? (item.historical ? undefined : entry.activeTurnStartedAt);
+        // Only engine-recorded boundaries live on the item. The local send
+        // clock stays as a fallback for sessions that never observe one.
+        const turnStartedAt=item.turnStartedAt ?? existing?.turnStartedAt;
         const timedItem={...item,...(turnStartedAt===undefined?{}:{turnStartedAt})};
         if (existing && index !== undefined) {
           items[index] = {
@@ -421,7 +434,7 @@ export const useCodexSessionStore = create<CodexSessionStore>((set, get) => ({
         messages[messages.length - 1] = { ...last, status: "pending" };
       }
       return {
-        sessions: { ...state.sessions, [sessionId]: { ...entry, ...(entry.session.status !== "running" ? { canonicalReady: false, canonicalEpoch: (entry.canonicalEpoch ?? 0) + 1 } : {}), activeTurnStartedAt: entry.activeTurnStartedAt ?? Date.now(), session: { ...entry.session, status: "running" }, messages } },
+        sessions: { ...state.sessions, [sessionId]: { ...entry, ...(entry.session.status !== "running" ? { canonicalReady: false, canonicalEpoch: (entry.canonicalEpoch ?? 0) + 1 } : {}), activeTurnStartedAt: entry.activeTurnStartedAt ?? Date.now(), engineTurnCompletedAt: undefined, session: { ...entry.session, status: "running" }, messages } },
       };
     }),
 
@@ -435,15 +448,19 @@ export const useCodexSessionStore = create<CodexSessionStore>((set, get) => ({
       // The session update may have cleared turnId before this notification.
       // Bind the outcome to the latest tracked turn, never infer it from idle.
       const turnId = entry.session.turnId ?? entry.items.at(-1)?.turnId;
-      const completedAt = Date.now();
+      const completedAt = entry.engineTurnCompletedAt ?? Date.now();
+      const turnStartedAt = entry.engineTurnStartedAt ?? entry.activeTurnStartedAt;
       const items = entry.items.map((item) => ({
         ...item,
         ...(item.turnId === turnId && item.status === "pending" ? { status: "done" as const, completedAt } : {}),
-        ...(turnId && item.turnId === turnId ? { turnCompletedAt: item.turnCompletedAt ?? completedAt } : {}),
+        ...(turnId && item.turnId === turnId ? {
+          ...(item.turnStartedAt === undefined && turnStartedAt === undefined ? {} : { turnStartedAt: item.turnStartedAt ?? turnStartedAt }),
+          turnCompletedAt: item.turnCompletedAt ?? completedAt,
+        } : {}),
         ...(outcome && turnId && item.turnId === turnId ? { turnOutcome: outcome } : {}),
       }));
       return {
-        sessions: { ...state.sessions, [sessionId]: { ...entry, activeTurnStartedAt: undefined, session: { ...entry.session, status: "idle" }, messages, items } },
+        sessions: { ...state.sessions, [sessionId]: { ...entry, activeTurnStartedAt: undefined, engineTurnStartedAt: undefined, engineTurnCompletedAt: undefined, session: { ...entry.session, status: "idle" }, messages, items } },
       };
     }),
 
@@ -458,9 +475,16 @@ export const useCodexSessionStore = create<CodexSessionStore>((set, get) => ({
       }
       const failureTurnId = turnId ?? entry.session.turnId;
       const id = `sofia-error:${failureTurnId ?? entry.items.length}`;
+      const turnStartedAt = entry.engineTurnStartedAt ?? entry.activeTurnStartedAt;
       const items: CodexTrackedItem[] = entry.items
         .filter((item) => item.id !== id)
-        .map((item) => item.status === "pending" ? { ...item, status: "error" } : item);
+        .map((item) => {
+          const boundary = item.turnId === failureTurnId && item.turnStartedAt === undefined && turnStartedAt !== undefined
+            ? { turnStartedAt }
+            : null;
+          if (item.status === "pending") return { ...item, status: "error" as const, ...boundary };
+          return boundary ? { ...item, ...boundary } : item;
+        });
       const described = describeSofiaError(message);
       const errorPresentation: WorkspaceEngineSessionErrorPresentation = {
         kind: "generic",
@@ -479,7 +503,7 @@ export const useCodexSessionStore = create<CodexSessionStore>((set, get) => ({
         error: message,
         sessions: {
           ...state.sessions,
-          [sessionId]: { ...entry, activeTurnStartedAt: undefined, session: { ...entry.session, status: "error" }, messages, items, settledUserMessages: [...(entry.settledUserMessages ?? []), ...entry.pendingUserMessages], pendingUserMessages: [] },
+          [sessionId]: { ...entry, activeTurnStartedAt: undefined, engineTurnStartedAt: undefined, engineTurnCompletedAt: undefined, session: { ...entry.session, status: "error" }, messages, items, settledUserMessages: [...(entry.settledUserMessages ?? []), ...entry.pendingUserMessages], pendingUserMessages: [] },
         },
       };
     }),

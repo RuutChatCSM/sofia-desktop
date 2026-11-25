@@ -151,10 +151,14 @@ function buildUIMessages(workspaceId: string, sessionId: string): UIMessage[] {
   let userMessageOrdinal = 0;
   for (const item of entry.items) {
     const phase = item.item.phase;
+    // Restored items carry the engine's recorded boundary. Live items learn it
+    // from the session's `turn/started`, falling back to the local send clock
+    // only until (or unless) that boundary arrives.
+    const turnStartedAt = item.turnStartedAt ?? (item.historical ? undefined : entry.engineTurnStartedAt ?? entry.activeTurnStartedAt);
     const metadata = {
       engine: {
         turnId: item.turnId,
-        ...(item.turnStartedAt === undefined ? {} : { turnStartedAt: item.turnStartedAt }),
+        ...(turnStartedAt === undefined ? {} : { turnStartedAt }),
         ...(item.turnCompletedAt === undefined ? {} : { turnCompletedAt: item.turnCompletedAt }),
         ...(item.turnOutcome ? { turnOutcome: item.turnOutcome } : {}),
         ...(phase === "commentary" || phase === "final_answer" ? { phase } : {}),

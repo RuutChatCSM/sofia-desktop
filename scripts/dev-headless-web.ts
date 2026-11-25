@@ -20,6 +20,7 @@ import {
   resolveHeadlessProviderHome,
   resolveHeadlessRuntimeManifestPath,
   resolveHeadlessServerConfigPath,
+  resolveHeadlessSidecarDirs,
   resolveHeadlessTokens,
   type HeadlessRuntimeManifest,
 } from "./dev-headless-web-lib";
@@ -351,12 +352,29 @@ const viteEnv = {
 };
 
 // Share desktop engine selection so both surfaces use the same Sofia binary.
+const gitCommonDir = (() => {
+  try {
+    return execFileSync("git", ["rev-parse", "--git-common-dir"], { cwd, encoding: "utf8" }).trim();
+  } catch {
+    return null;
+  }
+})();
 const sofiaEngine = resolveSofiaEngine({
   home: homedir(),
-  sidecarDirs: [path.join(cwd, "apps", "desktop", "resources", "sidecars")],
+  sidecarDirs: resolveHeadlessSidecarDirs(cwd, gitCommonDir),
 });
 if (!sofiaEngine) throw new Error("Sofia engine not found. Install Sofia or set SOFIA_BIN.");
 const sofiaBin = sofiaEngine.path;
+const sofiaVersion = (() => {
+  try {
+    return execFileSync(sofiaBin, ["--version"], { encoding: "utf8", timeout: 5000 }).trim();
+  } catch {
+    return null;
+  }
+})();
+logLine(
+  `[dev:headless-web] Sofia engine: ${sofiaBin}${sofiaVersion ? ` (${sofiaVersion})` : ""} [${sofiaEngine.source}]`,
+);
 
 // Isolate engine state from the desktop (`~/.sofia`), but share the provider
 // catalog/credentials so the same connected providers are available.

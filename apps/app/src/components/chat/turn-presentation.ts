@@ -22,6 +22,7 @@ export type TurnWorkEntry =
        */
       isCurrent: boolean
     }
+  | { kind: "interjection"; key: string; item: UIMessageWithIndex }
   | { kind: "detail"; key: string; item: UIMessageWithIndex };
 
 export type TurnPresentation = {
@@ -70,9 +71,13 @@ export function workEntriesForMessage(
 export function deriveTurnPresentation(
   items: readonly UIMessageWithIndex[],
   showThinking: boolean,
+  interjections: readonly UIMessageWithIndex[] = [],
 ): TurnPresentation {
   const ordered = [...items].sort((left, right) => left.index - right.index);
   const answerIndex = turnAnswerIndex(ordered.map((item) => item.message));
+  // A steer is user input *inside* the turn. Keep it in the narrative at the
+  // point it was sent without splitting the turn into a second work block.
+  const timeline = [...ordered, ...interjections].sort((left, right) => left.index - right.index);
   const work: TurnWorkEntry[] = [];
   const answerItems: UIMessageWithIndex[] = [];
   // Mutated through an object rather than plain `let`s: these are written from
@@ -128,8 +133,16 @@ export function deriveTurnPresentation(
     work.push(entry);
   };
 
-  ordered.forEach((item, position) => {
-    if (position === answerIndex) {
+  let assistantPosition = -1;
+  timeline.forEach((item) => {
+    if (item.message.role !== "assistant") {
+      phase.run = null;
+      phase.thought = null;
+      work.push({ kind: "interjection", key: `${item.message.id}:interjection`, item });
+      return;
+    }
+    assistantPosition += 1;
+    if (assistantPosition === answerIndex) {
       const split = splitTurnAtAnswer(item.message);
       if (split) {
         workEntriesForMessage({ ...item, message: split.steps }, showThinking).forEach(append);

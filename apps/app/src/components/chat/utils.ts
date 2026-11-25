@@ -9,8 +9,11 @@ const PPTX_MIME = "application/vnd.openxmlformats-officedocument.presentationml.
 const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 const SAFE_DOWNLOAD_PROTOCOLS = new Set(["blob:", "data:"])
 
-interface MessageGroup {
+export interface MessageGroup {
   messages: UIMessageWithIndex[]
+  /** User messages sent while this turn was running (a steer). They stay
+   * inside the turn so it renders one work block, at their original place. */
+  interjections: UIMessageWithIndex[]
 }
 
 export type UIMessageWithIndex = { index: number, message: UIMessage }
@@ -173,14 +176,26 @@ export function groupMessages(messages: UIMessage[], status: ThreadStatus): Mess
     }
 
     const assistantMessages: UIMessageWithIndex[] = []
+    const interjections: UIMessageWithIndex[] = []
 
     const turnId = messageTurnId(message)
-    while (index < messages.length && messages[index].role === "assistant" && messageTurnId(messages[index]) === turnId) {
-      assistantMessages.push({ message: messages[index], index });
+    while (index < messages.length) {
+      const candidate = messages[index]
+      if (candidate.role === "assistant") {
+        if (messageTurnId(candidate) !== turnId) break
+        assistantMessages.push({ message: candidate, index });
+        index++
+        continue
+      }
+      // A user message belongs inside the turn only when assistant work for the
+      // same turn follows it: that is a steer, not the next user turn.
+      const nextAssistant = messages.findIndex((entry, entryIndex) => entryIndex > index && entry.role === "assistant")
+      if (nextAssistant === -1 || messageTurnId(messages[nextAssistant]) !== turnId) break
+      interjections.push({ message: candidate, index })
       index++
     }
 
-    items.push({ messages: assistantMessages });
+    items.push({ messages: assistantMessages, interjections });
   }
 
   return items

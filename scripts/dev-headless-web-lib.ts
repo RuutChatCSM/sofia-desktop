@@ -265,3 +265,35 @@ export function resolveHeadlessProviderHome(env: NodeJS.ProcessEnv = process.env
   const home = env.HOME?.trim() || env.USERPROFILE?.trim();
   return home ? path.join(home, ".sofia") : null;
 }
+
+/**
+ * The checkout that owns the git common dir. In a worktree this is the main
+ * checkout, whose sidecars carry the engine built with the app.
+ */
+export function resolveMainWorktreeRoot(
+  cwd: string,
+  gitCommonDir: string | null | undefined,
+): string | null {
+  const commonDir = gitCommonDir?.trim();
+  if (!commonDir) return null;
+  return path.dirname(path.resolve(cwd, commonDir));
+}
+
+/**
+ * Engine candidates for the headless stack. A worktree's own sidecars are
+ * tried first, then the main checkout's, so a missing worktree sidecar cannot
+ * fall through to an unrelated engine on PATH.
+ */
+export function resolveHeadlessSidecarDirs(
+  cwd: string,
+  gitCommonDir: string | null | undefined,
+): string[] {
+  const sidecars = path.join("apps", "desktop", "resources", "sidecars");
+  const dirs = [path.join(cwd, sidecars)];
+  const mainRoot = resolveMainWorktreeRoot(cwd, gitCommonDir);
+  if (mainRoot) {
+    const mainDir = path.join(mainRoot, sidecars);
+    if (!dirs.includes(mainDir)) dirs.push(mainDir);
+  }
+  return dirs;
+}

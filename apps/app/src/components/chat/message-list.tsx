@@ -1320,6 +1320,8 @@ function groupHasWork(items: UIMessageWithIndex[], showThinking: boolean): boole
 
 interface AssistantMessageGroupProps {
   items: UIMessageWithIndex[]
+  /** User steers that landed inside this turn, at their transcript positions. */
+  interjections: UIMessageWithIndex[]
   /** Every assistant message of this group's turn, across the whole list. */
   turnMessages: UIMessage[]
   /** The group ends the transcript (the live turn while streaming). */
@@ -1350,6 +1352,7 @@ function collectMcpAppParts(items: UIMessageWithIndex[]): DynamicToolUIPart[] {
 
 function MessageGroup({
   items,
+  interjections,
   turnMessages,
   isLastGroup,
   turnContinuesLater,
@@ -1431,7 +1434,7 @@ function MessageGroup({
   // Every one of those is the turn's work, including `phase: "commentary"`
   // progress prose, and all of it lives inside the one work disclosure. Only the
   // answer escapes it. See turn-presentation.ts.
-  const presentation = deriveTurnPresentation(items, showThinking)
+  const presentation = deriveTurnPresentation(items, showThinking, interjections)
   // Reasoning is one of the things the work disclosure holds, at its own place
   // in the narrative — never a second disclosure beside the work. Two nested
   // "expand to see" controls made the reader learn a concept the turn does not
@@ -1439,6 +1442,8 @@ function MessageGroup({
   // sibling of it.
   let workItems = presentation.work
   let proseItems = presentation.answerItems
+  // A steer is a user message: keep it visible even after the turn settles.
+  const hasInterjection = workItems.some((entry) => entry.kind === "interjection")
 
   const durationMs = finishedTurnDurationMs(timing)
   // The header names the real current step and, once done, what the turn did.
@@ -1517,6 +1522,17 @@ function MessageGroup({
   // the presentation was derived, so this only has to place each entry — and a
   // milestone is already one row for a whole run of tool events.
   const renderWorkEntry = (entry: (typeof workItems)[number]) => {
+    if (entry.kind === "interjection") {
+      return (
+        <MessageComponent
+          key={entry.key}
+          message={entry.item.message}
+          isLastMessage={false}
+          isStreaming={false}
+          isLastStep={false}
+        />
+      )
+    }
     if (entry.kind === "collaboration") {
       const part = entry.parts[0];
       return part ? <WorkRow key={entry.key} kind="detail"><CollaborationActivity part={part} parts={entry.parts} /></WorkRow> : null;
@@ -1574,10 +1590,10 @@ function MessageGroup({
             elapsedMs={null}
             liveStatus={liveStatus}
             summary={turnSummary}
-            // Open only while it works. A finished turn collapses whatever its
-            // answer detection concluded: developer mode changes what expanding
-            // shows, not whether a finished turn starts expanded.
-            defaultOpen={isLiveGroup}
+            // Open while it works, and keep a steered user message visible
+            // afterwards. Otherwise a finished turn collapses whatever its
+            // answer detection concluded.
+            defaultOpen={isLiveGroup || hasInterjection}
           >
             {/* The disclosure owns the internal rhythm: whole-narrative rows sit
                 closer together than transcript messages do, because they are not
@@ -1681,6 +1697,7 @@ const MemoMessageGroup = React.memo(MessageGroup, (prev, next) =>
   prev.isStreaming === next.isStreaming &&
   (prev.activeLabel === next.activeLabel || !next.isLastGroup) &&
   sameItems(prev.items, next.items, (x, y) => x.message === y.message && x.index === y.index) &&
+  sameItems(prev.interjections, next.interjections, (x, y) => x.message === y.message && x.index === y.index) &&
   sameItems(prev.turnMessages, next.turnMessages, Object.is))
 
 interface MessageListProps {
@@ -1756,6 +1773,7 @@ export function MessageList({ messages, status, retryStatus }: MessageListProps)
             <div key={item.messages[0]?.message.id ?? "empty-assistant-group"} className={settledRow}>
             <MemoMessageGroup
               items={item.messages}
+              interjections={item.interjections}
               turnMessages={turnOf(item.messages).messages}
               isLastGroup={item.messages.at(-1)?.index === messages.length - 1}
               turnContinuesLater={turnOf(item.messages).lastIndex > (item.messages.at(-1)?.index ?? -1)}
