@@ -1324,20 +1324,18 @@ function WorkProse({
 
   return (
     <WorkRow kind={kind}>
-      {/* Sofia's narration reads as her voice beside the steps: a small mark
-          in the icon column and full-strength text, so "said → did → said"
-          is easy to follow. */}
-      <div data-commentary="" className="flex w-full min-w-0 items-start gap-2">
-        <span aria-hidden="true" className="mt-[9px] size-1.5 shrink-0 rounded-full bg-[var(--sofia-blue)]" />
-        <MessageContent
-          markdown
-          isStreaming={Boolean(isStreaming)}
-          highlightQuery={highlightQuery}
-          className="prose w-full min-w-0 bg-transparent p-0 text-[14px] leading-6 text-foreground"
-        >
-          {value}
-        </MessageContent>
-      </div>
+      {/* Sofia's narration is plain, full-strength text aligned with the step
+          icons; the steps are muted rows, so the contrast alone says who is
+          speaking ("said → did → said") without a marker. */}
+      <MessageContent
+        data-commentary=""
+        markdown
+        isStreaming={Boolean(isStreaming)}
+        highlightQuery={highlightQuery}
+        className="prose w-full min-w-0 bg-transparent p-0 py-0.5 text-[14px] leading-6 text-foreground"
+      >
+        {value}
+      </MessageContent>
     </WorkRow>
   )
 }
