@@ -602,6 +602,7 @@ const AssistantParts = React.memo(
                   key={`reasoning-${index}`}
                   text={group.text}
                   isStreaming={group.isStreaming}
+                  durationKey={`${message.id}:${index}`}
                 />
               )
             }
@@ -1480,6 +1481,7 @@ function MessageGroup({
           <ReasoningBlock
             text={entry.text}
             isStreaming={isLiveGroup && entry.isStreaming}
+            durationKey={entry.key}
             defaultOpen={isLiveGroup && entry.isCurrent}
           />
         </WorkRow>

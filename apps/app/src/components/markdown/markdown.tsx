@@ -320,9 +320,11 @@ function MarkdownBlockSwitch({ text, streaming, className, highlightQuery, ...pr
   }
   const blocks = splitMarkdownBlocks(text);
   return (
-    <div className={className} {...props}>
+    // Blocks inherit the wrapper's color, so muted text (thinking) does not
+    // render as body text while streaming and jump when it settles.
+    <div className={cn("text-foreground", className)} {...props}>
       {blocks.map((block, index) => (
-        <MemoMarkdownBlock key={index} text={block} streaming highlightQuery={highlightQuery} />
+        <MemoMarkdownBlock key={index} className="text-inherit" text={block} streaming highlightQuery={highlightQuery} />
       ))}
     </div>
   );
