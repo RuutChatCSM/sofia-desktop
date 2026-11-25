@@ -188,6 +188,7 @@ export function useCodexEngine(endpoint: CodexEngineEndpoint | null, activeSessi
   // the window shows another workspace.
   useCodexAttentionFeed(
     enabled && endpoint ? { baseUrl: endpoint.baseUrl, token: endpoint.token, hostToken: endpoint.hostToken } : null,
+    displayWorkspaceId,
   );
   const sessions = useCodexSessionStore(
     useShallow((state) =>

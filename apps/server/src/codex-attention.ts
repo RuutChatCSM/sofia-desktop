@@ -12,6 +12,8 @@ import { EventEmitter } from "node:events";
 import type { CodexEvent } from "./codex-sessions.js";
 
 export type CodexAttentionEvent = Extract<CodexEvent, { type: "backgroundProcess.failed" }>;
+/** Live (not replayed) session state from every workspace, for sidebar status. */
+export type CodexSessionStatusEvent = Extract<CodexEvent, { type: "session.updated" }>;
 
 /** Bound the replay buffer so a long-lived server cannot grow forever. */
 const MAX_PENDING = 100;
@@ -43,6 +45,10 @@ export class CodexAttentionHub {
     if (this.observed.get(workspaceId) === manager) return;
     this.observed.set(workspaceId, manager);
     manager.on((event) => {
+      if (event.type === "session.updated") {
+        this.emitter.emit("status", event);
+        return;
+      }
       if (event.type !== "backgroundProcess.failed") return;
       const key = attentionKey(event);
       this.pending.delete(key);
@@ -59,6 +65,12 @@ export class CodexAttentionHub {
   on(listener: (event: CodexAttentionEvent) => void): () => void {
     this.emitter.on("attention", listener);
     return () => { this.emitter.off("attention", listener); };
+  }
+
+  /** Session status changes from every observed workspace. */
+  onStatus(listener: (event: CodexSessionStatusEvent) => void): () => void {
+    this.emitter.on("status", listener);
+    return () => { this.emitter.off("status", listener); };
   }
 
   pendingEvents(): CodexAttentionEvent[] {

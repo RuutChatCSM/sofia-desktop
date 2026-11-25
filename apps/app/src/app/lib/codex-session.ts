@@ -60,7 +60,12 @@ export type CodexEvent =
   | { type: "thread.status"; sessionId: string; threadId: string; status: unknown }
   | { type: "warning"; sessionId: string; threadId: string; message: string }
   | { type: "error"; sessionId: string; threadId: string; turnId?: string; message: string }
-  | { type: "stream.ready"; streamId: string };
+  /** `replayed`: the server resumed from the client's last event number, so
+   * no full re-list or history re-read is needed. */
+  | { type: "stream.ready"; streamId: string; epoch?: string; seq?: number; replayed?: boolean };
+
+/** Where a reconnecting stream left off (see CodexEventLog on the server). */
+export type CodexStreamResume = { epoch: string; since: number };
 
 export type BackgroundProcessStatus = "running" | "completed" | "failed" | "declined";
 
@@ -205,9 +210,16 @@ export function createCodexSessionClient(options: CodexSessionClientOptions) {
         { token: options.token, hostToken: options.hostToken, method: "PUT", body: { providers } },
       ),
 
-    listSessions: async () => (await requestJson<CodexEngineStatus>(
+    /** `passive` lists from the engine's saved state without starting it. */
+    listSessions: async (listOptions?: { passive?: boolean }) => (await requestJson<CodexEngineStatus>(
       options.baseUrl,
-      `${workspacePath}/codex/engine`,
+      `${workspacePath}/codex/engine${listOptions?.passive ? "?passive=1" : ""}`,
+      { token: options.token, hostToken: options.hostToken },
+    )).sessions,
+
+    listArchivedSessions: async () => (await requestJson<{ ok: boolean; sessions: CodexSession[] }>(
+      options.baseUrl,
+      `${workspacePath}/codex/sessions/archived`,
       { token: options.token, hostToken: options.hostToken },
     )).sessions,
 
@@ -456,9 +468,9 @@ export function createCodexSessionClient(options: CodexSessionClientOptions) {
       ),
 
     /** Open the SSE event stream; invokes `onEvent` per parsed frame. */
-    stream: (signal: AbortSignal, onEvent: (event: CodexEvent) => void): Promise<void> =>
+    stream: (signal: AbortSignal, onEvent: (event: CodexEvent) => void, resume?: CodexStreamResume): Promise<void> =>
       consumeSse(
-        `${options.baseUrl}${workspacePath}/codex/stream`,
+        `${options.baseUrl}${workspacePath}/codex/stream${resume ? `?epoch=${encodeURIComponent(resume.epoch)}&since=${resume.since}` : ""}`,
         buildHeaders({ token: options.token, hostToken: options.hostToken }),
         signal,
         (event) => onEvent(event as CodexEvent),

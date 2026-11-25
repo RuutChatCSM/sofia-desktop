@@ -2,7 +2,7 @@ import type { CodexEvent } from "./codex-sessions.js";
 
 type TextDelta = Extract<CodexEvent, { type: "message.delta" | "thinking.delta" }>;
 
-function isTextDelta(event: CodexEvent): event is TextDelta {
+function isTextDelta<E extends CodexEvent>(event: E): event is E & TextDelta {
   return event.type === "message.delta" || event.type === "thinking.delta";
 }
 
@@ -17,8 +17,8 @@ function sameStream(a: TextDelta, b: TextDelta): boolean {
  * apply hundreds of store updates a second. Any other event flushes the
  * pending text first, so ordering relative to item and turn events is kept.
  */
-export function createDeltaCoalescer(send: (event: CodexEvent) => void, windowMs = 50) {
-  let pending: TextDelta | null = null;
+export function createDeltaCoalescer<E extends CodexEvent>(send: (event: E) => void, windowMs = 50) {
+  let pending: (E & TextDelta) | null = null;
   let timer: ReturnType<typeof setTimeout> | undefined;
   const flush = () => {
     clearTimeout(timer);
@@ -28,14 +28,15 @@ export function createDeltaCoalescer(send: (event: CodexEvent) => void, windowMs
     if (event) send(event);
   };
   return {
-    push(event: CodexEvent) {
+    push(event: E) {
       if (!isTextDelta(event)) {
         flush();
         send(event);
         return;
       }
       if (pending && sameStream(pending, event)) {
-        pending = { ...pending, text: pending.text + event.text };
+        // Later fields win (e.g. a sequence number), text accumulates.
+        pending = { ...event, text: pending.text + event.text };
         return;
       }
       flush();

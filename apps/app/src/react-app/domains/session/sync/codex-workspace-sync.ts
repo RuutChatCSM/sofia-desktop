@@ -24,7 +24,9 @@ export async function syncCodexWorkspace(
   // Subscribe before loading history: a slow old transcript must not block
   // newly created tasks, their first-message titles, or completion events.
   const stream = runCodexStream(client, signal, event => {
-    if (event.type === "stream.ready") requestRecovery();
+    // A resumed stream replayed every missed event; only a fresh one needs
+    // the list and open transcripts re-read.
+    if (event.type === "stream.ready" && !event.replayed) requestRecovery();
     if (event.type === "turn.completed" || event.type === "error") requestSessionHistory(event.sessionId);
   }, workspaceId);
   const hydrate = async () => {
@@ -34,6 +36,12 @@ export async function syncCodexWorkspace(
       if (signal.aborted) return;
       store.replaceSessions(list, { workspaceId, entries: snapshot });
       onListResolved({ status: "ready", error: null });
+      // Older servers have no archived listing; the section just stays empty.
+      const archived = await client.listArchivedSessions().catch(() => []);
+      if (signal.aborted) return;
+      for (const session of archived) {
+        if (!useCodexSessionStore.getState().sessions[session.id]) store.upsertSession({ ...session, workspaceId, archived: true });
+      }
       // History is read when a task is opened (ensureCodexTranscriptCached).
       // Reading every transcript here queued hundreds of reads ahead of the
       // one the user clicked and stalled the server on large rollouts.

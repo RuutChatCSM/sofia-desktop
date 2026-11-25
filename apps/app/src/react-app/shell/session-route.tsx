@@ -115,7 +115,7 @@ function toRouteSessionFromCodex(session: CodexSession): RouteSession {
   return {
     id: session.id,
     title: session.title,
-    time: { created: createdMs, updated: updatedMs },
+    time: { created: createdMs, updated: updatedMs, ...(session.archived ? { archived: updatedMs } : {}) },
     status: session.status,
     state: { type: session.status },
     workspaceId: session.workspaceId,
@@ -914,7 +914,7 @@ export function SessionRoute() {
             workspaceId: endpoint.workspaceId,
           });
           const snapshot = useCodexSessionStore.getState().sessions;
-          const sessions = await codexClient.listSessions();
+          const sessions = await codexClient.listSessions({ passive: true });
           if (!cancelled) {
             useCodexSessionStore.getState().replaceSessions(sessions.map(session => ({ ...session, workspaceId: workspace.id })), { workspaceId: workspace.id, entries: snapshot });
             setBackgroundCodexSessions((current) => ({ ...current, [workspace.id]: { sessions, error: null } }));
@@ -939,7 +939,8 @@ export function SessionRoute() {
     if (!codexEngine.enabled) return null;
     const sessionsFor = (workspaceId: string) => Object.values(sidebarCodexEntries)
       .map(entry => entry.session)
-      .filter(session => session.workspaceId === workspaceId && !session.archived && !session.parentSessionId)
+      // Archived tasks are included; the sidebar files them under "Archived".
+      .filter(session => session.workspaceId === workspaceId && !session.parentSessionId)
       .map(toRouteSessionFromCodex);
     return workspaceSessionGroups.map((group) => group.workspace.id === selectedWorkspaceId
       ? {

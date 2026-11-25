@@ -5,9 +5,10 @@ import {
   createCodexAttentionClient,
   type CodexAttentionClient,
   type CodexEvent,
+  type CodexSession,
 } from "@/app/lib/codex-session";
 import { notifyAlert } from "@/react-app/shell/notifications";
-import { backgroundProcessFailureTitle } from "./codex-session-store";
+import { backgroundProcessFailureTitle, useCodexSessionStore } from "./codex-session-store";
 import { useSessionManagementStore } from "./sidebar/session-management-store";
 
 export type CodexAttentionEndpoint = {
@@ -26,7 +27,11 @@ const RECONNECT_MAX_MS = 5_000;
  * one notification that opens it. Events are acknowledged so the server stops
  * replaying pending ones.
  */
-export function useCodexAttentionFeed(endpoint: CodexAttentionEndpoint | null): void {
+export function useCodexAttentionFeed(endpoint: CodexAttentionEndpoint | null, streamedWorkspaceId?: string | null): void {
+  // The streamed workspace already gets ordered status on its own stream; this
+  // feed only fills in the others, so it can never apply an older state.
+  const streamedWorkspace = useRef(streamedWorkspaceId);
+  streamedWorkspace.current = streamedWorkspaceId;
   const endpointKey = endpoint
     ? `${endpoint.baseUrl}\u001f${endpoint.token}\u001f${endpoint.hostToken ?? ""}`
     : "";
@@ -47,7 +52,7 @@ export function useCodexAttentionFeed(endpoint: CodexAttentionEndpoint | null): 
   useEffect(() => {
     if (!client) return;
     const controller = new AbortController();
-    void runAttentionFeed(client, controller.signal, seen.current);
+    void runAttentionFeed(client, controller.signal, seen.current, () => streamedWorkspace.current);
     return () => controller.abort();
   }, [client]);
 }
@@ -56,16 +61,27 @@ async function runAttentionFeed(
   client: CodexAttentionClient,
   signal: AbortSignal,
   seen: Set<string>,
+  streamedWorkspaceId: () => string | null | undefined,
 ): Promise<void> {
   for (let attempt = 1; !signal.aborted; attempt++) {
     try {
-      await client.stream(signal, (event) => handleAttentionEvent(event, client, seen));
+      await client.stream(signal, (event) => {
+        if (event.type === "session.updated") applyBackgroundStatus(event.session, streamedWorkspaceId());
+        else handleAttentionEvent(event, client, seen);
+      });
       if (!signal.aborted) throw new Error("attention feed closed");
     } catch {
       if (signal.aborted) break;
     }
     await delay(Math.min(RECONNECT_BASE_MS * attempt, RECONNECT_MAX_MS), signal);
   }
+}
+
+/** Keep a background workspace's sidebar row (running, idle, title) live. */
+function applyBackgroundStatus(session: CodexSession, streamedWorkspaceId: string | null | undefined): void {
+  const existing = useCodexSessionStore.getState().sessions[session.id];
+  if (!existing || existing.session.workspaceId === streamedWorkspaceId) return;
+  useCodexSessionStore.getState().upsertSession({ ...session, workspaceId: existing.session.workspaceId });
 }
 
 function handleAttentionEvent(

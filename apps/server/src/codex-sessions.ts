@@ -873,6 +873,53 @@ export class CodexSessionManager {
     return this.engine?.info ?? { running: false, pid: null, cwd: this.handle.cwd, userAgent: null, codexHome: null };
   }
 
+  /**
+   * The session list without starting an engine. Listing a background
+   * workspace used to spawn its app-server just to read thread metadata; the
+   * engine's state database already holds it. Once this manager has an engine
+   * (or loaded sessions), its in-memory list is authoritative.
+   */
+  async listSessionsPassively(): Promise<CodexSession[] | null> {
+    if (this.engine?.isAlive() || this.starting || this.sessions.size > 0) return this.listSessions();
+    return await this.readStateDbSessions({ archived: false });
+  }
+
+  /** Archived tasks, so the sidebar can show and restore them. */
+  async listArchivedSessions(): Promise<CodexSession[]> {
+    return (await this.readStateDbSessions({ archived: true })) ?? [];
+  }
+
+  private async readStateDbSessions({ archived }: { archived: boolean }): Promise<CodexSession[] | null> {
+    const db = this.handle.codexHome ? join(this.handle.codexHome, "state_5.sqlite") : null;
+    if (!db || !existsSync(db)) return null;
+    const { DatabaseSync } = await importNodeSqlite();
+    const sqlite = new DatabaseSync(db, { readOnly: true });
+    let rows: Array<Record<string, unknown>>;
+    try {
+      rows = sqlite.prepare("SELECT * FROM threads WHERE archived = ?").all(archived ? 1 : 0) as Array<Record<string, unknown>>;
+    } finally {
+      sqlite.close();
+    }
+    const cwds = this.workspaceCwds();
+    return rows.flatMap((row): CodexSession[] => {
+      const threadId = typeof row.id === "string" ? row.id : "";
+      const cwd = typeof row.cwd === "string" ? row.cwd : undefined;
+      if (!threadId || isSubagentThread(row) || !workspaceOwnsThread(this.handle.cwd, cwd, cwds)) return [];
+      return [{
+        id: codexSessionId(threadId),
+        threadId,
+        title: threadDisplayTitle({ name: typeof row.name === "string" ? row.name : undefined, title: typeof row.title === "string" ? row.title : undefined, preview: typeof row.first_user_message === "string" ? row.first_user_message : undefined }) || "Sofia task",
+        workspaceId: this.workspaceId ?? "local",
+        created: new Date((typeof row.created_at === "number" ? row.created_at : 0) * 1000).toISOString(),
+        ...(typeof row.updated_at === "number" ? { updated: new Date(row.updated_at * 1000).toISOString() } : {}),
+        ...(cwd ? { cwd } : {}),
+        ...(archived ? { archived: true } : {}),
+        turnId: null,
+        status: "idle",
+      }];
+    }).sort((a, b) => (b.updated ?? b.created).localeCompare(a.updated ?? a.created));
+  }
+
   listSessions(): CodexSession[] {
     this.refreshIndexedTitles();
     return [...this.sessions.values()].filter(session => !this.childSessionIds.has(session.id)).sort((a, b) => (b.updated ?? b.created).localeCompare(a.updated ?? a.created));
@@ -1719,7 +1766,12 @@ export class CodexSessionManager {
   /** Archive or unarchive a session (thread/archive, thread/unarchive). */
   async setArchived(sessionId: string, archived: boolean): Promise<CodexSession> {
     await this.start();
-    const session = this.sessions.get(sessionId);
+    let session = this.sessions.get(sessionId);
+    // Archived threads are not loaded at start; restoring one adopts it.
+    if (!session && !archived) {
+      session = (await this.listArchivedSessions()).find((candidate) => candidate.id === sessionId);
+      if (session) this.sessions.set(session.id, session);
+    }
     if (!session) throw new Error(`unknown Sofia session: ${sessionId}`);
     // A thread with no persisted rollout has nothing to archive; treat the
     // engine's "no rollout found" as already-archived rather than failing.

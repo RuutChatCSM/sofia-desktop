@@ -8,7 +8,7 @@ import { create } from "zustand";
 import { useSessionActivityStore } from "./status/session-activity-store";
 import type { UIMessage } from "ai";
 
-import type { BackgroundProcess, CodexEvent, CodexPlanItem, CodexSession, CodexSessionClient, CodexSessionStatus } from "@/app/lib/codex-session";
+import type { BackgroundProcess, CodexEvent, CodexPlanItem, CodexSession, CodexSessionClient, CodexSessionStatus, CodexStreamResume } from "@/app/lib/codex-session";
 import type { WorkspaceEngineSessionErrorPresentation } from "./sync/session-error";
 import {
   baselineFromChanges,
@@ -234,7 +234,8 @@ export const useCodexSessionStore = create<CodexSessionStore>((set, get) => ({
       const fetchedIds = new Set(sessions.map(session => session.id));
       if (snapshot) {
         for (const [id, entry] of Object.entries(snapshot.entries)) {
-          if (entry.session.workspaceId === snapshot.workspaceId && !fetchedIds.has(id) && state.sessions[id] === entry) {
+          // Archived tasks are listed separately; an active-list refresh keeps them.
+          if (entry.session.workspaceId === snapshot.workspaceId && !entry.session.archived && !fetchedIds.has(id) && state.sessions[id] === entry) {
             delete next[id];
           }
         }
@@ -564,10 +565,24 @@ export async function runCodexStream(
   const store = useCodexSessionStore.getState();
   store.setStreaming(true);
   store.setError(null);
+  // Last event number seen, so a reconnect replays only what was missed.
+  let resume: CodexStreamResume | undefined;
   for (let attempt = 1; !signal.aborted; attempt++) {
     try {
       await client.stream(signal, (event) => {
         const s = useCodexSessionStore.getState();
+        if (event.type === "stream.ready") {
+          if (event.epoch === undefined || event.seq === undefined) resume = undefined;
+          else if (!event.replayed) resume = { epoch: event.epoch, since: event.seq };
+          // Without a replay, events were missed: transcripts must be re-read.
+          if (!event.replayed && attempt > 1) {
+            for (const entry of Object.values(useCodexSessionStore.getState().sessions)) {
+              if (!workspaceId || entry.session.workspaceId === workspaceId) s.invalidateCanonical(entry.session.id);
+            }
+          }
+        } else if (resume && "seq" in event && typeof event.seq === "number") {
+          resume = { ...resume, since: event.seq };
+        }
         switch (event.type) {
           case "stream.ready":
             s.setStreaming(true);
@@ -672,14 +687,11 @@ export async function runCodexStream(
             break;
         }
         onEvent?.(event);
-      });
+      }, resume);
       if (!signal.aborted) throw new Error("Sofia connection closed; reconnecting");
     } catch (error) {
       if (signal.aborted) break;
       store.setStreaming(false);
-      for (const entry of Object.values(useCodexSessionStore.getState().sessions)) {
-        if (!workspaceId || entry.session.workspaceId === workspaceId) store.invalidateCanonical(entry.session.id);
-      }
       store.setError(error instanceof Error ? error.message : "Sofia stream disconnected");
       await new Promise<void>((resolve) => {
         const done = () => { clearTimeout(timer); signal.removeEventListener("abort", done); resolve(); };

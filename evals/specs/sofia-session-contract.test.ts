@@ -103,7 +103,8 @@ test("Sofia archive/rename routes enforce write scope and stream cancellation re
   let session: CodexSession = { id: "codex-one", threadId: "one", title: "Original", workspaceId: "ws", created: "2026-01-01", status: "idle", turnId: null };
   let subscriptions = 0, scopes = 0;
   const forkRequests: Array<string | null | undefined> = [];
-  const registry: CodexSessionRegistry = { getOrCreate: async () => ({
+  // One manager per workspace, as the production registry caches it.
+  const manager: Awaited<ReturnType<CodexSessionRegistry["getOrCreate"]>> = {
     engineInfo: {}, start: async () => {}, listSessions: () => [session],
     createSession: async () => session, prompt: async () => session, abort: async () => {}, delete: async () => {},
     getSessionItems: async () => [],
@@ -114,7 +115,8 @@ test("Sofia archive/rename routes enforce write scope and stream cancellation re
     terminateBackgroundProcess: async () => false,
     cleanBackgroundProcesses: async () => {},
     on: () => { subscriptions++; return () => { subscriptions--; }; },
-  }) };
+  };
+  const registry: CodexSessionRegistry = { getOrCreate: async () => manager };
   registerCodexRoutes({ routes, config, registry,
     readJsonBody: (request) => request.json(),
     requireClientScope: (_, scope) => { expect(scope).toBe("collaborator"); scopes++; },
@@ -135,10 +137,15 @@ test("Sofia archive/rename routes enforce write scope and stream cancellation re
   await request("DELETE", "sessions/codex-one");
   expect(scopes).toBe(5);
   await expect(request("POST", "sessions/codex-one/archive", { archived: "yes" })).rejects.toThrow("boolean");
+  // The workspace's event log subscribes once and keeps recording so a
+  // reconnecting client can resume; streams never add manager subscriptions.
   const stream = await request("GET", "stream");
   expect(subscriptions).toBe(1);
   await stream.body?.cancel();
-  expect(subscriptions).toBe(0);
+  const again = await request("GET", "stream");
+  expect(subscriptions).toBe(1);
+  await again.body?.cancel();
+  expect(subscriptions).toBe(1);
   config.readOnly = true;
   await expect(request("POST", "sessions/codex-one/rename", { title: "Blocked" })).rejects.toThrow("read only");
 });

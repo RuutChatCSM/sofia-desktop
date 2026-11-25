@@ -40,6 +40,7 @@ import type { CodexAttentionHub } from "./codex-attention.js";
 import { ApiError } from "./errors.js";
 import { addRoute, type RequestContext, type Route } from "./routes/registry.js";
 import { createDeltaCoalescer } from "./sse-delta-coalescer.js";
+import { eventLogFor } from "./codex-event-log.js";
 import type { ServerConfig, TokenScope } from "./types.js";
 
 const SSE_HEARTBEAT_MS = 15_000;
@@ -53,6 +54,8 @@ export interface CodexSessionRegistry {
     engineInfo: unknown;
     start: () => Promise<void>;
     listSessions: () => CodexSession[];
+    listSessionsPassively?: () => Promise<CodexSession[] | null>;
+    listArchivedSessions?: () => Promise<CodexSession[]>;
     listQuestions?: () => CodexQuestion[];
     respondQuestion?: (requestId: string, answers: string[][]) => void;
     getSubagents?: (parentSessionId: string) => CodexSession[];
@@ -150,9 +153,14 @@ export function registerCodexRoutes(options: RegisterCodexRoutesOptions): void {
     }
   };
 
-  addRoute(routes, "GET", "/workspace/:id/codex/engine", "client", async ({ params }) => {
+  addRoute(routes, "GET", "/workspace/:id/codex/engine", "client", async ({ params, url }) => {
     try {
       const manager = await workspaceManager(params.id);
+      // Sidebar refreshes for background workspaces must not spawn engines.
+      if (url.searchParams.get("passive") === "1") {
+        const sessions = await manager.listSessionsPassively?.().catch(() => null);
+        if (sessions) return jsonResponse({ ok: true, engine: manager.engineInfo ?? null, sessions });
+      }
       // Start the engine so persisted threads load from thread/list — without
       // this the session list is empty until the first session is created.
       await manager.start();
@@ -165,6 +173,12 @@ export function registerCodexRoutes(options: RegisterCodexRoutesOptions): void {
       }
       throw error;
     }
+  });
+
+  // Archived tasks come from the engine's saved state, never by starting it.
+  addRoute(routes, "GET", "/workspace/:id/codex/sessions/archived", "client", async ({ params }) => {
+    const manager = await workspaceManager(params.id);
+    return jsonResponse({ ok: true, sessions: await manager.listArchivedSessions?.() ?? [] });
   });
 
   // Codex model/provider config: what the app's model picker surfaces when the
@@ -687,7 +701,7 @@ export function registerCodexRoutes(options: RegisterCodexRoutesOptions): void {
   // SSE event stream: emits every CodexEvent as a `data:` frame. A single
   // subscriber per workspace is expected (the session sync layer). We keep the
   // connection open until the client aborts.
-  addRoute(routes, "GET", "/workspace/:id/codex/stream", "client", async ({ params, request }) => {
+  addRoute(routes, "GET", "/workspace/:id/codex/stream", "client", async ({ params, request, url }) => {
     const manager = await workspaceManager(params.id);
     await manager.start();
     const streamId = randomUUID();
@@ -695,6 +709,11 @@ export function registerCodexRoutes(options: RegisterCodexRoutesOptions): void {
     let closed = false;
     let unsubscribe = () => {};
     const controllerRef: { controller: ReadableStreamDefaultController<Uint8Array> | null } = { controller: null };
+    const log = eventLogFor(manager);
+    // Resume: a client that saw events up to `since` in this log's epoch gets
+    // only what it missed. Otherwise it gets the full current state.
+    const since = Number(url.searchParams.get("since"));
+    const replay = url.searchParams.get("epoch") === log.epoch ? log.since(since) : null;
 
     // A comment frame every 15 s lets the client tell a quiet stream from a
     // dead one (sleep/wake, proxies, a stalled remote) and reconnect.
@@ -702,7 +721,7 @@ export function registerCodexRoutes(options: RegisterCodexRoutesOptions): void {
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
         controllerRef.controller = controller;
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "stream.ready", streamId })}\n\n`));
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "stream.ready", streamId, epoch: log.epoch, seq: log.lastSeq, replayed: replay !== null })}\n\n`));
         heartbeat = setInterval(() => {
           if (closed) return;
           try { controller.enqueue(encoder.encode(": keepalive\n\n")); } catch { closed = true; }
@@ -715,7 +734,7 @@ export function registerCodexRoutes(options: RegisterCodexRoutesOptions): void {
       },
     });
 
-    const coalescer = createDeltaCoalescer((event) => {
+    const coalescer = createDeltaCoalescer<CodexEvent & { seq?: number }>((event) => {
       if (closed || !controllerRef.controller) return;
       try {
         controllerRef.controller.enqueue(encoder.encode(sseEncode(event)));
@@ -724,28 +743,22 @@ export function registerCodexRoutes(options: RegisterCodexRoutesOptions): void {
         unsubscribe();
       }
     });
-    unsubscribe = manager.on((event) => {
+
+    if (replay) {
+      for (const event of replay) coalescer.push(event);
+    } else {
+      // Full state for a fresh or unresumable client.
+      for (const session of manager.listSessions()) coalescer.push({ type: "session.created", session });
+    }
+    for (const question of manager.listQuestions?.() ?? []) {
+      coalescer.push({ type: "question.asked", sessionId: question.sessionID, properties: question });
+    }
+    // Subscribed in the same tick as the replay was read: no event can fall
+    // between the two.
+    unsubscribe = log.on((event) => {
       if (closed || !controllerRef.controller) return;
       coalescer.push(event);
     });
-
-    // Replay existing sessions so a reconnecting client sees current state.
-    for (const session of manager.listSessions()) {
-      if (closed || !controllerRef.controller) break;
-      try {
-        controllerRef.controller.enqueue(
-          encoder.encode(sseEncode({ type: "session.created", session })),
-        );
-      } catch {
-        closed = true;
-        break;
-      }
-    }
-
-    for (const question of manager.listQuestions?.() ?? []) {
-      if (closed || !controllerRef.controller) break;
-      controllerRef.controller.enqueue(encoder.encode(sseEncode({ type: "question.asked", sessionId: question.sessionID, properties: question })));
-    }
 
     request.signal.addEventListener("abort", () => {
       closed = true;
@@ -788,7 +801,7 @@ export function registerCodexRoutes(options: RegisterCodexRoutesOptions): void {
         },
       });
 
-      unsubscribe = attention.on((event) => {
+      const send = (event: CodexEvent) => {
         if (closed || !controllerRef.controller) return;
         try {
           controllerRef.controller.enqueue(encoder.encode(sseEncode(event)));
@@ -796,7 +809,12 @@ export function registerCodexRoutes(options: RegisterCodexRoutesOptions): void {
           closed = true;
           unsubscribe();
         }
-      });
+      };
+      const unsubscribeAttention = attention.on(send);
+      // Status from every workspace keeps background sidebar rows live
+      // without a per-workspace stream or polling.
+      const unsubscribeStatus = attention.onStatus(send);
+      unsubscribe = () => { unsubscribeAttention(); unsubscribeStatus(); };
 
       for (const event of attention.pendingEvents()) {
         if (closed || !controllerRef.controller) break;
