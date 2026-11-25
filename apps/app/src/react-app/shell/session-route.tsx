@@ -111,10 +111,11 @@ import { createCodexSessionClient, type CodexSession } from "@/app/lib/codex-ses
 /** Map a codex session into the engine Session shape the sidebar renders. */
 function toRouteSessionFromCodex(session: CodexSession): RouteSession {
   const createdMs = Date.parse(session.created) || Date.now();
+  const updatedMs = (session.updated && Date.parse(session.updated)) || createdMs;
   return {
     id: session.id,
     title: session.title,
-    time: { created: createdMs, updated: createdMs },
+    time: { created: createdMs, updated: updatedMs },
     status: session.status,
     state: { type: session.status },
     workspaceId: session.workspaceId,

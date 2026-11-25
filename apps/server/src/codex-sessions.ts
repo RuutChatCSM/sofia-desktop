@@ -63,6 +63,30 @@ export function threadBelongsToWorkspace(
   return pathsMatch(workspaceCwd, threadCwd) || pathsMatch(threadCwd, workspaceCwd);
 }
 
+/**
+ * Whether this workspace is the one place a thread is listed. Matching alone
+ * (above) lets nested workspaces both claim a thread, and each list refresh
+ * then moved the row to whichever workspace answered last. The owner is the
+ * closest workspace: the deepest one containing the thread's cwd, else the
+ * shallowest one inside it. A thread with no cwd belongs to the first
+ * workspace only.
+ */
+export function workspaceOwnsThread(
+  workspaceCwd: string,
+  threadCwd: string | null | undefined,
+  workspaceCwds: readonly string[],
+): boolean {
+  if (!threadBelongsToWorkspace(workspaceCwd, threadCwd)) return false;
+  const candidates = workspaceCwds.filter((cwd) => threadBelongsToWorkspace(cwd, threadCwd));
+  if (candidates.length <= 1) return true;
+  if (!threadCwd) return candidates[0] === workspaceCwd;
+  const containing = candidates.filter((cwd) => pathsMatch(cwd, threadCwd));
+  const owner = containing.length
+    ? containing.reduce((best, cwd) => (cwd.length > best.length ? cwd : best))
+    : candidates.reduce((best, cwd) => (cwd.length < best.length ? cwd : best));
+  return owner === workspaceCwd;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -231,6 +255,8 @@ export type CodexSession = {
   title: string;
   workspaceId: string;
   created: string;
+  /** Last activity (turn start or end); the session list is ordered by it. */
+  updated?: string;
   turnId: string | null;
   status: "idle" | "running" | "error";
   archived?: boolean;
@@ -450,6 +476,12 @@ export class CodexSessionManager {
   private mcpConfigSnapshot: string | null = null;
   private mcpRefresh: Promise<void> = Promise.resolve();
   private skillRootsSnapshot: string | null = null;
+  /** Every workspace root this server manages, so a thread has one owner. */
+  private workspaceCwds: () => readonly string[] = () => [this.handle.cwd];
+
+  setWorkspaceCwds(resolve: () => readonly string[]): void {
+    this.workspaceCwds = resolve;
+  }
   private skillRootsRefresh: Promise<void> = Promise.resolve();
 
   async setSkillRoots(roots: string[]): Promise<void> {
@@ -843,7 +875,7 @@ export class CodexSessionManager {
 
   listSessions(): CodexSession[] {
     this.refreshIndexedTitles();
-    return [...this.sessions.values()].filter(session => !this.childSessionIds.has(session.id)).sort((a, b) => b.created.localeCompare(a.created));
+    return [...this.sessions.values()].filter(session => !this.childSessionIds.has(session.id)).sort((a, b) => (b.updated ?? b.created).localeCompare(a.updated ?? a.created));
   }
 
   getSession(sessionId: string): CodexSession | null {
@@ -1270,6 +1302,8 @@ export class CodexSessionManager {
           title?: string;
           createdAt?: number;
           created_at?: number | string;
+          updatedAt?: number;
+          updated_at?: number;
           cwd?: string;
           model?: string;
           model_provider?: string;
@@ -1282,7 +1316,7 @@ export class CodexSessionManager {
         // Group by project, not exact path: a session created in a subdirectory
         // (or from the repo root while the workspace points at a subdir) belongs
         // to this workspace, and the TUI lists it. Strict equality hid them.
-        if (!threadBelongsToWorkspace(this.handle.cwd, thread.cwd)) continue;
+        if (!workspaceOwnsThread(this.handle.cwd, thread.cwd, this.workspaceCwds())) continue;
         if (selectCodexThreadName({ name: thread.name })) this.namedThreads.add(threadId);
         const originalThreadId = Object.entries(this.threadAliases).find(([, replacement]) => replacement === threadId)?.[0];
         const sessionId = codexSessionId(originalThreadId ?? threadId);
@@ -1302,6 +1336,7 @@ export class CodexSessionManager {
           cwd: thread.cwd ?? this.handle.cwd,
           workspaceId: this.workspaceId ?? "local",
           created,
+          ...(typeof (thread.updatedAt ?? thread.updated_at) === "number" ? { updated: new Date((thread.updatedAt ?? thread.updated_at)! * 1000).toISOString() } : {}),
           turnId: null,
           status: "idle",
           ...(typeof thread.model === "string" ? { model: thread.model } : {}),
@@ -1393,6 +1428,7 @@ export class CodexSessionManager {
           title: indexedTitles.get(threadId) ?? (threadDisplayTitle({name: typeof row.name === "string" ? row.name : undefined, title: typeof row.title === "string" ? row.title : undefined, preview: typeof row.first_user_message === "string" ? row.first_user_message : undefined}) || "Sofia task"),
           workspaceId: this.workspaceId ?? "local",
           created,
+          ...(typeof row.updated_at === "number" ? { updated: new Date(row.updated_at * 1000).toISOString() } : {}),
           turnId: null,
           status: "idle",
           rolloutPath: this.threadAliases[threadId]
@@ -1497,6 +1533,7 @@ export class CodexSessionManager {
     if (isPendingTaskTitle(session.title) && !this.pendingTitleInputs.has(session.id)) this.pendingTitleInputs.set(session.id, text);
     // Reserve the task before any RPC so concurrent prompts cannot start two turns.
     session.status = "running";
+    session.updated = new Date().toISOString();
     session.cwd = opts?.cwd ?? session.cwd ?? this.handle.cwd;
     this.emit({ type: "session.updated", session: { ...session } });
     let turnId: string | null;
@@ -2021,6 +2058,7 @@ export class CodexSessionManager {
     if (!session) return;
     session.turnId = params.turn.id;
     session.status = "running";
+    session.updated = new Date().toISOString();
     this.emit({ type: "session.updated", session: { ...session } });
   }
 
@@ -2076,6 +2114,7 @@ export class CodexSessionManager {
     if (!session) return;
     if (turn?.id && session.turnId && turn.id !== session.turnId) return;
     const completedTurnId = turn?.id ?? session.turnId;
+    session.updated = new Date().toISOString();
     session.status = turn?.status === "failed" || turn?.error || error ? "error" : "idle";
     session.turnId = null;
     this.emit({ type: "session.updated", session: { ...session } });

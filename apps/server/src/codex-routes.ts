@@ -39,7 +39,10 @@ import { CodexSteerError, CodexThreadBusyError, MAX_TRANSCRIPT_ITEMS, isCodexSes
 import type { CodexAttentionHub } from "./codex-attention.js";
 import { ApiError } from "./errors.js";
 import { addRoute, type RequestContext, type Route } from "./routes/registry.js";
+import { createDeltaCoalescer } from "./sse-delta-coalescer.js";
 import type { ServerConfig, TokenScope } from "./types.js";
+
+const SSE_HEARTBEAT_MS = 15_000;
 
 type ReadJsonBody = (request: Request) => Promise<Record<string, unknown>>;
 type RequireClientScope = (ctx: RequestContext, required: TokenScope) => void;
@@ -693,18 +696,26 @@ export function registerCodexRoutes(options: RegisterCodexRoutesOptions): void {
     let unsubscribe = () => {};
     const controllerRef: { controller: ReadableStreamDefaultController<Uint8Array> | null } = { controller: null };
 
+    // A comment frame every 15 s lets the client tell a quiet stream from a
+    // dead one (sleep/wake, proxies, a stalled remote) and reconnect.
+    let heartbeat: ReturnType<typeof setInterval> | undefined;
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
         controllerRef.controller = controller;
         controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "stream.ready", streamId })}\n\n`));
+        heartbeat = setInterval(() => {
+          if (closed) return;
+          try { controller.enqueue(encoder.encode(": keepalive\n\n")); } catch { closed = true; }
+        }, SSE_HEARTBEAT_MS);
       },
       cancel() {
         closed = true;
+        clearInterval(heartbeat);
         unsubscribe();
       },
     });
 
-    unsubscribe = manager.on((event) => {
+    const coalescer = createDeltaCoalescer((event) => {
       if (closed || !controllerRef.controller) return;
       try {
         controllerRef.controller.enqueue(encoder.encode(sseEncode(event)));
@@ -712,6 +723,10 @@ export function registerCodexRoutes(options: RegisterCodexRoutesOptions): void {
         closed = true;
         unsubscribe();
       }
+    });
+    unsubscribe = manager.on((event) => {
+      if (closed || !controllerRef.controller) return;
+      coalescer.push(event);
     });
 
     // Replay existing sessions so a reconnecting client sees current state.
@@ -734,6 +749,7 @@ export function registerCodexRoutes(options: RegisterCodexRoutesOptions): void {
 
     request.signal.addEventListener("abort", () => {
       closed = true;
+      clearInterval(heartbeat);
       unsubscribe();
       try { controllerRef.controller?.close(); } catch { /* already closed */ }
     });

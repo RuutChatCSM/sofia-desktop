@@ -312,6 +312,7 @@ export async function getOrCreateCodexSessionManager(config: ServerConfig, works
     manager = createCodexSessionManager(handle, workspaceId, enableLegacyImport);
     managersByKey.set(key, manager);
   }
+  manager.setWorkspaceCwds(() => (config.workspaces ?? []).map((workspace) => workspace.path));
   let keys = managerKeysByConfig.get(config);
   if (!keys) {
     keys = new Set();

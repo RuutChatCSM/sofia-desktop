@@ -371,6 +371,7 @@ export async function restoreCodexSessionItems(
     // interrupted turn. Absence is not deletion evidence: keep previously
     // observed history and live progress until explicit rollback/removal.
 
+    const restoredItems: CodexTrackedItem[] = [];
     for (const entry of result.items) {
       const item = entry.item;
       if (!isRecord(item) || !item.type) continue;
@@ -382,7 +383,7 @@ export async function restoreCodexSessionItems(
       // a turn that never ended (engine crash, app quit; after a restart the
       // session has no turn). It must read as interrupted, not spin forever.
       const orphaned = item.status === "inProgress" && session !== undefined && session.turnId !== entry.turnId;
-      store.upsertItem(sessionId, {
+      restoredItems.push({
         id: itemId,
         type: String(item.type),
         historical: true,
@@ -399,6 +400,9 @@ export async function restoreCodexSessionItems(
         status: orphaned ? "error" : item.status === "inProgress" || activeUnsettled ? "pending" : item.status === "failed" || item.status === "declined" ? "error" : "done",
       });
     }
+    // One store update for the whole read: per-item updates re-ran every
+    // subscriber once per item, quadratic in transcript length.
+    store.upsertItems(sessionId, restoredItems);
     // Recovery is also an acknowledgement path: an SSE echo may have been
     // missed while disconnected. Match by ordinal so a repeated historical
     // prompt cannot acknowledge a newer submission with the same text; an
@@ -421,12 +425,13 @@ export async function restoreCodexSessionItems(
       return items.length === current.items.length ? state : { sessions: { ...state.sessions, [sessionId]: { ...current, items } } };
     });
     const outcomes = new Map((result.outcomes ?? []).map(outcome => [outcome.turnId, outcome]));
+    const settledItems: CodexTrackedItem[] = [];
     for (const tracked of useCodexSessionStore.getState().sessions[sessionId]?.items ?? []) {
       const outcome = outcomes.get(tracked.turnId);
       // A live terminal event already recorded in this renderer wins.
       if (!outcome) continue;
       const interruptedTool = outcome.outcome === "cancelled" && tracked.item.status === "inProgress";
-      store.upsertItem(sessionId, {
+      settledItems.push({
         ...tracked,
         turnOutcome: tracked.turnOutcome ?? outcome.outcome,
         ...(outcome.startedAt === undefined ? {} : { turnStartedAt: outcome.startedAt }),
@@ -435,6 +440,7 @@ export async function restoreCodexSessionItems(
         ...(outcome.completedAt === undefined || tracked.completedAt !== undefined ? {} : { completedAt: outcome.completedAt }),
       });
     }
+    store.upsertItems(sessionId, settledItems);
     // Upserts preserve existing array positions. A formerly partial replay can
     // therefore put newly recovered commentary after old tools unless we restore
     // the authoritative order as well as the content.

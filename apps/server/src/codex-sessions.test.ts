@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { CodexSessionManager, codexSessionId, isCodexSessionId, isMissingRolloutError, isThreadWriterConflict, threadBelongsToWorkspace, threadTitleFromEngineText, resolveRevertBoundary, THREAD_TITLE_MAX_LENGTH, type CodexEvent } from "./codex-sessions.js";
+import { CodexSessionManager, codexSessionId, isCodexSessionId, isMissingRolloutError, isThreadWriterConflict, threadBelongsToWorkspace, workspaceOwnsThread, threadTitleFromEngineText, resolveRevertBoundary, THREAD_TITLE_MAX_LENGTH, type CodexEvent } from "./codex-sessions.js";
 
 const roots: string[] = [];
 
@@ -890,4 +890,13 @@ describe("resolveRevertBoundary", () => {
   test("returns null for an empty transcript", () => {
     expect(resolveRevertBoundary([], "m1")).toBeNull();
   });
+});
+
+test("a thread in nested workspaces is listed by the closest one only", () => {
+  const roots = ["/repo", "/repo/app", "/other"];
+  expect(roots.filter((root) => workspaceOwnsThread(root, "/repo/app/src", roots))).toEqual(["/repo/app"]);
+  expect(roots.filter((root) => workspaceOwnsThread(root, "/repo/docs", roots))).toEqual(["/repo"]);
+  expect(roots.filter((root) => workspaceOwnsThread(root, "/", roots))).toEqual(["/repo"]);
+  expect(roots.filter((root) => workspaceOwnsThread(root, undefined, roots))).toEqual(["/repo"]);
+  expect(workspaceOwnsThread("/solo", "/solo/x", ["/solo"])).toBe(true);
 });

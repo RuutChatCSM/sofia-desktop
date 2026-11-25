@@ -198,6 +198,8 @@ type CodexSessionActions = {
   applyThinkingDelta: (sessionId: string, text: string) => void;
   appendItemThinking: (sessionId: string, itemId: string, text: string) => void;
   upsertItem: (sessionId: string, item: CodexTrackedItem) => void;
+  /** Apply many items in one store update (history restore). */
+  upsertItems: (sessionId: string, items: CodexTrackedItem[]) => void;
   setBackgroundProcesses: (sessionId: string, processes: BackgroundProcess[]) => void;
   appendItemText: (sessionId: string, itemId: string, text: string) => void;
   appendItemOutput: (sessionId: string, itemId: string, text: string) => void;
@@ -260,23 +262,33 @@ export const useCodexSessionStore = create<CodexSessionStore>((set, get) => ({
       };
     }),
 
-  upsertItem: (sessionId, item) =>
+  upsertItem: (sessionId, item) => get().upsertItems(sessionId, [item]),
+
+  upsertItems: (sessionId, incoming) =>
     set((state) => {
       const entry = state.sessions[sessionId];
-      if (!entry) return state;
-      const existing = entry.items.find((i) => i.id === item.id);
+      if (!entry || incoming.length === 0) return state;
       const now = Date.now();
-      const turnStartedAt=item.turnStartedAt ?? existing?.turnStartedAt ?? (item.historical ? undefined : entry.activeTurnStartedAt);
-      const timedItem={...item,...(turnStartedAt===undefined?{}:{turnStartedAt})};
-      const items = existing
-        ? entry.items.map((i) => (i.id === item.id ? {
-            ...i, ...timedItem, createdAt: item.createdAt ?? i.createdAt ?? now,
-            status: i.status !== "pending" && item.status === "pending" ? i.status : item.status,
-            text: i.text.length > item.text.length ? i.text : item.text,
-            thinking: i.thinking.length > item.thinking.length ? i.thinking : item.thinking,
-            output: i.output.length > item.output.length ? i.output : item.output,
-          } : i))
-        : [...entry.items, { ...timedItem, createdAt: item.createdAt ?? now }];
+      const items = [...entry.items];
+      const indexById = new Map(items.map((tracked, index) => [tracked.id, index]));
+      for (const item of incoming) {
+        const index = indexById.get(item.id);
+        const existing = index === undefined ? undefined : items[index];
+        const turnStartedAt=item.turnStartedAt ?? existing?.turnStartedAt ?? (item.historical ? undefined : entry.activeTurnStartedAt);
+        const timedItem={...item,...(turnStartedAt===undefined?{}:{turnStartedAt})};
+        if (existing && index !== undefined) {
+          items[index] = {
+            ...existing, ...timedItem, createdAt: item.createdAt ?? existing.createdAt ?? now,
+            status: existing.status !== "pending" && item.status === "pending" ? existing.status : item.status,
+            text: existing.text.length > item.text.length ? existing.text : item.text,
+            thinking: existing.thinking.length > item.thinking.length ? existing.thinking : item.thinking,
+            output: existing.output.length > item.output.length ? existing.output : item.output,
+          };
+        } else {
+          indexById.set(item.id, items.length);
+          items.push({ ...timedItem, createdAt: item.createdAt ?? now });
+        }
+      }
       return { sessions: { ...state.sessions, [sessionId]: { ...entry, items } } };
     }),
 

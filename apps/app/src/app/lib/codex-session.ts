@@ -23,6 +23,8 @@ export type CodexSession = {
   title: string;
   workspaceId: string;
   created: string;
+  /** Last activity; the sidebar orders tasks by it. */
+  updated?: string;
   turnId: string | null;
   status: CodexSessionStatus;
   model?: string;
@@ -460,6 +462,7 @@ export function createCodexSessionClient(options: CodexSessionClientOptions) {
         buildHeaders({ token: options.token, hostToken: options.hostToken }),
         signal,
         (event) => onEvent(event as CodexEvent),
+        { stallTimeoutMs: 45_000 },
       ),
   };
 }
@@ -473,10 +476,25 @@ async function consumeSse(
   headers: Record<string, string>,
   signal: AbortSignal,
   onEvent: (event: unknown) => void,
+  options: { stallTimeoutMs?: number } = {},
 ): Promise<void> {
   const controller = new AbortController();
   const abort = () => controller.abort();
   signal.addEventListener("abort", abort, { once: true });
+  // A server that sends keepalive comments is known to be silent only when
+  // the connection is dead. Arm the watchdog once one arrives, so older
+  // servers without heartbeats are not reconnected every few seconds.
+  let lastByteAt = Date.now();
+  let heartbeatSeen = false;
+  let stalled = false;
+  const watchdog = options.stallTimeoutMs
+    ? setInterval(() => {
+        if (heartbeatSeen && Date.now() - lastByteAt > options.stallTimeoutMs!) {
+          stalled = true;
+          controller.abort();
+        }
+      }, Math.min(5_000, options.stallTimeoutMs))
+    : undefined;
   try {
     const response = await fetch(url, { headers, signal: controller.signal });
     if (!response.ok || !response.body) {
@@ -489,11 +507,13 @@ async function consumeSse(
     for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
+      lastByteAt = Date.now();
       buffer += decoder.decode(value, { stream: true });
       let idx: number;
       while ((idx = buffer.indexOf("\n\n")) >= 0) {
         const frame = buffer.slice(0, idx);
         buffer = buffer.slice(idx + 2);
+        if (frame.startsWith(":")) heartbeatSeen = true;
         const dataLine = frame.split("\n").find((line) => line.startsWith("data:"));
         if (!dataLine) continue;
         const raw = dataLine.slice(5).trim();
@@ -505,7 +525,11 @@ async function consumeSse(
         }
       }
     }
+  } catch (error) {
+    if (stalled && !signal.aborted) throw new Error("Event stream stalled; reconnecting");
+    throw error;
   } finally {
+    clearInterval(watchdog);
     signal.removeEventListener("abort", abort);
   }
 }
