@@ -41,10 +41,13 @@ const JumpToStartButton = memo(function JumpToStartButton({
 });
 
 type JumpToLatestButtonProps = {
+  /** Sofia is still writing below: the badge says there is more to catch up on. */
+  isStreaming: boolean;
   onJumpToLatest: (behavior?: ScrollBehavior) => void;
 };
 
 const JumpToLatestButton = memo(function JumpToLatestButton({
+  isStreaming,
   onJumpToLatest,
 }: JumpToLatestButtonProps) {
   const handleClick = useCallback(() => {
@@ -57,13 +60,23 @@ const JumpToLatestButton = memo(function JumpToLatestButton({
     // tooltip/aria-label.
     <button
       type="button"
-      title="Jump to latest"
+      title={isStreaming ? "Jump to latest — Sofia is still working" : "Jump to latest"}
       aria-label="Jump to latest"
+      aria-describedby={isStreaming ? "jump-to-latest-live" : undefined}
       data-jump-to-latest
-      className="flex size-8 items-center justify-center rounded-full border border-dls-border bg-dls-canvas/95 text-dls-text shadow-(--dls-card-shadow) backdrop-blur-md transition-colors hover:bg-dls-hover"
+      data-jump-to-latest-live={isStreaming ? "" : undefined}
+      className="relative flex size-8 items-center justify-center rounded-full border border-dls-border bg-dls-canvas/95 text-dls-text shadow-(--dls-card-shadow) backdrop-blur-md transition-colors hover:bg-dls-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
       onClick={handleClick}
     >
       <ArrowDown className="size-4" aria-hidden="true" />
+      {isStreaming ? (
+        <span
+          id="jump-to-latest-live"
+          className="absolute -right-0.5 -top-0.5 size-2.5 rounded-full bg-green-9 ring-2 ring-dls-canvas motion-safe:animate-pulse"
+        >
+          <span className="sr-only">Sofia is still working</span>
+        </span>
+      ) : null}
     </button>
   );
 });
@@ -99,7 +112,7 @@ export const SessionScrollOverlay = memo(function SessionScrollOverlay({
             <JumpToStartButton onJumpToStartOfMessage={onJumpToStartOfMessage} />
           </div>
         ) : null}
-        {showJumpToLatest ? <JumpToLatestButton onJumpToLatest={onJumpToLatest} /> : null}
+        {showJumpToLatest ? <JumpToLatestButton isStreaming={isStreaming} onJumpToLatest={onJumpToLatest} /> : null}
       </div>
     </div>
   );

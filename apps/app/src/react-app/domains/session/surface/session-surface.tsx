@@ -73,6 +73,7 @@ import { isHeicImage, normalizeImageFile } from "@/react-app/domains/session/syn
 import { resolveAttachmentFileMetadata } from "@/react-app/domains/session/sync/attachment-file-part";
 import { deriveSessionRenderModel } from "@/react-app/domains/session/sync/transition-controller";
 import { useSessionScrollController } from "./scroll-controller";
+import { shouldFollowSentMessage, type SentMessageMark } from "./scroll-intent";
 import { SessionScrollOverlay } from "./scroll-overlay";
 import { SessionFindBar } from "./find-bar";
 import { useSessionFindStore } from "./find-store";
@@ -1942,6 +1943,19 @@ export function SessionSurface(props: SessionSurfaceProps) {
     contentRef,
     tailSentinelRef,
   });
+
+  // Sending is the reader's own move to the tail: a task scrolled up to read
+  // history still shows the message just sent and follows the reply.
+  const userMessages = useMemo(() => {
+    const ids = renderedMessages.flatMap((message) => (message.role === "user" ? [message.id] : []));
+    return { latestId: ids.at(-1) ?? null, count: ids.length };
+  }, [renderedMessages]);
+  const sentFromRef = useRef<SentMessageMark | null>(null);
+  useEffect(() => {
+    const next = { sessionId: props.sessionId, ...userMessages };
+    if (shouldFollowSentMessage(sentFromRef.current, next)) sessionScroll.jumpToLatest("smooth");
+    sentFromRef.current = next;
+  }, [props.sessionId, sessionScroll.jumpToLatest, userMessages]);
 
   // The find bar moves the user off the tail itself, so record it as
   // navigation rather than letting the resulting scroll event look like a

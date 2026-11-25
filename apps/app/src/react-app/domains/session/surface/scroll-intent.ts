@@ -128,3 +128,16 @@ export function shouldShowJumpToLatest(input: { following: boolean; tailVisible:
 export function shouldCountHiddenUpdate(input: { following: boolean; tailVisible: boolean }): boolean {
   return shouldShowJumpToLatest(input);
 }
+
+export type SentMessageMark = { sessionId: string; latestId: string | null; count: number };
+
+/**
+ * Sending is the reader's own move to the tail. It counts only when the latest
+ * user message changed *and* there is one more of them in the same session:
+ * older history paging in above, a pending message taking its server id, or
+ * the first history load must not pull a reader off what they are reading.
+ */
+export function shouldFollowSentMessage(previous: SentMessageMark | null, next: SentMessageMark): boolean {
+  if (!previous || previous.sessionId !== next.sessionId || previous.count === 0) return false;
+  return previous.latestId !== next.latestId && next.count > previous.count;
+}
