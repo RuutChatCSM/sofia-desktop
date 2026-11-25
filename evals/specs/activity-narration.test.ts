@@ -4,8 +4,8 @@ import { getAggregateSummary, getAggregateRowLabel, getAggregateRowFile, getTool
 const tool = (toolName:string,input:unknown):AnyToolPart => ({type:'dynamic-tool',toolName,toolCallId:toolName,state:'output-available',input,output:'recorded'});
 test('mixed recorded and native action families produce narrative summaries and individual action text',()=>{
  const parts=[tool('apply_patch',{filePath:'/work/source.ts'}),tool('read',{filePath:'/work/notes.md'}),tool('bash',{command:'pnpm typecheck'}),tool('websearch',{query:'official documentation'})];
- expect(getAggregateSummary(parts,'past')).toBe('Edited files, read files, ran a command, searched the web');
- expect(getAggregateSummary(parts,'present')).toBe('Editing files, reading files, running a command, searching the web');
+ expect(getAggregateSummary(parts,'past')).toBe('Edited a file, read a file, ran a command, searched the web');
+ expect(getAggregateSummary(parts,'present')).toBe('Editing a file, reading a file, running a command, searching the web');
  expect(getAggregateRowFile(parts[0]!)).toEqual({verb:'Edited',path:'/work/source.ts'});
  expect(getAggregateRowLabel(parts[2]!)).toBe('Ran pnpm typecheck');
  expect(getAggregateRowLabel(parts[3]!)).toBe('Searched the web for official documentation');

@@ -52,21 +52,43 @@ function filePathOf(part: AnyToolPart): string | null {
 }
 
 /**
- * Consecutive actions use a readable family summary; expanding retains each call.
+ * Consecutive actions use a readable family summary with counts — "Ran 4
+ * commands, edited 2 files" — so the collapsed row says how much happened.
+ * Edits and reads count distinct files; expanding retains each call.
  */
 export function getAggregateSummary(parts: AnyToolPart[], tense: "present" | "past"): string {
-  const count = (family: ToolFamily) => parts.filter((part) => getToolFamily(part) === family).length
+  const ofFamily = (family: ToolFamily) => parts.filter((part) => getToolFamily(part) === family)
+  const files = (family: ToolFamily) => {
+    const calls = ofFamily(family)
+    const paths = new Set(calls.flatMap((part) => filePathOf(part) ?? []))
+    return paths.size || calls.length
+  }
+  const counted = (count: number, one: string, many: string) => (count === 1 ? one : `${count} ${many}`)
+  const verb = (past: string, present: string) => (tense === "past" ? past : present)
   const pieces: string[] = []
-  if (count("skill")) pieces.push(tense === "past" ? "loaded a tool" : "loading a tool")
-  if (count("edit")) pieces.push(tense === "past" ? "edited files" : "editing files")
-  if (count("read")) pieces.push(tense === "past" ? "read files" : "reading files")
-  if (count("search")) pieces.push(tense === "past" ? "searched files" : "searching files")
-  const commands = count("command")
-  if (commands) pieces.push(`${tense === "past" ? "ran" : "running"} ${commands === 1 ? "a command" : "commands"}`)
-  if (count("web")) pieces.push(tense === "past" ? "searched the web" : "searching the web")
+  const skills = ofFamily("skill").length
+  if (skills) pieces.push(`${verb("loaded", "loading")} ${counted(skills, "a tool", "tools")}`)
+  const edited = files("edit")
+  if (ofFamily("edit").length) pieces.push(`${verb("edited", "editing")} ${counted(edited, "a file", "files")}`)
+  const read = files("read")
+  if (ofFamily("read").length) pieces.push(`${verb("read", "reading")} ${counted(read, "a file", "files")}`)
+  if (ofFamily("search").length) pieces.push(verb("searched files", "searching files"))
+  const commands = ofFamily("command").length
+  if (commands) pieces.push(`${verb("ran", "running")} ${counted(commands, "a command", "commands")}`)
+  if (ofFamily("web").length) pieces.push(verb("searched the web", "searching the web"))
 
   const joined = pieces.join(", ")
   return joined.charAt(0).toUpperCase() + joined.slice(1)
+}
+
+/**
+ * The engine runs commands through a login shell (`/bin/zsh -lc '…'`); the
+ * reader asked for the command, not the wrapper.
+ */
+export function displayCommand(command: string): string {
+  const wrapped = /^(?:\S*\/)?(?:ba|z)?sh -l?c (['"])([\s\S]*)\1$/.exec(command.trim())
+  if (!wrapped?.[2]) return command.trim()
+  return wrapped[1] === "'" ? wrapped[2].replaceAll("'\\''", "'") : wrapped[2]
 }
 
 export function fileName(path: string): string {
@@ -99,7 +121,7 @@ export function getAggregateRowLabel(part: AnyToolPart): string {
   }
   if (isBashToolPart(part)) {
     const command = part.input?.command?.trim()
-    if (command) return `${isToolPartInFlight(part) ? "Running" : "Ran"} ${command}`
+    if (command) return `${isToolPartInFlight(part) ? "Running" : "Ran"} ${displayCommand(command)}`
   }
   if (isWebSearchToolPart(part)) return `${isToolPartInFlight(part) ? "Searching" : "Searched"} the web${part.input?.query ? ` for ${part.input.query}` : ""}`
   if (isGrepToolPart(part) || isGlobToolPart(part)) return `${isToolPartInFlight(part) ? "Searching" : "Searched"} files${part.input?.pattern ? ` for ${part.input.pattern}` : ""}`
