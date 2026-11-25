@@ -459,9 +459,20 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
     }
   },[selectedSessionId,options.renderedMessages,options.isLoading,isFollowing,restoreManualPosition,scrollToBottom]);
 
+  // Streaming re-renders once per frame; measuring in a microtask right after
+  // each commit forced a synchronous layout every frame. One read per frame,
+  // after layout, is enough.
   useEffect(() => {
     void options.renderedMessages;
-    queueMicrotask(refreshTopClippedMessage);
+    const frame = window.requestAnimationFrame(() => {
+      scheduledFramesRef.current.delete(frame);
+      refreshTopClippedMessage();
+    });
+    scheduledFramesRef.current.add(frame);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      scheduledFramesRef.current.delete(frame);
+    };
   }, [options.renderedMessages, refreshTopClippedMessage]);
 
   return {

@@ -20,6 +20,7 @@ import {
 } from "./markdown-primitive";
 import { LinkActionMenu } from "./link-action-menu";
 import { useSelectionStableValue } from "./selection-stability";
+import { splitMarkdownBlocks } from "./stream-blocks";
 
 export { renderHighlightedMarkdownHtml, renderMarkdownHtml } from "./markdown-primitive";
 
@@ -306,11 +307,32 @@ function MarkdownBlockInner({
   );
 }
 
+const MemoMarkdownBlock = memo(MarkdownBlockInner);
+
+/**
+ * While streaming, render each finished top-level block on its own so only
+ * the block being written re-parses, re-sanitizes and replaces its HTML.
+ * Settled text renders as one block (the exact final markup).
+ */
+function MarkdownBlockSwitch({ text, streaming, className, highlightQuery, ...props }: MarkdownBlockInnerProps) {
+  if (!streaming) {
+    return <MemoMarkdownBlock className={className} text={text} highlightQuery={highlightQuery} {...props} />;
+  }
+  const blocks = splitMarkdownBlocks(text);
+  return (
+    <div className={className} {...props}>
+      {blocks.map((block, index) => (
+        <MemoMarkdownBlock key={index} text={block} streaming highlightQuery={highlightQuery} />
+      ))}
+    </div>
+  );
+}
+
 /**
  * Memoize so a message block that has already been rendered — the usual
  * case for every assistant bubble above the currently-streaming one —
  * doesn't re-parse its markdown on every token. Only re-renders when its
  * own text / streaming / highlightQuery props change.
  */
-export const MarkdownBlock = memo(MarkdownBlockInner);
+export const MarkdownBlock = memo(MarkdownBlockSwitch);
 MarkdownBlock.displayName = "MarkdownBlock";

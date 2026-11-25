@@ -1285,7 +1285,12 @@ function groupHasWork(items: UIMessageWithIndex[], showThinking: boolean): boole
 
 interface AssistantMessageGroupProps {
   items: UIMessageWithIndex[]
-  messages: UIMessage[]
+  /** Every assistant message of this group's turn, across the whole list. */
+  turnMessages: UIMessage[]
+  /** The group ends the transcript (the live turn while streaming). */
+  isLastGroup: boolean
+  /** A later group continues this turn, so its change card belongs there. */
+  turnContinuesLater: boolean
   isStreaming: boolean
   /** Semantic Activity title for the live turn, e.g. "Running the app tests". */
   activeLabel?: string | null
@@ -1310,7 +1315,9 @@ function collectMcpAppParts(items: UIMessageWithIndex[]): DynamicToolUIPart[] {
 
 function MessageGroup({
   items,
-  messages,
+  turnMessages,
+  isLastGroup,
+  turnContinuesLater,
   isStreaming,
   activeLabel,
 }: AssistantMessageGroupProps) {
@@ -1321,7 +1328,7 @@ function MessageGroup({
   // client-side messages (e.g. session errors) don't exist on the server and
   // silently corrupt fork/revert boundaries.
   const lastRealItem = items.findLast((item) => !isSessionErrorMessage(item.message))
-  const isLiveGroup = isStreaming && lastItem !== undefined && lastItem.index === messages.length - 1
+  const isLiveGroup = isStreaming && isLastGroup
   // Timing belongs to the whole logical turn — narration, an earlier premature
   // answer, resumed work and the trailing answer all count (see turn-timing.ts).
   // The ticking clock is a hook, so it must run before the early return below.
@@ -1333,7 +1340,7 @@ function MessageGroup({
   // `source: "tool-events"` and carries no line counts.
   const changeRoot = useCodexSessionStore(state => state.sessions[sessionId]?.session.cwd);
   const turnId = items[0] ? messageTurnId(items[0].message) ?? items[0].message.id : null
-  const changeMessages = React.useMemo(() => messages.filter(message => message.role === "assistant" && messageTurnId(message) === turnId), [messages, turnId])
+  const changeMessages = turnMessages
   const turnArtifacts = React.useMemo(() => getArtifactsFromMessages(changeMessages.length ? changeMessages : items.map(item => item.message), [], {includeTargetFallbacks:false}), [changeMessages, items])
   const openArtifactPath = useOpenArtifactPath()
   const hintChangeSet = React.useMemo(
@@ -1439,7 +1446,7 @@ function MessageGroup({
   }
 
   const renderItem = (item: UIMessageWithIndex, groupIndex: number, hideReasoning?: boolean) => {
-    const isLastMessage = item.index === messages.length - 1
+    const isLastMessage = isLastGroup && item === lastItem
 
     return (
       <div key={item.message.id}>
@@ -1546,7 +1553,7 @@ function MessageGroup({
           still working has no result yet — showing the card the moment a file is
           touched puts a "what changed" summary inside the work it summarises, and
           it rewrites itself on every edit. It belongs to the settled turn. */}
-      {changeSet && !isLiveGroup && proseItems.length > 0 && !messages.slice((lastItem?.index ?? -1) + 1).some(message => turnId !== null && message.role === "assistant" && messageTurnId(message) === turnId) ? (
+      {changeSet && !isLiveGroup && proseItems.length > 0 && !turnContinuesLater ? (
         <div className="mx-auto w-full max-w-[800px] px-2 md:px-6">
           <TurnChangeSetCard
             changeSet={changeSet}
@@ -1608,6 +1615,21 @@ function MessageGroup({
   )
 }
 
+function sameItems<T>(a: readonly T[], b: readonly T[], same: (x: T, y: T) => boolean) {
+  return a.length === b.length && a.every((value, index) => same(value, b[index]))
+}
+
+// Streaming rebuilds the group arrays every frame, but a settled turn's
+// messages keep their identity. Compare members, not arrays, so only the
+// live turn re-renders while text streams in.
+const MemoMessageGroup = React.memo(MessageGroup, (prev, next) =>
+  prev.isLastGroup === next.isLastGroup &&
+  prev.turnContinuesLater === next.turnContinuesLater &&
+  prev.isStreaming === next.isStreaming &&
+  (prev.activeLabel === next.activeLabel || !next.isLastGroup) &&
+  sameItems(prev.items, next.items, (x, y) => x.message === y.message && x.index === y.index) &&
+  sameItems(prev.turnMessages, next.turnMessages, Object.is))
+
 interface MessageListProps {
   messages: UIMessage[]
   status: ThreadStatus
@@ -1618,12 +1640,34 @@ export function shouldShowMessageListLoading(status: ThreadStatus, messageCount:
   return status === "streaming" || (status === "submitted" && messageCount > 0)
 }
 
+// Off-screen settled turns skip layout and paint; `auto` remembers each row's
+// last real size so scroll position stays stable. The newest rows always
+// render, so streaming and bottom pinning measure real content.
+const SETTLED_ROW = "[content-visibility:auto] [contain-intrinsic-size:auto_320px]"
+const SETTLED_ROW_TAIL = 4
+
+const NO_TURN: { messages: UIMessage[]; lastIndex: number } = { messages: [], lastIndex: -1 }
+
 export function MessageList({ messages, status, retryStatus }: MessageListProps) {
   "use memo"
   const { sessionId, showThinking } = useMessageList()
   const isStreaming = status === "streaming" || status === "retrying"
   const showLoading = shouldShowMessageListLoading(status, messages.length)
   const items = React.useMemo(() => groupMessages(messages, status), [messages, status]);
+  // One pass instead of every group filtering the whole transcript per frame.
+  const turnIndex = React.useMemo(() => {
+    const byTurn = new Map<string, { messages: UIMessage[]; lastIndex: number }>()
+    messages.forEach((message, index) => {
+      if (message.role !== "assistant") return
+      const turnId = messageTurnId(message)
+      if (turnId === null) return
+      const entry = byTurn.get(turnId) ?? { messages: [], lastIndex: -1 }
+      entry.messages.push(message)
+      entry.lastIndex = index
+      byTurn.set(turnId, entry)
+    })
+    return byTurn
+  }, [messages])
   const error = useSessionErrorMessage();
   const hasSessionErrorMessage = React.useMemo(() => messages.some(isSessionErrorMessage), [messages])
   const activities = useSessionActivities(sessionId)
@@ -1642,20 +1686,30 @@ export function MessageList({ messages, status, retryStatus }: MessageListProps)
     && isMessageGroup(lastGroup)
     && groupHasWork(lastGroup.messages, showThinking)
 
+  const turnOf = (groupItems: UIMessageWithIndex[]) => {
+    const first = groupItems[0]?.message
+    const turnId = first ? messageTurnId(first) ?? first.id : null
+    return (turnId === null ? undefined : turnIndex.get(turnId)) ?? NO_TURN
+  }
+
   return (
     <div className={cn("flex flex-col gap-2 @container/message-list")}>
       {messages.length === 0 && <TaskSuggestions className="mx-auto w-full max-w-[800px] shrink-0 px-3 pb-3 md:px-5 md:pb-5 grow" />}
 
-      {items.map((item) => {
+      {items.map((item, itemIndex) => {
+        const settledRow = itemIndex < items.length - SETTLED_ROW_TAIL ? SETTLED_ROW : undefined
         if (isMessageGroup(item)) {
           return (
-            <MessageGroup
-              key={item.messages[0]?.message.id ?? "empty-assistant-group"}
+            <div key={item.messages[0]?.message.id ?? "empty-assistant-group"} className={settledRow}>
+            <MemoMessageGroup
               items={item.messages}
-              messages={messages}
+              turnMessages={turnOf(item.messages).messages}
+              isLastGroup={item.messages.at(-1)?.index === messages.length - 1}
+              turnContinuesLater={turnOf(item.messages).lastIndex > (item.messages.at(-1)?.index ?? -1)}
               isStreaming={isStreaming}
               activeLabel={liveActionLabel}
             />
+            </div>
           )
         }
 
@@ -1664,7 +1718,7 @@ export function MessageList({ messages, status, retryStatus }: MessageListProps)
           !messages[item.index + 1] || messages[item.index + 1].role !== item.message.role
 
         return (
-          <div key={item.message.id}>
+          <div key={item.message.id} className={settledRow}>
             <MessageComponent
               message={item.message}
               isLastMessage={isLastMessage}

@@ -1,4 +1,5 @@
 import { mergeCanonicalItemOrder } from "./canonical-item-order";
+import { shareMessageIdentity } from "./message-identity";
 import { normalizeUserMessageDisplayParts } from "./user-message-display";
 import { restoreRecordedTurnChanges } from "../changes/change-set-store";
 // Codex transcript adapter: bridges the codex session store into the shared
@@ -238,9 +239,11 @@ export function syncCodexTranscriptToCache(workspaceId: string, sessionId: strin
   const queryClient = getReactQueryClient();
   const entry = useCodexSessionStore.getState().sessions[sessionId];
   if (!entry) return;
-  const messages = buildUIMessages(workspaceId, sessionId);
-  if (messages.length > 0) {
-    queryClient.setQueryData(transcriptKey(workspaceId, sessionId), messages);
+  const key = transcriptKey(workspaceId, sessionId);
+  const previous = queryClient.getQueryData<UIMessage[]>(key);
+  const messages = shareMessageIdentity(previous, buildUIMessages(workspaceId, sessionId));
+  if (messages.length > 0 && messages !== previous) {
+    queryClient.setQueryData(key, messages);
   }
   // Codex's `update_plan` checklist is not an item, so it has no transcript
   // representation. Mirror it into the same todo cache the engine's `todowrite`

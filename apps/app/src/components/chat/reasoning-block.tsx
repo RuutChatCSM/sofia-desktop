@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { ChevronDown } from "lucide-react"
 
 import {
@@ -30,13 +30,17 @@ type ReasoningBlockProps = {
  * when the user opens it.
  */
 export function ReasoningBlock({ text, isStreaming, className, defaultOpen = false }: ReasoningBlockProps) {
+  "use memo"
   const [open, setOpen] = useState(defaultOpen)
+  const [followedDefault, setFollowedDefault] = useState(defaultOpen)
 
   // Follow the phase's role rather than only its first render. A manual toggle
   // in between survives, because `defaultOpen` changes only when the phase does.
-  useEffect(() => {
+  // Adjusted during render, so the phase change costs no extra commit.
+  if (followedDefault !== defaultOpen) {
+    setFollowedDefault(defaultOpen)
     setOpen(defaultOpen)
-  }, [defaultOpen])
+  }
 
   return (
     <Collapsible open={open} onOpenChange={setOpen} className={cn("w-full", className)} data-reasoning-block="">
