@@ -1265,10 +1265,19 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
         const desktop = (window()?.getContentBounds().width ?? 0) / zoom >= 1024;
         const rounded = desktop && browserPresentation !== "peek" && tab.state.viewport.mode === "panel";
         const radius = rounded ? Math.round(13 * zoom) : 0;
-        tab.container.setBorderRadius(radius || 1);
-        tab.view.setBorderRadius(radius);
-        tab.container.setBounds(bounds);
-        tab.view.setBounds({ x: 0, y: 0, width: bounds.width, height: bounds.height });
+        // Re-applying an unchanged radius or bounds makes macOS rebuild the
+        // view's compositor layers, which flashes the whole window. Only touch
+        // the native views when something actually changed.
+        if (tab.appliedRadius !== radius) {
+          tab.container.setBorderRadius(radius || 1);
+          tab.view.setBorderRadius(radius);
+          tab.appliedRadius = radius;
+        }
+        const current = tab.container.getBounds();
+        if (current.x !== bounds.x || current.y !== bounds.y || current.width !== bounds.width || current.height !== bounds.height) {
+          tab.container.setBounds(bounds);
+          tab.view.setBounds({ x: 0, y: 0, width: bounds.width, height: bounds.height });
+        }
       }
     },
   });
