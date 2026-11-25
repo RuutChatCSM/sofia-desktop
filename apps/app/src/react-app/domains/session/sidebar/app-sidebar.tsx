@@ -2517,10 +2517,13 @@ function SessionMenuItemImpl({
     ? undefined
     : sessionNumberAriaKeyShortcut(sessionActions.sessionNumberShortcutOs, shortcutDigit);
 
+  // New activity moves the open task (usually to the top); keep it in view.
+  // `nearest` scrolls only when the row is actually off-screen.
+  const activityAt = session.time?.updated;
   React.useEffect(() => {
     if (!isSelected) return;
     itemRef.current?.scrollIntoView({ block: "nearest" });
-  }, [isSelected]);
+  }, [isSelected, activityAt]);
 
   const openSession = () => {
     useSessionManagementStore.getState().clearUnread(session.id);

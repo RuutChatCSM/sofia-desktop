@@ -2712,12 +2712,20 @@ export function SessionRoute() {
   const handleArchiveSession = useCallback(
     async (sessionId: string, archived: boolean) => {
       if (codexEngine.enabled && sessionId.startsWith("codex-")) {
-        if (!codexEngine.archiveSession) throw new Error("Sofia engine is unavailable");
-        await codexEngine.archiveSession(sessionId, archived);
-        if (archived) {
-          if (selectedSessionId === sessionId) {
-            navigateToWorkspaceSession(selectedWorkspaceId);
-          }
+        try {
+          if (!codexEngine.archiveSession) throw new Error("Sofia engine is unavailable");
+          await codexEngine.archiveSession(sessionId, archived);
+        } catch (error) {
+          toast.error(
+            archived
+              ? t("session_management.archive_failed")
+              : t("session_management.unarchive_failed"),
+            { description: describeRouteError(error) },
+          );
+          return;
+        }
+        if (archived && selectedSessionId === sessionId) {
+          navigateToWorkspaceSession(selectedWorkspaceId);
         }
         return;
       }

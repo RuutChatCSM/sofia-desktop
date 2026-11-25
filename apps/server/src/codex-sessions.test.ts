@@ -404,6 +404,7 @@ describe("CodexSessionManager", () => {
 
   test("isMissingRolloutError detects the codex no-rollout failure", () => {
     expect(isMissingRolloutError(new Error("codex rpc error (-32600): no rollout found for thread id 01abc"))).toBe(true);
+    expect(isMissingRolloutError(new Error("Sofia RPC error (-32600): no archived rollout found for thread id 01abc"))).toBe(true);
     expect(isMissingRolloutError(new Error("some other failure"))).toBe(false);
   });
 

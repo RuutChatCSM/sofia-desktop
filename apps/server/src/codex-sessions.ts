@@ -226,7 +226,8 @@ export class CodexThreadBusyError extends Error {
  */
 export function isMissingRolloutError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
-  return /no rollout found/i.test(message);
+  // Unarchive reports "no archived rollout found" for a task that never ran.
+  return /no (?:archived )?rollout found/i.test(message);
 }
 
 /**
