@@ -22,6 +22,21 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/** Active session plus the six most recently opened others keep transcripts. */
+const TRANSCRIPT_CACHE_LIMIT = 7;
+
+/** Empty entries cost nothing to keep; only evict ones that hold transcript data. */
+function hasTranscriptData(entry: CodexSessionEntry): boolean {
+  return entry.items.length > 0 || entry.messages.length > 0 || entry.plan !== undefined;
+}
+
+function isProtectedFromEviction(entry: CodexSessionEntry): boolean {
+  return entry.session.status === "running" ||
+    Boolean(entry.warning) ||
+    entry.pendingUserMessages.length > 0 ||
+    (entry.settledUserMessages?.length ?? 0) > 0;
+}
+
 /** Extract plain text from a codex `userMessage` item payload. */
 export function userMessageText(item: Record<string, unknown>): string {
   if (typeof item.text === "string" && item.text.trim()) return item.text;
@@ -186,6 +201,8 @@ export type CodexSessionEntry = {
 
 type CodexSessionState = {
   sessions: Record<string, CodexSessionEntry>;
+  /** Session ids in open order, newest first, for transcript LRU eviction. */
+  recentSessionIds: string[];
   loaded: boolean;
   streaming: boolean;
   error: string | null;
@@ -213,6 +230,7 @@ type CodexSessionActions = {
   addPendingUserMessage: (sessionId: string, text: string, parts?: UIMessage["parts"], matchText?: string, orderedParts?: boolean, userMessageOrdinal?: number) => void;
   confirmPendingUserMessage: (sessionId: string, text?: string, userMessageOrdinal?: number, echoCreatedAt?: number) => void;
   invalidateCanonical: (sessionId: string) => void;
+  noteSessionOpened: (sessionId: string) => void;
   removeSession: (sessionId: string) => void;
   clear: () => void;
   setStreaming: (value: boolean) => void;
@@ -224,6 +242,7 @@ export type CodexSessionStore = CodexSessionState & CodexSessionActions;
 
 export const useCodexSessionStore = create<CodexSessionStore>((set, get) => ({
   sessions: {},
+  recentSessionIds: [],
   loaded: false,
   streaming: false,
   error: null,
@@ -539,14 +558,42 @@ export const useCodexSessionStore = create<CodexSessionStore>((set, get) => ({
     return entry ? { sessions: { ...state.sessions, [sessionId]: { ...entry, canonicalReady: false, canonicalEpoch: (entry.canonicalEpoch ?? 0) + 1 } } } : state;
   }),
 
+  // Bound renderer memory: keep transcripts only for the active session and
+  // the most recently opened others. Evicted entries stay listed in the
+  // sidebar; dropping their data plus bumping the epoch makes reopening
+  // re-read durable history.
+  noteSessionOpened: (sessionId) =>
+    set((state) => {
+      const recentSessionIds = [sessionId, ...state.recentSessionIds.filter(id => id !== sessionId)]
+        .slice(0, TRANSCRIPT_CACHE_LIMIT);
+      const kept = new Set(recentSessionIds);
+      let sessions = state.sessions;
+      for (const [id, entry] of Object.entries(state.sessions)) {
+        if (kept.has(id) || !hasTranscriptData(entry) || isProtectedFromEviction(entry)) continue;
+        if (sessions === state.sessions) sessions = { ...state.sessions };
+        sessions[id] = {
+          ...entry,
+          items: [],
+          messages: [],
+          plan: undefined,
+          canonicalReady: false,
+          canonicalEpoch: (entry.canonicalEpoch ?? 0) + 1,
+        };
+      }
+      const unchanged = sessions === state.sessions &&
+        recentSessionIds.length === state.recentSessionIds.length &&
+        recentSessionIds.every((id, index) => id === state.recentSessionIds[index]);
+      return unchanged ? state : { sessions, recentSessionIds };
+    }),
+
   removeSession: (sessionId) =>
     set((state) => {
       const next = { ...state.sessions };
       delete next[sessionId];
-      return { sessions: next };
+      return { sessions: next, recentSessionIds: state.recentSessionIds.filter(id => id !== sessionId) };
     }),
 
-  clear: () => set({ sessions: {}, loaded: false }),
+  clear: () => set({ sessions: {}, recentSessionIds: [], loaded: false }),
   setStreaming: (streaming) => set({ streaming }),
   setLoaded: (loaded) => set({ loaded }),
   setError: (error) => set({ error }),

@@ -170,6 +170,7 @@ export function useCodexEngine(endpoint: CodexEngineEndpoint | null, activeSessi
   // one-shot write that may already be gone.
   useEffect(() => {
     if (!client || !activeSessionId?.startsWith("codex-")) return;
+    useCodexSessionStore.getState().noteSessionOpened(activeSessionId);
     const entry = useCodexSessionStore.getState().sessions[activeSessionId];
     const workspaceId = displayWorkspaceId ?? entry?.session.workspaceId;
     if (!workspaceId) return;
