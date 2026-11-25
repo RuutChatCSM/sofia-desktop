@@ -167,9 +167,14 @@ export function useCodexEngine(endpoint: CodexEngineEndpoint | null, activeSessi
   // have no observer, so TanStack GC drops them after the transcript/status
   // gcTime and opening a task later rendered a blank pane with no way back.
   // Re-seed the active task's transcript on open instead of trusting a
-  // one-shot write that may already be gone.
+  // one-shot write that may already be gone. A task opened by URL (reload,
+  // deep link) is known before the session list arrives, and the restore
+  // needs its entry — so re-run once the entry exists.
+  const activeSessionKnown = useCodexSessionStore((state) =>
+    Boolean(activeSessionId && state.sessions[activeSessionId]),
+  );
   useEffect(() => {
-    if (!client || !activeSessionId?.startsWith("codex-")) return;
+    if (!client || !activeSessionKnown || !activeSessionId?.startsWith("codex-")) return;
     useCodexSessionStore.getState().noteSessionOpened(activeSessionId);
     const entry = useCodexSessionStore.getState().sessions[activeSessionId];
     const workspaceId = displayWorkspaceId ?? entry?.session.workspaceId;
@@ -178,7 +183,7 @@ export function useCodexEngine(endpoint: CodexEngineEndpoint | null, activeSessi
     // Opening a task reconciles background processes: the renderer's cache is
     // transient, the server registry is authoritative.
     void refreshBackgroundProcesses(activeSessionId);
-  }, [activeSessionId, client, displayWorkspaceId]);
+  }, [activeSessionId, activeSessionKnown, client, displayWorkspaceId]);
 
   // All store hooks must run at the top with stable selectors; a selector that
   // builds a new array each call makes useSyncExternalStore loop forever.
