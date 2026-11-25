@@ -4,6 +4,14 @@ import { isSandboxWorkspace } from "../../../../app/utils";
 import { t } from "../../../../i18n";
 
 export const MAX_SESSIONS_PREVIEW = 6;
+/** Reveal sessions in coarse pages instead of one row at a time. */
+export const SESSIONS_PAGE_SIZE = 50;
+
+export const nextSessionPreviewCount = (
+  current: number,
+  visible: number,
+  total: number,
+): number => Math.min(Math.max(current, visible) + SESSIONS_PAGE_SIZE, total);
 
 export type SessionListItem = WorkspaceSessionGroup["sessions"][number];
 export type FlattenedSessionRow = { session: SessionListItem; depth: number };
@@ -172,14 +180,19 @@ export const flattenSessionRows = (
   pinnedIds: Set<string> = EMPTY_SET,
   orderIds: string[] = EMPTY_ARRAY,
   rootFilter?: { include?: Set<string>; exclude?: Set<string> },
+  ensureRootId?: string,
 ) => {
   const { active } = partitionArchivedSessions(sessions);
-  const orderedRoots = orderRootSessions(getRootSessions(active), pinnedIds, orderIds)
+  const eligibleRoots = orderRootSessions(getRootSessions(active), pinnedIds, orderIds)
     .filter((root) => (
       (!rootFilter?.include || rootFilter.include.has(root.id)) &&
       !rootFilter?.exclude?.has(root.id)
-    ))
-    .slice(0, rootLimit);
+    ));
+  const orderedRoots = eligibleRoots.slice(0, rootLimit);
+  if (ensureRootId && !orderedRoots.some((root) => root.id === ensureRootId)) {
+    const ensuredRoot = eligibleRoots.find((root) => root.id === ensureRootId);
+    if (ensuredRoot) orderedRoots.push(ensuredRoot);
+  }
   const rows: FlattenedSessionRow[] = [];
   const visited = new Set<string>();
 

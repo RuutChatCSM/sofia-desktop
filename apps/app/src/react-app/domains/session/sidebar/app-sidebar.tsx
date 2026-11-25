@@ -106,7 +106,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-import { SidebarContext, useSidebarContext } from "./app-sidebar-provider";
+import {
+  SidebarContext,
+  SidebarSessionActionsContext,
+  useSidebarContext,
+  useSidebarSessionActions,
+} from "./app-sidebar-provider";
 import { AccountStatusMenu, type AccountStatusMenuProps } from "./account-status-menu";
 import { usePlatform } from "../../../kernel/platform";
 import {
@@ -116,17 +121,18 @@ import {
   sessionNumberShortcutTargetKey,
   type SessionNumberShortcutsState,
 } from "../../../shell/session-number-shortcuts";
-import type { SidebarContextValue } from "./app-sidebar-provider";
+import type { SidebarContextValue, SidebarSessionActions } from "./app-sidebar-provider";
 import {
   MAX_SESSIONS_PREVIEW,
+  SESSIONS_PAGE_SIZE,
   buildSessionTreeState,
   flattenSessionRows,
   formatSessionRelativeTime,
   getRootSessions,
-  orderRootSessions,
   isActiveWorkSessionStatus,
   isNeedsAttentionSessionStatus,
   isSessionArchived,
+  nextSessionPreviewCount,
   partitionArchivedSessions,
   workspaceKindLabel,
   workspaceLabel,
@@ -531,7 +537,7 @@ function SessionHoverQuickActions({
   isArchived,
   relativeTime,
 }: SessionHoverQuickActionsProps) {
-  const ctx = useSidebarContext();
+  const { onArchiveSession } = useSidebarSessionActions();
   const store = useSessionManagementStore;
 
   return (
@@ -554,7 +560,7 @@ function SessionHoverQuickActions({
       >
         {isPinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
       </Button>
-      {ctx.onArchiveSession ? (
+      {onArchiveSession ? (
         <Button
           variant="ghost"
           size="icon"
@@ -562,7 +568,7 @@ function SessionHoverQuickActions({
           aria-label={isArchived ? t("session_management.unarchive_session") : t("session_management.archive_session")}
           onClick={(event) => {
             event.stopPropagation();
-            ctx.onArchiveSession?.(sessionId, !isArchived);
+            onArchiveSession(sessionId, !isArchived);
           }}
         >
           {isArchived ? <ArchiveRestore className="size-3.5" /> : <Archive className="size-3.5" />}
@@ -1038,7 +1044,11 @@ export function AppSidebar(props: AppSidebarProps) {
     expandWorkspace(workspaceId);
     setPreviewCountByWorkspaceId((current) => ({
       ...current,
-      [workspaceId]: Math.min(Math.max(current[workspaceId] ?? MAX_SESSIONS_PREVIEW, visibleRoots) + MAX_SESSIONS_PREVIEW, totalRoots),
+      [workspaceId]: nextSessionPreviewCount(
+        current[workspaceId] ?? MAX_SESSIONS_PREVIEW,
+        visibleRoots,
+        totalRoots,
+      ),
     }));
   };
 
@@ -1103,6 +1113,38 @@ export function AppSidebar(props: AppSidebarProps) {
     sessionNumberShortcutByTarget,
   };
 
+  // Session rows read actions from this ref-backed value so a fresh inline
+  // callback from the app shell never invalidates every memoized row.
+  const sessionActionsRef = React.useRef({
+    onOpenSession: props.onOpenSession,
+    onPrefetchSession: props.onPrefetchSession,
+    onArchiveSession: props.onArchiveSession,
+    toggleSessionExpanded,
+  });
+  sessionActionsRef.current = {
+    onOpenSession: props.onOpenSession,
+    onPrefetchSession: props.onPrefetchSession,
+    onArchiveSession: props.onArchiveSession,
+    toggleSessionExpanded,
+  };
+  const canPrefetchSessions = Boolean(props.onPrefetchSession);
+  const canArchiveSessions = Boolean(props.onArchiveSession);
+  const sessionActions = React.useMemo<SidebarSessionActions>(() => ({
+    onOpenSession: (workspaceId, sessionId) =>
+      sessionActionsRef.current.onOpenSession(workspaceId, sessionId),
+    onPrefetchSession: canPrefetchSessions
+      ? (workspaceId, sessionId) =>
+          sessionActionsRef.current.onPrefetchSession?.(workspaceId, sessionId)
+      : undefined,
+    onArchiveSession: canArchiveSessions
+      ? (sessionId, archived) =>
+          sessionActionsRef.current.onArchiveSession?.(sessionId, archived)
+      : undefined,
+    toggleSessionExpanded: (sessionId) =>
+      sessionActionsRef.current.toggleSessionExpanded(sessionId),
+    sessionNumberShortcutOs: props.sessionNumberShortcuts.os,
+  }), [canArchiveSessions, canPrefetchSessions, props.sessionNumberShortcuts.os]);
+
   const brandLogoUrl = useBrandLogoUrl();
   const pinnedIds = useSessionManagementStore((state) => state.pinnedIds);
   const pinnedSessions = React.useMemo(() => {
@@ -1130,7 +1172,8 @@ export function AppSidebar(props: AppSidebarProps) {
 
   return (
     <SidebarContext.Provider value={contextValue}>
-      <Sidebar
+      <SidebarSessionActionsContext.Provider value={sessionActions}>
+        <Sidebar
         collapsible="offcanvas"
         className="mac:**:data-[sidebar=sidebar]:bg-transparent border-e-0 group-data-[side=left]:border-e-0"
       >
@@ -1310,7 +1353,8 @@ export function AppSidebar(props: AppSidebarProps) {
           } : undefined}
           onPointerDown={props.onStartResize}
         />
-      </Sidebar>
+        </Sidebar>
+      </SidebarSessionActionsContext.Provider>
     </SidebarContext.Provider>
   );
 }
@@ -1352,6 +1396,9 @@ type GlobalArchivedSessionEntry = {
 
 function GlobalArchivedSessions({ entries }: { entries: GlobalArchivedSessionEntry[] }) {
   const [expanded, setExpanded] = React.useState(false);
+  const [visibleCount, setVisibleCount] = React.useState(SESSIONS_PAGE_SIZE);
+  const visibleEntries = entries.slice(0, visibleCount);
+  const remaining = Math.max(0, entries.length - visibleEntries.length);
 
   return (
     <SidebarGroup data-global-archived-sessions className="mt-4 pb-1 pt-0">
@@ -1378,13 +1425,23 @@ function GlobalArchivedSessions({ entries }: { entries: GlobalArchivedSessionEnt
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuSub>
-                  {entries.map((entry) => (
+                  {visibleEntries.map((entry) => (
                     <GlobalArchivedSessionItem
                       key={`${entry.group.workspace.id}:${entry.session.id}`}
                       group={entry.group}
                       session={entry.session}
                     />
                   ))}
+                  {remaining > 0 ? (
+                    <ShowMoreSessionsButton
+                      label={t("workspace_list.show_more", {
+                        count: Math.min(SESSIONS_PAGE_SIZE, remaining),
+                      })}
+                      onClick={() => setVisibleCount((current) =>
+                        nextSessionPreviewCount(current, visibleEntries.length, entries.length)
+                      )}
+                    />
+                  ) : null}
                 </SidebarMenuSub>
               </SidebarMenuItem>
             </SidebarMenu>
@@ -1398,6 +1455,8 @@ function GlobalArchivedSessions({ entries }: { entries: GlobalArchivedSessionEnt
 function GlobalArchivedSessionItem({ group, session }: GlobalArchivedSessionEntry) {
   const ctx = useSidebarContext();
   const pinnedIds = usePinnedSessionIds();
+  const unreadIds = useUnreadSessionIds();
+  const needsAttentionIds = useNeedsAttentionSessionIds();
   const tree = useSessionTree(group.sessions, ctx.sessionStatusById);
   const forcedExpandedSessionIds = React.useMemo(
     () => new Set(
@@ -1410,13 +1469,15 @@ function GlobalArchivedSessionItem({ group, session }: GlobalArchivedSessionEntr
 
   return (
     <SessionMenuItem
-      session={session}
-      depth={0}
-      tree={tree}
-      workspaceId={group.workspace.id}
-      forcedExpandedSessionIds={forcedExpandedSessionIds}
-      isPinned={pinnedIds.has(session.id)}
-      workspaceName={workspaceLabel(group.workspace)}
+      {...getSessionRowProps({ session, depth: 0 }, ctx, {
+        workspaceId: group.workspace.id,
+        tree,
+        forcedExpandedSessionIds,
+        pinnedIds,
+        unreadIds,
+        needsAttentionIds,
+        workspaceName: workspaceLabel(group.workspace),
+      })}
     />
   );
 }
@@ -1424,6 +1485,8 @@ function GlobalArchivedSessionItem({ group, session }: GlobalArchivedSessionEntr
 function GlobalPinnedSessionTree({ group, sessionId }: GlobalPinnedSessionEntry) {
   const ctx = useSidebarContext();
   const pinnedIds = usePinnedSessionIds();
+  const unreadIds = useUnreadSessionIds();
+  const needsAttentionIds = useNeedsAttentionSessionIds();
   const tree = useSessionTree(group.sessions, ctx.sessionStatusById);
   const forcedExpandedSessionIds = React.useMemo(
     () => new Set(
@@ -1448,13 +1511,15 @@ function GlobalPinnedSessionTree({ group, sessionId }: GlobalPinnedSessionEntry)
   return rows.map((row) => (
     <SessionMenuItem
       key={row.session.id}
-      session={row.session}
-      depth={row.depth}
-      tree={tree}
-      workspaceId={group.workspace.id}
-      forcedExpandedSessionIds={forcedExpandedSessionIds}
-      isPinned={pinnedIds.has(row.session.id)}
-      workspaceName={row.depth === 0 ? workspaceLabel(group.workspace) : undefined}
+      {...getSessionRowProps(row, ctx, {
+        workspaceId: group.workspace.id,
+        tree,
+        forcedExpandedSessionIds,
+        pinnedIds,
+        unreadIds,
+        needsAttentionIds,
+        workspaceName: row.depth === 0 ? workspaceLabel(group.workspace) : undefined,
+      })}
     />
   ));
 }
@@ -1622,6 +1687,8 @@ function WorkspaceSidebarGroup({
   })();
 
   const pinnedIds = usePinnedSessionIds();
+  const unreadIds = useUnreadSessionIds();
+  const needsAttentionIds = useNeedsAttentionSessionIds();
   const orderIds = useSessionOrder(workspace.id);
   const { groups: wsGroups, assignments: wsAssignments } = useWorkspaceGroups(workspace.id);
   const store = useSessionManagementStore;
@@ -1630,14 +1697,10 @@ function WorkspaceSidebarGroup({
     () => partitionArchivedSessions(group.sessions),
     [group.sessions],
   );
-  const selectedRootId = tree.ancestorIdsBySessionId.get(ctx.selectedSessionId ?? "")?.[0]
-    ?? ctx.selectedSessionId;
-  const selectedRootIndex = orderRootSessions(getRootSessions(activeSessions), EMPTY_PINNED_IDS, orderIds)
-    .filter((session) => !pinnedIds.has(session.id))
-    .findIndex((session) => session.id === selectedRootId);
-  const visibleRootCount = isSelected && selectedRootIndex >= 0
-    ? Math.max(previewCount, selectedRootIndex + 1)
-    : previewCount;
+  const selectedRootId = ctx.selectedSessionId
+    ? tree.ancestorIdsBySessionId.get(ctx.selectedSessionId)?.[0] ?? ctx.selectedSessionId
+    : undefined;
+  const visibleRootCount = previewCount;
   const sessionRows = flattenSessionRows(
     group.sessions,
     wsGroups.length > 0 ? Number.MAX_SAFE_INTEGER : visibleRootCount,
@@ -1647,6 +1710,7 @@ function WorkspaceSidebarGroup({
     EMPTY_PINNED_IDS,
     orderIds,
     { exclude: pinnedIds },
+    isSelected ? selectedRootId : undefined,
   );
   const visibleRootIds = React.useMemo(
     () => sessionRows.flatMap((row) => (row.depth === 0 ? [row.session.id] : [])),
@@ -1659,7 +1723,7 @@ function WorkspaceSidebarGroup({
   const remainingRootSessions = Math.max(0, activeRootCount - visibleRootCount);
   const showMoreLabel = remainingRootSessions > 0
     ? t("workspace_list.show_more", {
-      count: Math.min(MAX_SESSIONS_PREVIEW, remainingRootSessions),
+      count: Math.min(SESSIONS_PAGE_SIZE, remainingRootSessions),
     })
     : t("workspace_list.show_more_fallback");
 
@@ -1776,13 +1840,15 @@ function WorkspaceSidebarGroup({
                         {sessionRows.map((row) => (
                           <SessionMenuItem
                             key={row.session.id}
-                            session={row.session}
-                            depth={row.depth}
-                            tree={tree}
-                            workspaceId={workspace.id}
-                            forcedExpandedSessionIds={forcedExpandedSessionIds}
-                            isPinned={pinnedIds.has(row.session.id)}
-                            draggable={row.depth === 0}
+                            {...getSessionRowProps(row, ctx, {
+                              workspaceId: workspace.id,
+                              tree,
+                              forcedExpandedSessionIds,
+                              pinnedIds,
+                              unreadIds,
+                              needsAttentionIds,
+                              draggable: row.depth === 0,
+                            })}
                           />
                         ))}
                       </Reorder.Group>
@@ -2091,7 +2157,13 @@ function GroupedSessionList({ sessionRows, groups, assignments, pinnedIds, tree,
   forcedExpandedSessionIds: Set<string>;
   store: typeof useSessionManagementStore;
 }) {
+  const ctx = useSidebarContext();
+  const unreadIds = useUnreadSessionIds();
+  const needsAttentionIds = useNeedsAttentionSessionIds();
   const [previewCountByGroup, setPreviewCountByGroup] = React.useState<Record<string, number>>({});
+  const selectedRootId = ctx.selectedSessionId
+    ? tree.ancestorIdsBySessionId.get(ctx.selectedSessionId)?.[0] ?? ctx.selectedSessionId
+    : undefined;
 
   const groupPreviewCount = (groupId: string) =>
     previewCountByGroup[groupId] ?? MAX_SESSIONS_PREVIEW;
@@ -2099,8 +2171,9 @@ function GroupedSessionList({ sessionRows, groups, assignments, pinnedIds, tree,
   const showMoreInGroup = React.useCallback((groupId: string, totalCount: number) => {
     setPreviewCountByGroup((current) => ({
       ...current,
-      [groupId]: Math.min(
-        (current[groupId] ?? MAX_SESSIONS_PREVIEW) + MAX_SESSIONS_PREVIEW,
+      [groupId]: nextSessionPreviewCount(
+        current[groupId] ?? MAX_SESSIONS_PREVIEW,
+        current[groupId] ?? MAX_SESSIONS_PREVIEW,
         totalCount,
       ),
     }));
@@ -2141,12 +2214,14 @@ function GroupedSessionList({ sessionRows, groups, assignments, pinnedIds, tree,
   const renderRow = (row: FlattenedSessionRow) => (
     <React.Fragment key={row.session.id}>
       <SessionMenuItem
-        session={row.session}
-        depth={row.depth}
-        tree={tree}
-        workspaceId={workspaceId}
-        forcedExpandedSessionIds={forcedExpandedSessionIds}
-        isPinned={pinnedIds.has(row.session.id)}
+        {...getSessionRowProps(row, ctx, {
+          workspaceId,
+          tree,
+          forcedExpandedSessionIds,
+          pinnedIds,
+          unreadIds,
+          needsAttentionIds,
+        })}
       />
       {(childrenByParent.get(row.session.id) ?? []).map(renderRow)}
     </React.Fragment>
@@ -2168,6 +2243,7 @@ function GroupedSessionList({ sessionRows, groups, assignments, pinnedIds, tree,
         renderRow={renderRow}
         previewCount={limit}
         onShowMore={() => showMoreInGroup(group.id, rows.length)}
+        selectedRootId={selectedRootId}
       />
     );
   };
@@ -2175,8 +2251,15 @@ function GroupedSessionList({ sessionRows, groups, assignments, pinnedIds, tree,
   const ungroupedExpanded = !(store.getState().groupsByWorkspace[workspaceId]?.collapsedGroupIds ?? []).includes(UNGROUPED_GROUP_ID);
   const ungroupedLimit = groupPreviewCount(UNGROUPED_GROUP_ID);
   const visibleUngroupedRows = ungroupedRows.slice(0, ungroupedLimit);
+  const ungroupedActiveRow = selectedRootId &&
+    !visibleUngroupedRows.some((row) => row.session.id === selectedRootId)
+    ? ungroupedRows.find((row) => row.session.id === selectedRootId)
+    : undefined;
+  const ungroupedRowsToRender = ungroupedActiveRow
+    ? [...visibleUngroupedRows, ungroupedActiveRow]
+    : visibleUngroupedRows;
   const ungroupedRemaining = Math.max(0, ungroupedRows.length - ungroupedLimit);
-  const visibleUngroupedRootIds = visibleUngroupedRows.map((r) => r.session.id);
+  const visibleUngroupedRootIds = ungroupedRowsToRender.map((r) => r.session.id);
 
   return (
     <>
@@ -2217,16 +2300,18 @@ function GroupedSessionList({ sessionRows, groups, assignments, pinnedIds, tree,
                 }}
                 className="flex flex-col gap-0.5"
               >
-                {visibleUngroupedRows.map((row) => (
+                {ungroupedRowsToRender.map((row) => (
                   <React.Fragment key={row.session.id}>
                     <SessionMenuItem
-                      session={row.session}
-                      depth={row.depth}
-                      tree={tree}
-                      workspaceId={workspaceId}
-                      forcedExpandedSessionIds={forcedExpandedSessionIds}
-                      isPinned={pinnedIds.has(row.session.id)}
-                      draggable={row.depth === 0}
+                      {...getSessionRowProps(row, ctx, {
+                        workspaceId,
+                        tree,
+                        forcedExpandedSessionIds,
+                        pinnedIds,
+                        unreadIds,
+                        needsAttentionIds,
+                        draggable: row.depth === 0,
+                      })}
                     />
                     {(childrenByParent.get(row.session.id) ?? []).map(renderRow)}
                   </React.Fragment>
@@ -2234,7 +2319,7 @@ function GroupedSessionList({ sessionRows, groups, assignments, pinnedIds, tree,
               </Reorder.Group>
               {ungroupedRemaining > 0 ? (
                 <ShowMoreSessionsButton
-                  label={t("workspace_list.show_more", { count: Math.min(MAX_SESSIONS_PREVIEW, ungroupedRemaining) })}
+                  label={t("workspace_list.show_more", { count: Math.min(SESSIONS_PAGE_SIZE, ungroupedRemaining) })}
                   onClick={() => showMoreInGroup(UNGROUPED_GROUP_ID, ungroupedRows.length)}
                 />
               ) : null}
@@ -2246,7 +2331,7 @@ function GroupedSessionList({ sessionRows, groups, assignments, pinnedIds, tree,
   );
 }
 
-function SessionGroupSection({ group, rows, expanded, workspaceId, store, renderRow, previewCount, onShowMore }: {
+function SessionGroupSection({ group, rows, expanded, workspaceId, store, renderRow, previewCount, onShowMore, selectedRootId }: {
   group: SessionGroupDefinition;
   rows: FlattenedSessionRow[];
   expanded: boolean;
@@ -2255,9 +2340,15 @@ function SessionGroupSection({ group, rows, expanded, workspaceId, store, render
   renderRow: (row: FlattenedSessionRow) => React.ReactNode;
   previewCount: number;
   onShowMore: () => void;
+  selectedRootId?: string;
 }) {
   const dragControls = useDragControls();
   const visibleRows = rows.slice(0, previewCount);
+  const activeRow = selectedRootId &&
+    !visibleRows.some((row) => row.session.id === selectedRootId)
+    ? rows.find((row) => row.session.id === selectedRootId)
+    : undefined;
+  const rowsToRender = activeRow ? [...visibleRows, activeRow] : visibleRows;
   const remaining = Math.max(0, rows.length - previewCount);
 
   return (
@@ -2288,13 +2379,13 @@ function SessionGroupSection({ group, rows, expanded, workspaceId, store, render
             onTitlePointerDown={(event) => dragControls.start(event)}
           />
           <CollapsibleContent className="flex flex-col gap-0.5">
-            {visibleRows.length > 0
+            {rowsToRender.length > 0
               ? (
                 <>
-                  {visibleRows.map(renderRow)}
+                  {rowsToRender.map(renderRow)}
                   {remaining > 0 ? (
                     <ShowMoreSessionsButton
-                      label={t("workspace_list.show_more", { count: Math.min(MAX_SESSIONS_PREVIEW, remaining) })}
+                      label={t("workspace_list.show_more", { count: Math.min(SESSIONS_PAGE_SIZE, remaining) })}
                       onClick={onShowMore}
                     />
                   ) : null}
@@ -2317,19 +2408,65 @@ function SessionGroupSection({ group, rows, expanded, workspaceId, store, render
 type SessionMenuItemProps = {
   session: SessionListItem;
   depth: number;
-  tree: SessionTreeState;
   workspaceId: string;
-  forcedExpandedSessionIds: Set<string>;
+  hasChildren: boolean;
+  isExpanded: boolean;
+  isSelected: boolean;
+  isActiveWorkspace: boolean;
+  status?: string;
+  isUnread: boolean;
+  needsAttention: boolean;
+  shortcutDigit: number | undefined;
   isPinned?: boolean;
   draggable?: boolean;
   workspaceName?: string;
 };
 
-function SessionNumberShortcutSlot({ digit }: { digit: number | undefined }) {
-  const ctx = useSidebarContext();
+type SessionRowSource = {
+  workspaceId: string;
+  tree: SessionTreeState;
+  forcedExpandedSessionIds: Set<string>;
+  pinnedIds: Set<string>;
+  unreadIds: Set<string>;
+  needsAttentionIds: Set<string>;
+  workspaceName?: string;
+  draggable?: boolean;
+};
+
+function getSessionRowProps(
+  row: FlattenedSessionRow,
+  ctx: SidebarContextValue,
+  source: SessionRowSource,
+): SessionMenuItemProps {
+  const sessionId = row.session.id;
+  return {
+    session: row.session,
+    depth: row.depth,
+    workspaceId: source.workspaceId,
+    workspaceName: source.workspaceName,
+    hasChildren: (source.tree.descendantCountBySessionId.get(sessionId) ?? 0) > 0,
+    isExpanded: ctx.expandedSessionIds.has(sessionId) ||
+      source.forcedExpandedSessionIds.has(sessionId),
+    isSelected: ctx.selectedSessionId === sessionId,
+    isActiveWorkspace: ctx.selectedWorkspaceId === source.workspaceId,
+    status: ctx.sessionStatusById?.[sessionId],
+    isUnread: source.unreadIds.has(sessionId),
+    needsAttention: source.needsAttentionIds.has(sessionId),
+    shortcutDigit: ctx.sessionNumberShortcutByTarget.get(
+      sessionNumberShortcutTargetKey(source.workspaceId, sessionId),
+    ),
+    isPinned: source.pinnedIds.has(sessionId),
+    draggable: source.draggable,
+  };
+}
+
+function SessionNumberShortcutSlot({ digit, os }: {
+  digit: number | undefined;
+  os: SidebarSessionActions["sessionNumberShortcutOs"];
+}) {
   if (digit === undefined) return null;
 
-  const label = sessionNumberShortcutLabel(ctx.sessionNumberShortcutOs, digit);
+  const label = sessionNumberShortcutLabel(os, digit);
 
   return (
     <span
@@ -2337,7 +2474,7 @@ function SessionNumberShortcutSlot({ digit }: { digit: number | undefined }) {
       aria-hidden="true"
       className={cn(
         "hidden h-5 shrink-0 items-center justify-center group-hover/menu-sub-item:flex group-focus-within/menu-sub-item:flex",
-        ctx.sessionNumberShortcutOs === "macos" ? "w-8" : "w-11",
+        os === "macos" ? "w-8" : "w-11",
       )}
     >
       <kbd
@@ -2350,51 +2487,53 @@ function SessionNumberShortcutSlot({ digit }: { digit: number | undefined }) {
   );
 }
 
-function SessionMenuItem({
+function SessionMenuItemImpl({
   session,
-  tree,
   workspaceId,
-  forcedExpandedSessionIds,
   depth,
+  hasChildren,
+  isExpanded,
+  isSelected,
+  isActiveWorkspace,
+  status: sessionActivityStatus,
+  isUnread: isUnreadFlag,
+  needsAttention,
+  shortcutDigit,
   isPinned = false,
   draggable = false,
   workspaceName,
 }: SessionMenuItemProps) {
-  const ctx = useSidebarContext();
+  const sessionActions = useSidebarSessionActions();
   const [isTitleHovered, setIsTitleHovered] = React.useState(false);
   const [isTitleFocused, setIsTitleFocused] = React.useState(false);
-  const unreadIds = useUnreadSessionIds();
-  const needsAttentionIds = useNeedsAttentionSessionIds();
-  const isSelected = ctx.selectedSessionId === session.id;
+  const itemRef = React.useRef<HTMLLIElement>(null);
   const displayTitle = getDisplaySessionTitle(session.title);
   const itemTitle = workspaceName ? `${displayTitle} — ${workspaceName}` : displayTitle;
-  const hasChildren = (tree.descendantCountBySessionId.get(session.id) ?? 0) > 0;
-  const isExpanded = ctx.expandedSessionIds.has(session.id) || forcedExpandedSessionIds.has(session.id);
-  const sessionActivityStatus = ctx.sessionStatusById?.[session.id];
   const resolvedActiveWork = isActiveWorkSessionStatus(sessionActivityStatus);
-  const isUnread = unreadIds.has(session.id) && !isSelected;
-  const needsAttention = needsAttentionIds.has(session.id);
+  const isUnread = isUnreadFlag && !isSelected;
   const isArchived = isSessionArchived(session);
   const relativeTime = formatSessionRelativeTime(session.time?.updated ?? session.time?.created);
-  const shortcutDigit = ctx.sessionNumberShortcutByTarget.get(
-    sessionNumberShortcutTargetKey(workspaceId, session.id),
-  );
   const ariaKeyShortcuts = shortcutDigit === undefined
     ? undefined
-    : sessionNumberAriaKeyShortcut(ctx.sessionNumberShortcutOs, shortcutDigit);
+    : sessionNumberAriaKeyShortcut(sessionActions.sessionNumberShortcutOs, shortcutDigit);
+
+  React.useEffect(() => {
+    if (!isSelected) return;
+    itemRef.current?.scrollIntoView({ block: "nearest" });
+  }, [isSelected]);
 
   const openSession = () => {
     useSessionManagementStore.getState().clearUnread(session.id);
     useSessionManagementStore.getState().clearNeedsAttention(session.id);
-    ctx.onOpenSession(workspaceId, session.id);
+    sessionActions.onOpenSession(workspaceId, session.id);
   };
 
   const prefetchSession = () => {
-    if (workspaceId !== ctx.selectedWorkspaceId) {
+    if (!isActiveWorkspace) {
       return;
     }
 
-    ctx.onPrefetchSession?.(workspaceId, session.id);
+    sessionActions.onPrefetchSession?.(workspaceId, session.id);
   };
 
   const handlePointerEnter = (event: React.PointerEvent) => {
@@ -2458,10 +2597,11 @@ function SessionMenuItem({
   const item = hasChildren ? (
     <Collapsible
       open={isExpanded}
-      onOpenChange={() => ctx.toggleSessionExpanded(session.id)}
+      onOpenChange={() => sessionActions.toggleSessionExpanded(session.id)}
       className="group/session-collapsible"
     >
       <SidebarMenuSubItem
+        ref={itemRef}
         {...dragProps}
         data-sidebar-session-id={session.id}
         data-sidebar-session-workspace-id={workspaceId}
@@ -2485,13 +2625,13 @@ function SessionMenuItem({
                 }}
                 onBlur={() => setIsTitleFocused(false)}
                 aria-label={accessibleState}
-                aria-description={shortcutDigit === undefined ? undefined : sessionNumberShortcutDescription(ctx.sessionNumberShortcutOs, shortcutDigit)}
+                aria-description={shortcutDigit === undefined ? undefined : sessionNumberShortcutDescription(sessionActions.sessionNumberShortcutOs, shortcutDigit)}
                 aria-keyshortcuts={ariaKeyShortcuts}
               >
                 {leading}
                 <SessionTitle intent={titleIntent} title={displayTitle} tooltip={itemTitle} />
                 <SessionActivityBadge sessionId={session.id} />
-                <SessionNumberShortcutSlot digit={shortcutDigit} />
+                <SessionNumberShortcutSlot digit={shortcutDigit} os={sessionActions.sessionNumberShortcutOs} />
                 <span className="flex size-6 shrink-0 items-center justify-center">
                   <ChevronRight className="size-4 text-muted-foreground transition-transform duration-200 group-data-open/session-collapsible:rotate-90 hover:text-foreground" />
                 </span>
@@ -2504,6 +2644,7 @@ function SessionMenuItem({
     </Collapsible>
   ) : (
     <SidebarMenuSubItem
+      ref={itemRef}
       {...dragProps}
       data-sidebar-session-id={session.id}
       data-sidebar-session-workspace-id={workspaceId}
@@ -2523,7 +2664,7 @@ function SessionMenuItem({
           }}
           onBlur={() => setIsTitleFocused(false)}
           aria-label={accessibleState}
-          aria-description={shortcutDigit === undefined ? undefined : sessionNumberShortcutDescription(ctx.sessionNumberShortcutOs, shortcutDigit)}
+          aria-description={shortcutDigit === undefined ? undefined : sessionNumberShortcutDescription(sessionActions.sessionNumberShortcutOs, shortcutDigit)}
           aria-keyshortcuts={ariaKeyShortcuts}
           className={rowButtonClass}
           style={rowButtonStyle}
@@ -2531,7 +2672,7 @@ function SessionMenuItem({
           {leading}
           <SessionTitle intent={titleIntent} title={displayTitle} tooltip={itemTitle} />
           <SessionActivityBadge sessionId={session.id} />
-          <SessionNumberShortcutSlot digit={shortcutDigit} />
+          <SessionNumberShortcutSlot digit={shortcutDigit} os={sessionActions.sessionNumberShortcutOs} />
         </SidebarMenuSubButton>
       </SessionContextMenu>
       {trailing}
@@ -2553,3 +2694,32 @@ function SessionMenuItem({
     </Reorder.Item>
   );
 }
+
+const sameSessionData = (left: SessionListItem, right: SessionListItem) =>
+  left.id === right.id &&
+  left.title === right.title &&
+  left.time?.updated === right.time?.updated &&
+  left.time?.created === right.time?.created &&
+  left.time?.archived === right.time?.archived;
+
+function areSessionMenuItemPropsEqual(
+  previous: Readonly<SessionMenuItemProps>,
+  next: Readonly<SessionMenuItemProps>,
+) {
+  return sameSessionData(previous.session, next.session) &&
+    previous.depth === next.depth &&
+    previous.workspaceId === next.workspaceId &&
+    previous.workspaceName === next.workspaceName &&
+    previous.hasChildren === next.hasChildren &&
+    previous.isExpanded === next.isExpanded &&
+    previous.isSelected === next.isSelected &&
+    previous.isActiveWorkspace === next.isActiveWorkspace &&
+    previous.status === next.status &&
+    previous.isUnread === next.isUnread &&
+    previous.needsAttention === next.needsAttention &&
+    previous.shortcutDigit === next.shortcutDigit &&
+    (previous.isPinned ?? false) === (next.isPinned ?? false) &&
+    (previous.draggable ?? false) === (next.draggable ?? false);
+}
+
+const SessionMenuItem = React.memo(SessionMenuItemImpl, areSessionMenuItemPropsEqual);
