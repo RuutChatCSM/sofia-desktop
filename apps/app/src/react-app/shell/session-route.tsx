@@ -31,6 +31,7 @@ import { useSessionManagementStore as sessionManagementStore } from "@/react-app
 import {
   buildSofiaWorkspaceBaseUrl,
   readSofiaServerSettings,
+  SofiaServerError,
 } from "@/app/lib/sofia-server";
 import {
   workspaceServerId,
@@ -1602,6 +1603,14 @@ export function SessionRoute() {
               await codexEngine.prompt(targetSessionId, promptText, selection, composed.images);
             }
           } catch (error) {
+            // No HTTP response (timeout, dropped connection) means the server
+            // may still start the turn. Putting the draft back invited a resend
+            // and a duplicate turn; keep the optimistic copy until the echo or
+            // a turn failure settles it.
+            if (!(error instanceof SofiaServerError)) {
+              useCodexSessionStore.getState().setWarning(targetSessionId, "Sofia hasn't confirmed this message yet. It will appear in the conversation once the engine picks it up.");
+              return { outcome: "accepted" };
+            }
             useCodexSessionStore.getState().confirmPendingUserMessage(targetSessionId, displayText);
             // Let the composer retain the draft. A rejected follow-up does not
             // stop the active turn and must never disappear silently.

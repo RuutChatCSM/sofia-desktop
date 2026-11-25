@@ -237,7 +237,9 @@ export function createCodexSessionClient(options: CodexSessionClientOptions) {
           hostToken: options.hostToken,
           method: "POST",
           body: { text, model: selection?.model, providerId: selection?.providerId, images },
-          timeoutMs: 60_000,
+          // Starting a turn can resume the thread, apply settings and snapshot
+          // the workspace, each with its own 60 s engine deadline.
+          timeoutMs: 180_000,
         },
       ),
 

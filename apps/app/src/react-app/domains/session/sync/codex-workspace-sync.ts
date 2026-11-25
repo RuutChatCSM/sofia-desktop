@@ -34,7 +34,9 @@ export async function syncCodexWorkspace(
       if (signal.aborted) return;
       store.replaceSessions(list, { workspaceId, entries: snapshot });
       onListResolved({ status: "ready", error: null });
-      await Promise.all(list.map(session => restoreCodexSessionItems(client, workspaceId, session.id, signal)));
+      // History is read when a task is opened (ensureCodexTranscriptCached).
+      // Reading every transcript here queued hundreds of reads ahead of the
+      // one the user clicked and stalled the server on large rollouts.
     } catch {
       if (signal.aborted) return;
       onListResolved({ status: "error", error: "Unable to load tasks. Reconnect the workspace and try again." });

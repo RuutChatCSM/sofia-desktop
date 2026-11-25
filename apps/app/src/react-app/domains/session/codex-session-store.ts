@@ -23,7 +23,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /** Extract plain text from a codex `userMessage` item payload. */
-function userMessageText(item: Record<string, unknown>): string {
+export function userMessageText(item: Record<string, unknown>): string {
   if (typeof item.text === "string" && item.text.trim()) return item.text;
   if (Array.isArray(item.content)) {
     return item.content
@@ -152,6 +152,9 @@ export type CodexUserMessageRecord = {
   /** Parts already contain the display text and attachment positions. */
   orderedParts?: boolean;
   userMessageOrdinal?: number;
+  /** When the user sent it; an echo recorded after this is that submission
+   * even when the ordinal drifted (history landed after the send). */
+  submittedAt?: number;
 };
 
 export type CodexSessionEntry = {
@@ -206,7 +209,7 @@ type CodexSessionActions = {
   failSession: (sessionId: string, message: string, turnId?: string) => void;
   setWarning: (sessionId: string, message: string | undefined) => void;
   addPendingUserMessage: (sessionId: string, text: string, parts?: UIMessage["parts"], matchText?: string, orderedParts?: boolean, userMessageOrdinal?: number) => void;
-  confirmPendingUserMessage: (sessionId: string, text?: string, userMessageOrdinal?: number) => void;
+  confirmPendingUserMessage: (sessionId: string, text?: string, userMessageOrdinal?: number, echoCreatedAt?: number) => void;
   invalidateCanonical: (sessionId: string) => void;
   removeSession: (sessionId: string) => void;
   clear: () => void;
@@ -477,6 +480,7 @@ export const useCodexSessionStore = create<CodexSessionStore>((set, get) => ({
         parts: parts ?? [],
         ...(orderedParts ? { orderedParts: true } : {}),
         ...(userMessageOrdinal !== undefined ? { userMessageOrdinal } : {}),
+        submittedAt: Date.now(),
       };
       return {
         sessions: {
@@ -493,13 +497,17 @@ export const useCodexSessionStore = create<CodexSessionStore>((set, get) => ({
       };
     }),
 
-  confirmPendingUserMessage: (sessionId, text, userMessageOrdinal) =>
+  confirmPendingUserMessage: (sessionId, text, userMessageOrdinal, echoCreatedAt) =>
     set((state) => {
       const entry = state.sessions[sessionId];
       if (!entry) return state;
       const trimmed = typeof text === "string" ? text.trim() : "";
+      // Clock skew between the engine and this window is small; a minute
+      // still cannot reach back to an earlier identical prompt in practice.
+      const recordedAfterSubmit = (message: CodexUserMessageRecord) =>
+        echoCreatedAt !== undefined && message.submittedAt !== undefined && echoCreatedAt >= message.submittedAt - 60_000;
       const matches = (message: CodexUserMessageRecord) =>
-        (userMessageOrdinal === undefined || message.userMessageOrdinal === undefined || message.userMessageOrdinal === userMessageOrdinal) &&
+        (userMessageOrdinal === undefined || message.userMessageOrdinal === undefined || message.userMessageOrdinal === userMessageOrdinal || recordedAfterSubmit(message)) &&
         (message.text === trimmed || (message.matchText ?? message.text).trim() === trimmed);
       const pendingIndex = entry.pendingUserMessages.findIndex(matches);
       const settledIndex = (entry.settledUserMessages ?? []).findIndex(matches);
@@ -574,6 +582,7 @@ export async function runCodexStream(
             const item = isRecord(event.item) ? event.item : {};
             const itemId = typeof item.id === "string" ? item.id : event.itemType;
             const turnId = typeof event.turnId === "string" ? event.turnId : itemId;
+            const firstSighting = !s.sessions[event.sessionId]?.items.some((tracked) => tracked.id === itemId);
             s.upsertItem(event.sessionId, {
               id: itemId,
               type: event.itemType,
@@ -584,8 +593,12 @@ export async function runCodexStream(
               output: "",
               status: "pending",
             });
+            // A user message the stream shows for the first time is the echo of
+            // a submission: acknowledge the oldest pending copy with that text.
+            // Ordinals drift whenever history lands after a send, so they are
+            // only a tie-breaker for items this renderer has already seen.
             if (event.itemType === "userMessage") {
-              const ordinal = useCodexSessionStore.getState().sessions[event.sessionId]?.items.filter(isVisibleCodexUserItem).findIndex((tracked) => tracked.id === itemId);
+              const ordinal = firstSighting ? undefined : useCodexSessionStore.getState().sessions[event.sessionId]?.items.filter(isVisibleCodexUserItem).findIndex((tracked) => tracked.id === itemId);
               s.confirmPendingUserMessage(event.sessionId, userMessageText(item), ordinal);
             }
             // Replayed starts cannot reopen an item/turn already completed.
@@ -597,7 +610,8 @@ export async function runCodexStream(
           case "item.completed": {
             const item = isRecord(event.item) ? event.item : {};
             const itemId = typeof item.id === "string" ? item.id : event.itemType;
-            if (!s.sessions[event.sessionId]?.items.some((tracked) => tracked.id === itemId)) {
+            const firstSighting = !s.sessions[event.sessionId]?.items.some((tracked) => tracked.id === itemId);
+            if (firstSighting) {
               s.upsertItem(event.sessionId, {
                 id: itemId, type: event.itemType, turnId: event.turnId, item,
                 text: "", thinking: "", output: "", status: "pending",
@@ -607,7 +621,7 @@ export async function runCodexStream(
             // The engine echoed a submitted user message: drop the optimistic
             // pending copy so it isn't rendered twice.
             if (event.itemType === "userMessage") {
-              const ordinal = useCodexSessionStore.getState().sessions[event.sessionId]?.items.filter(isVisibleCodexUserItem).findIndex((tracked) => tracked.id === itemId);
+              const ordinal = firstSighting ? undefined : useCodexSessionStore.getState().sessions[event.sessionId]?.items.filter(isVisibleCodexUserItem).findIndex((tracked) => tracked.id === itemId);
               s.confirmPendingUserMessage(event.sessionId, userMessageText(item), ordinal);
             }
             break;

@@ -33,14 +33,15 @@ for (const blockedRead of ["list", "history"]) {
     };
     const sync = syncCodexWorkspace(client, "display-workspace", controller.signal, () => {});
     try {
-      if (blockedRead === "history") await expect.poll(() => historyRequested).toBe(true);
       expect(emit).toBeTypeOf("function");
       emit?.({ type: "session.created", session });
       expect(useCodexSessionStore.getState().sessions[session.id].session.workspaceId).toBe("display-workspace");
       emit?.({ type: "session.updated", session: { ...session, title: "hii", status: "running", turnId: "first" } });
       expect(useCodexSessionStore.getState().sessions[session.id].session).toMatchObject({ title: "hii", status: "running" });
       releaseRead();
-      await expect.poll(() => historyRequested).toBe(true);
+      await expect.poll(() => useCodexSessionStore.getState().sessions[oldSession.id]).toBeDefined();
+      // Startup lists tasks only; a transcript is read when its task is opened.
+      expect(historyRequested).toBe(false);
       expect(useCodexSessionStore.getState().sessions[session.id].session.title).toBe("hii");
     } finally {
       controller.abort();

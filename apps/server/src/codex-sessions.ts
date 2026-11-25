@@ -1,7 +1,7 @@
 import { historyReadScheduler } from "./history-read-scheduler.js";
 import { readRolloutLines, RolloutRecordTooLargeError } from "./rollout-lines.js";
 import { isPlaceholderTaskTitle, parseCodexSessionTitles, selectCodexThreadName, threadDisplayTitle, threadTitleFromEngineText } from "./codex-session-titles.js";
-import { parseRolloutLines, TRANSCRIPT_RETAINED_CHARS, reconcileRolloutItems } from "./codex-rollout-items.js";
+import { createRolloutParser, TRANSCRIPT_RETAINED_CHARS, reconcileRolloutItems } from "./codex-rollout-items.js";
 import { parseDurableTurnOutcomes, type DurableTurnOutcome } from "./codex-turn-outcomes.js";
 import { recordedSubagentState, type RecordedAgentState } from "./codex-subagent-outcome.js";
 import { TurnChangeTracker, type TurnChangeRecord } from "./turn-changes.js";
@@ -15,6 +15,23 @@ import { resolveSofiaPrompt } from "./sofia-commands.js";
 import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
 import { existsSync, readFileSync, readdirSync, writeFileSync, openSync, closeSync, readSync, fstatSync, statSync } from "node:fs";
+import { open, type FileHandle } from "node:fs/promises";
+
+function rolloutFingerprint(path: string): string {
+  try {
+    const stat = statSync(path);
+    return `${stat.size}:${stat.mtimeMs}`;
+  } catch {
+    return "";
+  }
+}
+
+/** Keep a handful of recently opened transcripts; insertion order is recency. */
+function rememberBounded<V>(cache: Map<string, V>, key: string, value: V, max = 8): void {
+  cache.delete(key);
+  cache.set(key, value);
+  while (cache.size > max) cache.delete(cache.keys().next().value!);
+}
 import { homedir } from "node:os";
 import { join, resolve, relative, isAbsolute } from "node:path";
 
@@ -516,22 +533,33 @@ export class CodexSessionManager {
     }
   }
 
+  /** Thread id → rollout path, from the last directory scan. */
+  private rolloutPathIndex = new Map<string, string>();
+  private rolloutIndexScannedAt = 0;
+
   private findRolloutPath(threadId: string): string | null {
     if (!this.handle.codexHome) return null;
+    const known = this.rolloutPathIndex.get(threadId);
+    if (known) return known;
+    // A recursive scan of the sessions tree on every miss (threads with no
+    // rollout yet, other homes) was a synchronous stall on hot paths.
+    if (Date.now() - this.rolloutIndexScannedAt < 15_000) return null;
+    this.rolloutIndexScannedAt = Date.now();
     const root = join(this.handle.codexHome, "sessions");
     try {
-      const suffix = `-${threadId}.jsonl`;
-      const relative = readdirSync(root, { recursive: true, encoding: "utf8" })
-        .find((entry) => entry.endsWith(suffix));
-      return relative ? join(root, relative) : null;
+      for (const entry of readdirSync(root, { recursive: true, encoding: "utf8" })) {
+        const match = /rollout-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-(.+)\.jsonl$/.exec(entry);
+        if (match) this.rolloutPathIndex.set(match[1], join(root, entry));
+      }
     } catch {
       return null;
     }
+    return this.rolloutPathIndex.get(threadId) ?? null;
   }
 
-  private recoveredContext(session: CodexSession): string {
+  private async recoveredContext(session: CodexSession): Promise<string> {
     session.rolloutPath ??= this.findRolloutPath(session.id.slice("codex-".length));
-    const messages = this.readRolloutItems(session, 30)
+    const messages = (await this.readRolloutItems(session, 30))
       .flatMap(({ item }) => {
         if (item.type === "userMessage" && Array.isArray(item.content)) {
           const text = item.content
@@ -549,7 +577,7 @@ export class CodexSessionManager {
   }
 
   private async replaceMissingThread(session: CodexSession, engine: ManagedCodexEngine, selection?: { model?: string; providerId?: string }): Promise<void> {
-    const context = this.recoveredContext(session);
+    const context = await this.recoveredContext(session);
     const developerInstructions = buildSofiaDeveloperInstructions({
       workspaceId: session.workspaceId,
       cwd: session.cwd ?? this.handle.cwd,
@@ -856,13 +884,16 @@ export class CodexSessionManager {
    * neither persists the checklist as an item nor replays it on resume, so the
    * rollout is the durable record a reopened task restores from.
    */
-  private readLatestPlanFromRollout(session: CodexSession): CodexPlanItem[] | null {
+  private async readLatestPlanFromRollout(session: CodexSession): Promise<CodexPlanItem[] | null> {
     const path = session.rolloutPath ?? this.findRolloutPath(session.threadId);
     if (!path || !existsSync(path)) return null;
     session.rolloutPath = path;
+    const fingerprint = rolloutFingerprint(path);
+    const cached = this.rolloutPlanCache.get(path);
+    if (cached && cached.fingerprint === fingerprint) return cached.plan;
     try {
       let latest: CodexPlanItem[] | null = null;
-      for (const line of readRolloutLines(path)) {
+      for await (const line of readRolloutLines(path)) {
         if (!line.includes("update_plan")) continue;
         let parsed: Record<string, unknown>;
         try { parsed = JSON.parse(line); } catch { continue; }
@@ -872,6 +903,7 @@ export class CodexSessionManager {
         const steps = parsePlanArguments(payload.arguments);
         if (steps) latest = steps;
       }
+      rememberBounded(this.rolloutPlanCache, path, { fingerprint, plan: latest });
       return latest;
     } catch {
       return null;
@@ -883,7 +915,7 @@ export class CodexSessionManager {
     await this.start();
     const session = this.sessions.get(sessionId);
     if (!session) return null;
-    const plan = session.plan ?? this.readLatestPlanFromRollout(session);
+    const plan = session.plan ?? await this.readLatestPlanFromRollout(session);
     if (!plan) return null;
     session.plan = plan;
     // Restore is conservative: a fully completed checklist is the normal end
@@ -1052,13 +1084,13 @@ export class CodexSessionManager {
     try {
       const items = await this.readThreadStoreItems(engine, session.threadId, limit);
       if (items.length > 0) {
-        return reconcileRolloutItems(this.readRolloutItems(session, limit), items);
+        return reconcileRolloutItems(await this.readRolloutItems(session, limit), items);
       }
     } catch (error) {
       if (error instanceof RolloutRecordTooLargeError) throw error;
       // Fall through to the rollout reader.
     }
-    return this.readRolloutItems(session, limit);
+    return await this.readRolloutItems(session, limit);
   }
 
   /**
@@ -1105,27 +1137,45 @@ export class CodexSessionManager {
     if (!session) return [];
     const path = session.rolloutPath ?? this.findRolloutPath(session.threadId);
     if (!path || !existsSync(path)) return [];
-    let fd: number | undefined;
+    const fingerprint = rolloutFingerprint(path);
+    const cached = this.rolloutOutcomeCache.get(path);
+    if (cached && cached.fingerprint === fingerprint) return cached.outcomes;
+    let handle: FileHandle | undefined;
     try {
-      fd = openSync(path, "r");
-      const size = fstatSync(fd).size;
+      handle = await open(path, "r");
+      const size = (await handle.stat()).size;
       const length = Math.min(size, 8 * 1024 * 1024);
       const buffer = Buffer.alloc(length);
-      const read = readSync(fd, buffer, 0, length, size - length);
-      return parseDurableTurnOutcomes(buffer.subarray(0, read).toString("utf8"));
+      const { bytesRead } = await handle.read(buffer, 0, length, size - length);
+      const outcomes = parseDurableTurnOutcomes(buffer.subarray(0, bytesRead).toString("utf8"));
+      rememberBounded(this.rolloutOutcomeCache, path, { fingerprint, outcomes });
+      return outcomes;
     } catch {
       return [];
     } finally {
-      if (fd !== undefined) closeSync(fd);
+      await handle?.close();
     }
   }
 
-  private readRolloutItems(session: CodexSession, limit = 200): Array<{ turnId: string; item: Record<string, unknown> }> {
+  // Reopening a task re-read and re-parsed its whole rollout every time.
+  // Rollouts are append-only, so size + mtime identify a parse result.
+  private rolloutItemsCache = new Map<string, { fingerprint: string; limit: number; items: Array<{ turnId: string; item: Record<string, unknown> }> }>();
+  private rolloutPlanCache = new Map<string, { fingerprint: string; plan: CodexPlanItem[] | null }>();
+  private rolloutOutcomeCache = new Map<string, { fingerprint: string; outcomes: DurableTurnOutcome[] }>();
+
+  private async readRolloutItems(session: CodexSession, limit = 200): Promise<Array<{ turnId: string; item: Record<string, unknown> }>> {
     const path = session.rolloutPath ?? this.findRolloutPath(session.threadId);
     if (!path || !existsSync(path)) return [];
     session.rolloutPath = path;
+    const fingerprint = rolloutFingerprint(path);
+    const cached = this.rolloutItemsCache.get(path);
+    if (cached && cached.fingerprint === fingerprint && cached.limit === limit) return cached.items;
     try {
-      return parseRolloutLines(readRolloutLines(path), limit);
+      const parser = createRolloutParser(limit);
+      for await (const line of readRolloutLines(path)) parser.push(line);
+      const items = parser.finish();
+      rememberBounded(this.rolloutItemsCache, path, { fingerprint, limit, items });
+      return items;
     } catch (error) {
       if (error instanceof RolloutRecordTooLargeError) throw error;
       return [];

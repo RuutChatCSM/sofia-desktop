@@ -27,13 +27,15 @@ test("retained transcript payload is bounded even below the item count limit", (
   expect(items.at(-1)?.item.id).toBe(":item:1999");
 });
 
-test("chunked rollout reader preserves UTF-8 across boundaries and an unterminated last line", () => {
+test("chunked rollout reader preserves UTF-8 across boundaries and an unterminated last line", async () => {
   const root = mkdtempSync(join(tmpdir(), "sofia-rollout-lines-"));
   try {
     const path = join(root, "history.jsonl");
     const lines = ["x".repeat(256 * 1024 - 1) + "🌍", "last"];
     writeFileSync(path, lines.join("\n"));
-    expect([...readRolloutLines(path)]).toEqual(lines);
+    const read: string[] = [];
+    for await (const line of readRolloutLines(path)) read.push(line);
+    expect(read).toEqual(lines);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
@@ -46,7 +48,7 @@ test("100 MB history parses under a 64 MB V8 heap", { timeout: 60_000 }, () => {
     for (let i = 0; i < 5200; i++) appendFileSync(path, line);
     const parser = pathToFileURL(join(process.cwd(), "../apps/server/dist/codex-rollout-items.js")).href;
     const reader = pathToFileURL(join(process.cwd(), "../apps/server/dist/rollout-lines.js")).href;
-    const source = `import {parseRolloutLines} from ${JSON.stringify(parser)}; import {readRolloutLines} from ${JSON.stringify(reader)}; const items=parseRolloutLines(readRolloutLines(${JSON.stringify(path)}),10); console.log(JSON.stringify({count:items.length,last:items.at(-1).item.id}));`;
+    const source = `import {createRolloutParser} from ${JSON.stringify(parser)}; import {readRolloutLines} from ${JSON.stringify(reader)}; const p=createRolloutParser(10); for await (const line of readRolloutLines(${JSON.stringify(path)})) p.push(line); const items=p.finish(); console.log(JSON.stringify({count:items.length,last:items.at(-1).item.id}));`;
     const result = execFileSync(process.execPath, ["--max-old-space-size=64", "--input-type=module", "-e", source], { encoding: "utf8", timeout: 45_000, maxBuffer: 1024 * 1024 });
     expect(JSON.parse(result)).toEqual({ count: 10, last: ":item:5199" });
   } finally { rmSync(root, { recursive: true, force: true }); }

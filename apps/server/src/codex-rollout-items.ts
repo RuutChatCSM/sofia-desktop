@@ -25,7 +25,11 @@ function* stringLines(raw: string): Generator<string> {
   }
 }
 
-export function parseRolloutLines(lines: Iterable<string>, limit = 200): Array<{ turnId: string; item: Record<string, unknown> }> {
+/**
+ * Line-at-a-time rollout parser, so a caller can feed it from an async file
+ * read without holding the whole rollout or blocking on one long loop.
+ */
+export function createRolloutParser(limit = 200): { push: (line: string) => void; finish: () => Array<{ turnId: string; item: Record<string, unknown> }> } {
   const out: Array<{ turnId: string; item: Record<string, unknown> }> = [];
   let currentTurn = "";
   const boundaries = new Map<string, { turnStartedAt?: number; turnCompletedAt?: number }>();
@@ -56,17 +60,17 @@ export function parseRolloutLines(lines: Iterable<string>, limit = 200): Array<{
     sizes.set(entry, size);
     trim();
   };
-  for (const line of lines) {
+  const push = (line: string): void => {
     let parsed: unknown;
-    try { parsed = JSON.parse(line); } catch { continue; }
-    if (!isRecord(parsed) || !isRecord(parsed.payload)) continue;
+    try { parsed = JSON.parse(line); } catch { return; }
+    if (!isRecord(parsed) || !isRecord(parsed.payload)) return;
     const payload = parsed.payload;
     const timestamp = typeof parsed.timestamp === "string" ? Date.parse(parsed.timestamp) : NaN;
     const clock = Number.isFinite(timestamp) ? { createdAt: timestamp, completedAt: timestamp } : {};
     if (parsed.type === "compacted" || (parsed.type === "event_msg" && payload.type === "context_compacted")) {
       if (typeof payload.turn_id === "string") currentTurn = payload.turn_id;
       append({turnId:currentTurn,item:{type:"contextCompaction",id:`${currentTurn}:compaction:${emitted}`,status:"completed",...clock}});
-      continue;
+      return;
     }
     if (parsed.type === "event_msg" && payload.type === "item_completed" && isRecord(payload.item) && payload.item.type === "SubAgentActivity") {
       if (typeof payload.turn_id === "string") currentTurn = payload.turn_id;
@@ -77,12 +81,12 @@ export function parseRolloutLines(lines: Iterable<string>, limit = 200): Array<{
       const call = idFromCallId(out, id);
       if (call) { Object.assign(call.item, canonical); resize(call.item); }
       else append({ turnId: currentTurn, item: canonical });
-      continue;
+      return;
     }
     if (parsed.type === "event_msg" && ["stream_error", "reconnecting", "retrying"].includes(String(payload.type))) {
       if (typeof payload.turn_id === "string") currentTurn = payload.turn_id;
       append({turnId:currentTurn,item:{type:"networkStatus",id:`${currentTurn}:network:${emitted}`,text:typeof payload.message === "string" ? payload.message : "Reconnecting… waiting for network",status:"completed",...clock}});
-      continue;
+      return;
     }
     if (parsed.type === "event_msg" || parsed.type === "turn_context") {
       if (typeof payload.turn_id === "string") currentTurn = payload.turn_id;
@@ -94,9 +98,9 @@ export function parseRolloutLines(lines: Iterable<string>, limit = 200): Array<{
         if (payload.type === "task_started" || payload.type === "turn_started") boundaries.set(currentTurn, { ...previous, turnStartedAt: timestamp });
         if (payload.type === "task_complete" || payload.type === "turn_complete" || payload.type === "turn_aborted") boundaries.set(currentTurn, { ...previous, turnCompletedAt: timestamp });
       }
-      continue;
+      return;
     }
-    if (parsed.type !== "response_item") continue;
+    if (parsed.type !== "response_item") return;
     const type = payload.type;
     const id = typeof payload.call_id === "string" ? payload.call_id : typeof payload.id === "string" ? payload.id : `${currentTurn}:item:${emitted}`;
     const content = Array.isArray(payload.content) ? payload.content.filter(isRecord) : [];
@@ -133,10 +137,19 @@ export function parseRolloutLines(lines: Iterable<string>, limit = 200): Array<{
       }
     }
     if (item) append({ turnId: currentTurn, item: { ...item, ...clock } });
-  }
-  // Only retained entries are decorated; discarded history never gets copied.
-  const timed = out.map(entry => ({ ...entry, item: { ...entry.item, ...boundaries.get(entry.turnId) } }));
-  return limit > 0 && timed.length > limit ? timed.slice(-limit) : timed;
+  };
+  const finish = () => {
+    // Only retained entries are decorated; discarded history never gets copied.
+    const timed = out.map(entry => ({ ...entry, item: { ...entry.item, ...boundaries.get(entry.turnId) } }));
+    return limit > 0 && timed.length > limit ? timed.slice(-limit) : timed;
+  };
+  return { push, finish };
+}
+
+export function parseRolloutLines(lines: Iterable<string>, limit = 200): Array<{ turnId: string; item: Record<string, unknown> }> {
+  const parser = createRolloutParser(limit);
+  for (const line of lines) parser.push(line);
+  return parser.finish();
 }
 
 /** Root durable messages define narrative/order; materialization supplies stable IDs. */

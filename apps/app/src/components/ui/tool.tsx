@@ -118,12 +118,28 @@ function diffLineClass(line: string) {
   return ""
 }
 
+// One element per diff line is fine for an edit, not for a generated file:
+// render a bounded preview and let the reader ask for the rest.
+const DIFF_PREVIEW_LINES = 400
+const OUTPUT_PREVIEW_CHARS = 20_000
+
+function ShowAllButton({ hidden, onClick }: { hidden: string; onClick: () => void }) {
+  return (
+    <button type="button" className="text-muted-foreground hover:text-foreground self-start px-1 underline" onClick={onClick}>
+      Show {hidden} more
+    </button>
+  )
+}
+
 function DiffLines({ diff }: { diff: string }) {
+  const [showAll, setShowAll] = useState(false)
+  const lines = diff.split("\n")
+  const visible = showAll ? lines : lines.slice(0, DIFF_PREVIEW_LINES)
   return (
     <div className="max-h-60 overflow-auto rounded-md font-mono leading-relaxed">
-      {diff.split("\n").map((line, index) => (
+      {visible.map((line, index) => (
         <div
-          key={`${index}:${line}`}
+          key={index}
           className={cn(
             "whitespace-pre-wrap wrap-break-word px-1",
             diffLineClass(line)
@@ -132,7 +148,25 @@ function DiffLines({ diff }: { diff: string }) {
           {line || " "}
         </div>
       ))}
+      {visible.length < lines.length ? (
+        <ShowAllButton hidden={`${lines.length - visible.length} lines`} onClick={() => setShowAll(true)} />
+      ) : null}
     </div>
+  )
+}
+
+function OutputText({ text }: { text: string }) {
+  const [showAll, setShowAll] = useState(false)
+  const truncated = !showAll && text.length > OUTPUT_PREVIEW_CHARS
+  return (
+    <>
+      <pre className="max-h-60 overflow-auto whitespace-pre-wrap wrap-break-word opacity-80">
+        {truncated ? text.slice(0, OUTPUT_PREVIEW_CHARS) : text}
+      </pre>
+      {truncated ? (
+        <ShowAllButton hidden={`${(text.length - OUTPUT_PREVIEW_CHARS).toLocaleString()} characters`} onClick={() => setShowAll(true)} />
+      ) : null}
+    </>
   )
 }
 
@@ -168,11 +202,9 @@ const Tool = ({
   const label = title ?? getToolActivityLabel(toolPart)
   const hasInput = input !== null && input !== undefined
   const hasOutput = "output" in toolPart && toolPart.output !== undefined
-  const resultText = hasOutput
-    ? formatValue(toolPart.output)
-    : isError && toolPart.errorText
-      ? toolPart.errorText
-      : null
+  // Serializing a large output for the copy button on every render is what
+  // made long transcripts expensive; do it only when the reader copies.
+  const hasResult = hasOutput || Boolean(isError && toolPart.errorText)
   const inputDiff = getInputDiff(input)
   const Icon = toolIcon(toolPart)
   const [copied, setCopied] = useState(false)
@@ -183,7 +215,10 @@ const Tool = ({
       : RefreshCcw
 
   const handleCopyResult = useCallback(async () => {
-    if (resultText === null) return
+    const resultText = "output" in toolPart && toolPart.output !== undefined
+      ? formatValue(toolPart.output)
+      : toolPart.state === "output-error" ? toolPart.errorText : undefined
+    if (!resultText) return
     try {
       await navigator.clipboard.writeText(resultText)
       setCopied(true)
@@ -191,7 +226,7 @@ const Tool = ({
     } catch {
       // Clipboard access can be unavailable outside a secure browser context.
     }
-  }, [resultText])
+  }, [toolPart])
 
   return (
     <Collapsible className={className} defaultOpen={defaultOpen}>
@@ -267,7 +302,7 @@ const Tool = ({
       ) : null}
       <CollapsibleContent className="h-(--collapsible-panel-height) overflow-hidden text-sm transition-[height] duration-150 ease-out data-starting-style:h-0 data-ending-style:h-0 [&[hidden]:not([hidden='until-found'])]:hidden">
         <div className="bg-muted relative mt-2 flex flex-col gap-2 rounded-lg p-2 pr-10 text-xs">
-          {resultText !== null ? (
+          {hasResult ? (
             <Button
               type="button"
               variant="ghost"
@@ -294,9 +329,7 @@ const Tool = ({
             isDiffText(toolPart.output) ? (
               <DiffLines diff={toolPart.output} />
             ) : (
-              <pre className="max-h-60 overflow-auto whitespace-pre-wrap wrap-break-word opacity-80">
-                {formatValue(toolPart.output)}
-              </pre>
+              <OutputText text={formatValue(toolPart.output)} />
             )
           ) : null}
           {isError && toolPart.errorText ? (

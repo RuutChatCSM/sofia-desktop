@@ -1,21 +1,25 @@
-import { closeSync, fstatSync, openSync, readSync } from "node:fs";
+import { open } from "node:fs/promises";
 import { StringDecoder } from "node:string_decoder";
 
 export const MAX_ROLLOUT_LINE_CHARS = 64 * 1024 * 1024;
 
 export class RolloutRecordTooLargeError extends Error {}
 
-/** Snapshot-length, chunked JSONL reads: never allocate the entire rollout. */
-export function* readRolloutLines(path: string): Generator<string> {
-  const fd = openSync(path, "r");
+/**
+ * Snapshot-length, chunked JSONL reads: never allocate the entire rollout and
+ * never block the event loop. Rollouts reach hundreds of MB; a synchronous read
+ * froze every SSE stream this server serves until it finished.
+ */
+export async function* readRolloutLines(path: string): AsyncGenerator<string> {
+  const handle = await open(path, "r");
   try {
-    const size = fstatSync(fd).size;
+    const size = (await handle.stat()).size;
     const buffer = Buffer.alloc(256 * 1024);
     const decoder = new StringDecoder("utf8");
     let offset = 0;
     let pending = "";
     while (offset < size) {
-      const bytes = readSync(fd, buffer, 0, Math.min(buffer.length, size - offset), offset);
+      const { bytesRead: bytes } = await handle.read(buffer, 0, Math.min(buffer.length, size - offset), offset);
       if (!bytes) break;
       offset += bytes;
       const chunk = decoder.write(buffer.subarray(0, bytes));
@@ -36,6 +40,6 @@ export function* readRolloutLines(path: string): Generator<string> {
     pending += decoder.end();
     if (pending) yield pending;
   } finally {
-    closeSync(fd);
+    await handle.close();
   }
 }

@@ -3,7 +3,6 @@ import { CollaborationActivity } from "@/components/chat/collaboration-activity"
 import { isCollaborationActivity } from "@/lib/collaboration-activity"
 import { normalizeUserMessageDisplayParts } from "@/react-app/domains/session/sync/user-message-display";
 import { getArtifactsFromMessages } from "@/lib/artifacts";
-"use memo";
 
 import * as React from "react"
 import {
@@ -149,6 +148,7 @@ const SEARCH_HIGHLIGHT_MARK_CLASS = "rounded px-0.5 bg-amber-4/70 text-current"
 /** Above this many step rows a finished turn folds into one summary line. */
 
 function MessageTimestamp({ message, className }: { message: UIMessage; className?: string }) {
+  "use memo"
   const created = getMessageCreated(message)
   if (created === null) return null
 
@@ -328,6 +328,7 @@ interface FileMessageProps {
 }
 
 function FileMessage({ part, tone, imageSizeClassName }: FileMessageProps) {
+  "use memo"
   if (part.mediaType === "application/x-sofia-annotation") {
     return <AnnotationMessageChip url={part.url} />
   }
@@ -486,6 +487,7 @@ function TranscriptMedia({ part, title }: { part: FileUIPart; title: string }) {
 }
 
 function AnnotationMessageChip({ url }: { url: string }) {
+  "use memo"
   const [open, setOpen] = React.useState(false)
   let description = "Annotation details unavailable"
   try {
@@ -514,6 +516,7 @@ interface CopyMessageButtonProps {
 }
 
 function CopyMessageButton({ messages }: CopyMessageButtonProps) {
+  "use memo"
   const [copied, setCopied] = React.useState(false)
   const text = React.useMemo(() => getMessagesText(messages), [messages])
 
@@ -656,6 +659,7 @@ type UserMessageProps = {
 const USER_SKILL_TOKEN_RE = /(Load \[skill [^\]]+\] and follow its instructions\.|\[skill [^\]]+\])/
 
 function UserSkillChip(props: { name: string }) {
+  "use memo"
   return (
     <span className="mx-0.5 inline-flex items-center rounded-full border border-violet-6/35 bg-violet-3/20 px-2.5 py-1 text-xs font-medium text-violet-11 align-middle" title={`Skill: ${props.name}`}>
       {props.name}
@@ -983,6 +987,7 @@ interface ErrorMessageProps {
 }
 
 function ErrorMessage({ error }: ErrorMessageProps) {
+  "use memo"
   return (
     <Message className="not-prose mx-auto flex w-full max-w-[800px] flex-col items-start gap-2 px-2 md:px-6">
       <div className="group flex w-full flex-col items-start gap-0">
@@ -1000,6 +1005,7 @@ interface RetryMessageProps {
 }
 
 function RetryActionButton(props: { link: string; label: string }) {
+  "use memo"
   return (
     <Button
       variant="outline"
@@ -1101,6 +1107,7 @@ function TurnWorkBlock({
   defaultOpen: boolean
   children: React.ReactNode
 }) {
+  "use memo"
   const [open, setOpen] = React.useState(defaultOpen)
   // Follow the turn's lifecycle rather than only its first render: `active` flips
   // when the answer lands, which is exactly when the trail should fold away. A
@@ -1163,6 +1170,7 @@ function WorkRow({
   kind: "commentary" | "thought" | "milestone" | "detail"
   children: React.ReactNode
 }) {
+  "use memo"
   return (
     <div data-work-entry={kind} className="mx-auto w-full max-w-[800px] px-2 md:px-6">
       {children}
@@ -1189,6 +1197,7 @@ function WorkProse({
   text?: string
   isStreaming?: boolean
 }) {
+  "use memo"
   const { highlightQuery } = useMessageList()
   const value = text ?? getMessagesText(message ? [message] : [])
   if (!value.trim()) return null
@@ -1305,6 +1314,7 @@ function MessageGroup({
   isStreaming,
   activeLabel,
 }: AssistantMessageGroupProps) {
+  "use memo"
   const { sessionId, onRevertToUserMessage, onForkAtMessage, showThinking, readOnly } = useMessageList()
   const lastItem = items[items.length - 1]
   // Branch/revert must target a real server-side message id. Synthetic
@@ -1469,7 +1479,7 @@ function MessageGroup({
       )
     }
     if (entry.kind === "commentary") {
-      return <WorkProse key={entry.key} kind="commentary" message={entry.item.message} />
+      return <WorkProse key={entry.key} kind="commentary" message={entry.item.message} isStreaming={isLiveGroup && entry.item.index === lastItem?.index} />
     }
     if (entry.kind === "milestone") {
       return (
@@ -1609,6 +1619,7 @@ export function shouldShowMessageListLoading(status: ThreadStatus, messageCount:
 }
 
 export function MessageList({ messages, status, retryStatus }: MessageListProps) {
+  "use memo"
   const { sessionId, showThinking } = useMessageList()
   const isStreaming = status === "streaming" || status === "retrying"
   const showLoading = shouldShowMessageListLoading(status, messages.length)

@@ -15,7 +15,7 @@ import type { TodoItem } from "@/app/types";
 import { useSessionActivityStore } from "@/react-app/domains/session/status/session-activity-store";
 import { codexItemToParts, codexItemLabel, codexItemToToolPart, codexItemToToolParts } from "./codex-item-translator";
 import { stripInjectedCodexContext } from "./codex-context-fragments";
-import { isVisibleCodexUserItem, useCodexSessionStore, type CodexTrackedItem } from "../codex-session-store";
+import { isVisibleCodexUserItem, useCodexSessionStore, userMessageText, type CodexTrackedItem } from "../codex-session-store";
 import { sentAttachments } from "./sent-attachment-store";
 
 /** Map a tracked codex item into UIMessage parts (mirroring engine shapes). */
@@ -375,6 +375,10 @@ export async function restoreCodexSessionItems(
       const session = store.sessions[sessionId]?.session;
       const activeUnsettled = (item.type === "agentMessage" || item.type === "reasoning") &&
         item.status === undefined && session?.status === "running" && session.turnId === entry.turnId;
+      // An in-progress item from a turn the session is no longer on belongs to
+      // a turn that never ended (engine crash, app quit; after a restart the
+      // session has no turn). It must read as interrupted, not spin forever.
+      const orphaned = item.status === "inProgress" && session !== undefined && session.turnId !== entry.turnId;
       store.upsertItem(sessionId, {
         id: itemId,
         type: String(item.type),
@@ -388,18 +392,31 @@ export async function restoreCodexSessionItems(
         text: typeof item.text === "string" ? item.text : "",
         thinking: item.type === "reasoning" ? reasoningText(item) : "",
         output: typeof item.aggregatedOutput === "string" ? item.aggregatedOutput : "",
-        status: item.status === "inProgress" || activeUnsettled ? "pending" : item.status === "failed" || item.status === "declined" ? "error" : "done",
+        ...(orphaned ? { turnOutcome: "cancelled" as const } : {}),
+        status: orphaned ? "error" : item.status === "inProgress" || activeUnsettled ? "pending" : item.status === "failed" || item.status === "declined" ? "error" : "done",
       });
     }
     // Recovery is also an acknowledgement path: an SSE echo may have been
     // missed while disconnected. Match by ordinal so a repeated historical
-    // prompt cannot acknowledge a newer submission with the same text.
-    let userOrdinal = 0;
-    for (const entry of result.items) {
-      if (!isVisibleCodexUserItem({ type: String(entry.item.type), item: entry.item })) continue;
-      const content = Array.isArray(entry.item.content) ? entry.item.content.map(part => isRecord(part) && typeof part.text === "string" ? part.text : "").join("") : "";
-      store.confirmPendingUserMessage(sessionId, typeof entry.item.text === "string" ? entry.item.text : content, userOrdinal++);
-    }
+    // prompt cannot acknowledge a newer submission with the same text; an
+    // echo recorded after the submission matches even when ordinals drifted.
+    const restoredUsers = result.items.filter(entry => isVisibleCodexUserItem({ type: String(entry.item.type), item: entry.item }));
+    restoredUsers.forEach((entry, userOrdinal) => {
+      const createdAt = typeof entry.item.createdAt === "number" ? entry.item.createdAt : undefined;
+      store.confirmPendingUserMessage(sessionId, userMessageText(entry.item), userOrdinal, createdAt);
+    });
+    // The rollout can carry a user message under a different id than the live
+    // stream used (legacy and forked threads have no canonical ids). The same
+    // text in the same turn is one submission: keep the restored copy.
+    const restoredUserKeys = new Set(restoredUsers.map(entry => `${entry.turnId}\u0000${userMessageText(entry.item).trim()}`));
+    useCodexSessionStore.setState(state => {
+      const current = state.sessions[sessionId];
+      if (!current) return state;
+      const items = current.items.filter(item =>
+        item.type !== "userMessage" || item.historical || authoritativeIds.has(item.id) ||
+        !restoredUserKeys.has(`${item.turnId}\u0000${userMessageText(item.item).trim()}`));
+      return items.length === current.items.length ? state : { sessions: { ...state.sessions, [sessionId]: { ...current, items } } };
+    });
     const outcomes = new Map((result.outcomes ?? []).map(outcome => [outcome.turnId, outcome]));
     for (const tracked of useCodexSessionStore.getState().sessions[sessionId]?.items ?? []) {
       const outcome = outcomes.get(tracked.turnId);
@@ -485,6 +502,10 @@ export async function recoverCodexSessions(
     const latest = current && current.session !== previous ? current.session : session;
     const restored = { ...latest, workspaceId: workspaceId ?? latest.workspaceId };
     useCodexSessionStore.getState().upsertSession(restored);
+    // Only transcripts already loaded in this window can show missed events.
+    // Unopened tasks load on open; re-reading all of them on every reconnect
+    // caused request storms against large rollouts.
+    if (!current?.items.length && !current?.pendingUserMessages.length && !current?.settledUserMessages?.length) continue;
     await restoreCodexSessionItems(client, restored.workspaceId, restored.id, signal);
     if (signal.aborted) return;
   }
