@@ -123,7 +123,15 @@ export function ToolImageStrip({ images, viewerImages = images, latestOnly = fal
       >
         {/* A full-window lightbox: the screenshot is the point, so it gets the
             room, and the controls sit beside and below it instead of on it. */}
-        <DialogContent className="flex h-[94vh] w-[96vw] max-w-none flex-col border-none bg-transparent p-0 shadow-none sm:max-w-none">
+        <DialogContent
+          className={cn(
+            // Override the dialog's card sizing at every breakpoint (it is a
+            // centered max-w-md card on desktop and a bottom sheet below lg).
+            "inset-0 flex h-dvh w-screen max-w-none flex-col gap-0 rounded-none bg-black/85 p-6 shadow-none ring-0 dark:ring-0",
+            "lg:inset-0 lg:top-0 lg:inset-s-0 lg:h-dvh lg:w-screen lg:max-w-none lg:translate-x-0 lg:translate-y-0 lg:rounded-none rtl:lg:translate-x-0",
+            "max-lg:top-0 max-lg:h-dvh max-lg:max-h-none max-lg:rounded-none max-lg:p-6",
+          )}
+        >
           <DialogTitle className="sr-only">{current?.alt ?? "Tool image"}</DialogTitle>
           {current ? (
             <>
