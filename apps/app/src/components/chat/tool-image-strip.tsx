@@ -63,6 +63,9 @@ export function ToolImageStrip({ images, viewerImages = images, latestOnly = fal
 
   const current = openIndex === null ? null : viewerImages[openIndex]
   const hasPrevious = openIndex !== null && viewerImages.length > 1 && openIndex > 0
+  const closeOnBackdrop = (event: React.MouseEvent<HTMLElement>) => {
+    if (event.target === event.currentTarget) setOpenIndex(null)
+  }
   const hasNext = openIndex !== null && viewerImages.length > 1 && openIndex < viewerImages.length - 1
 
   return (
@@ -131,11 +134,14 @@ export function ToolImageStrip({ images, viewerImages = images, latestOnly = fal
             "lg:inset-0 lg:top-0 lg:inset-s-0 lg:h-dvh lg:w-screen lg:max-w-none lg:translate-x-0 lg:translate-y-0 lg:rounded-none rtl:lg:translate-x-0",
             "max-lg:top-0 max-lg:h-dvh max-lg:max-h-none max-lg:rounded-none max-lg:p-6",
           )}
+          // The viewer covers the whole window, so its own dark area is the
+          // "outside": a click there (not on the image or a control) closes it.
+          onClick={closeOnBackdrop}
         >
           <DialogTitle className="sr-only">{current?.alt ?? "Tool image"}</DialogTitle>
           {current ? (
             <>
-              <div className="flex min-h-0 flex-1 items-center justify-center gap-4 pt-12">
+              <div onClick={closeOnBackdrop} className="flex min-h-0 flex-1 items-center justify-center gap-4 pt-12">
                 {viewerImages.length > 1 ? (
                   <Button
                     type="button"
@@ -168,7 +174,7 @@ export function ToolImageStrip({ images, viewerImages = images, latestOnly = fal
                   </Button>
                 ) : null}
               </div>
-              <div className="mt-3 flex shrink-0 items-center justify-center gap-2 text-xs text-white/75">
+              <div onClick={closeOnBackdrop} className="mt-3 flex shrink-0 items-center justify-center gap-2 text-xs text-white/75">
                 <span className="max-w-[60vw] truncate">{current.alt}</span>
                 {viewerImages.length > 1 ? (
                   <span className="tabular-nums text-white/55">· {(openIndex ?? 0) + 1} / {viewerImages.length}</span>
