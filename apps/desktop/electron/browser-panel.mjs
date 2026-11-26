@@ -1580,6 +1580,8 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
       }
       mainWindow.contentView.addChildView(container);
     }
+    // Hidden in place by hideBrowserView; showing it again needs no re-add.
+    container.setVisible?.(true);
   }
 
   function selectBrowserTab(tabId) {
@@ -1742,14 +1744,20 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
   }
 
   function hideBrowserView() {
-    cursorOverlay.hide();
+    cursorOverlay.hideWindow();
     hideMenuOverlay();
     detachPeekShield();
     browserViewVisible = false;
     // Hiding the panel is not a viewport change: emulation and tab state stay.
     if (!window()) return;
+    const active = getActiveBrowserView();
     for (const tab of browserTabs.values()) {
-      detachBrowserView(tab.view);
+      // The renderer hides the page whenever a menu or dialog covers it, many
+      // times a minute. Removing and re-adding the native view recomposites
+      // the whole macOS window (a visible flash), so the active tab is made
+      // invisible in place; only background tabs leave the window.
+      if (tab.view === active && tab.container.setVisible) tab.container.setVisible(false);
+      else detachBrowserView(tab.view);
     }
   }
 

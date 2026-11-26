@@ -7,12 +7,20 @@ export function createBrowserCursorOverlay({ getWindow, resolveTarget }) {
   let overlay=null, ready=null, owner=null, generation=0;
   const positions=new Map();
   const arrivals=new Map();
-  function hide() { generation++; owner=null; overlay?.hide(); }
+  // Soft hide: fade the cursor but keep the transparent window mapped. Showing
+  // and hiding a transparent child window on every agent action made macOS
+  // recomposite the parent, which flashed the whole app. The window ignores
+  // the mouse, so leaving it mapped is invisible to the user.
+  function hide() {
+    generation++; owner=null;
+    if(overlay&&!overlay.isDestroyed()) void overlay.webContents.executeJavaScript('window.__sofiaAgentCursor?.hide()').catch(()=>{});
+  }
+  function hideWindow() { hide(); if(overlay&&!overlay.isDestroyed()) overlay.hide(); }
   async function bounded(promise, mine) {
     let timer;
     try {
       const result=await Promise.race([Promise.resolve(promise).then(value=>({completed:true,value})),new Promise(resolve=>{timer=setTimeout(()=>resolve({completed:false,reason:"host-timeout"}),2200);})]);
-      if(!result.completed&&mine===generation){hide();void overlay?.webContents.executeJavaScript('window.__sofiaAgentCursor?.hide()').catch(()=>{});}
+      if(!result.completed&&mine===generation)hide();
       return result;
     } finally {clearTimeout(timer);}
   }
@@ -32,12 +40,16 @@ export function createBrowserCursorOverlay({ getWindow, resolveTarget }) {
     }
     if(!target.visible){if(owner===state.owner)hide();return {host:true,arrived:false,reason:"target-hidden"};}
     if(!overlay||overlay.isDestroyed()) {
-      overlay=new BrowserWindow({parent,show:false,frame:false,transparent:true,hasShadow:false,focusable:false,skipTaskbar:true,webPreferences:{backgroundThrottling:false,sandbox:true,contextIsolation:true,nodeIntegration:false}});
+      // Painted while hidden and fully transparent, so its first show cannot
+      // flash an opaque frame.
+      overlay=new BrowserWindow({parent,show:false,frame:false,transparent:true,backgroundColor:'#00000000',paintWhenInitiallyHidden:true,hasShadow:false,focusable:false,skipTaskbar:true,webPreferences:{backgroundThrottling:false,sandbox:true,contextIsolation:true,nodeIntegration:false}});
       overlay.setIgnoreMouseEvents(true);
       const view=overlay;
       ready=view.loadURL('data:text/html;charset=utf-8,'+encodeURIComponent('<!doctype html><title>Sofia browser cursor</title><style>html,body{margin:0;background:transparent;overflow:hidden}</style>'))
         .then(()=>view.webContents.executeJavaScript(BROWSER_CURSOR_SCRIPT));
-      parent.on('move',hide); parent.on('hide',hide); parent.once('closed',()=>{view.destroy();});
+      // A child window moves with its parent; only a hidden parent must take
+      // the overlay down with it.
+      parent.on('hide',hideWindow); parent.on('minimize',hideWindow); parent.once('closed',()=>{view.destroy();});
     }
     const mine=++generation; owner=state.owner;
     const loaded=await bounded(ready,mine);
@@ -71,5 +83,5 @@ export function createBrowserCursorOverlay({ getWindow, resolveTarget }) {
     }
     return result;
   }
-  return {command,hide,close(){hide();overlay?.destroy();overlay=null;positions.clear();arrivals.clear();}};
+  return {command,hide,hideWindow,close(){hideWindow();overlay?.destroy();overlay=null;positions.clear();arrivals.clear();}};
 }
