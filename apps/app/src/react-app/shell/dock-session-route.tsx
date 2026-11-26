@@ -27,6 +27,7 @@ import { useLocal } from "@/react-app/kernel/local-provider";
 import { useCodexEngine } from "@/react-app/domains/session/use-codex-engine";
 import { useCodexSessionStore } from "@/react-app/domains/session/codex-session-store";
 import { SessionSurface } from "@/react-app/domains/session/surface/session-surface";
+import { WorkspaceProvider } from "./workspace-provider";
 import { getSessionModelSelection } from "@/react-app/domains/session/surface/session-model-store";
 import { sendCodexDraft } from "@/react-app/domains/session/sync/codex-composer-send";
 import { IDLE_CLOUD_MCP_SUBMISSION_GATE_STATE } from "@/react-app/domains/connections/cloud-mcp-submit-readiness";
@@ -257,7 +258,16 @@ export function DockSessionRoute() {
   const bubble = layout.size === "bubble";
   const bar = layout.size === "bar";
 
+  // The session surface reads its workspace (engine client, server client,
+  // root) from this context, exactly as it does under SessionRoute.
   return (
+    <WorkspaceProvider
+      client={engineClient}
+      engineBaseUrl={endpoint?.engineBaseUrl ?? ""}
+      sofiaServerClient={endpoint?.client ?? null}
+      workspaceId={endpoint?.workspaceId ?? ""}
+      selectedWorkspaceRoot={workspaceState.status === "ready" ? workspaceState.workspaceRoot : ""}
+    >
     <div className="h-full w-full overflow-hidden bg-transparent" data-dock-size={layout.size}>
       <section
         role="region"
@@ -417,5 +427,6 @@ export function DockSessionRoute() {
         </button>
       ) : null}
     </div>
+    </WorkspaceProvider>
   );
 }
