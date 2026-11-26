@@ -7,7 +7,7 @@ import path from "node:path";
 import { readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { app, View, WebContentsView, clipboard, dialog, nativeTheme, session, shell } from "electron";
+import { app, BrowserWindow, View, WebContentsView, clipboard, dialog, nativeTheme, session, shell } from "electron";
 
 import {
   PEEK_SHIELD_ACTION_CHANNEL,
@@ -746,16 +746,11 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
       getAppUrl: sessionDockAppUrl,
       // The dock is the app itself: same preload, same renderer capabilities,
       // same default session (theme and server settings are shared).
-      createView: () => new WebContentsView({
-        webPreferences: {
-          backgroundThrottling: false,
-          sandbox: false,
-          contextIsolation: true,
-          nodeIntegration: false,
-          plugins: true,
-          preload: path.join(__dirname, "preload.mjs"),
-        },
-      }),
+      // A frameless transparent child window, not a web view in the window:
+      // on macOS sibling web views do not reliably stack above the page, so
+      // the dock painted under it. Child windows are stacked by the OS, move
+      // with the app window, and stay mapped (no show/hide churn, no flash).
+      createView: () => createSessionDockWindow(),
       // The dock floats over the page, but a menu opened after it is still a
       // menu: re-raise that overlay so the dock can never cover a popup.
       bringToTop: (view) => {
@@ -767,6 +762,67 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
     });
     if (sessionDockTarget) sessionDock.setTarget(sessionDockTarget);
     return sessionDock;
+  }
+
+  function createSessionDockWindow() {
+    const parentWindow = window();
+    const win = new BrowserWindow({
+      parent: parentWindow ?? undefined,
+      show: false,
+      frame: false,
+      transparent: true,
+      backgroundColor: "#00000000",
+      hasShadow: false,
+      resizable: false,
+      movable: false,
+      minimizable: false,
+      maximizable: false,
+      fullscreenable: false,
+      skipTaskbar: true,
+      paintWhenInitiallyHidden: true,
+      webPreferences: {
+        backgroundThrottling: false,
+        sandbox: false,
+        contextIsolation: true,
+        nodeIntegration: false,
+        plugins: true,
+        preload: path.join(__dirname, "preload.mjs"),
+      },
+    });
+    // Bounds arrive relative to the browser area; the window lives in screen
+    // coordinates.
+    let local = { x: 0, y: 0, width: 1, height: 1 };
+    const origin = () => {
+      const content = window()?.getContentBounds() ?? { x: 0, y: 0 };
+      const host = getBrowserTab()?.container.getBounds() ?? { x: 0, y: 0 };
+      return { x: content.x + host.x, y: content.y + host.y };
+    };
+    const place = () => {
+      if (win.isDestroyed()) return;
+      const at = origin();
+      win.setBounds({ x: at.x + local.x, y: at.y + local.y, width: local.width, height: local.height });
+    };
+    const relayout = () => { if (win.isVisible()) place(); };
+    parentWindow?.on("resize", relayout);
+    parentWindow?.on("move", relayout);
+    win.once("closed", () => {
+      parentWindow?.off("resize", relayout);
+      parentWindow?.off("move", relayout);
+    });
+    return {
+      floating: true,
+      webContents: win.webContents,
+      setBackgroundColor: (color) => { if (!win.isDestroyed()) win.setBackgroundColor(color); },
+      setVisible: (visible) => {
+        if (win.isDestroyed()) return;
+        if (visible) { if (!win.isVisible()) win.showInactive(); }
+        else if (win.isVisible()) win.hide();
+      },
+      getBounds: () => ({ ...local }),
+      setBounds: (next) => { local = { ...next }; place(); },
+      reposition: place,
+      close: () => { if (!win.isDestroyed()) win.destroy(); },
+    };
   }
 
   function syncSessionDock() {

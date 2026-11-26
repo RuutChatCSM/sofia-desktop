@@ -331,10 +331,14 @@ export function createBrowserSessionDock({
     const mainWindow = getWindow();
     if (!mainWindow) return;
     const dock = ensureView();
-    try {
-      placeInHost(dock, mainWindow);
-    } catch {
-      return;
+    // A floating dock is its own child window: the OS stacks it above the
+    // page, which sibling web views inside the window do not guarantee.
+    if (!dock.floating) {
+      try {
+        placeInHost(dock, mainWindow);
+      } catch {
+        return;
+      }
     }
     attached = true;
     if (!visible) {
@@ -342,9 +346,12 @@ export function createBrowserSessionDock({
       visible = true;
     }
     updateBounds();
+    // The browser area may have moved inside the window without the dock's
+    // own bounds changing.
+    dock.reposition?.();
     // Inside the window (no browser container yet) the dock still has to beat
     // the other native views to the top.
-    if (parent === mainWindow.contentView) bringToTop(dock);
+    if (!dock.floating && parent === mainWindow.contentView) bringToTop(dock);
   }
 
   function hide() {
@@ -456,6 +463,10 @@ export function createBrowserSessionDock({
       }
     }
     parent = null;
+    if (dock?.floating) {
+      dock.close?.();
+      return;
+    }
     try { dock?.webContents.close(); } catch { /* already destroyed */ }
   }
 
