@@ -1,7 +1,8 @@
 import { deriveSessionResources } from "../panel/session-resources";
 import { useSessionResourcesStore } from "../panel/session-resources-store";
-import { codexClientForSession, useCodexSessionStore } from "../codex-session-store";
+import { codexClientForSession, isVisibleCodexUserItem, useCodexSessionStore, userMessageText } from "../codex-session-store";
 import { codexItemToToolPart } from "../sync/codex-item-translator";
+import { stripInjectedCodexContext } from "../sync/codex-context-fragments";
 import {
   captureTurnBaseline,
   finalizeTurnChangeSet,
@@ -10,6 +11,7 @@ import {
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState, type ReactNode } from "react";
 import type { UIMessage } from "ai";
 import { useQuery } from "@tanstack/react-query";
+import { useShallow } from "zustand/react/shallow";
 import type { SessionStatus } from "@/app/lib/engine-types";
 import { Check, FileUp, Minimize2 } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
@@ -72,7 +74,7 @@ import { deriveRenderedSessionMessages, resolveRenderedSessionSnapshot } from ".
 import { useLocal } from "@/react-app/kernel/local-provider";
 import { isHeicImage, normalizeImageFile } from "@/react-app/domains/session/sync/image-compression";
 import { resolveAttachmentFileMetadata } from "@/react-app/domains/session/sync/attachment-file-part";
-import { deriveSessionRenderModel } from "@/react-app/domains/session/sync/transition-controller";
+import { deriveComposerAvailability } from "@/react-app/domains/session/sync/transition-controller";
 import { useSessionScrollController } from "./scroll-controller";
 import { shouldFollowSentMessage, type SentMessageMark } from "./scroll-intent";
 import { SessionScrollOverlay } from "./scroll-overlay";
@@ -114,6 +116,7 @@ import {
   retryComposerQueueRecovery,
   useComposerStateStore,
 } from "./composer-state-store";
+import { deliveredQueuedDraftIds, resolveQueuedDelivery } from "./composer-queue-delivery";
 import { MessageList } from "@/components/chat/message-list";
 import { MessageListProvider, type DispatchAction } from "@/components/chat/message-list-provider";
 import type {
@@ -688,6 +691,8 @@ function hiddenMessageCount(snapshot: SofiaSessionSnapshot, revertMessageId: str
   return index < 0 ? snapshot.messages.length : snapshot.messages.length - index;
 }
 
+const NO_ECHOED_TEXTS: string[] = []
+
 export function SessionSurface(props: SessionSurfaceProps) {
   const local = useLocal();
   const { config: shellConfig } = useShellConfig();
@@ -753,6 +758,19 @@ export function SessionSurface(props: SessionSurfaceProps) {
   const queueHydrated = useComposerStateStore((state) => state.queueHydrated);
   const queueStorageError = useComposerStateStore((state) => state.queueStorageError);
   const canonicalQueueReady = useCodexSessionStore((state) => state.sessions[props.sessionId]?.canonicalReady === true);
+  // Engine echoes only — optimistic pending messages are not proof that the
+  // server received the turn, and matching those would falsely clear an
+  // unconfirmed delivery.
+  // Only needed while a delivery is unconfirmed; otherwise skip walking the
+  // transcript on every streamed update.
+  const hasUnconfirmedDelivery = queuedItems.some((item) => item.deliveryState === "outcome-unknown")
+  const echoedUserTexts = useCodexSessionStore(useShallow((state) =>
+    !hasUnconfirmedDelivery ? NO_ECHOED_TEXTS : (state.sessions[props.sessionId]?.items ?? []).flatMap((item) => {
+      if (!isVisibleCodexUserItem(item)) return [];
+      const text = stripInjectedCodexContext(userMessageText(item.item)).trim();
+      return text ? [text] : [];
+    }),
+  ));
   const setQueuedDeliveryState = useComposerStateStore((state) => state.setQueuedDeliveryState);
   const appendQueuedDraft = useComposerStateStore((state) => state.appendQueuedDraft);
   const removeQueuedDraftFromStore = useComposerStateStore((state) => state.removeQueuedDraft);
@@ -1211,12 +1229,16 @@ export function SessionSurface(props: SessionSurfaceProps) {
     return () => window.clearTimeout(id);
   }, [assistantOutputAfterAwaitStart, awaitingAssistantBaseline, liveStatus.type, renderedMessages.length, sending]);
 
-  const model = deriveSessionRenderModel({
+  const { model, disabled: composerDisabled } = deriveComposerAvailability({
     intendedSessionId: props.sessionId,
     renderedSessionId: renderedMessages.length > 0 || snapshot ? props.sessionId : null,
     hasSnapshot: Boolean(snapshot) || renderedMessages.length > 0,
     isFetching: snapshotQuery.isFetching,
-    isError: snapshotQuery.isError || Boolean(error),
+    snapshotError: snapshotQuery.isError,
+    // Delivery failures are shown in the transcript; they must never fail the
+    // session transition, which would disable the composer.
+    deliveryError: Boolean(error),
+    modelUnavailable: Boolean(props.modelUnavailable),
   });
 
   const buildDraft = useCallback((text: string, nextAttachments: ComposerAttachment[]): ComposerDraft => {
@@ -1424,8 +1446,12 @@ export function SessionSurface(props: SessionSurfaceProps) {
 
   const removeQueuedDraft = useCallback((id: string) => {
     const target = queuedItems.find((item) => item.id === id);
+    const resolution = resolveQueuedDelivery(target?.deliveryState, "delete");
     removeQueuedDraftFromStore(props.sessionId, id);
     target?.draft.attachments.forEach(revokeAttachmentPreview);
+    // Deleting an unconfirmed delivery is how the user abandons it. Release
+    // the admission block left by its failed send so the rest can drain again.
+    if (resolution.releaseAdmission) queueAdmission.current.retry(props.sessionId);
   }, [props.sessionId, queuedItems, removeQueuedDraftFromStore]);
 
   const editQueuedDraft = useCallback((id: string, text: string) => {
@@ -1456,7 +1482,11 @@ export function SessionSurface(props: SessionSurfaceProps) {
         setQueuedDeliveryState(props.sessionId, id, "ready");
         return;
       }
-      removeQueuedDraftFromStore(props.sessionId, id);
+      const resolution = resolveQueuedDelivery(item.deliveryState, "sent");
+      if (resolution.removeItem) removeQueuedDraftFromStore(props.sessionId, id);
+      // A successful explicit retry clears the admission block the earlier
+      // failed drain left behind, so the remaining ready items can follow.
+      if (resolution.releaseAdmission) queueAdmission.current.retry(props.sessionId);
       await flushComposerQueuePersistence();
       if (result.outcome !== "queued") target.attachments.forEach(revokeAttachmentPreview);
     } catch {
@@ -1474,6 +1504,29 @@ export function SessionSurface(props: SessionSurfaceProps) {
     setQueuedDeliveryState,
     queueHydrated,
   ]);
+
+  // A queued send can fail after it was dispatched, leaving the item marked
+  // outcome-unknown even though the engine already echoed the turn. The echo
+  // is the proof that the delivery landed: drop the item and release admission
+  // instead of leaving an uncertain row to block the queue forever.
+  const deliveredQueueIds = useMemo(
+    () => deliveredQueuedDraftIds(queuedItems, echoedUserTexts),
+    [echoedUserTexts, queuedItems],
+  );
+  useEffect(() => {
+    if (deliveredQueueIds.length === 0) return;
+    let releaseAdmission = false;
+    for (const id of deliveredQueueIds) {
+      const item = queuedItems.find((queued) => queued.id === id);
+      const resolution = resolveQueuedDelivery(item?.deliveryState, "echo");
+      if (!resolution.removeItem) continue;
+      item?.draft.attachments.forEach(revokeAttachmentPreview);
+      removeQueuedDraftFromStore(props.sessionId, id);
+      releaseAdmission = releaseAdmission || resolution.releaseAdmission;
+    }
+    if (releaseAdmission) queueAdmission.current.retry(props.sessionId);
+    void flushComposerQueuePersistence().catch(() => undefined);
+  }, [deliveredQueueIds, props.sessionId, queuedItems, removeQueuedDraftFromStore]);
 
   const handleAbort = useCallback(async () => {
     if (!chatStreaming) return;
@@ -2492,7 +2545,7 @@ export function SessionSurface(props: SessionSurfaceProps) {
         submissionPreparing={preparingCloudTools || submittingDraft}
         submissionLabel={submittingDraft ? "Sending message…" : undefined}
         queuedCount={queuedItems.length}
-        disabled={model.transitionState !== "idle" || Boolean(props.modelUnavailable)}
+        disabled={composerDisabled}
         modelUnavailable={Boolean(props.modelUnavailable)}
         modelUnavailableMessage={props.modelUnavailableMessage}
         organizationModelsEmpty={props.organizationModelsEmpty}
