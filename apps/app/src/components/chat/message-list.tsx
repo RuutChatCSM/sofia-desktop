@@ -1136,7 +1136,7 @@ function CapabilityRunRow({ service, past, items }: { service: string; past: str
   return (
     <Collapsible open={open} onOpenChange={setOpen} className="w-full">
       <div className="flex min-w-0 max-w-full items-center gap-2">
-        <CollapsibleTrigger className="group -mx-1 flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 rounded-md px-1 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50">
+        <CollapsibleTrigger className="group -mx-1 flex min-w-0 cursor-pointer items-center gap-1.5 rounded-md px-1 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50">
           {running ? <LoaderCircle aria-hidden="true" className="size-3.5 shrink-0 animate-spin" /> : <Icon aria-hidden="true" className="size-3.5 shrink-0" />}
           <span className={cn("truncate", running && "ow-text-shimmer")}>{label}</span>
           {failed ? (
@@ -1199,7 +1199,7 @@ function TurnWorkBlock({
       <div className="mx-auto flex w-full max-w-[800px] px-2 md:px-6">
         <div data-turn-work-divider="" className="flex w-full flex-col items-start border-b border-border/60 pb-2">
         <CollapsibleTrigger
-          className="group flex cursor-pointer items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+          className="group -mx-1 flex cursor-pointer items-center gap-1.5 rounded-md px-1 text-sm text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
           aria-label={open ? `${label}. Hide work` : `${label}. Show work`}
           data-turn-work-header={active ? "active" : "done"}
         >
@@ -1559,6 +1559,7 @@ function MessageGroup({
     : null
   const turnDigest = !isLiveGroup ? commentaryDigest(commentaryTexts) : undefined
   const aggregatable = toolParts.filter(isAggregatableToolPart)
+  const turnImages = toolParts.flatMap((part) => toolImagesFor(part))
   const turnSummary = !isLiveGroup && aggregatable.length ? getAggregateSummary(aggregatable, "past") : undefined
   // Shipped work header: elapsed time while working and after completion.
   const workLabel = turnWorkLabel({
@@ -1739,6 +1740,13 @@ function MessageGroup({
           {renderItem(item, position, true)}
         </div>
       ))}
+      {/* Screenshots the turn took belong with its answer ("screenshot
+          captured above"), not only as a thumbnail inside folded steps. */}
+      {!isLiveGroup && proseItems.length > 0 && turnImages.length > 0 ? (
+        <div data-turn-images="" className="mx-auto w-full max-w-[800px] px-2 md:px-6">
+          <ToolImageStrip images={turnImages.slice(-4)} viewerImages={turnImages} />
+        </div>
+      ) : null}
       {/* The turn's result: one summary card for this turn's change set. A turn
           still working has no result yet — showing the card the moment a file is
           touched puts a "what changed" summary inside the work it summarises, and

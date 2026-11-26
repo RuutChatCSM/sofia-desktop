@@ -94,11 +94,9 @@ export function condenseWork(
     out.push(entry.kind === "thought" ? { ...entry } : entry)
   }
   settleFolded()
-  // A run of one is just the call: keep its original line.
-  return out.map((entry): TurnWorkEntry => {
-    const only = entry.kind === "capabilityRun" && entry.items.length === 1 ? entry.items[0] : undefined
-    return only ? { kind: "detail", key: entry.key, item: only } : entry
-  })
+  // A run of one keeps the same row (icon, chevron, status) as longer runs,
+  // so a single "Used Browser" reads like its neighbours.
+  return out
 }
 
 /** Live turns show only their latest steps; older ones fold behind a count. */

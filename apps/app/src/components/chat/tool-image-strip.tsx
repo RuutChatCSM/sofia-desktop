@@ -85,7 +85,9 @@ export function ToolImageStrip({ images, viewerImages = images, latestOnly = fal
               title={image.alt}
               className={cn(
                 "cursor-zoom-in overflow-hidden rounded-md border border-border/70 bg-muted/40 transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 motion-reduce:transition-none",
-                latestOnly ? "h-10 w-16" : "h-[120px]",
+                // Row-sized: the latest screenshot sits inline after the label
+                // and never makes the row taller.
+                latestOnly ? "h-5 w-8 rounded-sm" : "h-[120px]",
               )}
             >
               <img

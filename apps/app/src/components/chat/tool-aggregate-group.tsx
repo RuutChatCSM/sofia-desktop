@@ -88,7 +88,7 @@ export function ToolAggregateGroup({ parts, className }: ToolAggregateGroupProps
           type="button"
           onClick={() => setExpanded(!expanded)}
           aria-expanded={expanded}
-          className="group -mx-1 flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 rounded-md px-1 text-start text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+          className="group -mx-1 flex min-w-0 cursor-pointer items-center gap-1.5 rounded-md px-1 text-start text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
         >
           <SummaryIcon aria-hidden="true" className="size-3.5 shrink-0" />
           <span className="min-w-0 truncate">{summary}</span>
