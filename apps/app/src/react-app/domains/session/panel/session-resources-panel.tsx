@@ -1,18 +1,47 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { deriveRecordedSubagents, deriveCodexSubagents, mergeSessionSubagents } from "./session-subagents";
 import { SessionSubagentsSection } from "./session-subagents-section";
 import { isCollectibleArtifactTarget, isOpenableFileTarget, targetFromFile } from "../artifacts/open-target";
-import { FileText, Globe, Link, Terminal, Plus } from "lucide-react";
+import { FileText, Globe, Images, Link, Terminal, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { usePanelTabStore } from "./panel-tab-store";
 import { useSessionResourcesStore } from "./session-resources-store";
 import { EMPTY_SESSION_RESOURCES, type SessionSource } from "./session-resources";
 import { useCodexSessionStore } from "../codex-session-store";
+import { codexItemToToolParts } from "../sync/codex-item-translator";
+import { ToolImageViewer } from "@/components/chat/tool-image-viewer";
+import { toolImagesFor, type ToolImage } from "@/lib/tool-images";
+
+// Items keep their identity until they change, so caching by item keeps a
+// streaming session from re-scanning every tool output for images per frame
+// (the tool parts are rebuilt as new objects on every call).
+const trackedItemImages=new WeakMap<object,ToolImage[]>();
+function imagesForTrackedItem(item:{item:Record<string,unknown>;id:string;status:string},sessionId:string):ToolImage[]{
+  const cached=trackedItemImages.get(item);
+  if(cached)return cached;
+  const images=codexItemToToolParts(item.item,sessionId,item.id,item.status==="done").flatMap(part=>toolImagesFor(part));
+  trackedItemImages.set(item,images);
+  return images;
+}
 
 export function SessionResourcesPanel({sessionId,onOpenFile,onOpenUrl,onReveal,fullSources=false,fullOutputs=false}:{sessionId:string;onOpenFile:(path:string)=>void;onOpenUrl:(url:string)=>void;onReveal?:()=>void;fullSources?:boolean;fullOutputs?:boolean}) {
   const resources=useSessionResourcesStore(state=>state.sessions[sessionId] ?? EMPTY_SESSION_RESOURCES);
   const items=useCodexSessionStore(state=>state.sessions[sessionId]?.items);
   const children=useCodexSessionStore(state=>state.sessions[sessionId]?.subagentSessions);
+  const screenshots=useMemo(()=>{
+    const seen=new Set<string>();
+    const collected:ToolImage[]=[];
+    for(const item of items ?? []){
+      for(const image of imagesForTrackedItem(item,sessionId)){
+        if(seen.has(image.src))continue;
+        seen.add(image.src);
+        collected.push(image);
+      }
+    }
+    return collected.reverse();
+  },[items,sessionId]);
+  const [screenshotIndex,setScreenshotIndex]=useState<number|null>(null);
+  const [showAllScreenshots,setShowAllScreenshots]=useState(false);
   const subagents=useMemo(()=>mergeSessionSubagents(mergeSessionSubagents(resources.subagents,deriveRecordedSubagents(children ?? [])),deriveCodexSubagents(items ?? [])),[resources.subagents,items,children]);
   const processes=useCodexSessionStore(state=>state.sessions[sessionId]?.backgroundProcesses);
   const inlineImage=(source:SessionSource)=>source.mediaType?.startsWith("image/") && (source.value?.startsWith("data:image/") || source.value?.startsWith("blob:"));
@@ -66,6 +95,15 @@ export function SessionResourcesPanel({sessionId,onOpenFile,onOpenUrl,onReveal,f
       store.openTab(sessionId,{id,type:'subagents',label:'Subagents'});store.selectTab(sessionId,id);onReveal?.();
     }}/> : null}
     {!fullSources && !fullOutputs && processes?.length?<div className="border-t border-border pt-3"><h3 className="mb-2 text-muted-foreground">Background processes</h3>{processes.map(process=><div key={process.processId} title={process.command} className="flex items-center gap-2 py-1"><Terminal className="size-4 shrink-0"/><span className="min-w-0 flex-1 truncate">{process.title || process.command}</span><span className="text-xs text-muted-foreground">{process.status}</span></div>)}</div>:null}
+    {!fullSources && !fullOutputs && screenshots.length>0?<div className="border-t border-border pt-3" data-session-screenshots="">
+      <div className="mb-2 flex items-center justify-between"><h3 className="text-muted-foreground">Screenshots</h3><span className="text-xs text-muted-foreground/70">{screenshots.length}</span></div>
+      <div className="grid grid-cols-3 gap-1.5">
+        {(showAllScreenshots?screenshots:screenshots.slice(0,12)).map((image,index)=><button key={`${image.src.slice(0,48)}:${index}`} type="button" onClick={()=>setScreenshotIndex(index)} aria-label={`Open screenshot: ${image.alt}`} title={image.alt} className="aspect-[4/3] overflow-hidden rounded-md border border-border/70 bg-muted/40 transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 motion-reduce:transition-none">
+          <img src={image.src} alt={image.alt} loading="lazy" decoding="async" className="h-full w-full object-cover"/>
+        </button>)}
+      </div>
+      {screenshots.length>12 && !showAllScreenshots?<button type="button" aria-label="View all screenshots" className="mt-2 flex items-center gap-2 text-muted-foreground hover:text-foreground" onClick={()=>setShowAllScreenshots(true)}><Images className="size-4"/>View all {screenshots.length}</button>:null}
+    </div>:null}
     {!fullOutputs ? <div className="border-t border-border pt-3"><div className="mb-2 flex items-center justify-between"><h2 className="text-muted-foreground">Sources</h2><Button size="icon-sm" variant="ghost" aria-label="Attach source files" onClick={()=>request('attach')}><Plus className="size-[18px]" /></Button></div>
       {resources.sources.length===0?<p className="text-muted-foreground/70">No sources yet</p>:(fullSources?resources.sources:resources.sources.slice(0,3)).map(source=><button key={source.id} data-resource-source="" title={source.value && !/^(data:|blob:)/.test(source.value) ? source.value : source.label} disabled={!sourceAvailable(source)} onClick={()=>openSource(source)} className="flex w-full items-center gap-2 rounded-md py-1.5 text-left hover:bg-muted disabled:cursor-default disabled:hover:bg-transparent">
         {inlineImage(source)?<img src={source.value} alt="" className="size-[18px] shrink-0 rounded-[3px] border border-border object-cover"/>:(source.kind==='url'||source.kind==='web')?<Globe className="size-4 shrink-0"/>:source.kind==='tool'?<Link className="size-4 shrink-0"/>:<FileText className="size-4 shrink-0"/>}<span className="truncate">{source.label}</span>
@@ -75,6 +113,6 @@ export function SessionResourcesPanel({sessionId,onOpenFile,onOpenUrl,onReveal,f
         store.openTab(sessionId,{id,type:'sources',label:'Sources'});store.selectTab(sessionId,id);onReveal?.();
       }}><Link className="size-4"/>View all</button>:null}
     </div>:null}
-
+    <ToolImageViewer images={screenshots} index={screenshotIndex} onIndexChange={setScreenshotIndex} onClose={()=>setScreenshotIndex(null)} sessionId={sessionId} />
   </section>;
 }

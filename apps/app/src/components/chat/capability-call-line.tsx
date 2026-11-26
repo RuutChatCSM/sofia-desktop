@@ -27,6 +27,8 @@ import { cn } from "@/lib/utils"
 type CapabilityCallLineProps = ChatToolReconnectCallbacks & {
   part: DynamicToolUIPart
   className?: string
+  /** Session that receives "Comment" annotations from the viewer. */
+  sessionId?: string
 }
 
 function formatTechnicalValue(value: unknown): string {
@@ -71,13 +73,13 @@ function failureInstruction(part: DynamicToolUIPart, reconnectName: string | nul
   return "The call failed. Full error is under Technical details."
 }
 
-function TechnicalDetailsPanel({ part }: { part: DynamicToolUIPart }) {
+function TechnicalDetailsPanel({ part, sessionId }: { part: DynamicToolUIPart; sessionId?: string }) {
   return (
     <div className="mt-2 flex flex-col gap-2 rounded-lg bg-muted p-2 text-xs">
       <div className="font-mono text-[11px] text-muted-foreground">
         {part.toolName} · {part.toolCallId}
       </div>
-      <ToolImageStrip images={toolImagesFor(part)} />
+      <ToolImageStrip images={toolImagesFor(part)} sessionId={sessionId} />
       {part.input !== undefined && part.input !== null ? (
         <pre className="max-h-40 overflow-auto whitespace-pre-wrap wrap-break-word">
           {stripToolImages(formatTechnicalValue(part.input))}
@@ -113,6 +115,7 @@ export function CapabilityCallLine({
   onReconnect,
   onReopenAuthorization,
   onRetry,
+  sessionId,
 }: CapabilityCallLineProps) {
   const [open, setOpen] = useState(false)
   const [detailsOpen, setDetailsOpen] = useState(false)
@@ -221,7 +224,7 @@ export function CapabilityCallLine({
                   capability name · arguments · schema digest
                 </span>
               </button>
-              {detailsOpen ? <TechnicalDetailsPanel part={part} /> : null}
+              {detailsOpen ? <TechnicalDetailsPanel part={part} sessionId={sessionId} /> : null}
             </div>
           </div>
         </CollapsibleContent>
@@ -250,7 +253,7 @@ export function CapabilityCallLine({
         </CollapsibleTrigger>
       </div>
       <CollapsibleContent className="h-(--collapsible-panel-height) overflow-hidden transition-[height] duration-150 ease-out data-starting-style:h-0 data-ending-style:h-0 [&[hidden]:not([hidden='until-found'])]:hidden">
-        <TechnicalDetailsPanel part={part} />
+        <TechnicalDetailsPanel part={part} sessionId={sessionId} />
       </CollapsibleContent>
     </Collapsible>
   )

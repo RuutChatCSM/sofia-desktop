@@ -80,6 +80,8 @@ export type ToolProps = {
   ) => Promise<ChatToolReconnectResult>
   onReopenAuthorization?: (action: ChatToolReconnectAction, authorizeUrl: string) => Promise<void>
   onRetry?: (action: ChatToolReconnectAction) => void | Promise<void>
+  /** Session that receives "Comment" annotations from the viewer. */
+  sessionId?: string
 }
 
 const formatValue = (value: unknown): string => {
@@ -190,6 +192,7 @@ const Tool = ({
   onReconnect,
   onReopenAuthorization,
   onRetry,
+  sessionId,
 }: ToolProps) => {
   const { state, input } = toolPart
   const inFlight = isToolPartInFlight(toolPart)
@@ -324,7 +327,7 @@ const Tool = ({
               {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
             </Button>
           ) : null}
-          <ToolImageStrip images={images} />
+          <ToolImageStrip images={images} sessionId={sessionId} />
           {hasInput ? (
             inputDiff !== null ? (
               <DiffLines diff={inputDiff} />

@@ -118,6 +118,7 @@ import {
 } from "@/components/ui/message"
 import { Tool } from "@/components/ui/tool"
 import { CapabilityCallLine } from "@/components/chat/capability-call-line"
+import { ToolImageGallery } from "@/components/chat/tool-image-gallery"
 import { ToolImageStrip } from "@/components/chat/tool-image-strip"
 import { hasPreservedMcpAppResult, McpAppFrame } from "@/components/chat/mcp-app-frame"
 import { ReasoningBlock } from "@/components/chat/reasoning-block"
@@ -208,7 +209,7 @@ class ToolMessage extends React.Component<ToolMessageProps, { failed: boolean }>
 }
 
 const ToolMessageInner = ({ part }: ToolMessageProps) => {
-  const { onMcpReconnect, onMcpReopenAuthorization, onMcpRetry, developerMode } = useMessageList()
+  const { onMcpReconnect, onMcpReopenAuthorization, onMcpRetry, developerMode, sessionId } = useMessageList()
 
   if (part.type === "dynamic-tool" && part.toolName === "network_status") {
     return <div data-network-status="" className="flex items-center gap-2 text-sm text-muted-foreground"><Wifi aria-hidden="true" className="size-4 shrink-0"/><span>{typeof part.input === "object" && part.input !== null && "message" in part.input && typeof part.input.message === "string" ? part.input.message : "Reconnecting… waiting for network"}</span></div>
@@ -301,6 +302,7 @@ const ToolMessageInner = ({ part }: ToolMessageProps) => {
     return (
       <CapabilityCallLine
         part={part}
+        sessionId={sessionId}
         onReconnect={onMcpReconnect}
         onReopenAuthorization={onMcpReopenAuthorization}
         onRetry={onMcpRetry}
@@ -311,6 +313,7 @@ const ToolMessageInner = ({ part }: ToolMessageProps) => {
   return (
     <Tool
       toolPart={part}
+      sessionId={sessionId}
       onReconnect={onMcpReconnect}
       onReopenAuthorization={onMcpReopenAuthorization}
       onRetry={onMcpRetry}
@@ -580,7 +583,7 @@ type AssistantMessageProps = {
  */
 const AssistantParts = React.memo(
   ({ message, isStreaming, hideReasoning }: Omit<AssistantMessageProps, "isLastMessage" | "isLastStep">) => {
-    const { showThinking, highlightQuery } = useMessageList()
+    const { showThinking, highlightQuery, sessionId } = useMessageList()
     const assistantRenderGroups = React.useMemo(
       () => {
         const groups = getAssistantRenderGroups(message.parts, showThinking)
@@ -628,7 +631,7 @@ const AssistantParts = React.memo(
             if (group.kind === "tool-aggregate") {
               return (
                 <div key={`tool-aggregate-${index}`} className="w-full">
-                  <ToolAggregateGroup parts={group.parts} />
+                  <ToolAggregateGroup parts={group.parts} sessionId={sessionId} />
                 </div>
               )
             }
@@ -1124,7 +1127,7 @@ export function rendersAsCapabilityLine(part: DynamicToolUIPart): boolean {
  * with the same icon, chevron and status vocabulary as tool milestones.
  * Expanding shows each call as before.
  */
-function CapabilityRunRow({ service, past, items }: { service: string; past: string; items: UIMessageWithIndex[] }) {
+function CapabilityRunRow({ service, past, items, sessionId }: { service: string; past: string; items: UIMessageWithIndex[]; sessionId: string }) {
   "use memo"
   const parts = items.flatMap((item) => item.message.parts.filter((part) => part.type === "dynamic-tool"))
   const running = parts.some((part) => isToolPartInFlight(part))
@@ -1147,7 +1150,7 @@ function CapabilityRunRow({ service, past, items }: { service: string; past: str
           ) : null}
           <ChevronRight aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground/70 transition-transform duration-150 group-data-panel-open:rotate-90 motion-reduce:transition-none" />
         </CollapsibleTrigger>
-        <ToolImageStrip images={runImages} latestOnly />
+        <ToolImageStrip images={runImages} latestOnly sessionId={sessionId} />
       </div>
       <CollapsibleContent className="h-(--collapsible-panel-height) overflow-hidden transition-[height] duration-150 ease-out data-starting-style:h-0 data-ending-style:h-0 motion-reduce:transition-none [&[hidden]:not([hidden='until-found'])]:hidden">
         <div className="mt-1.5 ms-[6px] flex flex-col gap-1 border-s border-border ps-3.5">
@@ -1660,14 +1663,14 @@ function MessageGroup({
     if (entry.kind === "milestone") {
       return (
         <WorkRow key={entry.key} kind="milestone">
-          <ToolAggregateGroup parts={entry.parts} className="w-full" />
+          <ToolAggregateGroup parts={entry.parts} className="w-full" sessionId={sessionId} />
         </WorkRow>
       )
     }
     if (entry.kind === "capabilityRun") {
       return (
         <WorkRow key={entry.key} kind="milestone">
-          <CapabilityRunRow service={entry.service} past={entry.past} items={entry.items} />
+          <CapabilityRunRow service={entry.service} past={entry.past} items={entry.items} sessionId={sessionId} />
         </WorkRow>
       )
     }
@@ -1744,7 +1747,7 @@ function MessageGroup({
           captured above"), not only as a thumbnail inside folded steps. */}
       {!isLiveGroup && proseItems.length > 0 && turnImages.length > 0 ? (
         <div data-turn-images="" className="mx-auto w-full max-w-[800px] px-2 md:px-6">
-          <ToolImageStrip images={turnImages.slice(-4)} viewerImages={turnImages} />
+          <ToolImageGallery images={turnImages} sessionId={sessionId} />
         </div>
       ) : null}
       {/* The turn's result: one summary card for this turn's change set. A turn

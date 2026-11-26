@@ -35,6 +35,8 @@ const showAllByGroupKey = new Map<string, boolean>()
 type ToolAggregateGroupProps = {
   parts: AnyToolPart[]
   className?: string
+  /** Session that receives "Comment" annotations from the viewer. */
+  sessionId?: string
 }
 
 function rowStatus(part: AnyToolPart): "running" | "failed" | "done" {
@@ -51,7 +53,7 @@ function rowStatus(part: AnyToolPart): "running" | "failed" | "done" {
  * "Show N more". A run with a failure opens by itself, so the failure is
  * read rather than hidden behind a count.
  */
-export function ToolAggregateGroup({ parts, className }: ToolAggregateGroupProps) {
+export function ToolAggregateGroup({ parts, className, sessionId }: ToolAggregateGroupProps) {
   const groupKey = parts[0]?.toolCallId ?? "aggregate"
   const [chosenExpanded, setExpandedState] = useState(() => expandedByGroupKey.get(groupKey) ?? null)
   const [showAll, setShowAllState] = useState(() => showAllByGroupKey.get(groupKey) ?? false)
@@ -106,7 +108,7 @@ export function ToolAggregateGroup({ parts, className }: ToolAggregateGroupProps
             </span>
           ) : null}
         </button>
-        <ToolImageStrip images={runImages} latestOnly />
+        <ToolImageStrip images={runImages} latestOnly sessionId={sessionId} />
       </div>
 
       {nowLabel ? (
@@ -183,7 +185,7 @@ export function ToolAggregateGroup({ parts, className }: ToolAggregateGroupProps
                 ) : null}
                 {rowImages.length ? (
                   <div className="ps-5.5">
-                    <ToolImageStrip images={rowImages} viewerImages={runImages} />
+                    <ToolImageStrip images={rowImages} viewerImages={runImages} sessionId={sessionId} />
                   </div>
                 ) : null}
               </div>
