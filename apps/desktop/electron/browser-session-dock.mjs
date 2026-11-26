@@ -482,6 +482,7 @@ export function browserSessionDockUrl() {
  *
  * @param {{
  *   getWindow: () => DockWindow | null,
+ *   getHost?: () => (DockWindow["contentView"] & { getBounds: () => { width: number, height: number } }) | null,
  *   getZoomFactor: () => number,
  *   createView: () => DockView,
  *   bringToTop: (view: DockView) => void,
@@ -491,6 +492,7 @@ export function browserSessionDockUrl() {
  */
 export function createBrowserSessionDock({
   getWindow,
+  getHost,
   getZoomFactor,
   createView,
   bringToTop,
@@ -507,10 +509,33 @@ export function createBrowserSessionDock({
   /** @type {{ x: number, y: number, width: number, height: number } | null} */
   let dragStart = null;
 
+  /** The view the dock lives in: the active browser container when there is one. */
+  let parent = null;
+
   function contentSize() {
+    const host = getHost?.();
+    if (host) {
+      const { width, height } = host.getBounds();
+      return { width, height };
+    }
     const mainWindow = getWindow();
     const [width, height] = mainWindow?.getContentSize?.() ?? [0, 0];
     return { width, height };
+  }
+
+  // Host the dock inside the browser's own container, after the page view, so
+  // it is always drawn above the page. As a sibling of the container in the
+  // window, any re-attach of the browser could stack the page over it.
+  function placeInHost(dock, mainWindow) {
+    const next = getHost?.() ?? mainWindow.contentView;
+    if (parent && parent !== next) {
+      try { if (parent.children.includes(dock)) parent.removeChildView(dock); } catch { /* already gone */ }
+    }
+    parent = next;
+    const children = next.children;
+    if (children.at(-1) === dock) return;
+    try { if (children.includes(dock)) next.removeChildView(dock); } catch { /* already gone */ }
+    next.addChildView(dock);
   }
 
   function bounds() {
@@ -566,20 +591,20 @@ export function createBrowserSessionDock({
     const mainWindow = getWindow();
     if (!mainWindow) return;
     const dock = ensureView();
-    if (!attached) {
-      try {
-        if (!mainWindow.contentView.children.includes(dock)) mainWindow.contentView.addChildView(dock);
-      } catch {
-        return;
-      }
-      attached = true;
+    try {
+      placeInHost(dock, mainWindow);
+    } catch {
+      return;
     }
+    attached = true;
     if (!visible) {
       dock.setVisible?.(true);
       visible = true;
     }
     updateBounds();
-    bringToTop(dock);
+    // Inside the window (no browser container yet) the dock still has to beat
+    // the other native views to the top.
+    if (parent === mainWindow.contentView) bringToTop(dock);
     sendState();
   }
 
@@ -680,14 +705,14 @@ export function createBrowserSessionDock({
     attached = false;
     visible = false;
     dragStart = null;
-    const mainWindow = getWindow();
-    if (dock && mainWindow) {
+    if (dock && parent) {
       try {
-        if (mainWindow.contentView.children.includes(dock)) mainWindow.contentView.removeChildView(dock);
+        if (parent.children.includes(dock)) parent.removeChildView(dock);
       } catch {
         // already gone
       }
     }
+    parent = null;
     try { dock?.webContents.close(); } catch { /* already destroyed */ }
   }
 

@@ -726,6 +726,11 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
     if (sessionDock) return sessionDock;
     sessionDock = createBrowserSessionDock({
       getWindow: window,
+      // The dock lives in the active tab's container, above its page.
+      getHost: () => {
+        const tab = getBrowserTab();
+        return tab && !tab.view.webContents.isDestroyed() ? tab.container : null;
+      },
       getZoomFactor: mainWindowZoomFactor,
       createView: () => new WebContentsView({
         webPreferences: {
