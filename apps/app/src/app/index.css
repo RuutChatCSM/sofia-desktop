@@ -206,6 +206,14 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* The native browser dock is a transparent WebContentsView: only the rounded
+   card paints, so the page beneath stays visible around its corners. */
+html[data-sofia-route="dock"],
+html[data-sofia-route="dock"] body,
+html[data-sofia-route="dock"] #root {
+  background: transparent !important;
+}
+
 .markdown-content [data-sofia-code-block] pre {
   margin: 0;
   background: transparent !important;
@@ -691,6 +699,17 @@ select:disabled {
 }
 .sofia-orbit[data-tone="thinking"] { --orbit-color: #8b7cf6; }
 .sofia-orbit[data-tone="warning"] { --orbit-color: #d4a72c; }
+/* The dock's composer is the same component at a tighter density. Keep the
+   hit targets honest; only the control chrome shrinks. */
+[data-composer-compact] [data-composer-action-row] button,
+[data-composer-compact] [data-composer-action-row] [role="button"] {
+  height: 1.5rem;
+  max-height: 1.5rem;
+  min-height: 1.5rem;
+}
+[data-composer-compact] [data-composer-action-row] button[class*="w-9"] {
+  width: 1.5rem;
+}
 @media (prefers-reduced-motion: no-preference) {
   .sofia-orbit { animation: sofia-orbit-spin .9s linear infinite; }
   .sofia-orbit[data-tone="warning"] { animation-duration: 1.6s; }

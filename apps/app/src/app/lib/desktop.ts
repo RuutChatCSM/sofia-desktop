@@ -52,8 +52,8 @@ import type {
   BrowserPeekChrome,
   BrowserPeekPointer,
   BrowserPresentationMode,
-  BrowserSessionDockMode,
-  BrowserSessionDockState,
+  BrowserSessionDockLayout,
+  BrowserSessionDockTarget,
   BrowserTabSyncState,
   BrowserViewport,
   BrowserZoom,
@@ -208,12 +208,19 @@ declare global {
         setPresentation?: (mode: BrowserPresentationMode) => Promise<BrowserPresentationMode>;
         /** Content for the floating preview's hover chrome (title, status, corners). */
         setPeekChrome?: (chrome: BrowserPeekChrome) => Promise<boolean>;
-        /** Publish the active turn to the native session dock over full screen. */
-        setSessionDockState?: (state: BrowserSessionDockState) => Promise<boolean>;
-        /** The user sent a follow-up from the native dock. */
-        onBrowserSessionDockSubmit?: (callback: (payload: { text: string; mode: BrowserSessionDockMode }) => void) => () => void;
-        onBrowserSessionDockStop?: (callback: () => void) => () => void;
+        /** Tell the native session dock which session to render. */
+        setSessionDockTarget?: (target: BrowserSessionDockTarget) => Promise<boolean>;
+        /** Dock renderer controls: size, drag, and returning to the chat shell. */
+        getSessionDockLayout?: () => Promise<BrowserSessionDockLayout | null>;
+        setSessionDockLayout?: (layout: Partial<BrowserSessionDockLayout>) => void;
+        dragSessionDock?: (dx: number, dy: number, phase: "move" | "end" | "cancel") => void;
+        sessionDockReady?: () => void;
+        backToChatFromSessionDock?: () => void;
+        openSidebarFromSessionDock?: () => void;
+        onSessionDockLayout?: (callback: (layout: BrowserSessionDockLayout) => void) => () => void;
+        onSessionDockTheme?: (callback: (dark: boolean) => void) => () => void;
         onBrowserSessionDockBackToChat?: (callback: () => void) => () => void;
+        onBrowserSessionDockOpenSidebar?: (callback: () => void) => () => void;
         setZoom?: (tabId: string, zoom: BrowserZoom) => Promise<BrowserZoom>;
         pan?: (tabId: string, pan: BrowserPanOffset) => Promise<BrowserPanOffset>;
         agentLease?: (

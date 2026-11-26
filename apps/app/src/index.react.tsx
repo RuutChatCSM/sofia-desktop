@@ -17,9 +17,14 @@ import {
 } from "./react-app/kernel/platform";
 import { AppProviders } from "./react-app/shell/providers";
 import { AppRoot } from "./react-app/shell/app-root";
+import { isDockDocumentLocation } from "./react-app/shell/dock-route";
 import { setWebNotificationHandler } from "./react-app/shell/desktop-notifications";
 import { startDeepLinkBridge } from "./react-app/shell/startup-deep-links";
 import "./app/index.css";
+
+if (isDockDocumentLocation()) {
+  document.documentElement.dataset.sofiaRoute = "dock";
+}
 
 bootstrapTheme();
 initLocale();

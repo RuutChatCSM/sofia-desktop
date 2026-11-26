@@ -90,7 +90,7 @@ import { TerminalDock } from "../terminal/terminal-dock";
 import { useActivePanelTab, usePanelTabStore, useSessionPanelState } from "../panel/panel-tab-store";
 import { useBrowserTabSync } from "../panel/use-side-panel-tabs";
 import { DEFAULT_BROWSER_DOCKED_WIDTH, browserFactMatchesScope, dispatchBrowserPresentation, pickAgentBrowserScope, useBrowserPresentationStore } from "../panel/browser-presentation";
-import { useBrowserSessionDockBackToChat } from "../surface/browser-session-dock";
+import { useBrowserSessionDockBackToChat, useBrowserSessionDockOpenSidebar } from "../surface/browser-session-dock";
 import { useSessionActivityStore } from "../status/session-activity-store";
 import { BrowserPeek } from "../panel/browser-peek";
 import { ComputerPeek } from "../panel/computer-peek";
@@ -438,6 +438,9 @@ export function SessionPage(props: SessionPageProps) {
   useBrowserSessionDockBackToChat(() => {
     if (panelExpanded) toggleSidePanelExpanded();
     else dispatchBrowserPresentation({ type: "user-restore-browser" });
+  });
+  useBrowserSessionDockOpenSidebar(() => {
+    if (browserPresentationMode === "expanded") dispatchBrowserPresentation({ type: "user-dock-browser" });
   });
   const activeSidePanel = voiceSidePanelOpen ? "voice" : sessionSidePanel;
   const sidePanelOpen = activeSidePanel !== null;

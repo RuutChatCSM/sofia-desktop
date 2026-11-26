@@ -22,6 +22,7 @@ import { startDebugLogger, stopDebugLogger } from "./debug-logger";
 import { startPerformanceTimelineGuard } from "./performance-timeline-guard";
 import { resolveSofiaConnection } from "./sofia-connection";
 import { ReloadCoordinatorProvider } from "./reload-coordinator";
+import { isDockDocumentLocation } from "./dock-route";
 
 function resolveDefaultServerUrl(): string {
   if (isDesktopRuntime()) return "http://127.0.0.1:4096";
@@ -51,6 +52,26 @@ type AppProvidersProps = {
 
 function EnterpriseAwareAppProviders({ children }: AppProvidersProps) {
   const activationRequired = useEnterpriseActivationRequired();
+  const dockRoute = isDockDocumentLocation();
+  if (dockRoute) {
+    // The dock only needs preferences, desktop config and theme. It must not
+    // start the automation runner, server boot polling or reload coordination;
+    // the main window already owns those.
+    return (
+      <ConnectLinkProvider>
+        <DesktopConfigProvider>
+          <BrandThemeProvider>
+            <RestrictionNoticeProvider>
+              <LocalProvider>
+                {children}
+                <Toaster />
+              </LocalProvider>
+            </RestrictionNoticeProvider>
+          </BrandThemeProvider>
+        </DesktopConfigProvider>
+      </ConnectLinkProvider>
+    );
+  }
   if (activationRequired) {
     return <ConnectLinkProvider>{children}</ConnectLinkProvider>;
   }
@@ -78,6 +99,7 @@ export function AppProviders({ children }: AppProvidersProps) {
   hydrateSofiaServerSettingsFromEnv();
 
   useEffect(() => {
+    if (isDockDocumentLocation()) return;
     // React 19.2 development builds retain a `performance.measure` entry for
     // every component render. Bound that buffer in dev so a long streaming
     // session cannot push the renderer into its V8 heap limit.

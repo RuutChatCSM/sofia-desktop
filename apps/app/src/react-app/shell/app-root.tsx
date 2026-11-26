@@ -43,11 +43,13 @@ import {
 } from "./control/control-provider";
 import { SofiaContextPublisher } from "./sofia-context-publisher";
 import { SessionRoute } from "./session-route";
+import { DockSessionRoute } from "./dock-session-route";
 import { SettingsRoute } from "./settings-route";
 import { ShellConfigProvider } from "./shell-config";
 import { WelcomeRoute } from "./welcome-route";
 import { readOrgSelectionPending } from "../../app/lib/den-sign-in-intent";
 import { signedInRoute } from "./den-signin-routing";
+import { isDockPath } from "./dock-route";
 
 
 type DenSigninGateProps = {
@@ -354,21 +356,25 @@ function BrandThemeControlActions() {
 let appOpenedCaptured = false;
 
 export function AppRoot() {
+  const location = useLocation();
+  const dockRoute = isDockPath(location.pathname);
   useDesktopFontZoomBehavior();
   useVisualViewportInset();
 
   // Module-level dedupe keeps StrictMode double-mounts from double-counting.
   useEffect(() => {
+    if (dockRoute) return;
     if (appOpenedCaptured) return;
     appOpenedCaptured = true;
     initAnalytics();
     captureAnalyticsEvent("app_opened", {});
-  }, []);
+  }, [dockRoute]);
 
   // Fetch what the organization shares with this member up front. Settings
   // mounts cold every time the extensions panel opens, so without this the
   // readiness groups wait on a Den round-trip the app could have done already.
   useEffect(() => {
+    if (dockRoute) return;
     prefetchCloudInventory();
     const handleSessionChanged = () => {
       clearCloudInventoryCache();
@@ -376,7 +382,7 @@ export function AppRoot() {
     };
     window.addEventListener(denSettingsChangedEvent, handleSessionChanged);
     return () => window.removeEventListener(denSettingsChangedEvent, handleSessionChanged);
-  }, []);
+  }, [dockRoute]);
 
   return (
     <>
@@ -384,6 +390,7 @@ export function AppRoot() {
         <ShellConfigProvider>
         <AppMenuProvider>
         <SofiaControlProvider>
+          {dockRoute ? <DockSessionRoute /> : <>
           <SofiaRouteControlActions />
           <SofiaContextPublisher />
           <DenAuthControlActions />
@@ -499,6 +506,7 @@ export function AppRoot() {
           </EnterpriseActivationGate>
           {SOFIA_CLOUD_AVAILABLE ? <CloudWorkspaceOverlay /> : null}
           </CloudWorkspaceStatusProvider>
+          </>}
         </SofiaControlProvider>
         </AppMenuProvider>
         </ShellConfigProvider>
@@ -512,9 +520,9 @@ export function AppRoot() {
         self-renders for every real user-visible commit, masking the
         true app-level signal.
       */}
-      <NewProvidersListener />
-      <DevProfilerOverlay />
-      <ReactRenderWatchdogOverlay />
+      {dockRoute ? null : <NewProvidersListener />}
+      {dockRoute ? null : <DevProfilerOverlay />}
+      {dockRoute ? null : <ReactRenderWatchdogOverlay />}
     </>
   );
 }

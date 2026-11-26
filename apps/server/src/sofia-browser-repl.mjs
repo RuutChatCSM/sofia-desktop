@@ -227,7 +227,8 @@ async function waitForLoad(send, timeoutMs = 12000) {
 function isSofiaApp(url) {
   if (typeof url !== "string" || !url) return false;
   if (url.includes("sofia-internal-peek-shield")) return true;
-  if (url.includes("sofia-internal-session-dock")) return true;
+  // The floating session dock is the app's own UI, now mounted on `#/dock`.
+  if (url.includes("#/dock")) return true;
   if (/^(?:sofia|sofia-dev|app|blob):/i.test(url)) return true;
   // Packaged builds render the app UI from inside the Electron asar archive.
   if (/^file:/i.test(url) && /\.asar\//i.test(url)) return true;

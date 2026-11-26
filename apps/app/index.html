@@ -17,6 +17,9 @@
     <script>
       (function () {
         try {
+          if (location.hash.indexOf("#/dock") === 0 || location.pathname === "/dock" || location.pathname.indexOf("/dock/") === 0) {
+            document.documentElement.dataset.sofiaRoute = "dock";
+          }
           var mode = localStorage.getItem("sofia.themePref") || "system";
           var prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
           var resolved = mode === "dark" || (mode === "system" && prefersDark) ? "dark" : "light";

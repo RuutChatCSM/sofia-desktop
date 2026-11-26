@@ -257,7 +257,7 @@ describe("sofia browser Node REPL", () => {
         { id: "PAGE-UI", type: "page", title: "Sofia", url: "http://localhost:5173/#/workspace/ws_1/session/codex-1" },
         { id: "PAGE-UI-IP", type: "page", title: "Sofia", url: "http://127.0.0.1:5173/#/workspace/ws_1" },
         { id: "PAGE-SHIELD", type: "page", title: "", url: "data:text/html;charset=utf-8,%3C!doctype%20html%3E#sofia-internal-peek-shield" },
-        { id: "PAGE-DOCK", type: "page", title: "", url: "data:text/html;charset=utf-8,%3C!doctype%20html%3E#sofia-internal-session-dock" },
+        { id: "PAGE-DOCK", type: "page", title: "Sofia", url: "http://localhost:5173/#/dock?workspace=ws_1&session=codex-1" },
         { id: "PAGE-BLOB", type: "page", title: "blob", url: "blob:http://localhost:5173/abc" },
       ]));
     });

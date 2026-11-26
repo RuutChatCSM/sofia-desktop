@@ -11,11 +11,8 @@ import {
 import { useLocation, useNavigate } from "react-router";
 import { toast } from "@/components/ui/sonner";
 import type {
-  AgentPartInput,
-  FilePartInput,
   ProviderListResponse,
   Session,
-  TextPartInput,
 } from "@/app/lib/engine-types";
 
 import { captureAnalyticsEvent, markTaskRunStart } from "@/app/lib/analytics";
@@ -31,7 +28,6 @@ import { useSessionManagementStore as sessionManagementStore } from "@/react-app
 import {
   buildSofiaWorkspaceBaseUrl,
   readSofiaServerSettings,
-  SofiaServerError,
 } from "@/app/lib/sofia-server";
 import {
   workspaceServerId,
@@ -56,7 +52,6 @@ import {
 import type {
   ComposerAttachment,
   ComposerDraft,
-  ComposerPart,
   ModelOption,
   ModelRef,
   SlashCommandOption,
@@ -100,9 +95,8 @@ import { usePlatform } from "@/react-app/kernel/platform";
 import { SessionPage, type OpenSessionTab } from "@/react-app/domains/session/chat/session-page";
 import { SessionSurfaceBoundary } from "@/react-app/shell/session-surface-boundary";
 import { useCodexEngine } from "@/react-app/domains/session/use-codex-engine";
-import { isVisibleCodexUserItem, useCodexSessionStore } from "@/react-app/domains/session/codex-session-store";
-import { recordSentAttachments } from "@/react-app/domains/session/sync/sent-attachment-store";
-import { transcriptDisplayParts } from "@/react-app/domains/session/sync/transcript-display-parts";
+import { useCodexSessionStore } from "@/react-app/domains/session/codex-session-store";
+import { draftToParts, sendCodexDraft } from "@/react-app/domains/session/sync/codex-composer-send";
 import { useCodexApprovals } from "@/react-app/domains/session/codex/use-codex-approvals";
 import { CodexApprovalModal } from "@/react-app/domains/session/codex/codex-approval-modal";
 import { ApprovalModeSelector } from "@/react-app/domains/session/codex/approval-mode-selector";
@@ -139,18 +133,12 @@ import {
   applySessionRevert,
   applySessionUnrevert,
 } from "@/react-app/domains/session/sync/session-sync";
-import { firstLineLocalFileParts, joinWorkspaceRelativePath, toFileUrl } from "@/react-app/domains/session/sync/prompt-file-parts";
-import { composerAttachmentsToWorkspaceFileParts } from "@/react-app/domains/session/sync/attachment-file-part";
-import { codexPromptFromParts } from "@/react-app/domains/session/sync/codex-prompt-parts";
 import { useSessionInteractions } from "@/react-app/domains/session/sync/use-session-interactions";
 import { useModelBehavior } from "@/react-app/domains/session/surface/use-model-behavior";
 import { useSessionFindStore } from "@/react-app/domains/session/surface/find-store";
 import { useModelPicker } from "@/react-app/domains/session/modals/use-model-picker";
 import { getSessionModelSelection, useSessionModelStore } from "@/react-app/domains/session/surface/session-model-store";
 import { openModelPickerEvent, openProviderAuthEvent } from "@/react-app/shell/new-providers-listener";
-import { appMentionInstruction } from "@/react-app/domains/session/surface/composer/app-mentions";
-import { decodeComposerMentionValue } from "@/react-app/domains/session/surface/composer/mention-encoding";
-import { connectSkillPrompt, parseConnectSkillToken } from "@/react-app/domains/session/surface/composer/connect-skill-token";
 import { markComposerAutoSend } from "@/react-app/domains/session/surface/composer-auto-send";
 import { sendWithRevertRollback } from "@/react-app/domains/session/surface/safe-edit-resend";
 import { CreateRemoteWorkspaceModal } from "@/react-app/domains/workspace/create-remote-workspace-modal";
@@ -400,163 +388,6 @@ function nextEvalUnavailableModel(current: ModelRef | null | undefined) {
 // All workspace-scoped server URLs/clients/tokens come from
 // `resolveWorkspaceEndpoint` in apps/app/src/app/lib/workspace-endpoint.ts.
 // Don't compose `<baseUrl>/workspace/<id>` here.
-
-async function draftToParts(
-  draft: ComposerDraft,
-  workspaceRoot: string,
-  sessionId: string,
-  endpoint: ResolvedWorkspaceEndpoint | null,
-) {
-  const parts: Array<TextPartInput | FilePartInput | AgentPartInput> = [];
-  const root = workspaceRoot.trim();
-
-  const toAbsolutePath = (path: string) => {
-    const trimmed = path.trim();
-    if (!trimmed) return "";
-    if (trimmed.startsWith("/")) return trimmed;
-    if (/^[a-zA-Z]:[\\/]/.test(trimmed)) return trimmed;
-    if (!root) return "";
-    return joinWorkspaceRelativePath(root, trimmed);
-  };
-
-  const filenameFromPath = (path: string) => {
-    const normalized = path.replace(/\\/g, "/");
-    const segments = normalized.split("/").filter(Boolean);
-    return segments[segments.length - 1] ?? "file";
-  };
-
-  const attachmentFileById = new Map<string, FilePartInput>();
-  if (draft.attachments.length > 0) {
-    if (!endpoint) {
-      throw new Error("Workspace endpoint is unavailable; attachments could not be copied for tool access.");
-    }
-    const uploaded = await composerAttachmentsToWorkspaceFileParts({
-      attachments: draft.attachments,
-      endpoint,
-      sessionId,
-      workspaceRoot: root,
-    });
-    // Attachment parts are structured only: paths/instructions from the
-    // workspace copy must never become user text (see draftToParts callers).
-    const fileParts = uploaded.filter((part): part is FilePartInput => part.type === "file");
-    for (const [index, attachment] of draft.attachments.entries()) {
-      const filePart = fileParts[index];
-      if (filePart) attachmentFileById.set(attachment.id, filePart);
-    }
-  }
-  const uploadedAttachmentParts = new Map(attachmentFileById);
-
-  // Prefer draft.text token order so attachment chips stay inline with surrounding text
-  // (same positions as the composer), instead of dumping every file part at the end.
-  const hasAttachmentTokens = /\[attachment [^\]]+\]/.test(draft.text);
-  if (hasAttachmentTokens || attachmentFileById.size > 0) {
-    const pasteByLabel = new Map(
-      draft.parts
-        .filter((part): part is Extract<ComposerPart, { type: "paste" }> => part.type === "paste")
-        .map((part) => [part.label, part.text] as const),
-    );
-    for (const segment of draft.text.split(/(\[attachment [^\]]+\]|\[pasted text [^\]]+\]|\[connect-skill [^\]]+\]|\[skill [^\]]+\]|@[^\s@]+)/)) {
-      if (!segment) continue;
-      const attachmentMatch = segment.match(/^\[attachment (.+)\]$/);
-      if (attachmentMatch?.[1]) {
-        const attachment = draft.attachments.find((item) => item.id === attachmentMatch[1]);
-        if (attachment?.annotationContext) parts.push({ type: "text", text: `\n${attachment.annotationContext}\n` });
-        const filePart = attachmentFileById.get(attachmentMatch[1]);
-        if (filePart) {
-          parts.push(filePart);
-          attachmentFileById.delete(attachmentMatch[1]);
-        }
-        continue;
-      }
-      const pasteMatch = segment.match(/^\[pasted text (.+)\]$/);
-      if (pasteMatch?.[1]) {
-        const pasted = pasteByLabel.get(pasteMatch[1]);
-        if (pasted) parts.push({ type: "text", text: pasted });
-        continue;
-      }
-      const connectSkill = parseConnectSkillToken(segment);
-      if (connectSkill) {
-        parts.push({ type: "text", text: connectSkillPrompt(connectSkill) });
-        continue;
-      }
-      const skillMatch = segment.match(/^\[skill (.+)\]$/);
-      if (skillMatch?.[1]) {
-        parts.push({ type: "text", text: `Load [skill ${skillMatch[1]}] and follow its instructions.` });
-        continue;
-      }
-      if (segment.startsWith("@")) {
-        const value = decodeComposerMentionValue(segment.slice(1));
-        const mentionPart = draft.parts.find((part) =>
-          (part.type === "agent" && part.name === value)
-          || (part.type === "app" && part.name === value)
-          || (part.type === "file" && part.path === value),
-        );
-        if (mentionPart?.type === "agent") {
-          parts.push({ type: "agent", name: mentionPart.name });
-          continue;
-        }
-        if (mentionPart?.type === "app") {
-          parts.push({ type: "text", text: appMentionInstruction(mentionPart.name) });
-          continue;
-        }
-        if (mentionPart?.type === "file") {
-          const absolute = toAbsolutePath(mentionPart.path);
-          if (!absolute) continue;
-          parts.push({
-            type: "file",
-            mime: "text/plain",
-            url: toFileUrl(absolute),
-            filename: filenameFromPath(mentionPart.path),
-          });
-          continue;
-        }
-      }
-      parts.push({ type: "text", text: segment });
-    }
-    for (const [id, filePart] of attachmentFileById) {
-      const context = draft.attachments.find((attachment) => attachment.id === id)?.annotationContext;
-      if (context) parts.push({ type: "text", text: `\n${context}\n` });
-      parts.push(filePart);
-    }
-  } else {
-    for (const part of draft.parts) {
-      if (part.type === "text") {
-        parts.push({ type: "text", text: part.text });
-        continue;
-      }
-      if (part.type === "paste") {
-        parts.push({ type: "text", text: part.text });
-        continue;
-      }
-      if (part.type === "agent") {
-        parts.push({ type: "agent", name: part.name });
-        continue;
-      }
-      if (part.type === "skill") {
-        parts.push({ type: "text", text: `Load [skill ${part.name}] and follow its instructions.` });
-        continue;
-      }
-      if (part.type === "app") {
-        parts.push({ type: "text", text: appMentionInstruction(part.name) });
-        continue;
-      }
-      if (part.type === "file") {
-        const absolute = toAbsolutePath(part.path);
-        if (!absolute) continue;
-        parts.push({
-          type: "file",
-          mime: "text/plain",
-          url: toFileUrl(absolute),
-          filename: filenameFromPath(part.path),
-        });
-      }
-    }
-  }
-
-  parts.push(...firstLineLocalFileParts(sanitizePromptText(draft.resolvedText ?? draft.text), root));
-
-  return { parts, uploadedAttachmentParts };
-}
 
 function singlePickedDirectory(selection: string | string[] | null) {
   return typeof selection === "string"
@@ -1565,60 +1396,15 @@ export function SessionRoute() {
         // Sofia sessions bypass the engine send pipeline entirely while
         // preserving the same per-session model selection as the composer.
         if (codexEngine.enabled && codexEngine.prompt && targetSessionId.startsWith("codex-")) {
-          const selection = {
-            model: sendModel?.modelID,
-            providerId: sendModel?.providerID,
-          };
-          const { parts, uploadedAttachmentParts } = await draftToParts(draft, selectedWorkspaceRoot, targetSessionId, selectedWorkspaceEndpoint);
-          // Never stringify a file part's URL into the prompt: attachment images
-          // carry a base64 data URL, which used to land in the turn as a wall of
-          // base64. Image payloads ride as structured image inputs instead.
-          const composed = codexPromptFromParts(parts);
-          const promptText = composed.text || text;
-          // Render the user's message immediately; it is dropped once the
-          // engine echoes it back as a `userMessage` item. Attachments ride as
-          // display parts so an image the user sent is visible in the chat, not
-          // just in the composer: the engine's echo is text only.
-          // Keep the editor's text/file order for display. The engine echoes
-          // only prompt text; the ordered display parts are the durable view.
-          const attachmentParts = await transcriptDisplayParts(draft, uploadedAttachmentParts);
-          const sessionEntry = useCodexSessionStore.getState().sessions[targetSessionId];
-          const userMessageOrdinal = sessionEntry
-            ? sessionEntry.items.filter(isVisibleCodexUserItem).length + sessionEntry.pendingUserMessages.length + (sessionEntry.settledUserMessages?.length ?? 0)
-            : undefined;
-          // Store by echo ordinal as well as prompt text. Repeated prompts and
-          // text-only engine echoes must not move a file to an older message.
-          recordSentAttachments(targetSessionId, promptText, attachmentParts, annotationIds.size ? displayText : undefined, true, userMessageOrdinal);
-          useCodexSessionStore.getState().addPendingUserMessage(targetSessionId, displayText, attachmentParts, promptText, true, userMessageOrdinal);
-          try {
-            const turnRunning = useCodexSessionStore.getState().sessions[targetSessionId]?.session.status === "running";
-            if (turnRunning && codexEngine.steer) {
-              const result = await codexEngine.steer(targetSessionId, promptText, composed.images);
-              if (result.outcome === "not_steerable" || result.outcome === "turn_mismatch") {
-                useCodexSessionStore.getState().confirmPendingUserMessage(targetSessionId, displayText);
-                useComposerStateStore.getState().appendQueuedDraft(targetSessionId, draft);
-                return { outcome: "queued" };
-              } else if (result.outcome === "no_active_turn") {
-                await codexEngine.prompt(targetSessionId, promptText, selection, composed.images);
-              }
-            } else {
-              await codexEngine.prompt(targetSessionId, promptText, selection, composed.images);
-            }
-          } catch (error) {
-            // No HTTP response (timeout, dropped connection) means the server
-            // may still start the turn. Putting the draft back invited a resend
-            // and a duplicate turn; keep the optimistic copy until the echo or
-            // a turn failure settles it.
-            if (!(error instanceof SofiaServerError)) {
-              useCodexSessionStore.getState().setWarning(targetSessionId, "Sofia hasn't confirmed this message yet. It will appear in the conversation once the engine picks it up.");
-              return { outcome: "accepted" };
-            }
-            useCodexSessionStore.getState().confirmPendingUserMessage(targetSessionId, displayText);
-            // Let the composer retain the draft. A rejected follow-up does not
-            // stop the active turn and must never disappear silently.
-            throw error;
-          }
-          return { outcome: "accepted" };
+          return sendCodexDraft({
+            draft,
+            sessionId: targetSessionId,
+            workspaceRoot: selectedWorkspaceRoot,
+            endpoint: selectedWorkspaceEndpoint,
+            model: sendModel,
+            prompt: codexEngine.prompt,
+            steer: codexEngine.steer,
+          });
         }
         // Per-conversation model memory: a session that picked its own model
         // sends with it (and its variant) instead of the global default.

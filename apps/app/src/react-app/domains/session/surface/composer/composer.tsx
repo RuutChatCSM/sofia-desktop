@@ -115,6 +115,8 @@ type ComposerProps = {
   onUploadInboxFiles?: ((files: File[]) => void | Promise<unknown>) | null;
   draftScopeKey?: string;
   compactTopSpacing?: boolean;
+  /** Tighter chrome for the native browser dock. */
+  compact?: boolean;
   /** Render inline in a page (new-task hero): no sticky dock chrome or inner max-width, aligning with sibling content. */
   flush?: boolean;
   /** Rendered immediately above the composer panel (e.g. the pending/queued
@@ -1250,7 +1252,9 @@ export function ReactSessionComposer(props: ComposerProps) {
   return (
     <div
       ref={rootRef}
-      className={props.flush ? `relative ${toolMenuOpen ? "z-50" : "z-20"}` : `sticky bottom-0 ${toolMenuOpen ? "z-50" : "z-20"} px-4 pb-[max(0.5rem,calc(env(safe-area-inset-bottom)+var(--keyboard-inset,0px)))] max-lg:px-3 lg:px-8 ${props.compactTopSpacing ? "pt-0" : "pt-1"}`}
+      className={props.compact
+        ? `relative ${toolMenuOpen ? "z-50" : "z-10"} px-2 py-0`
+        : props.flush ? `relative ${toolMenuOpen ? "z-50" : "z-20"}` : `sticky bottom-0 ${toolMenuOpen ? "z-50" : "z-20"} px-4 pb-[max(0.5rem,calc(env(safe-area-inset-bottom)+var(--keyboard-inset,0px)))] max-lg:px-3 lg:px-8 ${props.compactTopSpacing ? "pt-0" : "pt-1"}`}
       style={{ contain: "layout style" }}
       onKeyDownCapture={handleKeyDownCapture}
       onCompositionStart={() => {
@@ -1260,7 +1264,7 @@ export function ReactSessionComposer(props: ComposerProps) {
         imeComposingRef.current = false;
       }}
     >
-      <div className={props.flush ? "" : "max-w-[800px] mx-auto sofia-composer-dock"}>
+      <div className={props.compact || props.flush ? "" : "max-w-[800px] mx-auto sofia-composer-dock"}>
         {props.aboveComposer ? (
           <div className="sofia-composer-queue relative mx-3 -mb-3 rounded-t-[16px] border border-dls-border bg-dls-surface-muted pb-3 max-sm:mx-2">
             {props.aboveComposer}
@@ -1268,7 +1272,8 @@ export function ReactSessionComposer(props: ComposerProps) {
         ) : null}
         {/* Main composer panel */}
         <div
-          className={`sofia-composer-panel relative overflow-visible rounded-[24px] border border-dls-border bg-dls-canvas shadow-sm transition-colors ${panelRoundedClass}`}
+          data-composer-compact={props.compact ? "" : undefined}
+          className={`sofia-composer-panel relative overflow-visible ${props.compact ? "rounded-[18px]" : "rounded-[24px]"} border border-dls-border bg-dls-canvas shadow-sm transition-colors ${panelRoundedClass}`}
         >
           {props.topAccessory ? <div className="relative z-10">{props.topAccessory}</div> : null}
 
@@ -1283,10 +1288,11 @@ export function ReactSessionComposer(props: ComposerProps) {
             removes it with backspace like any other inline token.
           */}
 
-          <div className="px-4 pt-3 pb-2">
+          <div className={props.compact ? "px-3 pt-1.5 pb-0.5" : "px-4 pt-3 pb-2"}>
             {/* Editor */}
             <LexicalPromptEditor
               ref={editorRef}
+              compact={props.compact}
               value={props.draft}
               mentions={props.mentions}
               pastedText={pastedTextTokens}
@@ -1372,7 +1378,7 @@ export function ReactSessionComposer(props: ComposerProps) {
             />
 
             {/* Action row — tools, attachments, model, and send stay on one line */}
-            <div className="mt-2 flex items-center gap-1.5">
+            <div data-composer-action-row="" className={props.compact ? "mt-1 flex items-center gap-1" : "mt-2 flex items-center gap-1.5"}>
               <div className="flex min-w-0 flex-1 items-center gap-1.5">
                 <input
                   ref={(element) => {

@@ -24,7 +24,11 @@ export type CodexEngineEndpoint = {
  * sessions and opens the SSE stream. Sofia is the only engine, so this
  * activates whenever a workspace endpoint is available.
  */
-export function useCodexEngine(endpoint: CodexEngineEndpoint | null, activeSessionId?: string | null) {
+export function useCodexEngine(
+  endpoint: CodexEngineEndpoint | null,
+  activeSessionId?: string | null,
+  options?: { attention?: boolean },
+) {
   const enabled = Boolean(endpoint);
   const displayWorkspaceId = endpoint?.displayWorkspaceId ?? endpoint?.workspaceId;
   const endpointRef = useRef<CodexEngineEndpoint | null>(endpoint);
@@ -193,7 +197,9 @@ export function useCodexEngine(endpoint: CodexEngineEndpoint | null, activeSessi
   // so a background failure is surfaced (attention + notification) even while
   // the window shows another workspace.
   useCodexAttentionFeed(
-    enabled && endpoint ? { baseUrl: endpoint.baseUrl, token: endpoint.token, hostToken: endpoint.hostToken } : null,
+    options?.attention === false
+      ? null
+      : enabled && endpoint ? { baseUrl: endpoint.baseUrl, token: endpoint.token, hostToken: endpoint.hostToken } : null,
     displayWorkspaceId,
   );
   const sessions = useCodexSessionStore(

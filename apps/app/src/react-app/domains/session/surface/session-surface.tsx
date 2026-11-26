@@ -8,7 +8,7 @@ import {
   finalizeTurnChangeSet,
 } from "@/react-app/domains/session/changes/turn-change-tracking";
 /** @jsxImportSource react */
-import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import type { UIMessage } from "ai";
 import { useQuery } from "@tanstack/react-query";
 import { useShallow } from "zustand/react/shallow";
@@ -55,9 +55,9 @@ import { ProjectComposerStrip } from "../chat/project-composer-strip";
 import type { NewTaskComposerContext } from "../chat/new-task-composer";
 import { ReactSessionComposer } from "./composer/composer";
 import { ComposerQueueAdmission } from "./composer-queue-admission";
-import { useFollowUpPreference } from "./composer/follow-up-preference";
-import { useBrowserSessionDockActions, useBrowserSessionDockPublisher, useLiveBrowserSessionDockState } from "./browser-session-dock";
-import type { BrowserSessionDockMode } from "@/app/lib/desktop-types";
+import { useBrowserSessionDockTarget } from "./browser-session-dock";
+import type { BrowserSessionDockTarget } from "@/app/lib/desktop-types";
+import { getResolvedThemeMode, subscribeToTheme } from "@/app/theme";
 import { useSessionModelSelection } from "./session-model-store";
 import type { ProviderCatalog } from "./use-model-behavior";
 import { decodeComposerMentionValue, encodeComposerMentionValue, type ComposerMentionKind } from "./composer/mention-encoding";
@@ -330,6 +330,8 @@ function createChatTranscriptEvalMessages(sessionId: string, userText = "Plan to
 }
 
 export type SessionSurfaceProps = {
+  /** Compact shell used by the native browser dock. */
+  variant?: "default" | "dock" | "dock-bar";
   newTaskComposer?: NewTaskComposerContext | null;
   client: SofiaServerClient;
   environmentClient?: SofiaServerClient | null;
@@ -699,6 +701,8 @@ const NO_ECHOED_TEXTS: string[] = []
 export function SessionSurface(props: SessionSurfaceProps) {
   const local = useLocal();
   const { config: shellConfig } = useShellConfig();
+  const dockVariant = props.variant === "dock" || props.variant === "dock-bar";
+  const showTranscript = props.variant !== "dock-bar";
   const engineWarning = useCodexSessionStore((state) => state.sessions[props.sessionId]?.warning);
   // Evaluator/continuation chatter is diagnostics, not product copy, and a
   // long-thread advisory is informational rather than an incident.
@@ -1004,16 +1008,13 @@ export function SessionSurface(props: SessionSurfaceProps) {
 
     return [...baseRenderedMessages, ...evalMarkdownMessages];
   }, [baseRenderedMessages, evalMarkdownMessages]);
-  const followUpMode = useFollowUpPreference((state) => state.mode);
-  const dockState = useLiveBrowserSessionDockState({
+  const dark = useSyncExternalStore(subscribeToTheme, getResolvedThemeMode, getResolvedThemeMode) === "dark";
+  const dockTarget = useMemo<BrowserSessionDockTarget>(() => ({
+    workspaceId: props.workspaceId,
     sessionId: props.sessionId,
-    messages: renderedMessages,
-    status,
-    streaming: chatStreaming,
-    activities: sessionActivities,
-    followUpMode,
-  });
-  useBrowserSessionDockPublisher(dockState, props.isControlTarget);
+    dark,
+  }), [dark, props.sessionId, props.workspaceId]);
+  useBrowserSessionDockTarget(dockTarget, props.isControlTarget);
   useEffect(() => {
     useSessionResourcesStore.getState().setSession(props.sessionId, deriveSessionResources(renderedMessages, verifiedOpenTargets));
   }, [props.sessionId, renderedMessages, verifiedOpenTargets]);
@@ -1570,21 +1571,6 @@ export function SessionSurface(props: SessionSurfaceProps) {
     captureAnalyticsEvent("task_run_stopped", {});
     await snapshotQuery.refetch();
   }, [chatStreaming, clearQueuedDrafts, engineClient, props.sessionId, props.workspaceRoot, queuedItems, snapshotQuery.refetch]);
-
-  const handleDockSubmit = useCallback((text: string, mode: BrowserSessionDockMode) => {
-    const draft = withoutRevertTarget(buildDraft(text, []));
-    if (!draft) return;
-    if (mode === "queue") {
-      appendQueuedDraft(props.sessionId, draft);
-      return;
-    }
-    void sendDraft(draft).catch(() => undefined);
-  }, [appendQueuedDraft, buildDraft, props.sessionId, sendDraft]);
-
-  useBrowserSessionDockActions({
-    submit: handleDockSubmit,
-    stop: () => { void handleAbort(); },
-  }, props.isControlTarget);
 
   const handleDismissError = useCallback(() => {
     setError(null);
@@ -2334,6 +2320,7 @@ export function SessionSurface(props: SessionSurfaceProps) {
     <DevProfiler id="SessionSurface">
     <div
       data-session-surface-id={props.sessionId}
+      data-session-surface-variant={props.variant ?? "default"}
       onPointerDownCapture={handleFindSurfaceInteraction}
       onFocusCapture={handleFindSurfaceInteraction}
       onDragEnter={(event) => {
@@ -2381,12 +2368,14 @@ export function SessionSurface(props: SessionSurfaceProps) {
         </div>
       ) : null}
 
-      <SessionTopRail
-        notice={visibleNotice}
-        {...(visibleNotice ? { onDismiss: () => setVisibleNotice(null) } : {})}
-        {...(props.onStartNewChat ? { onStartNewChat: props.onStartNewChat } : {})}
-      />
-      <div className="relative min-h-0 flex-1">
+      {showTranscript ? (
+        <SessionTopRail
+          notice={visibleNotice}
+          {...(visibleNotice ? { onDismiss: () => setVisibleNotice(null) } : {})}
+          {...(props.onStartNewChat ? { onStartNewChat: props.onStartNewChat } : {})}
+        />
+      ) : null}
+      <div className={showTranscript ? "relative min-h-0 flex-1" : "hidden"}>
         <div
           ref={scrollRef}
           data-session-scroll=""
@@ -2415,7 +2404,7 @@ export function SessionSurface(props: SessionSurfaceProps) {
           onScroll={sessionScroll.handleScroll}
           // Extra top padding while the find bar is open so it never covers
           // the first message (short transcripts cannot scroll it clear).
-          className={`absolute inset-0 overflow-x-hidden overflow-y-auto overscroll-y-contain touch-pan-y px-3 pb-4 sm:px-5 ${findOwned ? "pt-16" : "pt-4"}`}
+          className={`absolute inset-0 overflow-x-hidden overflow-y-auto overscroll-y-contain touch-pan-y pb-4 ${dockVariant ? "px-2.5 sm:px-3" : "px-3 sm:px-5"} ${findOwned ? "pt-16" : dockVariant ? "pt-2.5" : "pt-4"}`}
         >
           {/* Chat column: tighter than the composer (800px) so messages
                keep a comfortable reading width and don't feel "too big". */}
@@ -2520,7 +2509,7 @@ export function SessionSurface(props: SessionSurfaceProps) {
         />
       </div>
 
-      <div ref={composerShellRef} data-computer-preview-obstacle className="shrink-0 px-0 pb-2 pt-2">
+      <div ref={composerShellRef} data-computer-preview-obstacle className={dockVariant ? "shrink-0" : "shrink-0 px-0 pb-2 pt-2"}>
         {(props.providerConnectedCount ?? 0) === 0 ? (
           <button
             type="button"
@@ -2561,6 +2550,7 @@ export function SessionSurface(props: SessionSurfaceProps) {
           props.newTaskComposer?.onSelectProject?.(id);
         } }} /> : null}
         <ReactSessionComposer
+          compact={dockVariant}
           draft={draft}
           mentions={mentions}
           onDraftChange={handleComposerDraftChange}

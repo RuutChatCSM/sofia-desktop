@@ -5,7 +5,7 @@ import { createBrowserWorkspaceStore } from "./browser-workspace-store.mjs";
 import { createBrowserCursorOverlay } from "./browser-cursor-overlay.mjs";
 import path from "node:path";
 import { readFile, writeFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { app, View, WebContentsView, clipboard, dialog, nativeTheme, session, shell } from "electron";
 
@@ -20,10 +20,9 @@ import {
 import {
   createBrowserSessionDock,
   SESSION_DOCK_READY_CHANNEL,
-  SESSION_DOCK_SUBMIT_CHANNEL,
-  SESSION_DOCK_STOP_CHANNEL,
   SESSION_DOCK_LAYOUT_CHANNEL,
   SESSION_DOCK_BACK_CHANNEL,
+  SESSION_DOCK_SIDEBAR_CHANNEL,
   SESSION_DOCK_DRAG_CHANNEL,
 } from "./browser-session-dock.mjs";
 import {
@@ -57,6 +56,18 @@ const MENU_OVERLAY_HTML = "overlay.html";
 const MENU_OVERLAY_WIDTH = 196;
 const MENU_OVERLAY_HEIGHT = 176;
 const MENU_OVERLAY_READY_TIMEOUT_MS = 2000;
+
+// The dock loads the same app as the main window. Keep this in sync with
+// `createMainWindow`'s start URL and packaged index path so the dock cannot
+// drift into a second, parallel UI.
+function sessionDockAppUrl() {
+  const startUrl = process.env.SOFIA_ELECTRON_START_URL?.trim() || process.env.ELECTRON_START_URL?.trim();
+  if (startUrl) return startUrl;
+  const indexPath = app.isPackaged
+    ? path.join(process.resourcesPath, "app-dist", "index.html")
+    : path.resolve(__dirname, "../../app/dist/index.html");
+  return pathToFileURL(indexPath).toString();
+}
 
 /**
  * Size given to an agent tab that is not on screen. A native view with no
@@ -175,7 +186,7 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
   let menuOverlayReadyResolvers = [];
   let menuOverlayShowSerial = 0;
   let sessionDock = null;
-  let sessionDockState = null;
+  let sessionDockTarget = null;
 
   function window() {
     return getWindow?.() ?? null;
@@ -732,13 +743,17 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
         return tab && !tab.view.webContents.isDestroyed() ? tab.container : null;
       },
       getZoomFactor: mainWindowZoomFactor,
+      getAppUrl: sessionDockAppUrl,
+      // The dock is the app itself: same preload, same renderer capabilities,
+      // same default session (theme and server settings are shared).
       createView: () => new WebContentsView({
         webPreferences: {
           backgroundThrottling: false,
-          sandbox: true,
+          sandbox: false,
           contextIsolation: true,
           nodeIntegration: false,
-          preload: path.join(__dirname, "browser-session-dock-preload.cjs"),
+          plugins: true,
+          preload: path.join(__dirname, "preload.mjs"),
         },
       }),
       // The dock floats over the page, but a menu opened after it is still a
@@ -750,7 +765,7 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
       sendToRenderer,
       preferencesPath: path.join(app.getPath("userData"), "browser-session-dock.json"),
     });
-    if (sessionDockState) sessionDock.setState(sessionDockState);
+    if (sessionDockTarget) sessionDock.setTarget(sessionDockTarget);
     return sessionDock;
   }
 
@@ -1991,17 +2006,19 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
     ipcMain.handle("sofia:browser:setViewport", (_event, tabId, viewport) => setBrowserTabViewport(tabId, viewport));
     ipcMain.handle("sofia:browser:setPresentation", (_event, mode) => setBrowserPresentation(mode));
     ipcMain.handle("sofia:browser:peekChrome", (_event, chrome) => setPeekShieldChrome(chrome));
-    ipcMain.handle("sofia:browser:sessionDockState", (_event, next) => {
-      sessionDockState = next && typeof next === "object" ? next : null;
-      sessionDock?.setState(sessionDockState);
+    ipcMain.handle("sofia:browser:sessionDockTarget", (event, next) => {
+      if (event.sender !== window()?.webContents) return false;
+      sessionDockTarget = next && typeof next === "object" ? next : null;
+      sessionDock?.setTarget(sessionDockTarget);
       return true;
     });
+    ipcMain.handle("sofia:browser:sessionDockLayout", (event) =>
+      sessionDock && sessionDock.isSender(event.sender) ? sessionDock.getLayout() : null);
     ipcMain.on(SESSION_DOCK_READY_CHANNEL, (event) => sessionDock?.markReady(event.sender));
     for (const channel of [
-      SESSION_DOCK_SUBMIT_CHANNEL,
-      SESSION_DOCK_STOP_CHANNEL,
       SESSION_DOCK_LAYOUT_CHANNEL,
       SESSION_DOCK_BACK_CHANNEL,
+      SESSION_DOCK_SIDEBAR_CHANNEL,
       SESSION_DOCK_DRAG_CHANNEL,
     ]) {
       ipcMain.on(channel, (event, payload) => sessionDock?.handleAction(channel, payload, event.sender));

@@ -105,19 +105,18 @@ export type BrowserPeekChrome = {
   radius: number;
 };
 
-/** A docked follow-up is sent, steered into the running turn, or queued. */
-export type BrowserSessionDockMode = "send" | "steer" | "queue";
+/** The native dock's three presentations. */
+export type BrowserSessionDockSize = "panel" | "bar" | "bubble";
 
-export type BrowserSessionDockTone = "working" | "thinking" | "warning";
+export type BrowserSessionDockLayout = {
+  corner: "bottom-right" | "bottom-left" | "top-right";
+  size: BrowserSessionDockSize;
+};
 
-/** Live turn snapshot the main renderer publishes to the native session dock. */
-export type BrowserSessionDockState = {
-  title: string;
-  tone: BrowserSessionDockTone;
-  meta: string[];
-  note?: string;
-  running: boolean;
-  mode: BrowserSessionDockMode;
+/** The session the main renderer wants the native dock to render. */
+export type BrowserSessionDockTarget = {
+  workspaceId: string;
+  sessionId: string;
   dark: boolean;
 };
 

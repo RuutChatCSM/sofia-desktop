@@ -180,7 +180,25 @@ contextBridge.exposeInMainWorld("__SOFIA_ELECTRON__", {
     setViewport(tabId, viewport) { return ipcRenderer.invoke("sofia:browser:setViewport", tabId, viewport); },
     setPresentation(mode) { return ipcRenderer.invoke("sofia:browser:setPresentation", mode); },
     setPeekChrome(chrome) { return ipcRenderer.invoke("sofia:browser:peekChrome", chrome); },
-    setSessionDockState(state) { return ipcRenderer.invoke("sofia:browser:sessionDockState", state); },
+    /** The main renderer tells the native dock which session to render. */
+    setSessionDockTarget(target) { return ipcRenderer.invoke("sofia:browser:sessionDockTarget", target); },
+    /** Dock renderer controls: resize, drag, and return to the chat shell. */
+    getSessionDockLayout() { return ipcRenderer.invoke("sofia:browser:sessionDockLayout"); },
+    setSessionDockLayout(layout) { ipcRenderer.send("sofia:browser:session-dock:layout", layout); },
+    dragSessionDock(dx, dy, phase) { ipcRenderer.send("sofia:browser:session-dock:drag", { dx, dy, phase }); },
+    sessionDockReady() { ipcRenderer.send("sofia:browser:session-dock:ready"); },
+    backToChatFromSessionDock() { ipcRenderer.send("sofia:browser:session-dock:back-to-chat"); },
+    openSidebarFromSessionDock() { ipcRenderer.send("sofia:browser:session-dock:open-sidebar"); },
+    onSessionDockLayout(callback) {
+      const handler = (_event, layout) => callback(layout ?? { corner: "bottom-right", size: "panel" });
+      ipcRenderer.on("sofia:browser:session-dock:layout-state", handler);
+      return () => ipcRenderer.removeListener("sofia:browser:session-dock:layout-state", handler);
+    },
+    onSessionDockTheme(callback) {
+      const handler = (_event, theme) => callback(theme?.dark === true);
+      ipcRenderer.on("sofia:browser:session-dock:theme", handler);
+      return () => ipcRenderer.removeListener("sofia:browser:session-dock:theme", handler);
+    },
     setZoom(tabId, zoom) { return ipcRenderer.invoke("sofia:browser:setZoom", tabId, zoom); },
     pan(tabId, pan) { return ipcRenderer.invoke("sofia:browser:pan", tabId, pan); },
     agentLease(action, request) { return ipcRenderer.invoke("sofia:browser:agentLease", action, request); },
@@ -248,20 +266,15 @@ contextBridge.exposeInMainWorld("__SOFIA_ELECTRON__", {
       ipcRenderer.on("sofia:browser:peek-pointer", handler);
       return () => ipcRenderer.removeListener("sofia:browser:peek-pointer", handler);
     },
-    onBrowserSessionDockSubmit(callback) {
-      const handler = (_event, payload) => callback(payload ?? {});
-      ipcRenderer.on("sofia:browser:session-dock-submit", handler);
-      return () => ipcRenderer.removeListener("sofia:browser:session-dock-submit", handler);
-    },
-    onBrowserSessionDockStop(callback) {
-      const handler = () => callback();
-      ipcRenderer.on("sofia:browser:session-dock-stop", handler);
-      return () => ipcRenderer.removeListener("sofia:browser:session-dock-stop", handler);
-    },
     onBrowserSessionDockBackToChat(callback) {
       const handler = () => callback();
       ipcRenderer.on("sofia:browser:session-dock-back-to-chat", handler);
       return () => ipcRenderer.removeListener("sofia:browser:session-dock-back-to-chat", handler);
+    },
+    onBrowserSessionDockOpenSidebar(callback) {
+      const handler = () => callback();
+      ipcRenderer.on("sofia:browser:session-dock-open-sidebar", handler);
+      return () => ipcRenderer.removeListener("sofia:browser:session-dock-open-sidebar", handler);
     },
   },
   terminal: {
