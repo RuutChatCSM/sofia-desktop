@@ -121,45 +121,52 @@ export function ToolImageStrip({ images, viewerImages = images, latestOnly = fal
           if (!open) setOpenIndex(null)
         }}
       >
-        <DialogContent className="max-h-[90vh] w-auto max-w-[min(90vw,56rem)] overflow-hidden border-none bg-transparent p-0 shadow-none sm:max-w-[min(90vw,56rem)]">
+        {/* A full-window lightbox: the screenshot is the point, so it gets the
+            room, and the controls sit beside and below it instead of on it. */}
+        <DialogContent className="flex h-[94vh] w-[96vw] max-w-none flex-col border-none bg-transparent p-0 shadow-none sm:max-w-none">
           <DialogTitle className="sr-only">{current?.alt ?? "Tool image"}</DialogTitle>
           {current ? (
-            <div className="relative">
-              <img
-                src={current.src}
-                alt={current.alt}
-                className="max-h-[85vh] w-auto max-w-full rounded-xl object-contain"
-              />
-              {viewerImages.length > 1 ? (
-                <>
+            <>
+              <div className="flex min-h-0 flex-1 items-center justify-center gap-4 pt-12">
+                {viewerImages.length > 1 ? (
                   <Button
                     type="button"
                     variant="secondary"
-                    size="icon-sm"
+                    size="icon"
                     onClick={() => setOpenIndex((index) => (index === null ? index : Math.max(0, index - 1)))}
                     disabled={!hasPrevious}
                     aria-label="Previous image"
-                    className="absolute inset-s-3 top-1/2 -translate-y-1/2 rounded-full bg-background/85 backdrop-blur"
+                    className="shrink-0 rounded-full bg-background/85 backdrop-blur"
                   >
                     <ChevronLeft aria-hidden="true" />
                   </Button>
+                ) : null}
+                <img
+                  src={current.src}
+                  alt={current.alt}
+                  className="max-h-full min-w-0 max-w-full rounded-xl object-contain shadow-2xl"
+                />
+                {viewerImages.length > 1 ? (
                   <Button
                     type="button"
                     variant="secondary"
-                    size="icon-sm"
+                    size="icon"
                     onClick={() => setOpenIndex((index) => (index === null ? index : Math.min(viewerImages.length - 1, index + 1)))}
                     disabled={!hasNext}
                     aria-label="Next image"
-                    className="absolute inset-e-3 top-1/2 -translate-y-1/2 rounded-full bg-background/85 backdrop-blur"
+                    className="shrink-0 rounded-full bg-background/85 backdrop-blur"
                   >
                     <ChevronRight aria-hidden="true" />
                   </Button>
-                  <span className="absolute inset-x-0 bottom-3 mx-auto w-fit rounded-full bg-background/85 px-2 py-0.5 text-[11px] tabular-nums text-muted-foreground backdrop-blur">
-                    {(openIndex ?? 0) + 1} / {viewerImages.length}
-                  </span>
-                </>
-              ) : null}
-            </div>
+                ) : null}
+              </div>
+              <div className="mt-3 flex shrink-0 items-center justify-center gap-2 text-xs text-white/75">
+                <span className="max-w-[60vw] truncate">{current.alt}</span>
+                {viewerImages.length > 1 ? (
+                  <span className="tabular-nums text-white/55">· {(openIndex ?? 0) + 1} / {viewerImages.length}</span>
+                ) : null}
+              </div>
+            </>
           ) : null}
         </DialogContent>
       </Dialog>
