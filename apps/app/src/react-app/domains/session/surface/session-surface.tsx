@@ -55,6 +55,9 @@ import { ProjectComposerStrip } from "../chat/project-composer-strip";
 import type { NewTaskComposerContext } from "../chat/new-task-composer";
 import { ReactSessionComposer } from "./composer/composer";
 import { ComposerQueueAdmission } from "./composer-queue-admission";
+import { useFollowUpPreference } from "./composer/follow-up-preference";
+import { useBrowserSessionDockActions, useBrowserSessionDockPublisher, useLiveBrowserSessionDockState } from "./browser-session-dock";
+import type { BrowserSessionDockMode } from "@/app/lib/desktop-types";
 import { useSessionModelSelection } from "./session-model-store";
 import type { ProviderCatalog } from "./use-model-behavior";
 import { decodeComposerMentionValue, encodeComposerMentionValue, type ComposerMentionKind } from "./composer/mention-encoding";
@@ -1001,6 +1004,16 @@ export function SessionSurface(props: SessionSurfaceProps) {
 
     return [...baseRenderedMessages, ...evalMarkdownMessages];
   }, [baseRenderedMessages, evalMarkdownMessages]);
+  const followUpMode = useFollowUpPreference((state) => state.mode);
+  const dockState = useLiveBrowserSessionDockState({
+    sessionId: props.sessionId,
+    messages: renderedMessages,
+    status,
+    streaming: chatStreaming,
+    activities: sessionActivities,
+    followUpMode,
+  });
+  useBrowserSessionDockPublisher(dockState, props.isControlTarget);
   useEffect(() => {
     useSessionResourcesStore.getState().setSession(props.sessionId, deriveSessionResources(renderedMessages, verifiedOpenTargets));
   }, [props.sessionId, renderedMessages, verifiedOpenTargets]);
@@ -1557,6 +1570,21 @@ export function SessionSurface(props: SessionSurfaceProps) {
     captureAnalyticsEvent("task_run_stopped", {});
     await snapshotQuery.refetch();
   }, [chatStreaming, clearQueuedDrafts, engineClient, props.sessionId, props.workspaceRoot, queuedItems, snapshotQuery.refetch]);
+
+  const handleDockSubmit = useCallback((text: string, mode: BrowserSessionDockMode) => {
+    const draft = withoutRevertTarget(buildDraft(text, []));
+    if (!draft) return;
+    if (mode === "queue") {
+      appendQueuedDraft(props.sessionId, draft);
+      return;
+    }
+    void sendDraft(draft).catch(() => undefined);
+  }, [appendQueuedDraft, buildDraft, props.sessionId, sendDraft]);
+
+  useBrowserSessionDockActions({
+    submit: handleDockSubmit,
+    stop: () => { void handleAbort(); },
+  }, props.isControlTarget);
 
   const handleDismissError = useCallback(() => {
     setError(null);

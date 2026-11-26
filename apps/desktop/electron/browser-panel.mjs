@@ -18,6 +18,15 @@ import {
   peekShieldUrl,
 } from "./browser-peek-shield.mjs";
 import {
+  createBrowserSessionDock,
+  SESSION_DOCK_READY_CHANNEL,
+  SESSION_DOCK_SUBMIT_CHANNEL,
+  SESSION_DOCK_STOP_CHANNEL,
+  SESSION_DOCK_LAYOUT_CHANNEL,
+  SESSION_DOCK_BACK_CHANNEL,
+  SESSION_DOCK_DRAG_CHANNEL,
+} from "./browser-session-dock.mjs";
+import {
   browserScopeIsPresented,
   effectiveBrowserViewport,
   browserPeekLayoutZoom,
@@ -165,6 +174,8 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
   let menuOverlayReady = false;
   let menuOverlayReadyResolvers = [];
   let menuOverlayShowSerial = 0;
+  let sessionDock = null;
+  let sessionDockState = null;
 
   function window() {
     return getWindow?.() ?? null;
@@ -711,6 +722,47 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
     mainWindow.contentView.addChildView(view);
   }
 
+  function ensureSessionDock() {
+    if (sessionDock) return sessionDock;
+    sessionDock = createBrowserSessionDock({
+      getWindow: window,
+      getZoomFactor: mainWindowZoomFactor,
+      createView: () => new WebContentsView({
+        webPreferences: {
+          backgroundThrottling: false,
+          sandbox: true,
+          contextIsolation: true,
+          nodeIntegration: false,
+          preload: path.join(__dirname, "browser-session-dock-preload.cjs"),
+        },
+      }),
+      // The dock floats over the page, but a menu opened after it is still a
+      // menu: re-raise that overlay so the dock can never cover a popup.
+      bringToTop: (view) => {
+        bringNativeViewToTop(view);
+        if (menuOverlayRequest && menuOverlayView) bringNativeViewToTop(menuOverlayView);
+      },
+      sendToRenderer,
+      preferencesPath: path.join(app.getPath("userData"), "browser-session-dock.json"),
+    });
+    if (sessionDockState) sessionDock.setState(sessionDockState);
+    return sessionDock;
+  }
+
+  function syncSessionDock() {
+    if (!window()) return;
+    const shouldShow =
+      browserPresentation === "expanded" &&
+      browserViewVisible &&
+      Boolean(getBrowserTab()) &&
+      browserTabs.size > 0;
+    if (!shouldShow) {
+      sessionDock?.hide();
+      return;
+    }
+    ensureSessionDock().show();
+  }
+
   function tabMenuRequest(tab, point) {
     const url = browserTabUrl(tab);
     return {
@@ -1137,6 +1189,7 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
         activeBrowserTabId = browserTabOrder.find(id => browserTabs.get(id)?.scopeId === activeScopeId) ?? null;
         materializeBrowserTab(getBrowserTab());
       }
+      syncSessionDock();
       sendBrowserState();
     });
     // Only the presented scope may take over the visible tab. A tab the agent
@@ -1361,6 +1414,9 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
     // Bounds arrive from whichever host the renderer mounted (peek card or
     // docked panel), so only the effective viewport needs a fresh apply.
     if (browserViewVisible) void applyTabViewport(activeBrowserTabId, { force: true });
+    // Full screen is the one place the conversation disappears; the native
+    // dock is what brings it back without shrinking the page.
+    syncSessionDock();
     return next;
   }
 
@@ -1598,6 +1654,7 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
     }
     attachActiveBrowserView();
     sendBrowserState();
+    syncSessionDock();
     return getBrowserTab(tabId);
   }
 
@@ -1617,6 +1674,7 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
     browserViewVisible = false;
     lastBrowserBounds = null;
     browserPresentation = "docked";
+    sessionDock?.hide();
     activeScopeId = next;
     restoreBrowserScope(next);
     const scoped = browserTabOrder.filter((id) => browserTabs.get(id)?.scopeId === next);
@@ -1736,6 +1794,7 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
     if (bounds.width > 0 && bounds.height > 0) {
       void applyTabViewport(activeBrowserTabId, { force: true });
     }
+    syncSessionDock();
     const url = view?.webContents.getURL();
     if (preloadDefault && (!url || url === "about:blank")) {
       view?.webContents.loadURL(BROWSER_DEFAULT_URL);
@@ -1747,6 +1806,7 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
     cursorOverlay.hideWindow();
     hideMenuOverlay();
     detachPeekShield();
+    sessionDock?.hide();
     browserViewVisible = false;
     // Hiding the panel is not a viewport change: emulation and tab state stay.
     if (!window()) return;
@@ -1764,6 +1824,8 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
   function destroyBrowserView() {
     cursorOverlay.close();
     hideBrowserView();
+    sessionDock?.destroy();
+    sessionDock = null;
     destroyPeekShield();
     const overlayView = menuOverlayView;
     menuOverlayView = null;
@@ -1908,6 +1970,7 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
       if (browserPresentation === "peek") syncPeekShield(scaleRendererBounds(bounds));
       // Panel resize: bounds and fit scale change, the tab viewport does not.
       void applyTabViewport(activeBrowserTabId);
+      if (browserPresentation === "expanded") syncSessionDock();
     });
     ipcMain.handle("sofia:browser:state", () => browserStatePayload());
     ipcMain.handle("sofia:browser:createTab", (_event, url) => {
@@ -1923,6 +1986,21 @@ export function createBrowserPanel({ getWindow, remoteDebugPort, onDeepLink, age
     ipcMain.handle("sofia:browser:setViewport", (_event, tabId, viewport) => setBrowserTabViewport(tabId, viewport));
     ipcMain.handle("sofia:browser:setPresentation", (_event, mode) => setBrowserPresentation(mode));
     ipcMain.handle("sofia:browser:peekChrome", (_event, chrome) => setPeekShieldChrome(chrome));
+    ipcMain.handle("sofia:browser:sessionDockState", (_event, next) => {
+      sessionDockState = next && typeof next === "object" ? next : null;
+      sessionDock?.setState(sessionDockState);
+      return true;
+    });
+    ipcMain.on(SESSION_DOCK_READY_CHANNEL, (event) => sessionDock?.markReady(event.sender));
+    for (const channel of [
+      SESSION_DOCK_SUBMIT_CHANNEL,
+      SESSION_DOCK_STOP_CHANNEL,
+      SESSION_DOCK_LAYOUT_CHANNEL,
+      SESSION_DOCK_BACK_CHANNEL,
+      SESSION_DOCK_DRAG_CHANNEL,
+    ]) {
+      ipcMain.on(channel, (event, payload) => sessionDock?.handleAction(channel, payload, event.sender));
+    }
     ipcMain.on(PEEK_SHIELD_READY_CHANNEL, (event) => {
       if (event.sender !== peekShieldView?.webContents) return;
       peekShieldReady = true;

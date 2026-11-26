@@ -52,6 +52,8 @@ import type {
   BrowserPeekChrome,
   BrowserPeekPointer,
   BrowserPresentationMode,
+  BrowserSessionDockMode,
+  BrowserSessionDockState,
   BrowserTabSyncState,
   BrowserViewport,
   BrowserZoom,
@@ -206,6 +208,12 @@ declare global {
         setPresentation?: (mode: BrowserPresentationMode) => Promise<BrowserPresentationMode>;
         /** Content for the floating preview's hover chrome (title, status, corners). */
         setPeekChrome?: (chrome: BrowserPeekChrome) => Promise<boolean>;
+        /** Publish the active turn to the native session dock over full screen. */
+        setSessionDockState?: (state: BrowserSessionDockState) => Promise<boolean>;
+        /** The user sent a follow-up from the native dock. */
+        onBrowserSessionDockSubmit?: (callback: (payload: { text: string; mode: BrowserSessionDockMode }) => void) => () => void;
+        onBrowserSessionDockStop?: (callback: () => void) => () => void;
+        onBrowserSessionDockBackToChat?: (callback: () => void) => () => void;
         setZoom?: (tabId: string, zoom: BrowserZoom) => Promise<BrowserZoom>;
         pan?: (tabId: string, pan: BrowserPanOffset) => Promise<BrowserPanOffset>;
         agentLease?: (

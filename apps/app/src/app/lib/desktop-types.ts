@@ -105,6 +105,22 @@ export type BrowserPeekChrome = {
   radius: number;
 };
 
+/** A docked follow-up is sent, steered into the running turn, or queued. */
+export type BrowserSessionDockMode = "send" | "steer" | "queue";
+
+export type BrowserSessionDockTone = "working" | "thinking" | "warning";
+
+/** Live turn snapshot the main renderer publishes to the native session dock. */
+export type BrowserSessionDockState = {
+  title: string;
+  tone: BrowserSessionDockTone;
+  meta: string[];
+  note?: string;
+  running: boolean;
+  mode: BrowserSessionDockMode;
+  dark: boolean;
+};
+
 /** Pointer motion on the preview, relative to where the drag started. */
 export type BrowserPeekPointer = {
   phase: "down" | "move" | "up" | "cancel";

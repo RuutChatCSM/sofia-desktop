@@ -125,9 +125,10 @@ import { ReasoningBlock } from "@/components/chat/reasoning-block"
 import { SubagentRunLine } from "@/components/chat/subagent-run-line"
 import { ToolAggregateGroup } from "@/components/chat/tool-aggregate-group"
 import { getAggregateSummary, isAggregatableToolPart, type AnyToolPart } from "@/lib/tool-aggregate"
-import { liveTurnStatus, type LiveTurnStatus } from "@/components/chat/turn-status"
+import { liveTurnStatusForTurn, type LiveTurnStatus } from "@/components/chat/turn-status"
 import { condenseWork, windowLiveWork } from "@/components/chat/work-condense"
 import { commentaryDigest, commentaryNote } from "@/components/chat/turn-commentary"
+import { useLiveElapsed } from "@/components/chat/use-live-elapsed"
 import { isToolPartInFlight } from "@/lib/tool-activity"
 import {
   isApplyPatchToolPart,
@@ -1385,21 +1386,6 @@ function logPresentation(input: {
   recordDevLog(true, { level: "debug", source: "presentation", label: line })
 }
 
-/** Ticks while a turn is live so its header can show elapsed work time. */
-function useLiveElapsed(startedAt: number | null, active: boolean): number | null {
-  const [now, setNow] = React.useState(() => Date.now())
-
-  React.useEffect(() => {
-    if (!active) return
-    setNow(Date.now())
-    const timer = window.setInterval(() => setNow(Date.now()), 1000)
-    return () => window.clearInterval(timer)
-  }, [active])
-
-  if (startedAt === null || !active) return null
-  return Math.max(0, now - startedAt)
-}
-
 /**
  * Whether a turn group already has visible work. When it does, the generic
  * "Sofia is working…" fallback must stay out of the transcript: the work block
@@ -1547,17 +1533,16 @@ function MessageGroup({
   const durationMs = finishedTurnDurationMs(timing)
   // The header names the real current step and, once done, what the turn did.
   const toolParts = items.flatMap((item) => item.message.parts.filter((part): part is AnyToolPart => part.type === "dynamic-tool" || part.type.startsWith("tool-")))
-  const lastWork = workItems.at(-1)
   const commentaryTexts = workItems.flatMap((entry) => entry.kind === "commentary" ? [getMessagesText([entry.item.message])] : [])
   const liveStatus = isLiveGroup && isStreaming
-    ? liveTurnStatus({
-        phase: lastWork?.kind === "thought" && lastWork.isStreaming ? "thinking" : proseItems.length > 0 ? "writing" : "working",
+    ? liveTurnStatusForTurn({
+        workItems,
+        proseCount: proseItems.length,
+        toolParts,
         activityLabel: activeLabel ?? null,
         connected: codexConnected,
-        elapsed: liveElapsedMs !== null && liveElapsedMs >= 1000 ? formatTurnWorkDuration(liveElapsedMs) : null,
-        steps: toolParts.length,
-        failed: toolParts.filter((part) => part.state === "output-error").length,
-        note: commentaryTexts.length ? commentaryNote(commentaryTexts[commentaryTexts.length - 1]) : undefined,
+        elapsedMs: liveElapsedMs,
+        commentaryText: commentaryTexts.length ? commentaryTexts[commentaryTexts.length - 1] : null,
       })
     : null
   const turnDigest = !isLiveGroup ? commentaryDigest(commentaryTexts) : undefined
