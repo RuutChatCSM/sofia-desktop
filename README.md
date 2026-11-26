@@ -8,7 +8,18 @@ The desktop app is there when you want a dedicated workspace, but it is not requ
 
 [**Download Sofia**](https://sofia.ruut.chat/download)
 
-<img width="1481" height="842" alt="Sofia desktop app" src="https://github.com/user-attachments/assets/66a8dd9b-5260-488c-957d-e54331e78c1c" />
+<img width="1480" alt="Sofia desktop app: a finished task with its step summary, Sofia's narration and the answer" src="docs/images/sofia-desktop.png" />
+
+## The desktop app
+
+A workspace for running agents on your own files, with any model from 50+ providers.
+
+- **See what the agent is doing.** A live status line names the current step ("Running the app tests · 42s · 6 steps"), and thinking stays to one line with its newest thought; the full reasoning is one click away.
+- **Read a turn at a glance.** Steps fold into a short timeline ("Edited 4 files, ran 2 commands"), and a finished turn keeps a digest of what Sofia said along the way.
+- **Screenshots and images inline.** Screenshots the agent takes show with its answer, open in a full-window viewer, and can be marked up and sent back as feedback.
+- **A built-in browser** the agent can drive, with annotation for pointing at what you mean.
+- **Jump to the change.** Click a step to open the exact lines it read or the diff it made.
+- **Sessions that keep up.** Tasks are grouped by workspace and ordered by recent activity, with live status across workspaces and archive and restore.
 
 ## Install with your AI agent
 
